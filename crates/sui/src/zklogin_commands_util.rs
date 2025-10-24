@@ -9,8 +9,8 @@ use fastcrypto::traits::{EncodeDecodeBase64, KeyPair};
 use fastcrypto_zkp::bn254::utils::get_proof;
 use fastcrypto_zkp::bn254::utils::{gen_address_seed, get_salt};
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 use regex::Regex;
 use reqwest::Client;
 use serde_json::json;
@@ -38,10 +38,10 @@ pub fn read_cli_line() -> Result<String, anyhow::Error> {
     let full_url = s.trim_end().to_string();
     let mut parsed_token = "";
     let re = Regex::new(r"id_token=([^&]+)").unwrap();
-    if let Some(captures) = re.captures(&full_url) {
-        if let Some(id_token) = captures.get(1) {
-            parsed_token = id_token.as_str();
-        }
+    if let Some(captures) = re.captures(&full_url)
+        && let Some(id_token) = captures.get(1)
+    {
+        parsed_token = id_token.as_str();
     }
     Ok(parsed_token.to_string())
 }

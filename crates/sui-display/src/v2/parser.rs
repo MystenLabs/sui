@@ -556,7 +556,7 @@ impl<'s> Parser<'s> {
                 (_, Match::Found(_)) => break,
                 (Match::Found(_), _) => continue,
                 (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
-                    return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                    return Err(delimited.union(terminated).into_error(self.lexer.peek()));
                 }
             }
         }
@@ -656,7 +656,7 @@ impl<'s> Parser<'s> {
                     (_, Match::Found(_)) => break,
                     (Match::Found(_), _) => continue,
                     (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
-                        return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                        return Err(delimited.union(terminated).into_error(self.lexer.peek()));
                     }
                 }
             }
@@ -692,7 +692,7 @@ impl<'s> Parser<'s> {
                     (_, Match::Found(_)) => break,
                     (Match::Found(_), _) => continue,
                     (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
-                        return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                        return Err(delimited.union(terminated).into_error(self.lexer.peek()));
                     }
                 }
             }
@@ -817,7 +817,7 @@ impl<'s> Parser<'s> {
                 (_, Match::Found(_)) => break,
                 (Match::Found(_), _) => continue,
                 (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
-                    return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                    return Err(delimited.union(terminated).into_error(self.lexer.peek()));
                 }
             }
         }
@@ -1119,7 +1119,7 @@ fn read_string_literal(slice: &str) -> Cow<'_, str> {
 }
 
 fn read_hex_literal(lexeme: &Lex<'_>, slice: &str) -> Result<Vec<u8>, Error> {
-    if slice.len() % 2 != 0 {
+    if !slice.len().is_multiple_of(2) {
         return Err(Error::OddHexLiteral(lexeme.detach()));
     }
 

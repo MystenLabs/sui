@@ -3,8 +3,8 @@
 
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
-use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointTransaction;
 use sui_indexer_alt_framework::types::SUI_BRIDGE_OBJECT_ID;
+use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointTransaction;
 
 pub mod error_handler;
 pub mod governance_action_handler;

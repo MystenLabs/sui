@@ -5,12 +5,12 @@ use crate::database::Connection;
 use crate::errors::IndexerError;
 use crate::handlers::pruner::PrunableTable;
 use clap::Args;
+use diesel::QueryDsl;
 use diesel::migration::{Migration, MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
 use diesel::prelude::QueryableByName;
 use diesel::table;
-use diesel::QueryDsl;
-use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use diesel_migrations::{EmbeddedMigrations, embed_migrations};
 use std::collections::{BTreeSet, HashSet};
 use std::time::Duration;
 use strum::IntoEnumIterator;
@@ -259,8 +259,8 @@ pub mod setup_postgres {
 mod tests {
     use crate::database::{Connection, ConnectionPool};
     use crate::db::{
-        check_db_migration_consistency, check_db_migration_consistency_impl, reset_database,
-        ConnectionPoolConfig, MIGRATIONS,
+        ConnectionPoolConfig, MIGRATIONS, check_db_migration_consistency,
+        check_db_migration_consistency_impl, reset_database,
     };
     use diesel::migration::{Migration, MigrationSource};
     use diesel::pg::Pg;
@@ -322,9 +322,11 @@ mod tests {
         .unwrap();
         // Local migrations is one record more than the applied migrations.
         // This will fail the consistency check since it's not a prefix.
-        assert!(check_db_migration_consistency(&mut connection)
-            .await
-            .is_err());
+        assert!(
+            check_db_migration_consistency(&mut connection)
+                .await
+                .is_err()
+        );
 
         pool.dedicated_connection()
             .await

@@ -13,7 +13,7 @@ use sui_types::{
 };
 
 use crate::ProgrammableTransactionBuilder;
-use crate::{convert_move_call_args, workloads::Gas, BenchMoveCallArg, ExecutionEffects};
+use crate::{BenchMoveCallArg, ExecutionEffects, convert_move_call_args, workloads::Gas};
 use sui_types::transaction::Command;
 
 /// A Sui account and all of the objects it owns
@@ -91,11 +91,12 @@ impl InMemoryWallet {
     /// Apply updates from `effects` to `self`
     pub fn update(&mut self, effects: &ExecutionEffects) {
         for (obj, owner) in effects.mutated().into_iter().chain(effects.created()) {
-            if let Owner::AddressOwner(a) = owner {
-                if let Some(account) = self.accounts.get_mut(&a) {
-                    account.add_or_update(obj);
-                } // else, doesn't belong to an account we can spend from, we don't care
-            } // TODO: support owned, shared objects
+            if let Owner::AddressOwner(a) = owner
+                && let Some(account) = self.accounts.get_mut(&a)
+            {
+                account.add_or_update(obj);
+            } // else, doesn't belong to an account we can spend from, we don't care
+            // TODO: support owned, shared objects
         }
         if let Some(sender_account) = self.accounts.get_mut(&effects.sender()) {
             for obj in effects.deleted() {

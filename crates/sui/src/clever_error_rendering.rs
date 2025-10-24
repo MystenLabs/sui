@@ -13,16 +13,16 @@
 
 use fastcrypto::encoding::{Base64, Encoding};
 use move_binary_format::{
-    binary_config::BinaryConfig, file_format::SignatureToken, CompiledModule,
+    CompiledModule, binary_config::BinaryConfig, file_format::SignatureToken,
 };
 use move_command_line_common::{
-    display::{try_render_constant, RenderResult},
+    display::{RenderResult, try_render_constant},
     error_bitset::ErrorBitset,
 };
 use move_core_types::account_address::AccountAddress;
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_sdk::apis::ReadApi;
-use sui_types::{base_types::ObjectID, Identifier};
+use sui_types::{Identifier, base_types::ObjectID};
 
 /// Take a Move abort status string and render it into a more human-readable error message using
 /// by parsing the string (as best we can) and seeing if the abort code is a Clever Error abort

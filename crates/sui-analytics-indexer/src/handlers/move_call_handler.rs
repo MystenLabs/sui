@@ -8,9 +8,9 @@ use anyhow::Result;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::TransactionDataAPI;
 
-use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
-use crate::tables::MoveCallEntry;
 use crate::FileType;
+use crate::handlers::{AnalyticsHandler, TransactionProcessor, process_transactions};
+use crate::tables::MoveCallEntry;
 
 const NAME: &str = "move_call";
 

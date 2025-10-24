@@ -3,16 +3,16 @@
 
 use anyhow::Context as _;
 use async_graphql::{
-    connection::{Connection, Edge},
     Context, InputObject, Object, Union,
+    connection::{Connection, Edge},
 };
 use move_core_types::language_storage::StructTag;
 use sui_types::{
+    SUI_FRAMEWORK_ADDRESS, TypeTag,
     dynamic_field::{
-        derive_dynamic_field_id, visitor as DFV, DynamicFieldInfo, DynamicFieldType,
-        DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
+        DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME, DynamicFieldInfo,
+        DynamicFieldType, derive_dynamic_field_id, visitor as DFV,
     },
-    TypeTag, SUI_FRAMEWORK_ADDRESS,
 };
 use tokio::sync::OnceCell;
 
@@ -38,7 +38,7 @@ use super::{
     object::{self, CLive, CVersion, Object, VersionFilter},
     object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
     owner::Owner,
-    transaction::{filter::TransactionFilter, CTransaction, Transaction},
+    transaction::{CTransaction, Transaction, filter::TransactionFilter},
 };
 
 pub(crate) struct DynamicField {

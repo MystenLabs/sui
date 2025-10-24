@@ -159,7 +159,8 @@ impl SubmitToConsensus for MockConsensusClient {
         _epoch_store: &Arc<AuthorityPerEpochStore>,
         _timeout: Duration,
     ) -> SuiResult {
-        self.submit_impl(&[transaction.clone()]).map(|_response| ())
+        self.submit_impl(std::slice::from_ref(transaction))
+            .map(|_response| ())
     }
 }
 

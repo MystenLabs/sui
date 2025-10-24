@@ -3,14 +3,14 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use diesel::prelude::QueryableByName;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{concurrent::Handler, Processor},
+    FieldCount,
+    pipeline::{Processor, concurrent::Handler},
     postgres::{Connection, Db},
     types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object},
-    FieldCount,
 };
 use sui_indexer_alt_schema::{
     objects::{StoredObjInfo, StoredObjInfoDeletionReference},
@@ -275,14 +275,14 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 #[cfg(test)]
 mod tests {
     use sui_indexer_alt_framework::{
+        Indexer,
         types::{
-            base_types::{dbg_addr, SequenceNumber},
+            base_types::{SequenceNumber, dbg_addr},
             object::Owner,
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
-        Indexer,
     };
-    use sui_indexer_alt_schema::{objects::StoredOwnerKind, MIGRATIONS};
+    use sui_indexer_alt_schema::{MIGRATIONS, objects::StoredOwnerKind};
 
     use super::*;
 

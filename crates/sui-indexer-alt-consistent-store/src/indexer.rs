@@ -3,13 +3,12 @@
 
 use std::path::Path;
 
-use anyhow::{ensure, Context as _};
+use anyhow::{Context as _, ensure};
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
-    self as framework,
+    self as framework, IndexerArgs,
     ingestion::{ClientArgs, IngestionConfig},
     pipeline::sequential::{self, SequentialConfig},
-    IndexerArgs,
 };
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -17,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     config::ConsistencyConfig,
     db::config::DbConfig,
-    store::{synchronizer::Synchronizer, Schema, Store},
+    store::{Schema, Store, synchronizer::Synchronizer},
 };
 
 /// An indexer specialised for writing to a RocksDB store via a schema, `S`, composed of three main
@@ -159,7 +158,7 @@ mod tests {
     };
 
     use crate::{
-        db::{tests::wm, Db},
+        db::{Db, tests::wm},
         restore::Restore,
         store::Connection,
     };

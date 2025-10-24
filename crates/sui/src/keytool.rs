@@ -3,9 +3,9 @@
 use crate::zklogin_commands_util::{perform_zk_login_test_tx, read_cli_line};
 use anyhow::anyhow;
 use aws_sdk_kms::{
+    Client as KmsClient,
     primitives::Blob,
     types::{MessageType, SigningAlgorithmSpec},
-    Client as KmsClient,
 };
 use bip32::DerivationPath;
 use clap::*;
@@ -19,15 +19,15 @@ use fastcrypto_zkp::bn254::utils::{
     gen_address_seed, get_nonce, get_oidc_url, get_proof, get_test_issuer_jwt_token,
     get_token_exchange_url,
 };
-use fastcrypto_zkp::bn254::zk_login::{fetch_jwks, OIDCProvider, ZkLoginInputs};
-use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
+use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, ZkLoginInputs, fetch_jwks};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use im::hashmap::HashMap as ImHashMap;
-use json_to_table::{json_to_table, Orientation};
+use json_to_table::{Orientation, json_to_table};
 use num_bigint::BigUint;
-use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 use serde::Serialize;
 use serde_json::json;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope, PersonalMessage};
@@ -44,11 +44,11 @@ use sui_keys::keypair_file::{
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
-use sui_types::crypto::{
-    get_authority_key_pair, EncodeDecodeBase64, Signature, SignatureScheme, SuiKeyPair,
-    ZkLoginPublicIdentifier,
-};
 use sui_types::crypto::{DefaultHash, PublicKey};
+use sui_types::crypto::{
+    EncodeDecodeBase64, Signature, SignatureScheme, SuiKeyPair, ZkLoginPublicIdentifier,
+    get_authority_key_pair,
+};
 use sui_types::error::SuiResult;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
@@ -58,7 +58,7 @@ use sui_types::transaction::{TransactionData, TransactionDataAPI};
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use tabled::builder::Builder;
 use tabled::settings::Rotate;
-use tabled::settings::{object::Rows, Modify, Width};
+use tabled::settings::{Modify, Width, object::Rows};
 use tracing::info;
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
@@ -481,7 +481,7 @@ pub enum CommandOutput {
 
 impl KeyToolCommand {
     pub async fn execute(self, keystore: &mut Keystore) -> Result<CommandOutput, anyhow::Error> {
-        let cmd_result = Ok(match self {
+        Ok(match self {
             KeyToolCommand::Alias {
                 old_alias,
                 new_alias,
@@ -627,9 +627,9 @@ impl KeyToolCommand {
             } => {
                 if Hex::decode(&input_string).is_ok() {
                     return Err(anyhow!(
-                        "Sui Keystore and Sui Wallet no longer support importing 
-                    private key as Hex, if you are sure your private key is encoded in Hex, use 
-                    `sui keytool convert $HEX` to convert first then import the Bech32 encoded 
+                        "Sui Keystore and Sui Wallet no longer support importing
+                    private key as Hex, if you are sure your private key is encoded in Hex, use
+                    `sui keytool convert $HEX` to convert first then import the Bech32 encoded
                     private key starting with `suiprivkey`."
                     ));
                 }
@@ -1028,7 +1028,7 @@ impl KeyToolCommand {
                 let jwt_randomness = if fixed {
                     "100681567828351849884072155819400689117".to_string()
                 } else {
-                    let random_bytes = rand::thread_rng().gen::<[u8; 16]>();
+                    let random_bytes = rand::thread_rng().r#gen::<[u8; 16]>();
                     let jwt_random_bytes = BigUint::from_bytes_be(&random_bytes);
                     jwt_random_bytes.to_string()
                 };
@@ -1181,7 +1181,9 @@ impl KeyToolCommand {
                 println!("Visit URL (AWS - Trace): {url_15}");
                 println!("Visit URL (EveFrontier): {url_16}");
 
-                println!("Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):");
+                println!(
+                    "Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):"
+                );
 
                 let parsed_token = read_cli_line()?;
                 let tx_digest = perform_zk_login_test_tx(
@@ -1310,9 +1312,7 @@ impl KeyToolCommand {
                     _ => CommandOutput::Error("Not a zkLogin signature".to_string()),
                 }
             }
-        });
-
-        cmd_result
+        })
     }
 }
 

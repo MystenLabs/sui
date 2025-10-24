@@ -15,10 +15,10 @@ use crate::{
     },
 };
 use axum::{
-    extract::{Path, State},
     Json,
+    extract::{Path, State},
 };
-use axum::{http::StatusCode, routing::get, Router};
+use axum::{Router, http::StatusCode, routing::get};
 use ethers::types::Address as EthAddress;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use fastcrypto::{
@@ -27,7 +27,7 @@ use fastcrypto::{
 };
 use std::sync::Arc;
 use std::{net::SocketAddr, str::FromStr};
-use sui_types::{bridge::BridgeChainId, TypeTag};
+use sui_types::{TypeTag, bridge::BridgeChainId};
 use tracing::{info, instrument};
 
 pub mod governance_verifier;
@@ -59,10 +59,8 @@ pub const EVM_CONTRACT_UPGRADE_PATH_WITH_CALLDATA: &str =
     "/sign/upgrade_evm_contract/{chain_id}/{nonce}/{proxy_address}/{new_impl_address}/{calldata}";
 pub const EVM_CONTRACT_UPGRADE_PATH: &str =
     "/sign/upgrade_evm_contract/{chain_id}/{nonce}/{proxy_address}/{new_impl_address}";
-pub const ADD_TOKENS_ON_SUI_PATH: &str =
-    "/sign/add_tokens_on_sui/{chain_id}/{nonce}/{native}/{token_ids}/{token_type_names}/{token_prices}";
-pub const ADD_TOKENS_ON_EVM_PATH: &str =
-    "/sign/add_tokens_on_evm/{chain_id}/{nonce}/{native}/{token_ids}/{token_addresses}/{token_sui_decimals}/{token_prices}";
+pub const ADD_TOKENS_ON_SUI_PATH: &str = "/sign/add_tokens_on_sui/{chain_id}/{nonce}/{native}/{token_ids}/{token_type_names}/{token_prices}";
+pub const ADD_TOKENS_ON_EVM_PATH: &str = "/sign/add_tokens_on_evm/{chain_id}/{nonce}/{native}/{token_ids}/{token_addresses}/{token_sui_decimals}/{token_prices}";
 
 // BridgeNode's public metadata that is accessible via the `/ping` endpoint.
 // Be careful with what to put here, as it is public.
@@ -469,7 +467,7 @@ async fn handle_add_tokens_on_sui(
                 return Err(BridgeError::InvalidBridgeClientRequest(format!(
                     "Invalid native flag: {}",
                     native
-                )))
+                )));
             }
         };
         // Validate list sizes to prevent DoS
@@ -555,7 +553,7 @@ async fn handle_add_tokens_on_evm(
                 return Err(BridgeError::InvalidBridgeClientRequest(format!(
                     "Invalid native flag: {}",
                     native
-                )))
+                )));
             }
         };
         // Validate list sizes to prevent DoS

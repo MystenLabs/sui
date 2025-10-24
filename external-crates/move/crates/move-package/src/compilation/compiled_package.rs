@@ -414,11 +414,11 @@ impl CompiledPackage {
     }
 
     /// Returns compiled modules for this package and its transitive dependencies
-    pub fn all_modules_map(&self) -> Modules {
+    pub fn all_modules_map(&self) -> Modules<'_> {
         Modules::new(self.all_compiled_units().map(|unit| &unit.module))
     }
 
-    pub fn root_modules_map(&self) -> Modules {
+    pub fn root_modules_map(&self) -> Modules<'_> {
         Modules::new(
             self.root_compiled_units
                 .iter()
@@ -530,14 +530,14 @@ impl CompiledPackage {
                 ModuleFormat::Bytecode => Either::Right(p),
             });
         // If bytecode dependency is not empty, do not allow renaming
-        if !bytecode_deps.is_empty() {
-            if let Some(pkg_name) = resolution_graph.contains_renaming() {
-                anyhow::bail!(
-                    "Found address renaming in package '{}' when \
+        if !bytecode_deps.is_empty()
+            && let Some(pkg_name) = resolution_graph.contains_renaming()
+        {
+            anyhow::bail!(
+                "Found address renaming in package '{}' when \
                     building with bytecode dependencies -- this is currently not supported",
-                    pkg_name
-                )
-            }
+                pkg_name
+            )
         }
 
         // invoke the compiler

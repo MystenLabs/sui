@@ -14,7 +14,7 @@ use axum_extra::typed_header::TypedHeader;
 use bytes::Buf;
 use hyper::header::CONTENT_ENCODING;
 use once_cell::sync::Lazy;
-use prometheus::{proto::MetricFamily, register_counter_vec, CounterVec};
+use prometheus::{CounterVec, proto::MetricFamily, register_counter_vec};
 use std::sync::Arc;
 use sui_tls::TlsConnectionInfo;
 use tracing::error;

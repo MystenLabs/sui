@@ -10,13 +10,13 @@ use crate::consensus_handler::SequencedConsensusTransactionKind;
 use crate::epoch::randomness::SINGLETON_KEY;
 use dashmap::DashMap;
 use fastcrypto_tbls::{dkg_v1, nodes::PartyId};
-use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use moka::policy::EvictionPolicy;
 use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use parking_lot::Mutex;
-use std::collections::{hash_map, BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque, hash_map};
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, SequenceNumber};
 use sui_types::crypto::RandomnessRound;
@@ -33,8 +33,8 @@ use sui_types::{
     signature::GenericSignature,
 };
 use tracing::{debug, info};
-use typed_store::rocks::DBBatch;
 use typed_store::Map;
+use typed_store::rocks::DBBatch;
 
 use crate::{
     authority::{

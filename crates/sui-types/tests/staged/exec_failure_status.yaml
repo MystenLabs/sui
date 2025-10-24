@@ -40,3 +40,4 @@
 38: MoveRawValueTooBig
 39: InvalidLinkage
 40: InsufficientBalanceForWithdraw
+41: NonExclusiveWriteInputObjectModified

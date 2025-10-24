@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::handlers::{is_bridge_txn, BRIDGE, TOKEN_DEPOSITED_EVENT};
+use crate::handlers::{BRIDGE, TOKEN_DEPOSITED_EVENT, is_bridge_txn};
 use crate::struct_tag;
 use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
@@ -9,12 +9,12 @@ use std::sync::Arc;
 use sui_bridge::events::MoveTokenDepositedEvent;
 use sui_bridge_schema::models::TokenTransferData;
 use sui_bridge_schema::schema::token_transfer_data;
-use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::postgres::Db;
 use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
 use sui_indexer_alt_framework::types::BRIDGE_ADDRESS;
+use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
 use tracing::info;
 
 pub struct TokenTransferDataHandler {

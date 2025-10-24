@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput};
+use syn::{DeriveInput, parse_macro_input};
 
 #[proc_macro_derive(FieldCount)]
 pub fn field_count_derive(input: TokenStream) -> TokenStream {

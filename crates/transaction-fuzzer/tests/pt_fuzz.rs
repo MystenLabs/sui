@@ -7,7 +7,7 @@ use transaction_fuzzer::account_universe::AccountCurrent;
 use transaction_fuzzer::account_universe::AccountData;
 use transaction_fuzzer::executor::Executor;
 use transaction_fuzzer::programmable_transaction_gen::{
-    gen_many_input_match, gen_programmable_transaction, MAX_ITERATIONS_INPUT_MATCH,
+    MAX_ITERATIONS_INPUT_MATCH, gen_many_input_match, gen_programmable_transaction,
 };
 use transaction_fuzzer::type_arg_fuzzer::{run_pt, run_pt_effects};
 
@@ -77,10 +77,10 @@ pub fn run_pt_success(
     cap: ObjectRef,
 ) -> ObjectRef {
     for i in 0..pt.inputs.len() {
-        if let CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)) = pt.inputs[i] {
-            if obj_ref.0 == cap.0 {
-                pt.inputs[i] = CallArg::Object(ObjectArg::ImmOrOwnedObject(cap));
-            }
+        if let CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)) = pt.inputs[i]
+            && obj_ref.0 == cap.0
+        {
+            pt.inputs[i] = CallArg::Object(ObjectArg::ImmOrOwnedObject(cap));
         }
     }
 

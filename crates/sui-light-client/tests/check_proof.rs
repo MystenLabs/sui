@@ -5,7 +5,7 @@ use anyhow::anyhow;
 
 use sui_light_client::proof::{
     base::{Proof, ProofBuilder, ProofContents, ProofTarget, ProofVerifier},
-    committee::{extract_new_committee_info, CommitteeProof},
+    committee::{CommitteeProof, extract_new_committee_info},
     objects::ObjectsTarget,
 };
 
@@ -47,10 +47,12 @@ async fn read_data(committee_seq: u64, seq: u64) -> (Committee, CheckpointData) 
 #[tokio::test]
 async fn check_can_read_test_data() {
     let (_committee, full_checkpoint) = read_data(15918264, 16005062).await;
-    assert!(full_checkpoint
-        .checkpoint_summary
-        .end_of_epoch_data
-        .is_some());
+    assert!(
+        full_checkpoint
+            .checkpoint_summary
+            .end_of_epoch_data
+            .is_some()
+    );
 }
 
 #[tokio::test]

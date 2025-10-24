@@ -12,9 +12,9 @@ mod checked {
     use crate::gas_model::units_types::CostTable;
     use crate::transaction::ObjectReadResult;
     use crate::{
+        ObjectID,
         error::{ExecutionError, ExecutionErrorKind},
         gas_model::tables::{GasStatus, ZERO_COST_SCHEDULE},
-        ObjectID,
     };
     use move_core_types::vm_status::StatusCode;
     use serde::{Deserialize, Serialize};

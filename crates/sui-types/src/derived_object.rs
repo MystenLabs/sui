@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    SUI_FRAMEWORK_ADDRESS,
     base_types::{ObjectID, SuiAddress},
-    dynamic_field, SUI_FRAMEWORK_ADDRESS,
+    dynamic_field,
 };
 use move_core_types::{
     identifier::Identifier,

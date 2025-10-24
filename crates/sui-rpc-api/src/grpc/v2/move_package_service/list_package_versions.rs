@@ -41,13 +41,13 @@ pub fn list_package_versions(
         .map(|token| decode_page_token(&token))
         .transpose()?;
 
-    if let Some(token) = &page_token {
-        if token.original_package_id != original_package_id {
-            return Err(FieldViolation::new("page_token")
-                .with_description("page token package ID does not match request package ID")
-                .with_reason(ErrorReason::FieldInvalid)
-                .into());
-        }
+    if let Some(token) = &page_token
+        && token.original_package_id != original_package_id
+    {
+        return Err(FieldViolation::new("page_token")
+            .with_description("page token package ID does not match request package ID")
+            .with_reason(ErrorReason::FieldInvalid)
+            .into());
     }
 
     let indexes = service

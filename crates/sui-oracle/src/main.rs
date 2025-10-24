@@ -6,7 +6,7 @@ use mysten_metrics::start_prometheus_server;
 use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::Config;
-use sui_oracle::{config::OracleNodeConfig, OracleNode};
+use sui_oracle::{OracleNode, config::OracleNodeConfig};
 use sui_sdk::wallet_context::WalletContext;
 
 #[derive(Parser)]

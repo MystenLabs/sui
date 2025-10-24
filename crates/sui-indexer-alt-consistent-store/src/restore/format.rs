@@ -4,7 +4,7 @@
 
 use std::io::{Cursor, Read, Seek as _, SeekFrom};
 
-use anyhow::{ensure, Context as _};
+use anyhow::{Context as _, ensure};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 use integer_encoding::VarIntReader as _;
 use serde::Deserialize;

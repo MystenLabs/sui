@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 
 use consensus_types::block::Round;
 use mysten_common::sync::notify_read::NotifyRead;
@@ -78,11 +78,11 @@ impl ConsensusTxStatusCache {
     }
 
     pub(crate) fn set_transaction_status(&self, pos: ConsensusPosition, status: ConsensusTxStatus) {
-        if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
-            if pos.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS <= last_committed_leader_round {
-                // Ignore stale status updates.
-                return;
-            }
+        if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow()
+            && pos.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS <= last_committed_leader_round
+        {
+            // Ignore stale status updates.
+            return;
         }
 
         let mut inner = self.inner.write();
@@ -156,27 +156,26 @@ impl ConsensusTxStatusCache {
         let mut round_rx = self.last_committed_leader_round_rx.clone();
         {
             let inner = self.inner.read();
-            if let Some(status) = inner.transaction_status.get(&consensus_position) {
-                if Some(status) != old_status.as_ref() {
-                    if let Some(old_status) = old_status {
-                        // The only scenario where the status may change, is when the transaction
-                        // is initially fastpath certified, and then later finalized or rejected.
-                        assert_eq!(old_status, ConsensusTxStatus::FastpathCertified);
-                    }
-                    return NotifyReadConsensusTxStatusResult::Status(*status);
+            if let Some(status) = inner.transaction_status.get(&consensus_position)
+                && Some(status) != old_status.as_ref()
+            {
+                if let Some(old_status) = old_status {
+                    // The only scenario where the status may change, is when the transaction
+                    // is initially fastpath certified, and then later finalized or rejected.
+                    assert_eq!(old_status, ConsensusTxStatus::FastpathCertified);
                 }
+                return NotifyReadConsensusTxStatusResult::Status(*status);
             }
             // Inner read lock dropped here.
         }
 
         let expiration_check = async {
             loop {
-                if let Some(last_committed_leader_round) = *round_rx.borrow() {
-                    if consensus_position.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS
+                if let Some(last_committed_leader_round) = *round_rx.borrow()
+                    && consensus_position.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS
                         <= last_committed_leader_round
-                    {
-                        return last_committed_leader_round;
-                    }
+                {
+                    return last_committed_leader_round;
                 }
                 // Channel closed - this should never happen in practice, so panic
                 round_rx
@@ -259,16 +258,15 @@ impl ConsensusTxStatusCache {
 
     /// Returns true if the position is too far ahead of the last committed round.
     pub(crate) fn check_position_too_ahead(&self, position: &ConsensusPosition) -> SuiResult<()> {
-        if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
-            if position.block.round
+        if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow()
+            && position.block.round
                 > last_committed_leader_round + CONSENSUS_STATUS_RETENTION_ROUNDS
-            {
-                return Err(SuiErrorKind::ValidatorConsensusLagging {
-                    round: position.block.round,
-                    last_committed_round: last_committed_leader_round,
-                }
-                .into());
+        {
+            return Err(SuiErrorKind::ValidatorConsensusLagging {
+                round: position.block.round,
+                last_committed_round: last_committed_leader_round,
             }
+            .into());
         }
         Ok(())
     }

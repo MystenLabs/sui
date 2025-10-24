@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, fmt::Write};
 
-use anyhow::{bail, Context as _};
+use anyhow::{Context as _, bail};
 use futures::future::OptionFuture;
 use move_core_types::{annotated_value::MoveTypeLayout, language_storage::StructTag};
 use sui_display::v1::Format;
@@ -13,18 +13,18 @@ use sui_json_rpc_types::{
     SuiParsedData, SuiPastObjectResponse, SuiRawData,
 };
 use sui_types::{
+    TypeTag,
     base_types::{ObjectID, ObjectType, SequenceNumber},
     display::DisplayVersionUpdatedEvent,
     error::SuiObjectResponseError,
     object::{Data, Object},
-    TypeTag,
 };
 use tokio::join;
 
 use crate::{
     context::Context,
     data::load_live,
-    error::{rpc_bail, InternalContext, RpcError},
+    error::{InternalContext, RpcError, rpc_bail},
 };
 
 /// Fetch the necessary data from the stores in `ctx` and transform it to build a response for a
@@ -165,7 +165,7 @@ async fn display(ctx: &Context, object: &Object) -> DisplayFieldsResponse {
                 error: Some(SuiObjectResponseError::DisplayError {
                     error: format!("{e:#}"),
                 }),
-            }
+            };
         }
     };
 

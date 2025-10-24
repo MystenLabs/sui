@@ -150,20 +150,20 @@ impl SimpleAbsInt for SelfTransferVerifierAI {
             .iter()
             .any(|(addr, module, fun)| f.is(addr, module, fun))
         {
-            if let Value::SenderAddress(sender_addr_loc) = args[1] {
-                if is_wrappable_obj_type(&f.arguments[0].ty) {
-                    let msg = "Transfer of an object to transaction sender address";
-                    let uid_msg = "Returning an object from a function, allows a caller to use the object \
+            if let Value::SenderAddress(sender_addr_loc) = args[1]
+                && is_wrappable_obj_type(&f.arguments[0].ty)
+            {
+                let msg = "Transfer of an object to transaction sender address";
+                let uid_msg = "Returning an object from a function, allows a caller to use the object \
                                and enables composability via programmable transactions.";
-                    let mut d = diag!(SELF_TRANSFER_DIAG, (*loc, msg), (self.fn_ret_loc, uid_msg));
-                    if sender_addr_loc != INVALID_LOC {
-                        d.add_secondary_label((
-                            sender_addr_loc,
-                            "Transaction sender address coming from here",
-                        ));
-                    }
-                    context.add_diag(d);
+                let mut d = diag!(SELF_TRANSFER_DIAG, (*loc, msg), (self.fn_ret_loc, uid_msg));
+                if sender_addr_loc != INVALID_LOC {
+                    d.add_secondary_label((
+                        sender_addr_loc,
+                        "Transaction sender address coming from here",
+                    ));
                 }
+                context.add_diag(d);
             }
             return Some(vec![]);
         }

@@ -14,9 +14,9 @@ use tidehunter::iterators::db_iterator::DbIterator;
 use tidehunter::key_shape::{KeyShape, KeySpace};
 use tidehunter::metrics::Metrics;
 pub use tidehunter::{
+    Decision, IndexWalPosition, WalPosition,
     key_shape::{KeyIndexing, KeyShapeBuilder, KeySpaceConfig, KeyType},
     minibytes::Bytes,
-    Decision, IndexWalPosition, WalPosition,
 };
 use typed_store_error::TypedStoreError;
 
@@ -104,11 +104,11 @@ pub(crate) fn apply_range_bounds(
 
 pub(crate) fn transform_th_iterator<'a, K, V>(
     iterator: impl Iterator<
-            Item = Result<
-                (tidehunter::minibytes::Bytes, tidehunter::minibytes::Bytes),
-                tidehunter::db::DbError,
-            >,
-        > + 'a,
+        Item = Result<
+            (tidehunter::minibytes::Bytes, tidehunter::minibytes::Bytes),
+            tidehunter::db::DbError,
+        >,
+    > + 'a,
     prefix: &'a Option<Vec<u8>>,
     timer: HistogramTimer,
 ) -> impl Iterator<Item = Result<(K, V), TypedStoreError>> + 'a

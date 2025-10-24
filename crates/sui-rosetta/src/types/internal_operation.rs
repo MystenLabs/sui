@@ -15,14 +15,14 @@ use sui_types::transaction::{ProgrammableTransaction, TransactionData};
 
 use crate::errors::Error;
 use crate::types::ConstructionMetadata;
-use pay_coin::pay_coin_pt;
 pub use pay_coin::PayCoin;
-use pay_sui::pay_sui_pt;
+use pay_coin::pay_coin_pt;
 pub use pay_sui::PaySui;
-use stake::stake_pt;
+use pay_sui::pay_sui_pt;
 pub use stake::Stake;
-use withdraw_stake::withdraw_stake_pt;
+use stake::stake_pt;
 pub use withdraw_stake::WithdrawStake;
+use withdraw_stake::withdraw_stake_pt;
 
 mod pay_coin;
 mod pay_sui;

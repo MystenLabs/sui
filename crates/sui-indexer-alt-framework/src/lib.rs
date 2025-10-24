@@ -3,14 +3,14 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use anyhow::{ensure, Context};
+use anyhow::{Context, ensure};
 use futures::future;
-use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
+use ingestion::{ClientArgs, IngestionConfig, IngestionService, client::IngestionClient};
 use metrics::IndexerMetrics;
 use pipeline::{
+    Processor,
     concurrent::{self, ConcurrentConfig},
     sequential::{self, Handler, SequentialConfig},
-    Processor,
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework_store_traits::{
@@ -326,11 +326,11 @@ impl<S: Store> Indexer<S> {
             P::NAME,
         );
 
-        if let Some(enabled_pipelines) = &mut self.enabled_pipelines {
-            if !enabled_pipelines.remove(P::NAME) {
-                info!(pipeline = P::NAME, "Skipping");
-                return Ok(None);
-            }
+        if let Some(enabled_pipelines) = &mut self.enabled_pipelines
+            && !enabled_pipelines.remove(P::NAME)
+        {
+            info!(pipeline = P::NAME, "Skipping");
+            return Ok(None);
         }
 
         let mut conn = self
@@ -444,10 +444,10 @@ impl<T: TransactionalStore> Indexer<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mocks::store::MockStore;
-    use crate::pipeline::{concurrent::ConcurrentConfig, Processor};
-    use crate::store::CommitterWatermark;
     use crate::FieldCount;
+    use crate::mocks::store::MockStore;
+    use crate::pipeline::{Processor, concurrent::ConcurrentConfig};
+    use crate::store::CommitterWatermark;
     use async_trait::async_trait;
     use std::sync::Arc;
     use sui_synthetic_ingestion::synthetic_ingestion;
@@ -638,8 +638,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_indexer_concurrent_pipeline_allow_inconsistent_first_checkpoint_with_skip_watermark(
-    ) {
+    async fn test_indexer_concurrent_pipeline_allow_inconsistent_first_checkpoint_with_skip_watermark()
+     {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
 
@@ -743,8 +743,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_indexer_sequential_pipeline_disallow_inconsistent_first_checkpoint_with_skip_watermark(
-    ) {
+    async fn test_indexer_sequential_pipeline_disallow_inconsistent_first_checkpoint_with_skip_watermark()
+     {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
 

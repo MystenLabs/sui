@@ -136,14 +136,13 @@ fn snapshot_path_for_version(version: u64) -> anyhow::Result<PathBuf> {
     for entry in fs::read_dir(&snapshot_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_dir() {
-            if let Some(snapshot_number) = path
+        if path.is_dir()
+            && let Some(snapshot_number) = path
                 .file_name()
                 .and_then(|n| n.to_str())
                 .and_then(|n| n.parse::<u64>().ok())
-            {
-                snapshots.insert(snapshot_number);
-            }
+        {
+            snapshots.insert(snapshot_number);
         }
     }
 

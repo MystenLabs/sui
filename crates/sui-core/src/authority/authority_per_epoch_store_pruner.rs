@@ -49,10 +49,10 @@ impl AuthorityPerEpochStorePruner {
         let directories = fs::read_dir(parent_path)?.collect::<Result<Vec<_>, _>>()?;
         for directory in directories {
             let path = directory.path();
-            if let Some(filename) = directory.file_name().to_str() {
-                if let Ok(epoch) = filename.split_at(EPOCH_DB_PREFIX.len()).1.parse::<u64>() {
-                    candidates.push((epoch, path));
-                }
+            if let Some(filename) = directory.file_name().to_str()
+                && let Ok(epoch) = filename.split_at(EPOCH_DB_PREFIX.len()).1.parse::<u64>()
+            {
+                candidates.push((epoch, path));
             }
         }
         let mut pruned = 0;

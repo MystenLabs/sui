@@ -276,6 +276,7 @@ impl From<anyhow::Error> for ReplayEngineError {
 
 /// TODO: Limited set but will add more
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum ExecutionStoreEvent {
     BackingPackageGetPackageObject {
         package_id: ObjectID,

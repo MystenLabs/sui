@@ -103,6 +103,7 @@ pub struct TransactionInfoRequest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum TransactionStatus {
     /// Signature over the transaction.
     Signed(AuthoritySignInfo),
@@ -346,11 +347,13 @@ impl TxType {
 impl SubmitTxRequest {
     pub fn into_raw(&self) -> Result<RawSubmitTxRequest, SuiError> {
         let transactions = if let Some(transaction) = &self.transaction {
-            vec![bcs::to_bytes(&transaction)
-                .map_err(|e| SuiErrorKind::TransactionSerializationError {
-                    error: e.to_string(),
-                })?
-                .into()]
+            vec![
+                bcs::to_bytes(&transaction)
+                    .map_err(|e| SuiErrorKind::TransactionSerializationError {
+                        error: e.to_string(),
+                    })?
+                    .into(),
+            ]
         } else {
             vec![]
         };
@@ -1112,7 +1115,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_submit_tx_request_into_raw() {
-        println!("Case 1. SubmitTxRequest::new_ping should be converted to RawSubmitTxRequest with submit_type set to Ping.");
+        println!(
+            "Case 1. SubmitTxRequest::new_ping should be converted to RawSubmitTxRequest with submit_type set to Ping."
+        );
         {
             let request = SubmitTxRequest::new_ping(PingType::Consensus);
             let raw_request = request.into_raw().unwrap();
@@ -1121,7 +1126,9 @@ mod tests {
             assert_eq!(submit_type, SubmitTxType::Ping);
         }
 
-        println!("Case 2. SubmitTxRequest::new_transaction should be converted to RawSubmitTxRequest with submit_type set to Default.");
+        println!(
+            "Case 2. SubmitTxRequest::new_transaction should be converted to RawSubmitTxRequest with submit_type set to Default."
+        );
         {
             // Create a dummy transaction for testing
             let sender = crate::base_types::SuiAddress::random_for_testing_only();

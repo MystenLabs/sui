@@ -13,7 +13,7 @@ use sui_types::{
     error::ExecutionErrorKind,
     execution_status::PackageUpgradeError,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
-    object::{Data, Object, OBJECT_START_VERSION},
+    object::{Data, OBJECT_START_VERSION, Object},
 };
 
 macro_rules! type_origin_table {
@@ -354,7 +354,7 @@ async fn test_transitive_dep_downgrade() {
 
     let mut m = basic_test_module();
     m.address_identifiers = vec![AccountAddress::from_hex_literal("0x2").unwrap()];
-    let f1 = MovePackage::new_initial(&[m.clone()], &config, [&l1]).unwrap();
+    let f1 = MovePackage::new_initial(std::slice::from_ref(&m), &config, [&l1]).unwrap();
     let f2 = f1
         .new_upgraded(
             ObjectID::from_hex_literal("0x3").unwrap(),
@@ -428,12 +428,14 @@ async fn test_upgrade_downgrade_transitive() {
         },
     );
 
-    assert!(MovePackage::new_initial(
-        &build_test_modules("H").await,
-        &config,
-        [&f_pkg, &b_v2, &c_v1]
-    )
-    .is_err());
+    assert!(
+        MovePackage::new_initial(
+            &build_test_modules("H").await,
+            &config,
+            [&f_pkg, &b_v2, &c_v1]
+        )
+        .is_err()
+    );
 }
 
 #[tokio::test]

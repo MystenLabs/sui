@@ -5,15 +5,15 @@ use std::{
     collections::BTreeSet,
     fmt::Debug,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     },
 };
 
 use async_trait::async_trait;
 use consensus_types::block::{BlockRef, Round};
 use mysten_metrics::{
-    monitored_mpsc::{channel, Receiver, Sender, WeakSender},
+    monitored_mpsc::{Receiver, Sender, WeakSender, channel},
     monitored_scope, spawn_logged_monitored_task,
 };
 use parking_lot::RwLock;
@@ -22,6 +22,7 @@ use tokio::sync::{oneshot, watch};
 use tracing::warn;
 
 use crate::{
+    BlockAPI as _,
     block::VerifiedBlock,
     commit::CertifiedCommits,
     context::Context,
@@ -29,7 +30,6 @@ use crate::{
     core_thread::CoreError::Shutdown,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    BlockAPI as _,
 };
 
 const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
@@ -62,7 +62,7 @@ pub enum CoreError {
 #[async_trait]
 pub trait CoreThreadDispatcher: Sync + Send + 'static {
     async fn add_blocks(&self, blocks: Vec<VerifiedBlock>)
-        -> Result<BTreeSet<BlockRef>, CoreError>;
+    -> Result<BTreeSet<BlockRef>, CoreError>;
 
     async fn check_block_refs(
         &self,
@@ -209,15 +209,14 @@ impl ChannelCoreThreadDispatcher {
         // Initialize highest received rounds.
         let highest_received_rounds = {
             let dag_state = dag_state.read();
-            let highest_received_rounds = context
+
+            context
                 .committee
                 .authorities()
                 .map(|(index, _)| {
                     AtomicU32::new(dag_state.get_last_block_for_authority(index).round())
                 })
-                .collect();
-
-            highest_received_rounds
+                .collect()
         };
 
         let (sender, receiver) =
@@ -239,10 +238,10 @@ impl ChannelCoreThreadDispatcher {
 
         let join_handle = spawn_logged_monitored_task!(
             async move {
-                if let Err(err) = core_thread.run().await {
-                    if !matches!(err, ConsensusError::Shutdown) {
-                        panic!("Fatal error occurred: {err}");
-                    }
+                if let Err(err) = core_thread.run().await
+                    && !matches!(err, ConsensusError::Shutdown)
+                {
+                    panic!("Fatal error occurred: {err}");
                 }
             },
             "ConsensusCoreThread"
@@ -267,13 +266,13 @@ impl ChannelCoreThreadDispatcher {
 
     async fn send(&self, command: CoreThreadCommand) {
         self.context.metrics.node_metrics.core_lock_enqueued.inc();
-        if let Some(sender) = self.sender.upgrade() {
-            if let Err(err) = sender.send(command).await {
-                warn!(
-                    "Couldn't send command to core thread, probably is shutting down: {}",
-                    err
-                );
-            }
+        if let Some(sender) = self.sender.upgrade()
+            && let Err(err) = sender.send(command).await
+        {
+            warn!(
+                "Couldn't send command to core thread, probably is shutting down: {}",
+                err
+            );
         }
     }
 }
@@ -459,6 +458,7 @@ mod test {
 
     use super::*;
     use crate::{
+        CommitConsumerArgs,
         block_manager::BlockManager,
         commit_observer::CommitObserver,
         context::Context,
@@ -469,7 +469,6 @@ mod test {
         storage::mem_store::MemStore,
         transaction::{TransactionClient, TransactionConsumer},
         transaction_certifier::TransactionCertifier,
-        CommitConsumerArgs,
     };
 
     #[tokio::test]

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anemo::types::PeerInfo;
-use anemo::{types::PeerEvent, Network, Peer, PeerId, Request, Response};
+use anemo::{Network, Peer, PeerId, Request, Response, types::PeerEvent};
 use fastcrypto::ed25519::{Ed25519PublicKey, Ed25519Signature};
 use futures::StreamExt;
 use mysten_common::debug_fatal;
@@ -308,10 +308,10 @@ impl DiscoveryEventLoop {
 
         // Clean out the pending_dials
         self.pending_dials.retain(|_k, v| !v.is_finished());
-        if let Some(abort_handle) = &self.dial_seed_peers_task {
-            if abort_handle.is_finished() {
-                self.dial_seed_peers_task = None;
-            }
+        if let Some(abort_handle) = &self.dial_seed_peers_task
+            && abort_handle.is_finished()
+        {
+            self.dial_seed_peers_task = None;
         }
 
         // Spawn some dials

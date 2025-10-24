@@ -186,7 +186,7 @@ mod checked {
         // Save loaded objects for debug. We dont want to lose the info
         state_view.save_loaded_runtime_objects(loaded_runtime_objects);
         state_view.save_wrapped_object_containers(wrapped_object_containers);
-        state_view.record_execution_results(finished?);
+        state_view.record_execution_results(finished?)?;
         state_view.record_generated_object_ids(generated_object_ids);
         Ok(mode_results)
     }
@@ -1560,13 +1560,13 @@ mod checked {
             }
             Value::Receiving(_, _, assigned_type) => {
                 // If the type has been fixed, make sure the types match up
-                if let Some(assigned_type) = assigned_type {
-                    if assigned_type != param_ty {
-                        return Err(command_argument_error(
-                            CommandArgumentError::TypeMismatch,
-                            idx,
-                        ));
-                    }
+                if let Some(assigned_type) = assigned_type
+                    && assigned_type != param_ty
+                {
+                    return Err(command_argument_error(
+                        CommandArgumentError::TypeMismatch,
+                        idx,
+                    ));
                 }
 
                 // Now make sure the param type is a struct instantiation of the receiving struct

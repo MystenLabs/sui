@@ -2,17 +2,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
 use crate::authority::ExecutionEnv;
+use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
 use crate::{
     authority::{
+        AuthorityState,
         authority_tests::{
             build_programmable_transaction, certify_shared_obj_transaction_no_execution,
             execute_programmable_transaction, send_and_confirm_transaction_,
         },
         move_integration_tests::build_and_publish_test_package,
         test_authority_builder::TestAuthorityBuilder,
-        AuthorityState,
     },
     move_call,
 };
@@ -27,7 +27,7 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::transaction::{ObjectArg, SharedObjectMutability, Transaction};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair},
+    crypto::{AccountKeyPair, get_key_pair},
     effects::TransactionEffects,
     execution_status::{CongestedObjects, ExecutionFailureStatus, ExecutionStatus},
     object::Object,

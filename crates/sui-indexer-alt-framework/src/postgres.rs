@@ -11,8 +11,8 @@ use tokio_util::sync::CancellationToken;
 use url::Url;
 
 use crate::{
-    ingestion::{ClientArgs, IngestionConfig},
     Indexer, IndexerArgs,
+    ingestion::{ClientArgs, IngestionConfig},
 };
 
 pub use sui_pg_db::*;
@@ -115,7 +115,7 @@ pub mod tests {
     use super::*;
 
     use crate::pipeline::concurrent;
-    use crate::{pipeline::Processor, store::Connection, ConcurrentConfig, FieldCount};
+    use crate::{ConcurrentConfig, FieldCount, pipeline::Processor, store::Connection};
 
     #[derive(FieldCount)]
     struct V {
@@ -170,10 +170,11 @@ pub mod tests {
         {
             let watermark = CommitterWatermark::new_for_testing(10);
             let mut conn = indexer.store().connect().await.unwrap();
-            assert!(conn
-                .set_committer_watermark(ConcurrentPipeline1::NAME, watermark)
-                .await
-                .unwrap());
+            assert!(
+                conn.set_committer_watermark(ConcurrentPipeline1::NAME, watermark)
+                    .await
+                    .unwrap()
+            );
         }
         indexer
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
@@ -188,15 +189,17 @@ pub mod tests {
         {
             let watermark1 = CommitterWatermark::new_for_testing(10);
             let mut conn = indexer.store().connect().await.unwrap();
-            assert!(conn
-                .set_committer_watermark(ConcurrentPipeline1::NAME, watermark1)
-                .await
-                .unwrap());
+            assert!(
+                conn.set_committer_watermark(ConcurrentPipeline1::NAME, watermark1)
+                    .await
+                    .unwrap()
+            );
             let watermark2 = CommitterWatermark::new_for_testing(20);
-            assert!(conn
-                .set_committer_watermark(ConcurrentPipeline2::NAME, watermark2)
-                .await
-                .unwrap());
+            assert!(
+                conn.set_committer_watermark(ConcurrentPipeline2::NAME, watermark2)
+                    .await
+                    .unwrap()
+            );
         }
 
         indexer

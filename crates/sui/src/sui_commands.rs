@@ -2,28 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::client_commands::{SuiClientCommands, USER_AGENT};
-use crate::fire_drill::{run_fire_drill, FireDrill};
-use crate::genesis_ceremony::{run, Ceremony};
+use crate::fire_drill::{FireDrill, run_fire_drill};
+use crate::genesis_ceremony::{Ceremony, run};
 use crate::keytool::KeyToolCommand;
 use crate::trace_analysis_commands::AnalyzeTraceCommand;
 use crate::validator_commands::SuiValidatorCommand;
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{Context, anyhow, bail, ensure};
 use clap::*;
 use colored::Colorize;
 use fastcrypto::traits::KeyPair;
+use futures::future;
 use move_analyzer::analyzer;
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_compiler::editions::Flavor;
 use move_package_alt_compilation::build_config::BuildConfig;
 use mysten_common::tempdir;
+use prometheus::Registry;
 use rand::rngs::OsRng;
 use std::collections::BTreeMap;
-use std::io::{stdout, Write};
+use std::io::{Write, stdout};
 use std::net::{AddrParseError, IpAddr, Ipv4Addr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use std::{fs, io};
 use sui_bridge::config::BridgeCommitteeConfig;
 use sui_bridge::metrics::BridgeMetrics;
@@ -32,25 +35,33 @@ use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::node::Genesis;
 use sui_config::p2p::SeedPeer;
 use sui_config::{
-    genesis_blob_exists, sui_config_dir, Config, PersistedConfig, FULL_NODE_DB_PATH,
-    SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_NETWORK_CONFIG,
+    Config, FULL_NODE_DB_PATH, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
+    SUI_NETWORK_CONFIG, genesis_blob_exists, sui_config_dir,
 };
 use sui_config::{
     SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
 };
-use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, LocalFaucet};
-use sui_indexer::test_utils::{
-    start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
-};
+use sui_faucet::{AppState, FaucetConfig, LocalFaucet, create_wallet_context, start_faucet};
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move::summary::PackageSummaryMetadata;
-use sui_sdk::apis::ReadApi;
 use sui_sdk::SuiClient;
+use sui_sdk::apis::ReadApi;
 use sui_types::move_package::MovePackage;
+use tokio::time::interval;
+use tokio_util::sync::CancellationToken;
 
-use sui_graphql_rpc::{
-    config::{ConnectionConfig, ServiceConfig},
-    test_infra::cluster::start_graphql_server_with_fn_rpc,
+use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
+use sui_indexer_alt_consistent_store::{
+    args::RpcArgs as ConsistentArgs, config::ServiceConfig as ConsistentConfig,
+    start_service as start_consistent_store,
+};
+use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs};
+use sui_indexer_alt_graphql::{
+    RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
+};
+use sui_indexer_alt_reader::{
+    bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
+    fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
 };
 
 use sui_keys::key_derive::generate_new_key;
@@ -58,6 +69,8 @@ use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::{self, execute_move_command};
 use sui_package_alt::SuiFlavor;
+use sui_pg_db::DbArgs;
+use sui_pg_db::temp::{LocalDatabase, get_available_port};
 use sui_protocol_config::Chain;
 use sui_replay_2 as SR2;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
@@ -70,79 +83,63 @@ use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{SignatureScheme, SuiKeyPair, ToFromBytes};
 use sui_types::digests::ChainIdentifier;
-use tracing;
 use tracing::info;
+use url::Url;
 
 const DEFAULT_EPOCH_DURATION_MS: u64 = 60_000;
 
 const DEFAULT_FAUCET_MIST_AMOUNT: u64 = 200_000_000_000; // 200 SUI
 const DEFAULT_FAUCET_PORT: u16 = 9123;
 
+const DEFAULT_CONSISTENT_STORE_PORT: u16 = 9124;
 const DEFAULT_GRAPHQL_PORT: u16 = 9125;
 
-const DEFAULT_INDEXER_PORT: u16 = 9124;
-
 #[derive(Args)]
-pub struct IndexerArgs {
-    /// Start an indexer with default host and port: 0.0.0.0:9124. This flag accepts also a port,
-    /// a host, or both (e.g., 0.0.0.0:9124).
+pub struct RpcArgs {
+    /// Start an indexer with a local PostgreSQL database.
+    /// The database will be created/opened in the network's configuration directory.
+    #[clap(long)]
+    with_indexer: bool,
+
+    /// Start a Consistent Store with default host and port: 0.0.0.0:9124. This flag accepts also a
+    /// port, a host, or both (e.g., 0.0.0.0:9124).
+    ///
     /// When providing a specific value, please use the = sign between the flag and value:
-    /// `--with-indexer=6124` or `--with-indexer=0.0.0.0`, or `--with-indexer=0.0.0.0:9124`
-    /// The indexer will be started in writer mode and reader mode.
-    #[clap(long,
-            default_missing_value = "0.0.0.0:9124",
-            num_args = 0..=1,
-            require_equals = true,
-            value_name = "INDEXER_HOST_PORT",
-        )]
-    with_indexer: Option<String>,
+    /// `--with-consistent-store=9124` or `--with-consistent-store=0.0.0.0`, or `--with-consistent-store=0.0.0.0:9124`
+    /// The Consistent Store will be automatically enabled when `--with-graphql` is set.
+    #[clap(
+        long,
+        default_missing_value = "0.0.0.0:9124",
+        num_args = 0..=1,
+        require_equals = true,
+        value_name = "CONSISTENT_STORE_HOST_PORT"
+    )]
+    with_consistent_store: Option<String>,
 
     /// Start a GraphQL server with default host and port: 0.0.0.0:9125. This flag accepts also a
     /// port, a host, or both (e.g., 0.0.0.0:9125).
+    ///
     /// When providing a specific value, please use the = sign between the flag and value:
-    /// `--with-graphql=6124` or `--with-graphql=0.0.0.0`, or `--with-graphql=0.0.0.0:9125`
-    /// Note that GraphQL requires a running indexer, which will be enabled by default if the
-    /// `--with-indexer` flag is not set.
+    /// `--with-graphql=9125` or `--with-graphql=0.0.0.0`, or `--with-graphql=0.0.0.0:9125`
+    ///
+    /// Note that GraphQL requires a running indexer and consistent store, which will be enabled
+    /// by default even if those flags are not set.
     #[clap(
-            long,
-            default_missing_value = "0.0.0.0:9125",
-            num_args = 0..=1,
-            require_equals = true,
-            value_name = "GRAPHQL_HOST_PORT"
-        )]
+        long,
+        default_missing_value = "0.0.0.0:9125",
+        num_args = 0..=1,
+        require_equals = true,
+        value_name = "GRAPHQL_HOST_PORT"
+    )]
     with_graphql: Option<String>,
-
-    /// Port for the Indexer Postgres DB. Default port is 5432.
-    #[clap(long, default_value = "5432")]
-    pg_port: u16,
-
-    /// Hostname for the Indexer Postgres DB. Default host is localhost.
-    #[clap(long, default_value = "localhost")]
-    pg_host: String,
-
-    /// DB name for the Indexer Postgres DB. Default DB name is sui_indexer.
-    #[clap(long, default_value = "sui_indexer")]
-    pg_db_name: String,
-
-    /// DB username for the Indexer Postgres DB. Default username is postgres.
-    #[clap(long, default_value = "postgres")]
-    pg_user: String,
-
-    /// DB password for the Indexer Postgres DB. Default password is postgrespw.
-    #[clap(long, default_value = "postgrespw")]
-    pg_password: String,
 }
 
-impl IndexerArgs {
+impl RpcArgs {
     pub fn for_testing() -> Self {
         Self {
-            with_indexer: None,
+            with_indexer: false,
+            with_consistent_store: None,
             with_graphql: None,
-            pg_port: 5432,
-            pg_host: "localhost".to_string(),
-            pg_db_name: "sui_indexer".to_string(),
-            pg_user: "postgres".to_string(),
-            pg_password: "postgrespw".to_string(),
         }
     }
 }
@@ -214,7 +211,7 @@ pub enum SuiCommand {
         with_faucet: Option<String>,
 
         #[clap(flatten)]
-        indexer_feature_args: IndexerArgs,
+        rpc_args: RpcArgs,
 
         /// Port to start the Fullnode RPC server on. Default port is 9000.
         #[clap(long, default_value = "9000")]
@@ -416,7 +413,7 @@ impl SuiCommand {
                 config_dir,
                 force_regenesis,
                 with_faucet,
-                indexer_feature_args,
+                rpc_args,
                 fullnode_rpc_port,
                 data_ingestion_dir,
                 no_full_node,
@@ -426,7 +423,7 @@ impl SuiCommand {
                 start(
                     config_dir.clone(),
                     with_faucet,
-                    indexer_feature_args,
+                    rpc_args,
                     force_regenesis,
                     epoch_duration_ms,
                     fullnode_rpc_port,
@@ -488,10 +485,10 @@ impl SuiCommand {
                     if let Some(env_override) = config.env {
                         context = context.with_env_override(env_override);
                     }
-                    if let Ok(client) = context.get_client().await {
-                        if let Err(e) = client.check_api_version() {
-                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                        }
+                    if let Ok(client) = context.get_client().await
+                        && let Err(e) = client.check_api_version()
+                    {
+                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
                     }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -512,10 +509,10 @@ impl SuiCommand {
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 let mut context = WalletContext::new(&config_path)?;
                 if let Some(cmd) = cmd {
-                    if let Ok(client) = context.get_client().await {
-                        if let Err(e) = client.check_api_version() {
-                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                        }
+                    if let Ok(client) = context.get_client().await
+                        && let Err(e) = client.check_api_version()
+                    {
+                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
                     }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -540,7 +537,9 @@ impl SuiCommand {
                         )
                         .await?;
                         let Some(client) = client else {
-                            bail!("`sui move summary --package-id <object_id>` requires a configured network");
+                            bail!(
+                                "`sui move summary --package-id <object_id>` requires a configured network"
+                            );
                         };
 
                         let read_api = client.read_api();
@@ -708,10 +707,10 @@ impl SuiCommand {
                 let config_path =
                     client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 let mut context = WalletContext::new(&config_path)?;
-                if let Ok(client) = context.get_client().await {
-                    if let Err(e) = client.check_api_version() {
-                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                    }
+                if let Ok(client) = context.get_client().await
+                    && let Err(e) = client.check_api_version()
+                {
+                    eprintln!("{}", format!("[warning] {e}").yellow().bold());
                 }
                 let rgp = context.get_reference_gas_price().await?;
                 let rpc_url = &context.get_active_env()?.rpc;
@@ -764,7 +763,7 @@ impl SuiCommand {
                     let signed_tx = context.sign_transaction(&tx).await;
                     tasks.push(context.execute_transaction_must_succeed(signed_tx));
                 }
-                futures::future::join_all(tasks).await;
+                future::join_all(tasks).await;
                 Ok(())
             }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
@@ -821,7 +820,7 @@ impl SuiCommand {
 async fn start(
     config: Option<PathBuf>,
     with_faucet: Option<String>,
-    indexer_feature_args: IndexerArgs,
+    rpc_args: RpcArgs,
     force_regenesis: bool,
     epoch_duration_ms: Option<u64>,
     fullnode_rpc_port: u16,
@@ -836,23 +835,20 @@ async fn start(
         );
     }
 
-    let IndexerArgs {
-        mut with_indexer,
+    let RpcArgs {
+        with_indexer,
+        mut with_consistent_store,
         with_graphql,
-        pg_port,
-        pg_host,
-        pg_db_name,
-        pg_user,
-        pg_password,
-    } = indexer_feature_args;
+    } = rpc_args;
 
-    let pg_address = format!("postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}");
-
-    if with_graphql.is_some() {
-        with_indexer = Some(with_indexer.unwrap_or_default());
+    // Automatically enable consistent store if GraphQL is enabled
+    if with_graphql.is_some() && with_consistent_store.is_none() {
+        with_consistent_store = Some("0.0.0.0:9124".to_string());
     }
 
-    if with_indexer.is_some() {
+    // Automatically enable indexer if GraphQL is enabled
+    let with_indexer = with_indexer || with_graphql.is_some();
+    if with_indexer {
         ensure!(
             !no_full_node,
             "Cannot start the indexer without a fullnode."
@@ -989,7 +985,7 @@ async fn start(
     // the indexer requires to set the fullnode's data ingestion directory
     // note that this overrides the default configuration that is set when running the genesis
     // command, which sets data_ingestion_dir to None.
-    if with_indexer.is_some() && data_ingestion_dir.is_none() {
+    if with_indexer && data_ingestion_dir.is_none() {
         data_ingestion_dir = Some(mysten_common::tempdir()?.keep())
     }
 
@@ -997,15 +993,21 @@ async fn start(
         swarm_builder = swarm_builder.with_data_ingestion_dir(dir.clone());
     }
 
-    let mut fullnode_url = sui_config::node::default_json_rpc_address();
-    fullnode_url.set_port(fullnode_rpc_port);
+    let mut fullnode_rpc_address = sui_config::node::default_json_rpc_address();
+    fullnode_rpc_address.set_port(fullnode_rpc_port);
 
     if no_full_node {
         swarm_builder = swarm_builder.with_fullnode_count(0);
     } else {
+        let rpc_config = sui_config::RpcConfig {
+            enable_indexing: Some(true),
+            ..Default::default()
+        };
+
         swarm_builder = swarm_builder
             .with_fullnode_count(1)
-            .with_fullnode_rpc_addr(fullnode_url);
+            .with_fullnode_rpc_addr(fullnode_rpc_address)
+            .with_fullnode_rpc_config(rpc_config);
     }
 
     let mut swarm = swarm_builder.build();
@@ -1014,62 +1016,150 @@ async fn start(
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     info!("Cluster started");
 
-    // the indexer requires a fullnode url with protocol specified
-    let fullnode_url = format!("http://{}", fullnode_url);
-    info!("Fullnode URL: {}", fullnode_url);
+    let fullnode_rpc_url = format!("http://{fullnode_rpc_address}");
+    info!("Fullnode RPC URL: {fullnode_rpc_url}");
 
-    if let Some(input) = with_indexer {
-        let indexer_address = parse_host_port(input, DEFAULT_INDEXER_PORT)
-            .map_err(|_| anyhow!("Invalid indexer host and port"))?;
-        info!("Starting the indexer service at {indexer_address}");
-        // Start in reader mode
-        start_indexer_jsonrpc_for_testing(
-            pg_address.clone(),
-            fullnode_url.clone(),
-            indexer_address.to_string(),
-            None,
-        )
-        .await;
-        info!("Indexer started in reader mode");
-        start_indexer_writer_for_testing(
-            pg_address.clone(),
-            None,
-            None,
-            // We ensured above that this is set to something if --with-indexer is set
-            data_ingestion_dir,
-            None,
-            None, /* start_checkpoint */
-            None, /* end_checkpoint */
-        )
-        .await;
-        info!("Indexer started in writer mode");
-    }
+    let prometheus_registry = Registry::new();
+    let cancel = CancellationToken::new();
+    let mut rpc_services = vec![];
 
-    if let Some(input) = with_graphql {
-        let graphql_address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
-            .map_err(|_| anyhow!("Invalid graphql host and port"))?;
-        tracing::info!("Starting the GraphQL service at {graphql_address}");
-        let graphql_connection_config = ConnectionConfig {
-            port: graphql_address.port(),
-            host: graphql_address.ip().to_string(),
-            db_url: pg_address,
+    // Start a local PostgreSQL database if needed
+    let database = if with_indexer {
+        let pg_dir = config_dir.join("indexer");
+        let port = get_available_port();
+
+        info!("Starting local PostgreSQL database at {pg_dir:?} on port {port}");
+
+        let db = if pg_dir.exists() {
+            LocalDatabase::new(pg_dir, port).context("Failed to start local PostgreSQL database")?
+        } else {
+            LocalDatabase::new_initdb(pg_dir, port)
+                .context("Failed to initialize and start local PostgreSQL database")?
+        };
+
+        info!("Local PostgreSQL database started at {}", db.url());
+        Some(db)
+    } else {
+        None
+    };
+
+    // Get the database URL from the local database
+    let database_url = database.as_ref().map(|db| db.url().clone());
+    let pipelines = if let Some(ref db_url) = database_url {
+        info!("Starting the indexer with database: {db_url}");
+
+        let client_args = ClientArgs {
+            local_ingestion_path: data_ingestion_dir.clone(),
             ..Default::default()
         };
 
-        start_graphql_server_with_fn_rpc(
-            graphql_connection_config,
-            Some(fullnode_url.clone()),
-            None, // it will be initialized by default
-            ServiceConfig::test_defaults(),
+        let indexer = setup_indexer(
+            db_url.clone(),
+            DbArgs::default(),
+            IndexerArgs::default(),
+            client_args,
+            IndexerConfig::for_test(),
+            None,
+            &prometheus_registry,
+            cancel.child_token(),
         )
-        .await;
-        info!("GraphQL started");
+        .await
+        .context("Failed to setup indexer")?;
+
+        let pipelines = indexer.pipelines().map(|s| s.to_string()).collect();
+        let handle = indexer.run().await.context("Failed to start indexer")?;
+        rpc_services.push(handle);
+
+        info!("Indexer started with pipelines: {pipelines:?}");
+        pipelines
+    } else {
+        vec![]
+    };
+
+    let consistent_store_url = if let Some(input) = with_consistent_store {
+        let address = parse_host_port(input, DEFAULT_CONSISTENT_STORE_PORT)
+            .context("Invalid consistent store host and port")?;
+
+        let client_args = ClientArgs {
+            local_ingestion_path: data_ingestion_dir.clone(),
+            ..Default::default()
+        };
+
+        let consistent_args = ConsistentArgs {
+            rpc_listen_address: address,
+            ..Default::default()
+        };
+
+        let handle = start_consistent_store(
+            config_dir.join("consistent_store"),
+            IndexerArgs::default(),
+            client_args,
+            consistent_args,
+            "0.0.0",
+            ConsistentConfig::for_test(),
+            &prometheus_registry,
+            cancel.child_token(),
+        )
+        .await
+        .context("Failed to start Consistent Store")?;
+        rpc_services.push(handle);
+
+        info!("Consistent Store started at {address}");
+        Some(format!("http://{address}"))
+    } else {
+        None
+    };
+
+    if let Some(input) = with_graphql {
+        let address = parse_host_port(input, DEFAULT_GRAPHQL_PORT)
+            .context("Invalid graphql host and port")?;
+
+        info!("Starting the GraphQL service at {address}");
+
+        let graphql_args = GraphQlArgs {
+            rpc_listen_address: address,
+            no_ide: false,
+        };
+
+        let consistent_reader_args = ConsistentReaderArgs {
+            consistent_store_url: consistent_store_url
+                .as_ref()
+                .map(|url| Url::parse(url))
+                .transpose()
+                .context("Failed to parse consistent store URL")?,
+            ..Default::default()
+        };
+
+        let fullnode_args = FullnodeArgs {
+            fullnode_rpc_url: Some(fullnode_rpc_url.clone()),
+        };
+
+        let handle = start_graphql(
+            database_url.clone(),
+            None,
+            fullnode_args,
+            DbArgs::default(),
+            BigtableArgs::default(),
+            consistent_reader_args,
+            graphql_args,
+            SystemPackageTaskArgs::default(),
+            "0.0.0",
+            GraphQlConfig::default(),
+            pipelines,
+            &prometheus_registry,
+            cancel.child_token(),
+        )
+        .await
+        .context("Failed to start GraphQL server")?;
+        rpc_services.push(handle);
+
+        info!("GraphQL started at {address}");
     }
 
     if let Some(input) = with_faucet {
         let faucet_address = parse_host_port(input, DEFAULT_FAUCET_PORT)
             .map_err(|_| anyhow!("Invalid faucet host and port"))?;
-        tracing::info!("Starting the faucet service at {faucet_address}");
+        info!("Starting the faucet service at {faucet_address}");
 
         let host_ip = match faucet_address {
             SocketAddr::V4(addr) => *addr.ip(),
@@ -1098,7 +1188,7 @@ async fn start(
                 external_keys: None,
                 envs: vec![SuiEnv {
                     alias: "localnet".to_string(),
-                    rpc: fullnode_url,
+                    rpc: fullnode_rpc_url,
                     ws: None,
                     basic_auth: None,
                 }],
@@ -1124,26 +1214,37 @@ async fn start(
         start_faucet(app_state).await?;
     }
 
-    let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
-    let mut unhealthy_cnt = 0;
+    // Run health check loop until Ctrl+C or failure
+    let mut interval = interval(Duration::from_secs(3));
+    let mut unhealthy = 0;
+
     loop {
-        for node in swarm.validator_nodes() {
-            if let Err(err) = node.health_check(true).await {
-                unhealthy_cnt += 1;
-                if unhealthy_cnt > 3 {
-                    // The network could temporarily go down during reconfiguration.
-                    // If we detect a failed validator 3 times in a row, give up.
-                    return Err(err.into());
-                }
-                // Break the inner loop so that we could retry latter.
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                info!("Received Ctrl+C, shutting down...");
                 break;
-            } else {
-                unhealthy_cnt = 0;
             }
+            _ = interval.tick() => {}
         }
 
-        interval.tick().await;
+        for node in swarm.validator_nodes() {
+            let Err(e) = node.health_check(true).await else {
+                unhealthy = 0;
+                break;
+            };
+
+            unhealthy += 1;
+            if unhealthy > 3 {
+                return Err(e.into());
+            }
+        }
     }
+
+    // Trigger cancellation to shut down all RPC services, and wait for all services to exit
+    // cleanly.
+    cancel.cancel();
+    future::join_all(rpc_services).await;
+    Ok(())
 }
 
 async fn genesis(
@@ -1212,7 +1313,10 @@ async fn genesis(
                 })?;
             }
         } else if files.len() != 2 || !client_path.exists() || !keystore_path.exists() {
-            bail!("Cannot run genesis with non-empty Sui config directory {}, please use the --force/-f option to remove the existing configuration", sui_config_dir.to_str().unwrap());
+            bail!(
+                "Cannot run genesis with non-empty Sui config directory {}, please use the --force/-f option to remove the existing configuration",
+                sui_config_dir.to_str().unwrap()
+            );
         }
     }
 
@@ -1419,7 +1523,10 @@ async fn prompt_if_no_config(
             }),
             None => {
                 if accept_defaults {
-                    print!("Creating config file [{:?}] with default (devnet) Full node server and ed25519 key scheme.", wallet_conf_path);
+                    print!(
+                        "Creating config file [{:?}] with default (devnet) Full node server and ed25519 key scheme.",
+                        wallet_conf_path
+                    );
                 } else {
                     print!(
                         "Config file [{:?}] doesn't exist, do you want to connect to a Sui Full node server [y/N]?",
@@ -1485,7 +1592,9 @@ async fn prompt_if_no_config(
             let key_scheme = if accept_defaults {
                 SignatureScheme::ED25519
             } else {
-                println!("Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1):");
+                println!(
+                    "Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1):"
+                );
                 match SignatureScheme::from_flag(read_line()?.trim()) {
                     Ok(s) => s,
                     Err(e) => return Err(anyhow!("{e}")),
@@ -1678,7 +1787,9 @@ pub async fn get_replay_node(context: &WalletContext) -> Result<SR2::Node, anyho
         .read_api()
         .get_chain_identifier()
         .await?;
-    let err_msg = format!("'{chain_id}' chain identifier is not supported for replay -- only testnet and mainnet are supported currently");
+    let err_msg = format!(
+        "'{chain_id}' chain identifier is not supported for replay -- only testnet and mainnet are supported currently"
+    );
     let chain_id = ChainIdentifier::from_chain_short_id(&chain_id)
         .ok_or_else(|| anyhow::anyhow!(err_msg.clone()))?;
     Ok(match chain_id.chain() {

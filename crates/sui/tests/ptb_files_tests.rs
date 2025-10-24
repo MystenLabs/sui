@@ -16,7 +16,7 @@ const TEST_DIR: &str = "tests";
 async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
     use std::collections::BTreeMap;
     use std::fs::OpenOptions;
-    use sui::client_ptb::ptb::{to_source_string, PTB};
+    use sui::client_ptb::ptb::{PTB, to_source_string};
     use sui::client_ptb::{error::build_error_reports, ptb::PTBPreview};
     use test_cluster::TestClusterBuilder;
 

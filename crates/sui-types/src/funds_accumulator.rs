@@ -3,8 +3,8 @@
 
 //! Rust bindings for `sui::funds_accumulator`
 
-use crate::base_types::SuiAddress;
 use crate::SUI_FRAMEWORK_ADDRESS;
+use crate::base_types::SuiAddress;
 use move_core_types::annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout};
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;

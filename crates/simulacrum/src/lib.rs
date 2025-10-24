@@ -14,7 +14,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, ensure};
 use fastcrypto::traits::Signer;
 use rand::rngs::OsRng;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
@@ -26,7 +26,7 @@ use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
-use sui_types::crypto::{get_account_key_pair, AccountKeyPair, AuthoritySignature};
+use sui_types::crypto::{AccountKeyPair, AuthoritySignature, get_account_key_pair};
 use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
@@ -48,9 +48,9 @@ use sui_types::{
 };
 
 use self::epoch_state::EpochState;
+pub use self::store::SimulatorStore;
 pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
-pub use self::store::SimulatorStore;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::{
@@ -263,11 +263,18 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     /// created.
     pub fn create_checkpoint(&mut self) -> VerifiedCheckpoint {
         if self.epoch_state.protocol_config().enable_accumulators() {
-            let settlement_txns = self.checkpoint_builder.get_settlement_txns();
+            let settlement_txns = self
+                .checkpoint_builder
+                .get_settlement_txns(self.epoch_state.protocol_config());
 
+            // The final transaction (the barrier transaction) must be executed after
+            // all the settlement transactions.
             for txn in settlement_txns {
                 self.execute_system_transaction(txn)
-                    .expect("settlement txn cannot fail");
+                    .expect("settlement txn cannot fail")
+                    .0
+                    .status()
+                    .unwrap();
             }
         }
 
@@ -774,7 +781,7 @@ impl Simulacrum {
 mod tests {
     use std::time::Duration;
 
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{SeedableRng, rngs::StdRng};
     use sui_types::{
         base_types::SuiAddress, effects::TransactionEffectsAPI, gas_coin::GasCoin,
         transaction::TransactionDataAPI,

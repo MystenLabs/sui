@@ -21,11 +21,11 @@ This pattern is similar to the [ERC1155](https://eips.ethereum.org/EIPS/eip-1155
 
 - **NFTs vs FTs distinction**
 
-  Each time a tokenized asset is minted, there's a possibility for it to be created with new metadata. If new metadata is incorporated, the tokenized asset is deemed unique, transforming it into an NFT. In this case, its balance is limited to one, signifying that only a single instance of this asset exists.
+  Each time a tokenized asset is minted, the system can create it with new metadata. If new metadata is incorporated, the tokenized asset becomes unique, transforming it into an NFT. In this case, its balance is limited to 1, signifying that only a single instance of this asset exists.
 
-  If there's no additional metadata, the tokenized asset is categorized as an FT, allowing its balance to exceed one, enabling multiple identical instances of the asset to exist.
+  If no additional metadata exists, the system categorizes the tokenized asset as an FT, allowing its balance to exceed 1, enabling multiple identical instances of the asset to exist.
 
-  FTs possess the capability to merge (join) among themselves or be split when the balance is greater than one. This functionality allows for the aggregation or division of units of the token, offering flexibility in handling varying quantities as needed.
+  FTs possess the capability to merge (join) among themselves or be split when the balance is greater than 1. This functionality allows for the aggregation or division of units of the token, offering flexibility in handling varying quantities as needed.
 
   As previously mentioned, all the collectibles of tokenized assets, whether NFTs or FTs, when combined, can amount to the maximum total supply of the asset.
 
@@ -45,7 +45,7 @@ As with all smart contracts on Sui, Move provides the logic that powers asset to
 
 This reference implementation uses the [Kiosk standard](../../../standards/kiosk.mdx) to ensure that tokenized assets operate within their defined policy. Use the implementation as presented to have marketable tokenized assets that support rules like royalties, commissions, and so on.
 
-If using Kiosk is not a requirement, then you can exclude the unlock module and some of the proxy's methods related to transfer policies.
+If Kiosk is not a requirement, then you can exclude the unlock module and some of the proxy's methods related to transfer policies.
 
 :::
 
@@ -57,13 +57,13 @@ Select a module to view its details:
 
 The `tokenized_asset` module operates in a manner similar to the `coin` library.
 
-When it receives a new one-time witness type, it creates a unique representation of a fractional asset. This module employs similar implementations to some methods found in the `Coin` module. It encompasses functionalities pertinent to asset tokenization, including new asset creation, minting, splitting, joining, and burning. See [One Time Witness](https://move-book.com/programmability/one-time-witness.html) in The Move Book for more information.
+When it receives a new One-Time Witness type, it creates a unique representation of a fractional asset. This module employs similar implementations to some methods found in the `Coin` module. It encompasses functionalities pertinent to asset tokenization, including new asset creation, minting, splitting, joining, and burning. See [One Time Witness](https://move-book.com/programmability/one-time-witness.html) in The Move Book for more information.
 
 **Structs**
 
 - `AssetCap`
 
-  Generate an `AssetCap` for each new asset represented as a fractional NFT. In most scenarios, you should create it as an owned object, which you can then transfer to the platform's administrator for access-restricted method invocation.
+  Generate an `AssetCap` for each new asset represented as a fractional NFT. In most scenarios, create it as an owned object, which you can then transfer to the platform's administrator for access-restricted method invocation.
 
   ```rust
   struct AssetCap<phantom T> {
@@ -126,7 +126,7 @@ When it receives a new one-time witness type, it creates a unique representation
 
 - `init`
 
-  This function creates a `PlatformCap` and sends it to the sender.
+  This function creates a `PlatformCap` and transfers it to the transaction sender.
 
   ```rust
   fun init(ctx: &mut TxContext) {}
@@ -134,7 +134,7 @@ When it receives a new one-time witness type, it creates a unique representation
 
 - `new_asset`
 
-  This function holds the responsibility of creating a fresh representation of an asset, defining its crucial attributes. Upon execution, it returns two distinct objects: the `AssetCap` and `AssetMetadata`. These objects encapsulate the necessary information and characteristics defining the asset within the system.
+  This function holds the responsibility of creating a fresh representation of an asset, defining its crucial attributes. Upon execution, it returns 2 distinct objects: the `AssetCap` and `AssetMetadata`. These objects encapsulate the necessary information and characteristics defining the asset within the system.
 
   ```rust
   public fun new_asset<T: drop>(
@@ -151,7 +151,7 @@ When it receives a new one-time witness type, it creates a unique representation
 
 - `mint`
 
-  The function performs the minting of a tokenized asset. If new metadata is introduced during this process, the resulting tokenized asset is considered unique, resulting in the creation of an NFT with a balance set to 1. Alternatively, if no new metadata is added, the tokenized asset is classified as an FT, permitting its balance to surpass 1, as specified by a provided argument. Upon execution, the function returns the tokenized asset object.
+  The function performs the minting of a tokenized asset. If new metadata is introduced during this process, the tokenized asset becomes unique, resulting in the creation of an NFT with a balance set to 1. Alternatively, if no new metadata is added, the system classifies the tokenized asset as an FT, permitting its balance to surpass 1, as specified by a provided argument. Upon execution, the function returns the tokenized asset object.
 
   ```rust
   public fun mint<T>(
@@ -165,7 +165,7 @@ When it receives a new one-time witness type, it creates a unique representation
 
 - `split`
 
-  This function is provided with a tokenized asset of the FT type and a balance greater than 1, along with a value less than the object's balance, and performs a split operation on the tokenized asset. The operation divides the existing tokenized asset into two separate tokenized assets. The newly created tokenized asset has a balance equal to the given value, while the balance of the provided object is reduced by the specified value. Upon completion, the function returns the newly created tokenized asset. This function does not accept or operate on tokenized assets of the NFT type.
+  This function receives a tokenized asset of the FT type and a balance greater than 1, along with a value less than the object's balance, and performs a split operation on the tokenized asset. The operation divides the existing tokenized asset into 2 separate tokenized assets. The newly created tokenized asset has a balance equal to the given value, while the balance of the provided object is reduced by the specified value. Upon completion, the function returns the newly created tokenized asset. This function does not accept or operate on tokenized assets of the NFT type.
 
   ```rust
   public fun split<T>(
@@ -177,7 +177,7 @@ When it receives a new one-time witness type, it creates a unique representation
 
 - `join`
 
-  This function is given two tokenized assets of the FT type and executes a merge operation on the tokenized assets. The operation involves increasing the balance of the first tokenized asset by the balance of the second one. Subsequently, the second tokenized asset is burned or removed from circulation. After the process concludes, the function returns the ID of the burned tokenized asset.
+  This function receives 2 tokenized assets of the FT type and executes a merge operation on the tokenized assets. The operation involves increasing the balance of the first tokenized asset by the balance of the second one. Subsequently, the system burns or removes the second tokenized asset from circulation. After the process concludes, the function returns the ID of the burned tokenized asset.
 
   This function does not accept or operate on tokenized assets of the NFT type.
 
@@ -190,7 +190,7 @@ When it receives a new one-time witness type, it creates a unique representation
 
 - `burn`
 
-  This function requires the `assetCap` as a parameter, thereby restricting its invocation solely to the platform admin. Additionally, it accepts a tokenized asset that is burned as part of its operation. Upon burning the provided tokenized asset, the circulating supply decreases by the balance of the burnt item. It necessitates a tokenized asset that is burnable.
+  This function requires the `assetCap` as a parameter, restricting its invocation solely to the platform admin. Additionally, it accepts a tokenized asset that is burned as part of its operation. Upon burning the provided tokenized asset, the circulating supply decreases by the balance of the burnt item. It requires a tokenized asset that is burnable.
 
   ```rust
   public fun burn<T>(
@@ -201,7 +201,7 @@ When it receives a new one-time witness type, it creates a unique representation
 
 - `total_supply`
 
-  This function retrieves and returns the value representing the total supply of the asset.
+  This function returns the maximum supply of the asset.
 
   ```rust
   public fun total_supply<T>(cap: &AssetCap<T>): u64 {}
@@ -209,7 +209,7 @@ When it receives a new one-time witness type, it creates a unique representation
 
 - `supply`
 
-  This function retrieves and returns the value representing the current circulating supply of the asset.
+  This function returns the current circulating supply of the asset.
 
   ```rust
   public fun supply<T>(cap: &AssetCap<T>): u64 {}
@@ -217,7 +217,7 @@ When it receives a new one-time witness type, it creates a unique representation
 
 - `value`
 
-  This function takes a tokenized asset as input and retrieves its associated balance value.
+  This function returns the balance of a tokenized asset.
 
   ```rust
   public fun value<T>(tokenized_asset: &TokenizedAsset<T>): u64 {}
@@ -244,7 +244,7 @@ The `proxy` module comprises methods that the type owner utilizes to execute pub
 
 - `Proxy`
 
-  The `PROXY` struct represents the one-time witness (OTW) to claim the publisher.
+  The `PROXY` struct represents the One-Time Witness (OTW) to claim the publisher.
 
   ```rust
   struct PROXY has drop {}
@@ -717,7 +717,7 @@ Successfully verified dependencies on-chain against source.
 
 You can also view a multitude of information and transactional effects.
 
-You should choose and store the `package ID` and the `registry ID` from the created objects in the respective fields within your .env file.
+You should choose and store the `package ID` and the `registry ID` from the created objects in the respective fields within your `.env` file.
 
 Afterward, it's necessary to modify the `Move.toml` file. Under the `[addresses]` section, replace `0x0` with the same `package ID`. Optionally, under the `[package]` section, add `published-at = <package ID>` (this step is not needed if you see a `Move.lock` file after running `sui client publish`).
 
@@ -762,7 +762,7 @@ Successfully verified dependencies on-chain against source.
 
 You can also view a multitude of information and transactional effects.
 
-You should choose and store the `package ID`, asset `metadata ID`, `asset cap ID` and the `Publisher ID` from the created objects in the respective fields within your .env file.
+You should choose and store the `package ID`, asset `metadata ID`, `asset cap ID` and the `Publisher ID` from the created objects in the respective fields within your `.env` file.
 
 ### Automatically
 
@@ -772,7 +772,7 @@ The process of automatic deployment for the template package refers to publishin
 - If a `Move.lock` file exists after running`sui client publish`, go on to the next step. If not, ensure that the `asset_tokenization/Move.toml` file has its `published-at` field uncommented and populated with the address of the latest package deployment.
 - Make any changes to the template fields by changing the input parameters of the `publishNewAsset` function.
 - Run `npm run publish-template`.
-- You should choose and store the _Template Package ID_, _asset metadata ID_, _asset cap ID_ and the _publisher ID_ from the created objects in the respective fields within your **.env** file.
+- You should choose and store the _Template Package ID_, _asset metadata ID_, _asset cap ID_ and the _publisher ID_ from the created objects in the respective fields within your **`.env`** file.
 
 For more details regarding this process, please consult the setup folder's [README](https://github.com/MystenLabs/asset-tokenization/tree/main/setup).
 
@@ -923,7 +923,7 @@ const tx = new Transaction();
 ...
 ```
 
-As mentioned in the [Bytecode manipulation](#bytecode-manipulation) section, the modules that you need to publish are the template and the genesis, hence the reason you have two elements in the `modules` array. It's also important to include any dependencies defined in the `Move.toml` file of the involved packages. The `packageId` used previously is the address the `asset_tokenization` package has been deployed to.
+As mentioned in the [Bytecode manipulation](#bytecode-manipulation) section, the modules that you need to publish are the template and the genesis, hence the reason you have 2 elements in the `modules` array. It's also important to include any dependencies defined in the `Move.toml` file of the involved packages. The `packageId` used previously is the address the `asset_tokenization` package has been deployed to.
 
 ## TypeScript
 
@@ -931,7 +931,7 @@ Now, you can begin interacting with the deployed smart contract and your tokeniz
 
 In a terminal or console within the project's setup directory, utilize the following commands:
 
-- **Create Transfer Policy**
+- **`create-tp`**
 
   First, create a `TransferPolicy` and a `ProtectedTP` with the following command:
 
@@ -941,9 +941,9 @@ In a terminal or console within the project's setup directory, utilize the follo
 
   After executing the command, the console displays the effects of the transaction.
 
-  By searching the transaction digest on a Sui network explorer, you can locate the created objects. Subsequently, select and save the `TransferPolicy ID` and the `ProtectedTP ID` from these objects into the respective fields within your .env file.
+  By searching the transaction digest on a Sui network explorer, you can locate the created objects. Subsequently, select and save the `TransferPolicy ID` and the `ProtectedTP ID` from these objects into the respective fields within your `.env` file.
 
-- **Add Rules**
+- **Add rules**
 
   In the project's file `transferPolicyRules.ts` located in the directory `setup/src/functions`, you can modify the code to include the desired rules for your transfer policy.
 
@@ -963,25 +963,25 @@ In a terminal or console within the project's setup directory, utilize the follo
           // .removePersonalKioskRule()
   ```
 
-  By running the command `npm run call tp-rules`, the rules will be added to your transfer policy.
+  By running the command `npm run call tp-rules`, the rules are added to your transfer policy.
 
   Now, investors can trade the fractions of your asset according to the rules you've set.
 
-- **Select Kiosk**
+- **`select-kiosk`**
 
-  You must place the tokenized assets within a kiosk if marketable assets are desired. Subsequently, you can list and sell them to other users. It's imperative to lock the objects in the kiosk to prevent any future unauthorized usage outside the defined policy that you set.
+  You must place the tokenized assets within a kiosk if marketable assets are desired. Subsequently, you can list and sell them to other users. Lock the objects in the kiosk to prevent any future unauthorized usage outside the defined policy that you set.
 
-  Best practices recommend a single, comprehensive kiosk for all operations. However, this might not always be the case. Therefore, this project requires the use of only one personal kiosk to ensure consistency and better management, even if you own multiple kiosks.
+  Best practices recommend a single, comprehensive kiosk for all operations. However, this might not always be the case. Therefore, this project requires the use of only 1 personal kiosk to ensure consistency and better management, even if you own multiple kiosks.
 
   To enforce this rule, execute the command `npm run call select-kiosk`. This provides you with the specific kiosk ID to use for this project.
 
-  Then, store the provided Kiosk ID in the appropriate field within your .env file.
+  Then, store the provided Kiosk ID in the appropriate field within your `.env` file.
 
-- **Mint**
+- **`mint`**
 
   In the project's file `mint.ts`, found in the directory `setup/src/functions`, you can edit the code to mint the desired type (NFT/FT) and balance for your asset.
 
-  As previously mentioned, if additional metadata is provided, the tokenized asset is treated as an NFT with a value of one. However, if there is no extra metadata, the tokenized asset is regarded as an FT, and you have the flexibility to select its balance, which can exceed one.
+  As previously mentioned, if additional metadata is provided, the tokenized asset is treated as an NFT with a value of 1. However, if there is no extra metadata, the tokenized asset is regarded as an FT, and you have the flexibility to select its balance, which can exceed 1.
 
   Here is an example from the code that needs modification:
 
@@ -1012,9 +1012,9 @@ In a terminal or console within the project's setup directory, utilize the follo
   }
   ```
 
-  Upon executing the command `npm run call mint`, a new tokenized asset is minted. You can save the object's `ID` in the .env file for future reference.
+  Upon executing the command `npm run call mint`, a new tokenized asset is minted. You can save the object's `ID` in the `.env` file for future reference.
 
-- **Lock**
+- **`lock`**
 
   Locking the objects within the kiosk is crucial to prevent any unauthorized usage beyond the established policy.
 
@@ -1022,11 +1022,11 @@ In a terminal or console within the project's setup directory, utilize the follo
 
   Before running the command, make sure that the field `TOKENIZED_ASSET` within your `.env` file is populated with the object you intend to lock.
 
-- **Mint and Lock**
+- **`mint-lock`**
 
   Executing the command `npm run call mint-lock` performs both the mint and lock functions sequentially, ensuring the minted asset is created and immediately locked within the kiosk.
 
-- **List**
+- **`list`**
 
   Now that your tokenized asset is placed and locked within your kiosk, you can proceed to list it for sale.
 
@@ -1047,7 +1047,7 @@ In a terminal or console within the project's setup directory, utilize the follo
 
   By running the command `npm run call list`, your tokenized asset is listed and made available for sale.
 
-- **Purchase**
+- **`purchase`**
 
   When a user intends to purchase an item, it needs to be listed for sale. After the user selects the item to buy, they are required to modify the following snippet of code found in the file `purchaseItem.ts`, located in the `setup/src/functions` directory.
 
@@ -1062,22 +1062,22 @@ In a terminal or console within the project's setup directory, utilize the follo
 
   Apart from specifying the item and its type, the buyer must set the specific price and the seller's kiosk ID to execute the purchase transaction successfully, accomplished by running `npm run call purchase`.
 
-- **Join**
+- **`join`**
 
-  When you execute the command `npm run call join`, two specified tokenized assets of the FT type are merged together. Before running the command, make sure that the fields `FT1` and `FT2` within your `.env` file are populated with the objects you intend to merge.
+  When you execute the command `npm run call join`, 2 specified tokenized assets of the FT type are merged together. Before running the command, make sure that the fields `FT1` and `FT2` within your `.env` file are populated with the objects you intend to merge.
 
-- **Burn**
+- **`burn`**
 
   When you intend to burn a tokenized asset, execute the command `npm run call burn`. Following this action, the specified asset is destroyed. Before running the command, make sure that the field `TOKENIZED_ASSET` within your `.env` file is populated with the object you intend to burn.
 
-- **Get Balance**
+- **`get-balance`**
 
   By executing the command `npm run call get-balance`, you can retrieve the balance value associated with the specified tokenized asset.
 
-- **Get Supply**
+- **`get-supply`**
 
   By executing the command `npm run call get-supply`, you can retrieve the value representing the current circulating supply of the asset.
 
-- **Get Total Supply**
+- **`get-total-supply`**
 
   By executing the command `npm run call get-total-supply`, you can retrieve the value representing the current circulating supply of the asset.

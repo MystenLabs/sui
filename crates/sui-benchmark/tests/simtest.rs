@@ -4,7 +4,7 @@
 #[cfg(msim)]
 mod test {
     use mysten_common::register_debug_fatal_handler;
-    use rand::{distributions::uniform::SampleRange, seq::SliceRandom, thread_rng, Rng};
+    use rand::{Rng, distributions::uniform::SampleRange, seq::SliceRandom, thread_rng};
     use std::collections::BTreeMap;
     use std::collections::HashSet;
     use std::num::NonZeroUsize;
@@ -23,16 +23,16 @@ mod test {
         WorkloadConfig, WorkloadConfiguration, WorkloadWeights,
     };
     use sui_benchmark::{
-        drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
-        util::get_ed25519_keypair_from_keystore,
         FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
+        drivers::{Interval, bench_driver::BenchDriver, driver::Driver},
+        util::get_ed25519_keypair_from_keystore,
     };
-    use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
     use sui_config::ExecutionCacheConfig;
+    use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
+    use sui_core::authority::AuthorityState;
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
-    use sui_core::authority::AuthorityState;
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
     use sui_macros::{
@@ -44,7 +44,7 @@ mod test {
         ProtocolVersion,
     };
     use sui_simulator::tempfile::TempDir;
-    use sui_simulator::{configs::*, SimConfig};
+    use sui_simulator::{SimConfig, configs::*};
     use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
@@ -130,8 +130,6 @@ mod test {
             .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(1)
             .with_chain_override(chain)
-            // Disable TransactionDriver in chain configide override tests.
-            .transaction_driver_percentage(0)
             .build()
             .await
             .into();
@@ -570,37 +568,51 @@ mod test {
                 * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
             config.set_per_object_congestion_control_mode_for_testing(mode);
             match mode {
-                PerObjectCongestionControlMode::None => panic!("Congestion control mode cannot be None in test_simulated_load_shared_object_congestion_control"),
+                PerObjectCongestionControlMode::None => panic!(
+                    "Congestion control mode cannot be None in test_simulated_load_shared_object_congestion_control"
+                ),
                 PerObjectCongestionControlMode::TotalGasBudget => {
-                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
-                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
-                    config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
-                        allow_overage_factor * total_gas_limit,
-                    );
-                    config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
-                        burst_limit_factor * total_gas_limit,
-                    );
-                },
-                PerObjectCongestionControlMode::TotalTxCount => {
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(
-                        txn_count_limit
+                        total_gas_limit,
                     );
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
-                        txn_count_limit
+                        total_gas_limit,
                     );
-                },
-                PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
-                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
-                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
-                    config.set_gas_budget_based_txn_cost_cap_factor_for_testing(total_gas_limit/cap_factor_denominator);
-                    config.set_gas_budget_based_txn_cost_absolute_cap_commit_count_for_testing(absolute_cap_factor);
                     config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
                         allow_overage_factor * total_gas_limit,
                     );
                     config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
                         burst_limit_factor * total_gas_limit,
                     );
-                },
+                }
+                PerObjectCongestionControlMode::TotalTxCount => {
+                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(
+                        txn_count_limit,
+                    );
+                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
+                        txn_count_limit,
+                    );
+                }
+                PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
+                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(
+                        total_gas_limit,
+                    );
+                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
+                        total_gas_limit,
+                    );
+                    config.set_gas_budget_based_txn_cost_cap_factor_for_testing(
+                        total_gas_limit / cap_factor_denominator,
+                    );
+                    config.set_gas_budget_based_txn_cost_absolute_cap_commit_count_for_testing(
+                        absolute_cap_factor,
+                    );
+                    config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
+                        allow_overage_factor * total_gas_limit,
+                    );
+                    config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
+                        burst_limit_factor * total_gas_limit,
+                    );
+                }
                 // Ignore, params are in ExecutionTimeEstimateParams
                 PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => {}
             }
@@ -718,18 +730,6 @@ mod test {
             config.set_random_beacon_dkg_timeout_round_for_testing(0);
             config
         });
-
-        let test_cluster = build_test_cluster(4, 30_000, 1).await;
-        test_simulated_load(test_cluster, 120).await;
-    }
-
-    #[sim_test(config = "test_config()")]
-    async fn test_simulated_load_mysticeti_fastpath() {
-        if sui_simulator::has_mainnet_protocol_config_override() {
-            return;
-        }
-
-        std::env::set_var("TRANSACTION_DRIVER", "100");
 
         let test_cluster = build_test_cluster(4, 30_000, 1).await;
         test_simulated_load(test_cluster, 120).await;
@@ -881,8 +881,6 @@ mod test {
                 )
                 .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
                 .with_stake_subsidy_start_epoch(10)
-                // Disable TransactionDriver in upgrade compatibility tests.
-                .transaction_driver_percentage(0)
                 .build()
                 .await,
         );
@@ -1192,7 +1190,6 @@ mod test {
                     &genesis,
                     &registry,
                     &test_cluster.fullnode_handle.rpc_url,
-                    test_cluster.transaction_driver_percentage(),
                 )
                 .await,
             )
@@ -1202,7 +1199,9 @@ mod test {
         let system_state_observer = {
             let mut system_state_observer = SystemStateObserver::new(proxy.clone());
             if let Ok(_) = system_state_observer.state.changed().await {
-                info!("Got the new state (reference gas price and/or protocol config) from system state object");
+                info!(
+                    "Got the new state (reference gas price and/or protocol config) from system state object"
+                );
             }
             Arc::new(system_state_observer)
         };
@@ -1468,7 +1467,9 @@ mod test {
         let checkpoint_overrides_computed = checkpoint_overrides.lock().unwrap().clone();
 
         if checkpoint_overrides_computed.is_empty() {
-            panic!("Fork should have been triggered during the test and checkpoint overrides should be computed");
+            panic!(
+                "Fork should have been triggered during the test and checkpoint overrides should be computed"
+            );
         }
 
         let captured_effects = effects_overrides.lock().unwrap().clone();

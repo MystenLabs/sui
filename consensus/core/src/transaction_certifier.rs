@@ -11,13 +11,13 @@ use parking_lot::RwLock;
 use tracing::info;
 
 use crate::{
+    BlockAPI as _, CertifiedBlock, CertifiedBlocksOutput, CommitIndex, VerifiedBlock,
     block::{BlockTransactionVotes, GENESIS_ROUND},
     block_verifier::BlockVerifier,
     commit::CommitAPI,
     context::Context,
     dag_state::DagState,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    BlockAPI as _, CertifiedBlock, CertifiedBlocksOutput, CommitIndex, VerifiedBlock,
 };
 
 /// TransactionCertifier has the following purposes:
@@ -594,8 +594,8 @@ mod test {
     use rand::seq::SliceRandom as _;
 
     use crate::{
-        block::BlockTransactionVotes, context::Context, test_dag_builder::DagBuilder, TestBlock,
-        Transaction,
+        TestBlock, Transaction, block::BlockTransactionVotes, context::Context,
+        test_dag_builder::DagBuilder,
     };
 
     use super::*;

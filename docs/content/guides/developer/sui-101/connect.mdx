@@ -5,9 +5,9 @@ keywords: [ testnet, devnet, mainnet, connect to network, available networks, su
 draft: true
 ---
 
-Sui offers three networks: Mainnet, Devnet, and Testnet. You can use one of the test networks, Devnet or Testnet, to experiment with the version of Sui running on that network. You can also spin up a [local Sui network](/guides/developer/sui-101/local-network.mdx) for local development. 
+Sui offers 3 networks: Mainnet, Devnet, and Testnet. You can use one of the test networks, Devnet or Testnet, to experiment with the version of Sui running on that network. You can also spin up a [local Sui network](/guides/developer/sui-101/local-network.mdx) for local development. 
 
-The Sui Testnet and Devnet networks consist of several validator nodes to validate each network's transactions. Clients send transactions and read requests via this endpoint: `https://fullnode.<SUI-NETWORK-VERSION>.sui.io:443` using [JSON-RPC](/references/sui-api.mdx).
+The Sui Testnet and Devnet networks consist of several validator nodes to validate each network's transactions. Clients send transactions and read requests through this endpoint: `https://fullnode.<SUI-NETWORK-VERSION>.sui.io:443` using [JSON-RPC](/references/sui-api.mdx).
 
 You can [request test SUI tokens](#request-test-tokens) through the Sui [#devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) and [#testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966) Discord channels, depending on which version of the network you use. If connected to Localnet, use cURL to request tokens from your [local faucet](/guides/developer/sui-101/local-network.mdx#use-the-local-faucet). The coins on these networks have no financial value. There is no faucet service for Mainnet.
 
@@ -26,7 +26,7 @@ Sui provides [Sui command line interface (CLI)](/references/cli/client.mdx) to i
 - Call and publish Move modules
 
 
-## Environment set up
+## Environment setup
 
 First, [Install Sui](/guides/developer/getting-started/install-binaries.mdx). After you install Sui, [request SUI test tokens](#request-gas-tokens) through Discord for the network you are using: [Devnet](https://discordapp.com/channels/916379725201563759/971488439931392130) or [Testnet](https://discord.com/channels/916379725201563759/1037811694564560966). If connected to a local network, use cURL to request tokens from your [local faucet](/guides/developer/sui-101/local-network.mdx#use-the-local-faucet).
 
@@ -77,7 +77,7 @@ Type an alias name and press **Enter**.
 Select key scheme to generate key pair (0 for ed25519, 1 for secp256k1, 2 for secp256r1):
 ```
 
-Press **0**, **1**, or **2** to select a key scheme and the press **Enter**.
+Press <kbd>0</kbd>, <kbd>1</kbd>, or <kbd>2</kbd> to select a key scheme and then press <kbd>Enter</kbd>.
 
 Sui returns a message similar to the following (depending on the key scheme you selected) that includes the address and 12-word recovery phrase for the address:
 
@@ -88,9 +88,9 @@ Secret Recovery Phrase : [cap wheat many line human lazy few solid bored proud s
 
 ### Connect to a custom RPC endpoint
 
-If you previously used `sui genesis` with the force option (`-f` or `--force`), your `client.yaml` file already includes two RPC endpoints: `localnet` at `http://0.0.0.0:9000` and `devnet` at `https://fullnode.devnet.sui.io:443`. You can view the defined environments with the `sui client envs` command, and switch between them with the `sui client switch` command.
+If you previously used `sui genesis` with the force option (`-f` or `--force`), your `client.yaml` file already includes 2 RPC endpoints: `localnet` at `http://0.0.0.0:9000` and `devnet` at `https://fullnode.devnet.sui.io:443`. You can view the defined environments with the `sui client envs` command and switch between them with the `sui client switch` command.
 
-If you previously installed a Sui client that connected to a Sui network, or created a local network, you can modify your existing `client.yaml` file to change the configured RPC endpoint. The `sui client` commands that relate to environments read from and write to the `client.yaml` file.
+If you previously installed a Sui client that connected to a Sui network or created a local network, you can modify your existing `client.yaml` file to change the configured RPC endpoint. The `sui client` commands that relate to environments read from and write to the `client.yaml` file.
 
 To check currently available environment aliases, run the following command: 
 

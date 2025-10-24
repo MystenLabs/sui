@@ -11,8 +11,8 @@ use bincode::Options;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use once_cell::sync::Lazy;
 use prometheus::{
-    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
-    Registry,
+    IntCounter, IntGauge, Registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry,
 };
 #[cfg(tidehunter)]
 use serde::de::DeserializeOwned;
@@ -38,8 +38,8 @@ use sui_types::{
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
-use typed_store::rocksdb::compaction_filter::Decision;
 use typed_store::rocksdb::LiveFile;
+use typed_store::rocksdb::compaction_filter::Decision;
 use typed_store::{Map, TypedStoreError};
 
 static PERIODIC_PRUNING_TABLES: Lazy<BTreeSet<String>> = Lazy::new(|| {
@@ -383,17 +383,17 @@ impl AuthorityStorePruner {
                     .unwrap_or_default(),
             );
         }
-        if config.smooth {
-            if let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints {
-                max_eligible_checkpoint = Self::smoothed_max_eligible_checkpoint_number(
-                    checkpoint_store,
-                    max_eligible_checkpoint,
-                    pruned_checkpoint_number,
-                    epoch_id,
-                    epoch_duration_ms,
-                    num_epochs_to_retain,
-                )?;
-            }
+        if config.smooth
+            && let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints
+        {
+            max_eligible_checkpoint = Self::smoothed_max_eligible_checkpoint_number(
+                checkpoint_store,
+                max_eligible_checkpoint,
+                pruned_checkpoint_number,
+                epoch_id,
+                epoch_duration_ms,
+                num_epochs_to_retain,
+            )?;
         }
         debug!("Max eligible checkpoint {}", max_eligible_checkpoint);
         Self::prune_for_eligible_epochs(
@@ -655,10 +655,10 @@ impl AuthorityStorePruner {
             {
                 continue;
             }
-            if let Some(candidate) = &sst_file_for_compaction {
-                if candidate.size > sst_file.size {
-                    continue;
-                }
+            if let Some(candidate) = &sst_file_for_compaction
+                && candidate.size > sst_file.size
+            {
+                continue;
             }
             sst_file_for_compaction = Some(sst_file);
         }
@@ -837,7 +837,10 @@ impl AuthorityStorePruner {
     ) -> Self {
         if pruning_config.num_epochs_to_retain > 0 && pruning_config.num_epochs_to_retain < u64::MAX
         {
-            warn!("Using objects pruner with num_epochs_to_retain = {} can lead to performance issues", pruning_config.num_epochs_to_retain);
+            warn!(
+                "Using objects pruner with num_epochs_to_retain = {} can lead to performance issues",
+                pruning_config.num_epochs_to_retain
+            );
             if is_validator {
                 warn!("Resetting to aggressive pruner.");
                 pruning_config.num_epochs_to_retain = 0;
@@ -915,18 +918,18 @@ impl ObjectsCompactionFilter {
             .with_fixint_encoding()
             .deserialize(key)?;
         let object: StoreObjectWrapper = bcs::from_bytes(value)?;
-        if matches!(object.into_inner(), StoreObject::Value(_)) {
-            if let Some(db) = self.db.upgrade() {
-                match db.object_tombstones.get(&object_id)? {
-                    Some(gc_version) => {
-                        if version <= gc_version {
-                            self.metrics.key_removed.inc();
-                            return Ok(Decision::Remove);
-                        }
-                        self.metrics.key_kept.inc();
+        if matches!(object.into_inner(), StoreObject::Value(_))
+            && let Some(db) = self.db.upgrade()
+        {
+            match db.object_tombstones.get(&object_id)? {
+                Some(gc_version) => {
+                    if version <= gc_version {
+                        self.metrics.key_removed.inc();
+                        return Ok(Decision::Remove);
                     }
-                    None => self.metrics.key_not_found.inc(),
+                    self.metrics.key_kept.inc();
                 }
+                None => self.metrics.key_not_found.inc(),
             }
         }
         Ok(Decision::Keep)
@@ -975,7 +978,7 @@ mod tests {
     use crate::authority::authority_store_pruner::AuthorityStorePruningMetrics;
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
     use crate::authority::authority_store_types::{
-        get_store_object, StoreObject, StoreObjectWrapper,
+        StoreObject, StoreObjectWrapper, get_store_object,
     };
     use prometheus::Registry;
     use sui_types::base_types::ObjectDigest;
@@ -986,8 +989,8 @@ mod tests {
         object::Object,
         storage::ObjectKey,
     };
-    use typed_store::rocks::{default_db_options, DBMap, MetricConf, ReadWriteOptions};
     use typed_store::Map;
+    use typed_store::rocks::{DBMap, MetricConf, ReadWriteOptions, default_db_options};
 
     use super::AuthorityStorePruner;
 

@@ -6,8 +6,8 @@ use std::env;
 use sui_proxy::config::ProxyConfig;
 use sui_proxy::{
     admin::{
-        app, create_server_cert_default_allow, create_server_cert_enforce_peer,
-        make_reqwest_client, server, Labels,
+        Labels, app, create_server_cert_default_allow, create_server_cert_enforce_peer,
+        make_reqwest_client, server,
     },
     config::load,
     histogram_relay, metrics,

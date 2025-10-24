@@ -14,9 +14,10 @@ use sui_node::SuiNodeHandle;
 use sui_protocol_config::ProtocolVersion;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_swarm_config::genesis_config::{
-    AccountConfig, ValidatorGenesisConfig, ValidatorGenesisConfigBuilder, DEFAULT_GAS_AMOUNT,
+    AccountConfig, DEFAULT_GAS_AMOUNT, ValidatorGenesisConfig, ValidatorGenesisConfigBuilder,
 };
-use sui_test_transaction_builder::{make_transfer_sui_transaction, TestTransactionBuilder};
+use sui_test_transaction_builder::{TestTransactionBuilder, make_transfer_sui_transaction};
+use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
@@ -27,13 +28,12 @@ use sui_types::governance::{
 };
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{
-    get_validator_from_table, sui_system_state_summary::get_validator_by_pool_id,
-    SuiSystemStateTrait,
+    SuiSystemStateTrait, get_validator_from_table,
+    sui_system_state_summary::get_validator_by_pool_id,
 };
 use sui_types::transaction::{
     Command, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
 };
-use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::time::sleep;
 
@@ -74,10 +74,12 @@ async fn test_transaction_expiration() {
         .wallet
         .execute_transaction_may_fail(expired_transaction)
         .await;
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains(&SuiErrorKind::TransactionExpired.to_string()));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains(&SuiErrorKind::TransactionExpired.to_string())
+    );
 
     // Non expired transaction signed without issue
     *data.expiration_mut_for_testing() = TransactionExpiration::Epoch(10);
@@ -563,9 +565,10 @@ async fn test_inactive_validator_pool_read() {
 
     // Check that this node is no longer a validator.
     validator.with(|node| {
-        assert!(node
-            .state()
-            .is_fullnode(&node.state().epoch_store_for_testing()));
+        assert!(
+            node.state()
+                .is_fullnode(&node.state().epoch_store_for_testing())
+        );
     });
 
     // Check that the validator that just left now shows up in the inactive_validators,
@@ -644,9 +647,10 @@ async fn test_reconfig_with_committee_change_basic() {
     test_cluster.wait_for_epoch_all_nodes(1).await;
 
     new_validator_handle.with(|node| {
-        assert!(node
-            .state()
-            .is_validator(&node.state().epoch_store_for_testing()));
+        assert!(
+            node.state()
+                .is_validator(&node.state().epoch_store_for_testing())
+        );
     });
 
     execute_remove_validator_tx(&test_cluster, &new_validator_handle).await;
@@ -1371,12 +1375,14 @@ async fn execute_add_validator_transactions(
     )
     .await;
 
-    assert!(try_request_add_validator(test_cluster, new_validator)
-        .await
-        .unwrap()
-        .0
-        .status()
-        .is_ok());
+    assert!(
+        try_request_add_validator(test_cluster, new_validator)
+            .await
+            .unwrap()
+            .0
+            .status()
+            .is_ok()
+    );
 
     // Check that we can get the pending validator from 0x5.
     test_cluster.fullnode_handle.sui_node.with(|node| {

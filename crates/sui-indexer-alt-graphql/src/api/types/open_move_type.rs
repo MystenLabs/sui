@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use async_graphql::{scalar, Object};
+use async_graphql::{Object, scalar};
 use serde::{Deserialize, Serialize};
 use sui_package_resolver::{OpenSignature, OpenSignatureBody, Reference};
 

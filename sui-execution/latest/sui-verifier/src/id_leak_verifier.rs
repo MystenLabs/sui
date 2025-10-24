@@ -21,7 +21,7 @@ use move_binary_format::{
     },
 };
 use move_bytecode_verifier::absint::{
-    analyze_function, AbstractDomain, FunctionContext, JoinResult, TransferFunctions,
+    AbstractDomain, FunctionContext, JoinResult, TransferFunctions, analyze_function,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::{
@@ -31,6 +31,7 @@ use std::{collections::BTreeMap, error::Error, num::NonZeroU64};
 use sui_types::bridge::BRIDGE_MODULE_NAME;
 use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
 use sui_types::{
+    BRIDGE_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
     accumulator_event::ACCUMULATOR_MODULE_NAME,
     authenticator_state::AUTHENTICATOR_STATE_MODULE_NAME,
     clock::CLOCK_MODULE_NAME,
@@ -38,12 +39,11 @@ use sui_types::{
     id::OBJECT_MODULE_NAME,
     randomness_state::RANDOMNESS_MODULE_NAME,
     sui_system_state::SUI_SYSTEM_MODULE_NAME,
-    BRIDGE_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
 
 use crate::{
-    check_for_verifier_timeout, to_verification_timeout_error, verification_failure,
-    TEST_SCENARIO_MODULE_NAME,
+    TEST_SCENARIO_MODULE_NAME, check_for_verifier_timeout, to_verification_timeout_error,
+    verification_failure,
 };
 pub(crate) const JOIN_BASE_COST: u128 = 10;
 pub(crate) const JOIN_PER_LOCAL_COST: u128 = 5;
@@ -163,10 +163,7 @@ fn verify_id_leak(
         let initial_state = AbstractState::new(&function_context);
         let mut verifier = IDLeakAnalysis::new(module, &function_context);
         let function_to_verify = verifier.cur_function();
-        if FUNCTIONS_TO_SKIP
-            .iter()
-            .any(|to_skip| function_to_verify == *to_skip)
-        {
+        if FUNCTIONS_TO_SKIP.contains(&function_to_verify) {
             continue;
         }
         analyze_function(&function_context, meter, &mut verifier, initial_state).map_err(
@@ -332,10 +329,7 @@ fn call(
 
     let return_ = verifier.binary_view.signature_at(function_handle.return_);
     let function = verifier.resolve_function(function_handle);
-    if FRESH_ID_FUNCTIONS
-        .iter()
-        .any(|makes_fresh| function == *makes_fresh)
-    {
+    if FRESH_ID_FUNCTIONS.contains(&function) {
         if return_.0.len() != 1 {
             debug_assert!(false, "{:?} should have a single return value", function);
             return Err(PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)

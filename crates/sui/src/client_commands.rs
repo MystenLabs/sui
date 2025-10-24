@@ -9,7 +9,7 @@ use crate::{
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map::Entry},
     fmt::{Debug, Display, Formatter, Write},
     fs,
     path::{Path, PathBuf},
@@ -17,7 +17,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{Context, anyhow, bail, ensure};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
@@ -36,7 +36,7 @@ use move_core_types::{
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 // use sui_move::manage_package::resolve_lock_file_path;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -56,13 +56,14 @@ use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{CompiledPackage, PackageDependencies};
 use sui_package_management::LockCommand;
 use sui_sdk::{
+    SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
+    SuiClient,
     apis::ReadApi,
     sui_client_config::{SuiClientConfig, SuiEnv},
     wallet_context::WalletContext,
-    SuiClient, SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0,
-    SUI_TESTNET_URL,
 };
 use sui_types::{
+    SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{FullObjectID, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
@@ -81,18 +82,17 @@ use sui_types::{
         InputObjectKind, ObjectArg, SenderSignedData, SharedObjectMutability, Transaction,
         TransactionData, TransactionDataAPI, TransactionKind,
     },
-    SUI_FRAMEWORK_PACKAGE_ID,
 };
 
 use json_to_table::json_to_table;
 use tabled::{
     builder::Builder as TableBuilder,
     settings::{
+        Alignment as TableAlignment, Border as TableBorder, Modify as TableModify,
+        Panel as TablePanel, Style as TableStyle,
         object::{Cell as TableCell, Columns as TableCols, Rows as TableRows},
         span::Span as TableSpan,
         style::HorizontalLine,
-        Alignment as TableAlignment, Border as TableBorder, Modify as TableModify,
-        Panel as TablePanel, Style as TableStyle,
     },
 };
 
@@ -1553,10 +1553,16 @@ impl SuiClientCommands {
                         let network = match env.rpc.as_str() {
                             SUI_DEVNET_URL => "https://faucet.devnet.sui.io/v2/gas",
                             SUI_TESTNET_URL => {
-                                bail!("For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}");
+                                bail!(
+                                    "For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}"
+                                );
                             }
-                            SUI_LOCAL_NETWORK_URL | SUI_LOCAL_NETWORK_URL_0 => "http://127.0.0.1:9123/v2/gas",
-                            _ => bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
+                            SUI_LOCAL_NETWORK_URL | SUI_LOCAL_NETWORK_URL_0 => {
+                                "http://127.0.0.1:9123/v2/gas"
+                            }
+                            _ => bail!(
+                                "Cannot recognize the active network. Please provide the gas faucet full URL."
+                            ),
                         };
                         network.to_string()
                     } else {
@@ -1920,7 +1926,10 @@ impl SuiClientCommands {
 
     pub fn switch_env(config: &mut SuiClientConfig, env: &str) -> Result<(), anyhow::Error> {
         let env = Some(env.into());
-        ensure!(config.get_env(&env).is_some(), "Environment config not found for [{env:?}], add new environment config using the `sui client new-env` command.");
+        ensure!(
+            config.get_env(&env).is_some(),
+            "Environment config not found for [{env:?}], add new environment config using the `sui client new-env` command."
+        );
         config.active_env = env;
         Ok(())
     }
@@ -1939,16 +1948,20 @@ fn check_dep_verification_flags(
         ),
 
         (false, false) => {
-            eprintln!("{}: Dependency sources are no longer verified automatically during publication and upgrade. \
+            eprintln!(
+                "{}: Dependency sources are no longer verified automatically during publication and upgrade. \
                 You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.",
-                "[Note]".bold().yellow());
+                "[Note]".bold().yellow()
+            );
             Ok(verify_dependencies)
         }
 
         (true, false) => {
-            eprintln!("{}: Dependency sources are no longer verified automatically during publication and upgrade, \
+            eprintln!(
+                "{}: Dependency sources are no longer verified automatically during publication and upgrade, \
                 so the `--skip-dependency-verification` flag is no longer necessary.",
-                "[Warning]".bold().yellow());
+                "[Warning]".bold().yellow()
+            );
             Ok(verify_dependencies)
         }
 
@@ -2154,17 +2167,17 @@ async fn compatibility_checks(
         }
     }
 
-    if !compiled_package.is_system_package() {
-        if let Some(already_published) = compiled_package.published_root_module() {
-            return Err(SuiErrorKind::ModulePublishFailure {
-                error: format!(
-                    "Modules must all have 0x0 as their addresses. \
+    if !compiled_package.is_system_package()
+        && let Some(already_published) = compiled_package.published_root_module()
+    {
+        return Err(SuiErrorKind::ModulePublishFailure {
+            error: format!(
+                "Modules must all have 0x0 as their addresses. \
                  Violated by module {:?}",
-                    already_published.self_id(),
-                ),
-            }
-            .into());
+                already_published.self_id(),
+            ),
         }
+        .into());
     }
 
     Ok(())
@@ -3004,7 +3017,9 @@ pub async fn request_tokens_from_faucet(
             if let Some(err) = faucet_resp.error {
                 bail!("Faucet request was unsuccessful: {err}")
             } else {
-                println!("Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins.");
+                println!(
+                    "Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins."
+                );
             }
         }
         StatusCode::BAD_REQUEST => {
@@ -3014,7 +3029,9 @@ pub async fn request_tokens_from_faucet(
             }
         }
         StatusCode::TOO_MANY_REQUESTS => {
-            bail!("Faucet service received too many requests from this IP address. Please try again after 60 minutes.");
+            bail!(
+                "Faucet service received too many requests from this IP address. Please try again after 60 minutes."
+            );
         }
         StatusCode::SERVICE_UNAVAILABLE => {
             bail!("Faucet service is currently overloaded or unavailable. Please try again later.");
@@ -3383,24 +3400,26 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     } else if tx_digest {
         Ok(SuiClientCommandResult::ComputeTransactionDigest(tx_data))
     } else {
-        let mut signatures = vec![context
-            .config
-            .keystore
-            .sign_secure(&signer, &tx_data, Intent::sui_transaction())
-            .await?
-            .into()];
+        let mut signatures = vec![
+            context
+                .config
+                .keystore
+                .sign_secure(&signer, &tx_data, Intent::sui_transaction())
+                .await?
+                .into(),
+        ];
 
-        if let Some(gas_sponsor) = gas_sponsor {
-            if gas_sponsor != signer {
-                signatures.push(
-                    context
-                        .config
-                        .keystore
-                        .sign_secure(&gas_sponsor, &tx_data, Intent::sui_transaction())
-                        .await?
-                        .into(),
-                );
-            }
+        if let Some(gas_sponsor) = gas_sponsor
+            && gas_sponsor != signer
+        {
+            signatures.push(
+                context
+                    .config
+                    .keystore
+                    .sign_secure(&gas_sponsor, &tx_data, Intent::sui_transaction())
+                    .await?
+                    .into(),
+            );
         }
 
         let sender_signed_data = SenderSignedData::new(tx_data, signatures);
@@ -3470,10 +3489,10 @@ pub(crate) async fn prerender_clever_errors(
     read_api: &ReadApi,
 ) {
     let SuiTransactionBlockEffects::V1(effects) = effects;
-    if let SuiExecutionStatus::Failure { error } = &mut effects.status {
-        if let Some(rendered) = render_clever_error_opt(error, read_api).await {
-            *error = rendered;
-        }
+    if let SuiExecutionStatus::Failure { error } = &mut effects.status
+        && let Some(rendered) = render_clever_error_opt(error, read_api).await
+    {
+        *error = rendered;
     }
 }
 
@@ -3683,7 +3702,9 @@ pub async fn load_root_pkg_for_publish_upgrade(
         };
 
         if chain_id != env_id {
-            bail!("The chain id of the active environment in the CLI does not match the chain id {env_id} for {env} environment in the manifest");
+            bail!(
+                "The chain id of the active environment in the CLI does not match the chain id {env_id} for {env} environment in the manifest"
+            );
         }
 
         let env = Environment::new(env.to_string(), env_id.to_string());
@@ -3716,7 +3737,9 @@ pub async fn load_root_pkg_for_publish_upgrade(
             .first_key_value()
             .expect("Should have a first key pair value");
 
-        eprintln!("Note: `Move.toml` does not define an `{active_env}` environment; building for `{env_name}` instead");
+        eprintln!(
+            "Note: `Move.toml` does not define an `{active_env}` environment; building for `{env_name}` instead"
+        );
         let env = Environment::new(env_name.to_string(), chain_id.to_string());
         return Ok(RootPackage::<SuiFlavor>::load(path, env, build_config.mode_set()).await?);
     }
@@ -3726,7 +3749,9 @@ pub async fn load_root_pkg_for_publish_upgrade(
         for e in matching_chain_ids.keys() {
             s.push_str(&format!("--build-env {e}"))
         }
-        bail!("Found several environments defined in Move.toml with chain-id `{chain_id}`. Please pass one of the following: \n\t{s}");
+        bail!(
+            "Found several environments defined in Move.toml with chain-id `{chain_id}`. Please pass one of the following: \n\t{s}"
+        );
     }
 
     // ephemeral case, no environment found with that name, we error
@@ -3780,7 +3805,9 @@ pub fn find_environment(
         };
 
         if &chain_id != env_id {
-            bail!("The chain id of the active environment in the CLI does not match the chain id {env_id} for {env} environment in the manifest");
+            bail!(
+                "The chain id of the active environment in the CLI does not match the chain id {env_id} for {env} environment in the manifest"
+            );
         }
 
         return Ok(Environment::new(env.to_string(), env_id.to_string()));
@@ -3801,7 +3828,9 @@ pub fn find_environment(
 
     // TODO improve error message
     if filtered_env_ids.is_empty() {
-        bail!("Did not find any environment in the manifest that has the same chain id as the active environment in the CLI");
+        bail!(
+            "Did not find any environment in the manifest that has the same chain id as the active environment in the CLI"
+        );
     }
 
     let env = filtered_env_ids

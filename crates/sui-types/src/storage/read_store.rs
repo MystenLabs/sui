@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::error::Result;
 use super::ObjectStore;
-use crate::balance_change::{derive_balance_changes, BalanceChange};
+use super::error::Result;
+use crate::balance_change::{BalanceChange, derive_balance_changes};
 use crate::base_types::{EpochId, ObjectID, ObjectType, SequenceNumber, SuiAddress};
 use crate::committee::Committee;
 use crate::digests::{
@@ -653,7 +653,7 @@ pub trait RpcIndexes: Send + Sync {
     fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>>;
 
     fn get_balance(&self, owner: &SuiAddress, coin_type: &StructTag)
-        -> Result<Option<BalanceInfo>>;
+    -> Result<Option<BalanceInfo>>;
 
     fn balance_iter(
         &self,
@@ -668,7 +668,7 @@ pub trait RpcIndexes: Send + Sync {
     ) -> Result<PackageVersionsIterator<'_>>;
 
     fn get_highest_indexed_checkpoint_seq_number(&self)
-        -> Result<Option<CheckpointSequenceNumber>>;
+    -> Result<Option<CheckpointSequenceNumber>>;
 
     fn authenticated_event_iter(
         &self,

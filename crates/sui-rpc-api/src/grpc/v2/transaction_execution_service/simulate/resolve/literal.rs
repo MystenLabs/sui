@@ -5,9 +5,10 @@ use super::NormalizedPackages;
 use crate::Result;
 use crate::RpcError;
 use move_binary_format::normalized;
-use prost_types::value::Kind;
 use prost_types::Value;
+use prost_types::value::Kind;
 use sui_sdk_types::Command;
+use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::STD_ASCII_MODULE_NAME;
 use sui_types::base_types::STD_ASCII_STRUCT_NAME;
@@ -15,7 +16,6 @@ use sui_types::base_types::STD_OPTION_MODULE_NAME;
 use sui_types::base_types::STD_OPTION_STRUCT_NAME;
 use sui_types::base_types::STD_UTF8_MODULE_NAME;
 use sui_types::base_types::STD_UTF8_STRUCT_NAME;
-use sui_types::MOVE_STDLIB_ADDRESS;
 
 type Type = normalized::Type<normalized::RcIdentifier>;
 
@@ -46,7 +46,7 @@ fn determine_literal_type(
                 return Err(RpcError::new(
                     tonic::Code::InvalidArgument,
                     "unable to resolve literal as it is used as multiple different types across commands",
-                ))
+                ));
             }
             None => {
                 *maybe_type = Some(ty);
@@ -183,7 +183,7 @@ fn resolve_as_bool(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
             return Err(RpcError::new(
                 tonic::Code::InvalidArgument,
                 "literal cannot be resolved into type bool",
-            ))
+            ));
         }
     };
 
@@ -226,7 +226,7 @@ where
                     "literal cannot be resolved into type {}",
                     std::any::type_name::<T>()
                 ),
-            ))
+            ));
         }
     };
 
@@ -248,7 +248,7 @@ fn resolve_as_address(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
             return Err(RpcError::new(
                 tonic::Code::InvalidArgument,
                 "literal cannot be resolved into type address",
-            ))
+            ));
         }
     };
 
@@ -266,7 +266,7 @@ fn resolve_as_string(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
             return Err(RpcError::new(
                 tonic::Code::InvalidArgument,
                 "literal cannot be resolved into string",
-            ))
+            ));
         }
     };
 
@@ -289,7 +289,7 @@ fn resolve_as_option(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Result<(
             return Err(RpcError::new(
                 tonic::Code::InvalidArgument,
                 "literal cannot be resolved into Option",
-            ))
+            ));
         }
     }
 
@@ -775,10 +775,12 @@ mod test {
             (
                 vector_type(vector_type(Type::U8)),
                 Kind::ListValue(prost_types::ListValue {
-                    values: vec![Kind::ListValue(prost_types::ListValue {
-                        values: vec![Kind::NumberValue(9 as _).into()],
-                    })
-                    .into()],
+                    values: vec![
+                        Kind::ListValue(prost_types::ListValue {
+                            values: vec![Kind::NumberValue(9 as _).into()],
+                        })
+                        .into(),
+                    ],
                 }),
                 Some(bcs::to_bytes(&vec![vec![9u8]]).unwrap()),
             ),

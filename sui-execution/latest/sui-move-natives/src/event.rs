@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    abstract_size, get_extension, get_extension_mut, legacy_test_cost,
+    NativesCostTable, abstract_size, get_extension, get_extension_mut, legacy_test_cost,
     object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
-    NativesCostTable,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -130,7 +129,7 @@ fn emit_impl(
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Sui verifier guarantees this is a struct".to_string()),
-            )
+            );
         }
     };
     let tag_size = tag.abstract_size_for_gas_metering();

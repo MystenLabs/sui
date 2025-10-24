@@ -13,12 +13,12 @@ use crate::object_store::http::s3::AmazonS3;
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 
 use crate::object_store::ObjectStoreGetExt;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, Utc};
 use futures::{StreamExt, TryStreamExt};
 use object_store::path::Path;
 use object_store::{Error, GetResult, GetResultPayload, ObjectMeta};
-use reqwest::header::{HeaderMap, CONTENT_LENGTH, ETAG, LAST_MODIFIED};
+use reqwest::header::{CONTENT_LENGTH, ETAG, HeaderMap, LAST_MODIFIED};
 use reqwest::{Client, Method};
 
 // http://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html

@@ -12,13 +12,13 @@ use fastcrypto::encoding::Base64;
 use serde_reflection::Registry;
 
 use move_binary_format::{
-    normalized::{self, Type},
     CompiledModule,
+    normalized::{self, Type},
 };
-use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule, Modules};
+use move_bytecode_utils::{Modules, layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
-    diagnostics::{report_diagnostics_to_buffer, report_warnings, Diagnostics},
+    diagnostics::{Diagnostics, report_diagnostics_to_buffer, report_warnings},
     linters::LINT_WARNING_PREFIX,
     shared::files::MappedFiles,
 };
@@ -42,12 +42,12 @@ use move_symbol_pool::Symbol;
 use sui_package_alt::SuiFlavor;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
+    BRIDGE_ADDRESS, DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    SUI_SYSTEM_ADDRESS, TypeTag,
     base_types::ObjectID,
     error::{SuiError, SuiErrorKind, SuiResult},
     is_system_package,
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
-    TypeTag, BRIDGE_ADDRESS, DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
-    SUI_SYSTEM_ADDRESS,
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
@@ -250,7 +250,9 @@ pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&MappedFiles>
         eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
     }
     if filtered_diags_num > 0 {
-        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (unique lints: {unique})");
+        eprintln!(
+            "Total number of linter warnings suppressed: {filtered_diags_num} (unique lints: {unique})"
+        );
     }
 }
 

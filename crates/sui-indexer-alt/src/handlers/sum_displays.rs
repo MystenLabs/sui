@@ -3,16 +3,16 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use diesel::{upsert::excluded, ExpressionMethods};
+use diesel::{ExpressionMethods, upsert::excluded};
 use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
 use sui_indexer_alt_framework::{
-    pipeline::{sequential::Handler, Processor},
+    FieldCount,
+    pipeline::{Processor, sequential::Handler},
     postgres::{Connection, Db},
     types::{display::DisplayVersionUpdatedEvent, full_checkpoint_content::CheckpointData},
-    FieldCount,
 };
 use sui_indexer_alt_schema::{displays::StoredDisplay, schema::sum_displays};
 

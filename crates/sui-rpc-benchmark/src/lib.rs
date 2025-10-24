@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use anyhow::Result;
-use clap::{value_parser, Parser, Subcommand};
+use clap::{Parser, Subcommand, value_parser};
 use tracing::info;
 use url::Url;
 

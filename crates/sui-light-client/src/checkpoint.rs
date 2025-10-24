@@ -5,7 +5,7 @@ use crate::committee::extract_new_committee_info;
 use crate::config::Config;
 use crate::graphql::query_last_checkpoint_of_epoch;
 use crate::object_store::SuiObjectStore;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::io::Read;

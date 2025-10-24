@@ -37,6 +37,7 @@
 //!
 //! The above design is used for both objects and markers.
 
+use crate::authority::AuthorityStore;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{
     ExecutionLockWriteGuard, LockDetailsDeprecated, ObjectLockStatus, SuiLockResult,
@@ -44,14 +45,13 @@ use crate::authority::authority_store::{
 use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
-use crate::authority::AuthorityStore;
 use crate::fallback_fetch::{do_fallback_lookup, do_fallback_lookup_fallible};
 use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 
-use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
-use futures::{future::BoxFuture, FutureExt};
+use dashmap::mapref::entry::Entry as DashMapEntry;
+use futures::{FutureExt, future::BoxFuture};
 use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::debug_fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
@@ -59,8 +59,8 @@ use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, HashSet};
 use std::hash::Hash;
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
@@ -68,7 +68,7 @@ use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::{
     EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
 };
-use sui_types::bridge::{get_bridge, Bridge};
+use sui_types::bridge::{Bridge, get_bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
@@ -80,19 +80,19 @@ use sui_types::object::Object;
 use sui_types::storage::{
     FullObjectKey, InputKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject,
 };
-use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
+use sui_types::sui_system_state::{SuiSystemState, get_sui_system_state};
 use sui_types::transaction::{TransactionDataAPI, VerifiedSignedTransaction, VerifiedTransaction};
 use tap::TapOptional;
 use tracing::{debug, info, instrument, trace, warn};
 
-use super::cache_types::Ticket;
 use super::ExecutionCacheAPI;
+use super::cache_types::Ticket;
 use super::{
+    Batch, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheReconfigAPI,
+    ExecutionCacheWrite, ObjectCacheRead, StateSyncAPI, TestingAPI, TransactionCacheRead,
     cache_types::{CacheResult, CachedVersionMap, IsNewer, MonotonicCache},
     implement_passthrough_traits,
     object_locks::ObjectLocks,
-    Batch, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheReconfigAPI,
-    ExecutionCacheWrite, ObjectCacheRead, StateSyncAPI, TestingAPI, TransactionCacheRead,
 };
 
 #[cfg(test)]
@@ -717,45 +717,45 @@ impl WritebackCache {
             .record_cache_request(request_type, "object_by_id");
         let entry = self.object_by_id_cache.get(object_id);
 
-        if cfg!(debug_assertions) {
-            if let Some(entry) = &entry {
-                // check that cache is coherent
-                let highest: Option<ObjectEntry> = self
-                    .dirty
-                    .objects
-                    .get(object_id)
-                    .and_then(|entry| entry.get_highest().map(|(_, o)| o.clone()))
-                    .or_else(|| {
-                        let obj: Option<ObjectEntry> = self
-                            .store
-                            .get_latest_object_or_tombstone(*object_id)
-                            .unwrap()
-                            .map(|(_, o)| o.into());
-                        obj
-                    });
+        if cfg!(debug_assertions)
+            && let Some(entry) = &entry
+        {
+            // check that cache is coherent
+            let highest: Option<ObjectEntry> = self
+                .dirty
+                .objects
+                .get(object_id)
+                .and_then(|entry| entry.get_highest().map(|(_, o)| o.clone()))
+                .or_else(|| {
+                    let obj: Option<ObjectEntry> = self
+                        .store
+                        .get_latest_object_or_tombstone(*object_id)
+                        .unwrap()
+                        .map(|(_, o)| o.into());
+                    obj
+                });
 
-                let cache_entry = match &*entry.lock() {
-                    LatestObjectCacheEntry::Object(_, entry) => Some(entry.clone()),
-                    LatestObjectCacheEntry::NonExistent => None,
-                };
+            let cache_entry = match &*entry.lock() {
+                LatestObjectCacheEntry::Object(_, entry) => Some(entry.clone()),
+                LatestObjectCacheEntry::NonExistent => None,
+            };
 
-                // If the cache entry is a tombstone, the db entry may be missing if it was pruned.
-                let tombstone_possibly_pruned = highest.is_none()
-                    && cache_entry
-                        .as_ref()
-                        .map(|e| e.is_tombstone())
-                        .unwrap_or(false);
+            // If the cache entry is a tombstone, the db entry may be missing if it was pruned.
+            let tombstone_possibly_pruned = highest.is_none()
+                && cache_entry
+                    .as_ref()
+                    .map(|e| e.is_tombstone())
+                    .unwrap_or(false);
 
-                if highest != cache_entry && !tombstone_possibly_pruned {
-                    tracing::error!(
-                        ?highest,
-                        ?cache_entry,
-                        ?tombstone_possibly_pruned,
-                        "object_by_id cache is incoherent for {:?}",
-                        object_id
-                    );
-                    panic!("object_by_id cache is incoherent for {:?}", object_id);
-                }
+            if highest != cache_entry && !tombstone_possibly_pruned {
+                tracing::error!(
+                    ?highest,
+                    ?cache_entry,
+                    ?tombstone_possibly_pruned,
+                    "object_by_id cache is incoherent for {:?}",
+                    object_id
+                );
+                panic!("object_by_id cache is incoherent for {:?}", object_id);
             }
         }
 
@@ -1061,11 +1061,12 @@ impl WritebackCache {
             mysten_metrics::monitored_scope("WritebackCache::commit_transaction_outputs::flush");
         for outputs in all_outputs.iter() {
             let tx_digest = outputs.transaction.digest();
-            assert!(self
-                .dirty
-                .pending_transaction_writes
-                .remove(tx_digest)
-                .is_some());
+            assert!(
+                self.dirty
+                    .pending_transaction_writes
+                    .remove(tx_digest)
+                    .is_some()
+            );
             self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, outputs);
         }
 
@@ -2283,16 +2284,16 @@ impl GlobalStateHashStore for WritebackCache {
             };
 
         // first check dirty data
-        if let Some(objects) = self.dirty.objects.get(object_id) {
-            if let Some(prior) = check_versions(&objects) {
-                candidates.push(prior);
-            }
+        if let Some(objects) = self.dirty.objects.get(object_id)
+            && let Some(prior) = check_versions(&objects)
+        {
+            candidates.push(prior);
         }
 
-        if let Some(objects) = self.cached.object_cache.get(object_id) {
-            if let Some(prior) = check_versions(&objects.lock()) {
-                candidates.push(prior);
-            }
+        if let Some(objects) = self.cached.object_cache.get(object_id)
+            && let Some(prior) = check_versions(&objects.lock())
+        {
+            candidates.push(prior);
         }
 
         if let Some(prior) = self

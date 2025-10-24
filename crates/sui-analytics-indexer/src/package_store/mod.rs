@@ -12,14 +12,14 @@ use std::result::Result as StdResult;
 use std::sync::Arc;
 use std::sync::Mutex;
 use sui_package_resolver::{
-    error::Error as ResolverError, Package, PackageStore, PackageStoreWithLruCache, Resolver,
-    Result,
+    Package, PackageStore, PackageStoreWithLruCache, Resolver, Result,
+    error::Error as ResolverError,
 };
 use sui_rpc_api::Client;
 use sui_types::{
+    SYSTEM_PACKAGE_ADDRESSES,
     base_types::ObjectID,
     object::{Data, Object},
-    SYSTEM_PACKAGE_ADDRESSES,
 };
 use thiserror::Error;
 use typed_store::rocks::{DBMap, MetricConf};

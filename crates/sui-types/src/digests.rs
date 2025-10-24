@@ -12,7 +12,7 @@ use fastcrypto::hash::{Blake2b256, HashFunction};
 use once_cell::sync::{Lazy, OnceCell};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, Bytes};
+use serde_with::{Bytes, serde_as};
 use sui_protocol_config::Chain;
 use tracing::info;
 
@@ -257,7 +257,7 @@ pub fn get_testnet_chain_identifier() -> ChainIdentifier {
 
 impl fmt::Display for ChainIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for byte in self.0 .0 .0[0..4].iter() {
+        for byte in self.0.0.0[0..4].iter() {
             write!(f, "{:02x}", byte)?;
         }
 

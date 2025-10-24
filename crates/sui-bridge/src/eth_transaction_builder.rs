@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::abi::{
-    eth_bridge_committee, eth_committee_upgradeable_contract, eth_sui_bridge, EthBridgeCommittee,
-    EthBridgeLimiter, EthCommitteeUpgradeableContract,
+    EthBridgeCommittee, EthBridgeLimiter, EthCommitteeUpgradeableContract, eth_bridge_committee,
+    eth_committee_upgradeable_contract, eth_sui_bridge,
 };
-use crate::abi::{eth_bridge_config, eth_bridge_limiter, EthBridgeConfig};
+use crate::abi::{EthBridgeConfig, eth_bridge_config, eth_bridge_limiter};
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::{
     AddTokensOnEvmAction, AssetPriceUpdateAction, BlocklistCommitteeAction,

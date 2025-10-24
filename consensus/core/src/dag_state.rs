@@ -18,16 +18,16 @@ use tokio::time::Instant;
 use tracing::{debug, error, info, trace};
 
 use crate::{
-    block::{genesis_blocks, BlockAPI, Slot, VerifiedBlock, GENESIS_ROUND},
+    CommittedSubDag,
+    block::{BlockAPI, GENESIS_ROUND, Slot, VerifiedBlock, genesis_blocks},
     commit::{
-        load_committed_subdag_from_store, CommitAPI as _, CommitDigest, CommitIndex, CommitInfo,
-        CommitRef, CommitVote, TrustedCommit, GENESIS_COMMIT_INDEX,
+        CommitAPI as _, CommitDigest, CommitIndex, CommitInfo, CommitRef, CommitVote,
+        GENESIS_COMMIT_INDEX, TrustedCommit, load_committed_subdag_from_store,
     },
     context::Context,
     leader_scoring::{ReputationScores, ScoringSubdag},
     storage::{Store, WriteBatch},
     threshold_clock::ThresholdClock,
-    CommittedSubDag,
 };
 
 /// DagState provides the API to write and read accepted blocks from the DAG.
@@ -226,7 +226,10 @@ impl DagState {
         if let Some(last_commit) = last_commit {
             let mut index = last_commit.index();
             let gc_round = state.gc_round();
-            info!("Recovering block commit statuses from commit index {} and backwards until leader of round <= gc_round {:?}", index, gc_round);
+            info!(
+                "Recovering block commit statuses from commit index {} and backwards until leader of round <= gc_round {:?}",
+                index, gc_round
+            );
 
             loop {
                 let commits = store
@@ -648,7 +651,9 @@ impl DagState {
 
             let last_evicted_round = self.evicted_rounds[authority_index];
             if end_round.saturating_sub(1) <= last_evicted_round {
-                panic!("Attempted to request for blocks of rounds < {end_round}, when the last evicted round is {last_evicted_round} for authority {authority_index}", );
+                panic!(
+                    "Attempted to request for blocks of rounds < {end_round}, when the last evicted round is {last_evicted_round} for authority {authority_index}",
+                );
             }
 
             let block_ref_iter = block_refs
@@ -693,7 +698,12 @@ impl DagState {
 
         let eviction_round = self.evicted_rounds[slot.authority];
         if slot.round <= eviction_round {
-            panic!("{}", format!("Attempted to check for slot {slot} that is <= the last evicted round {eviction_round}"));
+            panic!(
+                "{}",
+                format!(
+                    "Attempted to check for slot {slot} that is <= the last evicted round {eviction_round}"
+                )
+            );
         }
 
         let mut result = self.recent_refs_by_authority[slot.authority].range((
@@ -843,7 +853,10 @@ impl DagState {
             assert_eq!(commit.index(), last_commit.index() + 1);
 
             if commit.timestamp_ms() < last_commit.timestamp_ms() {
-                panic!("Commit timestamps do not monotonically increment, prev commit {:?}, new commit {:?}", last_commit, commit);
+                panic!(
+                    "Commit timestamps do not monotonically increment, prev commit {:?}, new commit {:?}",
+                    last_commit, commit
+                );
             }
             commit
                 .timestamp_ms()
@@ -1229,11 +1242,11 @@ mod test {
 
     use super::*;
     use crate::{
+        CommitRange,
         block::{TestBlock, VerifiedBlock},
-        storage::{mem_store::MemStore, WriteBatch},
+        storage::{WriteBatch, mem_store::MemStore},
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
-        CommitRange,
     };
 
     #[tokio::test]
@@ -1278,13 +1291,15 @@ mod test {
 
         // Check uncommitted blocks that do not exist.
         let last_ref = blocks.keys().last().unwrap();
-        assert!(dag_state
-            .get_block(&BlockRef::new(
-                last_ref.round,
-                last_ref.author,
-                BlockDigest::MIN
-            ))
-            .is_none());
+        assert!(
+            dag_state
+                .get_block(&BlockRef::new(
+                    last_ref.round,
+                    last_ref.author,
+                    BlockDigest::MIN
+                ))
+                .is_none()
+        );
 
         // Check slots with uncommitted blocks.
         for round in 1..=num_rounds {
@@ -1337,9 +1352,11 @@ mod test {
         }
 
         // Check rounds without uncommitted blocks.
-        assert!(dag_state
-            .get_uncommitted_blocks_at_round(non_existent_round)
-            .is_empty());
+        assert!(
+            dag_state
+                .get_uncommitted_blocks_at_round(non_existent_round)
+                .is_empty()
+        );
     }
 
     #[tokio::test]
@@ -1796,8 +1813,12 @@ mod test {
         }
 
         for round in 1..=3 {
-            assert!(dag_state
-                .contains_cached_block_at_slot(Slot::new(round, AuthorityIndex::new_for_test(0))));
+            assert!(
+                dag_state.contains_cached_block_at_slot(Slot::new(
+                    round,
+                    AuthorityIndex::new_for_test(0)
+                ))
+            );
         }
 
         // When trying to request for authority 1 at block slot 3 it should panic, as anything
@@ -2024,15 +2045,19 @@ mod test {
             if authority_index == AuthorityIndex::new_for_test(0) {
                 assert_eq!(blocks.len(), 4);
                 assert_eq!(dag_state.evicted_rounds[authority_index.value()], 6);
-                assert!(blocks
-                    .into_iter()
-                    .all(|block| block.round() >= 7 && block.round() <= 12));
+                assert!(
+                    blocks
+                        .into_iter()
+                        .all(|block| block.round() >= 7 && block.round() <= 12)
+                );
             } else {
                 assert_eq!(blocks.len(), 6);
                 assert_eq!(dag_state.evicted_rounds[authority_index.value()], 6);
-                assert!(blocks
-                    .into_iter()
-                    .all(|block| block.round() >= 7 && block.round() <= 12));
+                assert!(
+                    blocks
+                        .into_iter()
+                        .all(|block| block.round() >= 7 && block.round() <= 12)
+                );
             }
         }
 

@@ -9,13 +9,13 @@ use im::hashmap::{Entry, HashMap};
 use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use sui_types::{
+    SUI_AUTHENTICATOR_STATE_ADDRESS, TypeTag,
     authenticator_state::{ActiveJwk, AuthenticatorStateInner},
     crypto::ToFromBytes,
     dynamic_field::DynamicFieldType,
     signature::{GenericSignature, VerifyParams},
     signature_verification::VerifiedDigestCache,
     transaction::TransactionData,
-    TypeTag, SUI_AUTHENTICATOR_STATE_ADDRESS,
 };
 use tracing::warn;
 
@@ -25,7 +25,7 @@ use crate::{
         types::dynamic_field::{DynamicField, DynamicFieldName},
     },
     config::ZkLoginConfig,
-    error::{bad_user_input, upcast, RpcError},
+    error::{RpcError, bad_user_input, upcast},
     scope::Scope,
 };
 

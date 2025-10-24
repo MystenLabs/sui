@@ -5,8 +5,8 @@ use crate::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::AuthorityAPI,
     transaction_driver::{
-        effects_certifier::EffectsCertifier, error::TransactionDriverError,
-        metrics::TransactionDriverMetrics, SubmitTransactionOptions,
+        SubmitTransactionOptions, effects_certifier::EffectsCertifier,
+        error::TransactionDriverError, metrics::TransactionDriverMetrics,
     },
     validator_client_monitor::ValidatorClientMonitor,
 };
@@ -18,7 +18,7 @@ use std::{
     sync::{Arc, Mutex as StdMutex},
 };
 use sui_types::{
-    base_types::{random_object_ref, AuthorityName},
+    base_types::{AuthorityName, random_object_ref},
     committee::Committee,
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::TransactionEffects,
@@ -39,7 +39,7 @@ use sui_types::{
     sui_system_state::SuiSystemState,
     transaction::{CertifiedTransaction, Transaction},
 };
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 // Mock AuthorityAPI for testing
 #[derive(Clone)]
@@ -884,7 +884,9 @@ async fn test_mixed_rejected_reasons() {
     }
 
     {
-        tracing::debug!("Case #3: Test 2 retriable, 1 not found, and 1 non-retriable reason that arrives earlier");
+        tracing::debug!(
+            "Case #3: Test 2 retriable, 1 not found, and 1 non-retriable reason that arrives earlier"
+        );
         let authority_aggregator = Arc::new(create_test_authority_aggregator());
         let authorities: Vec<_> = authority_aggregator.authority_clients.keys().collect();
         for (i, authority_name) in authorities.iter().enumerate() {
@@ -935,7 +937,9 @@ async fn test_mixed_rejected_reasons() {
     }
 
     {
-        tracing::debug!("Case #4: Test 1 retriable, 2 not found, and 1 non-retriable reason that arrives earlier");
+        tracing::debug!(
+            "Case #4: Test 1 retriable, 2 not found, and 1 non-retriable reason that arrives earlier"
+        );
         let authority_aggregator = Arc::new(create_test_authority_aggregator());
         let authorities: Vec<_> = authority_aggregator.authority_clients.keys().collect();
         for (i, authority_name) in authorities.iter().enumerate() {

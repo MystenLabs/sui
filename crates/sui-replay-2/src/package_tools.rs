@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    Node,
     data_stores::file_system_store::{FileSystemStore, NODE_MAPPING_FILE, OBJECTS_DIR},
     replay_interface::{ObjectKey, ObjectStore, VersionQuery},
-    Node,
 };
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
@@ -158,7 +158,10 @@ fn get_chain_id_from_mapping(node: &Node) -> Result<String> {
     let mapping_file = FileSystemStore::base_path()?.join(NODE_MAPPING_FILE);
 
     if !mapping_file.exists() {
-        bail!("Node mapping file not found at {:?}. Please ensure the replay data store is properly initialized.", mapping_file);
+        bail!(
+            "Node mapping file not found at {:?}. Please ensure the replay data store is properly initialized.",
+            mapping_file
+        );
     }
 
     let file =

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::cluster::{new_wallet_context_from_cluster, Cluster};
+use super::cluster::{Cluster, new_wallet_context_from_cluster};
 use async_trait::async_trait;
 use fastcrypto::encoding::{Encoding, Hex};
 use std::collections::HashMap;
@@ -10,7 +10,7 @@ use std::sync::Arc;
 use sui_faucet::{FaucetConfig, FaucetResponse, LocalFaucet, RequestStatus};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
-use tracing::{debug, info, info_span, Instrument};
+use tracing::{Instrument, debug, info, info_span};
 
 pub struct FaucetClientFactory;
 

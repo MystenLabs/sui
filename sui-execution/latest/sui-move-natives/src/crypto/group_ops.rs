@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::object_runtime::ObjectRuntime;
-use crate::{get_extension, NativesCostTable};
+use crate::{NativesCostTable, get_extension};
 use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use fastcrypto::groups::{
-    bls12381 as bls, FromTrustedByteArray, GroupElement, HashToGroupElement, MultiScalarMul,
-    Pairing,
+    FromTrustedByteArray, GroupElement, HashToGroupElement, MultiScalarMul, Pairing,
+    bls12381 as bls,
 };
 use fastcrypto::serde_helpers::ToFromByteArray;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -597,8 +597,8 @@ where
 {
     if points.is_empty()
         || scalars.is_empty()
-        || scalars.len() % SCALAR_SIZE != 0
-        || points.len() % POINT_SIZE != 0
+        || !scalars.len().is_multiple_of(SCALAR_SIZE)
+        || !points.len().is_multiple_of(POINT_SIZE)
         || points.len() / POINT_SIZE != scalars.len() / SCALAR_SIZE
     {
         return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR));

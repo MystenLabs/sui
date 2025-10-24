@@ -23,8 +23,8 @@ use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::transaction::{
-    CallArg, CertifiedTransaction, Transaction, TransactionData, VerifiedCertificate,
-    VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    CallArg, CertifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData,
+    VerifiedCertificate, VerifiedTransaction,
 };
 use sui_types::utils::get_zklogin_user_address;
 use sui_types::utils::{

@@ -3,8 +3,8 @@
 
 use anyhow::Context;
 use anyhow::Result;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::trace;
@@ -82,10 +82,10 @@ pub fn ssfn_config_file(address: Multiaddr, i: usize) -> String {
 }
 
 fn multiaddr_to_filename(address: Multiaddr) -> Option<String> {
-    if let Some(hostname) = address.hostname() {
-        if let Some(port) = address.port() {
-            return Some(format!("{}-{}.yaml", hostname, port));
-        }
+    if let Some(hostname) = address.hostname()
+        && let Some(port) = address.port()
+    {
+        return Some(format!("{}-{}.yaml", hostname, port));
     }
     None
 }

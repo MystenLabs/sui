@@ -3,17 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::base_types::{random_object_ref, FullObjectRef};
+use crate::base_types::{FullObjectRef, random_object_ref};
 use crate::committee::Committee;
-use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
 use crate::crypto::Secp256k1SuiSignature;
 use crate::crypto::SuiKeyPair;
 use crate::crypto::SuiSignature;
 use crate::crypto::SuiSignatureInner;
 use crate::crypto::VerificationObligation;
+use crate::crypto::bcs_signable_test::{Foo, get_obligation_input};
 use crate::crypto::{
-    get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
-    AuthoritySignInfoTrait, SuiAuthoritySignature,
+    AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfoTrait,
+    SuiAuthoritySignature, get_key_pair,
 };
 use crate::digests::TransactionEventsDigest;
 use crate::effects::{SignedTransactionEffects, TestEffectsBuilder, TransactionEffectsAPI};
@@ -24,8 +24,8 @@ use fastcrypto::traits::AggregateAuthenticator;
 use fastcrypto::traits::KeyPair;
 use move_core_types::language_storage::StructTag;
 use roaring::RoaringBitmap;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
+use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 
 #[test]
@@ -80,9 +80,10 @@ fn test_signed_values() {
         &sec1,
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
-    assert!(v
-        .try_into_verified_for_testing(&committee, &Default::default())
-        .is_ok());
+    assert!(
+        v.try_into_verified_for_testing(&committee, &Default::default())
+            .is_ok()
+    );
 
     let v = SignedTransaction::new(
         committee.epoch(),
@@ -90,9 +91,10 @@ fn test_signed_values() {
         &sec2,
         AuthorityPublicKeyBytes::from(sec2.public()),
     );
-    assert!(v
-        .try_into_verified_for_testing(&committee, &Default::default())
-        .is_err());
+    assert!(
+        v.try_into_verified_for_testing(&committee, &Default::default())
+            .is_err()
+    );
 
     let v = SignedTransaction::new(
         committee.epoch(),
@@ -100,9 +102,10 @@ fn test_signed_values() {
         &sec3,
         AuthorityPublicKeyBytes::from(sec3.public()),
     );
-    assert!(v
-        .try_into_verified_for_testing(&committee, &Default::default())
-        .is_err());
+    assert!(
+        v.try_into_verified_for_testing(&committee, &Default::default())
+            .is_err()
+    );
 
     let v = SignedTransaction::new(
         committee.epoch(),
@@ -110,9 +113,10 @@ fn test_signed_values() {
         &sec1,
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
-    assert!(v
-        .try_into_verified_for_testing(&committee, &Default::default())
-        .is_err());
+    assert!(
+        v.try_into_verified_for_testing(&committee, &Default::default())
+            .is_err()
+    );
 }
 
 #[test]
@@ -167,22 +171,21 @@ fn test_certificates() {
     );
 
     let mut sigs = vec![v1.auth_sig().clone()];
-    assert!(CertifiedTransaction::new(
-        transaction.clone().into_message(),
-        sigs.clone(),
-        &committee
-    )
-    .is_err());
+    assert!(
+        CertifiedTransaction::new(transaction.clone().into_message(), sigs.clone(), &committee)
+            .is_err()
+    );
     sigs.push(v2.auth_sig().clone());
     let c =
         CertifiedTransaction::new(transaction.clone().into_message(), sigs, &committee).unwrap();
-    assert!(c
-        .verify_signatures_authenticated(
+    assert!(
+        c.verify_signatures_authenticated(
             &committee,
             &Default::default(),
             Arc::new(VerifiedDigestCache::new_empty())
         )
-        .is_ok());
+        .is_ok()
+    );
 
     let sigs = vec![v1.auth_sig().clone(), v3.auth_sig().clone()];
 
@@ -230,9 +233,11 @@ fn test_new_with_signatures() {
     );
 
     let (mut obligation, idx) = get_obligation_input(&message);
-    assert!(quorum
-        .add_to_verification_obligation(&committee, &mut obligation, idx)
-        .is_ok());
+    assert!(
+        quorum
+            .add_to_verification_obligation(&committee, &mut obligation, idx)
+            .is_ok()
+    );
     assert!(obligation.verify_all().is_ok());
 }
 
@@ -270,9 +275,11 @@ fn test_handle_reject_malicious_signature() {
         quorum.signature.add_signature(sig).unwrap();
     }
     let (mut obligation, idx) = get_obligation_input(&message);
-    assert!(quorum
-        .add_to_verification_obligation(&committee, &mut obligation, idx)
-        .is_ok());
+    assert!(
+        quorum
+            .add_to_verification_obligation(&committee, &mut obligation, idx)
+            .is_ok()
+    );
     assert!(obligation.verify_all().is_err());
 }
 
@@ -346,9 +353,11 @@ fn test_bitmap_out_of_range() {
     quorum.signers_map.insert(10);
 
     let (mut obligation, idx) = get_obligation_input(&message);
-    assert!(quorum
-        .add_to_verification_obligation(&committee, &mut obligation, idx)
-        .is_err());
+    assert!(
+        quorum
+            .add_to_verification_obligation(&committee, &mut obligation, idx)
+            .is_err()
+    );
 }
 
 #[test]
@@ -387,9 +396,11 @@ fn test_reject_extra_public_key() {
     quorum.signers_map.insert(3);
 
     let (mut obligation, idx) = get_obligation_input(&message);
-    assert!(quorum
-        .add_to_verification_obligation(&committee, &mut obligation, idx)
-        .is_ok());
+    assert!(
+        quorum
+            .add_to_verification_obligation(&committee, &mut obligation, idx)
+            .is_ok()
+    );
 }
 
 #[test]
@@ -423,9 +434,11 @@ fn test_reject_reuse_signatures() {
             .unwrap();
 
     let (mut obligation, idx) = get_obligation_input(&message);
-    assert!(quorum
-        .add_to_verification_obligation(&committee, &mut obligation, idx)
-        .is_err());
+    assert!(
+        quorum
+            .add_to_verification_obligation(&committee, &mut obligation, idx)
+            .is_err()
+    );
 }
 
 #[test]
@@ -452,9 +465,11 @@ fn test_empty_bitmap() {
     quorum.signers_map = RoaringBitmap::new();
 
     let (mut obligation, idx) = get_obligation_input(&message);
-    assert!(quorum
-        .add_to_verification_obligation(&committee, &mut obligation, idx)
-        .is_err());
+    assert!(
+        quorum
+            .add_to_verification_obligation(&committee, &mut obligation, idx)
+            .is_err()
+    );
 }
 
 #[test]
@@ -493,9 +508,11 @@ fn test_digest_caching() {
         &sec1,
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
-    assert!(signed_tx
-        .verify_signatures_authenticated_for_testing(&committee, &Default::default())
-        .is_ok());
+    assert!(
+        signed_tx
+            .verify_signatures_authenticated_for_testing(&committee, &Default::default())
+            .is_ok()
+    );
 
     let initial_digest = *signed_tx.digest();
 
@@ -639,22 +656,26 @@ fn test_user_signature_committed_in_signed_transactions() {
     authorities.insert(AuthorityPublicKeyBytes::from(sec1.public()), 1);
     let committee =
         Committee::new_for_testing_with_normalized_voting_power(epoch, authorities.clone());
-    assert!(signed_tx_a
-        .auth_sig()
-        .verify_secure(
-            transaction_a.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            &committee
-        )
-        .is_ok());
-    assert!(signed_tx_a
-        .auth_sig()
-        .verify_secure(
-            transaction_b.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            &committee
-        )
-        .is_err());
+    assert!(
+        signed_tx_a
+            .auth_sig()
+            .verify_secure(
+                transaction_a.data(),
+                Intent::sui_app(IntentScope::SenderSignedTransaction),
+                &committee
+            )
+            .is_ok()
+    );
+    assert!(
+        signed_tx_a
+            .auth_sig()
+            .verify_secure(
+                transaction_b.data(),
+                Intent::sui_app(IntentScope::SenderSignedTransaction),
+                &committee
+            )
+            .is_err()
+    );
 
     // Test hash non-equality
     let mut hasher = DefaultHasher::new();
@@ -954,14 +975,16 @@ fn verify_sender_signature_correctly_with_flag() {
     assert_eq!(s.scheme().flag(), Secp256k1SuiSignature::SCHEME.flag());
 
     // authority accepts signs tx after verification
-    assert!(signed_tx
-        .auth_sig()
-        .verify_secure(
-            transaction.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            &committee
-        )
-        .is_ok());
+    assert!(
+        signed_tx
+            .auth_sig()
+            .verify_secure(
+                transaction.data(),
+                Intent::sui_app(IntentScope::SenderSignedTransaction),
+                &committee
+            )
+            .is_ok()
+    );
 
     let transaction_1 = Transaction::from_data_and_signer(tx_data_2, vec![&sender_kp_2])
         .try_into_verified_for_testing(committee.epoch(), &Default::default())
@@ -982,23 +1005,27 @@ fn verify_sender_signature_correctly_with_flag() {
     assert_eq!(s.scheme().flag(), Ed25519SuiSignature::SCHEME.flag());
 
     // signature verified
-    assert!(signed_tx_1
-        .auth_sig()
-        .verify_secure(
-            transaction_1.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            &committee
-        )
-        .is_ok());
+    assert!(
+        signed_tx_1
+            .auth_sig()
+            .verify_secure(
+                transaction_1.data(),
+                Intent::sui_app(IntentScope::SenderSignedTransaction),
+                &committee
+            )
+            .is_ok()
+    );
 
-    assert!(signed_tx_1
-        .auth_sig()
-        .verify_secure(
-            transaction.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            &committee
-        )
-        .is_err());
+    assert!(
+        signed_tx_1
+            .auth_sig()
+            .verify_secure(
+                transaction.data(),
+                Intent::sui_app(IntentScope::SenderSignedTransaction),
+                &committee
+            )
+            .is_err()
+    );
 
     // create transaction with r1 signer
     let tx_3 = Transaction::from_data_and_signer(tx_data_3, vec![&sender_kp_3]);
@@ -1006,9 +1033,10 @@ fn verify_sender_signature_correctly_with_flag() {
     let tx_32 = tx_3.clone();
 
     // r1 signature tx verifies ok
-    assert!(tx_3
-        .try_into_verified_for_testing(committee.epoch(), &Default::default())
-        .is_ok());
+    assert!(
+        tx_3.try_into_verified_for_testing(committee.epoch(), &Default::default())
+            .is_ok()
+    );
     let verified_tx_3 = tx_31
         .try_into_verified_for_testing(committee.epoch(), &Default::default())
         .unwrap();
@@ -1019,14 +1047,16 @@ fn verify_sender_signature_correctly_with_flag() {
         &sec1,
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
-    assert!(signed_tx_3
-        .auth_sig()
-        .verify_secure(
-            tx_32.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            &committee
-        )
-        .is_ok());
+    assert!(
+        signed_tx_3
+            .auth_sig()
+            .verify_secure(
+                tx_32.data(),
+                Intent::sui_app(IntentScope::SenderSignedTransaction),
+                &committee
+            )
+            .is_ok()
+    );
 }
 
 #[test]
@@ -1259,13 +1289,15 @@ fn test_unique_input_objects() {
             ])
             .unwrap(),
     ];
-    let args_2 = vec![builder
-        .input(CallArg::Object(ObjectArg::SharedObject {
-            id: shared.0,
-            initial_shared_version: shared.1,
-            mutability: SharedObjectMutability::Mutable,
-        }))
-        .unwrap()];
+    let args_2 = vec![
+        builder
+            .input(CallArg::Object(ObjectArg::SharedObject {
+                id: shared.0,
+                initial_shared_version: shared.1,
+                mutability: SharedObjectMutability::Mutable,
+            }))
+            .unwrap(),
+    ];
 
     let sender_kp = SuiKeyPair::Ed25519(get_key_pair().1);
     let sender = (&sender_kp.public()).into();

@@ -3,7 +3,7 @@
 
 use std::net::SocketAddr;
 #[cfg(msim)]
-use std::sync::{atomic::AtomicI16, Arc};
+use std::sync::{Arc, atomic::AtomicI16};
 use sui_types::multiaddr::Multiaddr;
 
 /// A singleton struct to manage IP addresses and ports for simtest.

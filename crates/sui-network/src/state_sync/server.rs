@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{PeerHeights, StateSync, StateSyncMessage};
-use anemo::{rpc::Status, types::response::StatusCode, Request, Response, Result};
+use anemo::{Request, Response, Result, rpc::Status, types::response::StatusCode};
 use dashmap::DashMap;
 use futures::future::BoxFuture;
 use serde::{Deserialize, Serialize};
@@ -16,7 +16,7 @@ use sui_types::{
     },
     storage::WriteStore,
 };
-use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum GetCheckpointSummaryRequest {
@@ -69,10 +69,10 @@ where
 
         // If this checkpoint is higher than our highest verified checkpoint notify the
         // event loop to potentially sync it
-        if *checkpoint.sequence_number() > highest_verified_checkpoint {
-            if let Some(sender) = self.sender.upgrade() {
-                sender.send(StateSyncMessage::StartSyncJob).await.unwrap();
-            }
+        if *checkpoint.sequence_number() > highest_verified_checkpoint
+            && let Some(sender) = self.sender.upgrade()
+        {
+            sender.send(StateSyncMessage::StartSyncJob).await.unwrap();
         }
 
         Ok(Response::new(()))

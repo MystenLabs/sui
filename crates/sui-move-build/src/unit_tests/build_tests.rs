@@ -36,7 +36,7 @@ async fn generate_struct_layouts() {
 
 // TODO: pkg-alt ENABLE WHEN WE VALIDATE THIS PROPERLY
 // #[tokio::test]
-// async fn development_mode_not_allowed() {
+// fn development_mode_not_allowed() {
 //     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
 //         .to_path_buf()
 //         .join("src")
@@ -46,7 +46,8 @@ async fn generate_struct_layouts() {
 //     let err = BuildConfig::new_for_testing()
 //         .build(&path)
 //         .expect_err("Should have failed due to unsupported edition");
-//     assert!(err
-//         .to_string()
-//         .contains(&Edition::DEVELOPMENT.unknown_edition_error().to_string()));
+//     assert!(
+//         err.to_string()
+//             .contains(&Edition::DEVELOPMENT.unknown_edition_error().to_string())
+//     );
 // }

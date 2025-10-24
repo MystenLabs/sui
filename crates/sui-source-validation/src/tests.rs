@@ -1,24 +1,21 @@
-// // Copyright (c) Mysten Labs, Inc.
-// // SPDX-License-Identifier: Apache-2.0
-//
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // TODO: pkg-alt FAILING TEST
 // use expect_test::expect;
 // use move_core_types::account_address::AccountAddress;
 // use std::collections::HashMap;
 // use std::{fs, io, path::Path};
 // use std::{path::PathBuf, str};
-// use sui_json_rpc_types::{
-//     get_new_package_obj_from_response, get_new_package_upgrade_cap_from_response,
-// };
-// use sui_move_build::{BuildConfig, CompiledPackage};
+// use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 // use sui_sdk::wallet_context::WalletContext;
 // use sui_test_transaction_builder::{make_publish_transaction, make_publish_transaction_with_deps};
 // use sui_types::base_types::ObjectID;
 // use sui_types::move_package::UpgradePolicy;
 // use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
 // use sui_types::{
-//     base_types::{ObjectRef, SuiAddress, TransactionDigest},
 //     SUI_SYSTEM_STATE_OBJECT_ID,
+//     base_types::{ObjectRef, SuiAddress, TransactionDigest},
 // };
 // use test_cluster::TestClusterBuilder;
 //
@@ -370,7 +367,9 @@
 //     };
 //
 //     let client = context.get_client().await?;
-//     let expected = expect!["Dependency ID contains a Sui object, not a Move package: 0x0000000000000000000000000000000000000000000000000000000000000005"];
+//     let expected = expect![
+//         "Dependency ID contains a Sui object, not a Move package: 0x0000000000000000000000000000000000000000000000000000000000000005"
+//     ];
 //     expected.assert_eq(
 //         &BytecodeSourceVerifier::new(client.read_api())
 //             .verify(&a_pkg, ValidationMode::deps())
@@ -686,6 +685,7 @@
 //         // setup b as a bytecode package
 //         let pkg_path = copy_published_package(&tempdir, "b", b_ref.0.into()).await?;
 //
+//         move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
 //         BuildConfig::new_for_testing().build(&pkg_path).unwrap();
 //
 //         fs::remove_dir_all(pkg_path.join("sources"))?;
@@ -730,6 +730,7 @@
 //
 // /// Compile the package at absolute path `package`.
 // fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {
+//     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
 //     BuildConfig::new_for_testing()
 //         .build(package.as_ref())
 //         .unwrap()
@@ -761,7 +762,7 @@
 //     let with_unpublished_deps = false;
 //     let package_bytes = package.get_package_bytes(with_unpublished_deps);
 //     let package_digest = package.get_package_digest(with_unpublished_deps).to_vec();
-//     let package_deps = package.dependency_ids;
+//     let package_deps = package.dependency_ids.published.into_values().collect();
 //
 //     upgrade_package_with_wallet(
 //         context,

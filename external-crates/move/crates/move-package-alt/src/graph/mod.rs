@@ -163,12 +163,12 @@ impl<F: MoveFlavor> PackageGraph<F> {
         dest.package_ids.insert(package_id.clone(), index);
 
         for edge in self.inner.edges(node) {
-            if let Some(dep_modes) = edge.weight().modes() {
-                if !modes.iter().any(|mode| dep_modes.contains(mode)) {
-                    // dependency is moded but doesn't contain the modes we're allowing;
-                    // skip adding the dep to the new graph
-                    continue;
-                }
+            if let Some(dep_modes) = edge.weight().modes()
+                && !modes.iter().any(|mode| dep_modes.contains(mode))
+            {
+                // dependency is moded but doesn't contain the modes we're allowing;
+                // skip adding the dep to the new graph
+                continue;
             }
 
             let dst_index = self.copy_moded(dest, edge.target(), modes);

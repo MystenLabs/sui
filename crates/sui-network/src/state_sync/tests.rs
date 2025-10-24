@@ -16,14 +16,14 @@ use std::{collections::HashMap, time::Duration};
 use sui_config::node::ArchiveReaderConfig;
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_storage::blob::{Blob, BlobEncoding};
-use sui_swarm_config::test_utils::{empty_contents, CommitteeFixture};
+use sui_swarm_config::test_utils::{CommitteeFixture, empty_contents};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::{
     messages_checkpoint::CheckpointDigest,
     storage::{ReadStore, SharedInMemoryStore, WriteStore},
 };
 use tempfile::tempdir;
-use tokio::time::{timeout, Instant};
+use tokio::time::{Instant, timeout};
 
 #[tokio::test]
 async fn server_push_checkpoint() {
@@ -376,27 +376,26 @@ async fn test_state_sync_using_archive() -> anyhow::Result<()> {
     loop {
         {
             let store = store_1.inner();
-            if let Some(highest_synced_checkpoint) = store.get_highest_synced_checkpoint() {
-                if highest_synced_checkpoint.sequence_number
+            if let Some(highest_synced_checkpoint) = store.get_highest_synced_checkpoint()
+                && highest_synced_checkpoint.sequence_number
                     == ordered_checkpoints.last().unwrap().sequence_number
-                {
-                    // Node 1 is fully synced to the latest checkpoint on Node 2
-                    let expected = checkpoints
-                        .iter()
-                        .map(|(key, value)| (key, value.data()))
-                        .collect::<HashMap<_, _>>();
-                    let actual = store
-                        .checkpoints()
-                        .iter()
-                        .map(|(key, value)| (key, value.data()))
-                        .collect::<HashMap<_, _>>();
-                    assert_eq!(actual, expected);
-                    assert_eq!(
-                        store.checkpoint_sequence_number_to_digest(),
-                        &sequence_number_to_digest
-                    );
-                    break;
-                }
+            {
+                // Node 1 is fully synced to the latest checkpoint on Node 2
+                let expected = checkpoints
+                    .iter()
+                    .map(|(key, value)| (key, value.data()))
+                    .collect::<HashMap<_, _>>();
+                let actual = store
+                    .checkpoints()
+                    .iter()
+                    .map(|(key, value)| (key, value.data()))
+                    .collect::<HashMap<_, _>>();
+                assert_eq!(actual, expected);
+                assert_eq!(
+                    store.checkpoint_sequence_number_to_digest(),
+                    &sequence_number_to_digest
+                );
+                break;
             }
         }
         if total_time.elapsed() > Duration::from_secs(120) {

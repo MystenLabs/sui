@@ -8,8 +8,9 @@ use strum_macros::Display;
 use strum_macros::EnumString;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
-use sui_test_transaction_builder::publish_basics_package_and_make_counter;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::publish_basics_package_and_make_counter;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::base_types::{FullObjectRef, ObjectRef, SuiAddress};
 use sui_types::coin::PAY_JOIN_FUNC_NAME;
 use sui_types::coin::PAY_MODULE_NAME;
@@ -17,7 +18,6 @@ use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::gas_coin::GAS;
 use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::TransactionData;
-use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
     gas::GasCostSummary,
     transaction::{CallArg, ObjectArg},
@@ -226,8 +226,8 @@ async fn create_txes(
     ret
 }
 
-async fn run_actual_costs(
-) -> Result<BTreeMap<CommonTransactionCosts, GasCostSummary>, anyhow::Error> {
+async fn run_actual_costs()
+-> Result<BTreeMap<CommonTransactionCosts, GasCostSummary>, anyhow::Error> {
     let mut ret = BTreeMap::new();
     let test_cluster = TestClusterBuilder::new()
         .with_accounts(vec![AccountConfig {

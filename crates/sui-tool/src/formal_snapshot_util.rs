@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anemo::async_trait;
-use anyhow::anyhow;
 use anyhow::Result;
+use anyhow::anyhow;
 use futures::{StreamExt, TryStreamExt};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use sui_data_ingestion_core::{create_remote_store_client, CheckpointReader, Worker};
+use std::sync::atomic::{AtomicU64, Ordering};
+use sui_data_ingestion_core::{CheckpointReader, Worker, create_remote_store_client};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint};
 use sui_types::storage::WriteStore;

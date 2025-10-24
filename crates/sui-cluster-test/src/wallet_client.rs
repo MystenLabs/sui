@@ -11,7 +11,7 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{KeypairTraits, Signature};
 use sui_types::transaction::TransactionData;
-use tracing::{info, info_span, Instrument};
+use tracing::{Instrument, info, info_span};
 
 pub struct WalletClient {
     wallet_context: WalletContext,

@@ -530,7 +530,7 @@ impl Interpreter {
         debug_writeln!(buf, "        Code:")?;
         let pc = frame.pc as usize;
         let code = func.code();
-        let before = if pc > 3 { pc - 3 } else { 0 };
+        let before = pc.saturating_sub(3);
         let after = min(code.len(), pc + 4);
         for (idx, instr) in code.iter().enumerate().take(pc).skip(before) {
             debug_writeln!(buf, "            [{}] {:?}", idx, instr)?;

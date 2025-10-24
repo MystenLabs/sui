@@ -30,10 +30,10 @@ impl<T: MovingWindowValue> MovingWindow<T> {
     /// Adds a new value to the window. If the window is at capacity, the oldest value is removed
     /// before adding the new value.
     pub fn add_value(&mut self, value: T) {
-        if self.values.len() == self.max_size {
-            if let Some(old_value) = self.values.pop_front() {
-                T::sub_assign(&mut self.sum, old_value);
-            }
+        if self.values.len() == self.max_size
+            && let Some(old_value) = self.values.pop_front()
+        {
+            T::sub_assign(&mut self.sum, old_value);
         }
 
         self.values.push_back(value);

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 
-use super::{processor::processor, CommitterConfig, Processor, PIPELINE_BUFFER};
+use super::{CommitterConfig, PIPELINE_BUFFER, Processor, processor::processor};
 
 use crate::{
     metrics::IndexerMetrics,

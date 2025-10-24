@@ -5,7 +5,7 @@ authors = ["Mysten Labs <eng@mystenlabs.com>"]
 description = "End to end tests for Sui GraphQL"
 license = "Apache-2.0"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [lints]
 workspace = true

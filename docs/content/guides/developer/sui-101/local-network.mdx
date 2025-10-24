@@ -4,7 +4,7 @@ description: Connect to a Sui local network using the Sui CLI. Use local network
 keywords: [ local network, testnet, devnet, test application, deploy app locally, customize local network, configure local network, use local network, local network state, local faucet, using the local faucet, local sui faucet ]
 ---
 
-Use a Sui local network to test your dApps against the latest changes to Sui, and to prepare for the next Sui release to Devnet or Testnet. Sui CLI provides the `sui start` command to start a local network. There are several services that can be started when using `sui start`, such as an indexer, a faucet, or a local instance of the GraphQL service (including the web-based GraphiQL IDE). You can use the included faucet to get test SUI to use on the local network.
+Use a Sui local network to test your dApps against the latest changes to Sui and to prepare for the next Sui release to Devnet or Testnet. Sui CLI provides the `sui start` command to start a local network. There are several services that can be started when using `sui start`, such as an indexer, a faucet, or a local instance of the GraphQL service (including the web-based GraphiQL IDE). You can use the included faucet to get test SUI to use on the local network.
 
 If you haven't already, you need to [install Sui CLI](/guides/developer/getting-started/sui-install.mdx) on your system.
 
@@ -18,19 +18,19 @@ $ RUST_LOG="off,sui_node=info" sui start --with-faucet --force-regenesis
 
 This command:
 
-- Calls the Sui CLI binary with two flags:
+- Calls the Sui CLI binary with 2 flags:
 - `--with-faucet` to start a faucet service.
 - `--force-regenesis` to generate a new genesis and not persist the local network state.
 - Instructs Rust to set specific logging through the `RUST_LOG`=`off,sui_node=info` flags, which turns off logging for all components except `sui-node`. If you want to see more detailed logs, you can remove `RUST_LOG` from the command.
 
 :::info
-Each time you start the network by passing `--force-regenesis`, the local network starts from a random genesis with no previous data, and the local network is not persisted. If you'd like to persist data, skip passing the `--force-regenesis` flag. For more details, see the [Persist local network state](#persist-local-network-state) section. Please note that a temporary directory is created in `/tmp`, which might not work if the `/tmp` folder is mounted to `/tmpfs`. If this is the case, set `TMPDIR=./some_folder`.
+Each time you start the network by passing `--force-regenesis`, the local network starts from a random genesis with no previous data, and the local network is not persisted. If you'd like to persist data, skip passing the `--force-regenesis` flag. For more details, see the [Persist local network state](#persist-local-network-state) section. A temporary directory is created in `/tmp`, which might not work if the `/tmp` folder is mounted to `/tmpfs`. If this is the case, set `TMPDIR=./some_folder`.
 :::
 
 To customize your local Sui network, such as starting other services or changing default ports and hosts, include additional flags or options in the `sui start` command.
 
 :::info
-Options and flags like `with-indexer`, `with-graphql`, and related require you to have PostgreSQL/libpq installed. Check out the list of possible options below to find which is the default expected DB, or how to pass a different DB.
+Options and flags like `with-indexer`, `with-graphql`, and related require you to have PostgreSQL/libpq installed. Check out the list of possible options below to find which is the default expected DB or how to pass a different DB.
 :::
 
 The following is a list of possible options and flags to pass to `sui start`:
@@ -94,7 +94,7 @@ If successful, the response resembles the following:
 
 ## Connect the Sui CLI to your local network
 
-You can use the Sui CLI with any Sui network. By default it connects to Sui Devnet. To connect to your local network, create a new environment alias named `local` that sets the RPC URL the client uses to your local network.
+You can use the Sui CLI with any Sui network. By default, it connects to Sui Devnet. To connect to your local network, create a new environment alias named `local` that sets the RPC URL the client uses to your local network.
 
 ```sh
 $ sui client new-env --alias local --rpc http://127.0.0.1:9000

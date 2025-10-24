@@ -13,7 +13,7 @@ use move_vm_types::{
 use std::collections::{BTreeMap, VecDeque};
 use sui_types::nitro_attestation::{parse_nitro_attestation, verify_nitro_attestation};
 
-use crate::{get_extension, object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
 use move_vm_runtime::native_charge_gas_early_exit;
 
 pub const NOT_SUPPORTED_ERROR: u64 = 0;

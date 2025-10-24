@@ -8,9 +8,9 @@ use anyhow::Context;
 use diesel::{ConnectionError, ConnectionResult};
 use diesel_async::AsyncPgConnection;
 use rustls::{
+    ClientConfig, DigitallySignedStruct, RootCertStore,
     client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
     pki_types::{CertificateDer, ServerName, UnixTime},
-    ClientConfig, DigitallySignedStruct, RootCertStore,
 };
 use tokio_postgres_rustls::MakeRustlsConnect;
 use tracing::error;

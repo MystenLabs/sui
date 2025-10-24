@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 100;
+const MAX_PROTOCOL_VERSION: u64 = 101;
 
 // Record history of protocol version allocations here:
 //
@@ -273,6 +273,8 @@ const MAX_PROTOCOL_VERSION: u64 = 100;
 //             Add better error messages to the loader.
 // Version 99: Enable new commit handler.
 // Version 100: Framework update
+// Version 101: Framework update
+//              Set max updates per settlement txn to 100.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -868,6 +870,11 @@ struct FeatureFlags {
     // If true, deprecate global storage ops during Move module deserialization
     #[serde(skip_serializing_if = "is_false")]
     deprecate_global_storage_ops_during_deserialization: bool,
+
+    // If true, enable non-exclusive writes for user transactions.
+    // DO NOT ENABLE outside of the transaction test runner.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_non_exclusive_writes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1721,6 +1728,13 @@ pub struct ProtocolConfig {
     /// The metering step resolution for translation costs. This is the granularity at which we
     /// step up the metering for translation costs.
     translation_metering_step_resolution: Option<u64>,
+
+    /// The multiplier for each linkage entry when charging for linkage tables that we have
+    /// created.
+    translation_per_linkage_entry_charge: Option<u64>,
+
+    /// The maximum number of updates per settlement transaction.
+    max_updates_per_settlement_txn: Option<u32>,
 }
 
 /// An aliased address.
@@ -2006,6 +2020,10 @@ impl ProtocolConfig {
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
         self.feature_flags.enable_authenticated_event_streams && self.enable_accumulators()
+    }
+
+    pub fn enable_non_exclusive_writes(&self) -> bool {
+        self.feature_flags.enable_non_exclusive_writes
     }
 
     pub fn enable_coin_registry(&self) -> bool {
@@ -2394,7 +2412,9 @@ impl ProtocolConfig {
         });
 
         if std::env::var("SUI_PROTOCOL_CONFIG_OVERRIDE_ENABLE").is_ok() {
-            warn!("overriding ProtocolConfig settings with custom settings; this may break non-local networks");
+            warn!(
+                "overriding ProtocolConfig settings with custom settings; this may break non-local networks"
+            );
             let overrides: ProtocolConfigOptional =
                 serde_env::from_env_with_prefix("SUI_PROTOCOL_CONFIG_OVERRIDE")
                     .expect("failed to parse ProtocolConfig override env variables");
@@ -2919,6 +2939,9 @@ impl ProtocolConfig {
             translation_per_type_node_charge: None,
             translation_per_reference_node_charge: None,
             translation_metering_step_resolution: None,
+            translation_per_linkage_entry_charge: None,
+
+            max_updates_per_settlement_txn: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4163,8 +4186,10 @@ impl ProtocolConfig {
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
                 }
-                100 => {
+                100 => {}
+                101 => {
                     cfg.feature_flags.create_root_accumulator_object = true;
+                    cfg.max_updates_per_settlement_txn = Some(100);
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_poseidon = true;
                     }
@@ -4442,6 +4467,7 @@ impl ProtocolConfig {
             self.translation_per_type_node_charge = Some(1);
             self.translation_per_reference_node_charge = Some(1);
             self.translation_metering_step_resolution = Some(1000);
+            self.translation_per_linkage_entry_charge = Some(10);
         }
     }
 
@@ -4474,6 +4500,10 @@ impl ProtocolConfig {
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
         self.enable_accumulators_for_testing();
         self.feature_flags.enable_authenticated_event_streams = true;
+    }
+
+    pub fn enable_non_exclusive_writes_for_testing(&mut self) {
+        self.feature_flags.enable_non_exclusive_writes = true;
     }
 
     pub fn set_ignore_execution_time_observations_after_certs_closed_for_testing(
@@ -4690,9 +4720,10 @@ mod test {
         );
 
         // We didnt have this in version 1
-        assert!(prot
-            .lookup_attr("max_move_identifier_len".to_string())
-            .is_none());
+        assert!(
+            prot.lookup_attr("max_move_identifier_len".to_string())
+                .is_none()
+        );
 
         // But we did in version 9
         let prot: ProtocolConfig =
@@ -4705,11 +4736,12 @@ mod test {
         let prot: ProtocolConfig =
             ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // We didnt have this in version 1
-        assert!(prot
-            .attr_map()
-            .get("max_move_identifier_len")
-            .unwrap()
-            .is_none());
+        assert!(
+            prot.attr_map()
+                .get("max_move_identifier_len")
+                .unwrap()
+                .is_none()
+        );
         // We had this in version 1
         assert!(
             prot.attr_map().get("max_arguments").unwrap()
@@ -4720,14 +4752,17 @@ mod test {
         let prot: ProtocolConfig =
             ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // Does not exist
-        assert!(prot
-            .feature_flags
-            .lookup_attr("some random string".to_owned())
-            .is_none());
-        assert!(!prot
-            .feature_flags
-            .attr_map()
-            .contains_key("some random string"));
+        assert!(
+            prot.feature_flags
+                .lookup_attr("some random string".to_owned())
+                .is_none()
+        );
+        assert!(
+            !prot
+                .feature_flags
+                .attr_map()
+                .contains_key("some random string")
+        );
 
         // Was false in v1
         assert!(

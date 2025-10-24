@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use async_graphql::dataloader::Loader;
 use diesel::{
-    sql_types::{Array, BigInt},
     ExpressionMethods, QueryDsl,
+    sql_types::{Array, BigInt},
 };
 use sui_indexer_alt_schema::{
     epochs::{StoredEpochEnd, StoredEpochStart},

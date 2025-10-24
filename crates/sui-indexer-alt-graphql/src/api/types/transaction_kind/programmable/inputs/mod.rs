@@ -42,7 +42,7 @@ impl TransactionInput {
                     id,
                     initial_shared_version,
                     // TODO: extend schema to expose the full mutability enum
-                    mutability.is_mutable(),
+                    mutability.is_exclusive(),
                 )),
                 ObjectArg::Receiving((object_id, version, digest)) => Self::Receiving(
                     Receiving::from_object_ref(object_id, version, digest, scope),

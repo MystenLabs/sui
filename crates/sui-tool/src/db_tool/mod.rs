@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
-use self::index_search::{search_index, SearchRange};
+use self::db_dump::{StoreName, dump_table, duplicate_objects_summary, list_tables, table_summary};
+use self::index_search::{SearchRange, search_index};
 use crate::db_tool::db_dump::{compact, print_table_metadata, prune_checkpoints, prune_objects};
 use anyhow::{anyhow, bail};
 use clap::Parser;
@@ -16,7 +16,7 @@ use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::digests::{CheckpointContentsDigest, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber};
-use typed_store::rocks::{safe_drop_db, MetricConf};
+use typed_store::rocks::{MetricConf, safe_drop_db};
 pub mod db_dump;
 mod index_search;
 

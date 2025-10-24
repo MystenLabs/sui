@@ -1,7 +1,7 @@
 [package]
 name = "transaction-fuzzer"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
 description = "Tool to fuzz the system with randomly generated transactions"
 license = "Apache-2.0"

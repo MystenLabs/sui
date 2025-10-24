@@ -3,19 +3,19 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{Result, anyhow, bail, ensure};
 use diesel::prelude::QueryableByName;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{concurrent::Handler, Processor},
+    FieldCount,
+    pipeline::{Processor, concurrent::Handler},
     postgres::{Connection, Db},
     types::{
+        TypeTag,
         base_types::{ObjectID, SuiAddress},
         full_checkpoint_content::CheckpointData,
         object::{Object, Owner},
-        TypeTag,
     },
-    FieldCount,
 };
 use sui_indexer_alt_schema::{
     objects::{
@@ -283,9 +283,9 @@ impl Handler for CoinBalanceBuckets {
             .await?;
 
         ensure!(
-                deleted_coins == deleted_refs,
-                "Deleted coins count ({deleted_coins}) does not match deleted refs count ({deleted_refs})",
-            );
+            deleted_coins == deleted_refs,
+            "Deleted coins count ({deleted_coins}) does not match deleted refs count ({deleted_refs})",
+        );
 
         Ok((deleted_coins + deleted_refs) as usize)
     }
@@ -362,14 +362,14 @@ mod tests {
     use super::*;
     use diesel::QueryDsl;
     use sui_indexer_alt_framework::{
+        Indexer,
         types::{
-            base_types::{dbg_addr, MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
+            base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, dbg_addr},
             digests::TransactionDigest,
             gas_coin::GAS,
             object::{MoveObject, Object},
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
-        Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
     use sui_protocol_config::ProtocolConfig;

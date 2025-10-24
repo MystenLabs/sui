@@ -11,7 +11,7 @@ use std::fs;
 use std::path::PathBuf;
 use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
-use sui_types::transaction::{Transaction, DEFAULT_VALIDATOR_GAS_PRICE};
+use sui_types::transaction::{DEFAULT_VALIDATOR_GAS_PRICE, Transaction};
 use tracing::info;
 
 pub struct PackagePublishTxGenerator {

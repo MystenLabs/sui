@@ -274,7 +274,7 @@ impl MatchContext<true> for Context<'_> {
         self.env
     }
 
-    fn reporter(&self) -> &DiagnosticReporter {
+    fn reporter(&self) -> &DiagnosticReporter<'_> {
         &self.reporter
     }
 
@@ -2641,6 +2641,7 @@ fn process_value(context: &mut Context, sp!(loc, ev_): E::Value) -> H::Value {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 enum BinopEntry {
     Op {
         exp_loc: Loc,

@@ -8,7 +8,7 @@ use crate::{
     artifacts::{Artifact, ArtifactManager},
     execution::TxnContextAndEffects,
 };
-use anyhow::Context;
+use anyhow::{Context, Error};
 use move_binary_format::CompiledModule;
 use move_bytecode_source_map::utils::serialize_to_json_string;
 use move_command_line_common::files::MOVE_BYTECODE_EXTENSION;
@@ -27,7 +27,7 @@ pub fn save_trace_output(
     artifact_manager: &ArtifactManager<'_>,
     trace_builder: MoveTraceBuilder,
     context_and_effects: &TxnContextAndEffects,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), Error> {
     let trace = trace_builder.into_trace();
     let trace_member = artifact_manager.member(Artifact::Trace);
     trace_member

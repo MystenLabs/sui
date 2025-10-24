@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::subscription_handler::{SubscriptionMetrics, EVENT_DISPATCH_BUFFER_SIZE};
+use crate::subscription_handler::{EVENT_DISPATCH_BUFFER_SIZE, SubscriptionMetrics};
 use futures::Stream;
 use mysten_metrics::metered_channel::Sender;
 use mysten_metrics::spawn_monitored_task;
@@ -132,7 +132,7 @@ where
     }
 
     /// Subscribe to the data stream filtered by the filter object.
-    pub fn subscribe(&self, filter: F) -> impl Stream<Item = S> {
+    pub fn subscribe(&self, filter: F) -> impl Stream<Item = S> + use<T, S, F> {
         let (tx, rx) = mpsc::channel::<S>(EVENT_DISPATCH_BUFFER_SIZE);
         self.subscribers
             .write()

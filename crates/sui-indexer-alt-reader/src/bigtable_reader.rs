@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::time::Duration;
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_kvstore::{

@@ -14,8 +14,8 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
-    get_module_by_id, BackingPackageStore, ChildObjectResolver, ObjectStore, PackageObject,
-    ParentSync,
+    BackingPackageStore, ChildObjectResolver, ObjectStore, PackageObject, ParentSync,
+    get_module_by_id,
 };
 use sui_types::transaction::{InputObjectKind, InputObjects, ObjectReadResult, TransactionKey};
 

@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::sui_client_config::{SuiClientConfig, SuiEnv};
 use crate::SuiClient;
+use crate::sui_client_config::{SuiClientConfig, SuiEnv};
 use anyhow::{anyhow, ensure};
 use futures::future;
 use shared_crypto::intent::Intent;
@@ -399,10 +399,10 @@ impl WalletContext {
             return Ok(&self.config.keystore);
         }
 
-        if let Some(external_keys) = self.config.external_keys.as_ref() {
-            if external_keys.get_by_identity(key_identity).is_ok() {
-                return Ok(external_keys);
-            }
+        if let Some(external_keys) = self.config.external_keys.as_ref()
+            && external_keys.get_by_identity(key_identity).is_ok()
+        {
+            return Ok(external_keys);
         }
 
         Err(anyhow!(
@@ -418,10 +418,10 @@ impl WalletContext {
             return Ok(&mut self.config.keystore);
         }
 
-        if let Some(external_keys) = self.config.external_keys.as_mut() {
-            if external_keys.get_by_identity(key_identity).is_ok() {
-                return Ok(external_keys);
-            }
+        if let Some(external_keys) = self.config.external_keys.as_mut()
+            && external_keys.get_by_identity(key_identity).is_ok()
+        {
+            return Ok(external_keys);
         }
 
         Err(anyhow!(

@@ -9,7 +9,9 @@ use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::message_envelope::Message;
 use crate::object::Owner;
-use crate::transaction::{InputObjectKind, SenderSignedData, TransactionDataAPI};
+use crate::transaction::{
+    InputObjectKind, SenderSignedData, SharedObjectMutability, TransactionDataAPI,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub struct TestEffectsBuilder {
@@ -157,31 +159,38 @@ impl TestEffectsBuilder {
                     id,
                     initial_shared_version,
                     mutability,
-                } => mutability.is_mutable().then_some((
-                    *id,
-                    EffectsObjectChange {
-                        input_state: ObjectIn::Exist((
-                            (
-                                *self
-                                    .shared_input_versions
-                                    .get(id)
-                                    .unwrap_or(initial_shared_version),
-                                ObjectDigest::MIN,
-                            ),
-                            Owner::Shared {
-                                initial_shared_version: *initial_shared_version,
-                            },
-                        )),
-                        output_state: ObjectOut::ObjectWrite((
-                            // Digest must change with a mutation.
-                            ObjectDigest::MAX,
-                            Owner::Shared {
-                                initial_shared_version: *initial_shared_version,
-                            },
-                        )),
-                        id_operation: IDOperation::None,
-                    },
-                )),
+                } => {
+                    let mutable = match mutability {
+                        SharedObjectMutability::Mutable => true,
+                        SharedObjectMutability::Immutable => false,
+                        SharedObjectMutability::NonExclusiveWrite => todo!(),
+                    };
+                    mutable.then_some((
+                        *id,
+                        EffectsObjectChange {
+                            input_state: ObjectIn::Exist((
+                                (
+                                    *self
+                                        .shared_input_versions
+                                        .get(id)
+                                        .unwrap_or(initial_shared_version),
+                                    ObjectDigest::MIN,
+                                ),
+                                Owner::Shared {
+                                    initial_shared_version: *initial_shared_version,
+                                },
+                            )),
+                            output_state: ObjectOut::ObjectWrite((
+                                // Digest must change with a mutation.
+                                ObjectDigest::MAX,
+                                Owner::Shared {
+                                    initial_shared_version: *initial_shared_version,
+                                },
+                            )),
+                            id_operation: IDOperation::None,
+                        },
+                    ))
+                }
             })
             .chain(self.created_objects.into_iter().map(|(id, owner)| {
                 (

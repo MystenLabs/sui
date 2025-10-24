@@ -599,7 +599,7 @@ impl GlobalEnv {
     }
 
     /// Find all target modules and return in a vector
-    pub fn get_target_modules(&self) -> Vec<ModuleEnv> {
+    pub fn get_target_modules(&self) -> Vec<ModuleEnv<'_>> {
         let mut target_modules: Vec<ModuleEnv> = vec![];
         for module_env in self.get_modules() {
             if module_env.is_target() {
@@ -1335,7 +1335,7 @@ impl GlobalEnv {
     }
 
     /// Produce a TypeDisplayContext to print types within the scope of this env
-    pub fn get_type_display_ctx(&self) -> TypeDisplayContext {
+    pub fn get_type_display_ctx(&self) -> TypeDisplayContext<'_> {
         TypeDisplayContext::WithEnv {
             env: self,
             type_param_names: None,
@@ -2970,10 +2970,9 @@ impl<'env> FunctionEnv<'env> {
             .data
             .source_map
             .get_function_source_map(self.data.def_idx)
+            && let Some(loc) = fmap.get_code_location(offset)
         {
-            if let Some(loc) = fmap.get_code_location(offset) {
-                return self.module_env.env.to_loc(&loc);
-            }
+            return self.module_env.env.to_loc(&loc);
         }
         self.get_loc()
     }
@@ -3224,18 +3223,17 @@ impl<'env> FunctionEnv<'env> {
             .data
             .source_map
             .get_function_source_map(self.data.def_idx)
+            && let Some((ident, _)) = fmap.get_parameter_or_local_name(idx as u64)
         {
-            if let Some((ident, _)) = fmap.get_parameter_or_local_name(idx as u64) {
-                // The Move compiler produces temporary names of the form `<foo>%#<num>`,
-                // where <num> seems to be generated non-deterministically.
-                // Substitute this by a deterministic name which the backend accepts.
-                let clean_ident = if ident.contains("%#") {
-                    format!("tmp#${}", idx)
-                } else {
-                    ident
-                };
-                return self.module_env.env.symbol_pool.make(clean_ident.as_str());
-            }
+            // The Move compiler produces temporary names of the form `<foo>%#<num>`,
+            // where <num> seems to be generated non-deterministically.
+            // Substitute this by a deterministic name which the backend accepts.
+            let clean_ident = if ident.contains("%#") {
+                format!("tmp#${}", idx)
+            } else {
+                ident
+            };
+            return self.module_env.env.symbol_pool.make(clean_ident.as_str());
         }
         self.module_env.env.symbol_pool.make(&format!("$t{}", idx))
     }
@@ -3409,7 +3407,7 @@ impl<'env> FunctionEnv<'env> {
     }
 
     /// Produce a TypeDisplayContext to print types within the scope of this env
-    pub fn get_type_display_ctx(&self) -> TypeDisplayContext {
+    pub fn get_type_display_ctx(&self) -> TypeDisplayContext<'_> {
         let type_param_names = self
             .get_type_parameters()
             .iter()

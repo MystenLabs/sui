@@ -304,10 +304,10 @@ pub mod checked {
                     })
                     .unwrap_or(false);
                 // bucketize computation cost
-                if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort)) {
-                    if execution_result.is_ok() {
-                        *execution_result = Err(err);
-                    }
+                if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort))
+                    && execution_result.is_ok()
+                {
+                    *execution_result = Err(err);
                 }
 
                 // On error we need to dump writes, deletes, etc before charging storage gas

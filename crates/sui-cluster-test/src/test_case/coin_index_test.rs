@@ -614,10 +614,12 @@ impl TestCaseImpl for CoinIndexTest {
             managed_coins_12_39.data.last().unwrap().coin_object_id,
             last_managed_coin
         );
-        assert!(!managed_coins_12_39
-            .data
-            .iter()
-            .any(|coin| coin.coin_object_id == removed_coin_id));
+        assert!(
+            !managed_coins_12_39
+                .data
+                .iter()
+                .any(|coin| coin.coin_object_id == removed_coin_id)
+        );
         assert!(!managed_coins_12_39.has_next_page);
 
         // =========================== Test Get Coins Ends ===========================

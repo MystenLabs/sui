@@ -3,12 +3,12 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use tokio::{
     sync::Semaphore,
     task::JoinHandle,
-    time::{interval, MissedTickBehavior},
+    time::{MissedTickBehavior, interval},
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -356,7 +356,7 @@ mod tests {
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
 
-    use crate::{metrics::IndexerMetrics, mocks::store::*, pipeline::Processor, FieldCount};
+    use crate::{FieldCount, metrics::IndexerMetrics, mocks::store::*, pipeline::Processor};
 
     use super::*;
 

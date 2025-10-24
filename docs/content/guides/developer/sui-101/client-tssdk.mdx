@@ -4,7 +4,7 @@ description: Build a client-side application using the Sui TypeScript SDK.
 keywords: [ typescript, typescript SDK, build app, create app, client app, client-side, client-side application, build client app, build client, dApp kit, dApp-kit ]
 ---
 
-This exercise diverges from the example built in the previous topics in this section. Rather than adding a frontend to the running example, the instruction walks you through setting up dApp Kit in a React App, allowing you to connect to wallets, and query data from Sui RPC nodes to display in your app. You can use it to create your own frontend for the example used previously, but if you want to get a fully functional app up and running quickly, run the following command in a terminal or console to scaffold a new app with all steps in this exercise already implemented:
+This exercise diverges from the example built in the previous topics in this section. Rather than adding a frontend to the running example, this guide walks you through setting up dApp Kit in a React App. You can connect to wallets and query data from Sui RPC nodes to display in your app. You can use this to create your own frontend for the example used previously, but if you want to get a fully functional app up and running quickly, run the following command in a terminal or console to scaffold a new app with all steps in this exercise already implemented:
 
 <ImportContent source="info-pnpm-required.mdx" mode="snippet" />
 
@@ -20,7 +20,7 @@ $ yarn create @mysten/dapp --template react-client-dapp
 
 ## What is the Sui TypeScript SDK?
 
-The Sui TypeScript SDK (@mysten/sui) provides all the low-level functionality needed to interact with Sui ecosystem from TypeScript. You can use it in any TypeScript or JavaScript project, including web apps, Node.js apps, or mobile apps written with tools like React Native that support TypeScript.
+The Sui TypeScript SDK (@mysten/sui) provides all the low-level functionality needed to interact with the Sui ecosystem from TypeScript. You can use it in any TypeScript or JavaScript project, including web apps, Node.js apps, or mobile apps written with tools like React Native that support TypeScript.
 
 For more information on the Sui TypeScript SDK, see the [Sui TypeScript SDK documentation](https://sdk.mystenlabs.com/typescript).
 
@@ -30,9 +30,9 @@ dApp Kit (@mysten/dapp-kit) is a collection of React hooks, components, and util
 
 ## Installing dependencies
 
-To get started, you need a React app. The following steps apply to any React, so you can follow the same steps to add dApp Kit to an existing React app. If you are starting a new project, you can use Vite to scaffold a new React app.
+To get started, you need a React app. The following steps apply to any React app, so you can follow the same steps to add dApp Kit to an existing React app. If you are starting a new project, you can use Vite to scaffold a new React app.
 
-Run the following command in your terminal or console, and select React as the framework, and then select one of the TypeScript templates:
+Run the following command in your terminal or console, and select React as the framework, and then select a TypeScript template:
 
 ```sh npm2yarn
 $ npm init vite
@@ -46,7 +46,7 @@ $ npm install @mysten/sui @mysten/dapp-kit @tanstack/react-query
 
 ## Setting up Provider components
 
-To use all the features of dApp Kit, wrap your app with a couple of `Provider` components.
+To use all the features of dApp Kit, wrap your app with `Provider` components.
 
 Open the root component that renders your app (the default location the Vite template uses is `src/main.tsx`) and integrate or replace the current code with the following.
 
@@ -66,7 +66,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 );
 ```
 
-Next, set up the `SuiClientProvider`. This `Provider` delivers a `SuiClient` instance from `@mysten/sui` to all the hooks in dApp Kit. This provider manages which network dApp Kit connects to, and can accept configuration for multiple networks. This exercise connects to `devnet`.
+Next, set up the `SuiClientProvider`. This `Provider` delivers a `SuiClient` instance from `@mysten/sui` to all the hooks in dApp Kit. This `Provider` manages which network dApp Kit connects to, and can accept configuration for multiple networks. In this exercise, you connect to `devnet`.
 
 ```ts
 import { SuiClientProvider } from '@mysten/dapp-kit';
@@ -136,7 +136,7 @@ function App() {
 }
 ```
 
-The `ConnectButton` component displays a button that opens a modal on click, enabling the user to connect their wallet. Upon connection, it displays their address, and provides the option to disconnect.
+The `ConnectButton` component displays a button that opens a modal when clicked, enabling the user to connect their wallet. Upon connection, the component displays their address and provides the option to disconnect.
 
 ## Getting the connected wallet address
 

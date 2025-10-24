@@ -10,16 +10,16 @@ use sui_json_rpc_types::{ObjectChange, SuiExecutionStatus};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move_build::BuildConfig;
 use sui_sdk::rpc_types::SuiTransactionBlockResponseOptions;
+use sui_sdk::types::Identifier;
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 use sui_sdk::types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_sdk::types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_sdk::types::transaction::{
     CallArg, ObjectArg, SharedObjectMutability, Transaction, TransactionData,
 };
-use sui_sdk::types::Identifier;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
-use sui_types::{parse_sui_type_tag, TypeTag};
+use sui_types::{TypeTag, parse_sui_type_tag};
 
 // Integration tests for SUI Oracle, these test can be run manually on local or remote testnet.
 #[ignore]

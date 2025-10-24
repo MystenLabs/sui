@@ -6,16 +6,16 @@ use std::result::Result;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, ensure, Ok};
+use anyhow::{Ok, anyhow, bail, ensure};
 use async_trait::async_trait;
 use futures::future::join_all;
+use move_binary_format::CompiledModule;
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format::SignatureToken;
-use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use sui_json::{is_receiving_argument, resolve_move_function_args, ResolvedCallArg, SuiJsonValue};
+use sui_json::{ResolvedCallArg, SuiJsonValue, is_receiving_argument, resolve_move_function_args};
 use sui_json_rpc_types::{
     RPCTransactionRequestParams, SuiData, SuiObjectDataOptions, SuiObjectResponse, SuiRawData,
     SuiTypeTag,
@@ -35,7 +35,7 @@ use sui_types::transaction::{
     Argument, CallArg, Command, InputObjectKind, ObjectArg, SharedObjectMutability,
     TransactionData, TransactionKind,
 };
-use sui_types::{coin, fp_ensure, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID, coin, fp_ensure};
 
 #[async_trait]
 pub trait DataReader {
@@ -71,7 +71,9 @@ impl TransactionBuilder {
         gas_price: u64,
     ) -> Result<ObjectRef, anyhow::Error> {
         if gas_budget < gas_price {
-            bail!("Gas budget {gas_budget} is less than the reference gas price {gas_price}. The gas budget must be at least the current reference gas price of {gas_price}.")
+            bail!(
+                "Gas budget {gas_budget} is less than the reference gas price {gas_price}. The gas budget must be at least the current reference gas price of {gas_price}."
+            )
         }
         if let Some(gas) = input_gas {
             self.get_object_ref(gas).await
@@ -96,7 +98,9 @@ impl TransactionBuilder {
                     return Ok(obj.object_ref());
                 }
             }
-            Err(anyhow!("Cannot find gas coin for signer address {signer} with amount sufficient for the required gas budget {gas_budget}. If you are using the pay or transfer commands, you can use pay-sui or transfer-sui commands instead, which will use the only object as gas payment."))
+            Err(anyhow!(
+                "Cannot find gas coin for signer address {signer} with amount sufficient for the required gas budget {gas_budget}. If you are using the pay or transfer commands, you can use pay-sui or transfer-sui commands instead, which will use the only object as gas payment."
+            ))
         }
     }
 
@@ -193,10 +197,12 @@ impl TransactionBuilder {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        if let Some(gas) = gas {
-            if input_coins.contains(&gas) {
-                return Err(anyhow!("Gas coin is in input coins of Pay transaction, use PaySui transaction instead!"));
-            }
+        if let Some(gas) = gas
+            && input_coins.contains(&gas)
+        {
+            return Err(anyhow!(
+                "Gas coin is in input coins of Pay transaction, use PaySui transaction instead!"
+            ));
         }
 
         let coin_refs = self.input_refs(&input_coins).await?;
@@ -593,7 +599,7 @@ impl TransactionBuilder {
                 // If the capability is owned by an object, then the module defining the owning
                 // object gets to decide how the upgrade capability should be used.
                 Owner::ObjectOwner(_) => {
-                    return Err(anyhow::anyhow!("Upgrade capability controlled by object"))
+                    return Err(anyhow::anyhow!("Upgrade capability controlled by object"));
                 }
             };
             builder.obj(capability_arg).unwrap();

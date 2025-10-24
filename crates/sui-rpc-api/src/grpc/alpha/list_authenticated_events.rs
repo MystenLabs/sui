@@ -3,11 +3,11 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
+use crate::RpcError;
+use crate::RpcService;
 use crate::grpc::alpha::event_service_proto::{
     AuthenticatedEvent, ListAuthenticatedEventsRequest, ListAuthenticatedEventsResponse,
 };
-use crate::RpcError;
-use crate::RpcService;
 use bytes::Bytes;
 use prost::Message;
 use std::str::FromStr;
@@ -112,13 +112,13 @@ pub fn list_authenticated_events(
         .map(|token| decode_page_token(token))
         .transpose()?;
 
-    if let Some(token) = &page_token {
-        if token.stream_id != stream_addr {
-            return Err(RpcError::new(
-                tonic::Code::InvalidArgument,
-                "page_token stream_id mismatch".to_string(),
-            ));
-        }
+    if let Some(token) = &page_token
+        && token.stream_id != stream_addr
+    {
+        return Err(RpcError::new(
+            tonic::Code::InvalidArgument,
+            "page_token stream_id mismatch".to_string(),
+        ));
     }
 
     let start = request.start_checkpoint.unwrap_or(0);

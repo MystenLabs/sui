@@ -6,8 +6,8 @@ use std::time::Duration;
 use tracing::{debug, error};
 use url::Url;
 
-use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
 use crate::ingestion::Result as IngestionResult;
+use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
 
 /// Default timeout for remote checkpoint fetches.
 /// This prevents requests from hanging indefinitely due to network issues,
@@ -149,12 +149,12 @@ pub(crate) mod tests {
     use crate::metrics::tests::test_metrics;
     use axum::http::StatusCode;
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Mutex,
+        atomic::{AtomicUsize, Ordering},
     };
     use wiremock::{
-        matchers::{method, path_regex},
         Mock, MockServer, Request, Respond, ResponseTemplate,
+        matchers::{method, path_regex},
     };
 
     pub(crate) async fn respond_with(server: &MockServer, response: impl Respond + 'static) {

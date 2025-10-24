@@ -9,20 +9,20 @@ use std::{
 use consensus_config::Stake;
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
 use mysten_metrics::{
-    monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    monitored_mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
     monitored_scope, spawn_logged_monitored_task,
 };
 use parking_lot::RwLock;
 use tokio::task::JoinSet;
 
 use crate::{
+    BlockAPI, CommitIndex, CommittedSubDag, VerifiedBlock,
     commit::DEFAULT_WAVE_LENGTH,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction_certifier::TransactionCertifier,
-    BlockAPI, CommitIndex, CommittedSubDag, VerifiedBlock,
 };
 
 /// For transaction T committed at leader round R, when a new leader at round >= R + INDIRECT_REJECT_DEPTH
@@ -791,8 +791,8 @@ mod tests {
     use parking_lot::RwLock;
 
     use crate::{
-        block::BlockTransactionVotes, dag_state::DagState, linearizer::Linearizer,
-        storage::mem_store::MemStore, test_dag_builder::DagBuilder, TestBlock, VerifiedBlock,
+        TestBlock, VerifiedBlock, block::BlockTransactionVotes, dag_state::DagState,
+        linearizer::Linearizer, storage::mem_store::MemStore, test_dag_builder::DagBuilder,
     };
 
     use super::*;

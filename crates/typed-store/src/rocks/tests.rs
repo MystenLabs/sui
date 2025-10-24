@@ -69,9 +69,10 @@ async fn test_reopen() {
     };
     let db = DBMap::<u32, String>::reopen(&arc.db, None, &ReadWriteOptions::default(), false)
         .expect("Failed to re-open storage");
-    assert!(db
-        .contains_key(&123456789)
-        .expect("Failed to retrieve item in storage"));
+    assert!(
+        db.contains_key(&123456789)
+            .expect("Failed to retrieve item in storage")
+    );
 }
 
 #[tokio::test]
@@ -80,12 +81,14 @@ async fn test_contains_key() {
 
     db.insert(&123456789, &"123456789".to_string())
         .expect("Failed to insert");
-    assert!(db
-        .contains_key(&123456789)
-        .expect("Failed to call contains key"));
-    assert!(!db
-        .contains_key(&000000000)
-        .expect("Failed to call contains key"));
+    assert!(
+        db.contains_key(&123456789)
+            .expect("Failed to call contains key")
+    );
+    assert!(
+        !db.contains_key(&000000000)
+            .expect("Failed to call contains key")
+    );
 }
 
 #[tokio::test]
@@ -339,12 +342,14 @@ async fn test_insert_batch_across_different_db() {
     .expect("Failed to open storage");
     let keys_vals_2 = (1000..1100).map(|i| (i, i.to_string()));
 
-    assert!(db_cf_1
-        .batch()
-        .insert_batch(&db_cf_1, keys_vals_1)
-        .expect("Failed to batch insert")
-        .insert_batch(&db_cf_2, keys_vals_2)
-        .is_err());
+    assert!(
+        db_cf_1
+            .batch()
+            .insert_batch(&db_cf_1, keys_vals_1)
+            .expect("Failed to batch insert")
+            .insert_batch(&db_cf_2, keys_vals_2)
+            .is_err()
+    );
 }
 
 #[tokio::test]

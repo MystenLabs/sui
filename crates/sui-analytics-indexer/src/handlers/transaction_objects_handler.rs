@@ -8,12 +8,12 @@ use anyhow::Result;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::TransactionDataAPI;
 
+use crate::FileType;
 use crate::handlers::{
-    process_transactions, AnalyticsHandler, InputObjectTracker, ObjectStatusTracker,
-    TransactionProcessor,
+    AnalyticsHandler, InputObjectTracker, ObjectStatusTracker, TransactionProcessor,
+    process_transactions,
 };
 use crate::tables::TransactionObjectEntry;
-use crate::FileType;
 
 #[derive(Clone)]
 pub struct TransactionObjectsHandler {}

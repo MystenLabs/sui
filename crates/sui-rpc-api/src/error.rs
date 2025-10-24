@@ -134,8 +134,8 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                     .collect::<std::collections::BTreeMap<_, Vec<_>>>();
 
                 let message = format!(
-                        "Failed to sign transaction by a quorum of validators because of locked objects. Conflicting Transactions:\n{new_map:#?}",
-                    );
+                    "Failed to sign transaction by a quorum of validators because of locked objects. Conflicting Transactions:\n{new_map:#?}",
+                );
 
                 RpcError::new(Code::FailedPrecondition, message)
             }
@@ -146,11 +146,17 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                     "timed-out before finality could be reached",
                 )
             }
-            TimeoutBeforeFinalityWithErrors { last_error, attempts, timeout } => {
+            TimeoutBeforeFinalityWithErrors {
+                last_error,
+                attempts,
+                timeout,
+            } => {
                 // TODO add a Retry-After header
                 RpcError::new(
                     Code::Unavailable,
-                    format!("Transaction timed out before finality could be reached. Attempts: {attempts} & timeout: {timeout:?}. Last error: {last_error}"),
+                    format!(
+                        "Transaction timed out before finality could be reached. Attempts: {attempts} & timeout: {timeout:?}. Last error: {last_error}"
+                    ),
                 )
             }
             NonRecoverableTransactionError { errors } => {
@@ -159,7 +165,7 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                     // sort by total stake, descending, so users see the most prominent one first
                     .sorted_by(|(_, a, _), (_, b, _)| b.cmp(a))
                     .filter_map(|(err, _, _)| {
-                        match err.as_inner(){
+                        match err.as_inner() {
                             // Special handling of UserInputError:
                             // ObjectNotFound and DependentPackageNotFound are considered
                             // retryable errors but they have different treatment
@@ -188,7 +194,10 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                 );
 
                 let error_list = new_errors.join(", ");
-                let error_msg = format!("Transaction execution failed due to issues with transaction inputs, please review the errors and try again: {}.", error_list);
+                let error_msg = format!(
+                    "Transaction execution failed due to issues with transaction inputs, please review the errors and try again: {}.",
+                    error_list
+                );
 
                 RpcError::new(Code::InvalidArgument, error_msg)
             }

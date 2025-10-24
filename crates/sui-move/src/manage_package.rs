@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 
 use move_cli::base;
 use move_package::{
+    BuildConfig,
     lock_file::{self, LockFile},
     source_package::layout::SourcePackageLayout,
-    BuildConfig,
 };
 use sui_types::base_types::ObjectID;
 

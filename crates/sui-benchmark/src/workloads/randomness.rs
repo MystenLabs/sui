@@ -4,25 +4,25 @@
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
+use crate::workloads::GasCoinConfig;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::{
-    ExpectedFailureType, Workload, WorkloadBuilder, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
+    ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder,
 };
-use crate::workloads::GasCoinConfig;
 use crate::workloads::{Gas, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::crypto::{get_key_pair, AccountKeyPair};
+use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
+use sui_types::{Identifier, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     transaction::Transaction,
 };
-use sui_types::{Identifier, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use tracing::{error, info};
 
 /// The max amount of gas units needed for a payload.

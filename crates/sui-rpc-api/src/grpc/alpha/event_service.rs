@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::RpcService;
 use crate::grpc::alpha::event_service_proto::event_service_server::EventService;
 use crate::grpc::alpha::event_service_proto::{
     ListAuthenticatedEventsRequest, ListAuthenticatedEventsResponse,
 };
 use crate::grpc::alpha::list_authenticated_events;
-use crate::RpcService;
 
 #[tonic::async_trait]
 impl EventService for RpcService {

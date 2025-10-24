@@ -5,9 +5,9 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use super::*;
-use crate::authority::shared_object_version_manager::AssignedTxAndVersions;
 use crate::authority::ExecutionEnv;
-use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
+use crate::authority::shared_object_version_manager::AssignedTxAndVersions;
+use crate::authority::{AuthorityState, authority_tests::init_state_with_objects};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
 
@@ -18,9 +18,10 @@ use fastcrypto::traits::KeyPair;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use parking_lot::Mutex;
 use rand::rngs::StdRng;
-use rand::{thread_rng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, thread_rng};
 use sui_macros::sim_test;
-use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+use sui_types::crypto::{AccountKeyPair, deterministic_random_account_key};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
@@ -28,13 +29,12 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::transaction::SharedObjectMutability;
 use sui_types::utils::{make_committee_key_num, to_sender_signed_transaction};
-use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
     base_types::{ExecutionDigests, ObjectID, SuiAddress},
     object::Object,
     transaction::{
-        CallArg, CertifiedTransaction, ObjectArg, TransactionData, VerifiedTransaction,
-        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+        CallArg, CertifiedTransaction, ObjectArg, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+        TransactionData, VerifiedTransaction,
     },
 };
 use tokio::time::sleep;

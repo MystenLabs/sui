@@ -363,18 +363,18 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         // migrate any pubs from the legacy lockfile to the modern pubfile before we clobber the
         // legacy lockfile.
         let legacy_pubs = self.input_path.read_legacy_lockfile(&self.mutex)?;
-        if let Some(pubs) = &legacy_pubs {
-            if !pubs.is_empty() {
-                let old_pubfile = self
-                    .input_path
-                    .read_pubfile(&self.mutex)?
-                    .map(|(_, p)| p)
-                    .unwrap_or_default();
-                let mut legacy_pubs: ParsedPublishedFile<F> = pubs.clone().into();
-                // if the same publication exists in both, we keep the modern one
-                legacy_pubs.published.extend(old_pubfile.published);
-                self.output_path.write_pubfile(&legacy_pubs, &self.mutex)?;
-            }
+        if let Some(pubs) = &legacy_pubs
+            && !pubs.is_empty()
+        {
+            let old_pubfile = self
+                .input_path
+                .read_pubfile(&self.mutex)?
+                .map(|(_, p)| p)
+                .unwrap_or_default();
+            let mut legacy_pubs: ParsedPublishedFile<F> = pubs.clone().into();
+            // if the same publication exists in both, we keep the modern one
+            legacy_pubs.published.extend(old_pubfile.published);
+            self.output_path.write_pubfile(&legacy_pubs, &self.mutex)?;
         }
 
         let mut lockfile: ParsedLockfile = if legacy_pubs.is_some() {
@@ -434,13 +434,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ) -> PackageResult<ParsedEphemeralPubs<F>> {
         if let Ok(file) = FileHandle::new(&pubfile) {
             let parsed: ParsedEphemeralPubs<F> = toml_edit::de::from_str(file.source())?;
-            if let Some(build_env) = build_env {
-                if *build_env != parsed.build_env {
-                    return Err(PackageError::EphemeralEnvMismatch {
-                        file_build_env: parsed.build_env,
-                        passed_build_env: build_env.clone(),
-                    });
-                }
+            if let Some(build_env) = build_env
+                && *build_env != parsed.build_env
+            {
+                return Err(PackageError::EphemeralEnvMismatch {
+                    file_build_env: parsed.build_env,
+                    passed_build_env: build_env.clone(),
+                });
             }
             if *chain_id != parsed.chain_id {
                 return Err(PackageError::EphemeralChainMismatch {

@@ -101,12 +101,12 @@ pub use insta;
 /// `options` argument. Options include:
 ///
 ///  - `name`: The name of the test. This will be used to name the snapshot file. By default, the
-///            file stem (the name without the extension) of the input path is used.
+///    file stem (the name without the extension) of the input path is used.
 ///  - `info`: Additional information to include in the header of the snapshot file. This can be
-///           useful for debugging tests. The value can be any type that implements
-///           `serde::Serialize`.
+///    useful for debugging tests. The value can be any type that implements
+///    `serde::Serialize`.
 /// - `suffix`: A suffix to append to the snapshot file name. This changes the snapshot path to
-///            `{input_path}/{name}@{suffix}.snap`.
+///   `{input_path}/{name}@{suffix}.snap`.
 ///
 /// # Updating snapshots
 ///

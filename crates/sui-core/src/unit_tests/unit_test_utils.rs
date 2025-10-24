@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState};
+use crate::authority::{AuthorityState, test_authority_builder::TestAuthorityBuilder};
 use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder, TimeoutConfig};
 use crate::test_authority_clients::LocalAuthorityClient;
 use fastcrypto::traits::KeyPair;
@@ -19,8 +19,8 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{
-    generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
-    NetworkKeyPair, SuiKeyPair,
+    AccountKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair,
+    generate_proof_of_possession, get_key_pair,
 };
 use sui_types::object::Object;
 

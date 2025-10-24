@@ -47,6 +47,7 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::execution_scheduler::ExecutionScheduler;
+use crate::execution_scheduler::execution_scheduler_impl::BarrierDependencyBuilder;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::{
     checkpoints::CheckpointStore,
@@ -189,15 +190,14 @@ impl CheckpointExecutor {
             .get_highest_executed_checkpoint()
             .unwrap();
 
-        if let Some(highest_executed) = &highest_executed {
-            if self.epoch_store.epoch() == highest_executed.epoch()
-                && highest_executed.is_last_checkpoint_of_epoch()
-            {
-                // We can arrive at this point if we bump the highest_executed_checkpoint watermark, and then
-                // crash before completing reconfiguration.
-                info!(seq = ?highest_executed.sequence_number, "final checkpoint of epoch has already been executed");
-                return None;
-            }
+        if let Some(highest_executed) = &highest_executed
+            && self.epoch_store.epoch() == highest_executed.epoch()
+            && highest_executed.is_last_checkpoint_of_epoch()
+        {
+            // We can arrive at this point if we bump the highest_executed_checkpoint watermark, and then
+            // crash before completing reconfiguration.
+            info!(seq = ?highest_executed.sequence_number, "final checkpoint of epoch has already been executed");
+            return None;
         }
 
         Some(
@@ -308,7 +308,9 @@ impl CheckpointExecutor {
                 "CheckpointExecutor::wait_for_previous_checkpoints",
             );
 
-            info!("Reached end of epoch checkpoint, waiting for all previous checkpoints to be executed");
+            info!(
+                "Reached end of epoch checkpoint, waiting for all previous checkpoints to be executed"
+            );
             self.checkpoint_store
                 .notify_read_executed_checkpoint(sequence_number - 1)
                 .await;
@@ -381,7 +383,10 @@ impl CheckpointExecutor {
         // (RandomnessManager/RandomnessReporter is only present on validators.)
         if let Some(randomness_reporter) = self.epoch_store.randomness_reporter() {
             for round in randomness_rounds {
-                debug!(?round, "notifying RandomnessReporter that randomness update was executed in checkpoint");
+                debug!(
+                    ?round,
+                    "notifying RandomnessReporter that randomness update was executed in checkpoint"
+                );
                 randomness_reporter
                     .notify_randomness_in_checkpoint(round)
                     .expect("epoch cannot have ended");
@@ -765,6 +770,8 @@ impl CheckpointExecutor {
         ckpt_state: &CheckpointExecutionState,
         tx_data: &CheckpointTransactionData,
     ) -> Vec<TransactionDigest> {
+        let mut barrier_deps_builder = BarrierDependencyBuilder::new();
+
         // Find unexecuted transactions and their expected effects digests
         let (unexecuted_tx_digests, unexecuted_txns): (Vec<_>, Vec<_>) = itertools::multiunzip(
             itertools::izip!(
@@ -776,6 +783,9 @@ impl CheckpointExecutor {
             )
             .filter_map(
                 |(txn, tx_digest, expected_fx_digest, effects, executed_fx_digest)| {
+                    let barrier_deps =
+                        barrier_deps_builder.process_tx(*tx_digest, txn.transaction_data());
+
                     if let Some(executed_fx_digest) = executed_fx_digest {
                         assert_not_forked(
                             &ckpt_state.data.checkpoint,
@@ -799,7 +809,8 @@ impl CheckpointExecutor {
 
                         let mut env = ExecutionEnv::new()
                             .with_assigned_versions(assigned_versions)
-                            .with_expected_effects_digest(*expected_fx_digest);
+                            .with_expected_effects_digest(*expected_fx_digest)
+                            .with_barrier_dependencies(barrier_deps);
 
                         // Check if the expected effects indicate insufficient balance
                         if let ExecutionStatus::Failure {
@@ -902,7 +913,7 @@ impl CheckpointExecutor {
         } else {
             assert_eq!(seq, 0);
         }
-        if seq % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
+        if seq.is_multiple_of(CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL) {
             info!("Finished syncing and executing checkpoint {}", seq);
         }
 
@@ -964,10 +975,10 @@ impl CheckpointExecutor {
                 .expect("failed to update rpc_indexes");
         }
 
-        if let Some(sender) = &self.subscription_service_checkpoint_sender {
-            if let Err(e) = sender.send(checkpoint).await {
-                warn!("unable to send checkpoint to subscription service: {e}");
-            }
+        if let Some(sender) = &self.subscription_service_checkpoint_sender
+            && let Err(e) = sender.send(checkpoint).await
+        {
+            warn!("unable to send checkpoint to subscription service: {e}");
         }
     }
 

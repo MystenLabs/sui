@@ -6,8 +6,8 @@ use crate::metrics::AppMetrics;
 use axum::{
     body::Body,
     extract::{Request, State},
-    http::request::Parts,
     http::StatusCode,
+    http::request::Parts,
     response::Response,
 };
 use bytes::Bytes;
@@ -136,7 +136,7 @@ async fn proxy_request(
 
         let should_sample = !is_health_check && !is_grafana_agent && !is_grpc;
         let rate = state.logging_config.read_request_sample_rate;
-        if should_sample && rand::thread_rng().gen::<f64>() < rate {
+        if should_sample && rand::thread_rng().r#gen::<f64>() < rate {
             tracing::info!(
                 headers = ?parts.headers,
                 body = ?body_bytes,
