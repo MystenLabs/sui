@@ -3,40 +3,54 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use futures::{future::try_join_all, stream};
+use futures::{Stream, StreamExt, future::try_join_all, stream};
 use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use super::{IngestionConfig, client::IngestionClient};
 use crate::{
-    ingestion::error::Error, task::TrySpawnStreamExt,
+    ingestion::{
+        error::Error,
+        streaming_service::{PeekableStream, StreamingService},
+    },
+    metrics::IndexerMetrics,
+    task::TrySpawnStreamExt,
     types::full_checkpoint_content::CheckpointData,
 };
 
-/// Broadcaster task that manages checkpoint flow and spawns broadcast tasks for ranges.
+/// Broadcaster task that manages checkpoint flow and spawns broadcast tasks for ranges
+/// via either streaming or ingesting, or both.
 ///
 /// This task:
-/// 1. Maintains an ingest_hi based on subscriber feedback
-/// 2. Spawns a broadcaster task for the requested checkpoint range. Right now the entire requested range is given to
-///    each broadcaster, but with streaming support the end of the range could be different.
-/// 3. The broadcast_range task waits on the watch channel when it hits the ingest_hi limit
+/// 1. Maintains an ingest_hi based on subscriber feedback.
+/// 2. Spawns streaming or ingesting tasks for the requested checkpoint range. Depending on
+///    the current latest checkpoint available from streaming, it may spawn either or both tasks
+///    to cover the requested range. The overall idea is that ingestion covers the range
+///    [start, network_latest_cp), while streaming covers [network_latest_cp, end).
+/// 3. When both the streaming and ingesting task finish due to failures or range completion, it
+///    updates the overall watermark and runs a new loop iteration if the requested range is not complete.
+/// 4. Both the ingest_and_broadcast_range and stream_and_broadcast_range tasks wait on the watch
+///    channel when they hit the ingest_hi limit.
 ///
 /// The task will shut down if the `cancel` token is signalled, or if the `checkpoints` range completes.
-pub(super) fn broadcaster<R>(
+pub(super) fn broadcaster<R, S>(
     checkpoints: R,
     initial_commit_hi: Option<u64>,
+    mut streaming_service: Option<S>,
     config: IngestionConfig,
     client: IngestionClient,
     mut commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
+    metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()>
 where
     R: std::ops::RangeBounds<u64> + Send + 'static,
+    S: StreamingService + Send + 'static,
 {
     tokio::spawn(async move {
         info!("Starting broadcaster");
@@ -66,60 +80,132 @@ where
         let initial_ingest_hi = initial_commit_hi.map(|min_hi| min_hi + buffer_size);
         let (ingest_hi_watch_tx, ingest_hi_watch_rx) = watch::channel(initial_ingest_hi);
 
-        // Spawn the broadcaster task.
-        let mut broadcaster_handle = tokio::spawn(ingest_and_broadcast_range(
-            start_cp,
-            end_cp,
-            config.retry_interval(),
-            config.ingest_concurrency,
-            ingest_hi_watch_rx.clone(),
-            client.clone(),
-            subscribers.clone(),
-            cancel.clone(),
-        ));
+        // Helper macro to create a dummy streaming handle that just returns
+        // the provided checkpoint_hi immediately.
+        // We use this to simplify the join logic when streaming is not used.
+        macro_rules! dummy_streaming_handle {
+            ($checkpoint_hi:expr) => {
+                tokio::spawn(async move { $checkpoint_hi })
+            };
+        }
 
-        loop {
-            tokio::select! {
-                _ = cancel.cancelled() => {
-                    info!("Shutdown received, stopping ingestion");
-                    break;
-                }
+        // Initialize the overall checkpoint_hi watermark to start_cp.
+        // This value is updated every outer loop iteration
+        // after both streaming and broadcasting complete.
+        let mut checkpoint_hi = start_cp;
 
-                // Subscriber watermark update
-                // docs::#regulator (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                Some((name, hi)) = commit_hi_rx.recv() => {
-                    subscribers_hi.insert(name, hi);
+        'outer: while checkpoint_hi < end_cp {
+            let (streaming_handle, ingestion_end) =
+                if let Some(streaming_service) = &mut streaming_service {
+                    // TODO: we unwrap connection and peeking errors here, which will be handled
+                    // in a later PR.
+                    let mut stream = streaming_service.connect().await.unwrap();
+                    // Peek at the next checkpoint from streaming to determine the split point.
+                    let network_latest_cp = *stream
+                        .peek()
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .checkpoint_summary
+                        .sequence_number();
 
-                    if let Some(min_hi) = subscribers_hi.values().copied().min() {
-                        let new_ingest_hi = min_hi + buffer_size;
-                        // Update the watch channel, which will notify all waiting tasks
-                        let _ = ingest_hi_watch_tx.send(Some(new_ingest_hi));
-                        info!(ingest_hi = new_ingest_hi, "Updated ingest_hi");
+                    // We will only ingest up to the network_latest_cp, and stream from there to end_cp.
+                    let ingestion_end = network_latest_cp.min(end_cp);
+                    // Decide whether to start streaming now or delay it until we are within buffer size.
+                    let streaming_handle = if network_latest_cp <= checkpoint_hi + buffer_size {
+                        info!(
+                            network_latest_cp,
+                            checkpoint_hi, "Within buffer size, starting streaming"
+                        );
+
+                        tokio::spawn(stream_and_broadcast_range(
+                            network_latest_cp.max(checkpoint_hi), // Need the max here to avoid sending already processed checkpoints
+                            end_cp,
+                            stream,
+                            subscribers.clone(),
+                            ingest_hi_watch_rx.clone(),
+                            metrics.clone(),
+                            cancel.clone(),
+                        ))
+                    } else {
+                        info!(
+                            network_latest_cp,
+                            checkpoint_hi, "Outside buffer size, delaying streaming start"
+                        );
+                        dummy_streaming_handle!(ingestion_end)
+                    };
+
+                    (streaming_handle, ingestion_end)
+                } else {
+                    // No streaming service configured, so we just use ingestion for the entire range.
+                    (dummy_streaming_handle!(end_cp), end_cp)
+                };
+
+            // Spawn a broadcaster task for this range.
+            // It will exit when the range is complete or if it is cancelled.
+            let ingestion_handle = tokio::spawn(ingest_and_broadcast_range(
+                checkpoint_hi,
+                ingestion_end,
+                config.retry_interval(),
+                config.ingest_concurrency,
+                ingest_hi_watch_rx.clone(),
+                client.clone(),
+                subscribers.clone(),
+                cancel.clone(),
+            ));
+
+            let join_future = async { tokio::join!(streaming_handle, ingestion_handle) };
+            tokio::pin!(join_future);
+
+            loop {
+                tokio::select! {
+                    _ = cancel.cancelled() => {
+                        info!("Shutdown received, stopping ingestion");
+                        break 'outer;
                     }
-                }
-                // docs::/#regulator
 
-                // Handle broadcaster task completion
-                result = &mut broadcaster_handle => {
-                    match result {
-                        Ok(Ok(())) => {
-                            info!("Broadcaster completed successfully");
-                            break;
+                    // Subscriber watermark update
+                    // docs::#regulator (see docs/content/guides/developer/advanced/custom-indexer.mdx)
+                    Some((name, hi)) = commit_hi_rx.recv() => {
+                        subscribers_hi.insert(name, hi);
+
+                        if let Some(min_hi) = subscribers_hi.values().copied().min() {
+                            let new_ingest_hi = Some(min_hi + buffer_size);
+                            // Update the watch channel, which will notify all waiting tasks
+                            let _ = ingest_hi_watch_tx.send(new_ingest_hi);
                         }
-                        Ok(Err(Error::Cancelled)) => {
-                            info!("Broadcaster was cancelled");
-                            break;
+                    }
+                    // docs::/#regulator
+
+                    // Handle both streaming and broadcaster completion
+                    (streaming_result, broadcaster_result) = join_future.as_mut() => {
+                        // Check broadcaster result, cancel on any error
+                        match broadcaster_result {
+                            Ok(Ok(())) => {} // Success, continue
+                            Ok(Err(e)) => {
+                                error!("Broadcaster failed: {}", e);
+                                cancel.cancel();
+                                break 'outer;
+                            }
+                            Err(e) => {
+                                error!("Broadcaster task panicked: {}", e);
+                                cancel.cancel();
+                                break 'outer;
+                            }
                         }
-                        Ok(Err(e)) => {
-                            error!("Broadcaster failed: {}", e);
-                            cancel.cancel();
-                            break;
-                        }
-                        Err(e) => {
-                            error!("Broadcaster task panicked: {}", e);
-                            cancel.cancel();
-                            break;
-                        }
+
+                        // Update checkpoint_hi from streaming, or cancel on error
+                        checkpoint_hi = match streaming_result {
+                            Ok(w) => w,
+                            Err(e) => {
+                                error!("Streaming task panicked: {}", e);
+                                cancel.cancel();
+                                break 'outer;
+                            }
+                        };
+
+                        info!(checkpoint_hi, "Both tasks completed, moving on to next range");
+                        break;
                     }
                 }
             }
@@ -197,6 +283,82 @@ async fn ingest_and_broadcast_range(
         .await
 }
 
+/// Streams and broadcasts checkpoints from a range [start, end) to subscribers.
+/// This task is ingest_hi-aware and will wait if it encounters a checkpoint
+/// beyond the current ingest_hi, resuming when ingest_hi advances to currently
+/// streaming checkpoint.
+/// If we encounter any streaming error or unexpected checkpoint ahead of the current
+/// checkpoint_hi, we return the next checkpoint we want to stream.
+async fn stream_and_broadcast_range(
+    start: u64,
+    end: u64,
+    mut stream: impl Stream<Item = Result<CheckpointData, Error>> + std::marker::Unpin,
+    subscribers: Arc<Vec<mpsc::Sender<Arc<CheckpointData>>>>,
+    mut ingest_hi_rx: watch::Receiver<Option<u64>>,
+    metrics: Arc<IndexerMetrics>,
+    cancel: CancellationToken,
+) -> u64 {
+    let mut checkpoint_hi = start;
+    while checkpoint_hi < end {
+        tokio::select! {
+            _ = cancel.cancelled() => {
+                info!("Shutdown received, stopping streaming");
+                return checkpoint_hi;
+            }
+            item = stream.next() => {
+                match item {
+                    Some(Ok(checkpoint)) => {
+                        let sequence_number = *checkpoint.checkpoint_summary.sequence_number();
+
+                        if sequence_number < checkpoint_hi {
+                            // Already processed checkpoint, skip.
+                            info!(checkpoint = sequence_number, checkpoint_hi, "Skipping already processed checkpoint");
+                            continue;
+                        }
+
+                        if sequence_number > checkpoint_hi {
+                            // Unexpected checkpoint ahead of current watermark, return to main loop
+                            // to fill up the gap.
+                            warn!(checkpoint = sequence_number, checkpoint_hi, "Unexpected checkpoint");
+                            return checkpoint_hi;
+                        }
+
+                        assert_eq!(sequence_number, checkpoint_hi);
+
+                        // Wait until ingest_hi allows processing this checkpoint.
+                        if tokio::select! {
+                            result = ingest_hi_rx.wait_for(|hi| hi.is_none_or(|h| checkpoint_hi < h)) => result.is_err(),
+                            _ = cancel.cancelled() => true,
+                        } {
+                            return checkpoint_hi;
+                        }
+
+                        // Send checkpoint to all subscribers and return on any error.
+                        if send_checkpoint(Arc::new(checkpoint), &subscribers).await.is_err() {
+                            return checkpoint_hi;
+                        }
+
+                        info!(checkpoint = checkpoint_hi, "Streamed checkpoint to subscribers");
+                        metrics.total_streamed_checkpoints.inc();
+                        metrics.latest_streamed_checkpoint.set(checkpoint_hi as i64);
+                        checkpoint_hi = checkpoint_hi.saturating_add(1);
+                    }
+                    Some(Err(e)) => {
+                        warn!("Streaming error: {}", e);
+                        return checkpoint_hi;
+                    }
+                    None => {
+                        warn!("Streaming ended unexpectedly");
+                        return checkpoint_hi;
+                    }
+                }
+            }
+        }
+    }
+
+    checkpoint_hi
+}
+
 /// Send a checkpoint to all subscribers.
 /// Returns an error if any subscriber's channel is closed.
 async fn send_checkpoint(
@@ -209,7 +371,6 @@ async fn send_checkpoint(
 
 #[cfg(test)]
 mod tests {
-    use prometheus::Registry;
     use std::fmt::Debug;
     use std::sync::Arc;
     use std::time::Duration;
@@ -217,11 +378,12 @@ mod tests {
 
     use super::*;
     use crate::ingestion::client::FetchData;
+    use crate::ingestion::streaming_service::test_utils::MockStreamingService;
     use crate::ingestion::{IngestionConfig, test_utils::test_checkpoint_data};
-    use crate::metrics::IndexerMetrics;
+    use crate::metrics::tests::test_metrics;
 
     /// Create a mock IngestionClient for tests
-    fn mock_client() -> IngestionClient {
+    fn mock_client(metrics: Arc<IndexerMetrics>) -> IngestionClient {
         use crate::ingestion::client::{FetchError, IngestionClientTrait};
         use async_trait::async_trait;
 
@@ -236,10 +398,7 @@ mod tests {
             }
         }
 
-        IngestionClient::new_impl(
-            Arc::new(MockClient),
-            IndexerMetrics::new(None, &Registry::new()),
-        )
+        IngestionClient::new_impl(Arc::new(MockClient), metrics)
     }
 
     /// Create a test config
@@ -286,6 +445,25 @@ mod tests {
         }
     }
 
+    /// Verify that a channel receives checkpoints in sequential order without gaps.
+    /// Use this when checkpoints must arrive in strict order (e.g., from streaming).
+    async fn expect_checkpoints_in_order<R>(rx: &mut mpsc::Receiver<Arc<CheckpointData>>, range: R)
+    where
+        R: Iterator<Item = u64>,
+    {
+        let expected: Vec<u64> = range.collect();
+
+        for (i, &expected_seq) in expected.iter().enumerate() {
+            let checkpoint = expect_recv(rx).await.unwrap();
+            let seq = *checkpoint.checkpoint_summary.sequence_number();
+            assert_eq!(
+                seq, expected_seq,
+                "Expected checkpoint {} at position {}, but got {}",
+                expected_seq, i, seq
+            );
+        }
+    }
+
     #[tokio::test]
     async fn finite_list_of_checkpoints() {
         let (_, hi_rx) = mpsc::unbounded_channel();
@@ -293,13 +471,16 @@ mod tests {
         let cancel = CancellationToken::new();
 
         let cps = 0..5;
-        let h_broadcaster = broadcaster(
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster::<_, MockStreamingService>(
             cps,
             None,
+            None,
             test_config(),
-            mock_client(),
+            mock_client(metrics.clone()),
             hi_rx,
             vec![subscriber_tx],
+            metrics,
             cancel.clone(),
         );
 
@@ -315,13 +496,16 @@ mod tests {
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
         let cancel = CancellationToken::new();
 
-        let h_broadcaster = broadcaster(
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster::<_, MockStreamingService>(
             0..,
             None,
+            None,
             test_config(),
-            mock_client(),
+            mock_client(metrics.clone()),
             hi_rx,
             vec![subscriber_tx],
+            metrics,
             cancel.clone(),
         );
 
@@ -337,13 +521,16 @@ mod tests {
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
         let cancel = CancellationToken::new();
 
-        let h_broadcaster = broadcaster(
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster::<_, MockStreamingService>(
             0..,
             None,
+            None,
             test_config(),
-            mock_client(),
+            mock_client(metrics.clone()),
             hi_rx,
             vec![subscriber_tx],
+            metrics,
             cancel.clone(),
         );
 
@@ -362,13 +549,16 @@ mod tests {
         let mut config = test_config();
         config.checkpoint_buffer_size = 0; // No buffer
 
-        let h_broadcaster = broadcaster(
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster::<_, MockStreamingService>(
             0..,
             Some(4),
+            None,
             config,
-            mock_client(),
+            mock_client(metrics.clone()),
             hi_rx,
             vec![subscriber_tx],
+            metrics,
             cancel.clone(),
         );
 
@@ -390,13 +580,16 @@ mod tests {
         let mut config = test_config();
         config.checkpoint_buffer_size = 2; // Buffer of 2
 
-        let h_broadcaster = broadcaster(
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster::<_, MockStreamingService>(
             0..,
             Some(2),
+            None,
             config,
-            mock_client(),
+            mock_client(metrics.clone()),
             hi_rx,
             vec![subscriber_tx],
+            metrics,
             cancel.clone(),
         );
 
@@ -418,13 +611,16 @@ mod tests {
         let mut config = test_config();
         config.checkpoint_buffer_size = 0; // No buffer
 
-        let h_broadcaster = broadcaster(
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster::<_, MockStreamingService>(
             0..,
             Some(2),
+            None,
             config,
-            mock_client(),
+            mock_client(metrics.clone()),
             hi_rx,
             vec![subscriber_tx],
+            metrics,
             cancel.clone(),
         );
 
@@ -456,13 +652,16 @@ mod tests {
         config.checkpoint_buffer_size = 0; // No buffer
 
         let cps = 0..10;
-        let h_broadcaster = broadcaster(
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster::<_, MockStreamingService>(
             cps,
             Some(2),
+            None,
             config,
-            mock_client(),
+            mock_client(metrics.clone()),
             hi_rx,
             vec![subscriber_tx],
+            metrics,
             cancel.clone(),
         );
 
@@ -503,13 +702,16 @@ mod tests {
         let (subscriber_tx2, mut subscriber_rx2) = mpsc::channel(1);
         let cancel = CancellationToken::new();
 
-        let h_broadcaster = broadcaster(
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster::<_, MockStreamingService>(
             0..,
             None,
+            None,
             test_config(),
-            mock_client(),
+            mock_client(metrics.clone()),
             hi_rx,
             vec![subscriber_tx1, subscriber_tx2],
+            metrics,
             cancel.clone(),
         );
 
@@ -536,13 +738,16 @@ mod tests {
         let mut config = test_config();
         config.checkpoint_buffer_size = 0; // No buffer
 
-        let h_broadcaster = broadcaster(
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster::<_, MockStreamingService>(
             1000..1010,
             Some(1005),
+            None,
             config,
-            mock_client(),
+            mock_client(metrics.clone()),
             hi_rx,
             vec![subscriber_tx],
+            metrics,
             cancel.clone(),
         );
 
@@ -556,6 +761,76 @@ mod tests {
         hi_tx.send(("test", 1010)).unwrap();
 
         expect_checkpoints_in_range(&mut subscriber_rx, 1005..1010).await;
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_only() {
+        telemetry_subscribers::init_for_testing();
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(10);
+        let cancel = CancellationToken::new();
+
+        // Create a mock streaming service with checkpoints 0..5
+        let streaming_service = MockStreamingService::new(0..5);
+
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster(
+            0..5, // Bounded range
+            None,
+            Some(streaming_service),
+            test_config(),
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        // Should receive all checkpoints from the stream in order
+        expect_checkpoints_in_order(&mut subscriber_rx, 0..5).await;
+
+        // We should get all checkpoints from streaming.
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 5);
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
+        assert_eq!(metrics.latest_streamed_checkpoint.get(), 4);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_with_transition() {
+        telemetry_subscribers::init_for_testing();
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(100);
+        let cancel = CancellationToken::new();
+
+        // Create a mock streaming service that starts at checkpoint 50
+        // This simulates streaming being ahead of ingestion
+        let streaming_service = MockStreamingService::new(50..60);
+
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster(
+            0..60,
+            None,
+            Some(streaming_service),
+            test_config(),
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        expect_checkpoints_in_range(&mut subscriber_rx, 0..60).await;
+
+        // Verify both ingestion and streaming were used
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 50);
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 10);
+        assert_eq!(metrics.latest_streamed_checkpoint.get(), 59);
 
         cancel.cancel();
         h_broadcaster.await.unwrap();
