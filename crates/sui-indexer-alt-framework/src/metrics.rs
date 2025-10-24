@@ -55,6 +55,7 @@ pub struct IndexerMetrics {
     pub total_ingested_not_found_retries: IntCounter,
     pub total_streamed_checkpoints: IntCounter,
     pub total_stream_disconnections: IntCounter,
+    pub total_streaming_connection_failures: IntCounter,
 
     // Checkpoint lag metrics for the ingestion pipeline.
     pub latest_ingested_checkpoint: IntGauge,
@@ -213,6 +214,12 @@ impl IndexerMetrics {
             total_stream_disconnections: register_int_counter_with_registry!(
                 name("total_stream_disconnections"),
                 "Total number of times the gRPC stream was disconnected",
+                registry,
+            )
+            .unwrap(),
+            total_streaming_connection_failures: register_int_counter_with_registry!(
+                name("total_streaming_connection_failures"),
+                "Total number of failures due to streaming service connection or peek failures",
                 registry,
             )
             .unwrap(),
