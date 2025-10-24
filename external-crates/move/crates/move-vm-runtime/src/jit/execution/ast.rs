@@ -56,11 +56,9 @@ pub struct Package {
 // so that any data needed for execution is immediately available
 #[derive(Debug)]
 pub struct Module {
-    #[allow(dead_code)]
     pub id: ModuleId,
 
     /// Types as indexes into the package's vtable
-    #[allow(dead_code)]
     pub type_refs: ArenaVec<IntraPackageKey>,
 
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
@@ -73,7 +71,7 @@ pub struct Module {
     /// struct references carry the index into the global vector of types.
     /// That is effectively an indirection over the ref table:
     /// the instruction carries an index into this table which contains the index into the
-    /// glabal table of types. No instantiation of generic types is saved into the global table.
+    /// global table of types. No instantiation of generic types is saved into the global table.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
     pub structs: ArenaVec<StructDef>,
     /// materialized instantiations, whether partial or not
@@ -83,7 +81,7 @@ pub struct Module {
     /// enum references carry the index into the global vector of types.
     /// That is effectively an indirection over the ref table:
     /// the instruction carries an index into this table which contains the index into the
-    /// glabal table of types. No instantiation of generic types is saved into the global table.
+    /// global table of types. No instantiation of generic types is saved into the global table.
     /// Note that variants are not carried in the global table as these should stay in sync with the
     /// enum type.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
@@ -106,7 +104,7 @@ pub struct Module {
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
     pub field_instantiations: ArenaVec<FieldInstantiation>,
 
-    /// a map from signatures in instantiations to the `ArenaVec<ArenaType>` that reperesent it.
+    /// a map from signatures in instantiations to the `ArenaVec<ArenaType>` that represents it.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
     #[allow(dead_code)]
     pub(crate) instantiation_signatures: ArenaVec<ArenaVec<ArenaType>>,
@@ -326,7 +324,7 @@ pub enum Type {
 /// instruction stream.
 pub(crate) enum Bytecode {
     /// Pop and discard the value at the top of the stack.
-    /// The value on the stack must be an copyable type.
+    /// The value on the stack must be a copyable type.
     ///
     /// Stack transition:
     ///
@@ -388,7 +386,7 @@ pub(crate) enum Bytecode {
     ///
     /// Stack transition:
     ///
-    /// ```..., integer_value -> ..., u8_value```
+    /// ```..., integer_value -> ..., u64_value```
     CastU64,
     /// Convert the value at the top of the stack into u128.
     ///
@@ -739,7 +737,7 @@ pub(crate) enum Bytecode {
     ///
     /// ```..., vec[e1, e2, ..., eN] -> ..., e1, e2, ..., eN```
     VecUnpack(VMPointer<ArenaType>, u64),
-    /// Swaps the elements at two indices in the vector. Abort the execution if any of the indice
+    /// Swaps the elements at two indices in the vector. Abort the execution if any of the indices
     /// is out of bounds.
     ///
     /// ```..., vector_reference, u64_value(1), u64_value(2) -> ...```
@@ -1155,15 +1153,15 @@ impl Type {
 impl DatatypeDescriptor {
     pub fn datatype_key(&self) -> VirtualTableKey {
         match &self.datatype_info.inner_ref() {
-            Datatype::Enum(vmpointer) => vmpointer.to_ref().def_vtable_key.clone(),
-            Datatype::Struct(vmpointer) => vmpointer.to_ref().def_vtable_key.clone(),
+            Datatype::Enum(vmpointer) => vmpointer.def_vtable_key.clone(),
+            Datatype::Struct(vmpointer) => vmpointer.def_vtable_key.clone(),
         }
     }
 
     pub fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = &AbilitySet> {
         let type_params = match self.datatype_info.inner_ref() {
-            Datatype::Enum(vmpointer) => &vmpointer.to_ref().type_parameters,
-            Datatype::Struct(vmpointer) => &vmpointer.to_ref().type_parameters,
+            Datatype::Enum(vmpointer) => &vmpointer.type_parameters,
+            Datatype::Struct(vmpointer) => &vmpointer.type_parameters,
         };
         type_params.iter().map(|param| &param.constraints)
     }
