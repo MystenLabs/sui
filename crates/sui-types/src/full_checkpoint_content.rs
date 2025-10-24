@@ -257,6 +257,25 @@ impl Checkpoint {
         }
         latest_live_output_objects
     }
+
+    pub fn eventually_removed_object_refs_post_version(&self) -> Vec<ObjectRef> {
+        let mut eventually_removed_object_refs = BTreeMap::new();
+        for tx in self.transactions.iter() {
+            for obj_ref in tx
+                .effects
+                .deleted()
+                .into_iter()
+                .chain(tx.effects.wrapped().into_iter())
+                .chain(tx.effects.unwrapped_then_deleted().into_iter())
+            {
+                eventually_removed_object_refs.insert(obj_ref.0, obj_ref);
+            }
+            for obj in tx.output_objects(&self.object_set) {
+                eventually_removed_object_refs.remove(&obj.id());
+            }
+        }
+        eventually_removed_object_refs.into_values().collect()
+    }
 }
 
 impl ExecutedTransaction {

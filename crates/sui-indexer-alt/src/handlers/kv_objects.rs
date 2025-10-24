@@ -12,7 +12,6 @@ use sui_indexer_alt_framework::{
     types::full_checkpoint_content::Checkpoint,
 };
 use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
-use sui_types::effects::TransactionEffectsAPI;
 
 pub(crate) struct KvObjects;
 
@@ -22,15 +21,16 @@ impl Processor for KvObjects {
     type Value = StoredObject;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
-        let deleted_objects = checkpoint.transactions.iter().flat_map(|txn| {
-            txn.effects.deleted().into_iter().map(|object_ref| {
+        let deleted_objects = checkpoint
+            .eventually_removed_object_refs_post_version()
+            .into_iter()
+            .map(|(id, version, _)| {
                 Ok(StoredObject {
-                    object_id: object_ref.0.to_vec(),
-                    object_version: object_ref.1.value() as i64,
+                    object_id: id.to_vec(),
+                    object_version: version.value() as i64,
                     serialized_object: None,
                 })
-            })
-        });
+            });
 
         let created_objects = checkpoint.transactions.iter().flat_map(|txn| {
             txn.output_objects(&checkpoint.object_set).map(|o| {
