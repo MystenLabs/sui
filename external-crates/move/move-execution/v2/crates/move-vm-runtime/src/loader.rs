@@ -8,13 +8,15 @@ use crate::{
     session::LoadedFunctionInstantiation,
 };
 use move_binary_format::{
+    CompiledModule,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        AbilitySet, Bytecode, CompiledModule, Constant, ConstantPoolIndex, FieldHandleIndex,
+        AbilitySet, Bytecode, Constant, ConstantPoolIndex, FieldHandleIndex,
         FieldInstantiationIndex, FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
         FunctionInstantiationIndex, SignatureIndex, SignatureToken, StructDefInstantiationIndex,
         StructDefinitionIndex, StructFieldInformation, TableIndex, TypeParameterIndex,
     },
+    file_format_common::VERSION_6,
     IndexKind,
 };
 use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
@@ -27,6 +29,7 @@ use move_core_types::{
     runtime_value as R,
     vm_status::StatusCode,
 };
+
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
     data_store::DataStore,
@@ -674,6 +677,108 @@ impl Loader {
     ) -> VMResult<()> {
         fail::fail_point!("verifier-failpoint-1", |_| { Ok(()) });
 
+        // Check total size of modules as well as dependencies and ensure they are under a limit
+        // if one is configured. This is a fast, best-effort check meant to bound total linkage
+        // size during publication. The limit can be supplied via the optional environment variable
+        // `SUI_MAX_TOTAL_LINKAGE_SIZE` (in bytes). If absent, this check is a no-op.
+        if let Ok(limit_str) = std::env::var("SUI_MAX_TOTAL_LINKAGE_SIZE") {
+            if let Ok(max_total_linkage_size) = limit_str.parse::<u64>() {
+                // Sum serialized sizes of the modules being published.
+                let mut modules_size: u64 = 0;
+                for m in modules {
+                    let mut buf = Vec::new();
+                    // Serialize into a local buffer and take its length.
+                    if m.serialize_with_version(VERSION_6, &mut buf).is_ok() {
+                        modules_size = modules_size.saturating_add(buf.len() as u64);
+                        if modules_size > max_total_linkage_size {
+                            return Err(
+                                PartialVMError::new(StatusCode::EXCEEDED_MAX_TRANSACTION_SIZE)
+                                    .with_message("move package linkage exceeds configured limit".to_string())
+                                    .finish(Location::Undefined),
+                            );
+                        }
+                    }
+                }
+
+                // Collect runtime IDs of modules in the bundle to avoid double counting.
+                let bundle_ids: BTreeSet<ModuleId> = modules.iter().map(|m| m.self_id()).collect();
+
+                // DFS over transitive dependencies not included in the bundle and sum their sizes.
+                let mut visited: BTreeSet<ModuleId> = BTreeSet::new();
+                let mut stack: Vec<ModuleId> = Vec::new();
+                for m in modules {
+                    for dep in m.immediate_dependencies() {
+                        if !bundle_ids.contains(&dep) {
+                            stack.push(dep);
+                        }
+                    }
+                }
+
+                while let Some(runtime_dep) = stack.pop() {
+                    if !visited.insert(runtime_dep.clone()) {
+                        continue;
+                    }
+
+                    // Relocate runtime ID to storage ID and try to read the module bytes.
+                    let storage_id = match data_store.relocate(&runtime_dep) {
+                        Ok(id) => id,
+                        Err(_) => continue, // ignore missing deps here; verification below will error
+                    };
+
+                    // Try to get a compiled module from cache; otherwise load raw bytes.
+                    let (bytes_len, compiled_opt) = if let Some(cm) =
+                        self.module_cache.read().compiled_module_at(&storage_id)
+                    {
+                        let mut buf = Vec::new();
+                        if cm.serialize_with_version(VERSION_6, &mut buf).is_ok() {
+                            (buf.len() as u64, Some(cm))
+                        } else {
+                            (0, Some(cm))
+                        }
+                    } else {
+                        match data_store.load_module(&storage_id) {
+                            Ok(bytes) => (bytes.len() as u64, None),
+                            Err(_) => (0, None),
+                        }
+                    };
+
+                    modules_size = modules_size.saturating_add(bytes_len);
+                    if modules_size > max_total_linkage_size {
+                        return Err(
+                            PartialVMError::new(StatusCode::EXCEEDED_MAX_TRANSACTION_SIZE)
+                                .with_message("move package linkage exceeds configured limit".to_string())
+                                .finish(Location::Undefined),
+                        );
+                    }
+
+                    // Continue traversal: prefer using the compiled module if available; otherwise
+                    // try to deserialize freshly loaded bytes to discover further dependencies.
+                    if let Some(cm) = compiled_opt {
+                        for next in cm.immediate_dependencies() {
+                            if !bundle_ids.contains(&next) {
+                                stack.push(next);
+                            }
+                        }
+                    } else {
+                        // If not in cache, attempt to deserialize the module to discover deps.
+                        if let Ok(bytes) = data_store.load_module(&storage_id) {
+                            if let Ok(dep_cm) = CompiledModule::deserialize_with_config(
+                                &bytes,
+                                &self.vm_config.binary_config,
+                            ) {
+                                for next in dep_cm.immediate_dependencies() {
+                                    if !bundle_ids.contains(&next) {
+                                        stack.push(next);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // If we get here, total linkage size is within the configured limit.
+            }
+        }
         let mut bundle_verified = BTreeMap::new();
         for module in modules {
             let module_id = module.self_id();
