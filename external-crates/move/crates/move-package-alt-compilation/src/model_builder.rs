@@ -44,11 +44,11 @@ pub fn build<W: Write + Send, F: MoveFlavor>(
         .cloned()
         .map(|CompiledUnitWithSource { unit, source_path }| (source_path, unit))
         .collect::<Vec<_>>();
-    Ok(source_model::Model::from_source(
+    source_model::Model::from_source(
         compiled_package.file_map,
         Some(root_package_name),
         root_named_address_map,
         program_info,
         all_compiled_units,
-    )?)
+    )
 }
