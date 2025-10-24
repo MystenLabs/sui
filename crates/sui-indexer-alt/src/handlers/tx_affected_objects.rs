@@ -59,13 +59,14 @@ impl Processor for TxAffectedObjects {
 #[async_trait]
 impl Handler for TxAffectedObjects {
     type Store = Db;
+    type Batch = Vec<Self::Value>;
 
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
+    async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(tx_affected_objects::table)
-            .values(values)
+            .values(batch)
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
@@ -133,17 +134,17 @@ mod tests {
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = TxAffectedObjects.process(&checkpoint).await.unwrap();
-        TxAffectedObjects::commit(&values, &mut conn).await.unwrap();
+        TxAffectedObjects.commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
-        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+        CpSequenceNumbers.commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
         builder = builder.start_transaction(1).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = TxAffectedObjects.process(&checkpoint).await.unwrap();
-        TxAffectedObjects::commit(&values, &mut conn).await.unwrap();
+        TxAffectedObjects.commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
-        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+        CpSequenceNumbers.commit(&values, &mut conn).await.unwrap();
 
         builder = builder.start_transaction(0).finish_transaction();
         builder = builder.start_transaction(1).finish_transaction();
@@ -151,9 +152,9 @@ mod tests {
         builder = builder.start_transaction(3).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = TxAffectedObjects.process(&checkpoint).await.unwrap();
-        TxAffectedObjects::commit(&values, &mut conn).await.unwrap();
+        TxAffectedObjects.commit(&values, &mut conn).await.unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
-        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+        CpSequenceNumbers.commit(&values, &mut conn).await.unwrap();
 
         let fetched_results = get_all_tx_affected_objects(&mut conn).await.unwrap();
         assert_eq!(fetched_results.len(), 7);

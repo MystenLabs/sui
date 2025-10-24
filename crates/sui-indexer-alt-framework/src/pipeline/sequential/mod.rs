@@ -11,7 +11,7 @@ use super::{processor::processor, CommitterConfig, Processor, PIPELINE_BUFFER};
 
 use crate::{
     metrics::IndexerMetrics,
-    store::{Store, TransactionalStore},
+    store::{StoreTypes, TransactionalStore},
     types::full_checkpoint_content::Checkpoint,
 };
 
@@ -62,7 +62,7 @@ pub trait Handler: Processor {
     /// affected.
     async fn commit<'a>(
         batch: &Self::Batch,
-        conn: &mut <Self::Store as Store>::Connection<'a>,
+        conn: &mut <Self::Store as StoreTypes>::Connection<'a>,
     ) -> anyhow::Result<usize>;
 }
 

@@ -17,7 +17,8 @@ use scoped_futures::ScopedBoxFuture;
 use tokio::time::Duration;
 
 use crate::store::{
-    CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
+    self, CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store,
+    TransactionalStore,
 };
 
 #[derive(Default, Clone)]
@@ -195,9 +196,17 @@ impl Connection for MockConnection<'_> {
     }
 }
 
+impl store::StoreTypes for MockStore {
+    type Connection<'c> = MockConnection<'c>;
+    type BatchStrategy<V> = store::RowCountBatchStrategy<V>;
+    type Config = ();
+}
+
 #[async_trait]
 impl Store for MockStore {
-    type Connection<'c> = MockConnection<'c>;
+    fn config(&self) -> &Self::Config {
+        &()
+    }
 
     async fn connect(&self) -> anyhow::Result<Self::Connection<'_>> {
         // Check for connection failure simulation and increment attempts counter

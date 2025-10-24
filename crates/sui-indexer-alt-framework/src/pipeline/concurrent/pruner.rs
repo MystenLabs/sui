@@ -379,12 +379,14 @@ mod tests {
     #[async_trait]
     impl Handler for DataPipeline {
         type Store = MockStore;
+        type Batch = Vec<Self::Value>;
 
         async fn commit<'a>(
-            values: &[Self::Value],
+            &self,
+            batch: &Self::Batch,
             _conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
-            Ok(values.len())
+            Ok(batch.len())
         }
 
         async fn prune<'a>(

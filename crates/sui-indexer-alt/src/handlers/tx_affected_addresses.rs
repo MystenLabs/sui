@@ -69,13 +69,14 @@ impl Processor for TxAffectedAddresses {
 #[async_trait]
 impl Handler for TxAffectedAddresses {
     type Store = Db;
+    type Batch = Vec<Self::Value>;
 
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
+    async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(tx_affected_addresses::table)
-            .values(values)
+            .values(batch)
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
@@ -142,22 +143,24 @@ mod tests {
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = TxAffectedAddresses.process(&checkpoint).await.unwrap();
-        TxAffectedAddresses::commit(&values, &mut conn)
+        TxAffectedAddresses
+            .commit(&values, &mut conn)
             .await
             .unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
-        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+        CpSequenceNumbers.commit(&values, &mut conn).await.unwrap();
 
         // 1st checkpoint has 2 transactions
         builder = builder.start_transaction(0).finish_transaction();
         builder = builder.start_transaction(1).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = TxAffectedAddresses.process(&checkpoint).await.unwrap();
-        TxAffectedAddresses::commit(&values, &mut conn)
+        TxAffectedAddresses
+            .commit(&values, &mut conn)
             .await
             .unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
-        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+        CpSequenceNumbers.commit(&values, &mut conn).await.unwrap();
 
         // 2nd checkpoint has 4 transactions
         builder = builder.start_transaction(0).finish_transaction();
@@ -166,11 +169,12 @@ mod tests {
         builder = builder.start_transaction(3).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = TxAffectedAddresses.process(&checkpoint).await.unwrap();
-        TxAffectedAddresses::commit(&values, &mut conn)
+        TxAffectedAddresses
+            .commit(&values, &mut conn)
             .await
             .unwrap();
         let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
-        CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
+        CpSequenceNumbers.commit(&values, &mut conn).await.unwrap();
 
         let fetched_results = get_all_tx_affected_addresses(&mut conn).await.unwrap();
         assert_eq!(fetched_results.len(), 7);
