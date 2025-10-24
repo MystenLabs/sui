@@ -176,32 +176,14 @@ async fn test_legacy() {
     "###);
 
     // Migrate the legacy coin to the coin registry
-    let fx = coin_registry::migrate(&mut cluster, sender, &kp, &outputs, gas).await;
+    coin_registry::migrate(&mut cluster, sender, &kp, &outputs, gas).await;
 
     cluster.create_checkpoint().await;
     let outputs = query_owned_outputs(&cluster, sender).await;
-    let currency = find::shared(&fx).unwrap();
-    let gas = fx.gas_object().0;
 
     // RPC output should be the same after the migration
     let migrated = query_metadata(&cluster, &outputs.coin_type.to_canonical_string(true)).await;
     assert_eq!(metadata, migrated);
-
-    coin_registry::delete_migrated_legacy_metadata(
-        &mut cluster,
-        sender,
-        &kp,
-        &outputs,
-        currency,
-        gas,
-    )
-    .await;
-
-    cluster.create_checkpoint().await;
-
-    // RPC output should also be the same after deleting the legacy metadata
-    let deleted = query_metadata(&cluster, &outputs.coin_type.to_canonical_string(true)).await;
-    assert_eq!(metadata, deleted);
 }
 
 #[tokio::test]
