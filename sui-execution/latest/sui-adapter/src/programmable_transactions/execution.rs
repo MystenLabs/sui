@@ -7,11 +7,11 @@ pub use checked::*;
 mod checked {
     use crate::{
         adapter::substitute_package_id,
-        data_store::{PackageStore, legacy::sui_data_store::SuiDataStore},
+        data_store::{legacy::sui_data_store::SuiDataStore, PackageStore},
         execution_mode::ExecutionMode,
         execution_value::{
-            CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
-            ensure_serialized_size,
+            ensure_serialized_size, CommandKind, ExecutionState, ObjectContents, ObjectValue,
+            RawValueType, Value,
         },
         gas_charger::GasCharger,
         programmable_transactions::{context::*, trace_utils},
@@ -20,12 +20,11 @@ mod checked {
     };
     use move_binary_format::file_format::AbilitySet;
     use move_binary_format::{
-        CompiledModule,
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
         file_format::{CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
         file_format_common::VERSION_6,
-        normalized,
+        normalized, CompiledModule,
     };
     use move_core_types::{
         account_address::AccountAddress,
@@ -39,7 +38,7 @@ mod checked {
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
     use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
-    use serde::{Deserialize, de::DeserializeSeed};
+    use serde::{de::DeserializeSeed, Deserialize};
     use std::{
         cell::{OnceCell, RefCell},
         collections::{BTreeMap, BTreeSet},
@@ -51,33 +50,33 @@ mod checked {
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
-        SUI_FRAMEWORK_ADDRESS,
         balance::{
             BALANCE_MODULE_NAME, SEND_TO_ACCOUNT_FUNCTION_NAME, WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME,
         },
         base_types::{
-            MoveLegacyTxContext, MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
-            RESOLVED_UTF8_STR, SuiAddress, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
-            TxContext, TxContextKind,
+            MoveLegacyTxContext, MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind,
+            RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME,
+            TX_CONTEXT_STRUCT_NAME,
         },
         coin::Coin,
-        error::{ExecutionError, ExecutionErrorKind, command_argument_error},
+        error::{command_argument_error, ExecutionError, ExecutionErrorKind},
         execution::{ExecutionTiming, ResultWithTimings},
         execution_status::{CommandArgumentError, PackageUpgradeError, TypeArgumentError},
         id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{
-            MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
-            normalize_deserialized_modules,
+            normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
+            UpgradeTicket,
         },
-        storage::{BackingPackageStore, PackageObject, get_package_objects},
+        storage::{get_package_objects, BackingPackageStore, PackageObject},
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
         type_input::{StructInput, TypeInput},
+        MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_ADDRESS,
     };
     use sui_verifier::{
-        INIT_FN_NAME,
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
+        private_generics_verifier_v2, INIT_FN_NAME,
     };
     use tracing::instrument;
 
@@ -1278,7 +1277,7 @@ mod checked {
                 check_non_entry_signature::<Mode>(context, module_id, function, &signature)?
             }
         };
-        check_private_generics(module_id, function)?;
+        check_private_generics(context.protocol_config, module_id, function)?;
         Ok(LoadedFunctionInfo {
             kind: function_kind,
             signature,
@@ -1382,9 +1381,13 @@ mod checked {
     }
 
     pub fn check_private_generics(
+        protocol_config: &ProtocolConfig,
         module_id: &ModuleId,
         function: &IdentStr,
     ) -> Result<(), ExecutionError> {
+        if protocol_config.private_generics_verifier_v2() {
+            return check_private_generics_v2(module_id, function);
+        }
         let module_ident = (module_id.address(), module_id.name());
         if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
             return Err(ExecutionError::new_with_source(
@@ -1408,6 +1411,58 @@ mod checked {
             ));
         }
 
+        Ok(())
+    }
+
+    pub fn check_private_generics_v2(
+        callee_package: &ModuleId,
+        callee_function: &IdentStr,
+    ) -> Result<(), ExecutionError> {
+        let callee_address = *callee_package.address();
+        let callee_module = callee_package.name();
+        let callee = (callee_address, callee_module, callee_function);
+        let Some((_f, internal_type_parameters)) = private_generics_verifier_v2::FUNCTIONS_TO_CHECK
+            .iter()
+            .find(|(f, _)| &callee == f)
+        else {
+            return Ok(());
+        };
+        if let Some((internal_idx, _)) = internal_type_parameters
+            .iter()
+            .enumerate()
+            .find(|(_, is_internal)| **is_internal)
+        {
+            let callee_package_name = match callee.0 {
+                SUI_FRAMEWORK_ADDRESS => "sui",
+                MOVE_STDLIB_ADDRESS => "std",
+                a => {
+                    debug_assert!(
+                        false,
+                        "unknown package in private generics verifier. \
+                        Please improve this error message"
+                    );
+                    &format!("{a}")
+                }
+            };
+            let help =
+                if callee_address == SUI_FRAMEWORK_ADDRESS && callee_module == TRANSFER_MODULE {
+                    format!(
+                        " Use the public variant instead, 'sui::transfer::public_{}'.",
+                        callee_function
+                    )
+                } else {
+                    "".to_string()
+                };
+            let msg = format!(
+                "Cannot directly call function '{}::{}::{}' since type parameter #{} can \
+                 only be instantiated with types defined within the caller's module.{}",
+                callee_package_name, callee_module, callee_function, internal_idx, help,
+            );
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::NonEntryFunctionInvoked,
+                msg,
+            ));
+        }
         Ok(())
     }
 

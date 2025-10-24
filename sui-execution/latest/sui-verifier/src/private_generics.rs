@@ -13,7 +13,7 @@ use move_core_types::{account_address::AccountAddress, ident_str, identifier::Id
 use move_vm_config::verifier::VerifierConfig;
 use sui_types::{error::ExecutionError, SUI_FRAMEWORK_ADDRESS};
 
-use crate::{verification_failure, FunctionIdent, TEST_SCENARIO_MODULE_NAME};
+use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
 
 pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
 pub const EVENT_MODULE: &IdentStr = ident_str!("event");
