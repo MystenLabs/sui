@@ -627,12 +627,12 @@ impl AuthorityStorePruner {
         }
 
         let target_epoch = current_epoch - num_epochs_to_retain;
+        let last_epoch_to_delete = target_epoch - 1;
         let from_key = (0u64, TransactionDigest::ZERO);
-        // to_key is inclusive, so we reduce target_epoch by 1
-        let to_key = (target_epoch - 1, TransactionDigest::ZERO);
+        let to_key = (last_epoch_to_delete, TransactionDigest::new([0xff; 32]));
         info!(
-            "Pruning executed_transaction_digests for epochs < {} (current epoch: {})",
-            target_epoch, current_epoch
+            "Pruning executed_transaction_digests for epochs 0 to {} (current epoch: {})",
+            last_epoch_to_delete, current_epoch
         );
         perpetual_db
             .executed_transaction_digests

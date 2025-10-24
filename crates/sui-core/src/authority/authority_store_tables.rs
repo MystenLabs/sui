@@ -248,6 +248,8 @@ impl AuthorityPerpetualTables {
         digest_prefix[7] = 32;
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
         let epoch_prefix_key = KeyType::from_prefix_bits(9 * 8 + 4);
+        // (EpochId + TransactionDigest prefix) * 8 + 12
+        let epoch_tx_digest_prefix_key = KeyType::from_prefix_bits((8 + 8) * 8 + 12);
         let object_indexing = KeyIndexing::key_reduction(32 + 8, 16..(32 + 8));
         // todo can figure way to scramble off 8 bytes in the middle
         let obj_ref_size = 32 + 8 + 32 + 8;
@@ -412,9 +414,10 @@ impl AuthorityPerpetualTables {
             (
                 "executed_transaction_digests".to_string(),
                 ThConfig::new_with_config_indexing(
-                    KeyIndexing::VariableLength,
+                    // EpochId + (TransactionDigest)
+                    KeyIndexing::fixed(8 + (32 + 8)),
                     mutexes,
-                    epoch_prefix_key,
+                    epoch_tx_digest_prefix_key,
                     apply_relocation_filter(
                         bloom_config.clone(),
                         pruner_watermark.clone(),

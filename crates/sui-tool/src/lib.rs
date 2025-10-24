@@ -18,10 +18,7 @@ use std::{fs, io};
 use sui_config::{NodeConfig, genesis::Genesis};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_core::execution_cache::build_execution_cache_from_env;
-use sui_data_ingestion_core::{
-    CheckpointReader, ReaderOptions, create_remote_store_client, end_of_epoch_data,
-    setup_single_workflow,
-};
+use sui_data_ingestion_core::{CheckpointReader, create_remote_store_client, end_of_epoch_data};
 use sui_network::default_mysten_network_config;
 use sui_protocol_config::Chain;
 use sui_sdk::SuiClient;
