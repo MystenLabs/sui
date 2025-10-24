@@ -42,9 +42,7 @@ pub fn load_legacy_lockfile(
     let version = header
         .get("version")
         .and_then(|v| v.as_integer())
-        .ok_or(anyhow!(
-            "Could not parse lockfile: expected an integer `version` field"
-        ))?;
+        .unwrap_or(0);
 
     // Ignore modern lock files
     if version > 3 {
@@ -223,5 +221,41 @@ mod tests {
         let pubs = load_legacy_lockfile(&lockfile);
 
         assert_snapshot!(pubs.unwrap_err().to_string(), @"Could not parse lockfile: expected a [move] section");
+    }
+
+    /// Loading a very old lockfile that doesn't have a version field succeeds
+    /// DVX-1766
+    #[tokio::test]
+    async fn convert_unversioned_lockfile() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let lockfile = tempdir.path().join("Move.lock");
+        std::fs::write(
+            &lockfile,
+            indoc!(
+                r###"
+                [move]
+                manifest_digest = "46963749C976A052F2770EA6625F4DF4366F72291DC73139750BC416CF77A247"
+                deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
+                dependencies = [
+                  { name = "P" },
+                  { name = "Sui" },
+                ]
+
+                [[move.package]]
+                name = "P"
+                source = { git = "foo.git", rev = "main", subdir = "" }
+                dependencies = []
+
+                [move.toolchain-version]
+                compiler-version = "1.30.1"
+                edition = "2024.beta"
+                flavor = "sui"
+                "###
+            ),
+        )
+        .unwrap();
+
+        let pubs = load_legacy_lockfile(&lockfile).unwrap();
+        assert!(pubs.unwrap().is_empty());
     }
 }
