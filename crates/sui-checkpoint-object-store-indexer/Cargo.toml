@@ -1,0 +1,40 @@
+[package]
+name = "sui-checkpoint-object-store-indexer"
+edition = "2024"
+version.workspace = true
+publish = false
+
+[lib]
+name = "sui_checkpoint_object_store_indexer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sui-checkpoint-object-store-indexer"
+path = "src/main.rs"
+
+[dependencies]
+sui-config.workspace = true
+sui-indexer-alt-framework.workspace = true
+sui-indexer-alt-framework-store-traits.workspace = true
+sui-indexer-alt-object-store.workspace = true
+sui-rpc.workspace = true
+sui-types.workspace = true
+prost.workspace = true
+serde.workspace = true
+bytes.workspace = true
+clap.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+prometheus.workspace = true
+tokio-util.workspace = true
+async-trait.workspace = true
+object_store.workspace = true
+serde_json.workspace = true
+zstd.workspace = true
+humantime.workspace = true
+
+[lints]
+workspace = true
