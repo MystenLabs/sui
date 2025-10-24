@@ -227,7 +227,7 @@ impl BuildConfig {
             .publication()
             .map(|p| ObjectID::from_address(p.addresses.published_at.0));
 
-        root_pkg.save_lockfile_to_disk_sync()?;
+        root_pkg.save_lockfile_to_disk()?;
 
         Ok(CompiledPackage {
             package,

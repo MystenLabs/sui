@@ -320,8 +320,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                 ephemeral_file,
             } => {
                 let ephemeral =
-                    Self::load_ephemeral_pubfile(build_env, &config.chain_id, ephemeral_file)
-                        .await?;
+                    Self::load_ephemeral_pubfile(build_env, &config.chain_id, ephemeral_file)?;
                 (
                     Environment::new(ephemeral.build_env.clone(), config.chain_id.clone()),
                     Some(ephemeral),
@@ -355,16 +354,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         self.filtered_graph.packages()
     }
 
-    pub fn save_lockfile_to_disk_sync(&mut self) -> PackageResult<()> {
-        block_on!(self.save_lockfile_to_disk())
-    }
-
     /// Update the dependencies in the lockfile for this environment to match the dependency graph
     /// represented by `self`.
     ///
     /// Before overwriting the lockfile, this function also extracts any publication information
     /// from the legacy lockfile and writes it into the pubfile
-    pub async fn save_lockfile_to_disk(&mut self) -> PackageResult<()> {
+    pub fn save_lockfile_to_disk(&mut self) -> PackageResult<()> {
         // migrate any pubs from the legacy lockfile to the modern pubfile before we clobber the
         // legacy lockfile.
         let legacy_pubs = self.input_path.read_legacy_lockfile(&self.mutex)?;
@@ -403,7 +398,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Record metadata for a publication for the root package in either its `Published.toml` or
     /// its ephemeral pubfile (depending on how it was loaded)
-    pub async fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
+    pub fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
         let package_id = self.name().to_string();
 
         if let Some(ephemeral_file) = &mut self.ephemeral_file {
@@ -430,7 +425,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Load ephemeral publications from `pubfile`, checking that they have the correct `chain-id`
     /// and `build-env`. If the file does not exist, a new file is created and returned
-    async fn load_ephemeral_pubfile(
+    fn load_ephemeral_pubfile(
         build_env: &Option<EnvironmentName>,
         chain_id: &EnvironmentID,
         pubfile: impl AsRef<Path>,
