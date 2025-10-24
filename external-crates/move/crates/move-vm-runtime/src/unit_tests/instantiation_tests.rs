@@ -502,7 +502,7 @@ fn make_module(
         struct_def_instantiations,
         // function instantiations
         function_instantiations,
-        // unused...
+        // unused
         field_handles: vec![],
         friend_decls: vec![],
         field_instantiations: vec![],

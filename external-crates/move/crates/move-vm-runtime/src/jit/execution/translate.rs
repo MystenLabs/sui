@@ -110,15 +110,28 @@ impl PackageContext<'_> {
     fn try_resolve_direct_function_call(
         &self,
         vtable_entry: &VirtualTableKey,
-    ) -> Option<VMPointer<Function>> {
+    ) -> PartialVMResult<Option<VMPointer<Function>>> {
         // We are calling into a different package so we cannot resolve this to a direct call.
         if vtable_entry.package_key != self.original_id {
-            return None;
+            return Ok(None);
         }
-        // TODO(vm-rewrite): Have this return an error if the function was not found.
-        self.vtable_funs
-            .get(&vtable_entry.inner_pkg_key)
-            .map(|f| f.ptr_clone())
+        match self.vtable_funs.get(&vtable_entry.inner_pkg_key) {
+            Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
+            None => Err(
+                PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE).with_message(
+                    match self
+                        .interner
+                        .resolve_ident(&vtable_entry.inner_pkg_key.member_name, "function name")
+                    {
+                        Ok(fn_name) => format!(
+                            "Function {}::{} not found in vtable",
+                            self.version_id, fn_name,
+                        ),
+                        Err(_) => "Function with unknown name not found in vtable".to_string(),
+                    },
+                ),
+            ),
+        }
     }
 
     fn arena_vec<T>(
@@ -301,9 +314,6 @@ fn module(
     let struct_instantiations = struct_instantiations(context, cmodule, &structs, &sig_pointers)?;
     let enum_instantiations = enum_instantiations(context, cmodule, &enums, &sig_pointers)?;
 
-    // Process function instantiations
-    let function_instantiations = function_instantiations(context, cmodule, &sig_pointers)?;
-
     // Process field handles and instantiations
     let field_handles = field_handles(context, cmodule, &structs)?;
     let field_instantiations = field_instantiations(context, cmodule, &field_handles)?;
@@ -312,6 +322,20 @@ fn module(
 
     let variant_handles = variant_handles(cmodule, &enums);
     let variant_instantiations = variant_instantiations(context, cmodule, &enum_instantiations)?;
+
+    // Function loading is effectful; they all go into the arena.
+    // This happens last because it relies on the definitions above to rewrite the bytecode appropriately.
+    // It happens in three steps:
+    // 1. Preallocate all functions (without bodies) so that we have stable pointers for vtable
+    //    entries.
+    // 2. Add the function pointers to the package context's vtable.
+    // 3. Process function instantiations, which require the stable function pointers.
+    // 4. Finally, process the function bodies.
+
+    let (functions, fun_map) = preallocate_functions(context, &mkey, cmodule)?;
+    context.insert_vtable_functions(fun_map.into_values())?;
+
+    let function_instantiations = function_instantiations(context, cmodule, &sig_pointers)?;
 
     let definitions = Definitions {
         variants: variant_handles,
@@ -327,9 +351,7 @@ fn module(
         signatures: instantiation_signatures.to_ptrs(),
     };
 
-    // Function loading is effectful; they all go into the arena. This happens last because it
-    // relies on the definitions above to rewrite the bytecode appropriately.
-    let functions = functions(context, &mkey, module, definitions)?;
+    let functions = function_bodies(context, module, definitions, functions)?;
 
     // Build and return the module
     Ok(Module {
@@ -835,17 +857,18 @@ fn constants(
 // Function Translation
 // -------------------------------------------------------------------------------------------------
 
-fn functions(
-    package_context: &mut PackageContext,
+fn preallocate_functions(
+    package_context: &mut PackageContext<'_>,
     module_name: &IdentifierKey,
-    module: &input::Module,
-    definitions: Definitions,
-) -> PartialVMResult<ArenaVec<Function>> {
-    let input::Module {
-        compiled_module: module,
-        functions: optimized_fns,
-    } = module;
-    dbg_println!(flag: function_list_sizes, "pushing {} functions", module.function_defs().len());
+    module: &CompiledModule,
+) -> Result<
+    (
+        ArenaVec<Function>,
+        HashMap<VirtualTableKey, VMPointer<Function>>,
+    ),
+    PartialVMError,
+> {
+    dbg_println!(flag: function_list_sizes, "allocating {} functions", module.function_defs().len());
 
     let prealloc_functions: Vec<Function> = module
         .function_defs()
@@ -856,9 +879,7 @@ fn functions(
             alloc_function(package_context, module_name, module, findex, fun)
         })
         .collect::<PartialVMResult<Vec<_>>>()?;
-
-    let mut loaded_functions = package_context.arena_vec(prealloc_functions.into_iter())?;
-
+    let loaded_functions = package_context.arena_vec(prealloc_functions.into_iter())?;
     let fun_map = unique_map(
         loaded_functions
             .iter()
@@ -872,8 +893,23 @@ fn functions(
             )),
         Err(err) => err,
     })?;
+    Ok((loaded_functions, fun_map))
+}
 
-    package_context.insert_vtable_functions(fun_map.into_values())?;
+fn function_bodies(
+    package_context: &mut PackageContext,
+    module: &input::Module,
+    definitions: Definitions,
+    functions: ArenaVec<Function>,
+) -> PartialVMResult<ArenaVec<Function>> {
+    let input::Module {
+        compiled_module: module,
+        functions: optimized_fns,
+    } = module;
+
+    dbg_println!(flag: function_list_sizes, "processing {} functions", functions.len());
+
+    let mut functions = functions;
 
     let mut module_context = FunctionContext {
         package_context,
@@ -883,7 +919,7 @@ fn functions(
 
     let mut optimized_fns = optimized_fns.clone();
 
-    for fun in loaded_functions.iter_mut() {
+    for fun in functions.iter_mut() {
         let Some(opt_fun) = optimized_fns.remove(&fun.index) else {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
@@ -909,7 +945,7 @@ fn functions(
 
     let FunctionContext { .. } = module_context;
 
-    Ok(loaded_functions)
+    Ok(functions)
 }
 
 fn alloc_function(
@@ -1304,7 +1340,7 @@ fn call(
     };
     dbg_println!(flag: function_resolution, "Resolving function: {:?}", vtable_key);
     Ok(
-        match context.try_resolve_direct_function_call(&vtable_key) {
+        match context.try_resolve_direct_function_call(&vtable_key)? {
             Some(func) => CallType::Direct(func),
             None => CallType::Virtual(vtable_key),
         },
