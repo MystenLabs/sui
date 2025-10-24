@@ -22,6 +22,7 @@ use sui_types::crypto::{Signature, SuiKeyPair};
 use sui_types::gas_coin::GasCoin;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 use tokio::sync::RwLock;
+use tracing::info;
 
 pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
@@ -127,8 +128,46 @@ impl WalletContext {
                 .get_active_env()?
                 .create_rpc_client(self.request_timeout, self.max_concurrent_requests)
                 .await?;
+
             self.client.write().await.insert(client).clone()
         })
+    }
+
+    /// Load the chain ID corresponding to the active environment, or fetch and cache it if not
+    /// present.
+    ///
+    /// The chain ID is cached in the `client.yaml` file to avoid redundant network requests.
+    pub async fn load_or_cache_chain_id(
+        &self,
+        client: &SuiClient,
+    ) -> Result<String, anyhow::Error> {
+        self.internal_load_or_cache_chain_id(client, false).await
+    }
+
+    /// Cache (or recache) chain ID for the active environment by fetching it from the
+    /// network
+    pub async fn cache_chain_id(&self, client: &SuiClient) -> Result<String, anyhow::Error> {
+        self.internal_load_or_cache_chain_id(client, true).await
+    }
+
+    async fn internal_load_or_cache_chain_id(
+        &self,
+        client: &SuiClient,
+        force_recache: bool,
+    ) -> Result<String, anyhow::Error> {
+        let env = self.get_active_env()?;
+        if !force_recache && env.chain_id.is_some() {
+            let chain_id = env.chain_id.as_ref().unwrap();
+            info!("Found cached chain ID for env {}: {}", env.alias, chain_id);
+            return Ok(chain_id.clone());
+        }
+        let chain_id = client.read_api().get_chain_identifier().await?;
+        let path = self.config.path();
+        let mut config_result = SuiClientConfig::load_with_lock(path)?;
+
+        config_result.update_env_chain_id(&env.alias, chain_id.clone())?;
+        config_result.save_with_lock(path)?;
+        Ok(chain_id)
     }
 
     pub fn get_active_env(&self) -> Result<&SuiEnv, anyhow::Error> {

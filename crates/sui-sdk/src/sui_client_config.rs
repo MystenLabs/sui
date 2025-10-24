@@ -64,6 +64,21 @@ impl SuiClientConfig {
             self.envs.push(env)
         }
     }
+
+    /// Update the cached chain ID for the specified environment.
+    pub fn update_env_chain_id(
+        &mut self,
+        alias: &str,
+        chain_id: String,
+    ) -> Result<(), anyhow::Error> {
+        let env = self
+            .envs
+            .iter_mut()
+            .find(|env| env.alias == alias)
+            .ok_or_else(|| anyhow!("Environment {} not found", alias))?;
+        env.chain_id = Some(chain_id);
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,6 +88,9 @@ pub struct SuiEnv {
     pub ws: Option<String>,
     /// Basic HTTP access authentication in the format of username:password, if needed.
     pub basic_auth: Option<String>,
+    /// Cached chain identifier for this environment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain_id: Option<String>,
 }
 
 impl SuiEnv {
@@ -110,6 +128,7 @@ impl SuiEnv {
             rpc: SUI_DEVNET_URL.into(),
             ws: None,
             basic_auth: None,
+            chain_id: None,
         }
     }
     pub fn testnet() -> Self {
@@ -118,6 +137,7 @@ impl SuiEnv {
             rpc: SUI_TESTNET_URL.into(),
             ws: None,
             basic_auth: None,
+            chain_id: None,
         }
     }
 
@@ -127,6 +147,7 @@ impl SuiEnv {
             rpc: SUI_LOCAL_NETWORK_URL.into(),
             ws: None,
             basic_auth: None,
+            chain_id: None,
         }
     }
 }
@@ -143,6 +164,10 @@ impl Display for SuiEnv {
         if let Some(basic_auth) = &self.basic_auth {
             writeln!(writer)?;
             write!(writer, "Basic Auth: {}", basic_auth)?;
+        }
+        if let Some(chain_id) = &self.chain_id {
+            writeln!(writer)?;
+            write!(writer, "Chain ID: {}", chain_id)?;
         }
         write!(f, "{}", writer)
     }

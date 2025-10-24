@@ -1207,6 +1207,7 @@ impl TestClusterBuilder {
             rpc: rpc_url,
             ws: None,
             basic_auth: None,
+            chain_id: None,
         });
         wallet_conf.active_env = Some("localnet".to_string());
 

@@ -1,0 +1,4 @@
+[pruner]
+retention = 31104000
+
+[pipeline.tx_kinds]

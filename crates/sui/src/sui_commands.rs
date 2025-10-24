@@ -1191,6 +1191,7 @@ async fn start(
                     rpc: fullnode_rpc_url,
                     ws: None,
                     basic_auth: None,
+                    chain_id: None,
                 }],
                 active_address: Some(address),
                 active_env: Some("localnet".to_string()),
@@ -1495,6 +1496,7 @@ async fn genesis(
         ),
         ws: None,
         basic_auth: None,
+        chain_id: None,
     });
     client_config.add_env(SuiEnv::devnet());
 
@@ -1520,6 +1522,7 @@ async fn prompt_if_no_config(
                 rpc: v.into_string().unwrap(),
                 ws: None,
                 basic_auth: None,
+                chain_id: None,
             }),
             None => {
                 if accept_defaults {
@@ -1559,6 +1562,7 @@ async fn prompt_if_no_config(
                             rpc: url,
                             ws: None,
                             basic_auth: None,
+                            chain_id: None,
                         }
                     })
                 } else {
@@ -1619,6 +1623,9 @@ async fn prompt_if_no_config(
             }
             .persisted(wallet_conf_path)
             .save()?;
+
+            let context = WalletContext::new(wallet_conf_path)?;
+            let _ = context.cache_chain_id(&context.get_client().await?).await?;
         }
     }
     Ok(())
