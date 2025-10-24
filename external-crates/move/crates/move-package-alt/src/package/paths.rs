@@ -346,7 +346,9 @@ fn parse_file<T: DeserializeOwned>(path: &Path) -> FileResult<Option<(FileHandle
 }
 
 fn render_file<T: RenderToml>(path: &Path, value: &T) -> FileResult<()> {
-    std::fs::write(path, value.render_as_toml()).map_err(|source| FileError::IoError {
+    let rendered = value.render_as_toml();
+    debug!("writing to {path:?}:\n{rendered}");
+    std::fs::write(path, rendered).map_err(|source| FileError::IoError {
         file: path.to_path_buf(),
         source,
     })

@@ -416,7 +416,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                 .read_pubfile(&self.mutex)?
                 .map(|(_, p)| p)
                 .unwrap_or_default();
-            pubfile.published.insert(package_id, publish_data);
+            pubfile
+                .published
+                .insert(self.environment.name.clone(), publish_data);
             self.output_path.write_pubfile(&pubfile, &self.mutex)?;
         }
 
