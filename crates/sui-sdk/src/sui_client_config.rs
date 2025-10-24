@@ -165,6 +165,10 @@ impl Display for SuiEnv {
             writeln!(writer)?;
             write!(writer, "Basic Auth: {}", basic_auth)?;
         }
+        if let Some(chain_id) = &self.chain_id {
+            writeln!(writer)?;
+            write!(writer, "Chain ID: {}", chain_id)?;
+        }
         write!(f, "{}", writer)
     }
 }

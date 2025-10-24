@@ -1825,7 +1825,7 @@ impl SuiClientCommands {
                         "Environment config with name [{alias}] already exists."
                     ));
                 }
-                let env = SuiEnv {
+                let mut env = SuiEnv {
                     alias,
                     rpc,
                     ws,
@@ -1837,7 +1837,8 @@ impl SuiClientCommands {
                 env.create_rpc_client(None, None).await?;
                 context.config.envs.push(env.clone());
                 context.config.save()?;
-                let _ = context.cache_chain_id(&context.get_client().await?).await?;
+                let chain_id = context.cache_chain_id(&context.get_client().await?).await?;
+                env.chain_id = Some(chain_id);
                 SuiClientCommandResult::NewEnv(env)
             }
             SuiClientCommands::ActiveEnv => SuiClientCommandResult::ActiveEnv(
