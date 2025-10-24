@@ -8,7 +8,7 @@ use move_binary_format::{
 use move_bytecode_utils::format_signature_token;
 use move_core_types::{ident_str, identifier::IdentStr};
 use move_vm_config::verifier::VerifierConfig;
-use sui_types::{SUI_FRAMEWORK_ADDRESS, error::ExecutionError};
+use sui_types::{SUI_FRAMEWORK_ADDRESS, error::ExecutionError, make_invariant_violation};
 
 use crate::{FunctionIdent, TEST_SCENARIO_MODULE_NAME, verification_failure};
 
@@ -129,6 +129,11 @@ pub const FUNCTIONS_TO_CHECK: &[(FunctionIdent, &[/* is internal */ bool])] = &[
     (SUI_COIN_REGISTRY_NEW_CURRENCY, &[true]),
 ];
 
+enum Error {
+    User(String),
+    InvariantViolation(String),
+}
+
 /// Several functions in the Sui Framework have `internal` type parameters, whose arguments must be
 /// instantiated with types defined in the caller's module.
 /// For example, with `transfer::transfer<T>(...)` `T` must be a type declared in the current
@@ -149,19 +154,27 @@ pub fn verify_module(
     }
 
     for func_def in &module.function_defs {
-        verify_function(module, func_def).map_err(|error| {
-            verification_failure(format!(
+        verify_function(module, func_def).map_err(|error| match error {
+            Error::User(error) => verification_failure(format!(
                 "{}::{}. {}",
                 module.self_id(),
                 module.identifier_at(module.function_handle_at(func_def.function).name),
                 error
-            ))
+            )),
+            Error::InvariantViolation(error) => {
+                make_invariant_violation!(
+                    "{}::{}. {}",
+                    module.self_id(),
+                    module.identifier_at(module.function_handle_at(func_def.function).name),
+                    error
+                )
+            }
         })?;
     }
     Ok(())
 }
 
-fn verify_function(module: &CompiledModule, fdef: &FunctionDefinition) -> Result<(), String> {
+fn verify_function(module: &CompiledModule, fdef: &FunctionDefinition) -> Result<(), Error> {
     let code = match &fdef.code {
         None => return Ok(()),
         Some(code) => code,
@@ -189,36 +202,38 @@ fn verify_call(
     module: &CompiledModule,
     callee @ (callee_addr, callee_module, callee_function): FunctionIdent<'_>,
     ty_args: &[SignatureToken],
-) -> Result<(), String> {
+) -> Result<(), Error> {
     let rules_opt = FUNCTIONS_TO_CHECK.iter().find(|(f, _)| &callee == f);
     if EXHAUSTIVE_MODULES.contains(&callee.1) && rules_opt.is_none() {
-        return Err(format!(
+        // The function needs tobe added to the FUNCTIONS_TO_CHECK list
+        return Err(Error::InvariantViolation(format!(
             "Unknown function '{callee_addr}::{callee_module}::{callee_function}'. All functions \
             '{callee_module}' must be listed in FUNCTIONS_TO_CHECK",
-        ));
+        )));
     }
     let Some((_, internal_flags)) = rules_opt else {
         return Ok(());
     };
     let internal_flags = *internal_flags;
     if ty_args.len() != internal_flags.len() {
-        return Err(format!(
+        // This should have been caught by the bytecode verifier
+        return Err(Error::InvariantViolation(format!(
             "'{callee_addr}::{callee_module}::{callee_function}' \
             expects {} type arguments found {}",
             internal_flags.len(),
             ty_args.len()
-        ));
+        )));
     }
     for (idx, (ty_arg, &is_internal)) in ty_args.iter().zip(internal_flags).enumerate() {
         if !is_internal {
             continue;
         }
         if !is_defined_in_current_module(module, ty_arg) {
-            return Err(format!(
+            return Err(Error::User(format!(
                 "Invalid call to '{callee_addr}::{callee_module}::{callee_function}'. \
                 Type argument #{idx} must be a type defined in the current module, found '{}'",
                 format_signature_token(module, ty_arg),
-            ));
+            )));
         }
     }
 
