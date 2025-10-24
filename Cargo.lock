@@ -14844,6 +14844,7 @@ dependencies = [
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
  "sui-pg-db",
+ "sui-rpc",
  "sui-rpc-api",
  "sui-storage",
  "sui-synthetic-ingestion",
