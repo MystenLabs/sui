@@ -2586,7 +2586,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         );
 
         // Accumulate all withdraws per account.
-        let mut withdraw_map: BTreeMap<AccumulatorObjId, u64> = BTreeMap::new();
+        let mut withdraw_map: BTreeMap<_, u64> = BTreeMap::new();
         for withdraw in withdraws {
             let reserved_amount = match &withdraw.reservation {
                 Reservation::MaxAmountU64(amount) => *amount,
@@ -2644,7 +2644,7 @@ impl TransactionDataAPI for TransactionDataV1 {
             assert!(reserved_amount > 0);
 
             let WithdrawFrom::Sender = withdraw.withdraw_from;
-            // unwraps checked at signing time
+            // unwrap checked at signing time
             let account_id = AccumulatorValue::get_field_id(
                 self.sender(),
                 &withdraw.type_arg.to_type_tag().unwrap(),
@@ -2868,14 +2868,7 @@ impl TransactionDataV1 {}
 pub struct TxValidityCheckContext<'a> {
     pub config: &'a ProtocolConfig,
     pub epoch: EpochId,
-    pub accumulator_object_init_shared_version: Option<SequenceNumber>,
     pub chain_identifier: ChainIdentifier,
-}
-
-impl TxValidityCheckContext<'_> {
-    pub fn accumulators_enabled(&self) -> bool {
-        self.config.enable_accumulators() && self.accumulator_object_init_shared_version.is_some()
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -3177,7 +3170,8 @@ impl SenderSignedData {
         let coin_reservation_obj_refs = tx_data.coin_reservation_obj_refs();
         fp_ensure!(
             coin_reservation_obj_refs.is_empty()
-                || (context.accumulators_enabled() && context.config.enable_coin_reservation()),
+                || (context.config.enable_accumulators()
+                    && context.config.enable_coin_reservation()),
             SuiErrorKind::UserInputError {
                 error: UserInputError::Unsupported(
                     "coin reservation backward compatibility layer is not enabled".to_string()
