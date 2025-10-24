@@ -711,31 +711,31 @@ Epoch.startTimestamp
   => {}
 
 Epoch.transactions
-  => {}
+  => {"cp_sequence_numbers", "tx_digests"}
 
 Epoch.transactions (filter: afterCheckpoint)
-  => {}
+  => {"cp_sequence_numbers", "tx_digests"}
 
 Epoch.transactions (filter: atCheckpoint)
-  => {}
+  => {"cp_sequence_numbers", "tx_digests"}
 
 Epoch.transactions (filter: beforeCheckpoint)
-  => {}
+  => {"cp_sequence_numbers", "tx_digests"}
 
 Epoch.transactions (filter: function)
-  => {}
+  => {"cp_sequence_numbers", "tx_calls", "tx_digests"}
 
 Epoch.transactions (filter: kind)
-  => {}
+  => {"cp_sequence_numbers", "tx_digests", "tx_kinds"}
 
 Epoch.transactions (filter: affectedAddress)
-  => {}
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
 Epoch.transactions (filter: affectedObject)
-  => {}
+  => {"cp_sequence_numbers", "tx_affected_objects", "tx_digests"}
 
 Epoch.transactions (filter: sentAddress)
-  => {}
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
 Epoch.systemPackages
   => {}
@@ -2466,7 +2466,7 @@ Validator.projectUrl
   => {}
 
 Validator.operationCap
-  => {}
+  => {"obj_versions"}
 
 Validator.stakingPoolId
   => {}
