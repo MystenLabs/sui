@@ -4972,6 +4972,7 @@ async fn test_tree_shaking_package_with_unpublished_deps() -> Result<(), anyhow:
     let mut test = TreeShakingTest::new().await.unwrap();
     let chain_id = test.client.read_api().get_chain_identifier().await.unwrap();
     let _ = update_toml_with_localnet_chain_id(&test.package_path("H"), chain_id.clone());
+    let _ = update_toml_with_localnet_chain_id(&test.package_path("G"), chain_id.clone());
     // A package and with unpublished deps
     let (package_id, _) = test.publish_package("H", true).await.unwrap();
 
