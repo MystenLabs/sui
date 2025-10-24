@@ -202,6 +202,7 @@ collect_pipelines! {
     Epoch.[coinDenyList] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());
     };
+    Epoch.[transactions] => Query.transactions(.., "atCheckpoint");
 
     Event.[contents, eventBcs, sender, sequenceNumber, timestamp, transaction, transactionModule] |pipelines, _filters| {
         pipelines.insert("ev_struct_inst".to_string());
@@ -325,6 +326,9 @@ collect_pipelines! {
     Validator.[address] => IAddressable.*;
     Validator.[balance, balances, multiGetBalances, objects] => IAddressable.*;
     Validator.[defaultSuinsName] => IAddressable.defaultSuinsName();
+    Validator.[operationCap] |pipelines, _filters| {
+        pipelines.insert("obj_versions".to_string());
+    };
 }
 
 #[cfg(test)]
@@ -434,7 +438,7 @@ mod field_piplines_tests {
     }
 
     /// Validates that the macro invocation matches the schema. This will error if there are any
-    /// if the types or fields in the macro invocation are not found in the schema registry.
+    /// types or fields in the macro invocation are not found in the schema registry.
     fn test_macro_invocation_matches_schema(registry: &Registry) {
         let type_fields = &TYPE_FIELD_DELEGATIONS;
 
