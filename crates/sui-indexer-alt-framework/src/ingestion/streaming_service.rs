@@ -141,6 +141,7 @@ pub mod test_utils {
     /// the same data.
     pub struct MockStream {
         data: Arc<Mutex<VecDeque<MockCheckpointOrError>>>,
+        peek_failures_remaining: Arc<Mutex<usize>>,
     }
 
     impl Stream for MockStream {
@@ -165,6 +166,13 @@ pub mod test_utils {
     #[async_trait]
     impl PeekableStream for MockStream {
         async fn peek(&mut self) -> Option<Result<CheckpointData>> {
+            // Check if we should fail this peek
+            let mut failures = self.peek_failures_remaining.lock().unwrap();
+            if *failures > 0 {
+                *failures -= 1;
+                return Some(Err(Error::StreamingError("Mock peek failure".to_string())));
+            }
+
             let data = self.data.lock().unwrap();
 
             // Look at the front without removing it
@@ -184,6 +192,8 @@ pub mod test_utils {
     /// Mock streaming service for testing with predefined checkpoints and/or errors.
     pub struct MockStreamingService {
         checkpoints_or_errors: Arc<Mutex<VecDeque<MockCheckpointOrError>>>,
+        start_streaming_failures_remaining: usize,
+        peek_failures_remaining: Arc<Mutex<usize>>,
     }
 
     impl MockStreamingService {
@@ -197,7 +207,21 @@ pub mod test_utils {
                 .collect();
             Self {
                 checkpoints_or_errors: Arc::new(Mutex::new(checkpoints)),
+                start_streaming_failures_remaining: 0,
+                peek_failures_remaining: Arc::new(Mutex::new(0)),
             }
+        }
+
+        /// Make start_streaming fail for the next N calls
+        pub fn fail_start_streaming_times(mut self, times: usize) -> Self {
+            self.start_streaming_failures_remaining = times;
+            self
+        }
+
+        /// Make peek fail for the next N calls
+        pub fn fail_peek_times(self, times: usize) -> Self {
+            *self.peek_failures_remaining.lock().unwrap() = times;
+            self
         }
 
         /// Insert an error at the back of the queue.
@@ -232,9 +256,18 @@ pub mod test_utils {
         type Stream = MockStream;
 
         async fn connect(&mut self) -> Result<Self::Stream> {
+            // Simulate start_streaming failures
+            if self.start_streaming_failures_remaining > 0 {
+                self.start_streaming_failures_remaining -= 1;
+                return Err(Error::StreamingError(
+                    "Mock start_streaming failure".to_string(),
+                ));
+            }
+
             // Share the checkpoints queue and peek failures counter with the new stream
             Ok(MockStream {
                 data: Arc::clone(&self.checkpoints_or_errors),
+                peek_failures_remaining: Arc::clone(&self.peek_failures_remaining),
             })
         }
     }
