@@ -483,64 +483,14 @@ mod additional_consensus_state {
 
     #[test]
     fn test_additional_consensus_state() {
-        use crate::consensus_types::consensus_output_api::ParsedTransaction;
-
-        #[derive(Debug)]
-        struct TestConsensusCommit {
-            round: u64,
-            timestamp: u64,
-        }
-
-        impl std::fmt::Display for TestConsensusCommit {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(
-                    f,
-                    "TestConsensusCommitAPI(round={}, timestamp={})",
-                    self.round, self.timestamp
-                )
-            }
-        }
-
-        impl ConsensusCommitAPI for TestConsensusCommit {
-            fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
-                None
-            }
-            fn leader_round(&self) -> u64 {
-                self.round
-            }
-            fn leader_author_index(&self) -> AuthorityIndex {
-                0
-            }
-
-            /// Returns epoch UNIX timestamp in milliseconds
-            fn commit_timestamp_ms(&self) -> u64 {
-                self.timestamp
-            }
-
-            /// Returns a unique global index for each committed sub-dag.
-            fn commit_sub_dag_index(&self) -> u64 {
-                self.round
-            }
-
-            /// Returns all accepted and rejected transactions per block in the commit in deterministic order.
-            fn transactions(
-                &self,
-            ) -> Vec<(consensus_types::block::BlockRef, Vec<ParsedTransaction>)> {
-                vec![]
-            }
-
-            /// Returns the digest of consensus output.
-            fn consensus_digest(&self, _: &ProtocolConfig) -> ConsensusCommitDigest {
-                ConsensusCommitDigest::ZERO
-            }
-        }
+        use crate::consensus_test_utils::TestConsensusCommit;
 
         fn observe(state: &mut AdditionalConsensusState, round: u64, timestamp: u64) {
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             state.observe_commit(
                 &protocol_config,
                 100,
-                &TestConsensusCommit { round, timestamp },
+                &TestConsensusCommit::empty(round, timestamp, 0),
             );
         }
 
@@ -661,6 +611,46 @@ impl<C> ConsensusHandler<C> {
 
     pub(crate) fn execution_scheduler_sender(&self) -> &ExecutionSchedulerSender {
         &self.execution_scheduler_sender
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        checkpoint_service: Arc<C>,
+        execution_scheduler_sender: ExecutionSchedulerSender,
+        consensus_adapter: Arc<ConsensusAdapter>,
+        cache_reader: Arc<dyn ObjectCacheRead>,
+        low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
+        committee: ConsensusCommittee,
+        metrics: Arc<AuthorityMetrics>,
+        throughput_calculator: Arc<ConsensusThroughputCalculator>,
+        backpressure_subscriber: BackpressureSubscriber,
+        traffic_controller: Option<Arc<TrafficController>>,
+        last_consensus_stats: ExecutionIndicesWithStats,
+    ) -> Self {
+        let commit_rate_estimate_window_size = epoch_store
+            .protocol_config()
+            .get_consensus_commit_rate_estimation_window_size();
+        Self {
+            epoch_store,
+            last_consensus_stats,
+            checkpoint_service,
+            cache_reader,
+            low_scoring_authorities,
+            committee,
+            metrics,
+            processed_cache: LruCache::new(
+                NonZeroUsize::new(randomize_cache_capacity_in_tests(PROCESSED_CACHE_CAP)).unwrap(),
+            ),
+            execution_scheduler_sender,
+            consensus_adapter,
+            throughput_calculator,
+            additional_consensus_state: AdditionalConsensusState::new(
+                commit_rate_estimate_window_size,
+            ),
+            backpressure_subscriber,
+            traffic_controller,
+        }
     }
 }
 
@@ -1592,7 +1582,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         for_randomness: bool,
         txns: &[VerifiedExecutableTransaction],
     ) -> SharedObjectCongestionTracker {
-        SharedObjectCongestionTracker::from_protocol_config(
+        #[allow(unused_mut)]
+        let mut ret = SharedObjectCongestionTracker::from_protocol_config(
             self.epoch_store
                 .consensus_quarantine
                 .read()
@@ -1605,7 +1596,20 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .expect("db error"),
             self.epoch_store.protocol_config(),
             for_randomness,
-        )
+        );
+
+        fail_point_arg!(
+            "initial_congestion_tracker",
+            |tracker: SharedObjectCongestionTracker| {
+                info!(
+                    "Initialize shared_object_congestion_tracker to  {:?}",
+                    tracker
+                );
+                ret = tracker;
+            }
+        );
+
+        ret
     }
 
     fn process_jwks(
@@ -2841,6 +2845,17 @@ impl ExecutionSchedulerSender {
         Self { sender }
     }
 
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(
+        sender: monitored_mpsc::UnboundedSender<(
+            Vec<Schedulable>,
+            AssignedTxAndVersions,
+            SchedulingSource,
+        )>,
+    ) -> Self {
+        Self { sender }
+    }
+
     fn send(
         &self,
         transactions: Vec<Schedulable>,
@@ -3402,11 +3417,8 @@ mod tests {
             CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
             SignedCheckpointSummary,
         },
-        messages_consensus::{
-            AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKind,
-        },
+        messages_consensus::ConsensusTransaction,
         object::Object,
-        supported_protocol_versions::SupportedProtocolVersions,
         transaction::{
             CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
         },
@@ -3805,60 +3817,34 @@ mod tests {
 
     #[test]
     fn test_order_by_gas_price() {
-        let mut v = vec![cap_txn(10), user_txn(42), user_txn(100), cap_txn(1)];
-        PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
+        let mut v = vec![user_txn(42), user_txn(100)];
+        PostConsensusTxReorder::reorder_v2(&mut v, ConsensusTransactionOrdering::ByGasPrice);
         assert_eq!(
-            extract(v),
+            to_short_strings(v),
             vec![
-                "cap(10)".to_string(),
-                "cap(1)".to_string(),
-                "certified(100)".to_string(),
-                "certified(42)".to_string(),
+                "transaction(100)".to_string(),
+                "transaction(42)".to_string(),
             ]
         );
 
         let mut v = vec![
             user_txn(1200),
-            cap_txn(10),
             user_txn(12),
             user_txn(1000),
             user_txn(42),
             user_txn(100),
-            cap_txn(1),
             user_txn(1000),
         ];
-        PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
+        PostConsensusTxReorder::reorder_v2(&mut v, ConsensusTransactionOrdering::ByGasPrice);
         assert_eq!(
-            extract(v),
+            to_short_strings(v),
             vec![
-                "cap(10)".to_string(),
-                "cap(1)".to_string(),
-                "certified(1200)".to_string(),
-                "certified(1000)".to_string(),
-                "certified(1000)".to_string(),
-                "certified(100)".to_string(),
-                "certified(42)".to_string(),
-                "certified(12)".to_string(),
-            ]
-        );
-
-        // If there are no user transactions, the order should be preserved.
-        let mut v = vec![
-            cap_txn(10),
-            eop_txn(12),
-            eop_txn(10),
-            cap_txn(1),
-            eop_txn(11),
-        ];
-        PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
-        assert_eq!(
-            extract(v),
-            vec![
-                "cap(10)".to_string(),
-                "eop(12)".to_string(),
-                "eop(10)".to_string(),
-                "cap(1)".to_string(),
-                "eop(11)".to_string(),
+                "transaction(1200)".to_string(),
+                "transaction(1000)".to_string(),
+                "transaction(1000)".to_string(),
+                "transaction(100)".to_string(),
+                "transaction(42)".to_string(),
+                "transaction(12)".to_string(),
             ]
         );
     }
@@ -4122,49 +4108,13 @@ mod tests {
         );
     }
 
-    fn extract(v: Vec<VerifiedSequencedConsensusTransaction>) -> Vec<String> {
-        v.into_iter().map(extract_one).collect()
+    fn to_short_strings(v: Vec<VerifiedExecutableTransaction>) -> Vec<String> {
+        v.into_iter()
+            .map(|t| format!("transaction({})", t.transaction_data().gas_price()))
+            .collect()
     }
 
-    fn extract_one(t: VerifiedSequencedConsensusTransaction) -> String {
-        match t.0.transaction {
-            SequencedConsensusTransactionKind::External(ext) => match ext.kind {
-                ConsensusTransactionKind::EndOfPublish(authority) => {
-                    format!("eop({})", authority.0[0])
-                }
-                ConsensusTransactionKind::CapabilityNotification(cap) => {
-                    format!("cap({})", cap.generation)
-                }
-                ConsensusTransactionKind::CertifiedTransaction(txn) => {
-                    format!("certified({})", txn.transaction_data().gas_price())
-                }
-                ConsensusTransactionKind::UserTransaction(txn) => {
-                    format!("user({})", txn.transaction_data().gas_price())
-                }
-                _ => unreachable!(),
-            },
-            SequencedConsensusTransactionKind::System(_) => unreachable!(),
-        }
-    }
-
-    fn eop_txn(a: u8) -> VerifiedSequencedConsensusTransaction {
-        let mut authority = AuthorityName::default();
-        authority.0[0] = a;
-        txn(ConsensusTransactionKind::EndOfPublish(authority))
-    }
-
-    fn cap_txn(generation: u64) -> VerifiedSequencedConsensusTransaction {
-        txn(ConsensusTransactionKind::CapabilityNotification(
-            AuthorityCapabilitiesV1 {
-                authority: Default::default(),
-                generation,
-                supported_protocol_versions: SupportedProtocolVersions::SYSTEM_DEFAULT,
-                available_system_packages: vec![],
-            },
-        ))
-    }
-
-    fn user_txn(gas_price: u64) -> VerifiedSequencedConsensusTransaction {
+    fn user_txn(gas_price: u64) -> VerifiedExecutableTransaction {
         let (committee, keypairs) = Committee::new_simple_test_committee();
         let data = SenderSignedData::new(
             TransactionData::new_transfer(
@@ -4177,15 +4127,8 @@ mod tests {
             ),
             vec![],
         );
-        txn(ConsensusTransactionKind::CertifiedTransaction(Box::new(
+        VerifiedExecutableTransaction::new_from_certificate(VerifiedCertificate::new_unchecked(
             CertifiedTransaction::new_from_keypairs_for_testing(data, &keypairs, &committee),
-        )))
-    }
-
-    fn txn(kind: ConsensusTransactionKind) -> VerifiedSequencedConsensusTransaction {
-        VerifiedSequencedConsensusTransaction::new_test(ConsensusTransaction {
-            kind,
-            tracking_id: Default::default(),
-        })
+        ))
     }
 }
