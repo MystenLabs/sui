@@ -766,6 +766,10 @@ mod tests {
         h_broadcaster.await.unwrap();
     }
 
+    // =============== Streaming Tests ==================
+
+    // =============== Part 1: Basic Streaming ==================
+
     #[tokio::test]
     async fn streaming_only() {
         telemetry_subscribers::init_for_testing();
@@ -831,6 +835,287 @@ mod tests {
         assert_eq!(metrics.total_ingested_checkpoints.get(), 50);
         assert_eq!(metrics.total_streamed_checkpoints.get(), 10);
         assert_eq!(metrics.latest_streamed_checkpoint.get(), 59);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    // =============== Part 2: Edge Cases ==================
+
+    #[tokio::test]
+    async fn streaming_beyond_end_checkpoint() {
+        // Test scenario where streaming service starts beyond the requested end checkpoint.
+        telemetry_subscribers::init_for_testing();
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(30);
+        let cancel = CancellationToken::new();
+
+        // Streaming service starts at checkpoint 100, but we only want 0..30.
+        let streaming_service = MockStreamingService::new(100..110);
+
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster(
+            0..30,
+            None,
+            Some(streaming_service),
+            test_config(),
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        // Should use only ingestion since streaming is beyond end_cp
+        expect_checkpoints_in_range(&mut subscriber_rx, 0..30).await;
+
+        // Verify no streaming was used (all from ingestion)
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 0);
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 30);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_before_start_checkpoint() {
+        // Test scenario where streaming service starts before the requested start checkpoint.
+        telemetry_subscribers::init_for_testing();
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(30);
+        let cancel = CancellationToken::new();
+
+        // Streaming service starts at checkpoint 0 but indexing starts at 30.
+        let streaming_service = MockStreamingService::new(0..100);
+
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster(
+            30..100,
+            None,
+            Some(streaming_service),
+            test_config(),
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        expect_checkpoints_in_order(&mut subscriber_rx, 30..100).await;
+
+        // Verify only streaming was used (all from streaming)
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 70);
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
+        assert_eq!(metrics.latest_streamed_checkpoint.get(), 99);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_behind_watermark_skips_duplicates() {
+        // Test scenario where streaming service provides checkpoints behind the current watermark,
+        // which should be skipped.
+        telemetry_subscribers::init_for_testing();
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(50);
+        let cancel = CancellationToken::new();
+
+        // Create streaming service that returns some checkpoints behind the watermark
+        let mut streaming_service = MockStreamingService::new(0..15);
+        // Insert duplicate/old checkpoints that should be skipped
+        streaming_service.insert_checkpoint(3); // Behind watermark
+        streaming_service.insert_checkpoint(4); // Behind watermark
+        streaming_service.insert_checkpoint_range(15..20);
+
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster(
+            0..20,
+            None,
+            Some(streaming_service),
+            test_config(),
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        // Should receive all checkpoints exactly once (no duplicates) from streaming.
+        expect_checkpoints_in_order(&mut subscriber_rx, 0..20).await;
+
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 20);
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
+        assert_eq!(metrics.latest_streamed_checkpoint.get(), 19);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_ahead_of_watermark_recovery() {
+        // Test scenario where streaming service has a gap ahead of the watermark,
+        // requiring fallback to ingestion to fill the gap.
+        telemetry_subscribers::init_for_testing();
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(50);
+        let cancel = CancellationToken::new();
+
+        // Create streaming that has a gap (checkpoint ahead of expected watermark)
+        let mut streaming_service = MockStreamingService::new(0..3);
+        streaming_service.insert_checkpoint_range(6..10); // Gap: skips checkpoints 3 - 5
+
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster(
+            0..10,
+            None,
+            Some(streaming_service),
+            test_config(),
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        // Should receive first three checkpoints from streaming in order
+        expect_checkpoints_in_order(&mut subscriber_rx, 0..3).await;
+
+        // Then should fallback to ingestion for 3-5, and streaming continues for 6-9
+        expect_checkpoints_in_range(&mut subscriber_rx, 3..10).await;
+
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 6);
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 4);
+        assert_eq!(metrics.latest_streamed_checkpoint.get(), 9);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_with_backpressure() {
+        // Test scenario where streaming is regulated by watermark backpressure.
+
+        telemetry_subscribers::init_for_testing();
+        let (hi_tx, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(30);
+        let cancel = CancellationToken::new();
+
+        let streaming_service = MockStreamingService::new(0..20);
+
+        let mut config = test_config();
+        config.checkpoint_buffer_size = 0; // No buffer
+
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster(
+            0..20,
+            Some(10), // initial watermark to trigger backpressure
+            Some(streaming_service),
+            config,
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        // Should receive first 10 checkpoints (0..10) from streaming
+        expect_checkpoints_in_order(&mut subscriber_rx, 0..10).await;
+        assert_eq!(metrics.latest_streamed_checkpoint.get(), 9);
+
+        // Should halt due to backpressure
+        expect_timeout(&mut subscriber_rx).await;
+
+        // Update watermark to make progress
+        hi_tx.send(("test", 20)).unwrap();
+
+        // Should receive remaining checkpoints
+        expect_checkpoints_in_order(&mut subscriber_rx, 10..20).await;
+        assert_eq!(metrics.latest_streamed_checkpoint.get(), 19);
+
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 20);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    // =============== Part 3: Streaming Errors ==================
+
+    #[tokio::test]
+    async fn streaming_error_during_streaming() {
+        telemetry_subscribers::init_for_testing();
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
+        let cancel = CancellationToken::new();
+
+        // Create streaming service with error injected mid-stream
+        let mut streaming_service = MockStreamingService::new(0..5);
+        streaming_service.insert_error(); // Error after 5 checkpoints
+        streaming_service.insert_checkpoint_range(10..15);
+
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster(
+            0..15,
+            None,
+            Some(streaming_service),
+            test_config(),
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        // Should receive first 5 checkpoints from streaming in order
+        expect_checkpoints_in_order(&mut subscriber_rx, 0..5).await;
+
+        // After error, should fallback and complete via ingestion/retry (order not guaranteed)
+        expect_checkpoints_in_range(&mut subscriber_rx, 5..15).await;
+
+        // Verify streaming was used initially
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 10);
+        // Then ingestion was used to recover the missing checkpoints.
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 5);
+        // The last checkpoint should come from streaming after recovery.
+        assert_eq!(metrics.latest_streamed_checkpoint.get(), 14);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_multiple_errors_with_recovery() {
+        telemetry_subscribers::init_for_testing();
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(50);
+        let cancel = CancellationToken::new();
+
+        // Create streaming with multiple errors injected
+        let mut streaming_service = MockStreamingService::new(0..5);
+        streaming_service.insert_error(); // Error at checkpoint 5
+        streaming_service.insert_checkpoint_range(5..10);
+        streaming_service.insert_error(); // Error at checkpoint 10
+        streaming_service.insert_checkpoint_range(10..20);
+
+        let metrics = test_metrics();
+        let h_broadcaster = broadcaster(
+            0..20,
+            None,
+            Some(streaming_service),
+            test_config(),
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        // Should eventually receive all checkpoints despite errors from streaming.
+        expect_checkpoints_in_order(&mut subscriber_rx, 0..20).await;
+
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 20);
+        assert_eq!(metrics.latest_streamed_checkpoint.get(), 19);
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 0);
 
         cancel.cancel();
         h_broadcaster.await.unwrap();

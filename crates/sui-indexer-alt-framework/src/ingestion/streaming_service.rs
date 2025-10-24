@@ -130,8 +130,6 @@ pub mod test_utils {
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone)]
-    // TODO: remove this allow when the enum is used in tests
-    #[allow(dead_code)]
     enum MockCheckpointOrError {
         Checkpoint(u64),
         Error,
@@ -199,6 +197,32 @@ pub mod test_utils {
                 .collect();
             Self {
                 checkpoints_or_errors: Arc::new(Mutex::new(checkpoints)),
+            }
+        }
+
+        /// Insert an error at the back of the queue.
+        pub fn insert_error(&mut self) {
+            self.checkpoints_or_errors
+                .lock()
+                .unwrap()
+                .push_back(MockCheckpointOrError::Error);
+        }
+
+        /// Insert a checkpoint at the back of the queue.
+        pub fn insert_checkpoint(&mut self, sequence_number: u64) {
+            self.checkpoints_or_errors
+                .lock()
+                .unwrap()
+                .push_back(MockCheckpointOrError::Checkpoint(sequence_number));
+        }
+
+        pub fn insert_checkpoint_range<I>(&mut self, checkpoint_range: I)
+        where
+            I: IntoIterator<Item = u64>,
+        {
+            let mut checkpoints = self.checkpoints_or_errors.lock().unwrap();
+            for sequence_number in checkpoint_range {
+                checkpoints.push_back(MockCheckpointOrError::Checkpoint(sequence_number));
             }
         }
     }
