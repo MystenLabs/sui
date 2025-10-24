@@ -400,13 +400,6 @@ public fun set_name<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, name: Str
     currency.name = name;
 }
 
-#[test_only]
-/// Update the symbol of the `Currency`.
-public fun set_symbol<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, symbol: String) {
-    assert!(is_ascii_printable!(&symbol), EInvalidSymbol);
-    currency.symbol = symbol;
-}
-
 /// Update the description of the `Currency`.
 public fun set_description<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, description: String) {
     currency.description = description;
@@ -640,8 +633,19 @@ public fun finalize_unwrap_for_testing<T>(
 ): (Currency<T>, MetadataCap<T>) {
     let CurrencyInitializer { mut currency, extra_fields, .. } = init;
     extra_fields.destroy_empty();
+
+    // Mark the currency as new, so in the future we can support borrowing of the
+    // legacy metadata.
+    currency
+        .extra_fields
+        .insert(
+            NEW_CURRENCY_MARKER.to_string(),
+            ExtraField(type_name::with_original_ids<bool>(), NEW_CURRENCY_MARKER),
+        );
+
     let id = object::new(ctx);
     currency.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
+
     (currency, MetadataCap { id })
 }
 
@@ -652,6 +656,7 @@ public fun migrate_legacy_metadata_for_testing<T>(
     _ctx: &mut TxContext,
 ): Currency<T> {
     assert!(!registry.exists<T>(), ECurrencyAlreadyRegistered);
+    assert!(is_ascii_printable!(&legacy.get_symbol().to_string()), EInvalidSymbol);
 
     Currency<T> {
         id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
