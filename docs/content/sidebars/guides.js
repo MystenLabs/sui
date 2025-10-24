@@ -203,6 +203,7 @@ const guides = [
 			'guides/operator/archives',
 			'guides/operator/exchange-integration',
 			'guides/operator/bridge-node-configuration',
+			'guides/operator/indexer-stack-setup',
 			{
 				type: 'category',
 				label: 'Sui Validator Nodes',
