@@ -725,6 +725,13 @@ impl CallArg {
                 ObjectArg::ImmOrOwnedObject(_) => (),
                 ObjectArg::SharedObject { mutability, .. } => match mutability {
                     SharedObjectMutability::Mutable | SharedObjectMutability::Immutable => (),
+                    SharedObjectMutability::NonExclusiveWrite => {
+                        if !config.enable_non_exclusive_writes() {
+                            return Err(UserInputError::Unsupported(
+                                "User transactions cannot use SharedObjectMutability::NonExclusiveWrite".to_string(),
+                            ));
+                        }
+                    }
                 },
 
                 ObjectArg::Receiving(_) => {
@@ -1391,6 +1398,10 @@ impl SharedInputObject {
 
     pub fn into_id_and_version(self) -> (ObjectID, SequenceNumber) {
         (self.id, self.initial_shared_version)
+    }
+
+    pub fn is_accessed_exclusively(&self) -> bool {
+        self.mutability.is_exclusive()
     }
 }
 
@@ -3389,13 +3400,18 @@ pub enum SharedObjectMutability {
     // The "classic" mutable/immutable modes.
     Immutable,
     Mutable,
+    // Non-exclusive write is used to allow multiple transactions to
+    // simultaneously add disjoint dynamic fields to an object.
+    // (Currently only used by settlement transactions).
+    NonExclusiveWrite,
 }
 
 impl SharedObjectMutability {
-    pub fn is_mutable(&self) -> bool {
+    pub fn is_exclusive(&self) -> bool {
         match self {
             SharedObjectMutability::Mutable => true,
             SharedObjectMutability::Immutable => false,
+            SharedObjectMutability::NonExclusiveWrite => false,
         }
     }
 }
@@ -3462,6 +3478,23 @@ pub enum ObjectReadResultKind {
     ObjectConsensusStreamEnded(SequenceNumber, TransactionDigest),
     // A shared object in a cancelled transaction. The sequence number embeds cancellation reason.
     CancelledTransactionSharedObject(SequenceNumber),
+}
+
+impl ObjectReadResultKind {
+    pub fn is_cancelled(&self) -> bool {
+        matches!(
+            self,
+            ObjectReadResultKind::CancelledTransactionSharedObject(_)
+        )
+    }
+
+    pub fn version(&self) -> SequenceNumber {
+        match self {
+            ObjectReadResultKind::Object(object) => object.version(),
+            ObjectReadResultKind::ObjectConsensusStreamEnded(seq, _) => *seq,
+            ObjectReadResultKind::CancelledTransactionSharedObject(seq) => *seq,
+        }
+    }
 }
 
 impl std::fmt::Debug for ObjectReadResultKind {
@@ -3547,6 +3580,7 @@ impl ObjectReadResult {
             (InputObjectKind::SharedMoveObject { mutability, .. }, _) => match mutability {
                 SharedObjectMutability::Mutable => true,
                 SharedObjectMutability::Immutable => false,
+                SharedObjectMutability::NonExclusiveWrite => false,
             },
         }
     }
@@ -3758,61 +3792,122 @@ impl InputObjects {
             .collect()
     }
 
-    pub fn mutable_inputs(&self) -> BTreeMap<ObjectID, (VersionDigest, Owner)> {
+    /// All inputs that will be directly mutated by the transaction. This does
+    /// not include SharedObjectMutability::NonExclusiveWrite inputs.
+    pub fn exclusive_mutable_inputs(&self) -> BTreeMap<ObjectID, (VersionDigest, Owner)> {
+        self.mutables_with_input_kinds()
+            .filter_map(|(id, (version, owner, kind))| match kind {
+                InputObjectKind::SharedMoveObject { mutability, .. } => match mutability {
+                    SharedObjectMutability::Mutable => Some((id, (version, owner))),
+                    SharedObjectMutability::Immutable => None,
+                    SharedObjectMutability::NonExclusiveWrite => None,
+                },
+                _ => Some((id, (version, owner))),
+            })
+            .collect()
+    }
+
+    pub fn non_exclusive_input_objects(&self) -> BTreeMap<ObjectID, Object> {
         self.objects
             .iter()
-            .filter_map(
-                |ObjectReadResult {
-                     input_object_kind,
-                     object,
-                 }| match (input_object_kind, object) {
-                    (InputObjectKind::MovePackage(_), _) => None,
+            .filter_map(|read_result| {
+                match (read_result.as_object(), read_result.input_object_kind) {
                     (
-                        InputObjectKind::ImmOrOwnedMoveObject(object_ref),
-                        ObjectReadResultKind::Object(object),
-                    ) => {
-                        if object.is_immutable() {
-                            None
-                        } else {
-                            Some((
-                                object_ref.0,
-                                ((object_ref.1, object_ref.2), object.owner.clone()),
-                            ))
-                        }
-                    }
-                    (
-                        InputObjectKind::ImmOrOwnedMoveObject(_),
-                        ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
-                    ) => {
-                        unreachable!()
-                    }
-                    (
-                        InputObjectKind::SharedMoveObject { .. },
-                        ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
-                    ) => None,
-                    (
-                        InputObjectKind::SharedMoveObject { mutability, .. },
-                        ObjectReadResultKind::Object(object),
-                    ) => match mutability {
-                        SharedObjectMutability::Mutable => {
-                            let oref = object.compute_object_reference();
-                            Some((oref.0, ((oref.1, oref.2), object.owner.clone())))
-                        }
-                        SharedObjectMutability::Immutable => None,
-                    },
-                    (
-                        InputObjectKind::ImmOrOwnedMoveObject(_),
-                        ObjectReadResultKind::CancelledTransactionSharedObject(_),
-                    ) => {
-                        unreachable!()
-                    }
-                    (
-                        InputObjectKind::SharedMoveObject { .. },
-                        ObjectReadResultKind::CancelledTransactionSharedObject(_),
-                    ) => None,
-                },
-            )
+                        Some(object),
+                        InputObjectKind::SharedMoveObject {
+                            mutability: SharedObjectMutability::NonExclusiveWrite,
+                            ..
+                        },
+                    ) => Some((read_result.id(), object.clone())),
+                    _ => None,
+                }
+            })
             .collect()
+    }
+
+    /// All inputs that can be taken as &mut T, which includes both
+    /// SharedObjectMutability::Mutable and SharedObjectMutability::NonExclusiveWrite inputs.
+    pub fn all_mutable_inputs(&self) -> BTreeMap<ObjectID, (VersionDigest, Owner)> {
+        self.mutables_with_input_kinds()
+            .filter_map(|(id, (version, owner, kind))| match kind {
+                InputObjectKind::SharedMoveObject { mutability, .. } => match mutability {
+                    SharedObjectMutability::Mutable => Some((id, (version, owner))),
+                    SharedObjectMutability::Immutable => None,
+                    SharedObjectMutability::NonExclusiveWrite => Some((id, (version, owner))),
+                },
+                _ => Some((id, (version, owner))),
+            })
+            .collect()
+    }
+
+    fn mutables_with_input_kinds(
+        &self,
+    ) -> impl Iterator<Item = (ObjectID, (VersionDigest, Owner, InputObjectKind))> + '_ {
+        self.objects.iter().filter_map(
+            |ObjectReadResult {
+                 input_object_kind,
+                 object,
+             }| match (input_object_kind, object) {
+                (InputObjectKind::MovePackage(_), _) => None,
+                (
+                    InputObjectKind::ImmOrOwnedMoveObject(object_ref),
+                    ObjectReadResultKind::Object(object),
+                ) => {
+                    if object.is_immutable() {
+                        None
+                    } else {
+                        Some((
+                            object_ref.0,
+                            (
+                                (object_ref.1, object_ref.2),
+                                object.owner.clone(),
+                                *input_object_kind,
+                            ),
+                        ))
+                    }
+                }
+                (
+                    InputObjectKind::ImmOrOwnedMoveObject(_),
+                    ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
+                ) => {
+                    unreachable!()
+                }
+                (
+                    InputObjectKind::SharedMoveObject { .. },
+                    ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
+                ) => None,
+                (
+                    InputObjectKind::SharedMoveObject { mutability, .. },
+                    ObjectReadResultKind::Object(object),
+                ) => match *mutability {
+                    SharedObjectMutability::Mutable => {
+                        let oref = object.compute_object_reference();
+                        Some((
+                            oref.0,
+                            ((oref.1, oref.2), object.owner.clone(), *input_object_kind),
+                        ))
+                    }
+                    SharedObjectMutability::Immutable => None,
+                    SharedObjectMutability::NonExclusiveWrite => {
+                        let oref = object.compute_object_reference();
+                        Some((
+                            oref.0,
+                            ((oref.1, oref.2), object.owner.clone(), *input_object_kind),
+                        ))
+                    }
+                },
+                (
+                    InputObjectKind::ImmOrOwnedMoveObject(_),
+                    ObjectReadResultKind::CancelledTransactionSharedObject(_),
+                ) => {
+                    unreachable!()
+                }
+                (
+                    InputObjectKind::SharedMoveObject { .. },
+                    ObjectReadResultKind::CancelledTransactionSharedObject(_),
+                ) => None,
+            },
+        )
     }
 
     /// The version to set on objects created by the computation that `self` is input to.
@@ -3878,6 +3973,27 @@ impl InputObjects {
 
     pub fn iter_objects(&self) -> impl Iterator<Item = &Object> {
         self.objects.iter().filter_map(|o| o.as_object())
+    }
+
+    pub fn non_exclusive_mutable_inputs(
+        &self,
+    ) -> impl Iterator<Item = (ObjectID, SequenceNumber)> + '_ {
+        self.objects.iter().filter_map(
+            |ObjectReadResult {
+                 input_object_kind,
+                 object,
+             }| match input_object_kind {
+                // TODO: this is not exercised yet since settlement transactions cannot be
+                // cancelled, but if/when we expose non-exclusive writes to users,
+                // a cancelled transaction should not be considered to have done any writes.
+                InputObjectKind::SharedMoveObject {
+                    id,
+                    mutability: SharedObjectMutability::NonExclusiveWrite,
+                    ..
+                } if !object.is_cancelled() => Some((*id, object.version())),
+                _ => None,
+            },
+        )
     }
 }
 

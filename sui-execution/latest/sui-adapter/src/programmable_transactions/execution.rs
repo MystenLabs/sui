@@ -186,7 +186,7 @@ mod checked {
         // Save loaded objects for debug. We dont want to lose the info
         state_view.save_loaded_runtime_objects(loaded_runtime_objects);
         state_view.save_wrapped_object_containers(wrapped_object_containers);
-        state_view.record_execution_results(finished?);
+        state_view.record_execution_results(finished?)?;
         state_view.record_generated_object_ids(generated_object_ids);
         Ok(mode_results)
     }

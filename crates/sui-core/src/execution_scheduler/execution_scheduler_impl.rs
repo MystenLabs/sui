@@ -21,23 +21,69 @@ use mysten_common::debug_fatal;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::Mutex;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    base_types::{FullObjectID, SequenceNumber},
+    base_types::{FullObjectID, ObjectID, SequenceNumber},
+    digests::TransactionDigest,
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     storage::{InputKey, ObjectStore},
-    transaction::{SenderSignedData, TransactionDataAPI, TransactionKey},
+    transaction::{
+        SenderSignedData, SharedInputObject, SharedObjectMutability, TransactionData,
+        TransactionDataAPI, TransactionKey,
+    },
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 use super::{PendingCertificate, overload_tracker::OverloadTracker};
+
+/// Utility struct for collecting barrier dependencies
+pub(crate) struct BarrierDependencyBuilder {
+    dep_state: BTreeMap<ObjectID, BTreeSet<TransactionDigest>>,
+}
+
+impl BarrierDependencyBuilder {
+    pub fn new() -> Self {
+        Self {
+            dep_state: Default::default(),
+        }
+    }
+
+    /// process_tx must be called for each transaction in scheduling order. If the
+    /// transaction has a non-exclusive write to an object, the transaction digest is
+    /// stored to become a dependency of the eventual barrier transaction. If a
+    /// transaction has an exclusive write to an object, all pending non-exclusive write
+    /// transactions for that object are added to the barrier dependencies.
+    pub fn process_tx(
+        &mut self,
+        tx_digest: TransactionDigest,
+        tx: &TransactionData,
+    ) -> BTreeSet<TransactionDigest> {
+        let mut barrier_deps = BTreeSet::new();
+        for SharedInputObject { id, mutability, .. } in tx.kind().shared_input_objects() {
+            match mutability {
+                SharedObjectMutability::NonExclusiveWrite => {
+                    self.dep_state.entry(id).or_default().insert(tx_digest);
+                }
+                SharedObjectMutability::Mutable => {
+                    // If there were preceding non-exclusive writes to this object id, this
+                    // transaction is a barrier and must wait for them to finish.
+                    if let Some(deps) = self.dep_state.remove(&id) {
+                        barrier_deps.extend(deps);
+                    }
+                }
+                SharedObjectMutability::Immutable => (),
+            }
+        }
+        barrier_deps
+    }
+}
 
 #[derive(Clone)]
 pub struct ExecutionScheduler {
@@ -123,6 +169,7 @@ impl ExecutionScheduler {
         ))
     }
 
+    #[instrument(level = "debug", skip_all, fields(tx_digest = ?cert.digest()))]
     async fn schedule_transaction(
         self,
         cert: VerifiedExecutableTransaction,
@@ -145,6 +192,7 @@ impl ExecutionScheduler {
             )
             .into_iter()
             .collect();
+
         let receiving_object_keys: HashSet<_> = tx_data
             .receiving_objects()
             .into_iter()
@@ -194,6 +242,20 @@ impl ExecutionScheduler {
             .transaction_manager_num_enqueued_certificates
             .with_label_values(&["pending"])
             .inc();
+
+        if !execution_env.barrier_dependencies.is_empty() {
+            debug!(
+                "waiting for barrier dependencies to be executed: {:?}",
+                execution_env.barrier_dependencies
+            );
+            self.transaction_cache_read
+                .notify_read_executed_effects_digests(
+                    "wait_for_barrier_dependencies",
+                    &execution_env.barrier_dependencies,
+                )
+                .await;
+        }
+
         tokio::select! {
             _ = self.object_cache_read
                 .notify_read_input_objects(&missing_input_keys, &receiving_object_keys, epoch)
@@ -343,10 +405,16 @@ impl ExecutionScheduler {
                             .collect();
 
                 while let Some((txns, env)) = futures.next().await {
+                    let mut barrier_deps = BarrierDependencyBuilder::new();
                     let txns = txns
                         .into_iter()
-                        .map(|tx| (tx, env.clone()))
+                        .map(|tx| {
+                            let deps = barrier_deps.process_tx(*tx.digest(), tx.transaction_data());
+                            let env = env.clone().with_barrier_dependencies(deps);
+                            (tx, env)
+                        })
                         .collect::<Vec<_>>();
+
                     scheduler.enqueue_transactions(txns, &epoch_store);
                 }
             }));
@@ -562,16 +630,21 @@ impl ExecutionScheduler {
 
 #[cfg(test)]
 mod test {
-    use super::{ExecutionScheduler, PendingCertificate};
+    use super::{BarrierDependencyBuilder, ExecutionScheduler, PendingCertificate};
     use crate::authority::ExecutionEnv;
     use crate::authority::shared_object_version_manager::AssignedVersions;
     use crate::authority::{AuthorityState, authority_tests::init_state_with_objects};
     use crate::execution_scheduler::SchedulingSource;
+    use std::collections::BTreeSet;
     use std::{time::Duration, vec};
     use sui_test_transaction_builder::TestTransactionBuilder;
+    use sui_types::base_types::{SuiAddress, random_object_ref};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::object::Owner;
-    use sui_types::transaction::{SharedObjectMutability, VerifiedTransaction};
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::{
+        SharedObjectMutability, Transaction, TransactionData, TransactionKind, VerifiedTransaction,
+    };
     use sui_types::{
         SUI_FRAMEWORK_PACKAGE_ID,
         base_types::{ObjectID, SequenceNumber},
@@ -1459,5 +1532,122 @@ mod test {
         assert!(rx_ready_certificates.try_recv().is_err());
 
         execution_scheduler.check_empty_for_testing();
+    }
+
+    #[test]
+    fn test_barrier_dependency_builder() {
+        let make_transaction = |non_exclusive_writes: Vec<u32>, exclusive_writes: Vec<u32>| {
+            assert!(
+                non_exclusive_writes
+                    .iter()
+                    .all(|id| !exclusive_writes.contains(id))
+            );
+            assert!(
+                exclusive_writes
+                    .iter()
+                    .all(|id| !non_exclusive_writes.contains(id))
+            );
+
+            let non_exclusive_writes = non_exclusive_writes
+                .into_iter()
+                .map(|id| ObjectID::from_single_byte(id as u8));
+            let exclusive_writes = exclusive_writes
+                .into_iter()
+                .map(|id| ObjectID::from_single_byte(id as u8));
+            let mut builder = ProgrammableTransactionBuilder::new();
+            for non_exclusive_write in non_exclusive_writes {
+                builder
+                    .obj(ObjectArg::SharedObject {
+                        id: non_exclusive_write,
+                        initial_shared_version: SequenceNumber::new(),
+                        mutability: SharedObjectMutability::NonExclusiveWrite,
+                    })
+                    .unwrap();
+            }
+
+            for exclusive_write in exclusive_writes {
+                builder
+                    .obj(ObjectArg::SharedObject {
+                        id: exclusive_write,
+                        initial_shared_version: SequenceNumber::new(),
+                        mutability: SharedObjectMutability::Mutable,
+                    })
+                    .unwrap();
+            }
+
+            let tx = TransactionKind::ProgrammableTransaction(builder.finish());
+            let tx_data =
+                TransactionData::new(tx, SuiAddress::default(), random_object_ref(), 1, 1);
+            Transaction::from_data_and_signer(tx_data, vec![])
+        };
+
+        // One non-exclusive write, one exclusive write.
+        {
+            let mut barrier_dependency_builder = BarrierDependencyBuilder::new();
+            let tx1 = make_transaction(vec![1], vec![]);
+            let tx2 = make_transaction(vec![], vec![1]);
+
+            let tx1_deps =
+                barrier_dependency_builder.process_tx(*tx1.digest(), tx1.transaction_data());
+            let tx2_deps =
+                barrier_dependency_builder.process_tx(*tx2.digest(), tx2.transaction_data());
+            assert!(tx1_deps.is_empty());
+            assert_eq!(Vec::from_iter(tx2_deps), vec![*tx1.digest()]);
+        }
+
+        // One transaction has non-exclusive writes to two different objects, and then becomes
+        // a dependency of two barriers
+        {
+            let mut barrier_dependency_builder = BarrierDependencyBuilder::new();
+            let tx1 = make_transaction(vec![1, 2], vec![]);
+            let tx2 = make_transaction(vec![], vec![1]);
+            let tx3 = make_transaction(vec![], vec![2]);
+
+            let tx1_deps =
+                barrier_dependency_builder.process_tx(*tx1.digest(), tx1.transaction_data());
+            let tx2_deps =
+                barrier_dependency_builder.process_tx(*tx2.digest(), tx2.transaction_data());
+            let tx3_deps =
+                barrier_dependency_builder.process_tx(*tx3.digest(), tx3.transaction_data());
+            assert!(tx1_deps.is_empty());
+            assert_eq!(Vec::from_iter(tx2_deps), vec![*tx1.digest()]);
+            assert_eq!(Vec::from_iter(tx3_deps), vec![*tx1.digest()]);
+        }
+
+        // Ensure multiple-object dependences are merged
+        {
+            let mut barrier_dependency_builder = BarrierDependencyBuilder::new();
+            let tx1 = make_transaction(vec![1], vec![]);
+            let tx2 = make_transaction(vec![2], vec![]);
+            let tx3 = make_transaction(vec![], vec![1, 2]);
+
+            let tx1_deps =
+                barrier_dependency_builder.process_tx(*tx1.digest(), tx1.transaction_data());
+            let tx2_deps =
+                barrier_dependency_builder.process_tx(*tx2.digest(), tx2.transaction_data());
+            let tx3_deps =
+                barrier_dependency_builder.process_tx(*tx3.digest(), tx3.transaction_data());
+            assert!(tx1_deps.is_empty());
+            assert!(tx2_deps.is_empty());
+            assert_eq!(tx3_deps, BTreeSet::from([*tx1.digest(), *tx2.digest()]));
+        }
+
+        // Ensure dependency state is cleared
+        {
+            let mut barrier_dependency_builder = BarrierDependencyBuilder::new();
+            let tx1 = make_transaction(vec![1], vec![]);
+            let tx2 = make_transaction(vec![], vec![1]);
+            let tx3 = make_transaction(vec![], vec![1]);
+
+            let tx1_deps =
+                barrier_dependency_builder.process_tx(*tx1.digest(), tx1.transaction_data());
+            let tx2_deps =
+                barrier_dependency_builder.process_tx(*tx2.digest(), tx2.transaction_data());
+            let tx3_deps =
+                barrier_dependency_builder.process_tx(*tx3.digest(), tx3.transaction_data());
+            assert!(tx1_deps.is_empty());
+            assert_eq!(tx2_deps, BTreeSet::from([*tx1.digest()]));
+            assert!(tx3_deps.is_empty());
+        }
     }
 }

@@ -11,12 +11,14 @@ use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::error::ExecutionErrorKind;
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
 };
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::layout_resolver::LayoutResolver;
+use sui_types::object::Data;
 use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::{
@@ -41,10 +43,17 @@ pub struct TemporaryStore<'backing> {
     store: &'backing dyn BackingStore,
     tx_digest: TransactionDigest,
     input_objects: BTreeMap<ObjectID, Object>,
+
+    /// Store the original versions of the non-exclusive write inputs, in order to detect
+    /// mutations (which are illegal, but not prevented by the type system).
+    non_exclusive_input_original_versions: BTreeMap<ObjectID, Object>,
+
     stream_ended_consensus_objects: BTreeMap<ObjectID, SequenceNumber /* start_version */>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
-    mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>, // Inputs that are mutable
+    /// Inputs that will be mutated by the transaction. Does not include NonExclusiveWrite inputs,
+    /// which can be taken as `&mut T` but cannot be directly mutated.
+    mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
     execution_results: ExecutionResultsV2,
     /// Objects that were loaded during execution (dynamic fields + received objects).
     loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
@@ -85,7 +94,9 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
     ) -> Self {
-        let mutable_input_refs = input_objects.mutable_inputs();
+        let mutable_input_refs = input_objects.exclusive_mutable_inputs();
+        let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
+
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
         let stream_ended_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
@@ -110,6 +121,7 @@ impl<'backing> TemporaryStore<'backing> {
             store,
             tx_digest,
             input_objects: objects,
+            non_exclusive_input_original_versions,
             stream_ended_consensus_objects,
             lamport_timestamp,
             mutable_input_refs,
@@ -168,6 +180,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// sequence number. This is required to achieve safety.
     pub(crate) fn ensure_active_inputs_mutated(&mut self) {
         let mut to_be_updated = vec![];
+        // Note: we do not mutate input objects if they are non-exclusive write
         for id in self.mutable_input_refs.keys() {
             if !self.execution_results.modified_objects.contains(id) {
                 // We cannot update here but have to push to `to_be_updated` and update later
@@ -1067,6 +1080,42 @@ impl ChildObjectResolver for TemporaryStore<'_> {
     }
 }
 
+/// Compares the owner and payload of an object.
+/// This is used to detect illegal writes to non-exclusive write objects.
+fn was_object_mutated(object: &Object, original: &Object) -> bool {
+    let data_equal = match (&object.data, &original.data) {
+        (Data::Move(a), Data::Move(b)) => a.contents_and_type_equal(b),
+        // We don't have a use for package content-equality, so we remain as strict as
+        // possible for now.
+        (Data::Package(a), Data::Package(b)) => a == b,
+        _ => false,
+    };
+
+    let owner_equal = match (&object.owner, &original.owner) {
+        // We don't compare initial shared versions, because re-shared objects do not have the
+        // correct initial shared version at this point in time, and this field is not something
+        // that can be modified by a single transaction anyway.
+        (Owner::Shared { .. }, Owner::Shared { .. }) => true,
+        (
+            Owner::ConsensusAddressOwner { owner: a, .. },
+            Owner::ConsensusAddressOwner { owner: b, .. },
+        ) => a == b,
+        (Owner::AddressOwner(a), Owner::AddressOwner(b)) => a == b,
+        (Owner::Immutable, Owner::Immutable) => true,
+        (Owner::ObjectOwner(a), Owner::ObjectOwner(b)) => a == b,
+
+        // Keep the left hand side of the match exhaustive to catch future
+        // changes to Owner
+        (Owner::AddressOwner(_), _)
+        | (Owner::Immutable, _)
+        | (Owner::ObjectOwner(_), _)
+        | (Owner::Shared { .. }, _)
+        | (Owner::ConsensusAddressOwner { .. }, _) => false,
+    };
+
+    !data_equal || !owner_equal
+}
+
 impl Storage for TemporaryStore<'_> {
     fn reset(&mut self) {
         self.drop_writes();
@@ -1077,13 +1126,42 @@ impl Storage for TemporaryStore<'_> {
     }
 
     /// Take execution results v2, and translate it back to be compatible with effects v1.
-    fn record_execution_results(&mut self, results: ExecutionResults) {
-        let ExecutionResults::V2(results) = results else {
+    fn record_execution_results(
+        &mut self,
+        results: ExecutionResults,
+    ) -> Result<(), ExecutionError> {
+        let ExecutionResults::V2(mut results) = results else {
             panic!("ExecutionResults::V2 expected in sui-execution v1 and above");
         };
+
+        // for all non-exclusive write inputs, remove them from written objects
+        let mut to_remove = Vec::new();
+        for (id, original) in &self.non_exclusive_input_original_versions {
+            // Object must be present in `written_objects` and identical
+            if results
+                .written_objects
+                .get(id)
+                .map(|obj| was_object_mutated(obj, original))
+                .unwrap_or(true)
+            {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::NonExclusiveWriteInputObjectModified { id: *id },
+                    "Non-exclusive write input object has been modified or deleted",
+                ));
+            }
+            to_remove.push(*id);
+        }
+
+        for id in to_remove {
+            results.written_objects.remove(&id);
+            results.modified_objects.remove(&id);
+        }
+
         // It's important to merge instead of override results because it's
         // possible to execute PT more than once during tx execution.
         self.execution_results.merge_results(results);
+
+        Ok(())
     }
 
     fn save_loaded_runtime_objects(

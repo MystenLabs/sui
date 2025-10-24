@@ -8,13 +8,13 @@ use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
-    SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
     accumulator_metadata::AccumulatorOwner,
     accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
     base_types::{ObjectRef, SuiAddress},
     digests::{ChainIdentifier, CheckpointDigest},
-    effects::TransactionEffectsAPI,
+    effects::{InputConsensusObject, TransactionEffectsAPI},
     gas_coin::GAS,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ChildObjectResolver,
@@ -296,12 +296,81 @@ async fn test_deposits() {
 
     let tx = make_send_to_account_tx(1000, recipient, sender, gas, rgp);
 
+    let res = test_cluster.sign_and_execute_transaction(&tx).await;
+    let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
+
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+    let tx = make_send_to_account_tx(1000, recipient, sender, gas, rgp);
+
     test_cluster.sign_and_execute_transaction(&tx).await;
 
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
-        verify_accumulator_exists(child_object_resolver, recipient, 1000);
+        verify_accumulator_exists(child_object_resolver, recipient, 2000);
+
+        // Ensure that the accumulator root object is considered a read-only InputConsensusObject
+        // by the settlement transaction. This is necessary so that causal sorting in CheckpointBuilder
+        // orders barriers after settlements.
+        let sui_coin_type = Balance::type_tag(GAS::type_tag());
+        let accumulator_object =
+            AccumulatorValue::load_object(child_object_resolver, None, recipient, &sui_coin_type)
+                .expect("read cannot fail")
+                .expect("accumulator should exist");
+        let settlement_digest = accumulator_object.previous_transaction;
+        let settlement_effects = state
+            .get_transaction_cache_reader()
+            .get_executed_effects(&settlement_digest)
+            .expect("settlement digest should exist");
+        let input_consensus_objects = settlement_effects.input_consensus_objects();
+        input_consensus_objects.iter().find(|input_consensus_object| {
+            matches!(input_consensus_object, InputConsensusObject::ReadOnly(obj_ref) if obj_ref.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+        }).expect("settlement should have accumulator root object as read-only input consensus object");
+    });
+
+    // ensure that no conservation failures are detected during reconfig.
+    test_cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
+async fn test_multiple_settlement_txns() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.enable_accumulators_for_testing();
+        cfg.set_max_updates_per_settlement_txn_for_testing(3);
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let context = &mut test_cluster.wallet;
+
+    let (sender, gas) = get_sender_and_gas(context).await;
+
+    let recipient = SuiAddress::random_for_testing_only();
+
+    let amounts_and_recipients = (0..20)
+        .map(|_| (1u64, SuiAddress::random_for_testing_only()))
+        .collect::<Vec<_>>();
+
+    let tx = make_send_to_multi_account_tx(&amounts_and_recipients, sender, gas, rgp);
+
+    let res = test_cluster.sign_and_execute_transaction(&tx).await;
+    let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
+
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+    let tx = make_send_to_account_tx(1000, recipient, sender, gas, rgp);
+
+    test_cluster.sign_and_execute_transaction(&tx).await;
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+
+        for (amount, recipient) in amounts_and_recipients {
+            verify_accumulator_exists(child_object_resolver, recipient, amount);
+        }
     });
 
     // ensure that no conservation failures are detected during reconfig.
@@ -572,26 +641,36 @@ fn make_send_to_account_tx(
     gas: ObjectRef,
     rgp: u64,
 ) -> TransactionData {
+    make_send_to_multi_account_tx(&[(amount, recipient)], sender, gas, rgp)
+}
+
+fn make_send_to_multi_account_tx(
+    amounts_and_recipients: &[(u64, SuiAddress)],
+    sender: SuiAddress,
+    gas: ObjectRef,
+    rgp: u64,
+) -> TransactionData {
     let mut builder = ProgrammableTransactionBuilder::new();
 
-    let amount = builder.pure(amount).unwrap();
+    for (amount, recipient) in amounts_and_recipients {
+        let amount_arg = builder.pure(*amount).unwrap();
+        let recipient_arg = builder.pure(recipient).unwrap();
+        let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount_arg]));
 
-    let recipient_arg = builder.pure(recipient).unwrap();
+        let Argument::Result(coin_idx) = coin else {
+            panic!("coin is not a result");
+        };
 
-    let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
-    let Argument::Result(coin_idx) = coin else {
-        panic!("coin is not a result");
-    };
+        let coin = Argument::NestedResult(coin_idx, 0);
 
-    let coin = Argument::NestedResult(coin_idx, 0);
-
-    builder.programmable_move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("coin").unwrap(),
-        Identifier::new("send_funds").unwrap(),
-        vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![coin, recipient_arg],
-    );
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("send_funds").unwrap(),
+            vec!["0x2::sui::SUI".parse().unwrap()],
+            vec![coin, recipient_arg],
+        );
+    }
 
     let tx = TransactionKind::ProgrammableTransaction(builder.finish());
     TransactionData::new(tx, sender, gas, 10000000, rgp)

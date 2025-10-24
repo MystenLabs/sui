@@ -1460,7 +1460,8 @@ impl CheckpointBuilder {
 
         let accumulator_changes = builder.collect_accumulator_changes();
         let num_updates = builder.num_updates();
-        let settlement_txns = builder.build_tx(
+        let (settlement_txns, barrier_tx) = builder.build_tx(
+            self.epoch_store.protocol_config(),
             epoch,
             accumulator_root_obj_initial_shared_version,
             checkpoint_height,
@@ -1468,6 +1469,7 @@ impl CheckpointBuilder {
 
         let settlement_txns: Vec<_> = settlement_txns
             .into_iter()
+            .chain(std::iter::once(barrier_tx))
             .map(|tx| {
                 VerifiedExecutableTransaction::new_system(
                     VerifiedTransaction::new_system_transaction(tx),

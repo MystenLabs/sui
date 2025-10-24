@@ -106,7 +106,7 @@ mod checked {
         let finished = context.finish::<Mode>();
         // Save loaded objects for debug. We dont want to lose the info
         state_view.save_loaded_runtime_objects(loaded_child_objects);
-        state_view.record_execution_results(finished?);
+        state_view.record_execution_results(finished?)?;
         Ok(mode_results)
     }
 

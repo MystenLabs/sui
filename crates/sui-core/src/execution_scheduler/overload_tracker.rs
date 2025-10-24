@@ -42,19 +42,21 @@ impl OverloadTracker {
 
     pub(crate) fn add_pending_certificate(&self, tx_data: &SenderSignedData) {
         let tx_digest = tx_data.digest();
-        let mutable_shared_objects = Self::get_mutable_shared_objects(tx_data);
+        let exclusively_accessed_shared_objects =
+            Self::get_exclusively_accessed_shared_objects(tx_data);
         let mut object_waiting_queue = self.object_waiting_queue.write();
         let instant = Instant::now();
-        for object_id in mutable_shared_objects {
+        for object_id in exclusively_accessed_shared_objects {
             let queue = object_waiting_queue.entry(object_id).or_default();
             queue.insert(tx_digest, instant);
         }
     }
 
     pub(crate) fn remove_pending_certificate(&self, tx_data: &SenderSignedData) {
-        let mutable_shared_objects = Self::get_mutable_shared_objects(tx_data);
+        let exclusively_accessed_shared_objects =
+            Self::get_exclusively_accessed_shared_objects(tx_data);
         let mut object_waiting_queue = self.object_waiting_queue.write();
-        for object_id in mutable_shared_objects {
+        for object_id in exclusively_accessed_shared_objects {
             if let Some(entry) = object_waiting_queue.get_mut(&object_id) {
                 entry.remove(&tx_data.digest());
                 if entry.is_empty() {
@@ -64,14 +66,13 @@ impl OverloadTracker {
         }
     }
 
-    fn get_mutable_shared_objects(tx_data: &SenderSignedData) -> Vec<FullObjectID> {
+    fn get_exclusively_accessed_shared_objects(tx_data: &SenderSignedData) -> Vec<FullObjectID> {
         tx_data
             .transaction_data()
             .shared_input_objects()
             .into_iter()
             .filter_map(|r| {
-                r.mutability
-                    .is_mutable()
+                r.is_accessed_exclusively()
                     .then_some(FullObjectID::new(r.id, Some(r.initial_shared_version)))
             })
             .collect()
@@ -93,8 +94,9 @@ impl OverloadTracker {
             .into()
         );
 
-        let mutable_shared_objects = Self::get_mutable_shared_objects(tx_data);
-        let queue_len_and_age = self.objects_queue_len_and_age(mutable_shared_objects);
+        let exclusively_accessed_shared_objects =
+            Self::get_exclusively_accessed_shared_objects(tx_data);
+        let queue_len_and_age = self.objects_queue_len_and_age(exclusively_accessed_shared_objects);
         for (object_id, queue_len, txn_age) in queue_len_and_age {
             // When this occurs, most likely transactions piled up on a shared object.
             if queue_len >= overload_config.max_transaction_manager_per_object_queue_length {
