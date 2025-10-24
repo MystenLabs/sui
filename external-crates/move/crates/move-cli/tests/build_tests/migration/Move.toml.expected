@@ -1,0 +1,14 @@
+
+# TOML FILE
+
+[package]
+name = "A"
+edition = "2024"
+
+# this is a comment
+[addresses]
+A = "0x42"
+std = "0x1"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
