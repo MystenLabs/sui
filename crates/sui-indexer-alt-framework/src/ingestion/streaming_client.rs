@@ -98,6 +98,7 @@ pub mod test_utils {
     /// Mock streaming client for testing with predefined checkpoints.
     pub struct MockStreamingClient {
         checkpoints: Arc<Mutex<Vec<Result<u64>>>>,
+        connection_failures_remaining: usize,
     }
 
     impl MockStreamingClient {
@@ -107,7 +108,14 @@ pub mod test_utils {
         {
             Self {
                 checkpoints: Arc::new(Mutex::new(checkpoint_range.into_iter().map(Ok).collect())),
+                connection_failures_remaining: 0,
             }
+        }
+
+        /// Make `connect` fail for the next N calls
+        pub fn fail_connection_times(mut self, times: usize) -> Self {
+            self.connection_failures_remaining = times;
+            self
         }
 
         /// Insert an error at the back of the queue.
@@ -139,6 +147,12 @@ pub mod test_utils {
     #[async_trait]
     impl CheckpointStreamingClient for MockStreamingClient {
         async fn connect(&mut self) -> Result<CheckpointStream> {
+            if self.connection_failures_remaining > 0 {
+                self.connection_failures_remaining -= 1;
+                return Err(Error::StreamingError(anyhow::anyhow!(
+                    "Mock connection failure"
+                )));
+            }
             let stream = MockStreamState {
                 checkpoints: Arc::clone(&self.checkpoints),
             };
