@@ -209,8 +209,7 @@ impl IngestionClient {
                                 "proto_conversion",
                                 IngestionError::DeserializationError(checkpoint, e.into()),
                             )
-                        })?;
-                        checkpoint.into()
+                        })?
                     }
                     FetchData::Checkpoint(data) => {
                         // We are not recording size metric for Checkpoint data (from RPC client).

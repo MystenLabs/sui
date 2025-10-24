@@ -63,7 +63,7 @@ impl RemoteIngestionClient {
         // SAFETY: The path being joined is statically known to be valid.
         let url = self
             .url
-            .join(&format!("/{checkpoint}.pb.zst"))
+            .join(&format!("/{checkpoint}.binpb.zst"))
             .expect("Unexpected invalid URL");
 
         self.client.get(url).send().await
@@ -159,7 +159,7 @@ pub(crate) mod tests {
 
     pub(crate) async fn respond_with(server: &MockServer, response: impl Respond + 'static) {
         Mock::given(method("GET"))
-            .and(path_regex(r"/\d+\.pb\.zst"))
+            .and(path_regex(r"/\d+\.binpb\.zst"))
             .respond_with(response)
             .mount(server)
             .await;
@@ -195,14 +195,14 @@ pub(crate) mod tests {
             let mut times = times.lock().unwrap();
             *times += 1;
             match (*times, r.url.path()) {
-                // The first request will trigger a redirect to 0.pb.zst no matter what the original
+                // The first request will trigger a redirect to 0.binpb.zst no matter what the original
                 // request was for -- triggering a request error.
                 (1, _) => {
-                    status(StatusCode::MOVED_PERMANENTLY).append_header("Location", "/0.pb.zst")
+                    status(StatusCode::MOVED_PERMANENTLY).append_header("Location", "/0.binpb.zst")
                 }
 
                 // Set-up checkpoint 0 as an infinite redirect loop.
-                (_, "/0.pb.zst") => {
+                (_, "/0.binpb.zst") => {
                     status(StatusCode::MOVED_PERMANENTLY).append_header("Location", r.url.as_str())
                 }
 
