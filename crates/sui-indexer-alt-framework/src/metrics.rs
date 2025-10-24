@@ -53,6 +53,7 @@ pub struct IndexerMetrics {
     pub total_ingested_bytes: IntCounter,
     pub total_ingested_transient_retries: IntCounterVec,
     pub total_ingested_not_found_retries: IntCounter,
+    pub total_ingested_permanent_errors: IntCounterVec,
 
     // Checkpoint lag metrics for the ingestion pipeline.
     pub latest_ingested_checkpoint: IntGauge,
@@ -198,6 +199,14 @@ impl IndexerMetrics {
                 name("total_ingested_not_found_retries"),
                 "Total number of retries due to the not found errors while fetching data from the \
                  remote store",
+                registry,
+            )
+            .unwrap(),
+            total_ingested_permanent_errors: register_int_counter_vec_with_registry!(
+                name("total_ingested_permanent_errors"),
+                "Total number of permanent errors encountered while fetching data from the \
+                 remote store, which cause the ingestion service to shutdown",
+                &["reason"],
                 registry,
             )
             .unwrap(),

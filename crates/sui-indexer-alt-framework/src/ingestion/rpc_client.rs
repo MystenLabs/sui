@@ -42,7 +42,7 @@ impl IngestionClientTrait for RpcClient {
             .into_inner();
 
         let checkpoint =
-            Checkpoint::try_from(response.checkpoint()).map_err(|e| FetchError::Transient {
+            Checkpoint::try_from(response.checkpoint()).map_err(|e| FetchError::Permanent {
                 reason: "proto_conversion",
                 error: anyhow!(e),
             })?;

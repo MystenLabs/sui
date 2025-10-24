@@ -12,7 +12,7 @@ use sui_rpc::client::v2::Client;
 use sui_rpc::client::AuthInterceptor;
 use sui_storage::blob::Blob;
 use tokio_util::bytes::Bytes;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 use url::Url;
 
 use crate::ingestion::local_client::LocalIngestionClient;
@@ -46,6 +46,12 @@ pub enum FetchError {
     NotFound,
     #[error("Failed to fetch checkpoint due to {reason}: {error}")]
     Transient {
+        reason: &'static str,
+        #[source]
+        error: anyhow::Error,
+    },
+    #[error("Permenent error in {reason}: {error}")]
+    Permanent {
         reason: &'static str,
         #[source]
         error: anyhow::Error,
@@ -179,6 +185,14 @@ impl IngestionClient {
                         reason,
                         IngestionError::FetchError(checkpoint, error),
                     ),
+                    FetchError::Permanent { reason, error } => {
+                        error!(checkpoint, reason, "Permanent fetch error: {error}");
+                        self.metrics
+                            .total_ingested_permanent_errors
+                            .with_label_values(&[reason])
+                            .inc();
+                        BE::permanent(IngestionError::FetchError(checkpoint, error))
+                    }
                 })?;
 
                 Ok::<Checkpoint, backoff::Error<IngestionError>>(match fetch_data {
@@ -272,6 +286,7 @@ mod tests {
         checkpoints: DashMap<u64, FetchData>,
         transient_failures: DashMap<u64, usize>,
         not_found_failures: DashMap<u64, usize>,
+        permanent_failures: DashMap<u64, usize>,
     }
 
     #[async_trait]
@@ -282,6 +297,17 @@ mod tests {
                 if *remaining > 0 {
                     *remaining -= 1;
                     return Err(FetchError::NotFound);
+                }
+            }
+
+            // Check for non-retryable failures
+            if let Some(mut remaining) = self.permanent_failures.get_mut(&checkpoint) {
+                if *remaining > 0 {
+                    *remaining -= 1;
+                    return Err(FetchError::Permanent {
+                        reason: "mock_permanent_error",
+                        error: anyhow::anyhow!("Mock permanent error"),
+                    });
                 }
             }
 
@@ -430,5 +456,23 @@ mod tests {
         )
         .await
         .unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn test_fetch_non_retryable_error() {
+        let (client, mock) = setup_test();
+
+        mock.permanent_failures.insert(1, 1);
+
+        let result = client.fetch(1).await;
+        assert!(matches!(result, Err(IngestionError::FetchError(1, _))));
+
+        // Verify that the non-retryable error metric was incremented
+        let errors = client
+            .metrics
+            .total_ingested_permanent_errors
+            .with_label_values(&["mock_permanent_error"])
+            .get();
+        assert_eq!(errors, 1);
     }
 }
