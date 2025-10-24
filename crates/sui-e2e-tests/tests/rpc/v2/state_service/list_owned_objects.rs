@@ -5,7 +5,7 @@ use prost_types::FieldMask;
 use std::path::PathBuf;
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
-use sui_rpc::client::v2::Client;
+use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::changed_object::{IdOperation, OutputObjectState};
 use sui_rpc::proto::sui::rpc::v2::{

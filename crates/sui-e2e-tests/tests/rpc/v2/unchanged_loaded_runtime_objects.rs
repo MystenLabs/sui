@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
-use sui_rpc::client::v2::Client;
+use sui_rpc::Client;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
@@ -34,7 +34,7 @@ async fn test_unchanged_loaded_runtime_objects() {
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
     let transaction_digest = stake_with_validator(&test_cluster).await;
 
-    let mut client = sui_rpc::client::v2::Client::new(test_cluster.rpc_url()).unwrap();
+    let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let t = client
         .ledger_client()
         .get_transaction(
