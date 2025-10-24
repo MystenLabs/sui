@@ -410,7 +410,9 @@ impl TestTransactionBuilder {
                 let (all_module_bytes, dependencies) = match data {
                     PublishData::Source(_path, _with_unpublished_deps) => {
                         #[cfg(msim)]
-                        panic!("You must call `publish_async` when you have a `publish from source` operations in simtests.");
+                        panic!(
+                            "You must call `publish_async` when you have a `publish from source` operations in simtests."
+                        );
 
                         #[cfg(not(msim))]
                         {

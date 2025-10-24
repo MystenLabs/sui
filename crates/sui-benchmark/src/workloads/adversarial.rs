@@ -27,7 +27,7 @@ use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
 use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
-use sui_types::base_types::{random_object_ref, ObjectRef};
+use sui_types::base_types::{ObjectRef, random_object_ref};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::Command;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
