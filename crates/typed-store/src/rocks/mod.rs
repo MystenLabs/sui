@@ -403,6 +403,8 @@ impl Database {
     ) -> anyhow::Result<()> {
         if let Storage::TideHunter(db) = &self.storage {
             db.drop_cells_in_range(ks, from_inclusive, to_inclusive)?;
+        } else {
+            panic!("drop_cells_in_range called on non-TideHunter storage");
         }
         Ok(())
     }
