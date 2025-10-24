@@ -11,11 +11,13 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
+use tonic::transport::Uri;
 use url::Url;
 
 use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::client::IngestionClient;
 use crate::ingestion::error::{Error, Result};
+use crate::ingestion::streaming_client::GrpcStreamingClient;
 use crate::metrics::IndexerMetrics;
 use crate::types::full_checkpoint_content::Checkpoint;
 
@@ -25,6 +27,7 @@ pub mod error;
 mod local_client;
 pub mod remote_client;
 mod rpc_client;
+mod streaming_client;
 #[cfg(test)]
 mod test_utils;
 
@@ -52,6 +55,10 @@ pub struct ClientArgs {
     /// Optional password for the gRPC service.
     #[clap(long, env)]
     pub rpc_password: Option<String>,
+
+    /// gRPC endpoint for streaming checkpoints
+    #[clap(long, env)]
+    pub streaming_url: Option<Uri>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -68,10 +75,12 @@ pub struct IngestionConfig {
 
 pub struct IngestionService {
     config: IngestionConfig,
-    client: IngestionClient,
+    ingestion_client: IngestionClient,
+    streaming_client: Option<GrpcStreamingClient>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
+    metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 }
 
@@ -91,7 +100,7 @@ impl IngestionService {
         cancel: CancellationToken,
     ) -> Result<Self> {
         // TODO: Potentially support a hybrid mode where we can fetch from both local and remote.
-        let client = if let Some(url) = args.remote_store_url.as_ref() {
+        let ingestion_client = if let Some(url) = args.remote_store_url.as_ref() {
             IngestionClient::new_remote(url.clone(), metrics.clone())?
         } else if let Some(path) = args.local_ingestion_path.as_ref() {
             IngestionClient::new_local(path.clone(), metrics.clone())
@@ -106,21 +115,25 @@ impl IngestionService {
             panic!("One of remote_store_url, local_ingestion_path or rpc_api_url must be provided");
         };
 
+        let streaming_client = args.streaming_url.map(GrpcStreamingClient::new);
+
         let subscribers = Vec::new();
         let (commit_hi_tx, commit_hi_rx) = mpsc::unbounded_channel();
         Ok(Self {
             config,
-            client,
+            ingestion_client,
+            streaming_client,
             commit_hi_tx,
             commit_hi_rx,
             subscribers,
+            metrics,
             cancel,
         })
     }
 
-    /// The client this service uses to fetch checkpoints.
-    pub(crate) fn client(&self) -> &IngestionClient {
-        &self.client
+    /// The ingestion client this service uses to fetch checkpoints.
+    pub(crate) fn ingestion_client(&self) -> &IngestionClient {
+        &self.ingestion_client
     }
 
     /// Add a new subscription to the ingestion service. Note that the service is susceptible to
@@ -167,10 +180,12 @@ impl IngestionService {
     {
         let IngestionService {
             config,
-            client,
+            ingestion_client,
+            streaming_client,
             commit_hi_tx: _,
             commit_hi_rx,
             subscribers,
+            metrics,
             cancel,
         } = self;
 
@@ -181,10 +196,12 @@ impl IngestionService {
         let broadcaster = broadcaster(
             checkpoints,
             initial_commit_hi,
+            streaming_client,
             config,
-            client,
+            ingestion_client,
             commit_hi_rx,
             subscribers,
+            metrics,
             cancel.clone(),
         );
 
@@ -224,10 +241,7 @@ mod tests {
         IngestionService::new(
             ClientArgs {
                 remote_store_url: Some(Url::parse(&uri).unwrap()),
-                local_ingestion_path: None,
-                rpc_api_url: None,
-                rpc_username: None,
-                rpc_password: None,
+                ..Default::default()
             },
             IngestionConfig {
                 checkpoint_buffer_size,
