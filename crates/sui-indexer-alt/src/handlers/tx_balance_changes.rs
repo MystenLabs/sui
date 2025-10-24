@@ -19,7 +19,7 @@ use sui_indexer_alt_schema::{
     schema::tx_balance_changes,
     transactions::{BalanceChange, StoredTxBalanceChange},
 };
-use sui_types::{full_checkpoint_content::ExecutedTransaction, storage::ObjectKey};
+use sui_types::full_checkpoint_content::ExecutedTransaction;
 
 use crate::handlers::cp_sequence_numbers::tx_interval;
 use async_trait::async_trait;
@@ -109,16 +109,12 @@ fn balance_changes(
 
     let mut changes = BTreeMap::new();
 
-    // Get input objects from checkpoint.object_set using modified_at_versions
-    for (object_id, version) in transaction.effects.modified_at_versions() {
-        if let Some(object) = checkpoint.object_set.get(&ObjectKey(object_id, version)) {
-            if let Some((type_, balance)) = Coin::extract_balance_if_coin(object)? {
-                *changes.entry((object.owner(), type_)).or_insert(0i128) -= balance as i128;
-            }
+    for object in transaction.input_objects(&checkpoint.object_set) {
+        if let Some((type_, balance)) = Coin::extract_balance_if_coin(object)? {
+            *changes.entry((object.owner(), type_)).or_insert(0i128) -= balance as i128;
         }
     }
 
-    // Get output objects from checkpoint.object_set using all_changed_objects
     for object in transaction.output_objects(&checkpoint.object_set) {
         if let Some((type_, balance)) = Coin::extract_balance_if_coin(object)? {
             *changes.entry((object.owner(), type_)).or_insert(0i128) += balance as i128;
