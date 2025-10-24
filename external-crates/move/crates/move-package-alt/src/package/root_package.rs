@@ -663,7 +663,7 @@ pkg_b = { local = "../pkg_b" }"#,
             .await
             .unwrap();
 
-        root.save_lockfile_to_disk().await.unwrap();
+        root.save_lockfile_to_disk().unwrap();
         let lockfile = root
             .output_path
             .dump_lockfile(&root.mutex)
@@ -718,7 +718,7 @@ pkg_b = { local = "../pkg_b" }"#,
                 .await
                 .unwrap();
 
-        root_pkg.save_lockfile_to_disk().await.unwrap();
+        root_pkg.save_lockfile_to_disk().unwrap();
 
         let sha = dep_sha(&root_pkg, &env.name, "a").await;
         assert_eq!(sha, commit.sha());
@@ -740,7 +740,7 @@ pkg_b = { local = "../pkg_b" }"#,
                 .await
                 .unwrap();
 
-        root_pkg.save_lockfile_to_disk().await.unwrap();
+        root_pkg.save_lockfile_to_disk().unwrap();
 
         let sha = dep_sha(&root_pkg, &env.name, "a").await;
         assert_eq!(sha, commit.sha());
@@ -764,7 +764,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().await.unwrap();
+        root_pkg.save_lockfile_to_disk().unwrap();
         drop(root_pkg); // release the fs lock
 
         // change the branch
@@ -778,7 +778,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().await.unwrap();
+        root_pkg.save_lockfile_to_disk().unwrap();
 
         // sha should still be for commit 1
         let sha = dep_sha(&root_pkg, &env.name, "a").await;
@@ -803,7 +803,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().await.unwrap();
+        root_pkg.save_lockfile_to_disk().unwrap();
         drop(root_pkg); // release FS lock
 
         // change the branch
@@ -817,7 +817,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().await.unwrap();
+        root_pkg.save_lockfile_to_disk().unwrap();
 
         // since we repinned, sha should be for commit 2
         let sha = dep_sha(&root_pkg, &env.name, "a").await;
@@ -843,7 +843,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().await.unwrap();
+        root_pkg.save_lockfile_to_disk().unwrap();
         drop(root_pkg); // release FS lock
 
         // change the branch so we will notice a repin
@@ -858,7 +858,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().await.unwrap();
+        root_pkg.save_lockfile_to_disk().unwrap();
 
         // since the manifest changed, we should have repinned, so the sha should be for commit 2
         let sha = dep_sha(&root_pkg, &env.name, "a").await;
@@ -890,7 +890,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().await.unwrap();
+        root_pkg.save_lockfile_to_disk().unwrap();
         drop(root_pkg); // release package lock
 
         // change the branch so that we will notice a repin
@@ -905,7 +905,7 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().await.unwrap();
+        root_pkg.save_lockfile_to_disk().unwrap();
 
         // since the dependency's manifest changed, we should have repinned, so the sha should be
         // for commit 2
@@ -1337,7 +1337,6 @@ pkg_b = { local = "../pkg_b" }"#,
             },
             metadata: vanilla::PublishedMetadata::default(),
         })
-        .await
         .unwrap();
 
         // check
