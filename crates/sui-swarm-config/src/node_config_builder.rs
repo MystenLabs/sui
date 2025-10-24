@@ -444,6 +444,19 @@ impl FullnodeConfigBuilder {
             .config_directory
             .unwrap_or_else(|| mysten_common::tempdir().unwrap().keep());
 
+        let consensus_db_path = config_directory.join(CONSENSUS_DB_NAME).join(&key_path);
+        let consensus_config = ConsensusConfig {
+            db_path: consensus_db_path,
+            is_observer: true,
+            db_retention_epochs: None,
+            db_pruner_period_secs: None,
+            max_pending_transactions: None,
+            max_submit_position: None,
+            submit_delay_step_override_millis: None,
+            observer_target_validator: None,
+            parameters: Default::default(),
+        }; 
+
         let p2p_config = {
             let seed_peers = network_config
                 .validator_configs
@@ -520,7 +533,7 @@ impl FullnodeConfigBuilder {
                 .admin_interface_port
                 .unwrap_or(local_ip_utils::get_available_port(&localhost)),
             json_rpc_address: self.json_rpc_address.unwrap_or(json_rpc_address),
-            consensus_config: None,
+            consensus_config: Some(consensus_config),
             remove_deprecated_tables: false,
             enable_index_processing: default_enable_index_processing(),
             genesis: self.genesis.unwrap_or(sui_config::node::Genesis::new(
