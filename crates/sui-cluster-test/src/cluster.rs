@@ -377,6 +377,7 @@ pub async fn new_wallet_context_from_cluster(
             rpc: fullnode_url.into(),
             ws: None,
             basic_auth: None,
+            chain_id: None,
         }],
         active_address: Some(address),
         active_env: Some("localnet".to_string()),

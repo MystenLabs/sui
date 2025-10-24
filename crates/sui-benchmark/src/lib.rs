@@ -658,11 +658,16 @@ impl ValidatorProxy for FullNodeProxy {
                     );
                 }
                 Err(err) => {
+                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
                     warn!(
                         ?tx_digest,
-                        retry_cnt, "Transaction failed with err: {:?}", err
+                        retry_cnt,
+                        "Transaction failed with err: {:?}. Sleeping for {:?} ...",
+                        err,
+                        delay,
                     );
                     retry_cnt += 1;
+                    sleep(delay).await;
                 }
             }
         }

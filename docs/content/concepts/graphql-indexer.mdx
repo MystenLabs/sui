@@ -5,24 +5,7 @@ beta: devnet, testnet, mainnet
 keywords: [ indexer, archival store, graphql, custom indexer ]
 ---
 
-The GraphQL and `sui-indexer-alt` (Indexer) stack are part of the [Sui data access infrastructure](../guides/developer/sui-101/data-serving.mdx). The stack provides access to on-chain data through a high-performance GraphQL service backed by a scalable and general-purpose indexer. This stack is optimized for developers who need flexible queries, structured output, and historical access to data (with configurable retention) across the Sui network.
-
-GraphQL is ideal for applications that require rich query patterns over structured data, such as fetching owned objects, transaction history, specific onchain attributes, and more. The GraphQL service runs on top of a Postgres-compatible database that is updated by different Indexer pipelines in parallel.
-
-The general-purpose indexer includes configurable checkpoint-based pipelines that extract data from the Sui remote checkpoint store and full nodes. The pipelines write processed data to a database optimized for GraphQL query access.
-Together, the GraphQL service and Indexer offer a modular and production-ready data stack for builders, wallet developers, explorers, and indexer/data providers.
-
-:::info
-
-<ImportContent source="json-rpc-deprecation.mdx" mode="snippet" />
-
-:::
-
-:::info
-
-<ImportContent source="data-serving-msg.mdx" mode="snippet" />
-
-:::
+<ImportContent source="indexer-graphql.mdx" mode="snippet" />
 
 ## Key components
 
@@ -432,6 +415,7 @@ To improve performance and reliability, also consider these operational best pra
 <RelatedLink to="/concepts/custom-indexing-framework" />
 <RelatedLink to="/concepts/custom-indexer/pipeline-architecture" />
 <RelatedLink to="/concepts/archival-store" />
+<RelatedLink to="/guides/operator/indexer-stack-setup" />
 <RelatedLink to="/guides/developer/advanced/custom-indexer" />
 <RelatedLink href="https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt" label="Sui Indexer Alt" desc="The `sui-indexer-alt` crate in the Sui repo." />
 <RelatedLink href="https://github.com/MystenLabs/mvr/tree/main/crates/mvr-indexer" label="Move Registry" desc="The indexer that the Move Registry (MVR) implements." />
