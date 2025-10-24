@@ -41,7 +41,6 @@ pub(crate) mod tests {
     use crate::ingestion::client::IngestionClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_metrics;
-    use sui_storage::blob::{Blob, BlobEncoding};
 
     #[tokio::test]
     async fn local_test_fetch() {
@@ -52,7 +51,7 @@ pub(crate) mod tests {
             .await
             .unwrap();
 
-        let local_client = IngestionClient::new_local(tempdir, test_metrics());
+        let local_client = IngestionClient::new_local(tempdir.clone(), test_metrics());
         let checkpoint = local_client.fetch(1).await.unwrap();
 
         assert_eq!(checkpoint.summary.sequence_number, 1);
