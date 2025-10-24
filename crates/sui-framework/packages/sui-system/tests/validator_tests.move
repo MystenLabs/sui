@@ -4,9 +4,8 @@
 #[test_only]
 module sui_system::validator_tests;
 
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, destroy};
 use sui::balance;
-use sui::test_utils;
 use sui::url;
 use sui_system::staking_pool::StakedSui;
 use sui_system::test_runner;
@@ -100,7 +99,7 @@ fun metadata() {
     let ctx = &mut tx_context::dummy();
     let metadata = validator_builder::preset().build_metadata(ctx);
     metadata.validate();
-    test_utils::destroy(metadata);
+    destroy(metadata);
 }
 
 #[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidPubkey)]
@@ -256,7 +255,7 @@ fun validator_update_metadata_ok() {
         validator.next_epoch_network_pubkey_bytes().is_some_and!(|key| key == new_network_pub_key),
     );
 
-    test_utils::destroy(validator);
+    destroy(validator);
 }
 
 #[test, expected_failure(abort_code = sui_system::validator::EInvalidProofOfPossession)]

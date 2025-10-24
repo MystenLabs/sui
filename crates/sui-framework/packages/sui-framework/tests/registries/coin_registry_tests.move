@@ -5,11 +5,10 @@
 module sui::coin_registry_tests;
 
 use std::string::String;
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, destroy};
 use sui::coin::{Self, DenyCapV2, TreasuryCap, CoinMetadata};
 use sui::coin_registry::{Self, Currency, CurrencyInitializer, CoinRegistry};
 use sui::test_scenario;
-use sui::test_utils::destroy;
 use sui::url;
 
 /// OTW-like.
