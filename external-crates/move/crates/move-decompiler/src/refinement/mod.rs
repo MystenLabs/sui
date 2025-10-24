@@ -84,6 +84,7 @@ trait Refine {
             E::Value(_) => false,
             E::Variable(_) => false,
             E::Constant(_) => false,
+            E::VecUnpack(_, e) => self.refine(e),
             E::Unpack(_, _, e) => self.refine(e),
             E::UnpackVariant(_, _, _, e) => self.refine(e),
         }

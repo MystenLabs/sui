@@ -644,13 +644,12 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::VecSwap(rc_type) => {
             let args = pop_n!(3);
-            Instruction::AssignReg {
-                rhs: RValue::Data {
+            assign_reg!(
+                [] = RValue::Data {
                     op: DataOp::VecSwap(rc_type.clone()),
                     args,
-                },
-                lhs: vec![],
-            }
+                }
+            )
         }
 
         IB::LdU8(value) => assign_reg!([push!(Type::U8.into())] = imm!(Value::U8(*value))),

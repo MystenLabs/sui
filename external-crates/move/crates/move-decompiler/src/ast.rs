@@ -81,6 +81,7 @@ pub enum Exp {
         Vec<(Symbol, String)>,
         Box<Exp>,
     ),
+    VecUnpack(Vec<String>, Box<Exp>),
     Borrow(/* mut*/ bool, Box<Exp>),
     Value(Value),
     Variable(String),
@@ -118,6 +119,7 @@ impl Exp {
             Exp::Return(_) | Exp::Value(_) | Exp::Variable(_) | Exp::Constant(_) => false,
             Exp::Unpack(_, _, exp) => exp.contains_break(),
             Exp::UnpackVariant(_, _, _, exp) => exp.contains_break(),
+            Exp::VecUnpack(_, exp) => exp.contains_break(),
         }
     }
 
@@ -148,6 +150,7 @@ impl Exp {
             Exp::Return(_) | Exp::Value(_) | Exp::Variable(_) | Exp::Constant(_) => false,
             Exp::Unpack(_, _, exp) => exp.contains_continue(),
             Exp::UnpackVariant(_, _, _, exp) => exp.contains_continue(),
+            Exp::VecUnpack(_, exp) => exp.contains_continue(),
         }
     }
 
@@ -305,8 +308,7 @@ impl std::fmt::Display for Exp {
                     if !items.is_empty() {
                         write!(f, " ")?;
                     }
-                    writeln!(f, "}} = {};", exp)?;
-                    Ok(())
+                    writeln!(f, "}} = {};", exp)
                 }
                 Exp::UnpackVariant(unpack_kind, (module, enum_, variant), items, exp) => {
                     indent(f, level)?;
@@ -328,8 +330,18 @@ impl std::fmt::Display for Exp {
                         UnpackKind::ImmRef => "&",
                         UnpackKind::MutRef => "&mut ",
                     };
-                    writeln!(f, "}} = {unpack_str}{exp};",)?;
-                    Ok(())
+                    writeln!(f, "}} = {unpack_str}{exp};",)
+                }
+                Exp::VecUnpack(items, exp) => {
+                    indent(f, level)?;
+                    write!(f, "let [")?;
+                    for (i, name) in items.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", name)?;
+                    }
+                    writeln!(f, "] = {};", exp)
                 }
             }
         }
