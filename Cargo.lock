@@ -14095,7 +14095,6 @@ dependencies = [
  "test-fuzz",
  "thiserror 1.0.69",
  "tokio",
- "tokio-retry",
  "tokio-stream",
  "tracing",
  "twox-hash",
@@ -17796,17 +17795,6 @@ dependencies = [
  "tokio-postgres",
  "tokio-rustls 0.26.2",
  "x509-certificate",
-]
-
-[[package]]
-name = "tokio-retry"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f57eb36ecbe0fc510036adff84824dd3c24bb781e21bfa67b69d556aa85214f"
-dependencies = [
- "pin-project",
- "rand 0.8.5",
- "tokio",
 ]
 
 [[package]]

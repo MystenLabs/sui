@@ -10,7 +10,7 @@ mod transaction_submitter;
 /// Exports
 pub use error::TransactionDriverError;
 pub use metrics::*;
-use tokio_retry::strategy::ExponentialBackoff;
+use mysten_common::backoff::ExponentialBackoff;
 
 use std::{
     net::SocketAddr,
@@ -226,6 +226,8 @@ where
         options: SubmitTransactionOptions,
         timeout_duration: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
+        const MAX_DRIVE_TRANSACTION_RETRY_DELAY: Duration = Duration::from_secs(10);
+
         // For ping requests, the amplification factor is always 1.
         let amplification_factor = if request.ping_type.is_some() {
             1
@@ -263,11 +265,7 @@ where
             .with_label_values(&[tx_type.as_str(), ping_label])
             .inc();
 
-        const MAX_RETRY_DELAY: Duration = Duration::from_secs(10);
-        // Exponential backoff with jitter to prevent thundering herd on retries
-        let mut backoff = ExponentialBackoff::from_millis(100)
-            .max_delay(MAX_RETRY_DELAY)
-            .map(|duration| duration.mul_f64(rand::thread_rng().gen_range(0.5..1.0)));
+        let mut backoff = ExponentialBackoff::new(MAX_DRIVE_TRANSACTION_RETRY_DELAY);
         let mut attempts = 0;
         let mut latest_retriable_error = None;
 
@@ -322,9 +320,10 @@ where
                 };
                 let delay = if overload {
                     // Increase delay during overload.
-                    backoff.next().unwrap_or(MAX_RETRY_DELAY) + MAX_RETRY_DELAY
+                    const OVERLOAD_ADDITIONAL_DELAY: Duration = Duration::from_secs(10);
+                    backoff.next().unwrap() + OVERLOAD_ADDITIONAL_DELAY
                 } else {
-                    backoff.next().unwrap_or(MAX_RETRY_DELAY)
+                    backoff.next().unwrap()
                 };
                 sleep(delay).await;
 
