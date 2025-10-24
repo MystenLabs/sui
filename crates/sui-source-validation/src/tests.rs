@@ -689,8 +689,6 @@
 //         let pkg_path = copy_published_package(&tempdir, "b", b_ref.0.into()).await?;
 //
 //         move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-=======
->>>>>>> 91b4844ff4 (Fix)
 //         BuildConfig::new_for_testing().build(&pkg_path).unwrap();
 //
 //         fs::remove_dir_all(pkg_path.join("sources"))?;
