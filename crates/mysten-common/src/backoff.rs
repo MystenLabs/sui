@@ -11,16 +11,17 @@ use rand::Rng as _;
 /// The API is inspired by tokio-retry::strategy::ExponentialBackoff for ease of use.
 /// But bugs in the original implementation have been fixed.
 ///
-/// Basis example:
-/// ```
+/// ```rust,no_run
+/// use std::time::Duration;
+/// use mysten_common::backoff::ExponentialBackoff;
+///
+/// // Basic example:
 /// let mut backoff = ExponentialBackoff::new(Duration::from_secs(10));
 /// for (attempt, delay) in backoff.enumerate() {
 ///     println!("Attempt {attempt}: Delay: {:?}", delay);
 /// }
-/// ```
 ///
-/// Specifying initial, maximum delay and jitter:
-/// ```
+/// // Specifying initial, maximum delay and jitter:
 /// let mut backoff = ExponentialBackoff::new(Duration::from_secs(60))
 ///     .base(Duration::from_secs(5))
 ///     .factor(1.2)
