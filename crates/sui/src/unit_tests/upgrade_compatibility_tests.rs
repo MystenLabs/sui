@@ -242,8 +242,6 @@ async fn test_missing_module_toml() {
     }
 }
 
-// TODO: pkg-alt FAILING TEST
-/*
 #[tokio::test(flavor = "multi_thread")]
 async fn test_address_change() {
     // mismatched address on upgrade should fail
@@ -263,7 +261,7 @@ async fn test_address_change() {
     // with correct address, should not error
     let (pkg_v1, pkg_v2, path) = get_packages("address_change");
     let result = compare_packages(
-        AccountAddress::from_str("0x1").unwrap(), // correct "on-chain" address, matches address set in v1 package
+        AccountAddress::from_str("0xabc").unwrap(), // correct "on-chain" address, matches address set in v1 package
         pkg_v1,
         pkg_v2,
         path,
@@ -271,7 +269,7 @@ async fn test_address_change() {
     );
 
     assert!(result.is_ok());
-}*/
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn positional_formatting() {

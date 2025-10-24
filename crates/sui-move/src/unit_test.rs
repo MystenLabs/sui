@@ -39,7 +39,7 @@ impl Test {
     pub async fn execute(
         self,
         path: Option<&Path>,
-        build_config: BuildConfig,
+        mut build_config: BuildConfig,
     ) -> anyhow::Result<UnitTestResult> {
         let compute_coverage = self.test.compute_coverage;
         if !cfg!(feature = "tracing") && compute_coverage {
@@ -50,6 +50,11 @@ impl Test {
         }
         // save disassembly if trace execution is enabled
         let save_disassembly = self.test.trace;
+        // set the default flavor to Sui if not already set by the user
+        if build_config.default_flavor.is_none() {
+            build_config.default_flavor = Some(move_compiler::editions::Flavor::Sui);
+        }
+
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
         let unit_test_config = self.test.unit_test_config();

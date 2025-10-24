@@ -1,13 +1,16 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
+// // Copyright (c) Mysten Labs, Inc.
+// // SPDX-License-Identifier: Apache-2.0
+//
 // TODO: pkg-alt FAILING TEST
 // use expect_test::expect;
 // use move_core_types::account_address::AccountAddress;
 // use std::collections::HashMap;
 // use std::{fs, io, path::Path};
 // use std::{path::PathBuf, str};
-// use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
+// use sui_json_rpc_types::{
+//     get_new_package_obj_from_response, get_new_package_upgrade_cap_from_response,
+// };
+// use sui_move_build::{BuildConfig, CompiledPackage};
 // use sui_sdk::wallet_context::WalletContext;
 // use sui_test_transaction_builder::{make_publish_transaction, make_publish_transaction_with_deps};
 // use sui_types::base_types::ObjectID;
@@ -727,6 +730,66 @@
 //
 //     Ok(())
 // }
+//
+// // #[tokio::test]
+// // #[ignore] // TODO: DVX-786
+// // async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
+// //     let mut cluster = TestClusterBuilder::new().build().await;
+// //     let context = &mut cluster.wallet;
+// //
+// //     let tempdir = tempfile::tempdir()?;
+// //
+// //     {
+// //         // publish b
+// //         fs::create_dir_all(tempdir.path().join("publish"))?;
+// //         let b_src =
+// //             copy_published_package(&tempdir.path().join("publish"), "b", SuiAddress::ZERO).await?;
+// //         let b_ref = publish_package(context, b_src).await.0;
+// //
+// //         // setup b as a bytecode package
+// //         let pkg_path = copy_published_package(&tempdir, "b", b_ref.0.into()).await?;
+// //
+// //         BuildConfig::new_for_testing().build(&pkg_path).unwrap();
+// //
+// //         fs::remove_dir_all(pkg_path.join("sources"))?;
+// //     };
+// //
+// //     let (a_pkg, a_ref) = {
+// //         let a_src = copy_published_package(&tempdir, "a", SuiAddress::ZERO).await?;
+// //         (
+// //             compile_package(a_src.clone()),
+// //             publish_package(context, a_src).await.0,
+// //         )
+// //     };
+// //
+// //     assert!(
+// //         !a_pkg.bytecode_deps.is_empty(),
+// //         "Invalid test setup: expected bytecode deps to be present."
+// //     );
+// //
+// //     let client = context.get_client().await?;
+// //     let verifier = BytecodeSourceVerifier::new(client.read_api());
+// //
+// //     // Verify deps but skip root
+// //     verifier
+// //         .verify(&a_pkg, ValidationMode::deps())
+// //         .await
+// //         .unwrap();
+// //
+// //     // Skip deps but verify root
+// //     verifier
+// //         .verify(&a_pkg, ValidationMode::root_at(a_ref.0.into()))
+// //         .await
+// //         .unwrap();
+// //
+// //     // Verify both deps and root
+// //     verifier
+// //         .verify(&a_pkg, ValidationMode::root_and_deps_at(a_ref.0.into()))
+// //         .await
+// //         .unwrap();
+// //
+// //     Ok(())
+// // }
 //
 // /// Compile the package at absolute path `package`.
 // fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {

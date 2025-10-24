@@ -2,6 +2,8 @@
 name = "linter"
 version = "0.0.1"
 edition = "2024.beta"
+system-dependencies = []
 
 [dependencies]
-Sui = { local = "../../../../sui-framework/packages/sui-framework" }
+sui = { local = "../../../../sui-framework/packages/sui-framework" }
+std = { local = "../../../../sui-framework/packages/move-stdlib" }
