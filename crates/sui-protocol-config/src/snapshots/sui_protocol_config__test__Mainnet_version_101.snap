@@ -617,3 +617,4 @@ aliased_addresses:
         - 35
         - 173
         - 119
+max_updates_per_settlement_txn: 100
