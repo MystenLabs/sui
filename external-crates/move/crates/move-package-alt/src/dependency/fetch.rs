@@ -25,10 +25,10 @@ pub struct FetchedDependency(pub(super) Dependency<Fetched>);
 
 #[derive(Error, Debug)]
 pub enum FetchError {
-    #[error("Failed to load dependency `{1}`: {0:?}")]
+    #[error("Failed to load dependency `{1}`: {0}")]
     BadPackage(PackagePathError, String),
 
-    #[error("Error while fetching `{1}`: {0:?}")]
+    #[error("Error while fetching `{1}`: {0}")]
     GitFailure(GitError, String),
 }
 
