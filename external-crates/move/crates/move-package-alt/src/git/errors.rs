@@ -7,6 +7,8 @@ use std::{path::PathBuf, process::ExitStatus};
 use thiserror::Error;
 use tokio::process::Command;
 
+use crate::package::package_lock::LockError;
+
 pub type GitResult<T> = std::result::Result<T, GitError>;
 
 #[derive(Error, Debug)]
@@ -27,11 +29,14 @@ pub enum GitError {
         kind: CommandErrorKind,
     },
 
-    #[error(transparent)]
-    TempDirectory(#[from] std::io::Error),
+    #[error("Error while creating temporary directory: {0}")]
+    TempDirectory(std::io::Error),
 
     #[error("relative path `{path}` is not contained in the repository")]
     BadPath { path: PathBuf },
+
+    #[error(transparent)]
+    LockingError(#[from] LockError),
 }
 
 #[derive(Error, Debug)]

@@ -33,7 +33,11 @@ async fn init_genesis(
     ObjectID,
 ) {
     // add object_basics package object to genesis
-    let modules: Vec<_> = compile_basics_package().get_modules().cloned().collect();
+    let modules: Vec<_> = compile_basics_package()
+        .await
+        .get_modules()
+        .cloned()
+        .collect();
     let genesis_move_packages: Vec<_> = BuiltInFramework::genesis_move_packages().collect();
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
     let pkg = Object::new_package(

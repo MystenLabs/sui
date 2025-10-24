@@ -1,6 +1,6 @@
 module A::l;
 
-use A::m as am;
+use Dep::m as am;
 
 #[allow(unused_function)]
 fun f() {

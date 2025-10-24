@@ -218,7 +218,8 @@ async fn create_test_env() -> TestEnv {
     let tx_data = test_cluster
         .test_transaction_builder()
         .await
-        .publish(path)
+        .publish_async(path)
+        .await
         .build();
     let effects = test_cluster
         .sign_and_execute_transaction(&tx_data)

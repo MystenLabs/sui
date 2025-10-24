@@ -1,6 +1,6 @@
 Command `test`:
-INCLUDING DEPENDENCY Bar
 INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Bar
 BUILDING Foo
 Running Move unit tests
 [ PASS    ] A::M::nop

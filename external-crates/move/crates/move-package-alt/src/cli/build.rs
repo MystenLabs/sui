@@ -5,12 +5,12 @@
 use std::path::PathBuf;
 
 use crate::{
-    errors::{PackageError, PackageResult},
     flavor::Vanilla,
     package::RootPackage,
-    schema::{Environment, EnvironmentName},
+    schema::{Environment, EnvironmentName, ModeName},
 };
-use clap::Parser;
+use anyhow::bail;
+use clap::{ArgAction, Parser};
 
 /// Build the package
 #[derive(Debug, Clone, Parser)]
@@ -22,26 +22,33 @@ pub struct Build {
     /// dependencies will be updated.
     #[arg(name = "environment", short = 'e', long = "environment")]
     environment: EnvironmentName,
+
+    /// Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]`
+    /// annodations during compiltaion.
+    #[arg(
+        long = "mode",
+        value_name = "MODE",
+        action = ArgAction::Append,
+    )]
+    modes: Vec<ModeName>,
 }
 
 impl Build {
-    pub async fn execute(&self) -> PackageResult<()> {
+    pub async fn execute(&self) -> anyhow::Result<()> {
         let path = self.path.clone().unwrap_or_else(|| PathBuf::from("."));
 
         let envs = RootPackage::<Vanilla>::environments(&path)?;
 
         let Some(chain_id) = envs.get(&self.environment) else {
-            return Err(PackageError::Generic(format!(
-                "Environment {} not found",
-                self.environment
-            )));
+            bail!("Environment {} not found", self.environment);
         };
 
         let environment = Environment::new(self.environment.clone(), chain_id.clone());
 
-        let root_pkg = RootPackage::<Vanilla>::load(&path, environment).await?;
+        let mut root_pkg =
+            RootPackage::<Vanilla>::load(&path, environment, self.modes.clone()).await?;
 
-        for pkg in root_pkg.packages()? {
+        for pkg in root_pkg.packages() {
             println!("Package {}", pkg.name());
             if pkg.is_root() {
                 println!("  (root package)");
@@ -54,7 +61,7 @@ impl Build {
             println!();
         }
 
-        root_pkg.save_to_disk()?;
+        root_pkg.save_lockfile_to_disk()?;
         Ok(())
     }
 }

@@ -46,7 +46,7 @@ pub const NO_MIGRATION_NEEDED_MSG: &str = "No migration is required. Enjoy!";
 
 pub const BAR: &str = "============================================================";
 
-pub struct MigrationContext<'a, F: MoveFlavor, W: Write, R: BufRead> {
+pub struct MigrationContext<'a, F: MoveFlavor, W: Write + Send, R: BufRead> {
     build_plan: BuildPlan<'a, F>,
     terminal: Terminal<'a, W, R>,
 }
@@ -55,7 +55,7 @@ pub struct MigrationOptions {
     pub edition: Edition,
 }
 
-impl<F: MoveFlavor, W: Write, R: BufRead> MigrationContext<'_, F, W, R> {
+impl<F: MoveFlavor, W: Write + Send, R: BufRead> MigrationContext<'_, F, W, R> {
     pub fn new<'new>(
         build_plan: BuildPlan<'new, F>,
         writer: &'new mut W,
@@ -118,37 +118,13 @@ impl<F: MoveFlavor, W: Write, R: BufRead> MigrationContext<'_, F, W, R> {
         }
     }
 
-    pub fn perform_upgrade_migration(&mut self, mut migration: Migration) -> anyhow::Result<()> {
-        self.terminal.writeln(MIGRATION_DIFF_MSG)?;
-        self.terminal.writeln(BAR)?;
-        self.terminal.newline()?;
-        self.terminal.writeln(&migration.render_output())?;
-        self.terminal.newline()?;
-        self.terminal.writeln(BAR)?;
-        let apply = self
-            .terminal
-            .yes_no_prompt(APPLY_MIGRATION_PATCH_PROMPT, true)?;
-        if apply {
-            migration.apply_changes(self.terminal.writer)?;
-            self.terminal.newline()?;
-            self.terminal.writeln("Changes complete")?;
-        }
-
-        let filename = migration.record_diff(self.build_plan.root_package_path().to_path_buf())?;
-        self.terminal.write(WROTE_PATCHFILE)?;
-        self.terminal.writeln(filename.as_str())?;
-        self.terminal.newline()?;
-
-        if !apply {
-            self.terminal.writeln(NOMIGRATION_HELP_MSG)?;
-            self.terminal.writeln(MIGRATION_RERUN)?;
-        }
-        Ok(())
+    pub fn perform_upgrade_migration(&mut self, mut _migration: Migration) -> anyhow::Result<()> {
+        todo!()
     }
 }
 
 /// Migrate a legacy package to Move 2024 edition, if possible.
-pub fn migrate<F: MoveFlavor, W: Write, R: BufRead>(
+pub fn migrate<F: MoveFlavor, W: Write + Send, R: BufRead>(
     build_plan: BuildPlan<F>,
     writer: &mut W,
     reader: &mut R,

@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::manage_package::resolve_lock_file_path;
 use clap::Parser;
-use move_cli::base;
-use move_package::BuildConfig as MoveBuildConfig;
+use move_cli::base::{self};
+use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use std::{fs, path::Path};
-use sui_move_build::{BuildConfig, implicit_deps};
-use sui_package_management::system_package_versions::latest_system_packages;
+use sui_move_build::BuildConfig;
 
 const LAYOUTS_DIR: &str = "layouts";
 const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
@@ -49,7 +47,6 @@ impl Build {
         build_config: MoveBuildConfig,
     ) -> anyhow::Result<()> {
         let rerooted_path = base::reroot_path(path)?;
-        let build_config = resolve_lock_file_path(build_config, Some(&rerooted_path))?;
         Self::execute_internal(
             &rerooted_path,
             build_config,
@@ -60,11 +57,10 @@ impl Build {
 
     pub fn execute_internal(
         rerooted_path: &Path,
-        mut config: MoveBuildConfig,
+        config: MoveBuildConfig,
         generate_struct_layouts: bool,
         chain_id: Option<String>,
     ) -> anyhow::Result<()> {
-        config.implicit_dependencies = implicit_deps(latest_system_packages());
         let pkg = BuildConfig {
             config,
             run_bytecode_verifier: true,
@@ -85,10 +81,11 @@ impl Build {
             fs::write(layout_filename, layout_str)?
         }
 
-        pkg.package
-            .compiled_package_info
-            .build_flags
-            .update_lock_file_toolchain_version(rerooted_path, env!("CARGO_PKG_VERSION").into())?;
+        // TODO: pkg-alt - do we need to fix this? Now publishing holds the build info
+        // pkg.package
+        //     .compiled_package_info
+        //     .build_flags
+        //     .update_lock_file_toolchain_version(rerooted_path, env!("CARGO_PKG_VERSION").into())?;
 
         Ok(())
     }

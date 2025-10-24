@@ -25,6 +25,7 @@ use move_analyzer::{
 };
 use move_command_line_common::testing::insta_assert;
 use move_compiler::{editions::Flavor, linters::LintLevel};
+use move_package_alt::flavor::{MoveFlavor, Vanilla};
 use serde::{Deserialize, Serialize};
 use url::Url;
 use vfs::{MemoryFS, VfsPath};
@@ -436,7 +437,7 @@ fn completion_test(
 // Test Suite Runner Code
 //**************************************************************************************************
 
-fn initial_symbols(
+fn initial_symbols<F: MoveFlavor>(
     project: String,
 ) -> datatest_stable::Result<(PathBuf, CompiledPkgInfo, Symbols)> {
     let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -449,12 +450,11 @@ fn initial_symbols(
     // Similarly to `get_symbols`, we retry to exercise caching
     let mut should_retry = true;
     loop {
-        let (compiled_pkg_info_opt, _) = get_compiled_pkg(
+        let (compiled_pkg_info_opt, _) = get_compiled_pkg::<F>(
             pkg_deps.clone(),
             ide_files_root.clone(),
             project_path.as_path(),
             LintLevel::None,
-            BTreeMap::new(),
             Some(Flavor::Sui),
         )?;
         let compiled_pkg_info = compiled_pkg_info_opt.ok_or("PACKAGE COMPILATION FAILED")?;
@@ -466,11 +466,11 @@ fn initial_symbols(
     }
 }
 
-fn use_def_test_suite(
+fn use_def_test_suite<F: MoveFlavor>(
     project: String,
     file_tests: BTreeMap<String, Vec<UseDefTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, _, symbols) = initial_symbols(project)?;
+    let (project_path, _, symbols) = initial_symbols::<F>(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -500,11 +500,11 @@ fn use_def_test_suite(
     Ok(result)
 }
 
-fn auto_completion_test_suite(
+fn auto_completion_test_suite<F: MoveFlavor>(
     project: String,
     file_tests: BTreeMap<String, Vec<AutoCompletionTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, mut compiled_pkg_info, mut symbols) = initial_symbols(project)?;
+    let (project_path, mut compiled_pkg_info, mut symbols) = initial_symbols::<F>(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -529,11 +529,11 @@ fn auto_completion_test_suite(
     Ok(result)
 }
 
-fn auto_import_test_suite(
+fn auto_import_test_suite<F: MoveFlavor>(
     project: String,
     file_tests: BTreeMap<String, Vec<AutoImportTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, mut compiled_pkg_info, mut symbols) = initial_symbols(project)?;
+    let (project_path, mut compiled_pkg_info, mut symbols) = initial_symbols::<F>(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -558,11 +558,11 @@ fn auto_import_test_suite(
     Ok(result)
 }
 
-fn cursor_test_suite(
+fn cursor_test_suite<F: MoveFlavor>(
     project: String,
     file_tests: BTreeMap<String, Vec<CursorTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, compiled_pkg_info, mut symbols) = initial_symbols(project)?;
+    let (project_path, compiled_pkg_info, mut symbols) = initial_symbols::<F>(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -586,11 +586,11 @@ fn cursor_test_suite(
     Ok(result)
 }
 
-fn hint_test_suite(
+fn hint_test_suite<F: MoveFlavor>(
     project: String,
     file_tests: BTreeMap<String, Vec<HintTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, _, symbols) = initial_symbols(project)?;
+    let (project_path, _, symbols) = initial_symbols::<F>(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -615,11 +615,11 @@ fn hint_test_suite(
     Ok(result)
 }
 
-fn access_chain_quick_fix_test_suite(
+fn access_chain_quick_fix_test_suite<F: MoveFlavor>(
     project: String,
     file_tests: BTreeMap<String, Vec<AccessChainQuickFixTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, mut compiled_pkg_info, mut symbols) = initial_symbols(project)?;
+    let (project_path, mut compiled_pkg_info, mut symbols) = initial_symbols::<F>(project)?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
     let writer: &mut dyn io::Write = output.get_mut();
@@ -644,7 +644,7 @@ fn access_chain_quick_fix_test_suite(
     Ok(result)
 }
 
-fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
+fn move_ide_testsuite<F: MoveFlavor>(test_path: &Path) -> datatest_stable::Result<()> {
     let suite_file = io::BufReader::new(File::open(test_path)?);
     let stripped = StripComments::new(suite_file);
     let suite: TestSuite = serde_json::from_reader(stripped)?;
@@ -653,27 +653,27 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
         TestSuite::UseDef {
             project,
             file_tests,
-        } => use_def_test_suite(project, file_tests),
+        } => use_def_test_suite::<F>(project, file_tests),
         TestSuite::AutoCompletion {
             project,
             file_tests,
-        } => auto_completion_test_suite(project, file_tests),
+        } => auto_completion_test_suite::<F>(project, file_tests),
         TestSuite::AutoImport {
             project,
             file_tests,
-        } => auto_import_test_suite(project, file_tests),
+        } => auto_import_test_suite::<F>(project, file_tests),
         TestSuite::Cursor {
             project,
             file_tests,
-        } => cursor_test_suite(project, file_tests),
+        } => cursor_test_suite::<F>(project, file_tests),
         TestSuite::Hint {
             project,
             file_tests,
-        } => hint_test_suite(project, file_tests),
+        } => hint_test_suite::<F>(project, file_tests),
         TestSuite::AccessChainQuickFixTest {
             project,
             file_tests,
-        } => access_chain_quick_fix_test_suite(project, file_tests),
+        } => access_chain_quick_fix_test_suite::<F>(project, file_tests),
     }?;
 
     insta_assert! {
@@ -683,7 +683,7 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
     Ok(())
 }
 
-datatest_stable::harness!(move_ide_testsuite, "tests/", r".*\.ide$");
+datatest_stable::harness!(move_ide_testsuite::<Vanilla>, "tests/", r".*\.ide$");
 
 /// Generates cursor tests as json -- useful for making a new batch of tests. Update this list,
 /// set `harness = true` for this file in `Cargo.toml`,

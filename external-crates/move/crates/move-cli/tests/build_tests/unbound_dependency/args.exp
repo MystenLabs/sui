@@ -1,6 +1,2 @@
 Command `build -v`:
-Error: Failed to resolve dependencies for package 'A'
-
-Caused by:
-    0: Parsing manifest for 'Foo'
-    1: No such file or directory (os error 2)
+Error: Error while loading dependency foo: Failed to load dependency `{ local = "foo" }`: Invalid directory at `foo`

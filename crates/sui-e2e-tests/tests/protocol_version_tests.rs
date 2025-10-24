@@ -65,6 +65,7 @@ mod sim_only_tests {
         Arc,
         atomic::{AtomicUsize, Ordering},
     };
+    use std::{fs, io, path::Path};
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
     use sui_json_rpc_api::WriteApiClient;
@@ -100,9 +101,41 @@ mod sim_only_tests {
         SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
         SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     };
+    use tempfile::TempDir;
     use test_cluster::TestCluster;
     use tokio::time::{Duration, sleep};
     use tracing::info;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum BuildKind {
+        /// Extend the SuiSystem package with a module. This is for tests that live in
+        /// `/framework_upgrades/extend` folder.
+        ExtendSuiSystem,
+        /// In place builds happen when we want to build the sui framework directly
+        /// in its root folder.
+        InPlace,
+        /// Temp dir builds happen when we want to build the package in a temp dir.
+        TempDir,
+    }
+
+    impl From<&str> for BuildKind {
+        fn from(value: &str) -> Self {
+            // If we are dealing with `extends` folder,
+            // we want to extend the sui system module with extra code
+            if value.starts_with("extend/") {
+                return Self::ExtendSuiSystem;
+            }
+
+            // If we are dealing with in-place framework, we need to build in place.
+            if value.starts_with("../../../sui-framework/") {
+                return Self::InPlace;
+            }
+
+            // By default, we copy over to the temp dir and build there
+            // (which does not work well for dependencies as they would need to be copied over.)
+            return Self::TempDir;
+        }
+    }
 
     const START: u64 = ProtocolVersion::MAX.as_u64();
     const FINISH: u64 = ProtocolVersion::MAX_ALLOWED.as_u64();
@@ -318,7 +351,7 @@ mod sim_only_tests {
         // - Remove a private function.
         // - Promote a non-public function to public.
         // - Promote a non-entry function to entry.
-        let cluster = run_framework_upgrade("base", "compatible").await;
+        let cluster = run_framework_upgrade("extend/base", "extend/compatible").await;
         assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_succeeded(&cluster).await;
         assert_eq!(call_canary(&cluster).await, 43);
@@ -331,7 +364,7 @@ mod sim_only_tests {
     #[sim_test]
     async fn test_framework_incompatible_struct_layout() {
         // Upgrade attempts to change an existing struct layout
-        let cluster = run_framework_upgrade("base", "change_struct_layout").await;
+        let cluster = run_framework_upgrade("extend/base", "extend/change_struct_layout").await;
         assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
         assert_eq!(call_canary(&cluster).await, 42);
@@ -340,7 +373,7 @@ mod sim_only_tests {
     #[sim_test]
     async fn test_framework_add_struct_ability() {
         // Upgrade adds an ability to a struct (allowed, except for `key`).
-        let cluster = run_framework_upgrade("base", "add_struct_ability").await;
+        let cluster = run_framework_upgrade("extend/base", "extend/add_struct_ability").await;
 
         assert_eq!(call_canary(&cluster).await, 42);
         let to_wrap0 = create_obj(&cluster).await;
@@ -370,7 +403,7 @@ mod sim_only_tests {
     #[sim_test]
     async fn test_framework_add_key_ability() {
         // Upgrade adds the key ability to a struct (not allowed)
-        let cluster = run_framework_upgrade("base", "add_key_ability").await;
+        let cluster = run_framework_upgrade("extend/base", "extend/add_key_ability").await;
         assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
         assert_eq!(call_canary(&cluster).await, 42);
@@ -379,7 +412,7 @@ mod sim_only_tests {
     #[sim_test]
     async fn test_framework_incompatible_struct_ability() {
         // Upgrade attempts to remove an ability from a struct
-        let cluster = run_framework_upgrade("base", "change_struct_ability").await;
+        let cluster = run_framework_upgrade("extend/base", "extend/change_struct_ability").await;
         assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
         assert_eq!(call_canary(&cluster).await, 42);
@@ -388,7 +421,7 @@ mod sim_only_tests {
     #[sim_test]
     async fn test_framework_incompatible_type_constraint() {
         // Upgrade attempts to add a new type constraint to a generic type parameter
-        let cluster = run_framework_upgrade("base", "change_type_constraint").await;
+        let cluster = run_framework_upgrade("extend/base", "extend/change_type_constraint").await;
         assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
         assert_eq!(call_canary(&cluster).await, 42);
@@ -397,7 +430,8 @@ mod sim_only_tests {
     #[sim_test]
     async fn test_framework_incompatible_public_function_signature() {
         // Upgrade attempts to change the signature of a public function
-        let cluster = run_framework_upgrade("base", "change_public_function_signature").await;
+        let cluster =
+            run_framework_upgrade("extend/base", "extend/change_public_function_signature").await;
         assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
         assert_eq!(call_canary(&cluster).await, 42);
@@ -406,7 +440,8 @@ mod sim_only_tests {
     #[sim_test]
     async fn test_framework_incompatible_entry_function_signature() {
         // Upgrade attempts to change the signature of an entry function
-        let cluster = run_framework_upgrade("base", "change_entry_function_signature").await;
+        let cluster =
+            run_framework_upgrade("extend/base", "extend/change_entry_function_signature").await;
         assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_failed(&cluster).await;
         assert_eq!(call_canary(&cluster).await, 42);
@@ -417,7 +452,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         let sui_extra = ObjectID::from_single_byte(0x42);
-        framework_injection::set_override(sui_extra, fixture_modules("extra_package"));
+        framework_injection::set_override(sui_extra, fixture_modules("extra_package").await);
 
         let cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
@@ -479,10 +514,10 @@ mod sim_only_tests {
     async fn run_framework_upgrade(from: &str, to: &str) -> TestCluster {
         ProtocolConfig::poison_get_for_min_version();
 
-        override_sui_system_modules(to);
+        override_sui_system_modules(to).await;
         TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
-            .with_objects([sui_system_package_object(from)])
+            .with_objects([sui_system_package_object(from).await])
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))
@@ -704,10 +739,10 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         // Even though a new framework is available, the required new protocol version is not.
-        override_sui_system_modules("compatible");
+        override_sui_system_modules("extend/compatible").await;
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
-            .with_objects([sui_system_package_object("base")])
+            .with_objects([sui_system_package_object("extend/base").await])
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, START,
             ))
@@ -747,12 +782,17 @@ mod sim_only_tests {
         test_cluster.stop_all_validators().await;
         let first = test_cluster.swarm.validator_nodes().next().unwrap();
         let first_name = first.name();
+
+        // Gotta do both
+        let base_modules = sui_system_modules("extend/base").await;
+        let compatible_modules = sui_system_modules("extend/compatible").await;
+
         override_sui_system_modules_cb(Box::new(move |name| {
             if name == first_name {
                 info!("node {:?} using compatible packages", name.concise());
-                Some(sui_system_modules("base"))
+                Some(base_modules.clone())
             } else {
-                Some(sui_system_modules("compatible"))
+                Some(compatible_modules.clone())
             }
         }));
         test_cluster.start_all_validators().await;
@@ -778,8 +818,8 @@ mod sim_only_tests {
         assert_eq!(framework_mismatch_counter.load(Ordering::Relaxed), 1);
     }
 
-    // Test that protocol version upgrade does not complete when there is no quorum on the
-    // framework upgrades.
+    /// Test that protocol version upgrade does not complete when there is no quorum on the
+    /// framework upgrades.
     #[sim_test]
     async fn test_framework_upgrade_conflicting_versions_no_quorum() {
         ProtocolConfig::poison_get_for_min_version();
@@ -800,9 +840,11 @@ mod sim_only_tests {
         let mut validators = test_cluster.swarm.validator_nodes();
         let first = validators.next().unwrap().name();
         let second = validators.next().unwrap().name();
+
+        let compatible_modules = sui_system_modules("extend/compatible").await;
         override_sui_system_modules_cb(Box::new(move |name| {
             if name == first || name == second {
-                Some(sui_system_modules("compatible"))
+                Some(compatible_modules.clone())
             } else {
                 None
             }
@@ -819,11 +861,11 @@ mod sim_only_tests {
             config
         });
 
-        override_sui_system_modules("mock_sui_systems/base");
+        override_sui_system_modules("mock_sui_systems/base").await;
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             // Overrides with a sui system package that would abort during epoch change txn
-            .with_objects([sui_system_package_object("mock_sui_systems/safe_mode")])
+            .with_objects([sui_system_package_object("mock_sui_systems/safe_mode").await])
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))
@@ -877,7 +919,7 @@ mod sim_only_tests {
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, START,
             ))
-            .with_objects([sui_system_package_object("mock_sui_systems/base")])
+            .with_objects([sui_system_package_object("mock_sui_systems/base").await])
             .build()
             .await;
         // Make sure we can survive at least one epoch.
@@ -891,14 +933,14 @@ mod sim_only_tests {
             config
         });
 
-        override_sui_system_modules("mock_sui_systems/shallow_upgrade");
+        override_sui_system_modules("mock_sui_systems/shallow_upgrade").await;
 
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))
-            .with_objects([sui_system_package_object("mock_sui_systems/base")])
+            .with_objects([sui_system_package_object("mock_sui_systems/base").await])
             .build()
             .await;
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
@@ -928,14 +970,14 @@ mod sim_only_tests {
             config
         });
 
-        override_sui_system_modules("mock_sui_systems/deep_upgrade");
+        override_sui_system_modules("mock_sui_systems/deep_upgrade").await;
 
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))
-            .with_objects([sui_system_package_object("mock_sui_systems/base")])
+            .with_objects([sui_system_package_object("mock_sui_systems/base").await])
             .build()
             .await;
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
@@ -1004,7 +1046,7 @@ mod sim_only_tests {
             .build()
             .await;
         // TODO: Replace the path with the new framework path when we test it for real.
-        override_sui_system_modules("../../../sui-framework/packages/sui-system");
+        override_sui_system_modules("../../../sui-framework/packages/sui-system").await;
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
         // but the system state object hasn't been upgraded yet.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
@@ -1027,27 +1069,28 @@ mod sim_only_tests {
         test_cluster.wait_for_epoch(Some(2)).await;
     }
 
-    fn override_sui_system_modules(path: &str) {
-        framework_injection::set_override(SUI_SYSTEM_PACKAGE_ID, sui_system_modules(path));
+    async fn override_sui_system_modules(path: &str) {
+        framework_injection::set_override(SUI_SYSTEM_PACKAGE_ID, sui_system_modules(path).await);
     }
 
     fn override_sui_system_modules_cb(f: framework_injection::PackageUpgradeCallback) {
-        framework_injection::set_override_cb(SUI_SYSTEM_PACKAGE_ID, f)
+        framework_injection::set_override_cb(SUI_SYSTEM_PACKAGE_ID, f);
     }
 
     /// Get compiled modules for Sui System, built from fixture `fixture` in the
     /// `framework_upgrades` directory.
-    fn sui_system_modules(fixture: &str) -> Vec<CompiledModule> {
+    async fn sui_system_modules(fixture: &str) -> Vec<CompiledModule> {
         fixture_package(fixture)
+            .await
             .get_sui_system_modules()
             .cloned()
             .collect()
     }
 
     /// Like `sui_system_modules`, but package the modules in an `Object`.
-    fn sui_system_package_object(fixture: &str) -> Object {
+    async fn sui_system_package_object(fixture: &str) -> Object {
         Object::new_package(
-            &sui_system_modules(fixture),
+            &sui_system_modules(fixture).await,
             TransactionDigest::genesis_marker(),
             &ProtocolConfig::get_for_version(FINISH.into(), Chain::Unknown),
             &[
@@ -1061,16 +1104,65 @@ mod sim_only_tests {
 
     /// Get root compiled modules, built from fixture `fixture` in the `framework_upgrades`
     /// directory.
-    fn fixture_modules(fixture: &str) -> Vec<CompiledModule> {
-        fixture_package(fixture).into_modules()
+    async fn fixture_modules(fixture: &str) -> Vec<CompiledModule> {
+        fixture_package(fixture).await.into_modules()
     }
 
-    fn fixture_package(fixture: &str) -> CompiledPackage {
-        let mut package = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    async fn fixture_package(fixture: &str) -> CompiledPackage {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let mut package = root.clone();
         package.extend(["tests", "framework_upgrades", fixture]);
+
+        // Determine how to build the fixture.
+        let build_kind = BuildKind::from(fixture);
+        let tempdir = TempDir::new().unwrap();
+
+        let project_path = match build_kind {
+            BuildKind::ExtendSuiSystem | BuildKind::TempDir => {
+                let tempdir_path = tempdir.path();
+
+                let sui_packages_path = root.join("../sui-framework/packages");
+
+                // Copy the whole `sui-framework/packages` into the tempdir under `/system-packages/*`
+                copy_dir_all(&sui_packages_path, &tempdir_path.join("system-packages")).unwrap();
+
+                let project_path = tempdir_path.join("tmp-test");
+
+                // Copy `sui_system` into the project (we copy that first, before we paste the actual project).
+                // The project lives in `/${fixture}/`, so we copy sui-system move files into `/fixture/sources/`
+                if build_kind == BuildKind::ExtendSuiSystem {
+                    copy_dir_all(
+                        &sui_packages_path.join("sui-system/sources"),
+                        project_path.join("sources"),
+                    )
+                    .unwrap();
+                }
+
+                copy_dir_all(&package, &project_path).unwrap();
+
+                project_path
+            }
+            BuildKind::InPlace => package,
+        };
 
         let mut config = BuildConfig::new_for_testing();
         config.run_bytecode_verifier = true;
-        config.build(&package).unwrap()
+        config.build_async(&project_path).await.unwrap()
+    }
+
+    // Recursively copy a directory and all its contents
+    // Copied from `sui/tests/cli_tests.rs`
+    fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
+        fs::create_dir_all(&dst)?;
+        for entry in fs::read_dir(src)? {
+            let entry = entry?;
+            let ty = entry.file_type()?;
+            if ty.is_dir() {
+                copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+            } else {
+                fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+            }
+        }
+        Ok(())
     }
 }

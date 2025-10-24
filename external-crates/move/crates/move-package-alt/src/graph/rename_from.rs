@@ -22,9 +22,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// given to it in the depending package, unless `rename-from` is specified.
     pub fn check_rename_from(&self) -> RenameResult<()> {
         for edge in self.inner.edge_references() {
-            let dep = &edge.weight().dep;
+            let dep = &edge.weight();
 
-            let expected_name = dep.rename_from().as_ref().unwrap_or(&edge.weight().name);
+            let expected_name = dep.rename_from().as_ref().unwrap_or(edge.weight().name());
             let origin_pkg = self.inner[edge.source()].clone();
             let target_pkg = self.inner[edge.target()].clone();
 
@@ -38,7 +38,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
                 return Err(RenameError::new(
                     &self.inner[edge.source()],
                     &self.inner[edge.target()],
-                    &edge.weight().name,
+                    edge.weight().name(),
                     dep,
                 ));
             }
@@ -69,6 +69,7 @@ impl RenameError {
         // example: a contains `dep_name = { local = "b_path", rename=from = "b_name" }`
 
         // in example: path is "root -> a"
+        // TODO: DVX-1787
         let path = "<TODO>";
 
         // in example: source_name is "a"
@@ -184,7 +185,11 @@ mod tests {
     async fn test_external_rename_error() {
         let scenario = TestPackageGraph::new(["root", "a", "b"])
             .add_deps([("root", "a")])
-            .add_dep("a", "b", |dep| dep.name("c").make_external())
+            .add_dep(
+                "a",
+                "b",
+                |dep| dep.name("c"), /* TODO .make_external()*/
+            )
             .build();
 
         assert_snapshot!(scenario.graph_for("root").await.check_rename_from().unwrap_err().to_string(), @"TODO");

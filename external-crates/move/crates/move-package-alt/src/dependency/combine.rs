@@ -34,8 +34,8 @@ impl CombinedDependency {
         dep_replacements: &BTreeMap<PackageName, Spanned<ReplacementDependency>>,
         dependencies: &BTreeMap<PackageName, DefaultDependency>,
         system_dependencies: &BTreeMap<PackageName, ReplacementDependency>,
-    ) -> ManifestResult<BTreeMap<PackageName, Self>> {
-        let mut result = BTreeMap::new();
+    ) -> ManifestResult<Vec<Self>> {
+        let mut result = Vec::new();
 
         let mut replacements = dep_replacements.clone();
 
@@ -43,28 +43,33 @@ impl CombinedDependency {
             let combined = if let Some(replacement) = replacements.remove(pkg) {
                 Self::from_default_with_replacement(
                     *file,
+                    pkg.clone(),
                     env.name().to_string(),
                     default.clone(),
                     replacement.into_inner(),
                 )?
             } else {
-                Self::from_default(*file, env.name().to_string(), default.clone())
+                Self::from_default(*file, pkg.clone(), env.name().to_string(), default.clone())
             };
-            result.insert(pkg.clone(), combined);
+            result.push(combined);
         }
 
         for (pkg, dep) in replacements {
-            result.insert(
+            result.push(Self::from_replacement(
+                *file,
                 pkg.clone(),
-                Self::from_replacement(*file, env.name().to_string(), dep.into_inner())?,
-            );
+                env.name().to_string(),
+                dep.into_inner(),
+            )?);
         }
 
-        for (pkg_name, dep) in system_dependencies {
-            result.insert(
-                pkg_name.clone(),
-                Self::from_replacement(*file, env.name().to_string(), dep.clone())?,
-            );
+        for (pkg, dep) in system_dependencies {
+            result.push(Self::from_replacement(
+                *file,
+                pkg.clone(),
+                env.name().to_string(),
+                dep.clone(),
+            )?);
         }
 
         Ok(result)
@@ -72,18 +77,21 @@ impl CombinedDependency {
 
     /// Specialize an entry in the `[dependencies]` section, for the environment named
     /// `source_env_name`
-    pub fn from_default(
+    fn from_default(
         file: FileHandle,
+        name: PackageName,
         source_env_name: EnvironmentName,
         default: DefaultDependency,
     ) -> Self {
         Self(Dependency {
+            name,
             dep_info: default.dependency_info,
             use_environment: source_env_name,
             is_override: default.is_override,
             addresses: None,
             containing_file: file,
             rename_from: default.rename_from,
+            modes: default.modes,
         })
     }
 
@@ -94,8 +102,9 @@ impl CombinedDependency {
     /// used as the default environment for the dependency, but will be overridden if `replacement`
     /// specifies `use-environment` field.
     // TODO: replace ManifestResult here
-    fn from_replacement(
+    pub fn from_replacement(
         file: FileHandle,
+        name: PackageName,
         source_env_name: EnvironmentName,
         replacement: ReplacementDependency,
     ) -> ManifestResult<Self> {
@@ -104,17 +113,20 @@ impl CombinedDependency {
         };
 
         Ok(Self(Dependency {
+            name,
             dep_info: dep.dependency_info,
             use_environment: replacement.use_environment.unwrap_or(source_env_name),
             is_override: dep.is_override,
             addresses: replacement.addresses,
             containing_file: file,
             rename_from: dep.rename_from,
+            modes: dep.modes,
         }))
     }
 
     fn from_default_with_replacement(
         file: FileHandle,
+        name: PackageName,
         source_env_name: EnvironmentName,
         default: DefaultDependency,
         replacement: ReplacementDependency,
@@ -124,12 +136,14 @@ impl CombinedDependency {
         // TODO: possibly additional compatibility checks here?
 
         Ok(Self(Dependency {
+            name,
             dep_info: dep.dependency_info,
             use_environment: replacement.use_environment.unwrap_or(source_env_name),
             is_override: dep.is_override,
             addresses: replacement.addresses,
             containing_file: file,
             rename_from: dep.rename_from,
+            modes: dep.modes,
         }))
     }
 }

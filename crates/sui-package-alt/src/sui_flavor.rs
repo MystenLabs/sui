@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
 };
 
-use move_core_types::account_address::AccountAddress;
+use indexmap::IndexMap;
 use move_package_alt::{
     dependency::{self, CombinedDependency, PinnedDependencyInfo},
     errors::{FileHandle, PackageResult},
@@ -21,8 +21,16 @@ use serde::{Deserialize, Serialize};
 use sui_package_management::system_package_versions::{
     SYSTEM_GIT_REPO, SystemPackagesVersion, latest_system_packages, system_packages_for_protocol,
 };
+use sui_sdk::types::base_types::ObjectID;
 
-#[derive(Debug)]
+const EDITION: &str = "2024";
+const FLAVOR: &str = "sui";
+const TESTNET_ENV: &str = "testnet";
+const MAINNET_ENV: &str = "mainnet";
+const TESTNET_CHAIN_ID: &str = "4c78adac";
+const MAINNET_CHAIN_ID: &str = "35834a8a";
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SuiFlavor;
 
 impl SuiFlavor {
@@ -71,10 +79,11 @@ pub struct BuildParams {
 /// Note: Every field should be optional, and the system can
 /// pick sensible defaults (or error out) if fields are missing.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "kebab-case")]
 pub struct PublishedMetadata {
     pub toolchain_version: Option<String>,
     pub build_config: Option<BuildParams>,
-    pub upgrade_capability: Option<AccountAddress>,
+    pub upgrade_capability: Option<ObjectID>,
 }
 
 impl MoveFlavor for SuiFlavor {
@@ -88,10 +97,10 @@ impl MoveFlavor for SuiFlavor {
 
     type PackageMetadata = (); // TODO
 
-    fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID> {
-        BTreeMap::from([
-            ("mainnet".to_string(), "35834a8a".to_string()),
-            ("testnet".to_string(), "4c78adac".to_string()),
+    fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID> {
+        IndexMap::from([
+            (TESTNET_ENV.to_string(), TESTNET_CHAIN_ID.to_string()),
+            (MAINNET_ENV.to_string(), MAINNET_CHAIN_ID.to_string()),
         ])
     }
 
@@ -124,6 +133,7 @@ impl MoveFlavor for SuiFlavor {
                     dependency_info,
                     is_override: true,
                     rename_from: None,
+                    modes: None,
                 }),
                 addresses: None,
                 use_environment: None,
@@ -153,6 +163,15 @@ impl MoveFlavor for SuiFlavor {
             .into_iter()
             .filter(|(name, _)| default_deps.contains(name))
             .collect()
+    }
+}
+
+impl Default for BuildParams {
+    fn default() -> Self {
+        Self {
+            flavor: FLAVOR.to_string(),
+            edition: EDITION.to_string(),
+        }
     }
 }
 

@@ -5,7 +5,6 @@ use petgraph::{Direction, graph::NodeIndex, visit::EdgeRef};
 
 use crate::{
     compatibility::legacy_parser::NO_NAME_LEGACY_PACKAGE_NAME,
-    dependency::PinnedDependencyInfo,
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{Package, paths::PackagePath},
@@ -15,7 +14,9 @@ use crate::{
 use super::PackageGraph;
 use move_compiler::editions::Edition;
 
-/// A narrow interface for representing packages outside of `move-package-alt`
+/// A narrow interface for representing packages outside of `move-package-alt`. Note that
+/// at different points in the package system we use graphs that have been filtered in different
+/// ways; the package info has the same invariants as its underlying graph.
 #[derive(Copy)]
 #[derive_where(Clone)]
 pub struct PackageInfo<'graph, F: MoveFlavor> {
@@ -44,6 +45,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 
     /// Return the `PackageInfo` for id `id`, if one exists
+    #[cfg(test)]
     pub fn package_info_by_id(&self, id: &PackageID) -> Option<PackageInfo<'_, F>> {
         self.package_ids
             .get_by_left(id)
@@ -78,7 +80,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
             };
             let mut result = parent.display_path();
             result.push_str("::");
-            result.push_str(incoming.weight().name.as_str());
+            result.push_str(incoming.weight().name().as_str());
             result
         } else {
             self.package().name().to_string()
@@ -144,7 +146,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
             .edges(self.node)
             .map(|edge| {
                 (
-                    edge.weight().name.clone(),
+                    edge.weight().name().clone(),
                     Self {
                         graph: self.graph,
                         node: edge.target(),
@@ -152,12 +154,6 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
                 )
             })
             .collect()
-    }
-
-    /// Return a dependency that resolves to this package
-    pub(crate) fn dep_for_self(&self) -> &PinnedDependencyInfo {
-        // TODO: maybe pull this from the graph instead of storing it in the `Package`?
-        self.package().dep_for_self()
     }
 
     /// The addresses for the names that are available to this package. For modern packages, this
@@ -172,7 +168,12 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
             .graph
             .inner
             .edges(self.node)
-            .map(|edge| (edge.weight().name.clone(), self.node_to_addr(edge.target())))
+            .map(|edge| {
+                (
+                    edge.weight().name().clone(),
+                    self.node_to_addr(edge.target()),
+                )
+            })
             .collect();
         result.insert(self.package().name().clone(), self.node_to_addr(self.node));
 
@@ -242,6 +243,11 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
     pub(crate) fn package(&self) -> &Package<F> {
         &self.graph.inner[self.node]
     }
+
+    /// Return the named address for this package
+    pub fn named_address(&self) -> NamedAddress {
+        self.node_to_addr(self.node)
+    }
 }
 
 impl<F: MoveFlavor> std::fmt::Debug for PackageInfo<'_, F> {
@@ -271,7 +277,6 @@ mod tests {
     ) -> BTreeMap<PackageName, PackageInfo<'_, Vanilla>> {
         graph
             .packages()
-            .expect("failed to get packages from graph")
             .into_iter()
             .map(|node| (node.name().clone(), node))
             .collect()

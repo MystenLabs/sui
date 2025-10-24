@@ -10,7 +10,8 @@ edition = "2024"
 workspace = true
 
 [dependencies]
-move-package.workspace = true
+move-package-alt.workspace = true
+move-package-alt-compilation.workspace = true
 mysten-network.workspace = true
 sui-framework.workspace = true
 sui-move-build.workspace = true

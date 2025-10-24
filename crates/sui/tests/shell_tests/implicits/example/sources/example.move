@@ -3,8 +3,19 @@
 
 module example::example;
 
-use bridge::bridge;
+public struct Sword has key, store {
+    id: UID,
+    magic: u64,
+    strength: u64,
+}
 
-public fun bridge_update_node_url(bridge: &mut bridge::Bridge, new_url: vector<u8>, ctx: &TxContext) {
-  bridge::update_node_url(bridge, new_url, ctx)
+// Part 5: Public/entry functions (introduced later in the tutorial)
+// docs::#first-pause
+public fun sword_create(magic: u64, strength: u64, ctx: &mut TxContext): Sword {
+    // Create a sword
+    Sword {
+        id: object::new(ctx),
+        magic: magic,
+        strength: strength,
+    }
 }

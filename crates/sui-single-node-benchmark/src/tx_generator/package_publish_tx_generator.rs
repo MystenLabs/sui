@@ -4,7 +4,6 @@
 use crate::benchmark_context::BenchmarkContext;
 use crate::mock_account::Account;
 use crate::tx_generator::TxGenerator;
-use move_package::source_package::manifest_parser::parse_move_manifest_from_file;
 use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -12,7 +11,6 @@ use std::fs;
 use std::path::PathBuf;
 use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
-use sui_types::base_types::ObjectID;
 use sui_types::transaction::{DEFAULT_VALIDATOR_GAS_PRICE, Transaction};
 use tracing::info;
 
@@ -39,19 +37,15 @@ impl PackagePublishTxGenerator {
             info!("Publishing dependent package {}", name);
             let target_path = dir.join(&path);
             let module_bytes = if is_source_code {
-                let compiled_package = BuildConfig::new_for_testing_replace_addresses(vec![(
-                    name.clone(),
-                    ObjectID::ZERO,
-                )])
-                .build(&target_path)
-                .unwrap();
+                let compiled_package = BuildConfig::new_for_testing()
+                    .build_async(&target_path)
+                    .await
+                    .unwrap();
                 compiled_package.get_package_bytes(false)
             } else {
-                let toml = parse_move_manifest_from_file(&target_path.join("Move.toml")).unwrap();
-                let package_name = toml.package.name.as_str();
                 let module_dir = target_path
                     .join("build")
-                    .join(package_name)
+                    .join(name.clone())
                     .join("bytecode_modules");
                 let mut all_bytes = Vec::new();
                 info!("Loading module bytes from {:?}", module_dir);
@@ -88,11 +82,11 @@ impl PackagePublishTxGenerator {
         let target_path = dir.join(path);
         let published_deps = dep_map.clone();
 
-        dep_map.insert(Symbol::from(name), ObjectID::ZERO);
         let mut compiled_package = BuildConfig::new_for_testing_replace_addresses(
             dep_map.into_iter().map(|(k, v)| (k.to_string(), v)),
         )
-        .build(&target_path)
+        .build_async(&target_path)
+        .await
         .unwrap();
 
         compiled_package.dependency_ids.published = published_deps;

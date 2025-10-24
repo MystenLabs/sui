@@ -50,7 +50,8 @@ async fn test_list_package_versions_with_upgrades() {
     test_package_path.push("tests/move_test_code");
 
     let compiled_package = BuildConfig::new_for_testing()
-        .build(&test_package_path)
+        .build_async(&test_package_path)
+        .await
         .unwrap();
     let modules = compiled_package.get_package_bytes(false);
     let dependencies = compiled_package.get_dependency_storage_package_ids();

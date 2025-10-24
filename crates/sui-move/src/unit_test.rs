@@ -6,17 +6,16 @@ use move_cli::base::{
     self,
     test::{self, UnitTestResult},
 };
-use move_package::BuildConfig;
+use move_package_alt_compilation::build_config::BuildConfig;
 use move_unit_test::{UnitTestingConfig, extensions::set_extension_hook};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
-use std::{cell::RefCell, collections::BTreeMap, path::Path, rc::Rc, sync::Arc};
-use sui_move_build::{decorate_warnings, implicit_deps};
+use std::{cell::RefCell, collections::BTreeMap, io::Write, path::Path, rc::Rc, sync::Arc};
+use sui_move_build::decorate_warnings;
 use sui_move_natives::{
     NativesCostTable, object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
     transaction_context::TransactionContext,
 };
-use sui_package_management::system_package_versions::latest_system_packages;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{SuiAddress, TxContext},
@@ -37,7 +36,7 @@ pub struct Test {
 }
 
 impl Test {
-    pub fn execute(
+    pub async fn execute(
         self,
         path: Option<&Path>,
         build_config: BuildConfig,
@@ -61,6 +60,7 @@ impl Test {
             compute_coverage,
             save_disassembly,
         )
+        .await
     }
 }
 
@@ -76,9 +76,9 @@ static SET_EXTENSION_HOOK: Lazy<()> =
 
 /// This function returns a result of UnitTestResult. The outer result indicates whether it
 /// successfully started running the test, and the inner result indicatests whether all tests pass.
-pub fn run_move_unit_tests(
+pub async fn run_move_unit_tests(
     path: &Path,
-    mut build_config: BuildConfig,
+    build_config: BuildConfig,
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
     save_disassembly: bool,
@@ -88,9 +88,13 @@ pub fn run_move_unit_tests(
 
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
-    build_config.implicit_dependencies = implicit_deps(latest_system_packages());
 
-    let result = move_cli::base::test::run_move_unit_tests(
+    let mut writer: Box<dyn Write + Send> = Box::new(std::io::stdout());
+
+    let result = move_cli::base::test::run_move_unit_tests::<
+        sui_package_alt::SuiFlavor,
+        Box<dyn Write + Send>,
+    >(
         path,
         build_config,
         UnitTestingConfig {
@@ -104,8 +108,10 @@ pub fn run_move_unit_tests(
         Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
         save_disassembly,
-        &mut std::io::stdout(),
-    );
+        &mut writer,
+    )
+    .await;
+
     result.map(|(test_result, warning_diags)| {
         if test_result == UnitTestResult::Success
             && let Some(diags) = warning_diags

@@ -4,21 +4,22 @@
 
 use std::{
     collections::BTreeMap,
-    path::Path,
     sync::{LazyLock, Mutex},
 };
 
 use derive_where::derive_where;
 use tracing::debug;
 
-use super::compute_digest;
 use super::manifest::Manifest;
 use super::paths::PackagePath;
+use super::{compute_digest, package_lock::PackageSystemLock};
 use crate::compatibility::legacy::LegacyData;
-use crate::compatibility::legacy_parser::try_load_legacy_manifest;
 use crate::dependency::FetchedDependency;
 use crate::errors::FileHandle;
-use crate::schema::{ParsedManifest, ParsedPublishedFile, Publication, ReplacementDependency};
+use crate::{
+    dependency::Pinned,
+    schema::{ParsedManifest, Publication, ReplacementDependency},
+};
 use crate::{
     dependency::{CombinedDependency, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
@@ -55,14 +56,14 @@ pub struct Package<F: MoveFlavor> {
     publication: Option<Publication<F>>,
 
     /// The way this package should be serialized to the lockfile.
-    dep_for_self: PinnedDependencyInfo,
+    dep_for_self: Pinned,
 
     /// Optional legacy information for a supplied package.
     pub legacy_data: Option<LegacyData>,
 
     /// The pinned direct dependencies for this package
     /// Note: for legacy packages, this information will be stored in `legacy_data`.
-    deps: BTreeMap<PackageName, PinnedDependencyInfo>,
+    deps: Vec<PinnedDependencyInfo>,
 
     /// Dummy address that is set during package graph initialization for unpublished addresses
     // TODO: probably we want to refactor this and have it in published
@@ -70,46 +71,44 @@ pub struct Package<F: MoveFlavor> {
 }
 
 impl<F: MoveFlavor> Package<F> {
-    /// Load a package from the manifest.
-    /// Makes a best effort to translate old-style packages into the current format,
-    ///
-    /// Fails if [path] does not exist, or if it doesn't contain a manifest
-    pub async fn load_root(path: impl AsRef<Path>, env: &Environment) -> PackageResult<Self> {
-        let path = PackagePath::new(path.as_ref().to_path_buf())?;
-        let root_manifest = FileHandle::new(path.manifest_path())?;
-        let source = PinnedDependencyInfo::root_dependency(root_manifest, env.name().clone());
-
-        Self::load_internal(path, source, env).await
-    }
-
-    /// Fetch [dep] and load a package from the fetched source
-    /// Makes a best effort to translate old-style packages into the current format,
-    pub async fn load(dep: PinnedDependencyInfo, env: &Environment) -> PackageResult<Self> {
-        let path = FetchedDependency::fetch(&dep).await?.into();
-
-        Self::load_internal(path, dep, env).await
-    }
-
-    /// Loads a package internally, doing a "best" effort to translate an old-style package into the new one.
-    async fn load_internal(
+    /// Load a package from the directory given by `path`.
+    /// Makes a best effort to translate old-style packages into the current format
+    pub async fn load_root(
         path: PackagePath,
-        dep_for_self: PinnedDependencyInfo,
         env: &Environment,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Self> {
-        debug!("loading package {:?}", dep_for_self);
+        let source = Pinned::Root(path);
+
+        Self::load(source, env, mtx).await
+    }
+
+    /// Fetch [dep] (relative to [self]) and load a package from the fetched source
+    /// Makes a best effort to translate old-style packages into the current format,
+    pub async fn load(
+        dep: Pinned,
+        env: &Environment,
+        mtx: &PackageSystemLock,
+    ) -> PackageResult<Self> {
+        debug!("loading package {:?}", dep);
+        let path = FetchedDependency::fetch(&dep).await?;
+
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
-        let (file_handle, manifest) = if let Some(result) = try_load_legacy_manifest(&path, env)? {
+        let legacy_manifest = path.read_legacy_manifest(env, mtx)?;
+        let (file_handle, manifest) = if let Some(result) = legacy_manifest {
             result
         } else {
-            let m = Manifest::read_from_file(path.manifest_path())?;
-            (*m.file_handle(), m.into_parsed())
+            let manifest = Manifest::read_from_file(&path, mtx)?;
+            check_for_environment::<F>(&manifest, &env.name)?;
+
+            (*manifest.file_handle(), manifest.into_parsed())
         };
 
         // try to load the address from the modern lockfile
         //   - if it fails, look in the legacy data
         //   - if that fails, use a dummy address
-        let publication = Self::load_publication(&path, env.name())?.or_else(|| {
+        let publication = Self::load_publication(&path, env.name(), mtx)?.or_else(|| {
             manifest
                 .legacy_data
                 .as_ref()
@@ -121,7 +120,7 @@ impl<F: MoveFlavor> Package<F> {
         //   - if it fails (no lockfile / out of date lockfile), compute them from the manifest
         //     (adding system deps)
 
-        let deps = Self::deps_from_manifest(&dep_for_self, &file_handle, &manifest, env).await?;
+        let deps = Self::deps_from_manifest(&dep, &file_handle, &manifest, env).await?;
 
         // compute the digest (TODO: this should only compute over the environment specific data)
         let digest = compute_digest(file_handle.source());
@@ -132,7 +131,7 @@ impl<F: MoveFlavor> Package<F> {
             metadata: manifest.package,
             path,
             publication,
-            dep_for_self,
+            dep_for_self: dep,
             legacy_data: manifest.legacy_data,
             deps,
             dummy_addr,
@@ -182,7 +181,7 @@ impl<F: MoveFlavor> Package<F> {
     /// The way this package should be serialized to the root package's lockfile. Note that this is
     /// a dependency relative to the root package (in particular, the root package is the only
     /// package where `dep_for_self()` returns `{local = "."}`
-    pub fn dep_for_self(&self) -> &PinnedDependencyInfo {
+    pub fn dep_for_self(&self) -> &Pinned {
         &self.dep_for_self
     }
 
@@ -194,12 +193,12 @@ impl<F: MoveFlavor> Package<F> {
     /// to hold for exactly one package for a valid package graph (see [Self::dep_for_self] for
     /// more information)
     pub fn is_root(&self) -> bool {
-        self.dep_for_self().is_root()
+        matches!(self.dep_for_self(), Pinned::Root(_))
     }
 
     /// The resolved and pinned dependencies from the manifest for environment `env`
     /// Returns an error if `env` is not declared in the manifest (TODO: remove this restriction?)
-    pub fn direct_deps(&self) -> &BTreeMap<PackageName, PinnedDependencyInfo> {
+    pub fn direct_deps(&self) -> &Vec<PinnedDependencyInfo> {
         &self.deps
     }
 
@@ -232,19 +231,14 @@ impl<F: MoveFlavor> Package<F> {
     fn load_publication(
         path: &PackagePath,
         env: &EnvironmentName,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<Publication<F>>> {
-        let pubfile = path.publications_path();
-
-        let Ok(file) = FileHandle::new(path.publications_path()) else {
-            debug!("unable to load {pubfile:?}");
+        let Some((file, parsed)) = path.read_pubfile(mtx)? else {
             return Ok(None);
         };
 
-        debug!("parsing\n---\n{}\n---", file.source());
-        let parsed = toml_edit::de::from_str::<ParsedPublishedFile<F>>(file.source())?;
-
         let Some(publish) = parsed.published.get(env) else {
-            debug!("no entry for {env:?} in {pubfile:?}");
+            debug!("no entry for {env:?} in {file:?}");
             return Ok(None);
         };
 
@@ -255,11 +249,11 @@ impl<F: MoveFlavor> Package<F> {
     /// dependencies, system dependencies, and dep-replacements from the manifest and then pinning
     /// the results
     async fn deps_from_manifest(
-        parent: &PinnedDependencyInfo,
+        parent: &Pinned,
         file_handle: &FileHandle,
         manifest: &ParsedManifest,
         env: &Environment,
-    ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
+    ) -> PackageResult<Vec<PinnedDependencyInfo>> {
         debug!("adding system dependencies");
         let system_dependencies =
             Self::system_dependencies(env, manifest.package.system_dependencies.clone())?;
@@ -292,23 +286,26 @@ impl<F: MoveFlavor> Package<F> {
         if let Some(system_dependencies) = system_dependencies {
             // Only include the specified system dependencies.
             let all_flavor_deps = F::system_dependencies(env.id().to_string());
+            let valid = format!(
+                "[{}]",
+                all_flavor_deps
+                    .keys()
+                    .map(|k| k.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
 
             let mut result = BTreeMap::new();
 
-            for dep in &system_dependencies {
-                let name = PackageName::new(dep.clone())?;
+            for dep in system_dependencies {
+                let Ok(name) = PackageName::new(dep.clone()) else {
+                    return Err(PackageError::InvalidSystemDep { dep, valid });
+                };
+
                 if let Some(dep) = all_flavor_deps.get(&name) {
                     result.insert(name, dep.clone());
                 } else {
-                    return Err(PackageError::Generic(format!(
-                        "Invalid system dependency `{}`; the allowed system dependencies are: [{}]",
-                        dep,
-                        all_flavor_deps
-                            .keys()
-                            .map(|k| k.to_string())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )));
+                    return Err(PackageError::InvalidSystemDep { dep, valid });
                 }
             }
             return Ok(result);
@@ -327,11 +324,40 @@ fn create_dummy_addr() -> OriginalID {
     (*dummy_addr).into()
 }
 
+/// Check that `env` is defined in `manifest`, returning an error if it isn't
+fn check_for_environment<F: MoveFlavor>(
+    manifest: &Manifest,
+    env: &EnvironmentName,
+) -> PackageResult<()> {
+    let mut known_environments = manifest.environments();
+    known_environments.extend(F::default_environments());
+    let known_environments: Vec<EnvironmentName> = known_environments
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+
+    if known_environments.contains(env) {
+        Ok(())
+    } else {
+        let message = format!(
+            "Package `{}` does not declare a `{}` environment. The available environments are {:?}. Consider running with `--build-env {}`",
+            manifest.package_name(),
+            env,
+            known_environments,
+            known_environments
+                .first()
+                .expect("there is at least one environment")
+        );
+        Err(PackageError::UnknownBuildEnv(message))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use move_command_line_common::testing::insta::assert_snapshot;
 
     use super::*;
+    use indexmap::IndexMap;
 
     #[derive(Debug)]
     struct TestFlavor;
@@ -345,8 +371,8 @@ mod tests {
             "test".to_string()
         }
 
-        fn default_environments() -> BTreeMap<String, String> {
-            BTreeMap::new()
+        fn default_environments() -> IndexMap<String, String> {
+            IndexMap::new()
         }
 
         // Our test flavor has `[foo, bar, baz]` system dependencies.

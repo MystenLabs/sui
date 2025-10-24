@@ -4,10 +4,15 @@
 
 use std::collections::{BTreeMap, btree_map::Entry};
 
+use bimap::BiBTreeMap;
 use derive_where::derive_where;
 use indoc::formatdoc;
-use petgraph::visit::EdgeRef;
+use petgraph::{
+    graph::{DiGraph, NodeIndex},
+    visit::EdgeRef,
+};
 use thiserror::Error;
+use tracing::debug;
 
 use crate::{
     flavor::MoveFlavor,
@@ -21,12 +26,9 @@ pub enum LinkageError {
     #[error("{0}")]
     InconsistentLinkage(String),
 
-    // TODO: this error message could be better - it should include the dependency names for `dep1`
-    // and `dep2`
     #[error("{0}")]
     ConflictingOverrides(String),
 
-    // TODO: this error message could be better - it should include the path from `dep1` to `dep2`
     #[error("{0}")]
     CyclicDependencies(String),
 }
@@ -37,7 +39,7 @@ pub type LinkageResult<T> = Result<T, LinkageError>;
 pub type LinkageTable<'graph, F> = BTreeMap<OriginalID, PackageInfo<'graph, F>>;
 
 impl<F: MoveFlavor> PackageGraph<F> {
-    /// Construct and return a linkage table for the root package of `self`. The linkage table for a
+    /// Construct and return a linked version of the root package of `self`. The linkage table for a
     /// given package indicates which package nodes it should use for its transitive dependencies.
     ///
     /// For each package `p` in the linkage table and each direct dependency `d` of `p`, there must
@@ -52,7 +54,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// tree while maintaining a current set of overrides along the path; dependencies are first
     /// replaced with their overrides, and then recursively traversed. Once the linkage tables for
     /// the dependencies are constructed, they are merged and returned.
-    pub fn linkage(&self) -> LinkageResult<LinkageTable<'_, F>> {
+    pub fn linkage(&self) -> LinkageResult<Self> {
         self.root_package_info().check_cycles(
             self.root_package_info().name().clone(),
             &mut Vec::new(),
@@ -69,11 +71,64 @@ impl<F: MoveFlavor> PackageGraph<F> {
             ));
         }
 
-        Ok(linkage_result
+        let linkage: LinkageTable<F> = linkage_result
             .linkage
             .into_iter()
             .map(|(oid, (_, pkg))| (oid, pkg))
-            .collect())
+            .collect();
+
+        Ok(self.copy_linked(&linkage))
+    }
+
+    /// Create a copy of `self` with only the nodes from `linkage` and with the edges updated to
+    /// point to the nodes from the linkage
+    fn copy_linked(&self, linkage: &LinkageTable<F>) -> Self {
+        debug!("copying based on linkage {linkage:?}");
+        let mut result = Self {
+            root_index: NodeIndex::from(0),
+            package_ids: BiBTreeMap::new(),
+            inner: DiGraph::new(),
+        };
+
+        // add nodes
+        for pkg in linkage.values() {
+            let package = &self.inner[pkg.node];
+            let new_node = result.inner.add_node(package.clone());
+            let old = result.package_ids.insert(pkg.id().clone(), new_node);
+            assert!(!old.did_overwrite(), "package ids of self must be unique");
+        }
+
+        // set root node
+        let root_id = self
+            .package_ids
+            .get_by_right(&self.root_index)
+            .expect("all nodes in self must have package ids");
+
+        let new_root = result.get_package(root_id);
+        result.root_index = new_root.node;
+
+        // add edges
+        for old_pkg in linkage.values() {
+            let new_source = result
+                .package_ids
+                .get_by_left(old_pkg.id())
+                .expect("linkage has been copied into result");
+
+            for edge in self.inner.edges(old_pkg.node) {
+                let old_target = self.package_info(edge.target());
+                let oid = old_target.original_id();
+                let old_linked = linkage
+                    .get(&oid)
+                    .expect("linkage contains every original ID");
+                let new_target = result.get_package(old_linked.id());
+
+                result
+                    .inner
+                    .add_edge(*new_source, new_target.node, edge.weight().clone());
+            }
+        }
+
+        result
     }
 }
 
@@ -177,7 +232,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
             BTreeMap::new();
 
         for edge in self.graph.inner.edges(self.node) {
-            let dep = &edge.weight().dep;
+            let dep = &edge.weight();
 
             if !dep.is_override() {
                 continue;
@@ -185,7 +240,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
 
             let target = self.graph.package_info(edge.target());
             match result.entry(target.original_id()) {
-                Entry::Vacant(entry) => entry.insert((edge.weight().name.clone(), target)),
+                Entry::Vacant(entry) => entry.insert((edge.weight().name().clone(), target)),
                 Entry::Occupied(old) => {
                     if old.get().1.node == target.node {
                         continue;
@@ -193,7 +248,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
                         return Err(LinkageError::conflicting_overrides(
                             self,
                             &old.get().0,
-                            &edge.weight().name,
+                            edge.weight().name(),
                             &old.get().1.original_id(),
                         ));
                     }
@@ -969,14 +1024,11 @@ mod tests {
 
         let graph = scenario.graph_for("root").await;
         let linkage = graph.linkage().unwrap();
-        assert_eq!(
-            linkage
-                .get(&OriginalID::from(1))
-                .unwrap()
-                .package()
-                .published_at(),
-            Some(&PublishedID::from(3))
-        );
+        for pkg in linkage.packages() {
+            if pkg.original_id() == OriginalID::from(1) {
+                assert_eq!(pkg.display_name(), "d3");
+            }
+        }
     }
 
     /// ```mermaid

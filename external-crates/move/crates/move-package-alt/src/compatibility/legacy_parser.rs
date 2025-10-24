@@ -5,14 +5,14 @@
 use crate::{
     compatibility::{
         LegacyBuildInfo, LegacySubstOrRename, LegacySubstitution, LegacyVersion,
-        find_module_name_for_package, legacy_lockfile::try_load_legacy_lockfile_publications,
+        find_module_name_for_package,
     },
     errors::FileHandle,
     package::paths::PackagePath,
     schema::{
         DefaultDependency, Environment, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
-        ManifestGitDependency, OnChainDepInfo, PackageMetadata, PackageName, ParsedManifest,
-        PublishAddresses,
+        ManifestGitDependency, ModeName, OnChainDepInfo, PackageMetadata, PackageName,
+        ParsedManifest, PublishAddresses,
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
@@ -26,7 +26,7 @@ use std::{
 use toml::Value as TV;
 use tracing::debug;
 
-use super::{legacy::LegacyData, parse_address_literal};
+use super::{legacy::LegacyData, legacy_lockfile::load_legacy_lockfile, parse_address_literal};
 use move_compiler::editions::Edition;
 
 const EMPTY_ADDR_STR: &str = "_";
@@ -64,6 +64,7 @@ pub struct LegacyPackageMetadata {
     pub edition: Option<Edition>,
     pub published_at: Option<String>,
     pub unrecognized_fields: BTreeMap<String, toml::Value>,
+    pub implicit_deps: bool,
 }
 
 /// If `path` contains a valid legacy manifest, convert it to a modern format and return it. By
@@ -75,7 +76,7 @@ pub fn try_load_legacy_manifest(
     path: &PackagePath,
     default_env: &Environment,
 ) -> anyhow::Result<Option<(FileHandle, ParsedManifest)>> {
-    let Ok(file_handle) = FileHandle::new(path.manifest_path()) else {
+    let Ok(file_handle) = FileHandle::new(path.path().join("Move.toml")) else {
         debug!("failed to load legacy file");
         return Ok(None);
     };
@@ -142,19 +143,21 @@ fn parse_source_manifest(
                 .transpose()
                 .context("Error parsing '[build]' section of manifest")?;
 
-            let dependencies = table
+            let mut dependencies = table
                 .remove(DEPENDENCY_NAME)
-                .map(parse_dependencies)
+                .map(|deps| parse_dependencies(deps, None))
                 .transpose()
                 .context("Error parsing '[dependencies]' section of manifest")?
                 .unwrap_or_default();
 
-            let _dev_dependencies = table
+            let dev_dependencies = table
                 .remove(DEV_DEPENDENCY_NAME)
-                .map(parse_dependencies)
+                .map(|deps| parse_dependencies(deps, Some("test")))
                 .transpose()
                 .context("Error parsing '[dev-dependencies]' section of manifest")?
                 .unwrap_or_default();
+
+            dependencies.extend(dev_dependencies);
 
             let modern_name = derive_modern_name(&addresses, path)?
                 .unwrap_or(PackageName::new(NO_NAME_LEGACY_PACKAGE_NAME).expect("Cannot fail"));
@@ -196,18 +199,22 @@ fn parse_source_manifest(
             let is_system_package =
                 LEGACY_SYSTEM_DEPS_NAMES.contains(&metadata.legacy_name.as_str());
 
-            // IF we have one system package OR this package is a system package itself,
-            // we disable implicit deps.
-            let system_dependencies = if has_system_package || is_system_package {
-                Some(vec![])
-            } else {
-                None
-            };
+            // IF we have one system package OR this package is a system package itself (OR
+            // implicit deps are explicitly disabled), we disable implicit deps.
+            let system_dependencies =
+                if has_system_package || is_system_package || !metadata.implicit_deps {
+                    Some(vec![])
+                } else {
+                    None
+                };
 
             // We create a normalized legacy name, to make sure we can always use a package
             // as an Identifier.
             let normalized_legacy_name =
-                normalize_legacy_name_to_identifier(metadata.legacy_name.as_str())?;
+                normalize_legacy_name_to_identifier(metadata.legacy_name.as_str());
+
+            let legacy_publications =
+                load_legacy_lockfile(&path.path().join("Move.lock"))?.unwrap_or_default();
 
             Ok(ParsedManifest {
                 package: PackageMetadata {
@@ -232,8 +239,7 @@ fn parse_source_manifest(
                     normalized_legacy_name,
                     named_addresses: programmatic_addresses,
                     manifest_address_info,
-                    legacy_publications: try_load_legacy_lockfile_publications(path)
-                        .unwrap_or_default(),
+                    legacy_publications,
                 }),
                 dep_replacements: BTreeMap::new(),
             })
@@ -248,7 +254,7 @@ fn parse_source_manifest(
     }
 }
 
-fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
+pub fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
     match tval {
         TV::Table(mut table) => {
             check_for_required_field_names(&table, &["name"])?;
@@ -267,6 +273,11 @@ fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
             let published_at = table
                 .remove("published-at")
                 .map(|v| v.as_str().unwrap_or_default().to_string());
+
+            let implicit_deps = table
+                .remove("implicit-deps")
+                .map(|v| v.as_bool().unwrap_or(true))
+                .unwrap_or(true);
 
             let name = name.to_string();
 
@@ -308,6 +319,7 @@ fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
                 edition,
                 published_at,
                 unrecognized_fields: table.into_iter().collect(),
+                implicit_deps,
             })
         }
         x => bail!(
@@ -320,25 +332,41 @@ fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
 
 /// Given a "legacy" string, we produce an Identifier that is as "consistent"
 /// as possible.
-fn normalize_legacy_name_to_identifier(name: &str) -> Result<Identifier> {
-    // We could also, potentially, hash the String into a valid identifier,
-    // but these cases are super rare so "readability" is probably better for us.
-    Identifier::new(name.replace("-", "__").replace(" ", "____")).map_err(|_| {
-        anyhow!(
-            "Failed to convert legacy name {} to a normalized identifier",
-            name
-        )
-    })
+fn normalize_legacy_name_to_identifier(name: &str) -> Identifier {
+    // rules for `Identifier`:
+    //  - all characters must be a-z, A-z, 0-9, or `_`
+    //  - first character is not a digit
+    //  - entire string is not `_`
+    //  - string is non-empty
+
+    let mut result = String::new();
+
+    for c in name.chars() {
+        result.push(if c.is_ascii_alphanumeric() { c } else { '_' });
+    }
+
+    if result.is_empty() || result == "_" {
+        return Identifier::new("__").expect("__ is a valid identifier");
+    }
+
+    if result.chars().next().unwrap().is_numeric() {
+        result.insert(0, '_');
+    }
+
+    Identifier::new(result).expect("tranformed string is a valid identifier")
 }
 
-fn parse_dependencies(tval: TV) -> Result<BTreeMap<PackageName, DefaultDependency>> {
+fn parse_dependencies(
+    tval: TV,
+    mode: Option<&str>,
+) -> Result<BTreeMap<PackageName, DefaultDependency>> {
     match tval {
         TV::Table(table) => {
             let mut deps = BTreeMap::new();
 
             for (dep_name, dep) in table.into_iter() {
-                let dep_name_ident = normalize_legacy_name_to_identifier(&dep_name)?;
-                let dep = parse_dependency(dep)?;
+                let dep_name_ident = normalize_legacy_name_to_identifier(&dep_name);
+                let dep = parse_dependency(dep, mode)?;
                 deps.insert(dep_name_ident, dep);
             }
 
@@ -448,10 +476,12 @@ fn parse_external_resolver(resolver_val: &TV) -> Result<ExternalDependency> {
     })
 }
 
-fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
+fn parse_dependency(mut tval: TV, mode: Option<&str>) -> Result<DefaultDependency> {
     let Some(table) = tval.as_table_mut() else {
         bail!("Malformed dependency {}", tval);
     };
+
+    let modes = mode.map(|mode| [ModeName::from(mode)].into());
 
     let dep_override = table
         .remove("override")
@@ -467,6 +497,7 @@ fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
             dependency_info: ManifestDependencyInfo::External(dependency?),
             is_override: dep_override,
             rename_from: None,
+            modes,
         });
     }
 
@@ -550,6 +581,7 @@ fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
         dependency_info: result,
         is_override: dep_override,
         rename_from: None,
+        modes,
     })
 }
 
@@ -816,13 +848,16 @@ mod tests {
     fn normalize_legacy_names() {
         let names = vec![
             ("foo", "foo"),
-            ("foo-bar", "foo__bar"),
-            ("foo bar", "foo____bar"),
+            ("foo-bar", "foo_bar"),
+            ("foo bar", "foo_bar"),
             ("is_normal", "is_normal"),
+            ("0x1234", "_0x1234"),
+            ("UNO!", "UNO_"),
+            ("!", "__"),
         ];
 
         for (name, expected) in names {
-            let identifier = normalize_legacy_name_to_identifier(name).unwrap();
+            let identifier = normalize_legacy_name_to_identifier(name);
             assert_eq!(identifier.to_string(), expected);
         }
     }
