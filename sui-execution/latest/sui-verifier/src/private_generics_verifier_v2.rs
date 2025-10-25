@@ -204,11 +204,16 @@ fn verify_call(
     ty_args: &[SignatureToken],
 ) -> Result<(), Error> {
     let rules_opt = FUNCTIONS_TO_CHECK.iter().find(|(f, _)| &callee == f);
-    if EXHAUSTIVE_MODULES.contains(&callee.1) && rules_opt.is_none() {
-        // The function needs tobe added to the FUNCTIONS_TO_CHECK list
+    // Check for exhaustivity for certain sensitive modules. But we ignore calls within the same
+    // package as a way to exclude private and public(package) functions
+    if &callee_addr != module.address()
+        && EXHAUSTIVE_MODULES.contains(&callee_module)
+        && rules_opt.is_none()
+    {
+        // The function needs to be added to the FUNCTIONS_TO_CHECK list
         return Err(Error::InvariantViolation(format!(
             "Unknown function '{callee_addr}::{callee_module}::{callee_function}'. All functions \
-            '{callee_module}' must be listed in FUNCTIONS_TO_CHECK",
+            in '{callee_module}' must be listed in FUNCTIONS_TO_CHECK",
         )));
     }
     let Some((_, internal_flags)) = rules_opt else {
