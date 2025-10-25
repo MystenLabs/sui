@@ -16,7 +16,7 @@ public struct DemoBear has key, store {
 /// our OTW to create display.
 public struct DEMO_BEAR has drop {}
 
-// It's recommened to create Display using PTBs instead of
+// It's recommended to create Display using PTBs instead of
 // directly on the contracts.
 // We are only creating it here for demo purposes (one-step setup).
 fun init(otw: DEMO_BEAR, ctx: &mut TxContext) {
