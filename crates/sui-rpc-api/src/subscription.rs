@@ -123,7 +123,7 @@ impl SubscriptionService {
         self.subscribers.retain(|subscriber| {
             match subscriber.try_send(Arc::clone(&checkpoint)) {
                 Ok(()) => {
-                    trace!("succesfully enqueued checkpont for subscriber");
+                    trace!("successfully enqueued checkpont for subscriber");
                     true // Retain this subscriber
                 }
                 Err(e) => {
@@ -149,7 +149,7 @@ impl SubscriptionService {
         let (sender, reciever) = mpsc::channel(SUBSCRIPTION_CHANNEL_SIZE);
         match request.sender.send(reciever) {
             Ok(()) => {
-                trace!("succesfully registered new subscriber");
+                trace!("successfully registered new subscriber");
                 self.metrics.inflight_subscribers.inc();
                 self.subscribers.push(sender);
             }
