@@ -14,7 +14,7 @@ use tidehunter::iterators::db_iterator::DbIterator;
 use tidehunter::key_shape::{KeyShape, KeySpace};
 use tidehunter::metrics::Metrics;
 pub use tidehunter::{
-    Decision, IndexWalPosition, WalPosition,
+    Decision, WalPosition,
     key_shape::{KeyIndexing, KeyShapeBuilder, KeySpaceConfig, KeyType},
     minibytes::Bytes,
 };
