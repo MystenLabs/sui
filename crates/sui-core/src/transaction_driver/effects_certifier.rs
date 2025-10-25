@@ -8,7 +8,7 @@ use std::{
 };
 
 use futures::{StreamExt as _, join, stream::FuturesUnordered};
-use mysten_common::debug_fatal;
+use mysten_common::{backoff::ExponentialBackoff, debug_fatal};
 use sui_types::{
     base_types::{AuthorityName, ConciseableName as _},
     committee::StakeUnit,
@@ -23,7 +23,6 @@ use sui_types::{
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::time::{sleep, timeout};
-use tokio_retry::strategy::{ExponentialBackoff, jitter};
 use tracing::instrument;
 
 use crate::{
@@ -49,6 +48,7 @@ mod effects_certifier_tests;
 
 const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(10);
 
+const MAX_WAIT_FOR_EFFECTS_RETRY_DELAY: Duration = Duration::from_secs(2);
 pub(crate) struct EffectsCertifier {
     metrics: Arc<TransactionDriverMetrics>,
 }
@@ -581,9 +581,7 @@ impl EffectsCertifier {
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let effects_start = Instant::now();
-        let backoff = ExponentialBackoff::from_millis(100)
-            .max_delay(Duration::from_secs(2))
-            .map(jitter);
+        let backoff = ExponentialBackoff::new(MAX_WAIT_FOR_EFFECTS_RETRY_DELAY);
         let ping_type = raw_request.get_ping_type();
         // This loop should only retry errors that are retriable without new submission.
         for (attempt, delay) in backoff.enumerate() {
