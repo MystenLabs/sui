@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["load_bytecode_snapshot","load_bytecode_snapshot_manifest","manifest_path","update_bytecode_snapshot_manifest"],"struct":["Snapshot","SnapshotPackage"],"type":["SnapshotManifest"]};

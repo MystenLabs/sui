@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["spawn_connection_pool_metric_collector","start_prometheus_server"],"struct":["IndexerMetrics"]};

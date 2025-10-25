@@ -1,0 +1,164 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/sui-core/src/authority/authority_store_types.rs`."><title>authority_store_types.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="sui_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0 (1159e78c4 2025-09-14)" data-channel="1.90.0" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../../../static.files/storage-68b7e25d.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">sui_core/authority/</div>authority_store_types.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Mysten Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">use </span>serde::{Deserialize, Serialize};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>sui_types::base_types::MoveObjectType;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>sui_types::base_types::TransactionDigest;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>sui_types::coin::Coin;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>sui_types::error::{SuiError, SuiErrorKind};
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>sui_types::move_package::MovePackage;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>sui_types::object::{Data, MoveObject, Object, ObjectInner, Owner};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>sui_types::storage::ObjectKey;
+<a href=#12 id=12 data-nosnippet>12</a>
+<a href=#13 id=13 data-nosnippet>13</a><span class="comment">// Versioning process:
+<a href=#14 id=14 data-nosnippet>14</a>//
+<a href=#15 id=15 data-nosnippet>15</a>// Object storage versioning is done lazily (at read time) - therefore we must always preserve the
+<a href=#16 id=16 data-nosnippet>16</a>// code for reading the very first storage version. For all versions, a migration function
+<a href=#17 id=17 data-nosnippet>17</a>//
+<a href=#18 id=18 data-nosnippet>18</a>//   f(V_n) -&gt; V_(n+1)
+<a href=#19 id=19 data-nosnippet>19</a>//
+<a href=#20 id=20 data-nosnippet>20</a>// must be defined. This way we can iteratively migrate the very oldest version to the very newest
+<a href=#21 id=21 data-nosnippet>21</a>// version at any point in the future.
+<a href=#22 id=22 data-nosnippet>22</a>//
+<a href=#23 id=23 data-nosnippet>23</a>// To change the format of the object table value types (StoreObject and StoreMoveObject), use the
+<a href=#24 id=24 data-nosnippet>24</a>// following process:
+<a href=#25 id=25 data-nosnippet>25</a>// - Add a new variant to the enum to store the new version type.
+<a href=#26 id=26 data-nosnippet>26</a>// - Extend the `migrate` functions to migrate from the previous version to the new version.
+<a href=#27 id=27 data-nosnippet>27</a>// - Change `From&lt;Object&gt; for StoreObjectPair` to create the newest version only.
+<a href=#28 id=28 data-nosnippet>28</a>//
+<a href=#29 id=29 data-nosnippet>29</a>// Additionally, the first time we version these formats, we will need to:
+<a href=#30 id=30 data-nosnippet>30</a>// - Add a check in the `TryFrom&lt;StoreObjectPair&gt; for Object` to see if the object that was just
+<a href=#31 id=31 data-nosnippet>31</a>//   read is the latest version.
+<a href=#32 id=32 data-nosnippet>32</a>// - If it is not, use the migration function (as explained above) to migrate it to the next
+<a href=#33 id=33 data-nosnippet>33</a>//   version.
+<a href=#34 id=34 data-nosnippet>34</a>// - Repeat until we have arrive at the current version.
+<a href=#35 id=35 data-nosnippet>35</a>
+<a href=#36 id=36 data-nosnippet>36</a></span><span class="doccomment">/// Enum wrapper for versioning
+<a href=#37 id=37 data-nosnippet>37</a></span><span class="attr">#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+<a href=#38 id=38 data-nosnippet>38</a></span><span class="kw">pub enum </span>StoreObjectWrapper {
+<a href=#39 id=39 data-nosnippet>39</a>    V1(StoreObjectV1),
+<a href=#40 id=40 data-nosnippet>40</a>}
+<a href=#41 id=41 data-nosnippet>41</a>
+<a href=#42 id=42 data-nosnippet>42</a><span class="comment">// always points to latest version.
+<a href=#43 id=43 data-nosnippet>43</a></span><span class="kw">pub type </span>StoreObject = StoreObjectV1;
+<a href=#44 id=44 data-nosnippet>44</a>
+<a href=#45 id=45 data-nosnippet>45</a><span class="kw">impl </span>StoreObjectWrapper {
+<a href=#46 id=46 data-nosnippet>46</a>    <span class="kw">pub fn </span>migrate(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
+<a href=#47 id=47 data-nosnippet>47</a>        <span class="comment">// TODO: when there are multiple versions, we must iteratively migrate from version N to
+<a href=#48 id=48 data-nosnippet>48</a>        // N+1 until we arrive at the latest version
+<a href=#49 id=49 data-nosnippet>49</a>        </span><span class="self">self
+<a href=#50 id=50 data-nosnippet>50</a>    </span>}
+<a href=#51 id=51 data-nosnippet>51</a>
+<a href=#52 id=52 data-nosnippet>52</a>    <span class="comment">// Always returns the most recent version. Older versions are migrated to the latest version at
+<a href=#53 id=53 data-nosnippet>53</a>    // read time, so there is never a need to access older versions.
+<a href=#54 id=54 data-nosnippet>54</a>    </span><span class="kw">pub fn </span>inner(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>StoreObject {
+<a href=#55 id=55 data-nosnippet>55</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#56 id=56 data-nosnippet>56</a>            <span class="self">Self</span>::V1(v1) =&gt; v1,
+<a href=#57 id=57 data-nosnippet>57</a>
+<a href=#58 id=58 data-nosnippet>58</a>            <span class="comment">// can remove #[allow] when there are multiple versions
+<a href=#59 id=59 data-nosnippet>59</a>            </span><span class="attr">#[allow(unreachable_patterns)]
+<a href=#60 id=60 data-nosnippet>60</a>            </span><span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"object should have been migrated to latest version at read time"</span>),
+<a href=#61 id=61 data-nosnippet>61</a>        }
+<a href=#62 id=62 data-nosnippet>62</a>    }
+<a href=#63 id=63 data-nosnippet>63</a>    <span class="kw">pub fn </span>into_inner(<span class="self">self</span>) -&gt; StoreObject {
+<a href=#64 id=64 data-nosnippet>64</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#65 id=65 data-nosnippet>65</a>            <span class="self">Self</span>::V1(v1) =&gt; v1,
+<a href=#66 id=66 data-nosnippet>66</a>
+<a href=#67 id=67 data-nosnippet>67</a>            <span class="comment">// can remove #[allow] when there are multiple versions
+<a href=#68 id=68 data-nosnippet>68</a>            </span><span class="attr">#[allow(unreachable_patterns)]
+<a href=#69 id=69 data-nosnippet>69</a>            </span><span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"object should have been migrated to latest version at read time"</span>),
+<a href=#70 id=70 data-nosnippet>70</a>        }
+<a href=#71 id=71 data-nosnippet>71</a>    }
+<a href=#72 id=72 data-nosnippet>72</a>}
+<a href=#73 id=73 data-nosnippet>73</a>
+<a href=#74 id=74 data-nosnippet>74</a><span class="kw">impl </span>From&lt;StoreObject&gt; <span class="kw">for </span>StoreObjectWrapper {
+<a href=#75 id=75 data-nosnippet>75</a>    <span class="kw">fn </span>from(o: StoreObject) -&gt; <span class="self">Self </span>{
+<a href=#76 id=76 data-nosnippet>76</a>        StoreObjectWrapper::V1(o)
+<a href=#77 id=77 data-nosnippet>77</a>    }
+<a href=#78 id=78 data-nosnippet>78</a>}
+<a href=#79 id=79 data-nosnippet>79</a>
+<a href=#80 id=80 data-nosnippet>80</a><span class="attr">#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+<a href=#81 id=81 data-nosnippet>81</a></span><span class="kw">pub enum </span>StoreObjectV1 {
+<a href=#82 id=82 data-nosnippet>82</a>    Value(Box&lt;StoreObjectValue&gt;),
+<a href=#83 id=83 data-nosnippet>83</a>    Deleted,
+<a href=#84 id=84 data-nosnippet>84</a>    Wrapped,
+<a href=#85 id=85 data-nosnippet>85</a>}
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a><span class="doccomment">/// Forked version of [`sui_types::object::Object`]
+<a href=#88 id=88 data-nosnippet>88</a>/// Used for efficient storing of move objects in the database
+<a href=#89 id=89 data-nosnippet>89</a></span><span class="attr">#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+<a href=#90 id=90 data-nosnippet>90</a></span><span class="kw">pub struct </span>StoreObjectValue {
+<a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">pub </span>data: StoreData,
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">pub </span>owner: Owner,
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">pub </span>previous_transaction: TransactionDigest,
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="kw">pub </span>storage_rebate: u64,
+<a href=#95 id=95 data-nosnippet>95</a>}
+<a href=#96 id=96 data-nosnippet>96</a>
+<a href=#97 id=97 data-nosnippet>97</a><span class="doccomment">/// Forked version of [`sui_types::object::Data`]
+<a href=#98 id=98 data-nosnippet>98</a>/// Adds extra enum value `IndirectObject`, which represents a reference to an object stored separately
+<a href=#99 id=99 data-nosnippet>99</a></span><span class="attr">#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+<a href=#100 id=100 data-nosnippet>100</a></span><span class="kw">pub enum </span>StoreData {
+<a href=#101 id=101 data-nosnippet>101</a>    Move(MoveObject),
+<a href=#102 id=102 data-nosnippet>102</a>    Package(MovePackage),
+<a href=#103 id=103 data-nosnippet>103</a>    IndirectObjectDeprecated,
+<a href=#104 id=104 data-nosnippet>104</a>    Coin(u64),
+<a href=#105 id=105 data-nosnippet>105</a>}
+<a href=#106 id=106 data-nosnippet>106</a>
+<a href=#107 id=107 data-nosnippet>107</a><span class="kw">pub fn </span>get_store_object(object: Object) -&gt; StoreObjectWrapper {
+<a href=#108 id=108 data-nosnippet>108</a>    <span class="kw">let </span>object = object.into_inner();
+<a href=#109 id=109 data-nosnippet>109</a>    <span class="kw">let </span>data = <span class="kw">match </span>object.data {
+<a href=#110 id=110 data-nosnippet>110</a>        Data::Package(package) =&gt; StoreData::Package(package),
+<a href=#111 id=111 data-nosnippet>111</a>        Data::Move(move_obj) =&gt; {
+<a href=#112 id=112 data-nosnippet>112</a>            <span class="kw">if </span>move_obj.type_().is_gas_coin() {
+<a href=#113 id=113 data-nosnippet>113</a>                StoreData::Coin(
+<a href=#114 id=114 data-nosnippet>114</a>                    Coin::from_bcs_bytes(move_obj.contents())
+<a href=#115 id=115 data-nosnippet>115</a>                        .expect(<span class="string">"failed to deserialize coin"</span>)
+<a href=#116 id=116 data-nosnippet>116</a>                        .balance
+<a href=#117 id=117 data-nosnippet>117</a>                        .value(),
+<a href=#118 id=118 data-nosnippet>118</a>                )
+<a href=#119 id=119 data-nosnippet>119</a>            } <span class="kw">else </span>{
+<a href=#120 id=120 data-nosnippet>120</a>                StoreData::Move(move_obj)
+<a href=#121 id=121 data-nosnippet>121</a>            }
+<a href=#122 id=122 data-nosnippet>122</a>        }
+<a href=#123 id=123 data-nosnippet>123</a>    };
+<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">let </span>store_object = StoreObjectValue {
+<a href=#125 id=125 data-nosnippet>125</a>        data,
+<a href=#126 id=126 data-nosnippet>126</a>        owner: object.owner,
+<a href=#127 id=127 data-nosnippet>127</a>        previous_transaction: object.previous_transaction,
+<a href=#128 id=128 data-nosnippet>128</a>        storage_rebate: object.storage_rebate,
+<a href=#129 id=129 data-nosnippet>129</a>    };
+<a href=#130 id=130 data-nosnippet>130</a>    StoreObject::Value(Box::new(store_object)).into()
+<a href=#131 id=131 data-nosnippet>131</a>}
+<a href=#132 id=132 data-nosnippet>132</a>
+<a href=#133 id=133 data-nosnippet>133</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>try_construct_object(
+<a href=#134 id=134 data-nosnippet>134</a>    object_key: <span class="kw-2">&amp;</span>ObjectKey,
+<a href=#135 id=135 data-nosnippet>135</a>    store_object: StoreObjectValue,
+<a href=#136 id=136 data-nosnippet>136</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Object, SuiError&gt; {
+<a href=#137 id=137 data-nosnippet>137</a>    <span class="kw">let </span>data = <span class="kw">match </span>store_object.data {
+<a href=#138 id=138 data-nosnippet>138</a>        StoreData::Move(object) =&gt; Data::Move(object),
+<a href=#139 id=139 data-nosnippet>139</a>        StoreData::Package(package) =&gt; Data::Package(package),
+<a href=#140 id=140 data-nosnippet>140</a>        StoreData::Coin(balance) =&gt; <span class="kw">unsafe </span>{
+<a href=#141 id=141 data-nosnippet>141</a>            Data::Move(MoveObject::new_from_execution_with_limit(
+<a href=#142 id=142 data-nosnippet>142</a>                MoveObjectType::gas_coin(),
+<a href=#143 id=143 data-nosnippet>143</a>                <span class="bool-val">true</span>,
+<a href=#144 id=144 data-nosnippet>144</a>                object_key.<span class="number">1</span>,
+<a href=#145 id=145 data-nosnippet>145</a>                bcs::to_bytes(<span class="kw-2">&amp;</span>(object_key.<span class="number">0</span>, balance)).expect(<span class="string">"serialization failed"</span>),
+<a href=#146 id=146 data-nosnippet>146</a>                u64::MAX,
+<a href=#147 id=147 data-nosnippet>147</a>            )<span class="question-mark">?</span>)
+<a href=#148 id=148 data-nosnippet>148</a>        },
+<a href=#149 id=149 data-nosnippet>149</a>        <span class="kw">_ </span>=&gt; {
+<a href=#150 id=150 data-nosnippet>150</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(SuiErrorKind::Storage(
+<a href=#151 id=151 data-nosnippet>151</a>                <span class="string">"corrupted field: inconsistent object representation"</span>.to_string(),
+<a href=#152 id=152 data-nosnippet>152</a>            )
+<a href=#153 id=153 data-nosnippet>153</a>            .into());
+<a href=#154 id=154 data-nosnippet>154</a>        }
+<a href=#155 id=155 data-nosnippet>155</a>    };
+<a href=#156 id=156 data-nosnippet>156</a>
+<a href=#157 id=157 data-nosnippet>157</a>    <span class="prelude-val">Ok</span>(ObjectInner {
+<a href=#158 id=158 data-nosnippet>158</a>        data,
+<a href=#159 id=159 data-nosnippet>159</a>        owner: store_object.owner,
+<a href=#160 id=160 data-nosnippet>160</a>        previous_transaction: store_object.previous_transaction,
+<a href=#161 id=161 data-nosnippet>161</a>        storage_rebate: store_object.storage_rebate,
+<a href=#162 id=162 data-nosnippet>162</a>    }
+<a href=#163 id=163 data-nosnippet>163</a>    .into())
+<a href=#164 id=164 data-nosnippet>164</a>}</code></pre></div></section></main></body></html>
