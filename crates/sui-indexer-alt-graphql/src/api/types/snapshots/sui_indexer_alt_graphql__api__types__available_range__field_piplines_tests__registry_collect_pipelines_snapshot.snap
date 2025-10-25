@@ -1,0 +1,2595 @@
+---
+source: crates/sui-indexer-alt-graphql/src/api/types/available_range.rs
+expression: output
+---
+AccumulatorRootCreateTransaction._
+  => {}
+
+ActiveJwk.iss
+  => {}
+
+ActiveJwk.kid
+  => {}
+
+ActiveJwk.kty
+  => {}
+
+ActiveJwk.e
+  => {}
+
+ActiveJwk.n
+  => {}
+
+ActiveJwk.alg
+  => {}
+
+ActiveJwk.epoch
+  => {}
+
+Address.address
+  => {}
+
+Address.asObject
+  => {"obj_versions"}
+
+Address.balance
+  => {"consistent"}
+
+Address.balance (filter: coinType)
+  => {"consistent"}
+
+Address.balances
+  => {"consistent"}
+
+Address.defaultSuinsName
+  => {"obj_versions"}
+
+Address.dynamicField
+  => {"obj_versions"}
+
+Address.dynamicField (filter: type)
+  => {"obj_versions"}
+
+Address.dynamicField (filter: bcs)
+  => {"obj_versions"}
+
+Address.dynamicFields
+  => {"consistent"}
+
+Address.dynamicObjectField
+  => {"obj_versions"}
+
+Address.dynamicObjectField (filter: type)
+  => {"obj_versions"}
+
+Address.dynamicObjectField (filter: bcs)
+  => {"obj_versions"}
+
+Address.multiGetDynamicFields
+  => {"obj_versions"}
+
+Address.multiGetDynamicFields (filter: type)
+  => {"obj_versions"}
+
+Address.multiGetDynamicFields (filter: bcs)
+  => {"obj_versions"}
+
+Address.multiGetDynamicObjectFields
+  => {"obj_versions"}
+
+Address.multiGetDynamicObjectFields (filter: type)
+  => {"obj_versions"}
+
+Address.multiGetDynamicObjectFields (filter: bcs)
+  => {"obj_versions"}
+
+Address.multiGetBalances
+  => {"consistent"}
+
+Address.multiGetBalances (filter: keys)
+  => {"consistent"}
+
+Address.objects
+  => {"consistent"}
+
+Address.objects (filter: ownerKind)
+  => {"consistent"}
+
+Address.objects (filter: owner)
+  => {"consistent"}
+
+Address.objects (filter: type)
+  => {"consistent"}
+
+Address.transactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Address.transactions (filter: afterCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Address.transactions (filter: atCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Address.transactions (filter: beforeCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Address.transactions (filter: function)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Address.transactions (filter: kind)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Address.transactions (filter: affectedAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Address.transactions (filter: affectedObject)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Address.transactions (filter: sentAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+AddressOwner.address
+  => {}
+
+AuthenticatorStateCreateTransaction._
+  => {}
+
+AuthenticatorStateExpireTransaction.minEpoch
+  => {}
+
+AuthenticatorStateExpireTransaction.authenticatorObjInitialSharedVersion
+  => {}
+
+AuthenticatorStateUpdateTransaction.epoch
+  => {}
+
+AuthenticatorStateUpdateTransaction.round
+  => {}
+
+AuthenticatorStateUpdateTransaction.newActiveJwks
+  => {}
+
+AuthenticatorStateUpdateTransaction.authenticatorObjInitialSharedVersion
+  => {}
+
+AvailableRange.first
+  => {}
+
+AvailableRange.last
+  => {}
+
+Balance.coinType
+  => {}
+
+Balance.totalBalance
+  => {}
+
+BalanceChange.owner
+  => {}
+
+BalanceChange.coinType
+  => {}
+
+BalanceChange.amount
+  => {}
+
+BridgeCommitteeInitTransaction.bridgeObjectVersion
+  => {}
+
+BridgeStateCreateTransaction.chainIdentifier
+  => {}
+
+ChangeEpochTransaction.epoch
+  => {}
+
+ChangeEpochTransaction.protocolConfigs
+  => {}
+
+ChangeEpochTransaction.storageCharge
+  => {}
+
+ChangeEpochTransaction.computationCharge
+  => {}
+
+ChangeEpochTransaction.storageRebate
+  => {}
+
+ChangeEpochTransaction.nonRefundableStorageFee
+  => {}
+
+ChangeEpochTransaction.epochStartTimestamp
+  => {}
+
+ChangeEpochTransaction.systemPackages
+  => {}
+
+Checkpoint.sequenceNumber
+  => {}
+
+Checkpoint.query
+  => {}
+
+Checkpoint.artifactsDigest
+  => {}
+
+Checkpoint.digest
+  => {}
+
+Checkpoint.contentDigest
+  => {}
+
+Checkpoint.epoch
+  => {}
+
+Checkpoint.networkTotalTransactions
+  => {}
+
+Checkpoint.previousCheckpointDigest
+  => {}
+
+Checkpoint.rollingGasSummary
+  => {}
+
+Checkpoint.summaryBcs
+  => {}
+
+Checkpoint.contentBcs
+  => {}
+
+Checkpoint.timestamp
+  => {}
+
+Checkpoint.validatorSignatures
+  => {}
+
+Checkpoint.transactions
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Checkpoint.transactions (filter: afterCheckpoint)
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Checkpoint.transactions (filter: atCheckpoint)
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Checkpoint.transactions (filter: beforeCheckpoint)
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Checkpoint.transactions (filter: function)
+  => {"cp_sequence_numbers", "tx_calls", "tx_digests"}
+
+Checkpoint.transactions (filter: kind)
+  => {"cp_sequence_numbers", "tx_digests", "tx_kinds"}
+
+Checkpoint.transactions (filter: affectedAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Checkpoint.transactions (filter: affectedObject)
+  => {"cp_sequence_numbers", "tx_affected_objects", "tx_digests"}
+
+Checkpoint.transactions (filter: sentAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+CoinDenyListStateCreateTransaction._
+  => {}
+
+CoinMetadata.address
+  => {}
+
+CoinMetadata.version
+  => {}
+
+CoinMetadata.digest
+  => {}
+
+CoinMetadata.balance
+  => {"consistent"}
+
+CoinMetadata.balance (filter: coinType)
+  => {"consistent"}
+
+CoinMetadata.balances
+  => {"consistent"}
+
+CoinMetadata.contents
+  => {}
+
+CoinMetadata.decimals
+  => {}
+
+CoinMetadata.defaultSuinsName
+  => {"obj_versions"}
+
+CoinMetadata.description
+  => {}
+
+CoinMetadata.dynamicField
+  => {"obj_versions"}
+
+CoinMetadata.dynamicField (filter: type)
+  => {"obj_versions"}
+
+CoinMetadata.dynamicField (filter: bcs)
+  => {"obj_versions"}
+
+CoinMetadata.dynamicFields
+  => {"consistent"}
+
+CoinMetadata.dynamicObjectField
+  => {"obj_versions"}
+
+CoinMetadata.dynamicObjectField (filter: type)
+  => {"obj_versions"}
+
+CoinMetadata.dynamicObjectField (filter: bcs)
+  => {"obj_versions"}
+
+CoinMetadata.hasPublicTransfer
+  => {}
+
+CoinMetadata.iconUrl
+  => {}
+
+CoinMetadata.multiGetDynamicFields
+  => {"obj_versions"}
+
+CoinMetadata.multiGetDynamicFields (filter: type)
+  => {"obj_versions"}
+
+CoinMetadata.multiGetDynamicFields (filter: bcs)
+  => {"obj_versions"}
+
+CoinMetadata.multiGetDynamicObjectFields
+  => {"obj_versions"}
+
+CoinMetadata.multiGetDynamicObjectFields (filter: type)
+  => {"obj_versions"}
+
+CoinMetadata.multiGetDynamicObjectFields (filter: bcs)
+  => {"obj_versions"}
+
+CoinMetadata.moveObjectBcs
+  => {}
+
+CoinMetadata.multiGetBalances
+  => {"consistent"}
+
+CoinMetadata.multiGetBalances (filter: keys)
+  => {"consistent"}
+
+CoinMetadata.name
+  => {}
+
+CoinMetadata.objectAt
+  => {"obj_versions"}
+
+CoinMetadata.objectAt (filter: version)
+  => {"obj_versions"}
+
+CoinMetadata.objectAt (filter: rootVersion)
+  => {"obj_versions"}
+
+CoinMetadata.objectAt (filter: checkpoint)
+  => {"obj_versions"}
+
+CoinMetadata.objectBcs
+  => {}
+
+CoinMetadata.objectVersionsAfter
+  => {"obj_versions"}
+
+CoinMetadata.objectVersionsAfter (filter: afterVersion)
+  => {"obj_versions"}
+
+CoinMetadata.objectVersionsAfter (filter: beforeVersion)
+  => {"obj_versions"}
+
+CoinMetadata.objectVersionsBefore
+  => {"obj_versions"}
+
+CoinMetadata.objectVersionsBefore (filter: afterVersion)
+  => {"obj_versions"}
+
+CoinMetadata.objectVersionsBefore (filter: beforeVersion)
+  => {"obj_versions"}
+
+CoinMetadata.objects
+  => {"consistent"}
+
+CoinMetadata.objects (filter: ownerKind)
+  => {"consistent"}
+
+CoinMetadata.objects (filter: owner)
+  => {"consistent"}
+
+CoinMetadata.objects (filter: type)
+  => {"consistent"}
+
+CoinMetadata.owner
+  => {}
+
+CoinMetadata.previousTransaction
+  => {}
+
+CoinMetadata.storageRebate
+  => {}
+
+CoinMetadata.receivedTransactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+CoinMetadata.receivedTransactions (filter: afterCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+CoinMetadata.receivedTransactions (filter: atCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+CoinMetadata.receivedTransactions (filter: beforeCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+CoinMetadata.receivedTransactions (filter: function)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+CoinMetadata.receivedTransactions (filter: kind)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+CoinMetadata.receivedTransactions (filter: affectedAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+CoinMetadata.receivedTransactions (filter: affectedObject)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+CoinMetadata.receivedTransactions (filter: sentAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+CoinMetadata.regulatedState
+  => {}
+
+CoinMetadata.allowGlobalPause
+  => {}
+
+CoinMetadata.denyCap
+  => {}
+
+CoinMetadata.supplyState
+  => {}
+
+CoinMetadata.supply
+  => {"consistent"}
+
+CoinMetadata.symbol
+  => {}
+
+CoinRegistryCreateTransaction._
+  => {}
+
+CommandOutput.argument
+  => {}
+
+CommandOutput.value
+  => {}
+
+CommandResult.returnValues
+  => {}
+
+CommandResult.mutatedReferences
+  => {}
+
+ConsensusAddressOwner.startVersion
+  => {}
+
+ConsensusAddressOwner.address
+  => {}
+
+ConsensusCommitPrologueTransaction.epoch
+  => {}
+
+ConsensusCommitPrologueTransaction.round
+  => {}
+
+ConsensusCommitPrologueTransaction.commitTimestamp
+  => {}
+
+ConsensusCommitPrologueTransaction.consensusCommitDigest
+  => {}
+
+ConsensusCommitPrologueTransaction.subDagIndex
+  => {}
+
+ConsensusCommitPrologueTransaction.additionalStateDigest
+  => {}
+
+ConsensusObjectCancelled.address
+  => {}
+
+ConsensusObjectCancelled.cancellationReason
+  => {}
+
+ConsensusObjectRead.object
+  => {}
+
+Display.output
+  => {}
+
+Display.errors
+  => {}
+
+DisplayRegistryCreateTransaction._
+  => {}
+
+DynamicField.address
+  => {}
+
+DynamicField.version
+  => {}
+
+DynamicField.digest
+  => {}
+
+DynamicField.balance
+  => {"consistent"}
+
+DynamicField.balance (filter: coinType)
+  => {"consistent"}
+
+DynamicField.balances
+  => {"consistent"}
+
+DynamicField.contents
+  => {}
+
+DynamicField.defaultSuinsName
+  => {"obj_versions"}
+
+DynamicField.dynamicField
+  => {"obj_versions"}
+
+DynamicField.dynamicField (filter: type)
+  => {"obj_versions"}
+
+DynamicField.dynamicField (filter: bcs)
+  => {"obj_versions"}
+
+DynamicField.dynamicFields
+  => {"consistent"}
+
+DynamicField.dynamicObjectField
+  => {"obj_versions"}
+
+DynamicField.dynamicObjectField (filter: type)
+  => {"obj_versions"}
+
+DynamicField.dynamicObjectField (filter: bcs)
+  => {"obj_versions"}
+
+DynamicField.hasPublicTransfer
+  => {}
+
+DynamicField.multiGetDynamicFields
+  => {"obj_versions"}
+
+DynamicField.multiGetDynamicFields (filter: type)
+  => {"obj_versions"}
+
+DynamicField.multiGetDynamicFields (filter: bcs)
+  => {"obj_versions"}
+
+DynamicField.multiGetDynamicObjectFields
+  => {"obj_versions"}
+
+DynamicField.multiGetDynamicObjectFields (filter: type)
+  => {"obj_versions"}
+
+DynamicField.multiGetDynamicObjectFields (filter: bcs)
+  => {"obj_versions"}
+
+DynamicField.moveObjectBcs
+  => {}
+
+DynamicField.multiGetBalances
+  => {"consistent"}
+
+DynamicField.multiGetBalances (filter: keys)
+  => {"consistent"}
+
+DynamicField.name
+  => {}
+
+DynamicField.objectAt
+  => {"obj_versions"}
+
+DynamicField.objectAt (filter: version)
+  => {"obj_versions"}
+
+DynamicField.objectAt (filter: rootVersion)
+  => {"obj_versions"}
+
+DynamicField.objectAt (filter: checkpoint)
+  => {"obj_versions"}
+
+DynamicField.objectBcs
+  => {}
+
+DynamicField.objectVersionsAfter
+  => {"obj_versions"}
+
+DynamicField.objectVersionsAfter (filter: afterVersion)
+  => {"obj_versions"}
+
+DynamicField.objectVersionsAfter (filter: beforeVersion)
+  => {"obj_versions"}
+
+DynamicField.objectVersionsBefore
+  => {"obj_versions"}
+
+DynamicField.objectVersionsBefore (filter: afterVersion)
+  => {"obj_versions"}
+
+DynamicField.objectVersionsBefore (filter: beforeVersion)
+  => {"obj_versions"}
+
+DynamicField.objects
+  => {"consistent"}
+
+DynamicField.objects (filter: ownerKind)
+  => {"consistent"}
+
+DynamicField.objects (filter: owner)
+  => {"consistent"}
+
+DynamicField.objects (filter: type)
+  => {"consistent"}
+
+DynamicField.owner
+  => {}
+
+DynamicField.previousTransaction
+  => {}
+
+DynamicField.storageRebate
+  => {}
+
+DynamicField.receivedTransactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+DynamicField.receivedTransactions (filter: afterCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+DynamicField.receivedTransactions (filter: atCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+DynamicField.receivedTransactions (filter: beforeCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+DynamicField.receivedTransactions (filter: function)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+DynamicField.receivedTransactions (filter: kind)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+DynamicField.receivedTransactions (filter: affectedAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+DynamicField.receivedTransactions (filter: affectedObject)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+DynamicField.receivedTransactions (filter: sentAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+DynamicField.value
+  => {}
+
+EndOfEpochTransaction.transactions
+  => {}
+
+Epoch.epochId
+  => {}
+
+Epoch.checkpoints
+  => {"cp_sequence_numbers"}
+
+Epoch.checkpoints (filter: atEpoch)
+  => {"cp_sequence_numbers"}
+
+Epoch.checkpoints (filter: afterCheckpoint)
+  => {"cp_sequence_numbers"}
+
+Epoch.checkpoints (filter: atCheckpoint)
+  => {"cp_sequence_numbers"}
+
+Epoch.checkpoints (filter: beforeCheckpoint)
+  => {"cp_sequence_numbers"}
+
+Epoch.coinDenyList
+  => {"obj_versions"}
+
+Epoch.protocolConfigs
+  => {}
+
+Epoch.referenceGasPrice
+  => {}
+
+Epoch.startTimestamp
+  => {}
+
+Epoch.transactions
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Epoch.transactions (filter: afterCheckpoint)
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Epoch.transactions (filter: atCheckpoint)
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Epoch.transactions (filter: beforeCheckpoint)
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Epoch.transactions (filter: function)
+  => {"cp_sequence_numbers", "tx_calls", "tx_digests"}
+
+Epoch.transactions (filter: kind)
+  => {"cp_sequence_numbers", "tx_digests", "tx_kinds"}
+
+Epoch.transactions (filter: affectedAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Epoch.transactions (filter: affectedObject)
+  => {"cp_sequence_numbers", "tx_affected_objects", "tx_digests"}
+
+Epoch.transactions (filter: sentAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Epoch.systemPackages
+  => {}
+
+Epoch.endTimestamp
+  => {}
+
+Epoch.validatorSet
+  => {}
+
+Epoch.totalCheckpoints
+  => {}
+
+Epoch.totalTransactions
+  => {}
+
+Epoch.totalGasFees
+  => {}
+
+Epoch.totalStakeRewards
+  => {}
+
+Epoch.totalStakeSubsidies
+  => {}
+
+Epoch.fundSize
+  => {}
+
+Epoch.netInflow
+  => {}
+
+Epoch.fundInflow
+  => {}
+
+Epoch.fundOutflow
+  => {}
+
+Epoch.storageFund
+  => {}
+
+Epoch.safeMode
+  => {}
+
+Epoch.systemStateVersion
+  => {}
+
+Epoch.systemParameters
+  => {}
+
+Epoch.systemStakeSubsidy
+  => {}
+
+Epoch.liveObjectSetDigest
+  => {}
+
+Event.contents
+  => {"ev_struct_inst", "tx_digests"}
+
+Event.eventBcs
+  => {"ev_struct_inst", "tx_digests"}
+
+Event.sender
+  => {"ev_struct_inst", "tx_digests"}
+
+Event.sequenceNumber
+  => {"ev_struct_inst", "tx_digests"}
+
+Event.timestamp
+  => {"ev_struct_inst", "tx_digests"}
+
+Event.transaction
+  => {"ev_struct_inst", "tx_digests"}
+
+Event.transactionModule
+  => {"ev_struct_inst", "tx_digests"}
+
+ExecutionError.abortCode
+  => {}
+
+ExecutionError.sourceLineNumber
+  => {}
+
+ExecutionError.instructionOffset
+  => {}
+
+ExecutionError.identifier
+  => {}
+
+ExecutionError.constant
+  => {}
+
+ExecutionError.module
+  => {}
+
+ExecutionError.function
+  => {}
+
+ExecutionError.message
+  => {}
+
+ExecutionResult.effects
+  => {}
+
+ExecutionResult.errors
+  => {}
+
+FeatureFlag.key
+  => {}
+
+FeatureFlag.value
+  => {}
+
+GasCoin._
+  => {}
+
+GasCostSummary.computationCost
+  => {}
+
+GasCostSummary.storageCost
+  => {}
+
+GasCostSummary.storageRebate
+  => {}
+
+GasCostSummary.nonRefundableStorageFee
+  => {}
+
+GasEffects.gasObject
+  => {}
+
+GasEffects.gasSummary
+  => {}
+
+GasInput.gasSponsor
+  => {}
+
+GasInput.gasPrice
+  => {}
+
+GasInput.gasBudget
+  => {}
+
+GasInput.gasPayment
+  => {}
+
+GenesisTransaction.objects
+  => {}
+
+IAddressable.address
+  => {}
+
+IAddressable.balance
+  => {"consistent"}
+
+IAddressable.balance (filter: coinType)
+  => {"consistent"}
+
+IAddressable.balances
+  => {"consistent"}
+
+IAddressable.defaultSuinsName
+  => {"obj_versions"}
+
+IAddressable.multiGetBalances
+  => {"consistent"}
+
+IAddressable.multiGetBalances (filter: keys)
+  => {"consistent"}
+
+IAddressable.objects
+  => {"consistent"}
+
+IAddressable.objects (filter: ownerKind)
+  => {"consistent"}
+
+IAddressable.objects (filter: owner)
+  => {"consistent"}
+
+IAddressable.objects (filter: type)
+  => {"consistent"}
+
+IMoveDatatype.module
+  => {}
+
+IMoveDatatype.name
+  => {}
+
+IMoveDatatype.abilities
+  => {"obj_versions"}
+
+IMoveDatatype.typeParameters
+  => {"obj_versions"}
+
+IMoveObject.contents
+  => {}
+
+IMoveObject.dynamicField
+  => {"obj_versions"}
+
+IMoveObject.dynamicField (filter: type)
+  => {"obj_versions"}
+
+IMoveObject.dynamicField (filter: bcs)
+  => {"obj_versions"}
+
+IMoveObject.dynamicObjectField
+  => {"obj_versions"}
+
+IMoveObject.dynamicObjectField (filter: type)
+  => {"obj_versions"}
+
+IMoveObject.dynamicObjectField (filter: bcs)
+  => {"obj_versions"}
+
+IMoveObject.hasPublicTransfer
+  => {}
+
+IMoveObject.multiGetDynamicFields
+  => {"obj_versions"}
+
+IMoveObject.multiGetDynamicFields (filter: type)
+  => {"obj_versions"}
+
+IMoveObject.multiGetDynamicFields (filter: bcs)
+  => {"obj_versions"}
+
+IMoveObject.multiGetDynamicObjectFields
+  => {"obj_versions"}
+
+IMoveObject.multiGetDynamicObjectFields (filter: type)
+  => {"obj_versions"}
+
+IMoveObject.multiGetDynamicObjectFields (filter: bcs)
+  => {"obj_versions"}
+
+IMoveObject.dynamicFields
+  => {"consistent"}
+
+IMoveObject.moveObjectBcs
+  => {}
+
+IObject.version
+  => {}
+
+IObject.digest
+  => {}
+
+IObject.objectAt
+  => {"obj_versions"}
+
+IObject.objectAt (filter: version)
+  => {"obj_versions"}
+
+IObject.objectAt (filter: rootVersion)
+  => {"obj_versions"}
+
+IObject.objectAt (filter: checkpoint)
+  => {"obj_versions"}
+
+IObject.objectBcs
+  => {}
+
+IObject.objectVersionsAfter
+  => {"obj_versions"}
+
+IObject.objectVersionsAfter (filter: afterVersion)
+  => {"obj_versions"}
+
+IObject.objectVersionsAfter (filter: beforeVersion)
+  => {"obj_versions"}
+
+IObject.objectVersionsBefore
+  => {"obj_versions"}
+
+IObject.objectVersionsBefore (filter: afterVersion)
+  => {"obj_versions"}
+
+IObject.objectVersionsBefore (filter: beforeVersion)
+  => {"obj_versions"}
+
+IObject.owner
+  => {}
+
+IObject.previousTransaction
+  => {}
+
+IObject.storageRebate
+  => {}
+
+IObject.receivedTransactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+IObject.receivedTransactions (filter: afterCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+IObject.receivedTransactions (filter: atCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+IObject.receivedTransactions (filter: beforeCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+IObject.receivedTransactions (filter: function)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+IObject.receivedTransactions (filter: kind)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+IObject.receivedTransactions (filter: affectedAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+IObject.receivedTransactions (filter: affectedObject)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+IObject.receivedTransactions (filter: sentAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Immutable._
+  => {}
+
+Input.ix
+  => {}
+
+Linkage.originalId
+  => {}
+
+Linkage.upgradedId
+  => {}
+
+Linkage.version
+  => {}
+
+MakeMoveVecCommand.type
+  => {}
+
+MakeMoveVecCommand.elements
+  => {}
+
+MergeCoinsCommand.coin
+  => {}
+
+MergeCoinsCommand.coins
+  => {}
+
+MoveCallCommand.function
+  => {}
+
+MoveCallCommand.arguments
+  => {}
+
+MoveDatatype.module
+  => {}
+
+MoveDatatype.name
+  => {}
+
+MoveDatatype.abilities
+  => {"obj_versions"}
+
+MoveDatatype.asMoveStruct
+  => {"obj_versions"}
+
+MoveDatatype.asMoveEnum
+  => {"obj_versions"}
+
+MoveDatatype.typeParameters
+  => {"obj_versions"}
+
+MoveDatatypeTypeParameter.constraints
+  => {}
+
+MoveDatatypeTypeParameter.isPhantom
+  => {}
+
+MoveEnum.module
+  => {}
+
+MoveEnum.name
+  => {}
+
+MoveEnum.abilities
+  => {"obj_versions"}
+
+MoveEnum.variants
+  => {"obj_versions"}
+
+MoveEnum.typeParameters
+  => {"obj_versions"}
+
+MoveEnumVariant.name
+  => {}
+
+MoveEnumVariant.fields
+  => {}
+
+MoveField.name
+  => {}
+
+MoveField.type
+  => {}
+
+MoveFunction.module
+  => {}
+
+MoveFunction.name
+  => {}
+
+MoveFunction.isEntry
+  => {}
+
+MoveFunction.parameters
+  => {}
+
+MoveFunction.return
+  => {}
+
+MoveFunction.typeParameters
+  => {}
+
+MoveFunction.visibility
+  => {}
+
+MoveFunctionTypeParameter.constraints
+  => {}
+
+MoveModule.package
+  => {}
+
+MoveModule.name
+  => {}
+
+MoveModule.bytes
+  => {}
+
+MoveModule.datatype
+  => {}
+
+MoveModule.datatype (filter: name)
+  => {}
+
+MoveModule.datatypes
+  => {}
+
+MoveModule.disassembly
+  => {}
+
+MoveModule.enum
+  => {}
+
+MoveModule.enum (filter: name)
+  => {}
+
+MoveModule.enums
+  => {}
+
+MoveModule.fileFormatVersion
+  => {}
+
+MoveModule.friends
+  => {}
+
+MoveModule.function
+  => {}
+
+MoveModule.function (filter: name)
+  => {}
+
+MoveModule.functions
+  => {}
+
+MoveModule.struct
+  => {}
+
+MoveModule.struct (filter: name)
+  => {}
+
+MoveModule.structs
+  => {}
+
+MoveObject.address
+  => {}
+
+MoveObject.version
+  => {}
+
+MoveObject.digest
+  => {}
+
+MoveObject.asCoinMetadata
+  => {}
+
+MoveObject.asDynamicField
+  => {}
+
+MoveObject.balance
+  => {"consistent"}
+
+MoveObject.balance (filter: coinType)
+  => {"consistent"}
+
+MoveObject.balances
+  => {"consistent"}
+
+MoveObject.contents
+  => {}
+
+MoveObject.defaultSuinsName
+  => {"obj_versions"}
+
+MoveObject.dynamicField
+  => {"obj_versions"}
+
+MoveObject.dynamicField (filter: type)
+  => {"obj_versions"}
+
+MoveObject.dynamicField (filter: bcs)
+  => {"obj_versions"}
+
+MoveObject.dynamicFields
+  => {"consistent"}
+
+MoveObject.dynamicObjectField
+  => {"obj_versions"}
+
+MoveObject.dynamicObjectField (filter: type)
+  => {"obj_versions"}
+
+MoveObject.dynamicObjectField (filter: bcs)
+  => {"obj_versions"}
+
+MoveObject.hasPublicTransfer
+  => {}
+
+MoveObject.multiGetDynamicFields
+  => {"obj_versions"}
+
+MoveObject.multiGetDynamicFields (filter: type)
+  => {"obj_versions"}
+
+MoveObject.multiGetDynamicFields (filter: bcs)
+  => {"obj_versions"}
+
+MoveObject.multiGetBalances
+  => {"consistent"}
+
+MoveObject.multiGetBalances (filter: keys)
+  => {"consistent"}
+
+MoveObject.multiGetDynamicObjectFields
+  => {"obj_versions"}
+
+MoveObject.multiGetDynamicObjectFields (filter: type)
+  => {"obj_versions"}
+
+MoveObject.multiGetDynamicObjectFields (filter: bcs)
+  => {"obj_versions"}
+
+MoveObject.moveObjectBcs
+  => {}
+
+MoveObject.objectAt
+  => {"obj_versions"}
+
+MoveObject.objectAt (filter: version)
+  => {"obj_versions"}
+
+MoveObject.objectAt (filter: rootVersion)
+  => {"obj_versions"}
+
+MoveObject.objectAt (filter: checkpoint)
+  => {"obj_versions"}
+
+MoveObject.objectBcs
+  => {}
+
+MoveObject.objectVersionsAfter
+  => {"obj_versions"}
+
+MoveObject.objectVersionsAfter (filter: afterVersion)
+  => {"obj_versions"}
+
+MoveObject.objectVersionsAfter (filter: beforeVersion)
+  => {"obj_versions"}
+
+MoveObject.objectVersionsBefore
+  => {"obj_versions"}
+
+MoveObject.objectVersionsBefore (filter: afterVersion)
+  => {"obj_versions"}
+
+MoveObject.objectVersionsBefore (filter: beforeVersion)
+  => {"obj_versions"}
+
+MoveObject.objects
+  => {"consistent"}
+
+MoveObject.objects (filter: ownerKind)
+  => {"consistent"}
+
+MoveObject.objects (filter: owner)
+  => {"consistent"}
+
+MoveObject.objects (filter: type)
+  => {"consistent"}
+
+MoveObject.owner
+  => {}
+
+MoveObject.previousTransaction
+  => {}
+
+MoveObject.storageRebate
+  => {}
+
+MoveObject.receivedTransactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MoveObject.receivedTransactions (filter: afterCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MoveObject.receivedTransactions (filter: atCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MoveObject.receivedTransactions (filter: beforeCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MoveObject.receivedTransactions (filter: function)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MoveObject.receivedTransactions (filter: kind)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MoveObject.receivedTransactions (filter: affectedAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MoveObject.receivedTransactions (filter: affectedObject)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MoveObject.receivedTransactions (filter: sentAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MovePackage.address
+  => {}
+
+MovePackage.version
+  => {}
+
+MovePackage.digest
+  => {}
+
+MovePackage.balance
+  => {"consistent"}
+
+MovePackage.balance (filter: coinType)
+  => {"consistent"}
+
+MovePackage.balances
+  => {"consistent"}
+
+MovePackage.defaultSuinsName
+  => {"obj_versions"}
+
+MovePackage.module
+  => {}
+
+MovePackage.module (filter: name)
+  => {}
+
+MovePackage.modules
+  => {}
+
+MovePackage.moduleBcs
+  => {}
+
+MovePackage.multiGetBalances
+  => {"consistent"}
+
+MovePackage.multiGetBalances (filter: keys)
+  => {"consistent"}
+
+MovePackage.objects
+  => {"consistent"}
+
+MovePackage.objects (filter: ownerKind)
+  => {"consistent"}
+
+MovePackage.objects (filter: owner)
+  => {"consistent"}
+
+MovePackage.objects (filter: type)
+  => {"consistent"}
+
+MovePackage.objectAt
+  => {"obj_versions"}
+
+MovePackage.objectAt (filter: version)
+  => {"obj_versions"}
+
+MovePackage.objectAt (filter: rootVersion)
+  => {"obj_versions"}
+
+MovePackage.objectAt (filter: checkpoint)
+  => {"obj_versions"}
+
+MovePackage.objectBcs
+  => {}
+
+MovePackage.objectVersionsAfter
+  => {"obj_versions"}
+
+MovePackage.objectVersionsAfter (filter: afterVersion)
+  => {"obj_versions"}
+
+MovePackage.objectVersionsAfter (filter: beforeVersion)
+  => {"obj_versions"}
+
+MovePackage.objectVersionsBefore
+  => {"obj_versions"}
+
+MovePackage.objectVersionsBefore (filter: afterVersion)
+  => {"obj_versions"}
+
+MovePackage.objectVersionsBefore (filter: beforeVersion)
+  => {"obj_versions"}
+
+MovePackage.owner
+  => {}
+
+MovePackage.packageAt
+  => {}
+
+MovePackage.packageAt (filter: version)
+  => {}
+
+MovePackage.packageAt (filter: checkpoint)
+  => {}
+
+MovePackage.packageBcs
+  => {}
+
+MovePackage.packageVersionsAfter
+  => {}
+
+MovePackage.packageVersionsAfter (filter: afterVersion)
+  => {}
+
+MovePackage.packageVersionsAfter (filter: beforeVersion)
+  => {}
+
+MovePackage.packageVersionsBefore
+  => {}
+
+MovePackage.packageVersionsBefore (filter: afterVersion)
+  => {}
+
+MovePackage.packageVersionsBefore (filter: beforeVersion)
+  => {}
+
+MovePackage.previousTransaction
+  => {}
+
+MovePackage.linkage
+  => {}
+
+MovePackage.storageRebate
+  => {}
+
+MovePackage.receivedTransactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MovePackage.receivedTransactions (filter: afterCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MovePackage.receivedTransactions (filter: atCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MovePackage.receivedTransactions (filter: beforeCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MovePackage.receivedTransactions (filter: function)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MovePackage.receivedTransactions (filter: kind)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MovePackage.receivedTransactions (filter: affectedAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MovePackage.receivedTransactions (filter: affectedObject)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MovePackage.receivedTransactions (filter: sentAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MovePackage.typeOrigins
+  => {}
+
+MoveStruct.module
+  => {}
+
+MoveStruct.name
+  => {}
+
+MoveStruct.abilities
+  => {"obj_versions"}
+
+MoveStruct.fields
+  => {"obj_versions"}
+
+MoveStruct.typeParameters
+  => {"obj_versions"}
+
+MoveType.repr
+  => {}
+
+MoveType.signature
+  => {}
+
+MoveType.layout
+  => {}
+
+MoveType.abilities
+  => {}
+
+MoveValue.bcs
+  => {}
+
+MoveValue.display
+  => {}
+
+MoveValue.json
+  => {}
+
+MoveValue.type
+  => {}
+
+MutateConsensusStreamEnded.address
+  => {}
+
+MutateConsensusStreamEnded.sequenceNumber
+  => {}
+
+Mutation.executeTransaction
+  => {}
+
+Mutation.executeTransaction (filter: transactionDataBcs)
+  => {}
+
+Mutation.executeTransaction (filter: signatures)
+  => {}
+
+Object.address
+  => {}
+
+Object.version
+  => {}
+
+Object.digest
+  => {}
+
+Object.asMoveObject
+  => {}
+
+Object.asMovePackage
+  => {}
+
+Object.balance
+  => {"consistent"}
+
+Object.balance (filter: coinType)
+  => {"consistent"}
+
+Object.balances
+  => {"consistent"}
+
+Object.defaultSuinsName
+  => {"obj_versions"}
+
+Object.dynamicField
+  => {"obj_versions"}
+
+Object.dynamicField (filter: type)
+  => {"obj_versions"}
+
+Object.dynamicField (filter: bcs)
+  => {"obj_versions"}
+
+Object.dynamicFields
+  => {"consistent"}
+
+Object.dynamicObjectField
+  => {"obj_versions"}
+
+Object.dynamicObjectField (filter: type)
+  => {"obj_versions"}
+
+Object.dynamicObjectField (filter: bcs)
+  => {"obj_versions"}
+
+Object.multiGetDynamicFields
+  => {"obj_versions"}
+
+Object.multiGetDynamicFields (filter: type)
+  => {"obj_versions"}
+
+Object.multiGetDynamicFields (filter: bcs)
+  => {"obj_versions"}
+
+Object.multiGetDynamicObjectFields
+  => {"obj_versions"}
+
+Object.multiGetDynamicObjectFields (filter: type)
+  => {"obj_versions"}
+
+Object.multiGetDynamicObjectFields (filter: bcs)
+  => {"obj_versions"}
+
+Object.multiGetBalances
+  => {"consistent"}
+
+Object.multiGetBalances (filter: keys)
+  => {"consistent"}
+
+Object.objectAt
+  => {"obj_versions"}
+
+Object.objectAt (filter: version)
+  => {"obj_versions"}
+
+Object.objectAt (filter: rootVersion)
+  => {"obj_versions"}
+
+Object.objectAt (filter: checkpoint)
+  => {"obj_versions"}
+
+Object.objectBcs
+  => {}
+
+Object.objectVersionsAfter
+  => {"obj_versions"}
+
+Object.objectVersionsAfter (filter: afterVersion)
+  => {"obj_versions"}
+
+Object.objectVersionsAfter (filter: beforeVersion)
+  => {"obj_versions"}
+
+Object.objectVersionsBefore
+  => {"obj_versions"}
+
+Object.objectVersionsBefore (filter: afterVersion)
+  => {"obj_versions"}
+
+Object.objectVersionsBefore (filter: beforeVersion)
+  => {"obj_versions"}
+
+Object.objects
+  => {"consistent"}
+
+Object.objects (filter: ownerKind)
+  => {"consistent"}
+
+Object.objects (filter: owner)
+  => {"consistent"}
+
+Object.objects (filter: type)
+  => {"consistent"}
+
+Object.owner
+  => {}
+
+Object.previousTransaction
+  => {}
+
+Object.storageRebate
+  => {}
+
+Object.receivedTransactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Object.receivedTransactions (filter: afterCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Object.receivedTransactions (filter: atCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Object.receivedTransactions (filter: beforeCheckpoint)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Object.receivedTransactions (filter: function)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Object.receivedTransactions (filter: kind)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Object.receivedTransactions (filter: affectedAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Object.receivedTransactions (filter: affectedObject)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Object.receivedTransactions (filter: sentAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+ObjectChange.address
+  => {}
+
+ObjectChange.inputState
+  => {}
+
+ObjectChange.outputState
+  => {}
+
+ObjectChange.idCreated
+  => {}
+
+ObjectChange.idDeleted
+  => {}
+
+ObjectOwner.address
+  => {}
+
+OpenMoveType.signature
+  => {}
+
+OpenMoveType.repr
+  => {}
+
+OtherCommand._
+  => {}
+
+OwnedOrImmutable.object
+  => {}
+
+PageInfo.hasPreviousPage
+  => {}
+
+PageInfo.hasNextPage
+  => {}
+
+PageInfo.startCursor
+  => {}
+
+PageInfo.endCursor
+  => {}
+
+PerEpochConfig.object
+  => {}
+
+ProgrammableSystemTransaction.inputs
+  => {}
+
+ProgrammableSystemTransaction.commands
+  => {}
+
+ProgrammableTransaction.inputs
+  => {}
+
+ProgrammableTransaction.commands
+  => {}
+
+ProtocolConfig.key
+  => {}
+
+ProtocolConfig.value
+  => {}
+
+ProtocolConfigs.protocolVersion
+  => {}
+
+ProtocolConfigs.config
+  => {}
+
+ProtocolConfigs.config (filter: key)
+  => {}
+
+ProtocolConfigs.configs
+  => {}
+
+ProtocolConfigs.featureFlag
+  => {}
+
+ProtocolConfigs.featureFlag (filter: key)
+  => {}
+
+ProtocolConfigs.featureFlags
+  => {}
+
+PublishCommand.modules
+  => {}
+
+PublishCommand.dependencies
+  => {}
+
+Pure.bytes
+  => {}
+
+Query.address
+  => {}
+
+Query.address (filter: address)
+  => {}
+
+Query.address (filter: rootVersion)
+  => {}
+
+Query.chainIdentifier
+  => {}
+
+Query.checkpoint
+  => {}
+
+Query.checkpoint (filter: sequenceNumber)
+  => {}
+
+Query.checkpoints
+  => {"cp_sequence_numbers"}
+
+Query.checkpoints (filter: atEpoch)
+  => {"cp_sequence_numbers"}
+
+Query.checkpoints (filter: afterCheckpoint)
+  => {"cp_sequence_numbers"}
+
+Query.checkpoints (filter: atCheckpoint)
+  => {"cp_sequence_numbers"}
+
+Query.checkpoints (filter: beforeCheckpoint)
+  => {"cp_sequence_numbers"}
+
+Query.coinMetadata
+  => {"consistent", "obj_versions"}
+
+Query.coinMetadata (filter: coinType)
+  => {"consistent", "obj_versions"}
+
+Query.epoch
+  => {}
+
+Query.epoch (filter: epochId)
+  => {}
+
+Query.epochs
+  => {}
+
+Query.events
+  => {"ev_struct_inst", "tx_digests"}
+
+Query.events (filter: afterCheckpoint)
+  => {"ev_struct_inst", "tx_digests"}
+
+Query.events (filter: atCheckpoint)
+  => {"ev_struct_inst", "tx_digests"}
+
+Query.events (filter: beforeCheckpoint)
+  => {"ev_struct_inst", "tx_digests"}
+
+Query.events (filter: sender)
+  => {"ev_struct_inst", "tx_digests"}
+
+Query.events (filter: module)
+  => {"ev_emit_mod", "tx_digests"}
+
+Query.events (filter: type)
+  => {"ev_struct_inst", "tx_digests"}
+
+Query.multiGetCheckpoints
+  => {}
+
+Query.multiGetCheckpoints (filter: keys)
+  => {}
+
+Query.multiGetEpochs
+  => {}
+
+Query.multiGetEpochs (filter: keys)
+  => {}
+
+Query.multiGetObjects
+  => {}
+
+Query.multiGetObjects (filter: address)
+  => {}
+
+Query.multiGetObjects (filter: version)
+  => {}
+
+Query.multiGetObjects (filter: rootVersion)
+  => {}
+
+Query.multiGetObjects (filter: atCheckpoint)
+  => {}
+
+Query.multiGetPackages
+  => {}
+
+Query.multiGetPackages (filter: address)
+  => {}
+
+Query.multiGetPackages (filter: version)
+  => {}
+
+Query.multiGetPackages (filter: atCheckpoint)
+  => {}
+
+Query.multiGetTransactions
+  => {}
+
+Query.multiGetTransactions (filter: keys)
+  => {}
+
+Query.multiGetTransactionEffects
+  => {}
+
+Query.multiGetTransactionEffects (filter: keys)
+  => {}
+
+Query.multiGetTypes
+  => {}
+
+Query.multiGetTypes (filter: keys)
+  => {}
+
+Query.object
+  => {"obj_versions"}
+
+Query.object (filter: address)
+  => {"obj_versions"}
+
+Query.object (filter: version)
+  => {}
+
+Query.object (filter: rootVersion)
+  => {"obj_versions"}
+
+Query.object (filter: atCheckpoint)
+  => {"obj_versions"}
+
+Query.objects
+  => {"consistent"}
+
+Query.objects (filter: ownerKind)
+  => {"consistent"}
+
+Query.objects (filter: owner)
+  => {"consistent"}
+
+Query.objects (filter: type)
+  => {"consistent"}
+
+Query.objectVersions
+  => {"obj_versions"}
+
+Query.objectVersions (filter: address)
+  => {"obj_versions"}
+
+Query.objectVersions (filter: afterVersion)
+  => {"obj_versions"}
+
+Query.objectVersions (filter: beforeVersion)
+  => {"obj_versions"}
+
+Query.package
+  => {}
+
+Query.package (filter: address)
+  => {}
+
+Query.package (filter: version)
+  => {}
+
+Query.package (filter: atCheckpoint)
+  => {}
+
+Query.packages
+  => {}
+
+Query.packages (filter: afterCheckpoint)
+  => {}
+
+Query.packages (filter: beforeCheckpoint)
+  => {}
+
+Query.packageVersions
+  => {}
+
+Query.packageVersions (filter: address)
+  => {}
+
+Query.packageVersions (filter: afterVersion)
+  => {}
+
+Query.packageVersions (filter: beforeVersion)
+  => {}
+
+Query.protocolConfigs
+  => {}
+
+Query.protocolConfigs (filter: version)
+  => {}
+
+Query.serviceConfig
+  => {}
+
+Query.suinsName
+  => {}
+
+Query.suinsName (filter: address)
+  => {}
+
+Query.suinsName (filter: rootVersion)
+  => {}
+
+Query.transaction
+  => {}
+
+Query.transaction (filter: digest)
+  => {}
+
+Query.transactionEffects
+  => {}
+
+Query.transactionEffects (filter: digest)
+  => {}
+
+Query.transactions
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Query.transactions (filter: afterCheckpoint)
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Query.transactions (filter: atCheckpoint)
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Query.transactions (filter: beforeCheckpoint)
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Query.transactions (filter: function)
+  => {"cp_sequence_numbers", "tx_calls", "tx_digests"}
+
+Query.transactions (filter: kind)
+  => {"cp_sequence_numbers", "tx_digests", "tx_kinds"}
+
+Query.transactions (filter: affectedAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Query.transactions (filter: affectedObject)
+  => {"cp_sequence_numbers", "tx_affected_objects", "tx_digests"}
+
+Query.transactions (filter: sentAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Query.type
+  => {}
+
+Query.type (filter: type)
+  => {}
+
+Query.simulateTransaction
+  => {}
+
+Query.simulateTransaction (filter: transaction)
+  => {}
+
+Query.verifyZkLoginSignature
+  => {}
+
+Query.verifyZkLoginSignature (filter: bytes)
+  => {}
+
+Query.verifyZkLoginSignature (filter: signature)
+  => {}
+
+Query.verifyZkLoginSignature (filter: author)
+  => {}
+
+Query.__schema
+  => {}
+
+Query.__type
+  => {}
+
+Query.__type (filter: name)
+  => {}
+
+RandomnessStateCreateTransaction._
+  => {}
+
+RandomnessStateUpdateTransaction.epoch
+  => {}
+
+RandomnessStateUpdateTransaction.randomnessRound
+  => {}
+
+RandomnessStateUpdateTransaction.randomBytes
+  => {}
+
+RandomnessStateUpdateTransaction.randomnessObjInitialSharedVersion
+  => {}
+
+ReadConsensusStreamEnded.address
+  => {}
+
+ReadConsensusStreamEnded.sequenceNumber
+  => {}
+
+Receiving.object
+  => {}
+
+SafeMode.enabled
+  => {}
+
+SafeMode.gasSummary
+  => {}
+
+ServiceConfig.mutationTimeoutMs
+  => {}
+
+ServiceConfig.queryTimeoutMs
+  => {}
+
+ServiceConfig.maxQueryDepth
+  => {}
+
+ServiceConfig.maxQueryNodes
+  => {}
+
+ServiceConfig.maxOutputNodes
+  => {}
+
+ServiceConfig.maxTransactionPayloadSize
+  => {}
+
+ServiceConfig.maxQueryPayloadSize
+  => {}
+
+ServiceConfig.defaultPageSize
+  => {}
+
+ServiceConfig.defaultPageSize (filter: type)
+  => {}
+
+ServiceConfig.defaultPageSize (filter: field)
+  => {}
+
+ServiceConfig.maxPageSize
+  => {}
+
+ServiceConfig.maxPageSize (filter: type)
+  => {}
+
+ServiceConfig.maxPageSize (filter: field)
+  => {}
+
+ServiceConfig.maxMultiGetSize
+  => {}
+
+ServiceConfig.maxTypeArgumentDepth
+  => {}
+
+ServiceConfig.maxTypeArgumentWidth
+  => {}
+
+ServiceConfig.maxTypeNodes
+  => {}
+
+ServiceConfig.maxMoveValueDepth
+  => {}
+
+ServiceConfig.maxMoveValueBound
+  => {}
+
+ServiceConfig.maxDisplayFieldDepth
+  => {}
+
+ServiceConfig.maxDisplayOutputSize
+  => {}
+
+ServiceConfig.maxDisassembledModuleSize
+  => {}
+
+ServiceConfig.availableRange
+  => {}
+
+ServiceConfig.availableRange (filter: type)
+  => {}
+
+ServiceConfig.availableRange (filter: field)
+  => {}
+
+ServiceConfig.availableRange (filter: filters)
+  => {}
+
+Shared.initialSharedVersion
+  => {}
+
+SharedInput.address
+  => {}
+
+SharedInput.initialSharedVersion
+  => {}
+
+SharedInput.mutable
+  => {}
+
+SimulationResult.effects
+  => {}
+
+SimulationResult.events
+  => {}
+
+SimulationResult.outputs
+  => {}
+
+SimulationResult.error
+  => {}
+
+SplitCoinsCommand.coin
+  => {}
+
+SplitCoinsCommand.amounts
+  => {}
+
+StakeSubsidy.balance
+  => {}
+
+StakeSubsidy.distributionCounter
+  => {}
+
+StakeSubsidy.currentDistributionAmount
+  => {}
+
+StakeSubsidy.periodLength
+  => {}
+
+StakeSubsidy.decreaseRate
+  => {}
+
+StorageFund.totalObjectStorageRebates
+  => {}
+
+StorageFund.nonRefundableBalance
+  => {}
+
+StoreExecutionTimeObservationsTransaction._
+  => {}
+
+SystemParameters.durationMs
+  => {}
+
+SystemParameters.stakeSubsidyStartEpoch
+  => {}
+
+SystemParameters.minValidatorCount
+  => {}
+
+SystemParameters.maxValidatorCount
+  => {}
+
+SystemParameters.minValidatorJoiningStake
+  => {}
+
+SystemParameters.validatorLowStakeThreshold
+  => {}
+
+SystemParameters.validatorVeryLowStakeThreshold
+  => {}
+
+SystemParameters.validatorLowStakeGracePeriod
+  => {}
+
+Transaction.digest
+  => {}
+
+Transaction.effects
+  => {}
+
+Transaction.kind
+  => {}
+
+Transaction.expiration
+  => {}
+
+Transaction.gasInput
+  => {}
+
+Transaction.sender
+  => {}
+
+Transaction.transactionBcs
+  => {}
+
+Transaction.signatures
+  => {}
+
+TransactionEffects.digest
+  => {}
+
+TransactionEffects.transaction
+  => {}
+
+TransactionEffects.checkpoint
+  => {}
+
+TransactionEffects.status
+  => {}
+
+TransactionEffects.lamportVersion
+  => {}
+
+TransactionEffects.executionError
+  => {}
+
+TransactionEffects.timestamp
+  => {}
+
+TransactionEffects.epoch
+  => {}
+
+TransactionEffects.events
+  => {}
+
+TransactionEffects.balanceChanges
+  => {"tx_balance_changes", "tx_digests"}
+
+TransactionEffects.effectsBcs
+  => {}
+
+TransactionEffects.effectsDigest
+  => {}
+
+TransactionEffects.objectChanges
+  => {}
+
+TransactionEffects.gasEffects
+  => {}
+
+TransactionEffects.unchangedConsensusObjects
+  => {}
+
+TransactionEffects.dependencies
+  => {}
+
+TransferObjectsCommand.inputs
+  => {}
+
+TransferObjectsCommand.address
+  => {}
+
+TxResult.cmd
+  => {}
+
+TxResult.ix
+  => {}
+
+TypeOrigin.module
+  => {}
+
+TypeOrigin.struct
+  => {}
+
+TypeOrigin.definingId
+  => {}
+
+UpgradeCommand.modules
+  => {}
+
+UpgradeCommand.dependencies
+  => {}
+
+UpgradeCommand.currentPackage
+  => {}
+
+UpgradeCommand.upgradeTicket
+  => {}
+
+UserSignature.signatureBytes
+  => {}
+
+Validator.address
+  => {}
+
+Validator.balance
+  => {"consistent"}
+
+Validator.balance (filter: coinType)
+  => {"consistent"}
+
+Validator.balances
+  => {"consistent"}
+
+Validator.defaultSuinsName
+  => {"obj_versions"}
+
+Validator.multiGetBalances
+  => {"consistent"}
+
+Validator.multiGetBalances (filter: keys)
+  => {"consistent"}
+
+Validator.objects
+  => {"consistent"}
+
+Validator.objects (filter: ownerKind)
+  => {"consistent"}
+
+Validator.objects (filter: owner)
+  => {"consistent"}
+
+Validator.objects (filter: type)
+  => {"consistent"}
+
+Validator.credentials
+  => {}
+
+Validator.nextEpochCredentials
+  => {}
+
+Validator.name
+  => {}
+
+Validator.description
+  => {}
+
+Validator.imageUrl
+  => {}
+
+Validator.projectUrl
+  => {}
+
+Validator.operationCap
+  => {"obj_versions"}
+
+Validator.stakingPoolId
+  => {}
+
+Validator.exchangeRatesTable
+  => {}
+
+Validator.exchangeRatesSize
+  => {}
+
+Validator.stakingPoolActivationEpoch
+  => {}
+
+Validator.stakingPoolSuiBalance
+  => {}
+
+Validator.rewardsPool
+  => {}
+
+Validator.poolTokenBalance
+  => {}
+
+Validator.pendingStake
+  => {}
+
+Validator.pendingTotalSuiWithdraw
+  => {}
+
+Validator.pendingPoolTokenWithdraw
+  => {}
+
+Validator.votingPower
+  => {}
+
+Validator.gasPrice
+  => {}
+
+Validator.commissionRate
+  => {}
+
+Validator.nextEpochStake
+  => {}
+
+Validator.nextEpochGasPrice
+  => {}
+
+Validator.nextEpochCommissionRate
+  => {}
+
+Validator.atRisk
+  => {}
+
+Validator.reportRecords
+  => {}
+
+ValidatorAggregatedSignature.epoch
+  => {}
+
+ValidatorAggregatedSignature.signature
+  => {}
+
+ValidatorAggregatedSignature.signersMap
+  => {}
+
+ValidatorCredentials.protocolPubKey
+  => {}
+
+ValidatorCredentials.networkPubKey
+  => {}
+
+ValidatorCredentials.workerPubKey
+  => {}
+
+ValidatorCredentials.proofOfPossession
+  => {}
+
+ValidatorCredentials.netAddress
+  => {}
+
+ValidatorCredentials.p2PAddress
+  => {}
+
+ValidatorCredentials.primaryAddress
+  => {}
+
+ValidatorCredentials.workerAddress
+  => {}
+
+ValidatorSet.activeValidators
+  => {}
+
+ValidatorSet.inactivePoolsId
+  => {}
+
+ValidatorSet.inactivePoolsSize
+  => {}
+
+ValidatorSet.pendingActiveValidatorsId
+  => {}
+
+ValidatorSet.pendingActiveValidatorsSize
+  => {}
+
+ValidatorSet.pendingRemovals
+  => {}
+
+ValidatorSet.stakingPoolMappingsId
+  => {}
+
+ValidatorSet.stakingPoolMappingsSize
+  => {}
+
+ValidatorSet.totalStake
+  => {}
+
+ValidatorSet.validatorCandidatesId
+  => {}
+
+ValidatorSet.validatorCandidatesSize
+  => {}
+
+ZkLoginVerifyResult.success
+  => {}
+
+ZkLoginVerifyResult.error
+  => {}
