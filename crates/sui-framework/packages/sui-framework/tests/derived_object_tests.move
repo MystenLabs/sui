@@ -4,9 +4,8 @@
 #[test_only]
 module sui::derived_object_tests;
 
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, destroy};
 use sui::derived_object;
-use sui::test_utils::destroy;
 
 use fun object::new as TxContext.new;
 

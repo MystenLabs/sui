@@ -4,8 +4,8 @@
 #[test_only]
 module sui::poseidon_tests;
 
-use sui::poseidon::poseidon_bn254;
 use std::u64::min;
+use sui::poseidon::poseidon_bn254;
 
 #[test]
 fun test_poseidon_bn254_hash() {

@@ -5,12 +5,11 @@
 #[deprecated(note = b"Use sui_system::test_runner instead")]
 module sui_system::governance_test_utils;
 
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, destroy};
 use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
 use sui::test_scenario::{Self, Scenario};
-use sui::test_utils;
 use sui_system::stake_subsidy;
 use sui_system::staking_pool::{StakedSui, StakingPool};
 use sui_system::sui_system::{Self, SuiSystemState};
@@ -145,7 +144,7 @@ public fun advance_epoch_with_reward_amounts(
         0,
         scenario,
     );
-    test_utils::destroy(storage_rebate)
+    destroy(storage_rebate)
 }
 
 public fun advance_epoch_with_reward_amounts_and_slashing_rates(
@@ -172,7 +171,7 @@ public fun advance_epoch_with_reward_amounts_and_slashing_rates(
         0,
         ctx,
     );
-    test_utils::destroy(storage_rebate);
+    destroy(storage_rebate);
     test_scenario::return_shared(system_state);
     scenario.next_epoch(@0x0);
 }

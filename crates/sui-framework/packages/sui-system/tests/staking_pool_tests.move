@@ -4,10 +4,9 @@
 #[test_only]
 module sui_system::staking_pool_tests;
 
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, destroy};
 use sui::balance;
 use sui::test_scenario::{Self, Scenario};
-use sui::test_utils::destroy;
 use sui_system::staking_pool::{Self, StakingPool};
 
 #[test]
