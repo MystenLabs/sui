@@ -195,10 +195,8 @@ impl ReadApi {
             .into_iter()
             .flatten()
             .map(|check| {
-                (
-                    check.clone().into_summary_and_sequence().1,
-                    check.get_validator_signature(),
-                )
+                let (summary, auth_sig) = check.into_data_and_sig();
+                (summary, auth_sig.signature)
             })
             .collect();
 
@@ -207,7 +205,8 @@ impl ReadApi {
             .await?;
         let contents: Vec<CheckpointContents> = checkpoint_contents.into_iter().flatten().collect();
 
-        let mut checkpoints: Vec<Checkpoint> = vec![];
+        let mut checkpoints: Vec<Checkpoint> =
+            Vec::with_capacity(checkpoint_summaries_and_signatures.len());
 
         for (summary_and_sig, content) in checkpoint_summaries_and_signatures
             .into_iter()
@@ -244,22 +243,25 @@ impl ReadApi {
         let opts = opts.unwrap_or_default();
 
         // use LinkedHashMap to dedup and can iterate in insertion order.
-        let mut temp_response: IndexMap<&TransactionDigest, IntermediateTransactionResponse> =
-            IndexMap::from_iter(
-                digests
-                    .iter()
-                    .map(|k| (k, IntermediateTransactionResponse::new(*k))),
-            );
+        let mut temp_response: IndexMap<&TransactionDigest, IntermediateTransactionResponse> = {
+            let mut map = IndexMap::with_capacity(digests.len());
+            for digest in &digests {
+                map.insert(digest, IntermediateTransactionResponse::new(*digest));
+            }
+            map
+        };
         if temp_response.len() < num_digests {
             Err(SuiRpcInputError::ContainsDuplicates)?
         }
 
         if opts.require_input() {
             trace!("getting input");
-            let digests_clone = digests.clone();
-            let transactions =
-                self.transaction_kv_store.multi_get_tx(&digests_clone).await.tap_err(
-                    |err| debug!(digests=?digests_clone, "Failed to multi get transactions: {:?}", err),
+            let transactions = self
+                .transaction_kv_store
+                .multi_get_tx(&digests)
+                .await
+                .tap_err(
+                    |err| debug!(digests=?digests, "Failed to multi get transactions: {:?}", err),
                 )?;
 
             for ((_digest, cache_entry), txn) in
@@ -272,12 +274,11 @@ impl ReadApi {
         // Fetch effects when `show_events` is true because events relies on effects
         if opts.require_effects() {
             trace!("getting effects");
-            let digests_clone = digests.clone();
             let effects_list = self.transaction_kv_store
-                .multi_get_fx_by_tx_digest(&digests_clone)
+                .multi_get_fx_by_tx_digest(&digests)
                 .await
                 .tap_err(
-                    |err| debug!(digests=?digests_clone, "Failed to multi get effects for transactions: {:?}", err),
+                    |err| debug!(digests=?digests, "Failed to multi get effects for transactions: {:?}", err),
                 )?;
             for ((_digest, cache_entry), e) in
                 temp_response.iter_mut().zip(effects_list.into_iter())
