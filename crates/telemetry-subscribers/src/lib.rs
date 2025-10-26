@@ -19,14 +19,16 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     env,
-    io::{Write, stderr},
+    io::{Write, stderr, stdout},
     str::FromStr,
     sync::{Arc, Mutex, atomic::Ordering},
 };
 use tracing::metadata::LevelFilter;
 use tracing::{Level, error, info};
-use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
-use tracing_subscriber::{EnvFilter, Layer, Registry, filter, fmt, layer::SubscriberExt, reload};
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::{
+    EnvFilter, Layer, Registry, filter, filter::FilterFn, fmt, layer::SubscriberExt, reload,
+};
 
 use crate::file_exporter::{CachedOpenFile, FileExporter};
 
@@ -69,19 +71,19 @@ pub struct TelemetryConfig {
 #[must_use]
 #[allow(dead_code)]
 pub struct TelemetryGuards {
-    worker_guard: WorkerGuard,
+    worker_guards: Vec<WorkerGuard>,
     provider: Option<TracerProvider>,
 }
 
 impl TelemetryGuards {
     fn new(
         config: TelemetryConfig,
-        worker_guard: WorkerGuard,
+        worker_guards: Vec<WorkerGuard>,
         provider: Option<TracerProvider>,
     ) -> Self {
         set_global_telemetry_config(config);
         Self {
-            worker_guard,
+            worker_guards,
             provider,
         }
     }
@@ -170,15 +172,6 @@ impl TracingHandle {
                 error!("failed to reset trace filter: {}", e);
             }
         }
-    }
-}
-
-fn get_output(log_file: Option<String>) -> (NonBlocking, WorkerGuard) {
-    if let Some(logfile_prefix) = log_file {
-        let file_appender = tracing_appender::rolling::daily("", logfile_prefix);
-        tracing_appender::non_blocking(file_appender)
-    } else {
-        tracing_appender::non_blocking(stderr())
     }
 }
 
@@ -345,9 +338,15 @@ impl TelemetryConfig {
             }
         }
         let env_filter =
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(directives));
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&directives));
         let (log_filter, reload_handle) = reload::Layer::new(env_filter);
         let log_filter_handle = FilterHandle(reload_handle);
+
+        // Create separate EnvFilters for console output (non-reloadable)
+        let env_filter_for_stdout =
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&directives));
+        let env_filter_for_stderr =
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(directives));
 
         // Separate span level filter.
         // This is a dumb filter for now - allows all spans that are below a given level.
@@ -444,25 +443,88 @@ impl TelemetryConfig {
             layers.push(telemetry.with_filter(trace_env_filter).boxed());
         }
 
-        let (nb_output, worker_guard) = get_output(config.log_file.clone());
-        if config.json_log_output {
-            // Output to file or to stderr in a newline-delimited JSON format
-            let json_layer = fmt::layer()
-                .with_file(true)
-                .with_line_number(true)
-                .json()
-                .with_writer(nb_output)
-                .with_filter(log_filter)
-                .boxed();
-            layers.push(json_layer);
+        let mut worker_guards = Vec::new();
+
+        if let Some(log_file) = config.log_file.clone() {
+            // File output: existing behavior, all logs to one file
+            let file_appender = tracing_appender::rolling::daily("", log_file);
+            let (nb_output, worker_guard) = tracing_appender::non_blocking(file_appender);
+            worker_guards.push(worker_guard);
+
+            if config.json_log_output {
+                let json_layer = fmt::layer()
+                    .with_file(true)
+                    .with_line_number(true)
+                    .json()
+                    .with_writer(nb_output)
+                    .with_filter(log_filter)
+                    .boxed();
+                layers.push(json_layer);
+            } else {
+                let fmt_layer = fmt::layer()
+                    .with_ansi(false)
+                    .with_writer(nb_output)
+                    .with_filter(log_filter)
+                    .boxed();
+                layers.push(fmt_layer);
+            }
         } else {
-            // Output to file or to stderr with ANSI colors
-            let fmt_layer = fmt::layer()
-                .with_ansi(config.log_file.is_none() && stderr().is_tty())
-                .with_writer(nb_output)
-                .with_filter(log_filter)
-                .boxed();
-            layers.push(fmt_layer);
+            // Console output: split by level - INFO/DEBUG/TRACE to stdout, WARN/ERROR to stderr
+            let (stdout_writer, stdout_guard) = tracing_appender::non_blocking(stdout());
+            let (stderr_writer, stderr_guard) = tracing_appender::non_blocking(stderr());
+            worker_guards.push(stdout_guard);
+            worker_guards.push(stderr_guard);
+
+            // Filter for informational logs (INFO/DEBUG/TRACE) - goes to stdout
+            // Level ordering: ERROR(1) < WARN(2) < INFO(3) < DEBUG(4) < TRACE(5)
+            // Numeric comparison: >= INFO captures INFO(3), DEBUG(4), TRACE(5)
+            let stdout_filter = FilterFn::new(|metadata| metadata.level() >= &Level::INFO);
+
+            // Filter for error logs (WARN/ERROR) - goes to stderr
+            // Numeric comparison: <= WARN captures WARN(2), ERROR(1)
+            let stderr_filter = FilterFn::new(|metadata| metadata.level() <= &Level::WARN);
+
+            if config.json_log_output {
+                // JSON format for stdout
+                let json_stdout_layer = fmt::layer()
+                    .with_file(true)
+                    .with_line_number(true)
+                    .json()
+                    .with_writer(stdout_writer)
+                    .with_filter(env_filter_for_stdout)
+                    .with_filter(stdout_filter)
+                    .boxed();
+                layers.push(json_stdout_layer);
+
+                // JSON format for stderr
+                let json_stderr_layer = fmt::layer()
+                    .with_file(true)
+                    .with_line_number(true)
+                    .json()
+                    .with_writer(stderr_writer)
+                    .with_filter(env_filter_for_stderr)
+                    .with_filter(stderr_filter)
+                    .boxed();
+                layers.push(json_stderr_layer);
+            } else {
+                // Plain text format for stdout (with ANSI if TTY)
+                let fmt_stdout_layer = fmt::layer()
+                    .with_ansi(stdout().is_tty())
+                    .with_writer(stdout_writer)
+                    .with_filter(env_filter_for_stdout)
+                    .with_filter(stdout_filter)
+                    .boxed();
+                layers.push(fmt_stdout_layer);
+
+                // Plain text format for stderr (no ANSI)
+                let fmt_stderr_layer = fmt::layer()
+                    .with_ansi(false)
+                    .with_writer(stderr_writer)
+                    .with_filter(env_filter_for_stderr)
+                    .with_filter(stderr_filter)
+                    .boxed();
+                layers.push(fmt_stderr_layer);
+            }
         }
 
         let subscriber = tracing_subscriber::registry().with(layers);
@@ -475,7 +537,7 @@ impl TelemetryConfig {
 
         // The guard must be returned and kept in the main fn of the app, as when it's dropped then the output
         // gets flushed and closed. If this is dropped too early then no output will appear!
-        let guards = TelemetryGuards::new(config_clone, worker_guard, provider);
+        let guards = TelemetryGuards::new(config_clone, worker_guards, provider);
 
         (
             guards,
