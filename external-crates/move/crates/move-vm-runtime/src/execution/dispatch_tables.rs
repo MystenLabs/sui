@@ -187,7 +187,9 @@ impl VMDispatchTables {
             PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
                 .with_message(format!("Package {} not found", package))
         })?;
-        let interned = self.interner.intern_identifier(module_id).unwrap();
+
+        let interned = self.interner.intern_identifier(module_id)?;
+
         package
             .loaded_modules
             .get(&interned)
