@@ -163,6 +163,15 @@ impl ProgrammableTransactionBuilder {
         Argument::Result(i as u16)
     }
 
+    pub fn command_with_multiple_results<const N: usize>(
+        &mut self,
+        command: Command,
+    ) -> [Argument; N] {
+        let i = self.commands.len();
+        self.commands.push(command);
+        std::array::from_fn(|j| Argument::NestedResult(i as u16, j as u16))
+    }
+
     /// Will fail to generate if given an empty ObjVec
     pub fn move_call(
         &mut self,
@@ -195,6 +204,23 @@ impl ProgrammableTransactionBuilder {
         arguments: Vec<Argument>,
     ) -> Argument {
         self.command(Command::move_call(
+            package,
+            module,
+            function,
+            type_arguments,
+            arguments,
+        ))
+    }
+
+    pub fn programmable_move_call_with_multiple_results<const N: usize>(
+        &mut self,
+        package: ObjectID,
+        module: Identifier,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        arguments: Vec<Argument>,
+    ) -> [Argument; N] {
+        self.command_with_multiple_results(Command::move_call(
             package,
             module,
             function,
