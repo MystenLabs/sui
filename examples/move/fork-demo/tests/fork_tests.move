@@ -2,134 +2,131 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module fork_demo::fork_tests {
-    use sui::coin::{Self, Coin};
-    use sui::test_scenario as ts;
-    use sui::clock::{Self, Clock};
-    use sui::dynamic_field::{Self as df};
-    use sui::dynamic_object_field::{Self as dof};
-    use fork_demo::demo_coin::{Self, DEMO_COIN, DEMO_STATE, DEMO_DYNAMIC};
-    use std::debug;
+module fork_demo::fork_tests;
 
-    const ADMIN: address = @0xAD;
-    const USER1: address = @0x1111111111111111111111111111111111111111111111111111111111111111;
-    const MINT_AMOUNT: u64 = 1_000_000;
+use fork_demo::demo_coin::{Self, DEMO_COIN, DEMO_STATE};
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::test_scenario as ts;
 
-    #[test]
-    fun test_normal_mint_without_fork() {
-        let mut scenario = ts::begin(ADMIN);
-        let s = &mut scenario;
+const ADMIN: address = @0xAD;
+const USER1: address = @0x1111111111111111111111111111111111111111111111111111111111111111;
+const MINT_AMOUNT: u64 = 1_000_000;
 
-        // Initialize the coin
-        demo_coin::init_for_testing(s.ctx());
-        s.next_tx(ADMIN);
-        // Mint coins
-        {
-            let mut treasury = s.take_from_sender<coin::TreasuryCap<DEMO_COIN>>();
-            demo_coin::mint(&mut treasury, MINT_AMOUNT, USER1, s.ctx());
-            s.return_to_sender(treasury);
-        };
+#[test]
+fun test_normal_mint_without_fork() {
+    let mut scenario = ts::begin(ADMIN);
+    let s = &mut scenario;
 
-        s.next_tx(USER1);
-        // Verify USER1 received the coins
-        {
-            let coin = s.take_from_sender<Coin<DEMO_COIN>>();
-            assert!(coin.value() == MINT_AMOUNT, 0);
+    // Initialize the coin
+    demo_coin::init_for_testing(s.ctx());
+    s.next_tx(ADMIN);
+    // Mint coins
+    {
+        let mut treasury = s.take_from_sender<coin::TreasuryCap<DEMO_COIN>>();
+        demo_coin::mint(&mut treasury, MINT_AMOUNT, USER1, s.ctx());
+        s.return_to_sender(treasury);
+    };
 
-            s.return_to_sender(coin);
-        };
-
-        ts::end(scenario);
-    }
-
-    #[test]
-    fun test_verify_balance_from_fork() {
-        let scenario = ts::begin(USER1);
-        let s = &scenario;
-
-        // When testing with --fork-checkpoint, this test expects
-        // USER1 to already have DEMO_COIN from the checkpoint state
+    s.next_tx(USER1);
+    // Verify USER1 received the coins
+    {
         let coin = s.take_from_sender<Coin<DEMO_COIN>>();
-        let balance = coin.value();
-
-        // Verify the balance matches what was minted
-        assert!(balance == MINT_AMOUNT, 1);
+        assert!(coin.value() == MINT_AMOUNT, 0);
 
         s.return_to_sender(coin);
+    };
 
-        ts::end(scenario);
-    }
+    ts::end(scenario);
+}
 
-    #[test]
-    fun test_conditional_on_fork_state() {
-        let scenario = ts::begin(USER1);
-        let s = &scenario;
+#[test]
+fun test_verify_balance_from_fork() {
+    let scenario = ts::begin(USER1);
+    let s = &scenario;
 
-        // This test demonstrates how to write tests that work both
-        // with and without checkpoint forking
-        // Fork mode: verify existing balance
-        let coin = s.take_from_sender<Coin<DEMO_COIN>>();
-        let balance = coin.value();
-        assert!(balance > 0, 2);
-        s.return_to_sender(coin);
+    // When testing with --fork-checkpoint, this test expects
+    // USER1 to already have DEMO_COIN from the checkpoint state
+    let coin = s.take_from_sender<Coin<DEMO_COIN>>();
+    let balance = coin.value();
 
-        ts::end(scenario);
-    }
+    // Verify the balance matches what was minted
+    assert!(balance == MINT_AMOUNT, 1);
 
-    #[test]
-    fun test_check_demo_state_on_fork_state() {
-        let scenario = ts::begin(USER1);
-        let s = &scenario;
-        let demo_state = s.take_shared<DEMO_STATE>();
-        assert!(demo_coin::get_demo_counter(&demo_state) == 1, 3);
-        ts::return_shared(demo_state);
-        ts::end(scenario);
-    }
+    s.return_to_sender(coin);
 
-    #[test]
-    fun test_load_sui_system_shared_object_from_fork() {
-        let scenario = ts::begin(USER1);
-        let s = &scenario;
-        let clock = s.take_shared<Clock>();
-        assert!(clock.timestamp_ms() > 0, 4);
-        ts::return_shared(clock);
-        ts::end(scenario);
-    }
+    ts::end(scenario);
+}
 
-    #[test]
-    fun test_borrow_dynamic_field_from_fork() {
-        let scenario = ts::begin(USER1);
-        let s = &scenario;
+#[test]
+fun test_conditional_on_fork_state() {
+    let scenario = ts::begin(USER1);
+    let s = &scenario;
 
-        let demo_state = s.take_shared<DEMO_STATE>();
-        
-        // Verify the parent object state was correctly loaded from testnet
-        let current_counter = demo_coin::get_demo_counter(&demo_state);
-        assert!(current_counter == 1, 6); // Counter should be 1 after add_demo_dynamic was called
-        
-        // The dynamic field should be automatically loaded and accessible
-        let has_field = demo_coin::has_demo_dynamic(&demo_state, 0);
-        assert!(has_field, 7); // Dynamic field should be accessible from fork
-        
-        // Access the dynamic field that was created on testnet
-        let demo_dynamic = demo_coin::borrow_demo_dynamic(&demo_state, 0);
-        assert!(demo_coin::get_demo_dynamic_counter(demo_dynamic) == 0, 5);
+    // This test demonstrates how to write tests that work both
+    // with and without checkpoint forking
+    // Fork mode: verify existing balance
+    let coin = s.take_from_sender<Coin<DEMO_COIN>>();
+    let balance = coin.value();
+    assert!(balance > 0, 2);
+    s.return_to_sender(coin);
 
-        ts::return_shared(demo_state);
-        ts::end(scenario);
-    }
+    ts::end(scenario);
+}
 
-    #[test]
-    fun test_get_all_user_object_ids() {
-        let mut scenario = ts::begin(USER1);
-        let s = &mut scenario;
+#[test]
+fun test_check_demo_state_on_fork_state() {
+    let scenario = ts::begin(USER1);
+    let s = &scenario;
+    let demo_state = s.take_shared<DEMO_STATE>();
+    assert!(demo_coin::get_demo_counter(&demo_state) == 1, 3);
+    ts::return_shared(demo_state);
+    ts::end(scenario);
+}
 
-        s.next_tx(USER1);
-        {
-            let ids: vector<ID> = s.ids_for_sender<Coin<DEMO_COIN>>();
-            assert!(ids.length() > 0, 8);
-        };
+#[test]
+fun test_load_sui_system_shared_object_from_fork() {
+    let scenario = ts::begin(USER1);
+    let s = &scenario;
+    let clock = s.take_shared<Clock>();
+    assert!(clock.timestamp_ms() > 0, 4);
+    ts::return_shared(clock);
+    ts::end(scenario);
+}
 
-        ts::end(scenario);
-    }
+#[test]
+fun test_borrow_dynamic_field_from_fork() {
+    let scenario = ts::begin(USER1);
+    let s = &scenario;
+
+    let demo_state = s.take_shared<DEMO_STATE>();
+
+    // Verify the parent object state was correctly loaded from testnet
+    let current_counter = demo_coin::get_demo_counter(&demo_state);
+    assert!(current_counter == 1, 6); // Counter should be 1 after add_demo_dynamic was called
+
+    // The dynamic field should be automatically loaded and accessible
+    let has_field = demo_coin::has_demo_dynamic(&demo_state, 0);
+    assert!(has_field, 7); // Dynamic field should be accessible from fork
+
+    // Access the dynamic field that was created on testnet
+    let demo_dynamic = demo_coin::borrow_demo_dynamic(&demo_state, 0);
+    assert!(demo_coin::get_demo_dynamic_counter(demo_dynamic) == 0, 5);
+
+    ts::return_shared(demo_state);
+    ts::end(scenario);
+}
+
+#[test]
+fun test_get_all_user_object_ids() {
+    let mut scenario = ts::begin(USER1);
+    let s = &mut scenario;
+
+    s.next_tx(USER1);
+    {
+        let ids: vector<ID> = s.ids_for_sender<Coin<DEMO_COIN>>();
+        assert!(ids.length() > 0, 8);
+    };
+
+    ts::end(scenario);
 }
