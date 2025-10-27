@@ -166,6 +166,7 @@ impl BlockManager {
 
             // Insert the accepted blocks into DAG state so future blocks including them as
             // ancestors do not get suspended.
+            println!("try_accept_blocks_internal blocks_to_accept {blocks_to_accept:?}");
             self.dag_state
                 .write()
                 .accept_blocks(blocks_to_accept.clone());
@@ -200,6 +201,7 @@ impl BlockManager {
                     }
                 });
         }
+        println!("try_accept_one_committed_block accept {block:?}");
 
         // Accept this block before any unsuspended children blocks
         self.dag_state.write().accept_blocks(vec![block.clone()]);
@@ -276,6 +278,7 @@ impl BlockManager {
     /// block is accepted then Some result is returned. None is returned when either the block is suspended or the block
     /// has been already accepted before.
     fn try_accept_one_block(&mut self, block: VerifiedBlock) -> TryAcceptResult {
+        println!("try_accept_one_block {block:?}");
         let block_ref = block.reference();
         let mut missing_ancestors = BTreeSet::new();
         let mut ancestors_to_fetch = BTreeSet::new();
@@ -311,6 +314,7 @@ impl BlockManager {
             .filter(|ancestor| ancestor.round == GENESIS_ROUND || ancestor.round > gc_round)
             .cloned()
             .collect::<Vec<_>>();
+        println!("ancestors {ancestors:?}, gc_round {gc_round}");
 
         // make sure that we have all the required ancestors in store
         for (found, ancestor) in dag_state
@@ -318,6 +322,7 @@ impl BlockManager {
             .into_iter()
             .zip(ancestors.iter())
         {
+            println!("ancestor {ancestor:?}, found={found}");
             if !found {
                 missing_ancestors.insert(*ancestor);
 
@@ -355,6 +360,7 @@ impl BlockManager {
         // Remove the block ref from the `missing_blocks` - if exists - since we now have received the block. The block
         // might still get suspended, but we won't report it as missing in order to not re-fetch.
         self.missing_blocks.remove(&block.reference());
+        println!("missing_ancestors {missing_ancestors:?}");
 
         if !missing_ancestors.is_empty() {
             let hostname = self
@@ -496,6 +502,7 @@ impl BlockManager {
                     blocks_unsuspended_below_gc_round += 1;
                 }
             });
+            println!("try_accept_blocks_internal blocks_to_accept {unsuspended_blocks:?}, gc_round={gc_round}");
 
             // Now accept the unsuspended blocks
             self.dag_state
