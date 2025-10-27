@@ -51,7 +51,7 @@ mod checked {
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
-        MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+        SUI_FRAMEWORK_ADDRESS,
         balance::{
             BALANCE_MODULE_NAME, SEND_TO_ACCOUNT_FUNCTION_NAME, WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME,
         },
@@ -1439,26 +1439,13 @@ mod checked {
             // No `internal` type parameters, so it is ok to call
             return Ok(());
         };
-        let callee_package_name = match callee.0 {
-            SUI_FRAMEWORK_ADDRESS => "sui",
-            MOVE_STDLIB_ADDRESS => "std",
-            a => {
-                debug_assert!(
-                    false,
-                    "unknown package in private generics verifier. \
-                        Please improve this error message"
-                );
-                &format!("{a}")
-            }
-        };
-        let help = if callee_address == SUI_FRAMEWORK_ADDRESS && callee_module == TRANSFER_MODULE {
-            format!(
-                " Use the public variant instead, 'sui::transfer::public_{}'.",
-                callee_function
-            )
-        } else {
-            "".to_string()
-        };
+        let callee_package_name =
+            private_generics_verifier_v2::callee_package_name(&callee_address);
+        let help = private_generics_verifier_v2::help_message(
+            &callee_address,
+            callee_module,
+            callee_function,
+        );
         let msg = format!(
             "Cannot directly call function '{}::{}::{}' since type parameter #{} can \
                  only be instantiated with types defined within the caller's module.{}",

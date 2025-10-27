@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::borrow::Cow;
+
 use move_binary_format::{
     file_format::{Bytecode, FunctionDefinition, FunctionHandle, SignatureToken, Visibility},
     CompiledModule,
@@ -8,7 +10,9 @@ use move_binary_format::{
 use move_bytecode_utils::format_signature_token;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use move_vm_config::verifier::VerifierConfig;
-use sui_types::{error::ExecutionError, make_invariant_violation, SUI_FRAMEWORK_ADDRESS};
+use sui_types::{
+    error::ExecutionError, make_invariant_violation, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+};
 
 use crate::{verification_failure, FunctionIdent, TEST_SCENARIO_MODULE_NAME};
 
@@ -249,9 +253,12 @@ fn verify_call(
             continue;
         }
         if !is_defined_in_current_module(module, ty_arg) {
+            let callee_package_name = callee_package_name(&callee_addr);
+            let help = help_message(&callee_addr, callee_module, callee_function);
             return Err(Error::User(format!(
-                "Invalid call to '{callee_addr}::{callee_module}::{callee_function}'. \
-                Type argument #{idx} must be a type defined in the current module, found '{}'",
+                "Invalid call to '{callee_package_name}::{callee_module}::{callee_function}'. \
+                Type argument #{idx} must be a type defined in the current module, found '{}'.\
+                {help}",
                 format_signature_token(module, ty_arg),
             )));
         }
@@ -295,5 +302,35 @@ fn is_defined_in_current_module(module: &CompiledModule, type_arg: &SignatureTok
         | SignatureToken::Signer
         | SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_) => false,
+    }
+}
+
+pub fn callee_package_name(callee_addr: &AccountAddress) -> Cow<'static, str> {
+    match *callee_addr {
+        SUI_FRAMEWORK_ADDRESS => Cow::Borrowed("sui"),
+        MOVE_STDLIB_ADDRESS => Cow::Borrowed("std"),
+        a => {
+            debug_assert!(
+                false,
+                "unknown package in private generics verifier. \
+                Please improve this error message"
+            );
+            Cow::Owned(format!("{a}"))
+        }
+    }
+}
+
+pub fn help_message(
+    callee_addr: &AccountAddress,
+    callee_module: &IdentStr,
+    callee_function: &IdentStr,
+) -> String {
+    if *callee_addr == SUI_FRAMEWORK_ADDRESS && callee_module == TRANSFER_MODULE {
+        format!(
+            " If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_{}'.",
+            callee_function
+        )
+    } else {
+        String::new()
     }
 }
