@@ -1,5 +1,5 @@
-// Copyright (c) The Move Contributors
-// SPDX-License-Identifier: Apache-2.
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
     file_format::{Bytecode, FunctionDefinition, FunctionHandle, SignatureToken, Visibility},
