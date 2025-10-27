@@ -311,37 +311,37 @@ sui:<address>
 
 ### URI parameters
 
-#### `Address`
+#### `address`
 
-The destination address that will receive the payment funds. Must be a valid Sui address.
+The destination address that will receive the payment funds. Must be a valid Sui address. There is no pathname for the destination address.
 
-#### `Amount`
+#### `amount`
 
 The `amount` field is a required pathname. The value must be a non-negative integer or decimal numbers. This field represents the "display amount" of a specified coin type (for example, 0.05 SUI).
 
 If an `amount` value represents a decimal, that is less than `1`, it must must include a leading `0` before the decimal.
 
-#### Nonce
+#### `nonce`
 
 The `nonce` field is a required pathname. This represents a unique ascii based identifier for this payment. Must be unique within the registry to prevent duplicate payments. Recommended format is `UUIDv4`. Cannot exceed 36 characters.
 
-### Coin Type
+#### `coinType`
 
 The `coinType` field is a required pathname. The full type identifier of the coin to be transferred (for example, `0x2::sui::SUI`).
 
-#### Label
+#### `label`
 
 A human-readable name for the merchant or application receiving payment.
 
-#### Icon
+#### `icon`
 
 A URL pointing to an icon image for the merchant or application. Maybe be displayed to users during payment confirmation.
 
-#### Message
+#### `message`
 
 A description or context for the payment. May be displayed to users to explain the purpose of the payment.
 
-#### Registry
+#### `registry`
 
 The Object ID, or ascii represented `name` of the `PaymentRegistry`, to use for processing the payment. If provided, the payment will be processed through the registry with duplicate prevention. If omitted, the payment will be processed as an ephemeral payment.
 
