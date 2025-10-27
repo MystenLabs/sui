@@ -7,11 +7,11 @@ pub use checked::*;
 mod checked {
     use crate::{
         adapter::substitute_package_id,
-        data_store::{legacy::sui_data_store::SuiDataStore, PackageStore},
+        data_store::{PackageStore, legacy::sui_data_store::SuiDataStore},
         execution_mode::ExecutionMode,
         execution_value::{
-            ensure_serialized_size, CommandKind, ExecutionState, ObjectContents, ObjectValue,
-            RawValueType, Value,
+            CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
+            ensure_serialized_size,
         },
         gas_charger::GasCharger,
         programmable_transactions::{context::*, trace_utils},
@@ -20,11 +20,12 @@ mod checked {
     };
     use move_binary_format::file_format::AbilitySet;
     use move_binary_format::{
+        CompiledModule,
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
         file_format::{CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
         file_format_common::VERSION_6,
-        normalized, CompiledModule,
+        normalized,
     };
     use move_core_types::{
         account_address::AccountAddress,
@@ -38,7 +39,7 @@ mod checked {
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
     use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
-    use serde::{de::DeserializeSeed, Deserialize};
+    use serde::{Deserialize, de::DeserializeSeed};
     use std::{
         cell::{OnceCell, RefCell},
         collections::{BTreeMap, BTreeSet},
@@ -50,33 +51,34 @@ mod checked {
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
+        MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
         balance::{
             BALANCE_MODULE_NAME, SEND_TO_ACCOUNT_FUNCTION_NAME, WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME,
         },
         base_types::{
-            MoveLegacyTxContext, MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind,
-            RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME,
-            TX_CONTEXT_STRUCT_NAME,
+            MoveLegacyTxContext, MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
+            RESOLVED_UTF8_STR, SuiAddress, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+            TxContext, TxContextKind,
         },
         coin::Coin,
-        error::{command_argument_error, ExecutionError, ExecutionErrorKind},
+        error::{ExecutionError, ExecutionErrorKind, command_argument_error},
         execution::{ExecutionTiming, ResultWithTimings},
         execution_status::{CommandArgumentError, PackageUpgradeError, TypeArgumentError},
         id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{
-            normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
-            UpgradeTicket,
+            MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
+            normalize_deserialized_modules,
         },
-        storage::{get_package_objects, BackingPackageStore, PackageObject},
+        storage::{BackingPackageStore, PackageObject, get_package_objects},
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
         type_input::{StructInput, TypeInput},
-        MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_ADDRESS,
     };
     use sui_verifier::{
+        INIT_FN_NAME,
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
-        private_generics_verifier_v2, INIT_FN_NAME,
+        private_generics_verifier_v2,
     };
     use tracing::instrument;
 
