@@ -301,7 +301,7 @@ Payment Kit Transaction URIs use the following format:
 ```
 sui:<address>
     ?amount=<amount>
-    &coin_type=<coin_type>
+    &coinType=<coinType>
     &nonce=<nonce>
     &label=<label>
     &icon=<icon>
@@ -311,19 +311,39 @@ sui:<address>
 
 ### URI parameters
 
-**Required parameters:**
+#### `address`
 
-- **address**: The destination address that will receive the payment funds. Must be a valid Sui address.
-- **amount**: The payment amount in the base unit of the coin type (for example, MIST for SUI). Must be a valid `u64` value.
-- **nonce**: A unique identifier for this payment. Must be unique within the registry to prevent duplicate payments. Recommended format is UUIDv4.
-- **coin_type**: The full type identifier of the coin to be transferred (for example, `0x2::sui::SUI`).
+The destination address to receive the payment funds. Must be a valid Sui address. There is no pathname for the destination address.
 
-**Optional parameters:**
+#### `amount`
 
-- **label**: A human-readable name for the merchant or application receiving payment. Displayed to users during payment confirmation.
-- **icon**: A URL pointing to an icon image for the merchant or application. Displayed to users during payment confirmation.
-- **message**: A description or context for the payment. Displayed to users to explain the purpose of the payment.
-- **registry**: The object ID of the `PaymentRegistry` to use for processing the payment. If provided, the payment will be processed through the registry with duplicate prevention. If omitted, the payment will be processed as an ephemeral payment.
+The `amount` field is a required pathname. The value must be a non-negative integer or decimal numbers. This field represents the display amount of a specified coin type (for example, 0.05 SUI).
+
+If an `amount` value represents a decimal that is less than `1`, it must must include a leading `0` before the decimal.
+
+#### `nonce`
+
+The `nonce` field is a required pathname. This represents a unique ascii based identifier for this payment. Must be unique within the registry to prevent duplicate payments. Recommended format is `UUIDv4`. Cannot exceed 36 characters.
+
+#### `coinType`
+
+The `coinType` field is a required pathname. The full type identifier of the coin to be transferred (for example, `0x2::sui::SUI`).
+
+#### `label`
+
+A human-readable name for the merchant or application receiving payment.
+
+#### `icon`
+
+A URL pointing to an icon image for the merchant or application. Maybe be displayed to users during payment confirmation.
+
+#### `message`
+
+A description or context for the payment. May be displayed to users to explain the purpose of the payment.
+
+#### `registry`
+
+The object ID or ascii represented `name` of the `PaymentRegistry` to use for processing the payment. If provided, the payment is processed through the registry with duplicate prevention. If omitted, the payment is processed as an ephemeral payment.
 
 ### Example URIs
 
@@ -331,7 +351,7 @@ sui:<address>
 
 ```
 sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=1000000000
+    ?amount=0.62
     &nonce=550e8400-e29b-41d4-a716-446655440000
 ```
 
@@ -339,8 +359,8 @@ sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
 
 ```
 sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=5000000
-    &coin_type=0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN
+    ?amount=50
+    &coinType=0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN
     &nonce=550e8400-e29b-41d4-a716-446655440000
 ```
 
@@ -348,25 +368,34 @@ sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
 
 ```
 sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=1000000000
+    ?amount=1.2
     &nonce=550e8400-e29b-41d4-a716-446655440000
     &label=Coffee%20Shop
     &icon=https://example.com/icon.png
     &message=Espresso%20and%20croissant
 ```
 
-**Registry-based payment:**
+**Registry-based payment (registry object ID):**
 
 ```
 sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=1000000000
+    ?amount=0.1
     &nonce=550e8400-e29b-41d4-a716-446655440000
     &registry=0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890
 ```
 
+**Registry-based payment (Registry ACSII Name):**
+
+```
+sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    ?amount=0.1
+    &nonce=550e8400-e29b-41d4-a716-446655440000
+    &registry=default-payment-registry
+```
+
 ### URI encoding
 
-All parameter values must be properly URL-encoded according to RFC 3986. Special characters in parameter values (such as spaces, colons, slashes) must be percent-encoded:
+All parameter values must be properly URL-encoded according to RFC 3986. Special characters in parameter values (such as spaces, colons, slashes) must be percent-encoded. Examples include:
 
 - Space: `%20`
 - Colon: `%3A`
@@ -379,7 +408,7 @@ When implementing transaction URI support:
 
 1. **Validate all parameters**: Ensure addresses are valid Sui addresses, amounts are valid `u64` values, and coin types follow the correct format.
 2. **Generate unique nonces**: Use UUIDv4 or another cryptographically secure random identifier to prevent accidental duplicates.
-3. **Handle missing optional parameters**: Provide sensible defaults (such as `0x2::sui::SUI` for `coin_type`) when optional parameters are omitted.
+3. **Handle missing optional parameters**: Provide sensible defaults (such as `0x2::sui::SUI` for `coinType`) when optional parameters are omitted.
 4. **Display metadata to users**: Show the `label`, `icon`, and `message` parameters to users during payment confirmation to provide context.
 5. **Route to correct payment function**: Use `process_registry_payment` when `registry` is provided, otherwise use `process_ephemeral_payment`.
 
