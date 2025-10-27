@@ -270,9 +270,7 @@ impl Inner<'_> {
         // if not found, it must be new so it won't have any child objects, thus
         // we can return SequenceNumber(0) as no child object will be found
         let parents_root_version = parents_root_version.unwrap_or(SequenceNumber::new());
-        let mut cached = true;
         let cache_info = if let btree_map::Entry::Vacant(e) = self.cached_objects.entry(child) {
-            cached = false;
             // First, try to get the object from fork loaded objects
             let fork_obj_opt = {
                 use sui_types::fork_test_support::get_fork_loaded_objects;
