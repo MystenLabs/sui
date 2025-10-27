@@ -15422,7 +15422,6 @@ dependencies = [
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
- "protox",
  "serde",
  "sui-data-ingestion-core",
  "sui-types",
@@ -15431,7 +15430,6 @@ dependencies = [
  "tokio",
  "tonic 0.14.2",
  "tonic-prost",
- "tonic-prost-build",
  "tracing",
 ]
 
