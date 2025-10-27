@@ -1455,14 +1455,15 @@ mod tests {
     use move_core_types::{account_address::AccountAddress, identifier::Identifier};
     use std::collections::BTreeMap;
 
-    fn create_test_package_context() -> PackageContext<'static> {
+    fn create_test_package_context<'a>(interner: & 'a IdentifierInterner) -> PackageContext<'a> {
         let natives = Box::leak(Box::new(NativeFunctions::new([]).unwrap()));
         PackageContext {
             natives,
+            interner,
             version_id: AccountAddress::ONE,
             original_id: AccountAddress::ONE,
             loaded_modules: IndexMap::new(),
-            package_arena: Arena::new(),
+            package_arena: Arena::new_bounded(),
             vtable_funs: DefinitionMap::empty(),
             vtable_types: DefinitionMap::empty(),
             type_origin_table: HashMap::new(),
@@ -1585,7 +1586,7 @@ mod tests {
         blocks.insert(0, vec![input::Bytecode::LdU8(42), input::Bytecode::Ret]);
         blocks.insert(1, vec![input::Bytecode::LdU8(1), input::Bytecode::Pop]);
 
-        let result = flatten_and_renumber_blocks(blocks);
+        let result = flatten_and_renumber_blocks(blocks, &mut []);
 
         assert_eq!(result.len(), 4);
         assert!(matches!(result[0], input::Bytecode::LdU8(42)));
@@ -1601,7 +1602,7 @@ mod tests {
         blocks.insert(1, vec![input::Bytecode::Pop]);
         blocks.insert(2, vec![input::Bytecode::Branch(1)]);
 
-        let result = flatten_and_renumber_blocks(blocks);
+        let result = flatten_and_renumber_blocks(blocks, &mut []);
 
         assert_eq!(result.len(), 3);
         assert!(matches!(result[0], input::Bytecode::BrTrue(2))); // Points to new offset 2
@@ -1614,19 +1615,22 @@ mod tests {
     fn test_functions_empty_module() {
         let compiled_module = create_empty_module();
         let input_module = input::Module {
-            compiled_module,
+            compiled_module: compiled_module.clone(),
             functions: BTreeMap::new(),
         };
+        let interner = IdentifierInterner::new();
 
-        let mut package_context = create_test_package_context();
-        let module_name = intern_identifier(&Identifier::new("EmptyModule").unwrap()).unwrap();
+        let mut package_context = create_test_package_context(&interner);
+        let module_name = package_context.interner.intern_identifier(&Identifier::new("EmptyModule").unwrap()).unwrap();
         let definitions = create_test_definitions();
+        let (functions, fun_map) = preallocate_functions(&mut package_context, &module_name, &compiled_module).unwrap();
+        package_context.insert_vtable_functions(fun_map.into_values()).unwrap();
 
-        let result = functions(
+        let result = function_bodies(
             &mut package_context,
-            &module_name,
             &input_module,
             definitions,
+            functions,
         );
         assert!(result.is_ok());
         let loaded_functions = result.unwrap();
@@ -1646,19 +1650,22 @@ mod tests {
         optimized_functions.insert(function_index, opt_function);
 
         let input_module = input::Module {
-            compiled_module,
+            compiled_module: compiled_module.clone(),
             functions: optimized_functions,
         };
+        let interner = IdentifierInterner::new();
 
-        let mut package_context = create_test_package_context();
-        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let mut package_context = create_test_package_context(&interner);
+        let module_name = package_context.interner.intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
         let definitions = create_test_definitions();
+        let (functions, fun_map) = preallocate_functions(&mut package_context, &module_name, &compiled_module).unwrap();
+        package_context.insert_vtable_functions(fun_map.into_values()).unwrap();
 
-        let result = functions(
+        let result = function_bodies(
             &mut package_context,
-            &module_name,
             &input_module,
             definitions,
+            functions,
         );
         assert!(result.is_ok());
         let loaded_functions = result.unwrap();
@@ -1687,19 +1694,23 @@ mod tests {
         optimized_functions.insert(function_index, opt_function);
 
         let input_module = input::Module {
-            compiled_module,
+            compiled_module: compiled_module.clone(),
             functions: optimized_functions,
         };
 
-        let mut package_context = create_test_package_context();
-        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
-        let definitions = create_test_definitions();
+        let interner = IdentifierInterner::new();
 
-        let result = functions(
+        let mut package_context = create_test_package_context(&interner);
+        let module_name = package_context.interner.intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+        let (functions, fun_map) = preallocate_functions(&mut package_context, &module_name, &compiled_module).unwrap();
+        package_context.insert_vtable_functions(fun_map.into_values()).unwrap();
+
+        let result = function_bodies(
             &mut package_context,
-            &module_name,
             &input_module,
             definitions,
+            functions,
         );
         assert!(result.is_ok());
         let loaded_functions = result.unwrap();
@@ -1714,19 +1725,23 @@ mod tests {
     fn test_functions_missing_optimized_function() {
         let compiled_module = create_simple_module();
         let input_module = input::Module {
-            compiled_module,
+            compiled_module: compiled_module.clone(),
             functions: BTreeMap::new(), // Empty - missing optimized function
         };
 
-        let mut package_context = create_test_package_context();
-        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
-        let definitions = create_test_definitions();
+        let interner = IdentifierInterner::new();
 
-        let result = functions(
+        let mut package_context = create_test_package_context(&interner);
+        let module_name = package_context.interner.intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+        let (functions, fun_map) = preallocate_functions(&mut package_context, &module_name, &compiled_module).unwrap();
+        package_context.insert_vtable_functions(fun_map.into_values()).unwrap();
+
+        let result = function_bodies(
             &mut package_context,
-            &module_name,
             &input_module,
             definitions,
+            functions,
         );
         assert!(result.is_err());
 
@@ -1761,19 +1776,23 @@ mod tests {
         );
 
         let input_module = input::Module {
-            compiled_module,
+            compiled_module: compiled_module.clone(),
             functions: optimized_functions,
         };
 
-        let mut package_context = create_test_package_context();
-        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
-        let definitions = create_test_definitions();
+        let interner = IdentifierInterner::new();
 
-        let result = functions(
+        let mut package_context = create_test_package_context(&interner);
+        let module_name = package_context.interner.intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+        let (functions, fun_map) = preallocate_functions(&mut package_context, &module_name, &compiled_module).unwrap();
+        package_context.insert_vtable_functions(fun_map.into_values()).unwrap();
+
+        let result = function_bodies(
             &mut package_context,
-            &module_name,
             &input_module,
             definitions,
+            functions,
         );
         assert!(result.is_err());
 
@@ -1797,22 +1816,26 @@ mod tests {
         );
 
         let input_module = input::Module {
-            compiled_module,
+            compiled_module: compiled_module.clone(),
             functions: optimized_functions,
         };
 
-        let mut package_context = create_test_package_context();
-        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let interner = IdentifierInterner::new();
+
+        let mut package_context = create_test_package_context(&interner);
+        let module_name = package_context.interner.intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
         let definitions = create_test_definitions();
+        let (functions, fun_map) = preallocate_functions(&mut package_context, &module_name, &compiled_module).unwrap();
 
         // Verify vtable is initially empty
         assert_eq!(package_context.vtable_funs.len(), 0);
+        package_context.insert_vtable_functions(fun_map.into_values()).unwrap();
 
-        let result = functions(
+        let result = function_bodies(
             &mut package_context,
-            &module_name,
             &input_module,
             definitions,
+            functions,
         );
         assert!(result.is_ok());
 
@@ -1900,19 +1923,23 @@ mod tests {
         }
 
         let input_module = input::Module {
-            compiled_module,
+            compiled_module: compiled_module.clone(),
             functions: optimized_functions,
         };
 
-        let mut package_context = create_test_package_context();
-        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
-        let definitions = create_test_definitions();
+        let interner = IdentifierInterner::new();
 
-        let result = functions(
+        let mut package_context = create_test_package_context(&interner);
+        let module_name = package_context.interner.intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+        let (functions, fun_map) = preallocate_functions(&mut package_context, &module_name, &compiled_module).unwrap();
+        package_context.insert_vtable_functions(fun_map.into_values()).unwrap();
+
+        let result = function_bodies(
             &mut package_context,
-            &module_name,
             &input_module,
             definitions,
+            functions,
         );
         assert!(result.is_ok());
         let loaded_functions = result.unwrap();
@@ -2005,19 +2032,23 @@ mod tests {
         );
 
         let input_module = input::Module {
-            compiled_module,
+            compiled_module: compiled_module.clone(),
             functions: optimized_functions,
         };
 
-        let mut package_context = create_test_package_context();
-        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
-        let definitions = create_test_definitions();
+        let interner = IdentifierInterner::new();
 
-        let result = functions(
+        let mut package_context = create_test_package_context(&interner);
+        let module_name = package_context.interner.intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let definitions = create_test_definitions();
+        let (functions, fun_map) = preallocate_functions(&mut package_context, &module_name, &compiled_module).unwrap();
+        package_context.insert_vtable_functions(fun_map.into_values()).unwrap();
+
+        let result = function_bodies(
             &mut package_context,
-            &module_name,
             &input_module,
             definitions,
+            functions,
         );
 
         // Should fail because function 1 is missing from optimized functions
@@ -2093,19 +2124,25 @@ mod tests {
         );
 
         let input_module = input::Module {
-            compiled_module,
+            compiled_module: compiled_module.clone(),
             functions: optimized_functions,
         };
 
-        let mut package_context = create_test_package_context();
-        let module_name = intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
+        let interner = IdentifierInterner::new();
+
+        let mut package_context = create_test_package_context(&interner);
+        let module_name = package_context.interner.intern_identifier(&Identifier::new("TestModule").unwrap()).unwrap();
         let definitions = create_test_definitions();
 
-        let result = functions(
+
+        let (functions, fun_map) = preallocate_functions(&mut package_context, &module_name, &compiled_module).unwrap();
+        package_context.insert_vtable_functions(fun_map.into_values()).unwrap();
+
+        let result = function_bodies(
             &mut package_context,
-            &module_name,
             &input_module,
             definitions,
+            functions,
         );
 
         // Should fail because there are extra optimized functions (5, 10) that don't match any function definition
