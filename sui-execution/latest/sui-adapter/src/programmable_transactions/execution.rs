@@ -1279,7 +1279,11 @@ mod checked {
                 check_non_entry_signature::<Mode>(context, module_id, function, &signature)?
             }
         };
-        check_private_generics(context.protocol_config, module_id, function)?;
+        if context.protocol_config.private_generics_verifier_v2() {
+            check_private_generics_v2(module_id, function)?;
+        } else {
+            check_private_generics(module_id, function)?;
+        }
         Ok(LoadedFunctionInfo {
             kind: function_kind,
             signature,
@@ -1383,13 +1387,9 @@ mod checked {
     }
 
     pub fn check_private_generics(
-        protocol_config: &ProtocolConfig,
         module_id: &ModuleId,
         function: &IdentStr,
     ) -> Result<(), ExecutionError> {
-        if protocol_config.private_generics_verifier_v2() {
-            return check_private_generics_v2(module_id, function);
-        }
         let module_ident = (module_id.address(), module_id.name());
         if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
             return Err(ExecutionError::new_with_source(
@@ -1429,43 +1429,45 @@ mod checked {
         else {
             return Ok(());
         };
-        if let Some((internal_idx, _)) = internal_type_parameters
+        // If we find an internal type parameter, the call is automatically invalid--since we
+        // are not in a module and cannot define any types to satisfy the internal constraint.
+        let Some((internal_idx, _)) = internal_type_parameters
             .iter()
             .enumerate()
             .find(|(_, is_internal)| **is_internal)
-        {
-            let callee_package_name = match callee.0 {
-                SUI_FRAMEWORK_ADDRESS => "sui",
-                MOVE_STDLIB_ADDRESS => "std",
-                a => {
-                    debug_assert!(
-                        false,
-                        "unknown package in private generics verifier. \
+        else {
+            // No `internal` type parameters, so it is ok to call
+            return Ok(());
+        };
+        let callee_package_name = match callee.0 {
+            SUI_FRAMEWORK_ADDRESS => "sui",
+            MOVE_STDLIB_ADDRESS => "std",
+            a => {
+                debug_assert!(
+                    false,
+                    "unknown package in private generics verifier. \
                         Please improve this error message"
-                    );
-                    &format!("{a}")
-                }
-            };
-            let help =
-                if callee_address == SUI_FRAMEWORK_ADDRESS && callee_module == TRANSFER_MODULE {
-                    format!(
-                        " Use the public variant instead, 'sui::transfer::public_{}'.",
-                        callee_function
-                    )
-                } else {
-                    "".to_string()
-                };
-            let msg = format!(
-                "Cannot directly call function '{}::{}::{}' since type parameter #{} can \
+                );
+                &format!("{a}")
+            }
+        };
+        let help = if callee_address == SUI_FRAMEWORK_ADDRESS && callee_module == TRANSFER_MODULE {
+            format!(
+                " Use the public variant instead, 'sui::transfer::public_{}'.",
+                callee_function
+            )
+        } else {
+            "".to_string()
+        };
+        let msg = format!(
+            "Cannot directly call function '{}::{}::{}' since type parameter #{} can \
                  only be instantiated with types defined within the caller's module.{}",
-                callee_package_name, callee_module, callee_function, internal_idx, help,
-            );
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::NonEntryFunctionInvoked,
-                msg,
-            ));
-        }
-        Ok(())
+            callee_package_name, callee_module, callee_function, internal_idx, help,
+        );
+        Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            msg,
+        ))
     }
 
     type ArgInfo = (

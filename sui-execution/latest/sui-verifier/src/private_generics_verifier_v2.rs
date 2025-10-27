@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.
 
 use move_binary_format::{
-    file_format::{Bytecode, FunctionDefinition, FunctionHandle, SignatureToken},
+    file_format::{Bytecode, FunctionDefinition, FunctionHandle, SignatureToken, Visibility},
     CompiledModule,
 };
 use move_bytecode_utils::format_signature_token;
-use move_core_types::{ident_str, identifier::IdentStr};
+use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use move_vm_config::verifier::VerifierConfig;
 use sui_types::{error::ExecutionError, make_invariant_violation, SUI_FRAMEWORK_ADDRESS};
 
@@ -15,9 +15,6 @@ use crate::{verification_failure, FunctionIdent, TEST_SCENARIO_MODULE_NAME};
 pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
 pub const EVENT_MODULE: &IdentStr = ident_str!("event");
 pub const COIN_REGISTRY_MODULE: &IdentStr = ident_str!("coin_registry");
-
-// Modules that must have all public functions listed in `FUNCTIONS_TO_CHECK`
-pub const EXHAUSTIVE_MODULES: &[&IdentStr] = &[EVENT_MODULE, TRANSFER_MODULE];
 
 // Event function
 pub const SUI_EVENT_EMIT_EVENT: FunctionIdent =
@@ -104,6 +101,12 @@ pub const SUI_COIN_REGISTRY_NEW_CURRENCY: FunctionIdent = (
     ident_str!("new_currency"),
 );
 
+// Modules that must have all public functions listed in `FUNCTIONS_TO_CHECK`
+pub const EXHAUSTIVE_MODULES: &[(AccountAddress, &IdentStr)] = &[
+    (SUI_FRAMEWORK_ADDRESS, EVENT_MODULE),
+    (SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE),
+];
+
 // A list of all functions to check for internal rules. A boolean for each type parameter indicates
 // if the type parameter is `internal`
 pub const FUNCTIONS_TO_CHECK: &[(FunctionIdent, &[/* is internal */ bool])] = &[
@@ -145,14 +148,37 @@ pub fn verify_module(
     module: &CompiledModule,
     _verifier_config: &VerifierConfig,
 ) -> Result<(), ExecutionError> {
-    if *module.address() == SUI_FRAMEWORK_ADDRESS
-        && module.name() == IdentStr::new(TEST_SCENARIO_MODULE_NAME).unwrap()
+    let module_id = module.self_id();
+    let module_address = *module_id.address();
+    let module_name = module_id.name();
+
+    if module_address == SUI_FRAMEWORK_ADDRESS && module_name.as_str() == TEST_SCENARIO_MODULE_NAME
     {
         // exclude test_module which is a test-only module in the Sui framework which "emulates"
         // transactional execution and needs to allow test code to bypass private generics
         return Ok(());
+    };
+    // Check exhaustiveness for sensitive modules
+    if EXHAUSTIVE_MODULES.contains(&(module_address, module_name)) {
+        for fdef in module
+            .function_defs
+            .iter()
+            .filter(|fdef| fdef.visibility == Visibility::Public)
+        {
+            let function_name = module.identifier_at(module.function_handle_at(fdef.function).name);
+            let resolved = &(module_address, module_name, function_name);
+            let rules_opt = FUNCTIONS_TO_CHECK.iter().find(|(f, _)| f == resolved);
+            if rules_opt.is_none() {
+                // The function needs to be added to the FUNCTIONS_TO_CHECK list
+                return Err(make_invariant_violation!(
+                    "Unknown function '{module_id}::{function_name}'. \
+                    All functions in '{module_id}' must be listed in FUNCTIONS_TO_CHECK",
+                ));
+            }
+        }
     }
 
+    // Check calls
     for func_def in &module.function_defs {
         verify_function(module, func_def).map_err(|error| match error {
             Error::User(error) => verification_failure(format!(
@@ -203,20 +229,7 @@ fn verify_call(
     callee @ (callee_addr, callee_module, callee_function): FunctionIdent<'_>,
     ty_args: &[SignatureToken],
 ) -> Result<(), Error> {
-    let rules_opt = FUNCTIONS_TO_CHECK.iter().find(|(f, _)| &callee == f);
-    // Check for exhaustivity for certain sensitive modules. But we ignore calls within the same
-    // package as a way to exclude private and public(package) functions
-    if &callee_addr != module.address()
-        && EXHAUSTIVE_MODULES.contains(&callee_module)
-        && rules_opt.is_none()
-    {
-        // The function needs to be added to the FUNCTIONS_TO_CHECK list
-        return Err(Error::InvariantViolation(format!(
-            "Unknown function '{callee_addr}::{callee_module}::{callee_function}'. All functions \
-            in '{callee_module}' must be listed in FUNCTIONS_TO_CHECK",
-        )));
-    }
-    let Some((_, internal_flags)) = rules_opt else {
+    let Some((_, internal_flags)) = FUNCTIONS_TO_CHECK.iter().find(|(f, _)| &callee == f) else {
         return Ok(());
     };
     let internal_flags = *internal_flags;
