@@ -152,12 +152,14 @@ pub fn verify_module(
     let module_address = *module_id.address();
     let module_name = module_id.name();
 
+    // Skip sui::test_scenario
     if module_address == SUI_FRAMEWORK_ADDRESS && module_name.as_str() == TEST_SCENARIO_MODULE_NAME
     {
         // exclude test_module which is a test-only module in the Sui framework which "emulates"
         // transactional execution and needs to allow test code to bypass private generics
         return Ok(());
     };
+
     // Check exhaustiveness for sensitive modules
     if EXHAUSTIVE_MODULES.contains(&(module_address, module_name)) {
         for fdef in module
