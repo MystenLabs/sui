@@ -618,6 +618,7 @@ impl VMDispatchTables {
         depth: u64,
     ) -> PartialVMResult<runtime_value::MoveDatatypeLayout> {
         let ty = self.resolve_type(datatype_name)?.to_ref();
+        self.check_count_and_depth(count, &depth)?;
         let type_layout = match ty.datatype_info.inner_ref() {
             Datatype::Enum(einfo) => {
                 let mut variant_layouts = vec![];
@@ -654,6 +655,7 @@ impl VMDispatchTables {
                 ))
             }
         };
+        self.check_count_and_depth(count, &depth)?;
         Ok(type_layout)
     }
 
@@ -707,6 +709,8 @@ impl VMDispatchTables {
         let ty = self.resolve_type(datatype_name)?.to_ref();
         let struct_tag =
             self.datatype_to_type_tag(datatype_name, ty_args, DatatypeTagType::Defining)?;
+        self.check_count_and_depth(count, &depth)?;
+
         let type_layout = match ty.datatype_info.inner_ref() {
             Datatype::Enum(enum_type) => {
                 let mut variant_layouts = BTreeMap::new();
@@ -774,6 +778,7 @@ impl VMDispatchTables {
                 ))
             }
         };
+        self.check_count_and_depth(count, &depth)?;
         Ok(type_layout)
     }
 
