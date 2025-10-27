@@ -35,9 +35,6 @@ Address.asObject
 Address.balance
   => {"consistent"}
 
-Address.balance (filter: coinType)
-  => {"consistent"}
-
 Address.balances
   => {"consistent"}
 
@@ -47,85 +44,25 @@ Address.defaultSuinsName
 Address.dynamicField
   => {"obj_versions"}
 
-Address.dynamicField (filter: type)
-  => {"obj_versions"}
-
-Address.dynamicField (filter: bcs)
-  => {"obj_versions"}
-
 Address.dynamicFields
   => {"consistent"}
 
 Address.dynamicObjectField
   => {"obj_versions"}
 
-Address.dynamicObjectField (filter: type)
-  => {"obj_versions"}
-
-Address.dynamicObjectField (filter: bcs)
-  => {"obj_versions"}
-
 Address.multiGetDynamicFields
-  => {"obj_versions"}
-
-Address.multiGetDynamicFields (filter: type)
-  => {"obj_versions"}
-
-Address.multiGetDynamicFields (filter: bcs)
   => {"obj_versions"}
 
 Address.multiGetDynamicObjectFields
   => {"obj_versions"}
 
-Address.multiGetDynamicObjectFields (filter: type)
-  => {"obj_versions"}
-
-Address.multiGetDynamicObjectFields (filter: bcs)
-  => {"obj_versions"}
-
 Address.multiGetBalances
-  => {"consistent"}
-
-Address.multiGetBalances (filter: keys)
   => {"consistent"}
 
 Address.objects
   => {"consistent"}
 
-Address.objects (filter: ownerKind)
-  => {"consistent"}
-
-Address.objects (filter: owner)
-  => {"consistent"}
-
-Address.objects (filter: type)
-  => {"consistent"}
-
 Address.transactions
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Address.transactions (filter: afterCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Address.transactions (filter: atCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Address.transactions (filter: beforeCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Address.transactions (filter: function)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Address.transactions (filter: kind)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Address.transactions (filter: affectedAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Address.transactions (filter: affectedObject)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Address.transactions (filter: sentAddress)
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
 AddressOwner.address
@@ -245,15 +182,6 @@ Checkpoint.validatorSignatures
 Checkpoint.transactions
   => {"cp_sequence_numbers", "tx_digests"}
 
-Checkpoint.transactions (filter: afterCheckpoint)
-  => {"cp_sequence_numbers", "tx_digests"}
-
-Checkpoint.transactions (filter: atCheckpoint)
-  => {"cp_sequence_numbers", "tx_digests"}
-
-Checkpoint.transactions (filter: beforeCheckpoint)
-  => {"cp_sequence_numbers", "tx_digests"}
-
 Checkpoint.transactions (filter: function)
   => {"cp_sequence_numbers", "tx_calls", "tx_digests"}
 
@@ -284,9 +212,6 @@ CoinMetadata.digest
 CoinMetadata.balance
   => {"consistent"}
 
-CoinMetadata.balance (filter: coinType)
-  => {"consistent"}
-
 CoinMetadata.balances
   => {"consistent"}
 
@@ -305,22 +230,10 @@ CoinMetadata.description
 CoinMetadata.dynamicField
   => {"obj_versions"}
 
-CoinMetadata.dynamicField (filter: type)
-  => {"obj_versions"}
-
-CoinMetadata.dynamicField (filter: bcs)
-  => {"obj_versions"}
-
 CoinMetadata.dynamicFields
   => {"consistent"}
 
 CoinMetadata.dynamicObjectField
-  => {"obj_versions"}
-
-CoinMetadata.dynamicObjectField (filter: type)
-  => {"obj_versions"}
-
-CoinMetadata.dynamicObjectField (filter: bcs)
   => {"obj_versions"}
 
 CoinMetadata.hasPublicTransfer
@@ -332,19 +245,7 @@ CoinMetadata.iconUrl
 CoinMetadata.multiGetDynamicFields
   => {"obj_versions"}
 
-CoinMetadata.multiGetDynamicFields (filter: type)
-  => {"obj_versions"}
-
-CoinMetadata.multiGetDynamicFields (filter: bcs)
-  => {"obj_versions"}
-
 CoinMetadata.multiGetDynamicObjectFields
-  => {"obj_versions"}
-
-CoinMetadata.multiGetDynamicObjectFields (filter: type)
-  => {"obj_versions"}
-
-CoinMetadata.multiGetDynamicObjectFields (filter: bcs)
   => {"obj_versions"}
 
 CoinMetadata.moveObjectBcs
@@ -353,22 +254,10 @@ CoinMetadata.moveObjectBcs
 CoinMetadata.multiGetBalances
   => {"consistent"}
 
-CoinMetadata.multiGetBalances (filter: keys)
-  => {"consistent"}
-
 CoinMetadata.name
   => {}
 
 CoinMetadata.objectAt
-  => {"obj_versions"}
-
-CoinMetadata.objectAt (filter: version)
-  => {"obj_versions"}
-
-CoinMetadata.objectAt (filter: rootVersion)
-  => {"obj_versions"}
-
-CoinMetadata.objectAt (filter: checkpoint)
   => {"obj_versions"}
 
 CoinMetadata.objectBcs
@@ -377,31 +266,10 @@ CoinMetadata.objectBcs
 CoinMetadata.objectVersionsAfter
   => {"obj_versions"}
 
-CoinMetadata.objectVersionsAfter (filter: afterVersion)
-  => {"obj_versions"}
-
-CoinMetadata.objectVersionsAfter (filter: beforeVersion)
-  => {"obj_versions"}
-
 CoinMetadata.objectVersionsBefore
   => {"obj_versions"}
 
-CoinMetadata.objectVersionsBefore (filter: afterVersion)
-  => {"obj_versions"}
-
-CoinMetadata.objectVersionsBefore (filter: beforeVersion)
-  => {"obj_versions"}
-
 CoinMetadata.objects
-  => {"consistent"}
-
-CoinMetadata.objects (filter: ownerKind)
-  => {"consistent"}
-
-CoinMetadata.objects (filter: owner)
-  => {"consistent"}
-
-CoinMetadata.objects (filter: type)
   => {"consistent"}
 
 CoinMetadata.owner
@@ -416,30 +284,6 @@ CoinMetadata.storageRebate
 CoinMetadata.receivedTransactions
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
-CoinMetadata.receivedTransactions (filter: afterCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-CoinMetadata.receivedTransactions (filter: atCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-CoinMetadata.receivedTransactions (filter: beforeCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-CoinMetadata.receivedTransactions (filter: function)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-CoinMetadata.receivedTransactions (filter: kind)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-CoinMetadata.receivedTransactions (filter: affectedAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-CoinMetadata.receivedTransactions (filter: affectedObject)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-CoinMetadata.receivedTransactions (filter: sentAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
 CoinMetadata.regulatedState
   => {}
 
@@ -450,7 +294,7 @@ CoinMetadata.denyCap
   => {}
 
 CoinMetadata.supplyState
-  => {}
+  => {"consistent"}
 
 CoinMetadata.supply
   => {"consistent"}
@@ -527,9 +371,6 @@ DynamicField.digest
 DynamicField.balance
   => {"consistent"}
 
-DynamicField.balance (filter: coinType)
-  => {"consistent"}
-
 DynamicField.balances
   => {"consistent"}
 
@@ -542,22 +383,10 @@ DynamicField.defaultSuinsName
 DynamicField.dynamicField
   => {"obj_versions"}
 
-DynamicField.dynamicField (filter: type)
-  => {"obj_versions"}
-
-DynamicField.dynamicField (filter: bcs)
-  => {"obj_versions"}
-
 DynamicField.dynamicFields
   => {"consistent"}
 
 DynamicField.dynamicObjectField
-  => {"obj_versions"}
-
-DynamicField.dynamicObjectField (filter: type)
-  => {"obj_versions"}
-
-DynamicField.dynamicObjectField (filter: bcs)
   => {"obj_versions"}
 
 DynamicField.hasPublicTransfer
@@ -566,19 +395,7 @@ DynamicField.hasPublicTransfer
 DynamicField.multiGetDynamicFields
   => {"obj_versions"}
 
-DynamicField.multiGetDynamicFields (filter: type)
-  => {"obj_versions"}
-
-DynamicField.multiGetDynamicFields (filter: bcs)
-  => {"obj_versions"}
-
 DynamicField.multiGetDynamicObjectFields
-  => {"obj_versions"}
-
-DynamicField.multiGetDynamicObjectFields (filter: type)
-  => {"obj_versions"}
-
-DynamicField.multiGetDynamicObjectFields (filter: bcs)
   => {"obj_versions"}
 
 DynamicField.moveObjectBcs
@@ -587,22 +404,10 @@ DynamicField.moveObjectBcs
 DynamicField.multiGetBalances
   => {"consistent"}
 
-DynamicField.multiGetBalances (filter: keys)
-  => {"consistent"}
-
 DynamicField.name
   => {}
 
 DynamicField.objectAt
-  => {"obj_versions"}
-
-DynamicField.objectAt (filter: version)
-  => {"obj_versions"}
-
-DynamicField.objectAt (filter: rootVersion)
-  => {"obj_versions"}
-
-DynamicField.objectAt (filter: checkpoint)
   => {"obj_versions"}
 
 DynamicField.objectBcs
@@ -611,31 +416,10 @@ DynamicField.objectBcs
 DynamicField.objectVersionsAfter
   => {"obj_versions"}
 
-DynamicField.objectVersionsAfter (filter: afterVersion)
-  => {"obj_versions"}
-
-DynamicField.objectVersionsAfter (filter: beforeVersion)
-  => {"obj_versions"}
-
 DynamicField.objectVersionsBefore
   => {"obj_versions"}
 
-DynamicField.objectVersionsBefore (filter: afterVersion)
-  => {"obj_versions"}
-
-DynamicField.objectVersionsBefore (filter: beforeVersion)
-  => {"obj_versions"}
-
 DynamicField.objects
-  => {"consistent"}
-
-DynamicField.objects (filter: ownerKind)
-  => {"consistent"}
-
-DynamicField.objects (filter: owner)
-  => {"consistent"}
-
-DynamicField.objects (filter: type)
   => {"consistent"}
 
 DynamicField.owner
@@ -650,30 +434,6 @@ DynamicField.storageRebate
 DynamicField.receivedTransactions
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
-DynamicField.receivedTransactions (filter: afterCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-DynamicField.receivedTransactions (filter: atCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-DynamicField.receivedTransactions (filter: beforeCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-DynamicField.receivedTransactions (filter: function)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-DynamicField.receivedTransactions (filter: kind)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-DynamicField.receivedTransactions (filter: affectedAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-DynamicField.receivedTransactions (filter: affectedObject)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-DynamicField.receivedTransactions (filter: sentAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
 DynamicField.value
   => {}
 
@@ -684,18 +444,6 @@ Epoch.epochId
   => {}
 
 Epoch.checkpoints
-  => {"cp_sequence_numbers"}
-
-Epoch.checkpoints (filter: atEpoch)
-  => {"cp_sequence_numbers"}
-
-Epoch.checkpoints (filter: afterCheckpoint)
-  => {"cp_sequence_numbers"}
-
-Epoch.checkpoints (filter: atCheckpoint)
-  => {"cp_sequence_numbers"}
-
-Epoch.checkpoints (filter: beforeCheckpoint)
   => {"cp_sequence_numbers"}
 
 Epoch.coinDenyList
@@ -711,15 +459,6 @@ Epoch.startTimestamp
   => {}
 
 Epoch.transactions
-  => {"cp_sequence_numbers", "tx_digests"}
-
-Epoch.transactions (filter: afterCheckpoint)
-  => {"cp_sequence_numbers", "tx_digests"}
-
-Epoch.transactions (filter: atCheckpoint)
-  => {"cp_sequence_numbers", "tx_digests"}
-
-Epoch.transactions (filter: beforeCheckpoint)
   => {"cp_sequence_numbers", "tx_digests"}
 
 Epoch.transactions (filter: function)
@@ -890,9 +629,6 @@ IAddressable.address
 IAddressable.balance
   => {"consistent"}
 
-IAddressable.balance (filter: coinType)
-  => {"consistent"}
-
 IAddressable.balances
   => {"consistent"}
 
@@ -902,19 +638,7 @@ IAddressable.defaultSuinsName
 IAddressable.multiGetBalances
   => {"consistent"}
 
-IAddressable.multiGetBalances (filter: keys)
-  => {"consistent"}
-
 IAddressable.objects
-  => {"consistent"}
-
-IAddressable.objects (filter: ownerKind)
-  => {"consistent"}
-
-IAddressable.objects (filter: owner)
-  => {"consistent"}
-
-IAddressable.objects (filter: type)
   => {"consistent"}
 
 IMoveDatatype.module
@@ -935,19 +659,7 @@ IMoveObject.contents
 IMoveObject.dynamicField
   => {"obj_versions"}
 
-IMoveObject.dynamicField (filter: type)
-  => {"obj_versions"}
-
-IMoveObject.dynamicField (filter: bcs)
-  => {"obj_versions"}
-
 IMoveObject.dynamicObjectField
-  => {"obj_versions"}
-
-IMoveObject.dynamicObjectField (filter: type)
-  => {"obj_versions"}
-
-IMoveObject.dynamicObjectField (filter: bcs)
   => {"obj_versions"}
 
 IMoveObject.hasPublicTransfer
@@ -956,19 +668,7 @@ IMoveObject.hasPublicTransfer
 IMoveObject.multiGetDynamicFields
   => {"obj_versions"}
 
-IMoveObject.multiGetDynamicFields (filter: type)
-  => {"obj_versions"}
-
-IMoveObject.multiGetDynamicFields (filter: bcs)
-  => {"obj_versions"}
-
 IMoveObject.multiGetDynamicObjectFields
-  => {"obj_versions"}
-
-IMoveObject.multiGetDynamicObjectFields (filter: type)
-  => {"obj_versions"}
-
-IMoveObject.multiGetDynamicObjectFields (filter: bcs)
   => {"obj_versions"}
 
 IMoveObject.dynamicFields
@@ -986,34 +686,13 @@ IObject.digest
 IObject.objectAt
   => {"obj_versions"}
 
-IObject.objectAt (filter: version)
-  => {"obj_versions"}
-
-IObject.objectAt (filter: rootVersion)
-  => {"obj_versions"}
-
-IObject.objectAt (filter: checkpoint)
-  => {"obj_versions"}
-
 IObject.objectBcs
   => {}
 
 IObject.objectVersionsAfter
   => {"obj_versions"}
 
-IObject.objectVersionsAfter (filter: afterVersion)
-  => {"obj_versions"}
-
-IObject.objectVersionsAfter (filter: beforeVersion)
-  => {"obj_versions"}
-
 IObject.objectVersionsBefore
-  => {"obj_versions"}
-
-IObject.objectVersionsBefore (filter: afterVersion)
-  => {"obj_versions"}
-
-IObject.objectVersionsBefore (filter: beforeVersion)
   => {"obj_versions"}
 
 IObject.owner
@@ -1026,30 +705,6 @@ IObject.storageRebate
   => {}
 
 IObject.receivedTransactions
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-IObject.receivedTransactions (filter: afterCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-IObject.receivedTransactions (filter: atCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-IObject.receivedTransactions (filter: beforeCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-IObject.receivedTransactions (filter: function)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-IObject.receivedTransactions (filter: kind)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-IObject.receivedTransactions (filter: affectedAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-IObject.receivedTransactions (filter: affectedObject)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-IObject.receivedTransactions (filter: sentAddress)
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
 Immutable._
@@ -1172,9 +827,6 @@ MoveModule.bytes
 MoveModule.datatype
   => {}
 
-MoveModule.datatype (filter: name)
-  => {}
-
 MoveModule.datatypes
   => {}
 
@@ -1182,9 +834,6 @@ MoveModule.disassembly
   => {}
 
 MoveModule.enum
-  => {}
-
-MoveModule.enum (filter: name)
   => {}
 
 MoveModule.enums
@@ -1199,16 +848,10 @@ MoveModule.friends
 MoveModule.function
   => {}
 
-MoveModule.function (filter: name)
-  => {}
-
 MoveModule.functions
   => {}
 
 MoveModule.struct
-  => {}
-
-MoveModule.struct (filter: name)
   => {}
 
 MoveModule.structs
@@ -1232,9 +875,6 @@ MoveObject.asDynamicField
 MoveObject.balance
   => {"consistent"}
 
-MoveObject.balance (filter: coinType)
-  => {"consistent"}
-
 MoveObject.balances
   => {"consistent"}
 
@@ -1247,22 +887,10 @@ MoveObject.defaultSuinsName
 MoveObject.dynamicField
   => {"obj_versions"}
 
-MoveObject.dynamicField (filter: type)
-  => {"obj_versions"}
-
-MoveObject.dynamicField (filter: bcs)
-  => {"obj_versions"}
-
 MoveObject.dynamicFields
   => {"consistent"}
 
 MoveObject.dynamicObjectField
-  => {"obj_versions"}
-
-MoveObject.dynamicObjectField (filter: type)
-  => {"obj_versions"}
-
-MoveObject.dynamicObjectField (filter: bcs)
   => {"obj_versions"}
 
 MoveObject.hasPublicTransfer
@@ -1271,25 +899,10 @@ MoveObject.hasPublicTransfer
 MoveObject.multiGetDynamicFields
   => {"obj_versions"}
 
-MoveObject.multiGetDynamicFields (filter: type)
-  => {"obj_versions"}
-
-MoveObject.multiGetDynamicFields (filter: bcs)
-  => {"obj_versions"}
-
 MoveObject.multiGetBalances
   => {"consistent"}
 
-MoveObject.multiGetBalances (filter: keys)
-  => {"consistent"}
-
 MoveObject.multiGetDynamicObjectFields
-  => {"obj_versions"}
-
-MoveObject.multiGetDynamicObjectFields (filter: type)
-  => {"obj_versions"}
-
-MoveObject.multiGetDynamicObjectFields (filter: bcs)
   => {"obj_versions"}
 
 MoveObject.moveObjectBcs
@@ -1298,46 +911,16 @@ MoveObject.moveObjectBcs
 MoveObject.objectAt
   => {"obj_versions"}
 
-MoveObject.objectAt (filter: version)
-  => {"obj_versions"}
-
-MoveObject.objectAt (filter: rootVersion)
-  => {"obj_versions"}
-
-MoveObject.objectAt (filter: checkpoint)
-  => {"obj_versions"}
-
 MoveObject.objectBcs
   => {}
 
 MoveObject.objectVersionsAfter
   => {"obj_versions"}
 
-MoveObject.objectVersionsAfter (filter: afterVersion)
-  => {"obj_versions"}
-
-MoveObject.objectVersionsAfter (filter: beforeVersion)
-  => {"obj_versions"}
-
 MoveObject.objectVersionsBefore
   => {"obj_versions"}
 
-MoveObject.objectVersionsBefore (filter: afterVersion)
-  => {"obj_versions"}
-
-MoveObject.objectVersionsBefore (filter: beforeVersion)
-  => {"obj_versions"}
-
 MoveObject.objects
-  => {"consistent"}
-
-MoveObject.objects (filter: ownerKind)
-  => {"consistent"}
-
-MoveObject.objects (filter: owner)
-  => {"consistent"}
-
-MoveObject.objects (filter: type)
   => {"consistent"}
 
 MoveObject.owner
@@ -1352,30 +935,6 @@ MoveObject.storageRebate
 MoveObject.receivedTransactions
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
-MoveObject.receivedTransactions (filter: afterCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MoveObject.receivedTransactions (filter: atCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MoveObject.receivedTransactions (filter: beforeCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MoveObject.receivedTransactions (filter: function)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MoveObject.receivedTransactions (filter: kind)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MoveObject.receivedTransactions (filter: affectedAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MoveObject.receivedTransactions (filter: affectedObject)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MoveObject.receivedTransactions (filter: sentAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
 MovePackage.address
   => {}
 
@@ -1388,9 +947,6 @@ MovePackage.digest
 MovePackage.balance
   => {"consistent"}
 
-MovePackage.balance (filter: coinType)
-  => {"consistent"}
-
 MovePackage.balances
   => {"consistent"}
 
@@ -1398,9 +954,6 @@ MovePackage.defaultSuinsName
   => {"obj_versions"}
 
 MovePackage.module
-  => {}
-
-MovePackage.module (filter: name)
   => {}
 
 MovePackage.modules
@@ -1412,31 +965,10 @@ MovePackage.moduleBcs
 MovePackage.multiGetBalances
   => {"consistent"}
 
-MovePackage.multiGetBalances (filter: keys)
-  => {"consistent"}
-
 MovePackage.objects
   => {"consistent"}
 
-MovePackage.objects (filter: ownerKind)
-  => {"consistent"}
-
-MovePackage.objects (filter: owner)
-  => {"consistent"}
-
-MovePackage.objects (filter: type)
-  => {"consistent"}
-
 MovePackage.objectAt
-  => {"obj_versions"}
-
-MovePackage.objectAt (filter: version)
-  => {"obj_versions"}
-
-MovePackage.objectAt (filter: rootVersion)
-  => {"obj_versions"}
-
-MovePackage.objectAt (filter: checkpoint)
   => {"obj_versions"}
 
 MovePackage.objectBcs
@@ -1445,19 +977,7 @@ MovePackage.objectBcs
 MovePackage.objectVersionsAfter
   => {"obj_versions"}
 
-MovePackage.objectVersionsAfter (filter: afterVersion)
-  => {"obj_versions"}
-
-MovePackage.objectVersionsAfter (filter: beforeVersion)
-  => {"obj_versions"}
-
 MovePackage.objectVersionsBefore
-  => {"obj_versions"}
-
-MovePackage.objectVersionsBefore (filter: afterVersion)
-  => {"obj_versions"}
-
-MovePackage.objectVersionsBefore (filter: beforeVersion)
   => {"obj_versions"}
 
 MovePackage.owner
@@ -1466,31 +986,13 @@ MovePackage.owner
 MovePackage.packageAt
   => {}
 
-MovePackage.packageAt (filter: version)
-  => {}
-
-MovePackage.packageAt (filter: checkpoint)
-  => {}
-
 MovePackage.packageBcs
   => {}
 
 MovePackage.packageVersionsAfter
   => {}
 
-MovePackage.packageVersionsAfter (filter: afterVersion)
-  => {}
-
-MovePackage.packageVersionsAfter (filter: beforeVersion)
-  => {}
-
 MovePackage.packageVersionsBefore
-  => {}
-
-MovePackage.packageVersionsBefore (filter: afterVersion)
-  => {}
-
-MovePackage.packageVersionsBefore (filter: beforeVersion)
   => {}
 
 MovePackage.previousTransaction
@@ -1503,30 +1005,6 @@ MovePackage.storageRebate
   => {}
 
 MovePackage.receivedTransactions
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MovePackage.receivedTransactions (filter: afterCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MovePackage.receivedTransactions (filter: atCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MovePackage.receivedTransactions (filter: beforeCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MovePackage.receivedTransactions (filter: function)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MovePackage.receivedTransactions (filter: kind)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MovePackage.receivedTransactions (filter: affectedAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MovePackage.receivedTransactions (filter: affectedObject)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-MovePackage.receivedTransactions (filter: sentAddress)
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
 MovePackage.typeOrigins
@@ -1580,12 +1058,6 @@ MutateConsensusStreamEnded.sequenceNumber
 Mutation.executeTransaction
   => {}
 
-Mutation.executeTransaction (filter: transactionDataBcs)
-  => {}
-
-Mutation.executeTransaction (filter: signatures)
-  => {}
-
 Object.address
   => {}
 
@@ -1604,9 +1076,6 @@ Object.asMovePackage
 Object.balance
   => {"consistent"}
 
-Object.balance (filter: coinType)
-  => {"consistent"}
-
 Object.balances
   => {"consistent"}
 
@@ -1616,58 +1085,22 @@ Object.defaultSuinsName
 Object.dynamicField
   => {"obj_versions"}
 
-Object.dynamicField (filter: type)
-  => {"obj_versions"}
-
-Object.dynamicField (filter: bcs)
-  => {"obj_versions"}
-
 Object.dynamicFields
   => {"consistent"}
 
 Object.dynamicObjectField
   => {"obj_versions"}
 
-Object.dynamicObjectField (filter: type)
-  => {"obj_versions"}
-
-Object.dynamicObjectField (filter: bcs)
-  => {"obj_versions"}
-
 Object.multiGetDynamicFields
-  => {"obj_versions"}
-
-Object.multiGetDynamicFields (filter: type)
-  => {"obj_versions"}
-
-Object.multiGetDynamicFields (filter: bcs)
   => {"obj_versions"}
 
 Object.multiGetDynamicObjectFields
   => {"obj_versions"}
 
-Object.multiGetDynamicObjectFields (filter: type)
-  => {"obj_versions"}
-
-Object.multiGetDynamicObjectFields (filter: bcs)
-  => {"obj_versions"}
-
 Object.multiGetBalances
   => {"consistent"}
 
-Object.multiGetBalances (filter: keys)
-  => {"consistent"}
-
 Object.objectAt
-  => {"obj_versions"}
-
-Object.objectAt (filter: version)
-  => {"obj_versions"}
-
-Object.objectAt (filter: rootVersion)
-  => {"obj_versions"}
-
-Object.objectAt (filter: checkpoint)
   => {"obj_versions"}
 
 Object.objectBcs
@@ -1676,31 +1109,10 @@ Object.objectBcs
 Object.objectVersionsAfter
   => {"obj_versions"}
 
-Object.objectVersionsAfter (filter: afterVersion)
-  => {"obj_versions"}
-
-Object.objectVersionsAfter (filter: beforeVersion)
-  => {"obj_versions"}
-
 Object.objectVersionsBefore
   => {"obj_versions"}
 
-Object.objectVersionsBefore (filter: afterVersion)
-  => {"obj_versions"}
-
-Object.objectVersionsBefore (filter: beforeVersion)
-  => {"obj_versions"}
-
 Object.objects
-  => {"consistent"}
-
-Object.objects (filter: ownerKind)
-  => {"consistent"}
-
-Object.objects (filter: owner)
-  => {"consistent"}
-
-Object.objects (filter: type)
   => {"consistent"}
 
 Object.owner
@@ -1713,30 +1125,6 @@ Object.storageRebate
   => {}
 
 Object.receivedTransactions
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Object.receivedTransactions (filter: afterCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Object.receivedTransactions (filter: atCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Object.receivedTransactions (filter: beforeCheckpoint)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Object.receivedTransactions (filter: function)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Object.receivedTransactions (filter: kind)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Object.receivedTransactions (filter: affectedAddress)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Object.receivedTransactions (filter: affectedObject)
-  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
-
-Object.receivedTransactions (filter: sentAddress)
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
 ObjectChange.address
@@ -1808,16 +1196,10 @@ ProtocolConfigs.protocolVersion
 ProtocolConfigs.config
   => {}
 
-ProtocolConfigs.config (filter: key)
-  => {}
-
 ProtocolConfigs.configs
   => {}
 
 ProtocolConfigs.featureFlag
-  => {}
-
-ProtocolConfigs.featureFlag (filter: key)
   => {}
 
 ProtocolConfigs.featureFlags
@@ -1835,46 +1217,19 @@ Pure.bytes
 Query.address
   => {}
 
-Query.address (filter: address)
-  => {}
-
-Query.address (filter: rootVersion)
-  => {}
-
 Query.chainIdentifier
   => {}
 
 Query.checkpoint
   => {}
 
-Query.checkpoint (filter: sequenceNumber)
-  => {}
-
 Query.checkpoints
-  => {"cp_sequence_numbers"}
-
-Query.checkpoints (filter: atEpoch)
-  => {"cp_sequence_numbers"}
-
-Query.checkpoints (filter: afterCheckpoint)
-  => {"cp_sequence_numbers"}
-
-Query.checkpoints (filter: atCheckpoint)
-  => {"cp_sequence_numbers"}
-
-Query.checkpoints (filter: beforeCheckpoint)
   => {"cp_sequence_numbers"}
 
 Query.coinMetadata
   => {"consistent", "obj_versions"}
 
-Query.coinMetadata (filter: coinType)
-  => {"consistent", "obj_versions"}
-
 Query.epoch
-  => {}
-
-Query.epoch (filter: epochId)
   => {}
 
 Query.epochs
@@ -1883,157 +1238,52 @@ Query.epochs
 Query.events
   => {"ev_struct_inst", "tx_digests"}
 
-Query.events (filter: afterCheckpoint)
-  => {"ev_struct_inst", "tx_digests"}
-
-Query.events (filter: atCheckpoint)
-  => {"ev_struct_inst", "tx_digests"}
-
-Query.events (filter: beforeCheckpoint)
-  => {"ev_struct_inst", "tx_digests"}
-
-Query.events (filter: sender)
-  => {"ev_struct_inst", "tx_digests"}
-
 Query.events (filter: module)
   => {"ev_emit_mod", "tx_digests"}
 
-Query.events (filter: type)
-  => {"ev_struct_inst", "tx_digests"}
-
 Query.multiGetCheckpoints
-  => {}
-
-Query.multiGetCheckpoints (filter: keys)
   => {}
 
 Query.multiGetEpochs
   => {}
 
-Query.multiGetEpochs (filter: keys)
-  => {}
-
 Query.multiGetObjects
-  => {}
-
-Query.multiGetObjects (filter: address)
-  => {}
-
-Query.multiGetObjects (filter: version)
-  => {}
-
-Query.multiGetObjects (filter: rootVersion)
-  => {}
-
-Query.multiGetObjects (filter: atCheckpoint)
   => {}
 
 Query.multiGetPackages
   => {}
 
-Query.multiGetPackages (filter: address)
-  => {}
-
-Query.multiGetPackages (filter: version)
-  => {}
-
-Query.multiGetPackages (filter: atCheckpoint)
-  => {}
-
 Query.multiGetTransactions
-  => {}
-
-Query.multiGetTransactions (filter: keys)
   => {}
 
 Query.multiGetTransactionEffects
   => {}
 
-Query.multiGetTransactionEffects (filter: keys)
-  => {}
-
 Query.multiGetTypes
-  => {}
-
-Query.multiGetTypes (filter: keys)
   => {}
 
 Query.object
   => {"obj_versions"}
 
-Query.object (filter: address)
-  => {"obj_versions"}
-
 Query.object (filter: version)
   => {}
 
-Query.object (filter: rootVersion)
-  => {"obj_versions"}
-
-Query.object (filter: atCheckpoint)
-  => {"obj_versions"}
-
 Query.objects
-  => {"consistent"}
-
-Query.objects (filter: ownerKind)
-  => {"consistent"}
-
-Query.objects (filter: owner)
-  => {"consistent"}
-
-Query.objects (filter: type)
   => {"consistent"}
 
 Query.objectVersions
   => {"obj_versions"}
 
-Query.objectVersions (filter: address)
-  => {"obj_versions"}
-
-Query.objectVersions (filter: afterVersion)
-  => {"obj_versions"}
-
-Query.objectVersions (filter: beforeVersion)
-  => {"obj_versions"}
-
 Query.package
-  => {}
-
-Query.package (filter: address)
-  => {}
-
-Query.package (filter: version)
-  => {}
-
-Query.package (filter: atCheckpoint)
   => {}
 
 Query.packages
   => {}
 
-Query.packages (filter: afterCheckpoint)
-  => {}
-
-Query.packages (filter: beforeCheckpoint)
-  => {}
-
 Query.packageVersions
   => {}
 
-Query.packageVersions (filter: address)
-  => {}
-
-Query.packageVersions (filter: afterVersion)
-  => {}
-
-Query.packageVersions (filter: beforeVersion)
-  => {}
-
 Query.protocolConfigs
-  => {}
-
-Query.protocolConfigs (filter: version)
   => {}
 
 Query.serviceConfig
@@ -2042,34 +1292,13 @@ Query.serviceConfig
 Query.suinsName
   => {}
 
-Query.suinsName (filter: address)
-  => {}
-
-Query.suinsName (filter: rootVersion)
-  => {}
-
 Query.transaction
-  => {}
-
-Query.transaction (filter: digest)
   => {}
 
 Query.transactionEffects
   => {}
 
-Query.transactionEffects (filter: digest)
-  => {}
-
 Query.transactions
-  => {"cp_sequence_numbers", "tx_digests"}
-
-Query.transactions (filter: afterCheckpoint)
-  => {"cp_sequence_numbers", "tx_digests"}
-
-Query.transactions (filter: atCheckpoint)
-  => {"cp_sequence_numbers", "tx_digests"}
-
-Query.transactions (filter: beforeCheckpoint)
   => {"cp_sequence_numbers", "tx_digests"}
 
 Query.transactions (filter: function)
@@ -2090,34 +1319,16 @@ Query.transactions (filter: sentAddress)
 Query.type
   => {}
 
-Query.type (filter: type)
-  => {}
-
 Query.simulateTransaction
   => {}
 
-Query.simulateTransaction (filter: transaction)
-  => {}
-
 Query.verifyZkLoginSignature
-  => {}
-
-Query.verifyZkLoginSignature (filter: bytes)
-  => {}
-
-Query.verifyZkLoginSignature (filter: signature)
-  => {}
-
-Query.verifyZkLoginSignature (filter: author)
   => {}
 
 Query.__schema
   => {}
 
 Query.__type
-  => {}
-
-Query.__type (filter: name)
   => {}
 
 RandomnessStateCreateTransaction._
@@ -2174,19 +1385,7 @@ ServiceConfig.maxQueryPayloadSize
 ServiceConfig.defaultPageSize
   => {}
 
-ServiceConfig.defaultPageSize (filter: type)
-  => {}
-
-ServiceConfig.defaultPageSize (filter: field)
-  => {}
-
 ServiceConfig.maxPageSize
-  => {}
-
-ServiceConfig.maxPageSize (filter: type)
-  => {}
-
-ServiceConfig.maxPageSize (filter: field)
   => {}
 
 ServiceConfig.maxMultiGetSize
@@ -2217,15 +1416,6 @@ ServiceConfig.maxDisassembledModuleSize
   => {}
 
 ServiceConfig.availableRange
-  => {}
-
-ServiceConfig.availableRange (filter: type)
-  => {}
-
-ServiceConfig.availableRange (filter: field)
-  => {}
-
-ServiceConfig.availableRange (filter: filters)
   => {}
 
 Shared.initialSharedVersion
@@ -2420,9 +1610,6 @@ Validator.address
 Validator.balance
   => {"consistent"}
 
-Validator.balance (filter: coinType)
-  => {"consistent"}
-
 Validator.balances
   => {"consistent"}
 
@@ -2432,19 +1619,7 @@ Validator.defaultSuinsName
 Validator.multiGetBalances
   => {"consistent"}
 
-Validator.multiGetBalances (filter: keys)
-  => {"consistent"}
-
 Validator.objects
-  => {"consistent"}
-
-Validator.objects (filter: ownerKind)
-  => {"consistent"}
-
-Validator.objects (filter: owner)
-  => {"consistent"}
-
-Validator.objects (filter: type)
   => {"consistent"}
 
 Validator.credentials

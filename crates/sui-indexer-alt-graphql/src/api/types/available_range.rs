@@ -125,8 +125,8 @@ macro_rules! collect_pipelines {
             }
         }
 
-        /// Map from (Type, Field) to Option<(DelegateType, DelegateField)> for testing.
-        /// Maps to None if the field is not delegated. The "*" wildcard is expanded.
+        /// Map from (Type, Field) to (DelegateType, DelegateField) for testing.
+        /// Maps to ("", "") if the field is not delegated. The "*" wildcard is expanded.
         #[cfg(test)]
         static TYPE_FIELD_DELEGATIONS: std::sync::LazyLock<std::collections::HashMap<(&'static str, &'static str), (&'static str, &'static str)>> =
             std::sync::LazyLock::new(|| {
@@ -183,6 +183,9 @@ collect_pipelines! {
     CoinMetadata.[digest, objectBcs, owner, previousTransaction, storageRebate, version] => IObject.*;
     CoinMetadata.[receivedTransactions] => IObject.receivedTransactions();
     CoinMetadata.[supply] |pipelines, _filters| {
+        pipelines.insert("consistent".to_string());
+    };
+    CoinMetadata.[supplyState] |pipelines, _filters| {
         pipelines.insert("consistent".to_string());
     };
 
@@ -458,28 +461,23 @@ mod field_piplines_tests {
 
     /// Calls collect_pipeline on types, fields, and filters in the schema registry and
     /// stores the input and output in a snapshot for regression testing and auditing.
+    /// If a filter does not result in a different set of pipelines from the unfiltered case,
+    /// it is not included in the snapshot.
     fn test_registry_collect_pipelines_snapshot(registry: &Registry) -> String {
         const PAGINATION_ARGS: &[&str] = &["first", "after", "last", "before"];
-        const GENERATED_TYPES: &[&str] = &["Connection", "Edge"];
-        const INTROSPECTION_TYPE: &str = "__";
 
         let mut output = String::new();
 
         for (type_name, meta_type) in registry.types.iter() {
-            if type_name.starts_with(INTROSPECTION_TYPE)
-                || GENERATED_TYPES
-                    .iter()
-                    .any(|suffix| type_name.ends_with(suffix))
-            {
-                continue;
-            }
-
             let (MetaType::Object { fields, .. } | MetaType::Interface { fields, .. }) = meta_type
             else {
                 continue;
             };
 
             for (field_name, meta_field) in fields.iter() {
+                if should_ignore_in_snapshot(type_name, field_name) {
+                    continue;
+                }
                 let filter_fields: Vec<String> = meta_field
                     .args
                     .iter()
@@ -498,27 +496,66 @@ mod field_piplines_tests {
                     })
                     .collect();
 
-                for filter_field in std::iter::once(None).chain(filter_fields.iter().map(Some)) {
+                let mut unfiltered_pipelines = BTreeSet::new();
+                super::collect_pipelines(
+                    type_name,
+                    Some(field_name),
+                    BTreeSet::new(),
+                    &mut unfiltered_pipelines,
+                );
+                let unfiltered_output_str =
+                    formatted_output_str(type_name, field_name, &unfiltered_pipelines, None);
+                output.push_str(&unfiltered_output_str);
+
+                for filter_field in filter_fields.iter().map(Some) {
                     let filters = filter_field.iter().copied().map(String::from).collect();
                     let mut pipelines = BTreeSet::new();
                     super::collect_pipelines(type_name, Some(field_name), filters, &mut pipelines);
-
-                    let filter_suffix =
-                        filter_field.map_or(String::new(), |f| format!(" (filter: {f})"));
-                    let pipeline_list = pipelines
-                        .iter()
-                        .map(|s| format!("\"{s}\""))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-
-                    output.push_str(&format!(
-                        "{type_name}.{field_name}{filter_suffix}\n  => {{{pipeline_list}}}\n\n"
-                    ));
+                    let output_str =
+                        formatted_output_str(type_name, field_name, &pipelines, filter_field);
+                    if unfiltered_pipelines != pipelines {
+                        output.push_str(&output_str);
+                    }
                 }
             }
         }
-
         insta::assert_snapshot!(output);
         output
+    }
+
+    fn formatted_output_str(
+        type_name: &str,
+        field_name: &str,
+        pipelines: &BTreeSet<String>,
+        filter_field: Option<&String>,
+    ) -> String {
+        let filter_suffix = filter_field.map_or(String::new(), |f| format!(" (filter: {f})"));
+        let pipeline_list = pipelines
+            .iter()
+            .map(|s| format!("\"{s}\""))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let output_str =
+            format!("{type_name}.{field_name}{filter_suffix}\n  => {{{pipeline_list}}}\n\n");
+        output_str
+    }
+
+    /// If the type or fields is a generated type or field, or an introspection type, it is skipped in the snapshot.
+    fn should_ignore_in_snapshot(type_name: &str, field_name: &str) -> bool {
+        const GENERATED_TYPES: &[&str] = &["Connection", "Edge"];
+        const GENERATED_FIELDS: &[&str] = &["node", "nodes", "edges", "cursor", "pageInfo"];
+        const INTROSPECTION_TYPE: &str = "__";
+        if type_name.starts_with(INTROSPECTION_TYPE)
+            || GENERATED_TYPES
+                .iter()
+                .any(|suffix| type_name.ends_with(suffix))
+                && GENERATED_FIELDS
+                    .iter()
+                    .any(|suffix| field_name.ends_with(suffix))
+        {
+            return true;
+        }
+        false
     }
 }
