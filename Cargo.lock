@@ -16171,7 +16171,6 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-keys",
  "sui-move-build",
- "sui-node",
  "sui-sdk",
  "sui-swarm-config",
  "sui-types",
@@ -16181,7 +16180,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
- "typed-store",
 ]
 
 [[package]]

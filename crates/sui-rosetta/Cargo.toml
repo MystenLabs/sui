@@ -25,13 +25,10 @@ async-trait.workspace = true
 clap.workspace = true
 thiserror.workspace = true
 eyre.workspace = true
-typed-store.workspace = true
 tempfile.workspace = true
 fastcrypto.workspace = true
-sui-swarm-config.workspace = true
 sui-types.workspace = true
 sui-sdk.workspace = true
-sui-node.workspace = true
 sui-config.workspace = true
 sui-keys.workspace = true
 sui-json-rpc-types.workspace = true
@@ -45,6 +42,7 @@ telemetry-subscribers.workspace = true
 enum_dispatch.workspace = true
 
 [dev-dependencies]
+sui-swarm-config.workspace = true
 sui-sdk.workspace = true
 sui-move-build.workspace = true
 test-cluster.workspace = true
