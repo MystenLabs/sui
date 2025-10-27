@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 # Run tests with fork testing
 
 set -e

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 # Mint tokens to USER1 and save object IDs for fork testing
 
 set -e

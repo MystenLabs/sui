@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 # Deploy the demo coin contract to testnet
 
 set -e
