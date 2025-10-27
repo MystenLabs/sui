@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 101;
+const MAX_PROTOCOL_VERSION: u64 = 100;
 
 // Record history of protocol version allocations here:
 //
@@ -4117,8 +4117,7 @@ impl ProtocolConfig {
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
                 }
-                100 => {}
-                101 => {
+                100 => {
                     cfg.feature_flags.private_generics_verifier_v2 = true;
                 }
                 // Use this template when making changes:
