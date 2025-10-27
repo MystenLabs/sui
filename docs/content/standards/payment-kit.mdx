@@ -313,13 +313,13 @@ sui:<address>
 
 #### `address`
 
-The destination address that will receive the payment funds. Must be a valid Sui address. There is no pathname for the destination address.
+The destination address to receive the payment funds. Must be a valid Sui address. There is no pathname for the destination address.
 
 #### `amount`
 
-The `amount` field is a required pathname. The value must be a non-negative integer or decimal numbers. This field represents the "display amount" of a specified coin type (for example, 0.05 SUI).
+The `amount` field is a required pathname. The value must be a non-negative integer or decimal numbers. This field represents the display amount of a specified coin type (for example, 0.05 SUI).
 
-If an `amount` value represents a decimal, that is less than `1`, it must must include a leading `0` before the decimal.
+If an `amount` value represents a decimal that is less than `1`, it must must include a leading `0` before the decimal.
 
 #### `nonce`
 
@@ -343,7 +343,7 @@ A description or context for the payment. May be displayed to users to explain t
 
 #### `registry`
 
-The Object ID, or ascii represented `name` of the `PaymentRegistry`, to use for processing the payment. If provided, the payment will be processed through the registry with duplicate prevention. If omitted, the payment will be processed as an ephemeral payment.
+The object ID or ascii represented `name` of the `PaymentRegistry` to use for processing the payment. If provided, the payment is processed through the registry with duplicate prevention. If omitted, the payment is processed as an ephemeral payment.
 
 ### Example URIs
 
@@ -375,7 +375,7 @@ sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
     &message=Espresso%20and%20croissant
 ```
 
-**Registry-based payment (Registry Object ID):**
+**Registry-based payment (registry object ID):**
 
 ```
 sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
