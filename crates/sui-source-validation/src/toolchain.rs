@@ -192,8 +192,8 @@ pub(crate) fn units_for_toolchain(
             continue;
         }
 
-        let mut lock_file = File::open(lock_file)?;
-        let lock_version = Header::read(&mut lock_file)?.version;
+        // let mut lock_file = File::open(lock_file)?;
+        // let lock_version = Header::read(&mut lock_file)?.version;
         if lock_version == PRE_TOOLCHAIN_MOVE_LOCK_VERSION {
             // No need to attempt reading lock file toolchain
             debug!("{package} on legacy compiler",);
@@ -204,9 +204,6 @@ pub(crate) fn units_for_toolchain(
             continue;
         }
 
-        // Read lock file toolchain info
-        lock_file.rewind()?;
-        let toolchain_version = ToolchainVersion::read(&mut lock_file)?;
         match toolchain_version {
             // No ToolchainVersion and new Move.lock version implies current compiler.
             None => {
