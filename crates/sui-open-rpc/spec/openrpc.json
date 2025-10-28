@@ -1386,6 +1386,7 @@
                 "passkey_auth": false,
                 "per_command_shared_object_transfer_rules": false,
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
+                "private_generics_verifier_v2": false,
                 "random_beacon": false,
                 "receive_objects": false,
                 "recompute_has_public_transfer_in_execution": false,
