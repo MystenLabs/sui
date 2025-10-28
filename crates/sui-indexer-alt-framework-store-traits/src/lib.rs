@@ -31,9 +31,6 @@ pub trait BatchAccumulator<V>: Send {
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
-
-    /// Returns true if at capacity.
-    fn is_full(&self) -> bool;
 }
 
 /// Batch accumulator that limits batch size based on sql parameter count.
@@ -97,15 +94,6 @@ impl<V: FieldCount + Send> BatchAccumulator<V> for ParameterCountBatchAccumulato
 
     fn len(&self) -> usize {
         self.values.len()
-    }
-
-    fn is_full(&self) -> bool {
-        let max_params = i16::MAX as usize;
-        let used_params = self.values.len() * V::FIELD_COUNT;
-        let capacity_left = max_params.saturating_sub(used_params);
-
-        // Full if we can't fit another row
-        capacity_left < V::FIELD_COUNT
     }
 }
 

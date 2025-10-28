@@ -122,16 +122,14 @@ where
 
                         let taken = accumulator.take_from(&mut indexed.values);
                         watermark.push(indexed.watermark.take(taken));
-
                         if indexed.is_empty() {
                             checkpoint_lag_reporter.report_lag(
                                 indexed.watermark.checkpoint(),
                                 indexed.watermark.timestamp_ms(),
                             );
                             entry.remove();
-                        }
-
-                        if accumulator.is_full() {
+                        // This means the batch can't hold any more values. Send it.
+                        } else if taken == 0 {
                             break;
                         }
                     }
