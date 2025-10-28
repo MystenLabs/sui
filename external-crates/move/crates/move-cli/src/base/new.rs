@@ -4,8 +4,11 @@
 use anyhow::{self, Context};
 use clap::*;
 use indoc::formatdoc;
+
 use move_package_alt::package::layout::SourcePackageLayout;
 use move_package_alt::schema::PackageName;
+
+use std::fmt::Display;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::{fs::create_dir_all, io::Write, path::Path};
@@ -24,10 +27,20 @@ pub struct New {
 
 impl New {
     pub fn execute_with_defaults(self, path: Option<&Path>) -> anyhow::Result<()> {
-        self.execute(path)
+        self.execute(
+            path,
+            std::iter::empty::<(&str, &str)>(),
+            std::iter::empty::<(&str, &str)>(),
+        )
     }
 
-    pub fn execute(&self, path: Option<&Path>) -> anyhow::Result<()> {
+    pub fn execute(
+        &self,
+        path: Option<&Path>,
+
+        deps: impl IntoIterator<Item = (impl Display, impl Display)>,
+        addrs: impl IntoIterator<Item = (impl Display, impl Display)>,
+    ) -> anyhow::Result<()> {
         std::fs::write(
             self.source_file_path(&path)?,
             formatdoc!(
@@ -44,7 +57,7 @@ impl New {
                 name = self.name_var()?,
             ),
         )?;
-        self.write_move_toml(&path)?;
+        self.write_move_toml(&path, deps, addrs)?;
         self.write_gitignore(&path)?;
         Ok(())
     }
@@ -79,46 +92,68 @@ impl New {
     }
 
     /// create default `Move.toml`
-    fn write_move_toml(&self, path: &Option<&Path>) -> anyhow::Result<()> {
-        std::fs::write(
-            self.manifest_path(path)?,
-            formatdoc!(
-                r#"
-                # Full documentation for Move.toml can be found at: docs.sui.io
+    fn write_move_toml(
+        &self,
+        path: &Option<&Path>,
+        deps: impl IntoIterator<Item = (impl Display, impl Display)>,
+        addrs: impl IntoIterator<Item = (impl Display, impl Display)>,
+    ) -> anyhow::Result<()> {
+        let name = self.name_var()?;
+        let mut w = std::fs::File::create(self.manifest_path(path)?)
+            .context("Unexpected error creating Move.toml")?;
+        writeln!(
+            w,
+            r#"[package]
+name = "{name}"
+edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+# license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
+# authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 
-                [package]
-                name = "{name}"
-                edition = "2024"         # use "2024" for Move 2024 edition
-                # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
-                # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
-                # flavor = "sui"
+[dependencies]"#
+        )?;
+        for (dep_name, dep_val) in deps {
+            writeln!(w, "{dep_name} = {dep_val}")?;
+        }
 
-                # add the environment names and their chain ids here
-                # by default, testnet and mainnet are implicitly available
-                # example for devnet: devnet = "abcdef1234"
-                # [environments]
-                # chain_name = "{{chain_id}}"
+        writeln!(
+            w,
+            r#"
+# For remote import, use the `{{ git = "...", subdir = "...", rev = "..." }}`.
+# Revision can be a branch, a tag, and a commit hash.
+# MyRemotePackage = {{ git = "https://some.remote/host.git", subdir = "remote/path", rev = "main" }}
 
-                # Add your dependencies here or leave empty (for adding automatically sui and std deps)
-                # [dependencies]
+# For local dependencies use `local = path`. Path is relative to the package root
+# Local = {{ local = "../path/to" }}
 
-                # Depedency on local package in the directory `../bar`, which can be referred to in the Move code as "bar::module::function"
-                # bar = {{ local = "../bar" }}
+# To resolve a version conflict and force a specific version for dependency
+# override use `override = true`
+# Override = {{ local = "../conflicting/version", override = true }}
 
-                # Git dependency
-                # foo = {{ git = "https://example.com/foo.git", rev = "releases/v1", subdir = "foo" }}
+[addresses]"#
+        )?;
 
-                # Setting `override = true` forces your dependencies to use this version of the package.
-                # This is required if you need to link against a different version from one of your dependencies, or if
-                # two of your dependencies depend on different versions of the same package
-                # foo = {{ git = "https://example.com/foo.git", rev = "releases/v1", override = true }}
+        // write named addresses
+        for (addr_name, addr_val) in addrs {
+            writeln!(w, "{addr_name} = \"{addr_val}\"")?;
+        }
 
-                # Use to replace dependencies for specific environments
-                # [dep-replacements.mainnet]
-                # foo = {{ git = "https://example.com/foo.git", original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_beta" }}
-                "#,
-                name = self.name_var()?
-            ),
+        writeln!(
+            w,
+            r#"
+# Named addresses will be accessible in Move as `@name`. They're also exported:
+# for example, `std = "0x1"` is exported by the Standard Library.
+# alice = "0xA11CE"
+
+[dev-dependencies]
+# The dev-dependencies section allows overriding dependencies for `--test` and
+# `--dev` modes. You can introduce test-only dependencies here.
+# Local = {{ local = "../path/to/dev-build" }}
+
+[dev-addresses]
+# The dev-addresses section allows overwriting named addresses for the `--test`
+# and `--dev` modes.
+# alice = "0xB0B"
+"#
         )?;
 
         Ok(())
