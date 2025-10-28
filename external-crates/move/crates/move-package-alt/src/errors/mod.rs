@@ -107,6 +107,9 @@ pub enum PackageError {
 
     #[error("Unable to create ephemeral publication file `{file}`: {err:?}")]
     InvalidEphemeralFile { file: PathBuf, err: std::io::Error },
+
+    #[error("Multiple entries with `source = {{ {dep} }}` exist in the publication file")]
+    MultipleEphemeralEntries { dep: String },
 }
 
 /// Truncate `s` to the first `head` characters and the last `tail` characters of `s`, separated by

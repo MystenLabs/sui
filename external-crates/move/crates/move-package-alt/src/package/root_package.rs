@@ -14,8 +14,8 @@ use crate::graph::PackageInfo;
 use crate::package::block_on;
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{
-    Environment, ModeName, PackageID, PackageName, ParsedEphemeralPubs, ParsedPublishedFile,
-    Publication,
+    Environment, LocalPub, LockfileDependencyInfo, ModeName, PackageID, PackageName,
+    ParsedEphemeralPubs, ParsedPublishedFile, Publication, RenderToml,
 };
 use crate::{
     errors::{PackageError, PackageResult},
@@ -279,7 +279,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let mut filtered_graph = unfiltered_graph.filter_for_mode(&config.modes).linkage()?;
         if let Some(ephemeral_pubs) = ephemeral_pubs {
             debug!("adding overrides");
-            filtered_graph.add_publish_overrides(localpubs_to_publications(&ephemeral_pubs));
+            filtered_graph.add_publish_overrides(localpubs_to_publications(&ephemeral_pubs)?);
         }
 
         debug!("checking rename-from");
@@ -399,16 +399,26 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Record metadata for a publication for the root package in either its `Published.toml` or
     /// its ephemeral pubfile (depending on how it was loaded)
     pub fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
-        let package_id = self.name().to_string();
-
+        let root_dep = self.package_info().package().dep_for_self().clone().into();
         if let Some(ephemeral_file) = &mut self.ephemeral_file {
             let mut pubs = ephemeral_file
-                .read_pubfile()?
+                .read_pubfile::<F>()?
                 .map(|(_, pubs)| pubs)
                 .unwrap_or_default();
 
+            pubs.published
+                .retain(|localpub| localpub.source != root_dep);
+
+            let new_pub = LocalPub {
+                source: root_dep,
+                addresses: publish_data.addresses,
+                version: publish_data.version,
+                metadata: publish_data.metadata,
+            };
+
             // TODO: should we check build-env and chain-id again?
-            pubs.published.insert(package_id, publish_data.into());
+            pubs.published.push(new_pub);
+
             ephemeral_file.write_pubfile(&pubs)?;
         } else {
             let mut pubfile = self
@@ -459,7 +469,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             let pubs = ParsedEphemeralPubs {
                 build_env: build_env.clone(),
                 chain_id: chain_id.clone(),
-                published: BTreeMap::new(),
+                published: Vec::new(),
             };
 
             pubfile.write_pubfile(&pubs)?;
@@ -483,22 +493,25 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
 fn localpubs_to_publications<F: MoveFlavor>(
     pubfile: &ParsedEphemeralPubs<F>,
-) -> BTreeMap<PackageID, Publication<F>> {
-    pubfile
-        .published
-        .iter()
-        .map(|(id, local_pub)| {
-            (
-                id.clone(),
-                Publication::<F> {
-                    chain_id: pubfile.chain_id.clone(),
-                    addresses: local_pub.addresses.clone(),
-                    version: local_pub.version,
-                    metadata: local_pub.metadata.clone(),
-                },
-            )
-        })
-        .collect()
+) -> PackageResult<BTreeMap<LockfileDependencyInfo, Publication<F>>> {
+    let mut result = BTreeMap::new();
+    for local_pub in &pubfile.published {
+        let new = Publication::<F> {
+            chain_id: pubfile.chain_id.clone(),
+            addresses: local_pub.addresses.clone(),
+            version: local_pub.version,
+            metadata: local_pub.metadata.clone(),
+        };
+
+        let old = result.insert(local_pub.source.clone().into(), new);
+        if old.is_some() {
+            let mut dep = local_pub.source.render_as_toml();
+            // take off trailing newline
+            dep.pop();
+            return Err(PackageError::MultipleEphemeralEntries { dep });
+        }
+    }
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -951,7 +964,8 @@ pkg_b = { local = "../pkg_b" }"#,
             chain-id = "localnet"
             build-env = "{DEFAULT_ENV_NAME}"
 
-            [published.root]
+            [[published]]
+            source = {{ root = true }}
             original-id = "0x2"
             published-at = "0x3"
             version = 0
@@ -999,7 +1013,8 @@ pkg_b = { local = "../pkg_b" }"#,
             chain-id = "localnet"
             build-env = "{DEFAULT_ENV_NAME}"
 
-            [published.dep]
+            [[published]]
+            source = {{ local = "../dep" }}
             original-id = "0x2"
             published-at = "0x3"
             version = 0
@@ -1031,6 +1046,51 @@ pkg_b = { local = "../pkg_b" }"#,
 
         assert_eq!(dep_addrs.original_id, OriginalID::from(2));
         assert_eq!(dep_addrs.published_at, PublishedID::from(3));
+    }
+
+    /// The ephemeral file contains two entries with the same `source`; this should not be allowed
+    #[test(tokio::test)]
+    async fn ephemeral_duplicates() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_published("dep", OriginalID::from(1), PublishedID::from(1))
+            .add_deps([("root", "dep")])
+            .build();
+
+        let mut ephemeral = tempfile::NamedTempFile::new().unwrap();
+        write!(
+            ephemeral,
+            r###"
+            chain-id = "localnet"
+            build-env = "{DEFAULT_ENV_NAME}"
+
+            [[published]]
+            source = {{ root = true }}
+            version = 1
+            published-at = "0x1"
+            original-id = "0x2"
+
+            [[published]]
+            source = {{ root = true }}
+            version = 2
+            published-at = "0x1"
+            original-id = "0x2"
+            "###,
+        )
+        .unwrap();
+
+        // load root package with ephemeral file
+
+        let err = RootPackage::<Vanilla>::load_ephemeral(
+            scenario.path_for("root"),
+            None,
+            "localnet".into(),
+            ephemeral.path(),
+            vec![],
+        )
+        .await
+        .unwrap_err();
+
+        assert_snapshot!(err.to_string(), @"Multiple entries with `source = { root = true }` exist in the publication file");
     }
 
     /// Ephemerally loading a dep that is published but not in the ephemeral file produces the
@@ -1093,7 +1153,8 @@ pkg_b = { local = "../pkg_b" }"#,
             chain-id = "localnet"
             build-env = "{DEFAULT_ENV_NAME}"
 
-            [published.dep]
+            [[published]]
+            source = {{ local = "../dep" }}
             original-id = "0x2"
             published-at = "0x3"
             version = 0
@@ -1184,12 +1245,14 @@ pkg_b = { local = "../pkg_b" }"#,
             chain-id = "localnet"
             build-env = "{DEFAULT_ENV_NAME}"
 
-            [published.dep1]
+            [[published]]
+            source = {{ local = "../dep1" }}
             original-id = "0x4"
             published-at = "0x5"
             version = 0
 
-            [published.dep2]
+            [[published]]
+            source = {{ local = "../dep2" }}
             original-id = "0x4"
             published-at = "0x6"
             version = 0
@@ -1225,12 +1288,14 @@ pkg_b = { local = "../pkg_b" }"#,
             chain-id = "localnet"
             build-env = "{DEFAULT_ENV_NAME}"
 
-            [published.dep1]
+            [[published]]
+            source = {{ local = "../dep1" }}
             original-id = "0x2"
             published-at = "0x5"
             version = 0
 
-            [published.dep2]
+            [[published]]
+            source = {{ local = "../dep2" }}
             original-id = "0x3"
             published-at = "0x6"
             version = 0
@@ -1358,7 +1423,8 @@ pkg_b = { local = "../pkg_b" }"#,
         build-env = "_test_env"
         chain-id = "localnet"
 
-        [published.root]
+        [[published]]
+        source = { root = true }
         published-at = "0x0000000000000000000000000000000000000000000000000000000000000002"
         original-id = "0x0000000000000000000000000000000000000000000000000000000000000001"
         version = 0
