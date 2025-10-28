@@ -1,5 +1,5 @@
 use toml_edit::{
-    DocumentMut, InlineTable, Item, KeyMut, Table, Value,
+    Array, ArrayOfTables, DocumentMut, InlineTable, Item, KeyMut, Table, Value,
     visit_mut::{self, VisitMut},
 };
 
@@ -19,12 +19,27 @@ pub fn expand_toml(toml: &mut DocumentMut) {
         }
 
         fn visit_table_like_kv_mut(&mut self, mut key: KeyMut<'_>, node: &mut Item) {
+            key.fmt();
+
             if let Item::Value(Value::InlineTable(inline_table)) = node {
                 let inline_table = std::mem::replace(inline_table, InlineTable::new());
                 let table = inline_table.into_table();
-                key.fmt();
                 *node = Item::Table(table);
+            } else if let Item::Value(Value::Array(array)) = node {
+                if array.iter().all(|item| item.is_inline_table()) {
+                    let array = std::mem::replace(array, Array::new());
+                    let mut aot = ArrayOfTables::new();
+                    for item in array.into_iter() {
+                        let Value::InlineTable(table) = item else {
+                            panic!("we checked that all elements are inline tables")
+                        };
+                        aot.push(table.into_table());
+                    }
+                    *node = Item::ArrayOfTables(aot);
+                }
+                return;
             }
+
             visit_mut::visit_table_like_kv_mut(self, key, node);
         }
     }
