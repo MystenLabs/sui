@@ -52,9 +52,9 @@ The registry is a system-level shared object located at address `0xc`.
 
 ### Core components
 
-**CoinRegistry:** The main system object that coordinates all coin-related operations. This shared object serves as the entry point for all registry operations and is created once during network initialization. Its address is `0xc`.
+**`CoinRegistry`:** The main system object that coordinates all coin-related operations. This shared object serves as the entry point for all registry operations and is created once during network initialization. Its address is `0xc`.
 
-**Currency:** The core of the registry system, storing comprehensive information about each coin type including:
+**`Currency<T>`:** The core of the registry system, storing comprehensive information about each coin type including:
 - **Metadata management:** Basic coin information like name, symbol, decimals, description, and icon URL.
 - **Supply tracking:** Maintains supply state information (fixed, burn-only, or unknown).
 - **Regulatory status:** Tracks whether the coin is regulated with deny list capabilities.
@@ -337,9 +337,9 @@ Manage the metadata capability using:
 ### Security considerations
 
 **Capability security:**
-- **MetadataCap:** Protect metadata capabilities as they control coin branding.
-- **TreasuryCap:** Treasury capabilities determine minting and burning permissions.
-- **DenyCapV2:** Deny capabilities can restrict coin usage.
+- **`MetadataCap`:** Protect metadata capabilities as they control coin branding.
+- **`TreasuryCap`:** Treasury capabilities determine minting and burning permissions.
+- **`DenyCapV2`:** Deny capabilities can restrict coin usage.
 
 **Validation:**
 The registry enforces several important validations:
