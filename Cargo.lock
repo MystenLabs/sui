@@ -14154,7 +14154,6 @@ dependencies = [
  "test-fuzz",
  "thiserror 1.0.69",
  "tokio",
- "tokio-retry",
  "tokio-stream",
  "tracing",
  "twox-hash",
@@ -15483,7 +15482,6 @@ dependencies = [
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
- "protox",
  "serde",
  "sui-data-ingestion-core",
  "sui-types",
@@ -15492,7 +15490,6 @@ dependencies = [
  "tokio",
  "tonic 0.14.2",
  "tonic-prost",
- "tonic-prost-build",
  "tracing",
 ]
 
@@ -16253,7 +16250,6 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-keys",
  "sui-move-build",
- "sui-node",
  "sui-sdk",
  "sui-swarm-config",
  "sui-types",
@@ -16263,7 +16259,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
- "typed-store",
 ]
 
 [[package]]
@@ -17880,17 +17875,6 @@ dependencies = [
  "tokio-postgres",
  "tokio-rustls 0.26.2",
  "x509-certificate",
-]
-
-[[package]]
-name = "tokio-retry"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f57eb36ecbe0fc510036adff84824dd3c24bb781e21bfa67b69d556aa85214f"
-dependencies = [
- "pin-project",
- "rand 0.8.5",
- "tokio",
 ]
 
 [[package]]

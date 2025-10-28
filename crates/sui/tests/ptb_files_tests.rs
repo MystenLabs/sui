@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(not(msim))]
-use std::io::Write;
-#[cfg(not(msim))]
 use std::path::Path;
 #[cfg(not(msim))]
 use sui_types::transaction::{CallArg, ObjectArg};
@@ -15,7 +13,6 @@ const TEST_DIR: &str = "tests";
 #[tokio::main]
 async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
     use std::collections::BTreeMap;
-    use std::fs::OpenOptions;
     use sui::client_ptb::ptb::{PTB, to_source_string};
     use sui::client_ptb::{error::build_error_reports, ptb::PTBPreview};
     use test_cluster::TestClusterBuilder;
@@ -67,23 +64,6 @@ async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
     let context = &test_cluster.wallet;
     let client = context.get_client().await?;
 
-    // Hack to work with new pkg system where we need to pass a build env. We did not add such a
-    // flag yet to the client ptb command, so the hack is to write to Move.toml the localnet
-    // environment with the right chain, and then revert the file to the original content.
-    let chain_id = client.read_api().get_chain_identifier().await.unwrap();
-
-    let orig_toml = std::fs::read_to_string("tests/ptb_files/publish/test_pkg/Move.toml").unwrap();
-    let mut toml = OpenOptions::new()
-        .append(true)
-        .open("tests/ptb_files/publish/test_pkg/Move.toml")
-        .unwrap();
-    writeln!(
-        toml,
-        "{}",
-        &format!("[environments]\nlocalnet=\"{chain_id}\"")
-    )
-    .unwrap();
-
     let (built_ptb, warnings) = PTB::build_ptb(
         program,
         BTreeMap::new(),
@@ -91,9 +71,6 @@ async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
         context.get_active_env().unwrap().alias.clone(),
     )
     .await;
-
-    // convert back to the original Move.toml file
-    std::fs::write("tests/ptb_files/publish/test_pkg/Move.toml", &orig_toml).unwrap();
 
     if !warnings.is_empty() {
         let rendered = build_error_reports(&file_contents, warnings);

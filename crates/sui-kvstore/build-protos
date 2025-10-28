@@ -1,24 +1,25 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+#!/usr/bin/env -S cargo +nightly -Zscript
+---
+[package]
+edition = "2024"
+
+[dependencies]
+tonic-prost-build = "0.14.2"
+protox = "0.9"
+---
 
 use std::path::PathBuf;
 
 fn main() {
     let crate_dir = PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
     let proto_dir = crate_dir.join("proto");
-    let out_dir = crate_dir.join("src").join("bigtable").join("proto");
-
-    println!("cargo:rerun-if-changed={}", proto_dir.display());
+    let out_dir = crate_dir.join("src/bigtable/proto");
 
     let fds = protox::Compiler::new(&proto_dir)
         .unwrap()
         .include_source_info(false)
         .include_imports(true)
-        .open_files(&[proto_dir
-            .join("google")
-            .join("bigtable")
-            .join("v2")
-            .join("bigtable.proto")])
+        .open_files(&[proto_dir.join("google/bigtable/v2/bigtable.proto")])
         .unwrap()
         .file_descriptor_set();
 

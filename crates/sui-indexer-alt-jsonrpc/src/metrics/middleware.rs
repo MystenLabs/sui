@@ -94,11 +94,7 @@ where
         let method = if self.layer.methods.contains(request.method_name()) {
             request.method.clone()
         } else {
-            // TODO(DVX-1210): the request method name is only here to make sure we know
-            // about all the methods called by first party apps. We should change
-            // this back to "<UNKNOWN>" once we have stabilized the API to avoid
-            // high cardinality of metrics labels.
-            format!("UNKNOWN:{}", request.method_name()).into()
+            "<UNKNOWN>".into()
         };
 
         self.layer

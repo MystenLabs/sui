@@ -349,7 +349,7 @@ impl UpdatableConsensusClient {
     }
 
     async fn get(&self) -> Arc<Arc<dyn ConsensusClient>> {
-        const START_TIMEOUT: Duration = Duration::from_secs(30);
+        const START_TIMEOUT: Duration = Duration::from_secs(300);
         const RETRY_INTERVAL: Duration = Duration::from_millis(100);
         if let Ok(client) = timeout(START_TIMEOUT, async {
             loop {
