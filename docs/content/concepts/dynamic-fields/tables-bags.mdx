@@ -3,7 +3,7 @@ title: Table and Bag
 description: Sui provides `Table` and `Bag` collections built using dynamic fields, but with additional support to count the number of entries they contain to protect against accidental deletion when non-empty.
 ---
 
-You can extend existing objects using [dynamic fields](/concepts/dynamic-fields.mdx). Note that it is possible to delete an object that still has (potentially non-drop) dynamic fields. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for on-chain collection types that could be holding unboundedly many key-value pairs as dynamic fields.
+You can extend existing objects using [dynamic fields](/concepts/dynamic-fields.mdx). It is possible to delete an object that still has (potentially non-drop) dynamic fields. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for on-chain collection types that could be holding unboundedly many key-value pairs as dynamic fields.
 
 This topic describes 2 such collections, table and bag, built using dynamic fields, but with additional support to count the number of entries they contain, and protect against accidental deletion when non-empty.
 
@@ -36,7 +36,7 @@ public struct Bag has key, store { /* ... */ }
 public fun new(ctx: &mut TxContext): Bag;
 ```
 
-`Bag` is a *heterogeneous* map, so it can hold key-value pairs of arbitrary types (they do not need to match each other). Note that the `Bag` type does not have any type parameters for this reason. Like `Table`, `Bag` is also an object, so creating one with `sui::bag::new` requires supplying a `&mut TxContext` to generate an ID.
+`Bag` is a heterogeneous map, so it can hold key-value pairs of arbitrary types (they do not need to match each other). The `Bag` type does not have any type parameters for this reason. Like `Table`, `Bag` is also an object, so creating one with `sui::bag::new` requires supplying a `&mut TxContext` to generate an ID.
 
 See `sui::bag::ObjectBag` for the object-preserving version of `Bag`.
 

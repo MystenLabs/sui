@@ -484,7 +484,7 @@ Finally, memory protection ensures the entire system operates within predictable
 Basic example: Slow database scenario
 
 1. **Initial state**: Your indexer is processing 100 checkpoints per second.
-1. **Bottleneck appears**: Database becomes slow (high load, maintenance, or similar) and can now only handle 50 commits per second.
+1. **Bottleneck appears**: Database becomes slow (because of high load, maintenance, or similar) and can now only handle 50 commits per second.
 1. **Backpressure cascade**:
     - `Committer` channel fills up (cannot commit fast enough).
     - `Collector` stops sending to `Committer` (channel full).
