@@ -80,16 +80,8 @@ impl AvailableRange {
     }
 }
 
-/// Expands a series of type/field/filter patterns to generate the collect_pipelines function and accompanying tests to
-/// validate that arguments of the macro invocation exist in the GraphQL schema registry.
-///
-/// # Generated Functions and Tests
-///
-/// - `collect_pipelines`: resolves type/field/filter combinations to the indexer pipelines where data is available.
-/// - `test_schema_inclusion`: Testing entry point that calls the other tests using a GraphQL extension.
-/// - `test_implements_interface`: Tests if a type implements an interface, it should delegate to the correct type and fields in the macro invocation
-/// - `test_macro_invocation_matches_schema`: Tests that the macro invocation matches the types and fields in the GraphQL schema.
-/// - `test_registry_collect_pipelines_snapshot`: Generates a snapshot of all type.field (filter) -> pipeline mappings for regression testing and auditing.
+/// Expands a series of type/field/filter patterns to generate the collect_pipelines function and collects macro invocation data into
+/// a HashMap of (Type, Field) to (DelegateType, DelegateField) for tests.
 macro_rules! collect_pipelines {
     (
         $($type:ident . [$($field:ident),*]
@@ -97,7 +89,8 @@ macro_rules! collect_pipelines {
         $(|$pipes:ident, $filt:ident| $block:block)?
         ;
     )*) => {
-        /// Populates `pipelines` with indexer pipeline names by matching against the collect_pipelines! macro configuration.
+        /// Populates `pipelines` with pipeline names by matching the type, field, and filters to their dependent pipelines where data is available.
+        /// The mapping is defined in the collect_pipelines! macro innvocation.
         fn collect_pipelines(
             type_: &str,
             field: Option<&str>,
@@ -126,7 +119,7 @@ macro_rules! collect_pipelines {
         }
 
         /// Map from (Type, Field) to (DelegateType, DelegateField) for testing.
-        /// Maps to ("", "") if the field is not delegated. The "*" wildcard is expanded.
+        /// Maps to ("", "") if the type/field is not delegated. The "*" wildcard is expanded.
         #[cfg(test)]
         static TYPE_FIELD_DELEGATIONS: std::sync::LazyLock<std::collections::HashMap<(&'static str, &'static str), (&'static str, &'static str)>> =
             std::sync::LazyLock::new(|| {
@@ -363,34 +356,33 @@ mod field_piplines_tests {
         assert!(valid.is_empty());
     }
 
-    /// Validates that all types, fields in the macro exist in the GraphQL schema, all types implement interfaces correctly, and take a snapshot of all
-    /// type.field (filter) -> pipeline mappings.
-    #[tokio::test]
-    async fn test_schema_inclusion() {
-        struct SchemaValidationExtension;
+    /// Helper function that runs a test function with access to the GraphQL schema registry.
+    async fn with_registry(test_fn: fn(&Registry)) {
+        struct TestExtension {
+            test_fn: fn(&Registry),
+        }
 
-        impl ExtensionFactory for SchemaValidationExtension {
+        impl ExtensionFactory for TestExtension {
             fn create(&self) -> Arc<dyn Extension> {
-                Arc::new(SchemaValidationExtensionImpl)
+                Arc::new(TestExtensionImpl {
+                    test_fn: self.test_fn,
+                })
             }
         }
 
-        struct SchemaValidationExtensionImpl;
+        struct TestExtensionImpl {
+            test_fn: fn(&Registry),
+        }
 
         #[async_trait::async_trait]
-        impl Extension for SchemaValidationExtensionImpl {
+        impl Extension for TestExtensionImpl {
             async fn request(&self, ctx: &ExtensionContext<'_>, next: NextRequest<'_>) -> Response {
-                let registry = &ctx.schema_env.registry;
-
-                test_macro_invocation_matches_schema(registry);
-                test_implements_interface(registry);
-                test_registry_collect_pipelines_snapshot(registry);
-
+                (self.test_fn)(&ctx.schema_env.registry);
                 next.run(ctx).await
             }
         }
 
-        let schema = schema().extension(SchemaValidationExtension).finish();
+        let schema = schema().extension(TestExtension { test_fn }).finish();
         let response = schema.execute("{ __typename }").await;
         assert!(
             response.errors.is_empty(),
@@ -399,10 +391,25 @@ mod field_piplines_tests {
         );
     }
 
+    #[tokio::test]
+    async fn test_macro_invocation_matches_schema() {
+        with_registry(macro_invocation_matches_schema).await;
+    }
+
+    #[tokio::test]
+    async fn test_type_delegation_matches_interface() {
+        with_registry(type_delegation_matches_interface).await;
+    }
+
+    #[tokio::test]
+    async fn test_registry_collect_pipelines_snapshot() {
+        with_registry(registry_collect_pipelines_snapshot).await;
+    }
+
     /// If a type implements an interface, every field in the interface is delegated to that interface in the macro invocation.
     /// ex. CoinMetadata.[balance] => IMoveObject.balance();  in the macro invocation should throw an error because
     ///     Type 'CoinMetadata' field 'balance' should delegate to interface 'IAddressable' but delegates to 'IMoveObject'
-    fn test_implements_interface(registry: &Registry) {
+    fn type_delegation_matches_interface(registry: &Registry) {
         let type_delegations = &TYPE_FIELD_DELEGATIONS;
 
         for (interface_name, meta_type) in registry.types.iter() {
@@ -442,7 +449,7 @@ mod field_piplines_tests {
 
     /// Validates that the macro invocation matches the schema. This will error if there are any
     /// types or fields in the macro invocation are not found in the schema registry.
-    fn test_macro_invocation_matches_schema(registry: &Registry) {
+    fn macro_invocation_matches_schema(registry: &Registry) {
         let type_fields = &TYPE_FIELD_DELEGATIONS;
 
         for ((type_name, field_name), _) in type_fields.iter() {
@@ -463,7 +470,7 @@ mod field_piplines_tests {
     /// stores the input and output in a snapshot for regression testing and auditing.
     /// If a filter does not result in a different set of pipelines from the unfiltered case,
     /// it is not included in the snapshot.
-    fn test_registry_collect_pipelines_snapshot(registry: &Registry) -> String {
+    fn registry_collect_pipelines_snapshot(registry: &Registry) {
         const PAGINATION_ARGS: &[&str] = &["first", "after", "last", "before"];
 
         let mut output = String::new();
@@ -520,7 +527,6 @@ mod field_piplines_tests {
             }
         }
         insta::assert_snapshot!(output);
-        output
     }
 
     fn formatted_output_str(
