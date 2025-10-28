@@ -124,6 +124,7 @@ feature_flags:
   use_new_commit_handler: true
   better_loader_errors: true
   generate_df_type_layouts: true
+  private_generics_verifier_v2: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

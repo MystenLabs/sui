@@ -867,6 +867,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_display_registry: bool,
 
+    // If true, enable private generics verifier v2
+    #[serde(skip_serializing_if = "is_false")]
+    private_generics_verifier_v2: bool,
+
     // If true, deprecate global storage ops during Move module deserialization
     #[serde(skip_serializing_if = "is_false")]
     deprecate_global_storage_ops_during_deserialization: bool,
@@ -2362,6 +2366,10 @@ impl ProtocolConfig {
 
     pub fn allow_references_in_ptbs(&self) -> bool {
         self.feature_flags.allow_references_in_ptbs
+    }
+
+    pub fn private_generics_verifier_v2(&self) -> bool {
+        self.feature_flags.private_generics_verifier_v2
     }
 
     pub fn deprecate_global_storage_ops_during_deserialization(&self) -> bool {
@@ -4186,7 +4194,9 @@ impl ProtocolConfig {
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
                 }
-                100 => {}
+                100 => {
+                    cfg.feature_flags.private_generics_verifier_v2 = true;
+                }
                 101 => {
                     cfg.feature_flags.create_root_accumulator_object = true;
                     cfg.max_updates_per_settlement_txn = Some(100);
@@ -4270,6 +4280,7 @@ impl ProtocolConfig {
             max_variants_in_enum: self.max_move_enum_variants_as_option(),
             additional_borrow_checks,
             better_loader_errors: self.better_loader_errors(),
+            private_generics_verifier_v2: self.private_generics_verifier_v2(),
         }
     }
 
