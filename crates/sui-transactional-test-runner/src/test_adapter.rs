@@ -390,7 +390,13 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
             None => AdapterInitConfig::default(),
         };
-        let enabled_ptb_v2 = protocol_config.version >= ProtocolVersion::max()
+        assert!(
+            protocol_config.version <= ProtocolVersion::max(),
+            "Cannot set the protocol version to {}, since it is higher than the max version {}",
+            protocol_config.version.as_u64(),
+            ProtocolVersion::max().as_u64(),
+        );
+        let enabled_ptb_v2 = protocol_config.version == ProtocolVersion::max()
             && ENABLE_PTB_V2.get().copied().unwrap_or(false);
         protocol_config.set_enable_ptb_execution_v2_for_testing(enabled_ptb_v2);
 
