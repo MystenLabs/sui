@@ -34,7 +34,7 @@ Some of the benefits to migrate to the Coin Registry include:
 
 ### Migration function mappings
 
-Smart contracts should update logic that relies on the `coin` module to use the `coin_registry` module instead:
+Update smart contract logic that relies on the `coin` module to use the `coin_registry` module instead:
 
 - `coin::create_currency` -> `coin_registry::new_currency_with_otw`
 - `coin::create_regulated_currency_v2` -> `coin_registry::new_currency_with_otw`
