@@ -8373,6 +8373,7 @@ dependencies = [
  "bimap",
  "clap",
  "codespan-reporting",
+ "colored",
  "derive-where",
  "fs4",
  "futures",

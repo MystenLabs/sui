@@ -7,8 +7,10 @@ use crate::{
     schema::{OriginalID, PublishAddresses, PublishedID},
 };
 use anyhow::{Result, anyhow};
+use colored::Colorize;
 use std::{collections::BTreeMap, path::Path};
 use toml::Value as TV;
+use tracing::warn;
 
 use super::{legacy::LegacyEnvironment, parse_address_literal};
 
@@ -47,6 +49,16 @@ pub fn load_legacy_lockfile(
     // Ignore modern lock files
     if version > 3 {
         return Ok(None);
+    }
+
+    // The old package system didn't fail if the lockfile version field was too high, instead it
+    // just mushed the lockfile fields in with the new lockfile fields. We detect this case and
+    // complain loudly.
+    if lockfile.get("pinned").is_some() {
+        warn!(
+            "{}: Detected a modern lockfile that was modified by an older CLI; some information may be lost. Be sure that all contributors are using the latest CLI.",
+            "WARNING".bold().yellow()
+        );
     }
 
     // Extract legacy addresses and write them into the pub file
