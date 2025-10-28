@@ -60,7 +60,7 @@ use crate::{
         EnvironmentID, EnvironmentName, RootPackage, package_lock::PackageSystemLock,
         paths::PackagePath,
     },
-    schema::{ModeName, OriginalID, PackageName, PublishAddresses, PublishedID},
+    schema::{ModeName, OriginalID, PublishAddresses, PublishedID},
     test_utils::{Project, project},
 };
 
@@ -80,7 +80,7 @@ pub struct TestPackageGraph {
 /// Information used to build a node in the package graph
 pub struct PackageSpec {
     /// The `package.name` field.
-    name: PackageName,
+    name: String,
 
     /// The identifier used to refer to the package in tests and on the filesystem
     id: String,
@@ -119,13 +119,13 @@ struct GitSpec {
 /// Information used to build an edge in the package graph
 pub struct DepSpec {
     /// The name that the containing package gives to the dependency
-    name: PackageName,
+    name: String,
 
     /// whether to include `override = true`
     is_override: bool,
 
     /// the `rename-from` field for the dep
-    rename_from: Option<PackageName>,
+    rename_from: Option<String>,
 
     /// the `[dep-replacements]` environment to include the dep in (or `None` for the default section)
     in_env: Option<EnvironmentName>,
@@ -473,7 +473,7 @@ impl TestPackageGraph {
             .map(|env| format!("{env}."))
             .unwrap_or("".to_string());
 
-        let name = dep.name.as_ref().as_str();
+        let name = &dep.name;
 
         let is_override = if dep.is_override {
             ", override = true"
@@ -505,7 +505,7 @@ impl TestPackageGraph {
     /// `<capitalized-name> = { ... }`, failing if the dependency uses non-legacy features
     fn format_legacy_dep(&self, dep: &DepSpec, target: &PackageSpec) -> String {
         // TODO: we could share more code with the non-legacy stuff I think
-        let name = dep.name.as_ref().as_str().to_camel_case();
+        let name = &dep.name;
         let path = &target.id;
 
         let is_override = if dep.is_override {
@@ -532,7 +532,7 @@ impl PackageSpec {
     /// Create a new empty package spec
     fn new(name: impl AsRef<str>) -> Self {
         Self {
-            name: PackageName::new(name.as_ref()).expect("valid package name"),
+            name: name.as_ref().to_string(),
             pubs: BTreeMap::new(),
             id: name.as_ref().to_string(),
             is_legacy: false,
@@ -565,7 +565,7 @@ impl PackageSpec {
 
     /// Update that `name` field in the `[package]` section of the manifest
     pub fn package_name(mut self, name: impl AsRef<str>) -> Self {
-        self.name = PackageName::new(name.as_ref()).expect("valid package name");
+        self.name = name.as_ref().to_string();
         self
     }
 
@@ -603,7 +603,7 @@ impl PackageSpec {
 impl DepSpec {
     fn new(name: impl AsRef<str>) -> Self {
         Self {
-            name: PackageName::new(name.as_ref()).expect("valid package name"),
+            name: name.as_ref().to_string(),
             is_override: false,
             rename_from: None,
             in_env: None,
@@ -620,13 +620,13 @@ impl DepSpec {
 
     /// Set the name used for the dependency in the containing package
     pub fn name(mut self, name: impl AsRef<str>) -> Self {
-        self.name = PackageName::new(name.as_ref()).expect("valid package name");
+        self.name = name.as_ref().to_string();
         self
     }
 
     /// Set the `rename-from` field of the dependency
     pub fn rename_from(mut self, original: impl AsRef<str>) -> Self {
-        self.rename_from = Some(PackageName::new(original.as_ref()).expect("valid package name"));
+        self.rename_from = Some(original.as_ref().to_string());
         self
     }
 
@@ -852,7 +852,7 @@ mod tests {
 
 
         [dependencies]
-        C = { local = "../c" }
+        c = { local = "../c" }
 
         [addresses]
         b = "0x0"
