@@ -67,6 +67,7 @@ const standards = [
 			'standards/deepbook-margin/design',
 			'standards/deepbook-margin/margin-manager',
 			'standards/deepbook-margin/margin-pool',
+			'standards/deepbook-margin/orders',
 			{
 				type: 'category',
 				label: 'SDK',
