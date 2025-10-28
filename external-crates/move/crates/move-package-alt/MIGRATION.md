@@ -4,15 +4,6 @@ New Move package management system
 This guide describes the changes from the old package management system to the
 new package management system.
 
-The new system is currently in a prototype stage; some features are not yet
-fully implemented (and these are noted in the documentation below). We've also
-focused primarily on the cases where we have a valid setup, so that some of our
-error messages may need some polish, and there may be cases where a
-consistency check is not yet performed. Nevertheless, we hope that the
-implementation is complete enough that you can successfully do an experimental
-migration of real packages (and hopefully provide us concrete feedback to guide
-our next steps).
-
 Advantages of the new system
 ============================
 
@@ -20,7 +11,7 @@ Some of the benefits of the new system:
 
 **Designed for multiple environments**
   - care has been taken to ensure that you can write a single manifest that
-    works correctly for multiple environments (E.g. mainnet and testnet)
+    works correctly for multiple environments (e.g. mainnet and testnet)
 
   - you can override dependencies for specific environments, so that you have
     more flexibility in your testing deployment process
@@ -43,6 +34,10 @@ Some of the benefits of the new system:
  - you can rename dependencies, so that you can now depend on multiple packages
    with the same name
 
+ - you can no longer "smoosh together" packages, which prevents a lot of
+   confusing and error-prone situations, and lets you have modules with the
+   same name in different packages.
+
  - the [addresses] section is gone - dependency names and package names are
    unified
 
@@ -50,12 +45,21 @@ Some of the benefits of the new system:
    what package a name refers to only requires looking at your Move.toml and
    not your dependencies' Move.toml files
 
+**Other improvements**
+ - sparse and shallow git downloads mean you no longer have to download the
+   entire repositories of your dependencies
+
+ - upgrade capability is automatically stored in the publication file for
+   convenience
+
+ - test-publish command gives more flexible control for localnet and devnet
+   deployments
 
 **Baseline for new features**
  - the new implementation also sets us up to implement new features (or to
-   properly implement old features that don't work well), such as a stored
-   upgrade cap, efficient git downloads, source verification, republishing
-   dependencies on local networks, and on-chain dependencies.
+   properly implement old features that don't work well), such as more accurate
+   source verification, automatic dependency publication on local networks, and
+   on-chain dependencies.
 
 Installing and running the prototype
 ====================================
