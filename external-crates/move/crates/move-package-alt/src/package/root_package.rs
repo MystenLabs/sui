@@ -1250,8 +1250,8 @@ pkg_b = { local = "../pkg_b" }"#,
         assert_snapshot!(root.unwrap_err().to_string(), @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          root::dep1 refers to { local = "../dep1" }
-          root::dep2 refers to { local = "../dep2" }
+          root::dep1 refers to { local = "../dep1", ... }
+          root::dep2 refers to { local = "../dep2", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 

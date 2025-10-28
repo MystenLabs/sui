@@ -469,8 +469,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "root").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          root::a::b::d1 refers to { local = "../d1" }
-          root::a::c::d2 refers to { local = "../d2" }
+          root::a::b::d1 refers to { local = "../d1", ... }
+          root::a::c::d2 refers to { local = "../d2", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -481,8 +481,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "a").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          a::b::d1 refers to { local = "../d1" }
-          a::c::d2 refers to { local = "../d2" }
+          a::b::d1 refers to { local = "../d1", ... }
+          a::c::d2 refers to { local = "../d2", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -519,8 +519,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "root").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          root::a::b::d1 refers to { local = "../d1" }
-          root::a::c::d2 refers to { local = "../d2" }
+          root::a::b::d1 refers to { local = "../d1", ... }
+          root::a::c::d2 refers to { local = "../d2", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -531,8 +531,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "a").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          a::b::d1 refers to { local = "../d1" }
-          a::c::d2 refers to { local = "../d2" }
+          a::b::d1 refers to { local = "../d1", ... }
+          a::c::d2 refers to { local = "../d2", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -600,8 +600,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "root").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          root::a::d3 refers to { local = "../d3" }
-          root::a::b::d1 refers to { local = "../d1" }
+          root::a::d3 refers to { local = "../d3", ... }
+          root::a::b::d1 refers to { local = "../d1", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -612,8 +612,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "a").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          a::d3 refers to { local = "../d3" }
-          a::b::d1 refers to { local = "../d1" }
+          a::d3 refers to { local = "../d3", ... }
+          a::b::d1 refers to { local = "../d1", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -642,8 +642,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "root").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          root::a::d1 refers to { local = "../d1" }
-          root::a::b::d2 refers to { local = "../d2" }
+          root::a::d1 refers to { local = "../d1", ... }
+          root::a::b::d2 refers to { local = "../d2", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -654,8 +654,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "a").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          a::d1 refers to { local = "../d1" }
-          a::b::d2 refers to { local = "../d2" }
+          a::d1 refers to { local = "../d1", ... }
+          a::b::d2 refers to { local = "../d2", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -684,8 +684,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "root").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          root::a::b1 refers to { local = "../b1" }
-          root::a::b2 refers to { local = "../b2" }
+          root::a::b1 refers to { local = "../b1", ... }
+          root::a::b2 refers to { local = "../b2", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -696,8 +696,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "a").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          a::b1 refers to { local = "../b1" }
-          a::b2 refers to { local = "../b2" }
+          a::b1 refers to { local = "../b1", ... }
+          a::b2 refers to { local = "../b2", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -735,8 +735,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "root").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          root::a::b1 refers to { local = "../b1" }
-          root::a::b2 refers to { local = "../b2" }
+          root::a::b1 refers to { local = "../b1", ... }
+          root::a::b2 refers to { local = "../b2", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -747,8 +747,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "a").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          a::b1 refers to { local = "../b1" }
-          a::b2 refers to { local = "../b2" }
+          a::b1 refers to { local = "../b1", ... }
+          a::b2 refers to { local = "../b2", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -942,8 +942,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "root").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          root::a::c::e2 refers to { local = "../e2" }
-          root::a::c::d::e1 refers to { local = "../e1" }
+          root::a::c::e2 refers to { local = "../e2", ... }
+          root::a::c::d::e1 refers to { local = "../e1", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -954,8 +954,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "a").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0001:
 
-          a::c::e2 refers to { local = "../e2" }
-          a::c::d::e1 refers to { local = "../e1" }
+          a::c::e2 refers to { local = "../e2", ... }
+          a::c::d::e1 refers to { local = "../e1", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -1076,8 +1076,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "root").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0003:
 
-          root::a::c1 refers to { local = "../c1" }
-          root::a::e::c2 refers to { local = "../c2" }
+          root::a::c1 refers to { local = "../c1", ... }
+          root::a::e::c2 refers to { local = "../c2", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
@@ -1089,8 +1089,8 @@ mod tests {
         assert_snapshot!(linkage_err(&scenario, "a").await, @r###"
         Package depends on multiple versions of the package with ID 0x00...0003:
 
-          a::c1 refers to { local = "../c1" }
-          a::e::c2 refers to { local = "../c2" }
+          a::c1 refers to { local = "../c1", ... }
+          a::e::c2 refers to { local = "../c2", ... }
 
         To resolve this, you must explicitly add an override in your Move.toml:
 
