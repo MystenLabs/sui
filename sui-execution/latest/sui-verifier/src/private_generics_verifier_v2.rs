@@ -4,17 +4,17 @@
 use std::borrow::Cow;
 
 use move_binary_format::{
-    file_format::{Bytecode, FunctionDefinition, FunctionHandle, SignatureToken, Visibility},
     CompiledModule,
+    file_format::{Bytecode, FunctionDefinition, FunctionHandle, SignatureToken, Visibility},
 };
 use move_bytecode_utils::format_signature_token;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use move_vm_config::verifier::VerifierConfig;
 use sui_types::{
-    error::ExecutionError, make_invariant_violation, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, error::ExecutionError, make_invariant_violation,
 };
 
-use crate::{verification_failure, FunctionIdent, TEST_SCENARIO_MODULE_NAME};
+use crate::{FunctionIdent, TEST_SCENARIO_MODULE_NAME, verification_failure};
 
 pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
 pub const EVENT_MODULE: &IdentStr = ident_str!("event");
