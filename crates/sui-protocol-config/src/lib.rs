@@ -854,6 +854,10 @@ struct FeatureFlags {
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
     enable_display_registry: bool,
+
+    // If true, enable private generics verifier v2
+    #[serde(skip_serializing_if = "is_false")]
+    private_generics_verifier_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2302,6 +2306,10 @@ impl ProtocolConfig {
 
     pub fn allow_references_in_ptbs(&self) -> bool {
         self.feature_flags.allow_references_in_ptbs
+    }
+
+    pub fn private_generics_verifier_v2(&self) -> bool {
+        self.feature_flags.private_generics_verifier_v2
     }
 }
 
@@ -4109,7 +4117,9 @@ impl ProtocolConfig {
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
                 }
-                100 => {}
+                100 => {
+                    cfg.feature_flags.private_generics_verifier_v2 = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4186,6 +4196,7 @@ impl ProtocolConfig {
             max_variants_in_enum: self.max_move_enum_variants_as_option(),
             additional_borrow_checks,
             better_loader_errors: self.better_loader_errors(),
+            private_generics_verifier_v2: self.private_generics_verifier_v2(),
         }
     }
 
