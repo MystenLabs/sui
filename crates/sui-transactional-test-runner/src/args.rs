@@ -102,6 +102,8 @@ pub struct SuiInitArgs {
 pub struct ViewObjectCommand {
     #[clap(value_parser = parse_fake_id)]
     pub id: FakeID,
+    #[clap(long = "hide-contents")]
+    pub hide_contents: bool,
 }
 
 #[derive(Debug, clap::Parser)]

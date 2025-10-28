@@ -890,7 +890,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     current_epoch, round
                 )))
             }
-            SuiSubcommand::ViewObject(ViewObjectCommand { id: fake_id }) => {
+            SuiSubcommand::ViewObject(ViewObjectCommand {
+                id: fake_id,
+                hide_contents,
+            }) => {
                 let obj = get_obj!(fake_id);
                 Ok(Some(match &obj.data {
                     object::Data::Move(move_obj) => {
@@ -899,12 +902,14 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                             BoundedVisitor::deserialize_struct(move_obj.contents(), &layout)
                                 .unwrap();
 
-                        self.stabilize_str(format!(
-                            "Owner: {}\nVersion: {}\nContents: {:#}",
-                            &obj.owner,
-                            obj.version().value(),
-                            move_struct
-                        ))
+                        let msg =
+                            format!("Owner: {}\nVersion: {}", &obj.owner, obj.version().value());
+                        let msg = if hide_contents {
+                            msg
+                        } else {
+                            format!("{msg}\nContents: {move_struct:#}",)
+                        };
+                        self.stabilize_str(msg)
                     }
                     object::Data::Package(package) => {
                         let num_modules = package.serialized_module_map().len();
