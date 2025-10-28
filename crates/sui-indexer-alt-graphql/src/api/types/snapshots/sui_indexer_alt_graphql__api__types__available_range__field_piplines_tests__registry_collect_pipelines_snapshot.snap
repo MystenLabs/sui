@@ -1,0 +1,1770 @@
+---
+source: crates/sui-indexer-alt-graphql/src/api/types/available_range.rs
+expression: output
+---
+AccumulatorRootCreateTransaction._
+  => {}
+
+ActiveJwk.iss
+  => {}
+
+ActiveJwk.kid
+  => {}
+
+ActiveJwk.kty
+  => {}
+
+ActiveJwk.e
+  => {}
+
+ActiveJwk.n
+  => {}
+
+ActiveJwk.alg
+  => {}
+
+ActiveJwk.epoch
+  => {}
+
+Address.address
+  => {}
+
+Address.asObject
+  => {"obj_versions"}
+
+Address.balance
+  => {"consistent"}
+
+Address.balances
+  => {"consistent"}
+
+Address.defaultSuinsName
+  => {"obj_versions"}
+
+Address.dynamicField
+  => {"obj_versions"}
+
+Address.dynamicFields
+  => {"consistent"}
+
+Address.dynamicObjectField
+  => {"obj_versions"}
+
+Address.multiGetDynamicFields
+  => {"obj_versions"}
+
+Address.multiGetDynamicObjectFields
+  => {"obj_versions"}
+
+Address.multiGetBalances
+  => {"consistent"}
+
+Address.objects
+  => {"consistent"}
+
+Address.transactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+AddressOwner.address
+  => {}
+
+AuthenticatorStateCreateTransaction._
+  => {}
+
+AuthenticatorStateExpireTransaction.minEpoch
+  => {}
+
+AuthenticatorStateExpireTransaction.authenticatorObjInitialSharedVersion
+  => {}
+
+AuthenticatorStateUpdateTransaction.epoch
+  => {}
+
+AuthenticatorStateUpdateTransaction.round
+  => {}
+
+AuthenticatorStateUpdateTransaction.newActiveJwks
+  => {}
+
+AuthenticatorStateUpdateTransaction.authenticatorObjInitialSharedVersion
+  => {}
+
+AvailableRange.first
+  => {}
+
+AvailableRange.last
+  => {}
+
+Balance.coinType
+  => {}
+
+Balance.totalBalance
+  => {}
+
+BalanceChange.owner
+  => {}
+
+BalanceChange.coinType
+  => {}
+
+BalanceChange.amount
+  => {}
+
+BridgeCommitteeInitTransaction.bridgeObjectVersion
+  => {}
+
+BridgeStateCreateTransaction.chainIdentifier
+  => {}
+
+ChangeEpochTransaction.epoch
+  => {}
+
+ChangeEpochTransaction.protocolConfigs
+  => {}
+
+ChangeEpochTransaction.storageCharge
+  => {}
+
+ChangeEpochTransaction.computationCharge
+  => {}
+
+ChangeEpochTransaction.storageRebate
+  => {}
+
+ChangeEpochTransaction.nonRefundableStorageFee
+  => {}
+
+ChangeEpochTransaction.epochStartTimestamp
+  => {}
+
+ChangeEpochTransaction.systemPackages
+  => {}
+
+Checkpoint.sequenceNumber
+  => {}
+
+Checkpoint.query
+  => {}
+
+Checkpoint.artifactsDigest
+  => {}
+
+Checkpoint.digest
+  => {}
+
+Checkpoint.contentDigest
+  => {}
+
+Checkpoint.epoch
+  => {}
+
+Checkpoint.networkTotalTransactions
+  => {}
+
+Checkpoint.previousCheckpointDigest
+  => {}
+
+Checkpoint.rollingGasSummary
+  => {}
+
+Checkpoint.summaryBcs
+  => {}
+
+Checkpoint.contentBcs
+  => {}
+
+Checkpoint.timestamp
+  => {}
+
+Checkpoint.validatorSignatures
+  => {}
+
+Checkpoint.transactions
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Checkpoint.transactions (filter: function)
+  => {"cp_sequence_numbers", "tx_calls", "tx_digests"}
+
+Checkpoint.transactions (filter: kind)
+  => {"cp_sequence_numbers", "tx_digests", "tx_kinds"}
+
+Checkpoint.transactions (filter: affectedAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Checkpoint.transactions (filter: affectedObject)
+  => {"cp_sequence_numbers", "tx_affected_objects", "tx_digests"}
+
+Checkpoint.transactions (filter: sentAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+CoinDenyListStateCreateTransaction._
+  => {}
+
+CoinMetadata.address
+  => {}
+
+CoinMetadata.version
+  => {}
+
+CoinMetadata.digest
+  => {}
+
+CoinMetadata.balance
+  => {"consistent"}
+
+CoinMetadata.balances
+  => {"consistent"}
+
+CoinMetadata.contents
+  => {}
+
+CoinMetadata.decimals
+  => {}
+
+CoinMetadata.defaultSuinsName
+  => {"obj_versions"}
+
+CoinMetadata.description
+  => {}
+
+CoinMetadata.dynamicField
+  => {"obj_versions"}
+
+CoinMetadata.dynamicFields
+  => {"consistent"}
+
+CoinMetadata.dynamicObjectField
+  => {"obj_versions"}
+
+CoinMetadata.hasPublicTransfer
+  => {}
+
+CoinMetadata.iconUrl
+  => {}
+
+CoinMetadata.multiGetDynamicFields
+  => {"obj_versions"}
+
+CoinMetadata.multiGetDynamicObjectFields
+  => {"obj_versions"}
+
+CoinMetadata.moveObjectBcs
+  => {}
+
+CoinMetadata.multiGetBalances
+  => {"consistent"}
+
+CoinMetadata.name
+  => {}
+
+CoinMetadata.objectAt
+  => {"obj_versions"}
+
+CoinMetadata.objectBcs
+  => {}
+
+CoinMetadata.objectVersionsAfter
+  => {"obj_versions"}
+
+CoinMetadata.objectVersionsBefore
+  => {"obj_versions"}
+
+CoinMetadata.objects
+  => {"consistent"}
+
+CoinMetadata.owner
+  => {}
+
+CoinMetadata.previousTransaction
+  => {}
+
+CoinMetadata.storageRebate
+  => {}
+
+CoinMetadata.receivedTransactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+CoinMetadata.regulatedState
+  => {}
+
+CoinMetadata.allowGlobalPause
+  => {}
+
+CoinMetadata.denyCap
+  => {}
+
+CoinMetadata.supplyState
+  => {"consistent"}
+
+CoinMetadata.supply
+  => {"consistent"}
+
+CoinMetadata.symbol
+  => {}
+
+CoinRegistryCreateTransaction._
+  => {}
+
+CommandOutput.argument
+  => {}
+
+CommandOutput.value
+  => {}
+
+CommandResult.returnValues
+  => {}
+
+CommandResult.mutatedReferences
+  => {}
+
+ConsensusAddressOwner.startVersion
+  => {}
+
+ConsensusAddressOwner.address
+  => {}
+
+ConsensusCommitPrologueTransaction.epoch
+  => {}
+
+ConsensusCommitPrologueTransaction.round
+  => {}
+
+ConsensusCommitPrologueTransaction.commitTimestamp
+  => {}
+
+ConsensusCommitPrologueTransaction.consensusCommitDigest
+  => {}
+
+ConsensusCommitPrologueTransaction.subDagIndex
+  => {}
+
+ConsensusCommitPrologueTransaction.additionalStateDigest
+  => {}
+
+ConsensusObjectCancelled.address
+  => {}
+
+ConsensusObjectCancelled.cancellationReason
+  => {}
+
+ConsensusObjectRead.object
+  => {}
+
+Display.output
+  => {}
+
+Display.errors
+  => {}
+
+DisplayRegistryCreateTransaction._
+  => {}
+
+DynamicField.address
+  => {}
+
+DynamicField.version
+  => {}
+
+DynamicField.digest
+  => {}
+
+DynamicField.balance
+  => {"consistent"}
+
+DynamicField.balances
+  => {"consistent"}
+
+DynamicField.contents
+  => {}
+
+DynamicField.defaultSuinsName
+  => {"obj_versions"}
+
+DynamicField.dynamicField
+  => {"obj_versions"}
+
+DynamicField.dynamicFields
+  => {"consistent"}
+
+DynamicField.dynamicObjectField
+  => {"obj_versions"}
+
+DynamicField.hasPublicTransfer
+  => {}
+
+DynamicField.multiGetDynamicFields
+  => {"obj_versions"}
+
+DynamicField.multiGetDynamicObjectFields
+  => {"obj_versions"}
+
+DynamicField.moveObjectBcs
+  => {}
+
+DynamicField.multiGetBalances
+  => {"consistent"}
+
+DynamicField.name
+  => {}
+
+DynamicField.objectAt
+  => {"obj_versions"}
+
+DynamicField.objectBcs
+  => {}
+
+DynamicField.objectVersionsAfter
+  => {"obj_versions"}
+
+DynamicField.objectVersionsBefore
+  => {"obj_versions"}
+
+DynamicField.objects
+  => {"consistent"}
+
+DynamicField.owner
+  => {}
+
+DynamicField.previousTransaction
+  => {}
+
+DynamicField.storageRebate
+  => {}
+
+DynamicField.receivedTransactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+DynamicField.value
+  => {}
+
+EndOfEpochTransaction.transactions
+  => {}
+
+Epoch.epochId
+  => {}
+
+Epoch.checkpoints
+  => {"cp_sequence_numbers"}
+
+Epoch.coinDenyList
+  => {"obj_versions"}
+
+Epoch.protocolConfigs
+  => {}
+
+Epoch.referenceGasPrice
+  => {}
+
+Epoch.startTimestamp
+  => {}
+
+Epoch.transactions
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Epoch.transactions (filter: function)
+  => {"cp_sequence_numbers", "tx_calls", "tx_digests"}
+
+Epoch.transactions (filter: kind)
+  => {"cp_sequence_numbers", "tx_digests", "tx_kinds"}
+
+Epoch.transactions (filter: affectedAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Epoch.transactions (filter: affectedObject)
+  => {"cp_sequence_numbers", "tx_affected_objects", "tx_digests"}
+
+Epoch.transactions (filter: sentAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Epoch.systemPackages
+  => {}
+
+Epoch.endTimestamp
+  => {}
+
+Epoch.validatorSet
+  => {}
+
+Epoch.totalCheckpoints
+  => {}
+
+Epoch.totalTransactions
+  => {}
+
+Epoch.totalGasFees
+  => {}
+
+Epoch.totalStakeRewards
+  => {}
+
+Epoch.totalStakeSubsidies
+  => {}
+
+Epoch.fundSize
+  => {}
+
+Epoch.netInflow
+  => {}
+
+Epoch.fundInflow
+  => {}
+
+Epoch.fundOutflow
+  => {}
+
+Epoch.storageFund
+  => {}
+
+Epoch.safeMode
+  => {}
+
+Epoch.systemStateVersion
+  => {}
+
+Epoch.systemParameters
+  => {}
+
+Epoch.systemStakeSubsidy
+  => {}
+
+Epoch.liveObjectSetDigest
+  => {}
+
+Event.contents
+  => {"ev_struct_inst", "tx_digests"}
+
+Event.eventBcs
+  => {"ev_struct_inst", "tx_digests"}
+
+Event.sender
+  => {"ev_struct_inst", "tx_digests"}
+
+Event.sequenceNumber
+  => {"ev_struct_inst", "tx_digests"}
+
+Event.timestamp
+  => {"ev_struct_inst", "tx_digests"}
+
+Event.transaction
+  => {"ev_struct_inst", "tx_digests"}
+
+Event.transactionModule
+  => {"ev_struct_inst", "tx_digests"}
+
+ExecutionError.abortCode
+  => {}
+
+ExecutionError.sourceLineNumber
+  => {}
+
+ExecutionError.instructionOffset
+  => {}
+
+ExecutionError.identifier
+  => {}
+
+ExecutionError.constant
+  => {}
+
+ExecutionError.module
+  => {}
+
+ExecutionError.function
+  => {}
+
+ExecutionError.message
+  => {}
+
+ExecutionResult.effects
+  => {}
+
+ExecutionResult.errors
+  => {}
+
+FeatureFlag.key
+  => {}
+
+FeatureFlag.value
+  => {}
+
+GasCoin._
+  => {}
+
+GasCostSummary.computationCost
+  => {}
+
+GasCostSummary.storageCost
+  => {}
+
+GasCostSummary.storageRebate
+  => {}
+
+GasCostSummary.nonRefundableStorageFee
+  => {}
+
+GasEffects.gasObject
+  => {}
+
+GasEffects.gasSummary
+  => {}
+
+GasInput.gasSponsor
+  => {}
+
+GasInput.gasPrice
+  => {}
+
+GasInput.gasBudget
+  => {}
+
+GasInput.gasPayment
+  => {}
+
+GenesisTransaction.objects
+  => {}
+
+IAddressable.address
+  => {}
+
+IAddressable.balance
+  => {"consistent"}
+
+IAddressable.balances
+  => {"consistent"}
+
+IAddressable.defaultSuinsName
+  => {"obj_versions"}
+
+IAddressable.multiGetBalances
+  => {"consistent"}
+
+IAddressable.objects
+  => {"consistent"}
+
+IMoveDatatype.module
+  => {}
+
+IMoveDatatype.name
+  => {}
+
+IMoveDatatype.abilities
+  => {"obj_versions"}
+
+IMoveDatatype.typeParameters
+  => {"obj_versions"}
+
+IMoveObject.contents
+  => {}
+
+IMoveObject.dynamicField
+  => {"obj_versions"}
+
+IMoveObject.dynamicObjectField
+  => {"obj_versions"}
+
+IMoveObject.hasPublicTransfer
+  => {}
+
+IMoveObject.multiGetDynamicFields
+  => {"obj_versions"}
+
+IMoveObject.multiGetDynamicObjectFields
+  => {"obj_versions"}
+
+IMoveObject.dynamicFields
+  => {"consistent"}
+
+IMoveObject.moveObjectBcs
+  => {}
+
+IObject.version
+  => {}
+
+IObject.digest
+  => {}
+
+IObject.objectAt
+  => {"obj_versions"}
+
+IObject.objectBcs
+  => {}
+
+IObject.objectVersionsAfter
+  => {"obj_versions"}
+
+IObject.objectVersionsBefore
+  => {"obj_versions"}
+
+IObject.owner
+  => {}
+
+IObject.previousTransaction
+  => {}
+
+IObject.storageRebate
+  => {}
+
+IObject.receivedTransactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Immutable._
+  => {}
+
+Input.ix
+  => {}
+
+Linkage.originalId
+  => {}
+
+Linkage.upgradedId
+  => {}
+
+Linkage.version
+  => {}
+
+MakeMoveVecCommand.type
+  => {}
+
+MakeMoveVecCommand.elements
+  => {}
+
+MergeCoinsCommand.coin
+  => {}
+
+MergeCoinsCommand.coins
+  => {}
+
+MoveCallCommand.function
+  => {}
+
+MoveCallCommand.arguments
+  => {}
+
+MoveDatatype.module
+  => {}
+
+MoveDatatype.name
+  => {}
+
+MoveDatatype.abilities
+  => {"obj_versions"}
+
+MoveDatatype.asMoveStruct
+  => {"obj_versions"}
+
+MoveDatatype.asMoveEnum
+  => {"obj_versions"}
+
+MoveDatatype.typeParameters
+  => {"obj_versions"}
+
+MoveDatatypeTypeParameter.constraints
+  => {}
+
+MoveDatatypeTypeParameter.isPhantom
+  => {}
+
+MoveEnum.module
+  => {}
+
+MoveEnum.name
+  => {}
+
+MoveEnum.abilities
+  => {"obj_versions"}
+
+MoveEnum.variants
+  => {"obj_versions"}
+
+MoveEnum.typeParameters
+  => {"obj_versions"}
+
+MoveEnumVariant.name
+  => {}
+
+MoveEnumVariant.fields
+  => {}
+
+MoveField.name
+  => {}
+
+MoveField.type
+  => {}
+
+MoveFunction.module
+  => {}
+
+MoveFunction.name
+  => {}
+
+MoveFunction.isEntry
+  => {}
+
+MoveFunction.parameters
+  => {}
+
+MoveFunction.return
+  => {}
+
+MoveFunction.typeParameters
+  => {}
+
+MoveFunction.visibility
+  => {}
+
+MoveFunctionTypeParameter.constraints
+  => {}
+
+MoveModule.package
+  => {}
+
+MoveModule.name
+  => {}
+
+MoveModule.bytes
+  => {}
+
+MoveModule.datatype
+  => {}
+
+MoveModule.datatypes
+  => {}
+
+MoveModule.disassembly
+  => {}
+
+MoveModule.enum
+  => {}
+
+MoveModule.enums
+  => {}
+
+MoveModule.fileFormatVersion
+  => {}
+
+MoveModule.friends
+  => {}
+
+MoveModule.function
+  => {}
+
+MoveModule.functions
+  => {}
+
+MoveModule.struct
+  => {}
+
+MoveModule.structs
+  => {}
+
+MoveObject.address
+  => {}
+
+MoveObject.version
+  => {}
+
+MoveObject.digest
+  => {}
+
+MoveObject.asCoinMetadata
+  => {}
+
+MoveObject.asDynamicField
+  => {}
+
+MoveObject.balance
+  => {"consistent"}
+
+MoveObject.balances
+  => {"consistent"}
+
+MoveObject.contents
+  => {}
+
+MoveObject.defaultSuinsName
+  => {"obj_versions"}
+
+MoveObject.dynamicField
+  => {"obj_versions"}
+
+MoveObject.dynamicFields
+  => {"consistent"}
+
+MoveObject.dynamicObjectField
+  => {"obj_versions"}
+
+MoveObject.hasPublicTransfer
+  => {}
+
+MoveObject.multiGetDynamicFields
+  => {"obj_versions"}
+
+MoveObject.multiGetBalances
+  => {"consistent"}
+
+MoveObject.multiGetDynamicObjectFields
+  => {"obj_versions"}
+
+MoveObject.moveObjectBcs
+  => {}
+
+MoveObject.objectAt
+  => {"obj_versions"}
+
+MoveObject.objectBcs
+  => {}
+
+MoveObject.objectVersionsAfter
+  => {"obj_versions"}
+
+MoveObject.objectVersionsBefore
+  => {"obj_versions"}
+
+MoveObject.objects
+  => {"consistent"}
+
+MoveObject.owner
+  => {}
+
+MoveObject.previousTransaction
+  => {}
+
+MoveObject.storageRebate
+  => {}
+
+MoveObject.receivedTransactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MovePackage.address
+  => {}
+
+MovePackage.version
+  => {}
+
+MovePackage.digest
+  => {}
+
+MovePackage.balance
+  => {"consistent"}
+
+MovePackage.balances
+  => {"consistent"}
+
+MovePackage.defaultSuinsName
+  => {"obj_versions"}
+
+MovePackage.module
+  => {}
+
+MovePackage.modules
+  => {}
+
+MovePackage.moduleBcs
+  => {}
+
+MovePackage.multiGetBalances
+  => {"consistent"}
+
+MovePackage.objects
+  => {"consistent"}
+
+MovePackage.objectAt
+  => {"obj_versions"}
+
+MovePackage.objectBcs
+  => {}
+
+MovePackage.objectVersionsAfter
+  => {"obj_versions"}
+
+MovePackage.objectVersionsBefore
+  => {"obj_versions"}
+
+MovePackage.owner
+  => {}
+
+MovePackage.packageAt
+  => {}
+
+MovePackage.packageBcs
+  => {}
+
+MovePackage.packageVersionsAfter
+  => {}
+
+MovePackage.packageVersionsBefore
+  => {}
+
+MovePackage.previousTransaction
+  => {}
+
+MovePackage.linkage
+  => {}
+
+MovePackage.storageRebate
+  => {}
+
+MovePackage.receivedTransactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MovePackage.typeOrigins
+  => {}
+
+MoveStruct.module
+  => {}
+
+MoveStruct.name
+  => {}
+
+MoveStruct.abilities
+  => {"obj_versions"}
+
+MoveStruct.fields
+  => {"obj_versions"}
+
+MoveStruct.typeParameters
+  => {"obj_versions"}
+
+MoveType.repr
+  => {}
+
+MoveType.signature
+  => {}
+
+MoveType.layout
+  => {}
+
+MoveType.abilities
+  => {}
+
+MoveValue.bcs
+  => {}
+
+MoveValue.display
+  => {}
+
+MoveValue.json
+  => {}
+
+MoveValue.type
+  => {}
+
+MutateConsensusStreamEnded.address
+  => {}
+
+MutateConsensusStreamEnded.sequenceNumber
+  => {}
+
+Mutation.executeTransaction
+  => {}
+
+Object.address
+  => {}
+
+Object.version
+  => {}
+
+Object.digest
+  => {}
+
+Object.asMoveObject
+  => {}
+
+Object.asMovePackage
+  => {}
+
+Object.balance
+  => {"consistent"}
+
+Object.balances
+  => {"consistent"}
+
+Object.defaultSuinsName
+  => {"obj_versions"}
+
+Object.dynamicField
+  => {"obj_versions"}
+
+Object.dynamicFields
+  => {"consistent"}
+
+Object.dynamicObjectField
+  => {"obj_versions"}
+
+Object.multiGetDynamicFields
+  => {"obj_versions"}
+
+Object.multiGetDynamicObjectFields
+  => {"obj_versions"}
+
+Object.multiGetBalances
+  => {"consistent"}
+
+Object.objectAt
+  => {"obj_versions"}
+
+Object.objectBcs
+  => {}
+
+Object.objectVersionsAfter
+  => {"obj_versions"}
+
+Object.objectVersionsBefore
+  => {"obj_versions"}
+
+Object.objects
+  => {"consistent"}
+
+Object.owner
+  => {}
+
+Object.previousTransaction
+  => {}
+
+Object.storageRebate
+  => {}
+
+Object.receivedTransactions
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+ObjectChange.address
+  => {}
+
+ObjectChange.inputState
+  => {}
+
+ObjectChange.outputState
+  => {}
+
+ObjectChange.idCreated
+  => {}
+
+ObjectChange.idDeleted
+  => {}
+
+ObjectOwner.address
+  => {}
+
+OpenMoveType.signature
+  => {}
+
+OpenMoveType.repr
+  => {}
+
+OtherCommand._
+  => {}
+
+OwnedOrImmutable.object
+  => {}
+
+PageInfo.hasPreviousPage
+  => {}
+
+PageInfo.hasNextPage
+  => {}
+
+PageInfo.startCursor
+  => {}
+
+PageInfo.endCursor
+  => {}
+
+PerEpochConfig.object
+  => {}
+
+ProgrammableSystemTransaction.inputs
+  => {}
+
+ProgrammableSystemTransaction.commands
+  => {}
+
+ProgrammableTransaction.inputs
+  => {}
+
+ProgrammableTransaction.commands
+  => {}
+
+ProtocolConfig.key
+  => {}
+
+ProtocolConfig.value
+  => {}
+
+ProtocolConfigs.protocolVersion
+  => {}
+
+ProtocolConfigs.config
+  => {}
+
+ProtocolConfigs.configs
+  => {}
+
+ProtocolConfigs.featureFlag
+  => {}
+
+ProtocolConfigs.featureFlags
+  => {}
+
+PublishCommand.modules
+  => {}
+
+PublishCommand.dependencies
+  => {}
+
+Pure.bytes
+  => {}
+
+Query.address
+  => {}
+
+Query.chainIdentifier
+  => {}
+
+Query.checkpoint
+  => {}
+
+Query.checkpoints
+  => {"cp_sequence_numbers"}
+
+Query.coinMetadata
+  => {"consistent", "obj_versions"}
+
+Query.epoch
+  => {}
+
+Query.epochs
+  => {}
+
+Query.events
+  => {"ev_struct_inst", "tx_digests"}
+
+Query.events (filter: module)
+  => {"ev_emit_mod", "tx_digests"}
+
+Query.multiGetCheckpoints
+  => {}
+
+Query.multiGetEpochs
+  => {}
+
+Query.multiGetObjects
+  => {}
+
+Query.multiGetPackages
+  => {}
+
+Query.multiGetTransactions
+  => {}
+
+Query.multiGetTransactionEffects
+  => {}
+
+Query.multiGetTypes
+  => {}
+
+Query.object
+  => {"obj_versions"}
+
+Query.object (filter: version)
+  => {}
+
+Query.objects
+  => {"consistent"}
+
+Query.objectVersions
+  => {"obj_versions"}
+
+Query.package
+  => {}
+
+Query.packages
+  => {}
+
+Query.packageVersions
+  => {}
+
+Query.protocolConfigs
+  => {}
+
+Query.serviceConfig
+  => {}
+
+Query.suinsName
+  => {}
+
+Query.transaction
+  => {}
+
+Query.transactionEffects
+  => {}
+
+Query.transactions
+  => {"cp_sequence_numbers", "tx_digests"}
+
+Query.transactions (filter: function)
+  => {"cp_sequence_numbers", "tx_calls", "tx_digests"}
+
+Query.transactions (filter: kind)
+  => {"cp_sequence_numbers", "tx_digests", "tx_kinds"}
+
+Query.transactions (filter: affectedAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Query.transactions (filter: affectedObject)
+  => {"cp_sequence_numbers", "tx_affected_objects", "tx_digests"}
+
+Query.transactions (filter: sentAddress)
+  => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+Query.type
+  => {}
+
+Query.simulateTransaction
+  => {}
+
+Query.verifyZkLoginSignature
+  => {}
+
+Query.__schema
+  => {}
+
+Query.__type
+  => {}
+
+RandomnessStateCreateTransaction._
+  => {}
+
+RandomnessStateUpdateTransaction.epoch
+  => {}
+
+RandomnessStateUpdateTransaction.randomnessRound
+  => {}
+
+RandomnessStateUpdateTransaction.randomBytes
+  => {}
+
+RandomnessStateUpdateTransaction.randomnessObjInitialSharedVersion
+  => {}
+
+ReadConsensusStreamEnded.address
+  => {}
+
+ReadConsensusStreamEnded.sequenceNumber
+  => {}
+
+Receiving.object
+  => {}
+
+SafeMode.enabled
+  => {}
+
+SafeMode.gasSummary
+  => {}
+
+ServiceConfig.mutationTimeoutMs
+  => {}
+
+ServiceConfig.queryTimeoutMs
+  => {}
+
+ServiceConfig.maxQueryDepth
+  => {}
+
+ServiceConfig.maxQueryNodes
+  => {}
+
+ServiceConfig.maxOutputNodes
+  => {}
+
+ServiceConfig.maxTransactionPayloadSize
+  => {}
+
+ServiceConfig.maxQueryPayloadSize
+  => {}
+
+ServiceConfig.defaultPageSize
+  => {}
+
+ServiceConfig.maxPageSize
+  => {}
+
+ServiceConfig.maxMultiGetSize
+  => {}
+
+ServiceConfig.maxTypeArgumentDepth
+  => {}
+
+ServiceConfig.maxTypeArgumentWidth
+  => {}
+
+ServiceConfig.maxTypeNodes
+  => {}
+
+ServiceConfig.maxMoveValueDepth
+  => {}
+
+ServiceConfig.maxMoveValueBound
+  => {}
+
+ServiceConfig.maxDisplayFieldDepth
+  => {}
+
+ServiceConfig.maxDisplayOutputSize
+  => {}
+
+ServiceConfig.maxDisassembledModuleSize
+  => {}
+
+ServiceConfig.availableRange
+  => {}
+
+Shared.initialSharedVersion
+  => {}
+
+SharedInput.address
+  => {}
+
+SharedInput.initialSharedVersion
+  => {}
+
+SharedInput.mutable
+  => {}
+
+SimulationResult.effects
+  => {}
+
+SimulationResult.events
+  => {}
+
+SimulationResult.outputs
+  => {}
+
+SimulationResult.error
+  => {}
+
+SplitCoinsCommand.coin
+  => {}
+
+SplitCoinsCommand.amounts
+  => {}
+
+StakeSubsidy.balance
+  => {}
+
+StakeSubsidy.distributionCounter
+  => {}
+
+StakeSubsidy.currentDistributionAmount
+  => {}
+
+StakeSubsidy.periodLength
+  => {}
+
+StakeSubsidy.decreaseRate
+  => {}
+
+StorageFund.totalObjectStorageRebates
+  => {}
+
+StorageFund.nonRefundableBalance
+  => {}
+
+StoreExecutionTimeObservationsTransaction._
+  => {}
+
+SystemParameters.durationMs
+  => {}
+
+SystemParameters.stakeSubsidyStartEpoch
+  => {}
+
+SystemParameters.minValidatorCount
+  => {}
+
+SystemParameters.maxValidatorCount
+  => {}
+
+SystemParameters.minValidatorJoiningStake
+  => {}
+
+SystemParameters.validatorLowStakeThreshold
+  => {}
+
+SystemParameters.validatorVeryLowStakeThreshold
+  => {}
+
+SystemParameters.validatorLowStakeGracePeriod
+  => {}
+
+Transaction.digest
+  => {}
+
+Transaction.effects
+  => {}
+
+Transaction.kind
+  => {}
+
+Transaction.expiration
+  => {}
+
+Transaction.gasInput
+  => {}
+
+Transaction.sender
+  => {}
+
+Transaction.transactionBcs
+  => {}
+
+Transaction.signatures
+  => {}
+
+TransactionEffects.digest
+  => {}
+
+TransactionEffects.transaction
+  => {}
+
+TransactionEffects.checkpoint
+  => {}
+
+TransactionEffects.status
+  => {}
+
+TransactionEffects.lamportVersion
+  => {}
+
+TransactionEffects.executionError
+  => {}
+
+TransactionEffects.timestamp
+  => {}
+
+TransactionEffects.epoch
+  => {}
+
+TransactionEffects.events
+  => {}
+
+TransactionEffects.balanceChanges
+  => {"tx_balance_changes", "tx_digests"}
+
+TransactionEffects.effectsBcs
+  => {}
+
+TransactionEffects.effectsDigest
+  => {}
+
+TransactionEffects.objectChanges
+  => {}
+
+TransactionEffects.gasEffects
+  => {}
+
+TransactionEffects.unchangedConsensusObjects
+  => {}
+
+TransactionEffects.dependencies
+  => {}
+
+TransferObjectsCommand.inputs
+  => {}
+
+TransferObjectsCommand.address
+  => {}
+
+TxResult.cmd
+  => {}
+
+TxResult.ix
+  => {}
+
+TypeOrigin.module
+  => {}
+
+TypeOrigin.struct
+  => {}
+
+TypeOrigin.definingId
+  => {}
+
+UpgradeCommand.modules
+  => {}
+
+UpgradeCommand.dependencies
+  => {}
+
+UpgradeCommand.currentPackage
+  => {}
+
+UpgradeCommand.upgradeTicket
+  => {}
+
+UserSignature.signatureBytes
+  => {}
+
+Validator.address
+  => {}
+
+Validator.balance
+  => {"consistent"}
+
+Validator.balances
+  => {"consistent"}
+
+Validator.defaultSuinsName
+  => {"obj_versions"}
+
+Validator.multiGetBalances
+  => {"consistent"}
+
+Validator.objects
+  => {"consistent"}
+
+Validator.credentials
+  => {}
+
+Validator.nextEpochCredentials
+  => {}
+
+Validator.name
+  => {}
+
+Validator.description
+  => {}
+
+Validator.imageUrl
+  => {}
+
+Validator.projectUrl
+  => {}
+
+Validator.operationCap
+  => {"obj_versions"}
+
+Validator.stakingPoolId
+  => {}
+
+Validator.exchangeRatesTable
+  => {}
+
+Validator.exchangeRatesSize
+  => {}
+
+Validator.stakingPoolActivationEpoch
+  => {}
+
+Validator.stakingPoolSuiBalance
+  => {}
+
+Validator.rewardsPool
+  => {}
+
+Validator.poolTokenBalance
+  => {}
+
+Validator.pendingStake
+  => {}
+
+Validator.pendingTotalSuiWithdraw
+  => {}
+
+Validator.pendingPoolTokenWithdraw
+  => {}
+
+Validator.votingPower
+  => {}
+
+Validator.gasPrice
+  => {}
+
+Validator.commissionRate
+  => {}
+
+Validator.nextEpochStake
+  => {}
+
+Validator.nextEpochGasPrice
+  => {}
+
+Validator.nextEpochCommissionRate
+  => {}
+
+Validator.atRisk
+  => {}
+
+Validator.reportRecords
+  => {}
+
+ValidatorAggregatedSignature.epoch
+  => {}
+
+ValidatorAggregatedSignature.signature
+  => {}
+
+ValidatorAggregatedSignature.signersMap
+  => {}
+
+ValidatorCredentials.protocolPubKey
+  => {}
+
+ValidatorCredentials.networkPubKey
+  => {}
+
+ValidatorCredentials.workerPubKey
+  => {}
+
+ValidatorCredentials.proofOfPossession
+  => {}
+
+ValidatorCredentials.netAddress
+  => {}
+
+ValidatorCredentials.p2PAddress
+  => {}
+
+ValidatorCredentials.primaryAddress
+  => {}
+
+ValidatorCredentials.workerAddress
+  => {}
+
+ValidatorSet.activeValidators
+  => {}
+
+ValidatorSet.inactivePoolsId
+  => {}
+
+ValidatorSet.inactivePoolsSize
+  => {}
+
+ValidatorSet.pendingActiveValidatorsId
+  => {}
+
+ValidatorSet.pendingActiveValidatorsSize
+  => {}
+
+ValidatorSet.pendingRemovals
+  => {}
+
+ValidatorSet.stakingPoolMappingsId
+  => {}
+
+ValidatorSet.stakingPoolMappingsSize
+  => {}
+
+ValidatorSet.totalStake
+  => {}
+
+ValidatorSet.validatorCandidatesId
+  => {}
+
+ValidatorSet.validatorCandidatesSize
+  => {}
+
+ZkLoginVerifyResult.success
+  => {}
+
+ZkLoginVerifyResult.error
+  => {}
