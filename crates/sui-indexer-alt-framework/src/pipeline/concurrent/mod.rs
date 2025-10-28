@@ -1,24 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use sui_indexer_alt_framework_store_traits::Connection;
 use tokio::{
-    sync::mpsc,
+    sync::{mpsc, watch},
     task::JoinHandle,
-    time::{interval, MissedTickBehavior},
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::{
     FieldCount, metrics::IndexerMetrics, store::Store,
@@ -28,13 +20,14 @@ use crate::{
 use super::{CommitterConfig, PIPELINE_BUFFER, Processor, WatermarkPart, processor::processor};
 
 use self::{
-    collector::collector, commit_watermark::commit_watermark, committer::committer, pruner::pruner,
-    reader_watermark::reader_watermark,
+    collector::collector, commit_watermark::commit_watermark, committer::committer,
+    main_reader_lo::main_reader_lo, pruner::pruner, reader_watermark::reader_watermark,
 };
 
 mod collector;
 mod commit_watermark;
 mod committer;
+mod main_reader_lo;
 mod pruner;
 mod reader_watermark;
 
@@ -230,17 +223,22 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     // If the watermark key does not match the pipeline name, then it is a tasked pipeline and we
     // need to track the main reader lo.
-    let main_reader_lo = if task.is_some() {
-        Some(Arc::new(AtomicU64::new(next_checkpoint)))
+
+    // The watch channel is an Option<sender/receiver<Option<u64>>>. The other Option indicates
+    // whether the pipeline is tasked or main. The inner is the safety mechanism - consumers must
+    // wait until the task has started and provided a fresh value.
+    let (main_reader_lo_tx, main_reader_lo_rx) = if task.is_some() {
+        let (tx, rx) = watch::channel(None);
+        (Some(tx), Some(rx))
     } else {
-        None
+        (None, None)
     };
 
     // Any checkpoints below this watermark will not be passed to the tasked pipeline.
-    let main_reader_lo_task = main_reader_lo_task::<H>(
-        main_reader_lo.clone(),
+    let main_reader_lo_task = main_reader_lo::<H>(
+        main_reader_lo_tx,
         pruner_config.clone(),
-        pruner_cancel.clone(),
+        cancel.clone(),
         store.clone(),
     );
 
@@ -250,13 +248,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         processor_tx,
         metrics.clone(),
         cancel.clone(),
-        main_reader_lo.clone(),
     );
 
     let collector = collector::<H>(
         committer_config.clone(),
         collector_rx,
         collector_tx,
+        main_reader_lo_rx,
         metrics.clone(),
         cancel.clone(),
     );
@@ -275,18 +273,14 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer_config,
         watermark_rx,
         store.clone(),
-        task,
+        task.clone(),
         metrics.clone(),
         cancel,
     );
 
     // Tasked pipelines will skip reader_watermark and pruner. Setting the pruner config to None
     // will result in the tasks returning early.
-    let pruner_config = if main_reader_lo.is_some() {
-        None
-    } else {
-        pruner_config
-    };
+    let pruner_config = if task.is_some() { None } else { pruner_config };
 
     let reader_watermark = reader_watermark::<H>(
         pruner_config.clone(),
@@ -304,10 +298,16 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     tokio::spawn(async move {
-        let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);
+        let (_, _, _, _, _) = futures::join!(
+            main_reader_lo_task,
+            processor,
+            collector,
+            committer,
+            commit_watermark
+        );
 
         pruner_cancel.cancel();
-        let _ = futures::join!(main_reader_lo_task, reader_watermark, pruner);
+        let _ = futures::join!(reader_watermark, pruner);
     })
 }
 
@@ -317,61 +317,6 @@ const fn max_chunk_rows<H: Handler>() -> usize {
     } else {
         i16::MAX as usize / H::Value::FIELD_COUNT
     }
-}
-
-/// Starts a task for a tasked pipeline to track the main reader lo.
-pub(super) fn main_reader_lo_task<H: Handler + 'static>(
-    main_reader_lo: Option<Arc<AtomicU64>>,
-    config: Option<PrunerConfig>,
-    cancel: CancellationToken,
-    store: H::Store,
-) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        let Some(main_reader_lo) = main_reader_lo else {
-            info!(pipeline = H::NAME, "Skipping main reader lo task");
-            return;
-        };
-
-        let Some(config) = config else {
-            info!(pipeline = H::NAME, "Skipping main reader lo task");
-            return;
-        };
-
-        let mut reader_interval = interval(config.interval() / 2);
-        reader_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-
-        loop {
-            tokio::select! {
-                _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, "Shutdown received");
-                    break;
-                }
-
-                // Periodic refresh of the main reader watermark.
-                _ = reader_interval.tick() => {
-                    match store.connect().await {
-                        Ok(mut conn) => {
-                            match conn.reader_watermark(H::NAME).await {
-                                Ok(Some(main_reader_watermark)) => {
-                                    let current_reader_lo = main_reader_watermark.reader_lo;
-                                    main_reader_lo.store(current_reader_lo, Ordering::Relaxed);
-                                }
-                                Ok(None) => {
-                                    warn!(pipeline = H::NAME, "No reader watermark found");
-                                }
-                                Err(e) => {
-                                    warn!(pipeline = H::NAME, "Failed to get reader watermark: {e}");
-                                }
-                            }
-                        },
-                        Err(e) => {
-                            warn!(pipeline = H::NAME, "Failed to connect to store: {e}");
-                        }
-                    }
-                }
-            }
-        }
-    })
 }
 
 #[cfg(test)]

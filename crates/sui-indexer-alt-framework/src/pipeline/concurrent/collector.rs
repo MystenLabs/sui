@@ -4,7 +4,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use tokio::{
-    sync::mpsc,
+    sync::{mpsc, watch},
     task::JoinHandle,
     time::{MissedTickBehavior, interval},
 };
@@ -79,14 +79,41 @@ impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
 ///
 /// This task will shutdown if canceled via the `cancel` token, or if any of its channels are
 /// closed.
+///
+/// When `main_reader_lo` is present, the collector will skip checkpoints that are below the main
+/// pipeline's reader watermark, to avoid writing data that has already been considered pruned by
+/// the main pipeline.
 pub(super) fn collector<H: Handler + 'static>(
     config: CommitterConfig,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::Sender<BatchedRows<H>>,
+    mut main_reader_lo_rx: Option<watch::Receiver<Option<u64>>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
+        println!("Check");
+        if let Some(reader_lo_rx) = &mut main_reader_lo_rx {
+            info!(
+                pipeline = H::NAME,
+                "Starting collector with main reader lo tracking"
+            );
+            if reader_lo_rx.wait_for(|v| v.is_some()).await.is_err() {
+                info!(
+                    pipeline = H::NAME,
+                    "Shutdown received before main reader lo initialized"
+                );
+                println!("Shutdown received before main reader lo initialized");
+                return;
+            }
+        } else {
+            info!(
+                pipeline = H::NAME,
+                "Starting collector without main reader lo tracking"
+            );
+        }
+        println!("After waiting for main reader lo to initialize");
+
         // The `poll` interval controls the maximum time to wait between collecting batches,
         // regardless of number of rows pending.
         let mut poll = interval(config.collect_interval());
@@ -125,7 +152,30 @@ pub(super) fn collector<H: Handler + 'static>(
                         };
 
                         let indexed = entry.get_mut();
+
+                        // Skip outdated checkpoints if we are behind the main reader.
+                        if let Some(main_reader_lo_rx) = &mut main_reader_lo_rx {
+                            if main_reader_lo_rx.wait_for(|v| v.is_some()).await.is_err() {
+                                info!(
+                                    pipeline = H::NAME,
+                                    "Shutting down collector as main reader lo watch closed",
+                                );
+                                return;
+                            }
+                            // SAFETY: We just waited for the value to be Some.
+                            if indexed.watermark.checkpoint() < main_reader_lo_rx.borrow().unwrap() {
+                                println!("Ignore this one");
+                                pending_rows -= indexed.values.len();
+                                entry.remove();
+                                continue;
+                            }
+                        }
+
+                        println!("Batching checkpoint: {}", indexed.watermark.checkpoint());
+
+
                         indexed.batch_into(&mut batch);
+
                         if indexed.is_empty() {
                             checkpoint_lag_reporter.report_lag(
                                 indexed.watermark.checkpoint(),
@@ -282,6 +332,7 @@ mod tests {
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
+            None,
             test_metrics(),
             cancel.clone(),
         );
@@ -323,6 +374,7 @@ mod tests {
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
+            None,
             test_metrics(),
             cancel.clone(),
         );
@@ -362,6 +414,7 @@ mod tests {
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
+            None,
             metrics.clone(),
             cancel.clone(),
         );
@@ -416,6 +469,7 @@ mod tests {
             config,
             processor_rx,
             collector_tx,
+            None,
             test_metrics(),
             cancel.clone(),
         );
@@ -470,6 +524,7 @@ mod tests {
             config,
             processor_rx,
             collector_tx,
+            None,
             test_metrics(),
             cancel.clone(),
         );
@@ -513,6 +568,7 @@ mod tests {
             config,
             processor_rx,
             collector_tx,
+            None,
             test_metrics(),
             cancel.clone(),
         );
@@ -535,4 +591,12 @@ mod tests {
 
         cancel.cancel();
     }
+
+    // TODO (wlmyng): test behavior around main_reader_lo_rx
+
+    // collector receives checkpoints 0-9, main_reader_lo is 5, drop 0-4
+    // main_reader_lo_rx dynamically updates
+    // collector blocks until Some value arrives
+    // watch channel closes during processing
+    // checkpoints arrive out of order
 }

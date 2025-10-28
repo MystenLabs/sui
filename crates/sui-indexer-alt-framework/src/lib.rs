@@ -1140,7 +1140,7 @@ mod tests {
         // reader watermark at `7`.
         let mut conn = store.connect().await.unwrap();
         conn.set_committer_watermark(
-            "test",
+            MockCheckpointSequenceNumberHandler::NAME,
             CommitterWatermark {
                 checkpoint_hi_inclusive: 10,
                 ..Default::default()
@@ -1148,7 +1148,9 @@ mod tests {
         )
         .await
         .unwrap();
-        conn.set_reader_watermark("test", 7).await.unwrap();
+        conn.set_reader_watermark(MockCheckpointSequenceNumberHandler::NAME, 7)
+            .await
+            .unwrap();
 
         // Start a tasked indexer that will ingest from checkpoint 0. Checkpoints 0 through 6 should
         // be ignored by the tasked indexer.
@@ -1189,7 +1191,16 @@ mod tests {
         let _ = tasked_indexer
             .concurrent_pipeline(
                 MockCheckpointSequenceNumberHandler,
-                ConcurrentConfig::default(),
+                ConcurrentConfig {
+                    pruner: Some(PrunerConfig {
+                        interval_ms: 10,
+                        delay_ms: 1000,
+                        retention: 10,
+                        max_chunk_size: 10,
+                        prune_concurrency: 1,
+                    }),
+                    ..ConcurrentConfig::default()
+                },
             )
             .await;
 
@@ -1198,17 +1209,11 @@ mod tests {
         tasked_indexer.run().await.unwrap().await.unwrap();
 
         assert_eq!(metrics.total_ingested_checkpoints.get(), 16);
-        // 7 checkpoints out of order, 0 through 6 inclusive.
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&["test"])
-                .unwrap()
-                .get(),
-            7
-        );
-        // assert that we have no data from checkpoints 0 through 6.
-        let data = store.data.get("test").unwrap();
+
+        let data = store
+            .data
+            .get(MockCheckpointSequenceNumberHandler::NAME)
+            .unwrap();
         assert_eq!(data.len(), 9);
         for i in 0..7 {
             assert!(data.get(&i).is_none());
@@ -1276,7 +1281,16 @@ mod tests {
         let _ = tasked_indexer
             .concurrent_pipeline(
                 MockCheckpointSequenceNumberHandler,
-                ConcurrentConfig::default(),
+                ConcurrentConfig {
+                    pruner: Some(PrunerConfig {
+                        interval_ms: 10,
+                        delay_ms: 1000,
+                        retention: 10,
+                        max_chunk_size: 10,
+                        prune_concurrency: 1,
+                    }),
+                    ..ConcurrentConfig::default()
+                },
             )
             .await;
 
