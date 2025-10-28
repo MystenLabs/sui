@@ -24,7 +24,7 @@ struct Args {
     command: SuiCommand,
 
     /// Display less output
-    #[arg(short, long)]
+    #[arg(short, long, global = true)]
     quiet: bool,
 }
 
