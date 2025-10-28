@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::{AggregateError, Error};
+use crate::toolchain::ToolchainVersion;
 use futures::future;
 use move_binary_format::CompiledModule;
 use move_compiler::compiled_unit::NamedCompiledModule;
