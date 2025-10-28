@@ -43,4 +43,4 @@ A checkpoint contains a list of transactions, so a full node can fetch and execu
 
 The checkpoint also includes the effects digests of each transaction. An effects digest is the cryptographic hash of the `TransactionEffects` structure, which lists all transaction inputs and outputs, including the digests of all objects written by the transaction. This allows a full node to confirm it has the same execution results as the validators who signed the checkpoint.  
 
-By executing checkpoints and verifying transaction outputs, a full node can build the entire state of the Sui network—the collection of objects in the network—and trust that every byte of every object is correct.
+By executing checkpoints and verifying transaction outputs, a full node can build the entire state of the Sui network (the collection of objects in the network) and trust that every byte of every object is correct.

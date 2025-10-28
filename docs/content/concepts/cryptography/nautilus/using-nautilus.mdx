@@ -152,7 +152,7 @@ Frontend code is not included in this guide. The Move call is demonstrated using
 
 6. Optionally, you can set up an application load balancer (ALB) for the EC2 instance with an SSL/TLS certificate from AWS Certificate Manager (ACM), and configure Amazon Route 53 for DNS routing. For more information, see the [ACM User Guide](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request-public.html) and the [ALB Guide](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html).
 
- ## Develop your own Nautilus server
+## Develop your own Nautilus server
 
 The Nautilus server logic lives in `src/nautilus-server`. To customize the application, refer to `apps/weather-example` or `apps/twitter-example` as templates:
 
@@ -348,7 +348,7 @@ $ cat out/nitro.pcrs
 </details>
 
 ```sh
-# Add environment variables you use later when registering the enclave.
+# Add environment variables to use later when registering the enclave.
 $ PCR0=968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879
 $ PCR1=968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879
 $ PCR2=21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
