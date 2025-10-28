@@ -22,6 +22,11 @@ module sui_system::sui_system_state_inner {
     const SYSTEM_STATE_VERSION_V2: u64 = 18446744073709551607;  // u64::MAX - 8
 
     const EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY: u64 = 0;
+    const EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY: u64 = 1;
+
+    public struct ExecutionTimeObservationChunkKey has copy, drop, store {
+        chunk_index: u64,
+    }
 
     public struct SystemParameters has store {
         epoch_duration_ms: u64,
@@ -193,5 +198,38 @@ module sui_system::sui_system_state_inner {
             let _: vector<u8> = bag::remove(&mut self.extra_fields, EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY);
         };
         bag::add(&mut self.extra_fields, EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY, estimates);
+    }
+
+    public(package) fun store_execution_time_estimates_v2(
+        self: &mut SuiSystemStateInnerV2,
+        estimate_chunks: vector<vector<u8>>,
+    ) {
+        let old_key = EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY;
+        if (bag::contains(&self.extra_fields, old_key)) {
+            let _: vector<u8> = bag::remove(&mut self.extra_fields, old_key);
+        };
+        let chunk_count_key = EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY;
+        if (bag::contains(&self.extra_fields, chunk_count_key)) {
+            let existing_chunk_count: u64 = bag::remove(&mut self.extra_fields, chunk_count_key);
+            let mut chunk_idx = 0;
+            while (chunk_idx < existing_chunk_count) {
+                let chunk_key = ExecutionTimeObservationChunkKey { chunk_index: chunk_idx };
+                if (bag::contains(&self.extra_fields, chunk_key)) {
+                    let _: vector<u8> = bag::remove(&mut self.extra_fields, chunk_key);
+                };
+                chunk_idx = chunk_idx + 1;
+            };
+        };
+        let total_chunks = vector::length(&estimate_chunks);
+        if (total_chunks > 0) {
+            bag::add(&mut self.extra_fields, chunk_count_key, total_chunks);
+            let mut i = 0;
+            while (i < total_chunks) {
+                let chunk_key = ExecutionTimeObservationChunkKey { chunk_index: i };
+                let chunk_data = *vector::borrow(&estimate_chunks, i);
+                bag::add(&mut self.extra_fields, chunk_key, chunk_data);
+                i = i + 1;
+            };
+        };
     }
 }
