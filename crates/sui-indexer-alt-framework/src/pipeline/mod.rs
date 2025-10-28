@@ -13,6 +13,15 @@ mod logging;
 mod processor;
 pub mod sequential;
 
+/// Status returned by `Handler::batch` to indicate whether the batch is ready to be committed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BatchStatus {
+    /// The batch can accept more values.
+    Pending,
+    /// The batch is full and should be committed.
+    Ready,
+}
+
 /// Extra buffer added to channels between tasks in a pipeline. There does not need to be a huge
 /// capacity here because tasks already buffer rows to insert internally.
 const PIPELINE_BUFFER: usize = 5;
@@ -49,7 +58,7 @@ struct IndexedCheckpoint<P: Processor> {
 
 /// A representation of the proportion of a watermark.
 #[derive(Debug, Clone)]
-pub(crate) struct WatermarkPart {
+struct WatermarkPart {
     /// The watermark itself
     watermark: CommitterWatermark,
     /// The number of rows from this watermark that are in this part

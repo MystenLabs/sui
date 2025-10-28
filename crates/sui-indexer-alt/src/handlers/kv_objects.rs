@@ -7,8 +7,8 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{Processor, concurrent::Handler},
-    postgres::{Connection, Db},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
     types::full_checkpoint_content::Checkpoint,
 };
 use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
@@ -54,8 +54,6 @@ impl Processor for KvObjects {
 
 #[async_trait]
 impl Handler for KvObjects {
-    type Store = Db;
-
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 

@@ -222,8 +222,7 @@ impl<S: Store> Indexer<S> {
         config: ConcurrentConfig,
     ) -> Result<()>
     where
-        H: concurrent::FullHandler<Store = S> + Send + Sync + 'static,
-        H::Value: Send + Sync,
+        H: concurrent::Handler<Store = S> + Send + Sync + 'static,
     {
         let Some(watermark) = self.add_pipeline::<H>().await? else {
             return Ok(());
@@ -475,9 +474,18 @@ mod tests {
     #[async_trait]
     impl crate::pipeline::concurrent::Handler for MockHandler {
         type Store = MockStore;
+        type Batch = Vec<MockValue>;
+
+        fn batch(
+            batch: &mut Self::Batch,
+            values: &mut Vec<Self::Value>,
+        ) -> crate::pipeline::BatchStatus {
+            batch.append(values);
+            crate::pipeline::BatchStatus::Pending
+        }
 
         async fn commit<'a>(
-            _values: &[Self::Value],
+            _batch: &Self::Batch,
             _conn: &mut <Self::Store as Store>::Connection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(1)
@@ -489,8 +497,12 @@ mod tests {
         type Store = MockStore;
         type Batch = Vec<Self::Value>;
 
-        fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+        fn batch(
+            batch: &mut Self::Batch,
+            values: Vec<Self::Value>,
+        ) -> crate::pipeline::BatchStatus {
             batch.extend(values);
+            crate::pipeline::BatchStatus::Pending
         }
 
         async fn commit<'a>(
@@ -521,8 +533,12 @@ mod tests {
         type Store = MockStore;
         type Batch = Vec<MockValue>;
 
-        fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+        fn batch(
+            batch: &mut Self::Batch,
+            values: Vec<Self::Value>,
+        ) -> crate::pipeline::BatchStatus {
             batch.extend(values);
+            crate::pipeline::BatchStatus::Pending
         }
 
         async fn commit<'a>(

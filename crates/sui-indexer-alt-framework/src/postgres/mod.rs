@@ -17,6 +17,8 @@ use crate::{
 
 pub use sui_pg_db::*;
 
+pub mod handler;
+
 /// An opinionated indexer implementation that uses a Postgres database as the store.
 impl Indexer<Db> {
     /// Create a new instance of the indexer framework. `database_url`, `db_args`, `indexer_args,`,
@@ -109,17 +111,14 @@ pub mod tests {
 
     use async_trait::async_trait;
     use std::sync::Arc;
-    use sui_indexer_alt_framework_store_traits::CommitterWatermark;
+    use sui_indexer_alt_framework_store_traits::{
+        CommitterWatermark, Connection as ConnectionTrait,
+    };
     use sui_types::full_checkpoint_content::Checkpoint;
 
     use super::*;
 
-    use crate::pipeline::concurrent;
-    use crate::{
-        ConcurrentConfig, FieldCount,
-        pipeline::Processor,
-        store::{Connection, Store},
-    };
+    use crate::{ConcurrentConfig, pipeline::Processor};
 
     #[derive(FieldCount)]
     struct V {
@@ -142,12 +141,10 @@ pub mod tests {
             }
 
             #[async_trait]
-            impl concurrent::Handler for $name {
-                type Store = Db;
-
+            impl handler::Handler for $name {
                 async fn commit<'a>(
                     _values: &[Self::Value],
-                    _conn: &mut <Self::Store as Store>::Connection<'a>,
+                    _conn: &mut Connection<'a>,
                 ) -> anyhow::Result<usize> {
                     todo!()
                 }

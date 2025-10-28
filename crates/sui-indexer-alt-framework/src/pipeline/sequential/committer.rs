@@ -151,9 +151,13 @@ where
                                 let indexed = entry.remove();
                                 batch_rows += indexed.len();
                                 batch_checkpoints += 1;
-                                H::batch(&mut batch, indexed.values);
+                                let status = H::batch(&mut batch, indexed.values);
                                 watermark = Some(indexed.watermark);
                                 next_checkpoint += 1;
+
+                                if matches!(status, crate::pipeline::BatchStatus::Ready) {
+                                    break;
+                                }
                             }
 
                             // Next pending checkpoint is in the past, ignore it to avoid double
@@ -396,7 +400,7 @@ fn can_process_pending<T>(
 mod tests {
     use crate::{
         mocks::store::{MockConnection, MockStore},
-        pipeline::{CommitterConfig, Processor},
+        pipeline::{BatchStatus, CommitterConfig, Processor},
     };
 
     use super::*;
@@ -428,8 +432,9 @@ mod tests {
         const MAX_BATCH_CHECKPOINTS: usize = 3; // Using small max value for testing.
         const MIN_EAGER_ROWS: usize = 4; // Using small eager value for testing.
 
-        fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+        fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) -> BatchStatus {
             batch.extend(values);
+            BatchStatus::Pending
         }
 
         async fn commit<'a>(

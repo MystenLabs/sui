@@ -8,9 +8,8 @@ use std::sync::Arc;
 use sui_bridge_schema::models::SuiErrorTransactions;
 use sui_bridge_schema::schema::sui_error_transactions;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::Handler;
-use sui_indexer_alt_framework::postgres::Db;
-use sui_indexer_alt_framework::store::Store;
+use sui_indexer_alt_framework::postgres::Connection;
+use sui_indexer_alt_framework::postgres::handler::Handler;
 use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
 use sui_indexer_alt_framework::types::execution_status::ExecutionStatus;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
@@ -47,11 +46,9 @@ impl Processor for ErrorTransactionHandler {
 
 #[async_trait]
 impl Handler for ErrorTransactionHandler {
-    type Store = Db;
-
     async fn commit<'a>(
         values: &[Self::Value],
-        conn: &mut <Self::Store as Store>::Connection<'a>,
+        conn: &mut Connection<'a>,
     ) -> anyhow::Result<usize> {
         Ok(diesel::insert_into(sui_error_transactions::table)
             .values(values)

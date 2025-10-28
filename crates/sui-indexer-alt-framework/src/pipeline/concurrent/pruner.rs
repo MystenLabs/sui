@@ -19,7 +19,9 @@ use crate::{
     store::{Connection, Store},
 };
 
-use super::{FullHandler, PrunerConfig};
+#[cfg(test)]
+use super::BatchStatus;
+use super::{Handler, PrunerConfig};
 
 #[derive(Default)]
 struct PendingRanges {
@@ -94,7 +96,7 @@ impl PendingRanges {
 ///
 /// The task will shutdown if the `cancel` token is signalled. If the `config` is `None`, the task
 /// will shutdown immediately.
-pub(super) fn pruner<H: FullHandler + Send + Sync + 'static>(
+pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
     handler: Arc<H>,
     config: Option<PrunerConfig>,
     store: H::Store,
@@ -296,7 +298,7 @@ pub(super) fn pruner<H: FullHandler + Send + Sync + 'static>(
     })
 }
 
-async fn prune_task_impl<H: FullHandler + Send + Sync + 'static>(
+async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
     metrics: Arc<IndexerMetrics>,
     db: H::Store,
     handler: Arc<H>,
@@ -344,7 +346,6 @@ async fn prune_task_impl<H: FullHandler + Send + Sync + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use super::super::Handler;
     use std::sync::Arc;
     use std::{
         collections::HashMap,
@@ -380,12 +381,18 @@ mod tests {
     #[async_trait]
     impl Handler for DataPipeline {
         type Store = MockStore;
+        type Batch = Vec<Self::Value>;
+
+        fn batch(batch: &mut Self::Batch, values: &mut Vec<Self::Value>) -> BatchStatus {
+            batch.append(values);
+            BatchStatus::Pending
+        }
 
         async fn commit<'a>(
-            values: &[Self::Value],
+            batch: &Self::Batch,
             _conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
-            Ok(values.len())
+            Ok(batch.len())
         }
 
         async fn prune<'a>(

@@ -12,7 +12,9 @@ use crate::{
     store::{Connection, Store},
 };
 
-use super::{FullHandler, PrunerConfig};
+#[cfg(test)]
+use super::BatchStatus;
+use super::{Handler, PrunerConfig};
 
 /// The reader watermark task is responsible for updating the `reader_lo` and `pruner_timestamp`
 /// values for a pipeline's row in the watermark table, based on the pruner configuration, and the
@@ -25,7 +27,7 @@ use super::{FullHandler, PrunerConfig};
 ///
 /// If there is no pruner configuration, this task will immediately exit. Otherwise, the task exits
 /// when the provided cancellation token is triggered.
-pub(super) fn reader_watermark<H: FullHandler + 'static>(
+pub(super) fn reader_watermark<H: Handler + 'static>(
     config: Option<PrunerConfig>,
     store: H::Store,
     metrics: Arc<IndexerMetrics>,
@@ -108,7 +110,6 @@ pub(super) fn reader_watermark<H: FullHandler + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use super::super::Handler;
     use async_trait::async_trait;
     use std::sync::Arc;
     use sui_pg_db::FieldCount;
@@ -143,9 +144,15 @@ mod tests {
     #[async_trait]
     impl Handler for DataPipeline {
         type Store = MockStore;
+        type Batch = Vec<Self::Value>;
+
+        fn batch(batch: &mut Self::Batch, values: &mut Vec<Self::Value>) -> BatchStatus {
+            batch.append(values);
+            BatchStatus::Pending
+        }
 
         async fn commit<'a>(
-            _values: &[Self::Value],
+            _batch: &Self::Batch,
             _conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(0)

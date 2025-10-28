@@ -14,35 +14,37 @@ use tracing::{debug, info};
 use crate::{
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{CommitterConfig, IndexedCheckpoint, WatermarkPart},
-    store::BatchAccumulator,
 };
 
-use super::{BatchedRows, FullHandler};
+#[cfg(test)]
+use super::BatchStatus;
+use super::{BatchedRows, Handler};
 
 /// Processed values that are waiting to be written to the database. This is an internal type used
 /// by the concurrent collector to hold data it is waiting to send to the committer.
-struct PendingCheckpoint<H: FullHandler> {
+struct PendingCheckpoint<H: Handler> {
     /// Values to be inserted into the database from this checkpoint
     values: Vec<H::Value>,
     /// The watermark associated with this checkpoint and the part of it that is left to commit
     watermark: WatermarkPart,
 }
 
-impl<H: FullHandler> PendingCheckpoint<H> {
+impl<H: Handler> PendingCheckpoint<H> {
     /// Whether there are values left to commit from this indexed checkpoint.
     fn is_empty(&self) -> bool {
-        self.values.is_empty()
+        let empty = self.values.is_empty();
+        debug_assert!(!empty || self.watermark.batch_rows == 0);
+        empty
     }
 }
 
-impl<H: FullHandler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
+impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
     fn from(indexed: IndexedCheckpoint<H>) -> Self {
-        let total_rows = indexed.values.len();
         Self {
             watermark: WatermarkPart {
                 watermark: indexed.watermark,
-                batch_rows: total_rows,
-                total_rows,
+                batch_rows: indexed.values.len(),
+                total_rows: indexed.values.len(),
             },
             values: indexed.values,
         }
@@ -63,17 +65,13 @@ impl<H: FullHandler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
 ///
 /// This task will shutdown if canceled via the `cancel` token, or if any of its channels are
 /// closed.
-pub(super) fn collector<H: FullHandler + 'static>(
+pub(super) fn collector<H: Handler + 'static>(
     config: CommitterConfig,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::Sender<BatchedRows<H>>,
-    handler: Arc<H>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
-) -> JoinHandle<()>
-where
-    H::Value: Send + Sync,
-{
+) -> JoinHandle<()> {
     tokio::spawn(async move {
         // The `poll` interval controls the maximum time to wait between collecting batches,
         // regardless of number of rows pending.
@@ -106,8 +104,9 @@ where
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    let mut accumulator = handler.accumulator();
+                    let mut batch = H::Batch::default();
                     let mut watermark = Vec::new();
+                    let mut batch_len = 0;
 
                     loop {
                         let Some(mut entry) = pending.first_entry() else {
@@ -119,8 +118,11 @@ where
                         }
 
                         let indexed = entry.get_mut();
+                        let before = indexed.values.len();
+                        let status = H::batch(&mut batch, &mut indexed.values);
+                        let taken = before - indexed.values.len();
 
-                        let taken = accumulator.take_from(&mut indexed.values);
+                        batch_len += taken;
                         watermark.push(indexed.watermark.take(taken));
                         if indexed.is_empty() {
                             checkpoint_lag_reporter.report_lag(
@@ -128,15 +130,13 @@ where
                                 indexed.watermark.timestamp_ms(),
                             );
                             entry.remove();
-                        // This means the batch can't hold any more values. Send it.
-                        } else if taken == 0 {
+                        }
+
+                        if status == super::BatchStatus::Ready {
+                            // Batch is full, send it
                             break;
                         }
                     }
-
-                    let batch_len = accumulator.len();
-                    let batch = accumulator.take_batch();
-
                     pending_rows -= batch_len;
                     let elapsed = guard.stop_and_record();
                     debug!(
@@ -205,7 +205,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::super::Handler;
     use std::time::Duration;
 
     use async_trait::async_trait;
@@ -213,7 +212,7 @@ mod tests {
     use tokio::sync::mpsc;
 
     use crate::{
-        FieldCount, metrics::tests::test_metrics, pipeline::Processor,
+        metrics::tests::test_metrics, pipeline::Processor,
         types::full_checkpoint_content::Checkpoint,
     };
 
@@ -222,17 +221,10 @@ mod tests {
     #[derive(Clone)]
     struct Entry;
 
-    impl FieldCount for Entry {
-        // Fake a large number of fields to test batch sizing.
-        const FIELD_COUNT: usize = 32;
-    }
-
-    fn max_chunk_rows_for_test() -> usize {
-        use crate::store::ParameterCountBatchAccumulator;
-        ParameterCountBatchAccumulator::<Entry>::max_rows()
-    }
-
     struct TestHandler;
+
+    // Max chunk rows for testing - simulates postgres bind parameter limit
+    const TEST_MAX_CHUNK_ROWS: usize = 1024;
 
     #[async_trait]
     impl Processor for TestHandler {
@@ -248,12 +240,27 @@ mod tests {
     #[async_trait]
     impl Handler for TestHandler {
         type Store = Db;
+        type Batch = Vec<Entry>;
 
         const MIN_EAGER_ROWS: usize = 10;
         const MAX_PENDING_ROWS: usize = 10000;
 
+        fn batch(batch: &mut Self::Batch, values: &mut Vec<Self::Value>) -> BatchStatus {
+            // Simulate batch size limit
+            let remaining_capacity = TEST_MAX_CHUNK_ROWS.saturating_sub(batch.len());
+            let to_take = remaining_capacity.min(values.len());
+            let taken = values.drain(..to_take).collect::<Vec<_>>();
+            batch.extend(taken);
+
+            if batch.len() >= TEST_MAX_CHUNK_ROWS {
+                BatchStatus::Ready
+            } else {
+                BatchStatus::Pending
+            }
+        }
+
         async fn commit<'a>(
-            _values: &[Self::Value],
+            _batch: &Self::Batch,
             _conn: &mut Connection<'a>,
         ) -> anyhow::Result<usize> {
             tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -292,14 +299,12 @@ mod tests {
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
-            Arc::new(TestHandler),
             test_metrics(),
             cancel.clone(),
         );
 
-        let max_chunk_rows = max_chunk_rows_for_test();
-        let part1_length = max_chunk_rows / 2;
-        let part2_length = max_chunk_rows - part1_length - 1;
+        let part1_length = TEST_MAX_CHUNK_ROWS / 2;
+        let part2_length = TEST_MAX_CHUNK_ROWS - part1_length - 1;
 
         // Send test data
         let test_data = vec![
@@ -313,7 +318,7 @@ mod tests {
         }
 
         let batch1 = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
-        assert_eq!(batch1.batch_len, max_chunk_rows);
+        assert_eq!(batch1.batch_len, TEST_MAX_CHUNK_ROWS);
 
         let batch2 = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
         assert_eq!(batch2.batch_len, 1);
@@ -334,7 +339,6 @@ mod tests {
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
-            Arc::new(TestHandler),
             test_metrics(),
             cancel.clone(),
         );
@@ -374,7 +378,6 @@ mod tests {
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
-            Arc::new(TestHandler),
             metrics.clone(),
             cancel.clone(),
         );
@@ -388,8 +391,8 @@ mod tests {
             vec![
                 Entry;
                 // Decreasing this number by even 1 would make the test fail.
-                <TestHandler as Handler>::MAX_PENDING_ROWS
-                    + max_chunk_rows_for_test() * collector_channel_size
+                TestHandler::MAX_PENDING_ROWS
+                    + TEST_MAX_CHUNK_ROWS * collector_channel_size
             ],
         );
         processor_tx.send(data).await.unwrap();
@@ -429,7 +432,6 @@ mod tests {
             config,
             processor_rx,
             collector_tx,
-            Arc::new(TestHandler),
             test_metrics(),
             cancel.clone(),
         );
@@ -441,13 +443,8 @@ mod tests {
         assert_eq!(initial_batch.batch_len, 0);
 
         // Send data that's just below MIN_EAGER_ROWS threshold.
-        let below_threshold = IndexedCheckpoint::new(
-            0,
-            1,
-            10,
-            1000,
-            vec![Entry; <TestHandler as Handler>::MIN_EAGER_ROWS - 1],
-        );
+        let below_threshold =
+            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; TestHandler::MIN_EAGER_ROWS - 1]);
         processor_tx.send(below_threshold).await.unwrap();
 
         // Try to receive with timeout - should timeout since we're below threshold
@@ -465,10 +462,7 @@ mod tests {
 
         // Should immediately get a batch without waiting for the long interval
         let eager_batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
-        assert_eq!(
-            eager_batch.batch_len,
-            <TestHandler as Handler>::MIN_EAGER_ROWS
-        );
+        assert_eq!(eager_batch.batch_len, TestHandler::MIN_EAGER_ROWS);
 
         // Verify batch was created quickly (much less than 60 seconds)
         let elapsed = start_time.elapsed();
@@ -492,7 +486,6 @@ mod tests {
             config,
             processor_rx,
             collector_tx,
-            Arc::new(TestHandler),
             test_metrics(),
             cancel.clone(),
         );
@@ -506,18 +499,13 @@ mod tests {
         let start_time = std::time::Instant::now();
 
         // Send exactly MIN_EAGER_ROWS in one checkpoint
-        let exact_threshold = IndexedCheckpoint::new(
-            0,
-            1,
-            10,
-            1000,
-            vec![Entry; <TestHandler as Handler>::MIN_EAGER_ROWS],
-        );
+        let exact_threshold =
+            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; TestHandler::MIN_EAGER_ROWS]);
         processor_tx.send(exact_threshold).await.unwrap();
 
         // Should trigger immediately since pending_rows >= MIN_EAGER_ROWS.
         let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
-        assert_eq!(batch.batch_len, <TestHandler as Handler>::MIN_EAGER_ROWS);
+        assert_eq!(batch.batch_len, TestHandler::MIN_EAGER_ROWS);
 
         // Verify batch was created quickly (much less than 60 seconds)
         let elapsed = start_time.elapsed();
@@ -541,7 +529,6 @@ mod tests {
             config,
             processor_rx,
             collector_tx,
-            Arc::new(TestHandler),
             test_metrics(),
             cancel.clone(),
         );
@@ -551,13 +538,8 @@ mod tests {
         assert_eq!(initial_batch.batch_len, 0);
 
         // Send MIN_EAGER_ROWS - 1 entries (below threshold)
-        let below_threshold = IndexedCheckpoint::new(
-            0,
-            1,
-            10,
-            1000,
-            vec![Entry; <TestHandler as Handler>::MIN_EAGER_ROWS - 1],
-        );
+        let below_threshold =
+            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; TestHandler::MIN_EAGER_ROWS - 1]);
         processor_tx.send(below_threshold).await.unwrap();
 
         // Try to receive with timeout - should timeout since we're below threshold
@@ -565,10 +547,7 @@ mod tests {
 
         // Should eventually get batch when timer triggers
         let timer_batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(4)).await;
-        assert_eq!(
-            timer_batch.batch_len,
-            <TestHandler as Handler>::MIN_EAGER_ROWS - 1
-        );
+        assert_eq!(timer_batch.batch_len, TestHandler::MIN_EAGER_ROWS - 1);
 
         cancel.cancel();
     }

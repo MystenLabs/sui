@@ -152,14 +152,16 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
 mod tests {
     use std::sync::Arc;
 
-    use sui_indexer_alt_framework::{pipeline::Processor, types::object::Object};
+    use sui_indexer_alt_framework::{
+        pipeline::{BatchStatus, Processor},
+        types::{full_checkpoint_content::Checkpoint, object::Object},
+    };
 
     use crate::{
         db::{Db, tests::wm},
         restore::Restore,
         store::Connection,
     };
-    use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 
     use super::*;
 
@@ -188,7 +190,9 @@ mod tests {
         type Store = Store<TestSchema>;
         type Batch = ();
 
-        fn batch(_: &mut (), _: Vec<()>) {}
+        fn batch(_: &mut (), _: Vec<()>) -> BatchStatus {
+            BatchStatus::Pending
+        }
 
         async fn commit<'a>(_: &(), _: &mut Connection<'a, TestSchema>) -> anyhow::Result<usize> {
             Ok(0)

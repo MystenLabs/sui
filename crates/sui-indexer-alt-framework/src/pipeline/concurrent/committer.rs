@@ -16,7 +16,9 @@ use crate::{
     task::TrySpawnStreamExt,
 };
 
-use super::{BatchedRows, FullHandler};
+#[cfg(test)]
+use super::BatchStatus;
+use super::{BatchedRows, Handler};
 
 /// If the committer needs to retry a commit, it will wait this long initially.
 const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
@@ -34,8 +36,7 @@ const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 ///
 /// This task will shutdown via its `cancel`lation token, or if its receiver or sender channels are
 /// closed.
-pub(super) fn committer<H: FullHandler + 'static>(
-    handler: Arc<H>,
+pub(super) fn committer<H: Handler + 'static>(
     config: CommitterConfig,
     skip_watermark: bool,
     rx: mpsc::Receiver<BatchedRows<H>>,
@@ -60,7 +61,6 @@ pub(super) fn committer<H: FullHandler + 'static>(
                      batch_len,
                      watermark,
                  }| {
-                    let handler = handler.clone();
                     let batch = Arc::new(batch);
                     let tx = tx.clone();
                     let db = db.clone();
@@ -85,7 +85,6 @@ pub(super) fn committer<H: FullHandler + 'static>(
 
                     use backoff::Error as BE;
                     let commit = move || {
-                        let handler = handler.clone();
                         let batch = batch.clone();
                         let db = db.clone();
                         let metrics = metrics.clone();
@@ -119,7 +118,7 @@ pub(super) fn committer<H: FullHandler + 'static>(
                                 BE::transient(Break::Err(e))
                             })?;
 
-                            let affected = handler.commit(&batch, &mut conn).await;
+                            let affected = H::commit(&batch, &mut conn).await;
                             let elapsed = guard.stop_and_record();
 
                             match affected {
@@ -133,7 +132,7 @@ pub(super) fn committer<H: FullHandler + 'static>(
                                     );
 
                                     checkpoint_lag_reporter.report_lag(
-                                        // unwrap is safe because we would have returned if batch is empty.
+                                        // unwrap is safe because we would have returned if values is empty.
                                         highest_checkpoint.unwrap(),
                                         highest_checkpoint_timestamp.unwrap(),
                                     );
@@ -223,7 +222,6 @@ pub(super) fn committer<H: FullHandler + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use super::super::Handler;
     use std::sync::{
         Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
@@ -239,7 +237,10 @@ mod tests {
         FieldCount,
         metrics::IndexerMetrics,
         mocks::store::*,
-        pipeline::{Processor, WatermarkPart, concurrent::BatchedRows},
+        pipeline::{
+            Processor, WatermarkPart,
+            concurrent::{BatchedRows, Handler},
+        },
         store::CommitterWatermark,
     };
 
@@ -258,24 +259,6 @@ mod tests {
 
     pub struct DataPipeline;
 
-    fn make_test_batch(
-        values: Vec<StoredData>,
-        watermark: Vec<WatermarkPart>,
-    ) -> BatchedRows<DataPipeline> {
-        use crate::{pipeline::concurrent::FullHandler, store::BatchAccumulator};
-        let handler = DataPipeline;
-        let mut accumulator = handler.accumulator();
-        let mut values = values;
-        accumulator.take_from(&mut values);
-        let batch_len = accumulator.len();
-        let batch = accumulator.take_batch();
-        BatchedRows {
-            batch,
-            batch_len,
-            watermark,
-        }
-    }
-
     #[async_trait]
     impl Processor for DataPipeline {
         const NAME: &'static str = "data";
@@ -290,12 +273,18 @@ mod tests {
     #[async_trait]
     impl Handler for DataPipeline {
         type Store = MockStore;
+        type Batch = Vec<Self::Value>;
+
+        fn batch(batch: &mut Self::Batch, values: &mut Vec<Self::Value>) -> BatchStatus {
+            batch.append(values);
+            BatchStatus::Pending
+        }
 
         async fn commit<'a>(
-            values: &[Self::Value],
+            batch: &Self::Batch,
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
-            for value in values {
+            for value in batch {
                 // If there's a delay, sleep for that duration
                 if value.commit_delay_ms > 0 {
                     tokio::time::sleep(Duration::from_millis(value.commit_delay_ms)).await;
@@ -321,7 +310,7 @@ mod tests {
                     )
                     .await?;
             }
-            Ok(values.len())
+            Ok(batch.len())
         }
     }
 
@@ -348,10 +337,8 @@ mod tests {
         let (watermark_tx, watermark_rx) = mpsc::channel(10);
 
         let store_clone = store.clone();
-        let handler = Arc::new(DataPipeline);
         let committer_handle = tokio::spawn(async move {
             let _ = committer(
-                handler,
                 config,
                 skip_watermark,
                 batch_rx,
@@ -376,8 +363,8 @@ mod tests {
         let mut setup = setup_test(MockStore::default(), false).await;
 
         // Send batches
-        let batch1 = make_test_batch(
-            vec![
+        let batch1 = BatchedRows {
+            batch: vec![
                 StoredData {
                     cp_sequence_number: 1,
                     tx_sequence_numbers: vec![1, 2, 3],
@@ -389,7 +376,8 @@ mod tests {
                     ..Default::default()
                 },
             ],
-            vec![
+            batch_len: 2,
+            watermark: vec![
                 WatermarkPart {
                     watermark: CommitterWatermark {
                         epoch_hi_inclusive: 0,
@@ -411,15 +399,16 @@ mod tests {
                     total_rows: 1, // Total rows from checkpoint 2
                 },
             ],
-        );
+        };
 
-        let batch2 = make_test_batch(
-            vec![StoredData {
+        let batch2 = BatchedRows {
+            batch: vec![StoredData {
                 cp_sequence_number: 3,
                 tx_sequence_numbers: vec![7, 8, 9],
                 ..Default::default()
             }],
-            vec![WatermarkPart {
+            batch_len: 2,
+            watermark: vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
                     checkpoint_hi_inclusive: 3,
@@ -429,7 +418,7 @@ mod tests {
                 batch_rows: 1,
                 total_rows: 1, // Total rows from checkpoint 3
             }],
-        );
+        };
 
         setup.batch_tx.send(batch1).await.unwrap();
         setup.batch_tx.send(batch2).await.unwrap();
@@ -459,14 +448,15 @@ mod tests {
         let mut setup = setup_test(MockStore::default(), false).await;
 
         // Create a batch with a single item that will fail once before succeeding
-        let batch = make_test_batch(
-            vec![StoredData {
+        let batch = BatchedRows {
+            batch: vec![StoredData {
                 cp_sequence_number: 1,
                 tx_sequence_numbers: vec![1, 2, 3],
                 commit_failure_remaining: Arc::new(AtomicUsize::new(1)),
                 commit_delay_ms: 1_000, // Long commit delay for testing state between retry
             }],
-            vec![WatermarkPart {
+            batch_len: 2,
+            watermark: vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
                     checkpoint_hi_inclusive: 1,
@@ -476,7 +466,7 @@ mod tests {
                 batch_rows: 1,
                 total_rows: 1,
             }],
-        );
+        };
 
         // Send the batch
         setup.batch_tx.send(batch).await.unwrap();
@@ -527,13 +517,14 @@ mod tests {
         };
         let mut setup = setup_test(store, false).await;
 
-        let batch = make_test_batch(
-            vec![StoredData {
+        let batch = BatchedRows {
+            batch: vec![StoredData {
                 cp_sequence_number: 1,
                 tx_sequence_numbers: vec![1, 2, 3],
                 ..Default::default()
             }],
-            vec![WatermarkPart {
+            batch_len: 1,
+            watermark: vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
                     checkpoint_hi_inclusive: 1,
@@ -543,7 +534,7 @@ mod tests {
                 batch_rows: 1,
                 total_rows: 1,
             }],
-        );
+        };
 
         // Send the batch
         setup.batch_tx.send(batch).await.unwrap();
@@ -584,9 +575,10 @@ mod tests {
     async fn test_empty_batch_handling() {
         let mut setup = setup_test(MockStore::default(), false).await;
 
-        let empty_batch = make_test_batch(
-            vec![], // Empty values
-            vec![WatermarkPart {
+        let empty_batch = BatchedRows {
+            batch: vec![], // Empty batch
+            batch_len: 0,
+            watermark: vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
                     checkpoint_hi_inclusive: 1,
@@ -596,7 +588,7 @@ mod tests {
                 batch_rows: 0,
                 total_rows: 0,
             }],
-        );
+        };
 
         // Send the empty batch
         setup.batch_tx.send(empty_batch).await.unwrap();
@@ -625,13 +617,14 @@ mod tests {
     async fn test_skip_watermark_mode() {
         let mut setup = setup_test(MockStore::default(), true).await;
 
-        let batch = make_test_batch(
-            vec![StoredData {
+        let batch = BatchedRows {
+            batch: vec![StoredData {
                 cp_sequence_number: 1,
                 tx_sequence_numbers: vec![1, 2, 3],
                 ..Default::default()
             }],
-            vec![WatermarkPart {
+            batch_len: 1,
+            watermark: vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
                     checkpoint_hi_inclusive: 1,
@@ -641,7 +634,7 @@ mod tests {
                 batch_rows: 1,
                 total_rows: 1,
             }],
-        );
+        };
 
         // Send the batch
         setup.batch_tx.send(batch).await.unwrap();
@@ -670,13 +663,14 @@ mod tests {
     async fn test_watermark_channel_closed() {
         let setup = setup_test(MockStore::default(), false).await;
 
-        let batch = make_test_batch(
-            vec![StoredData {
+        let batch = BatchedRows {
+            batch: vec![StoredData {
                 cp_sequence_number: 1,
                 tx_sequence_numbers: vec![1, 2, 3],
                 ..Default::default()
             }],
-            vec![WatermarkPart {
+            batch_len: 1,
+            watermark: vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
                     checkpoint_hi_inclusive: 1,
@@ -686,7 +680,7 @@ mod tests {
                 batch_rows: 1,
                 total_rows: 1,
             }],
-        );
+        };
 
         // Send the batch
         setup.batch_tx.send(batch).await.unwrap();
