@@ -89,12 +89,12 @@ A `MarginManager` can only borrow from one margin pool at a time (either base or
 
 Risk is measured using a **risk ratio** calculated as:
 
-$$\text{Risk Ratio} = \frac{\text{Total Assets (in debt currency)}}{\text{Total Debt}}$$
+$$\text{Risk Ratio} = \frac{\text{Total Assets}}{\text{Total Debt}}$$
 
 Different risk ratio thresholds determine allowable actions:
 
-- **Borrow threshold** (e.g., 1.5): Minimum ratio to take out new loans
-- **Withdraw threshold** (e.g., 1.3): Minimum ratio to withdraw collateral
+- **Withdraw threshold** (e.g., 2.0): Minimum ratio to withdraw collateral
+- **Borrow threshold** (e.g., 1.25): Minimum ratio to take out new loans
 - **Target liquidation ratio** (e.g., 1.25): Target ratio after partial liquidation
 - **Liquidation threshold** (e.g., 1.15): Below this, the position can be liquidated
 
