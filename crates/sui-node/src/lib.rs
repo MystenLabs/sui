@@ -153,6 +153,7 @@ use typed_store::rocks::default_db_options;
 use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 
 pub mod admin;
+pub mod checkpoint_publisher;
 mod handle;
 pub mod metrics;
 
@@ -959,6 +960,62 @@ impl SuiNode {
 
     pub fn subscribe_to_shutdown_channel(&self) -> broadcast::Receiver<Option<RunWithRange>> {
         self.shutdown_channel_tx.subscribe()
+    }
+
+    /// Subscribe to the stream of checkpoints that have been fully synchronized and downloaded.
+    /// This provides real-time access to checkpoint data as it becomes available.
+    ///
+    /// # Returns
+    /// A broadcast receiver that will receive `VerifiedCheckpoint` messages.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use sui_node::SuiNode;
+    /// # async fn example(node: &SuiNode) {
+    /// let mut checkpoint_rx = node.subscribe_to_synced_checkpoints();
+    /// while let Ok(checkpoint) = checkpoint_rx.recv().await {
+    ///     println!("New checkpoint: {}", checkpoint.sequence_number());
+    /// }
+    /// # }
+    /// ```
+    pub fn subscribe_to_synced_checkpoints(
+        &self,
+    ) -> broadcast::Receiver<sui_types::messages_checkpoint::VerifiedCheckpoint> {
+        self.state_sync_handle.subscribe_to_synced_checkpoints()
+    }
+
+    /// Get a handle to the StateSync subsystem.
+    /// This can be used to send checkpoints or subscribe to checkpoint events.
+    ///
+    /// # Returns
+    /// A cloneable handle to the StateSync subsystem.
+    pub fn state_sync_handle(&self) -> state_sync::Handle {
+        self.state_sync_handle.clone()
+    }
+
+    /// Get the checkpoint store for accessing checkpoint data.
+    ///
+    /// # Returns
+    /// An Arc reference to the CheckpointStore.
+    pub fn checkpoint_store(&self) -> Arc<CheckpointStore> {
+        self.checkpoint_store.clone()
+    }
+
+    /// Subscribe to transaction effects from the transaction orchestrator (if running as validator).
+    /// This provides real-time access to transaction execution results.
+    ///
+    /// # Returns
+    /// An optional broadcast receiver for transaction effects (None if not a validator).
+    pub fn subscribe_to_transaction_effects(
+        &self,
+    ) -> Option<
+        broadcast::Receiver<
+            sui_core::quorum_driver::QuorumDriverEffectsQueueResult,
+        >,
+    > {
+        self.transaction_orchestrator
+            .as_ref()
+            .map(|orchestrator| orchestrator.quorum_driver_handler().subscribe_to_effects())
     }
 
     pub fn current_epoch_for_testing(&self) -> EpochId {
