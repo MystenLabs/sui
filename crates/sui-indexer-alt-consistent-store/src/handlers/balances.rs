@@ -99,7 +99,7 @@ impl sequential::Handler for Balances {
 
     /// Values are not batched between checkpoints, but we can simplify the output for a single
     /// checkpoint by combining deltas for the same owner and type.
-    fn batch(batch: &mut Self::Batch, values: Vec<Delta>) -> BatchStatus {
+    fn batch(batch: &mut Self::Batch, values: impl IntoIterator<Item = Delta>) -> BatchStatus {
         for value in values {
             batch
                 .entry(Key {

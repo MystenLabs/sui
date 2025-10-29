@@ -146,8 +146,11 @@ mod tests {
         type Store = MockStore;
         type Batch = Vec<Self::Value>;
 
-        fn batch(batch: &mut Self::Batch, values: &mut Vec<Self::Value>) -> BatchStatus {
-            batch.append(values);
+        fn batch(
+            batch: &mut Self::Batch,
+            values: &mut impl ExactSizeIterator<Item = Self::Value>,
+        ) -> BatchStatus {
+            batch.extend(values);
             BatchStatus::Pending
         }
 

@@ -65,7 +65,10 @@ impl Handler for SumDisplays {
     type Store = Db;
     type Batch = BTreeMap<Vec<u8>, Self::Value>;
 
-    fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) -> BatchStatus {
+    fn batch(
+        batch: &mut Self::Batch,
+        values: impl IntoIterator<Item = Self::Value>,
+    ) -> BatchStatus {
         for value in values {
             batch.insert(value.object_type.clone(), value);
         }

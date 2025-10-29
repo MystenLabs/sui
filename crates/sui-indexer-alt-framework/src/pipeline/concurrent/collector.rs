@@ -23,8 +23,8 @@ use super::{BatchedRows, Handler};
 /// Processed values that are waiting to be written to the database. This is an internal type used
 /// by the concurrent collector to hold data it is waiting to send to the committer.
 struct PendingCheckpoint<H: Handler> {
-    /// Values to be inserted into the database from this checkpoint
-    values: Vec<H::Value>,
+    /// Iterator over values to be inserted into the database from this checkpoint
+    values: std::vec::IntoIter<H::Value>,
     /// The watermark associated with this checkpoint and the part of it that is left to commit
     watermark: WatermarkPart,
 }
@@ -32,7 +32,7 @@ struct PendingCheckpoint<H: Handler> {
 impl<H: Handler> PendingCheckpoint<H> {
     /// Whether there are values left to commit from this indexed checkpoint.
     fn is_empty(&self) -> bool {
-        let empty = self.values.is_empty();
+        let empty = self.values.len() == 0;
         debug_assert!(!empty || self.watermark.batch_rows == 0);
         empty
     }
@@ -40,13 +40,14 @@ impl<H: Handler> PendingCheckpoint<H> {
 
 impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
     fn from(indexed: IndexedCheckpoint<H>) -> Self {
+        let total_rows = indexed.values.len();
         Self {
             watermark: WatermarkPart {
                 watermark: indexed.watermark,
-                batch_rows: indexed.values.len(),
-                total_rows: indexed.values.len(),
+                batch_rows: total_rows,
+                total_rows,
             },
-            values: indexed.values,
+            values: indexed.values.into_iter(),
         }
     }
 }
@@ -245,12 +246,14 @@ mod tests {
         const MIN_EAGER_ROWS: usize = 10;
         const MAX_PENDING_ROWS: usize = 10000;
 
-        fn batch(batch: &mut Self::Batch, values: &mut Vec<Self::Value>) -> BatchStatus {
+        fn batch(
+            batch: &mut Self::Batch,
+            values: &mut impl ExactSizeIterator<Item = Self::Value>,
+        ) -> BatchStatus {
             // Simulate batch size limit
             let remaining_capacity = TEST_MAX_CHUNK_ROWS.saturating_sub(batch.len());
             let to_take = remaining_capacity.min(values.len());
-            let taken = values.drain(..to_take).collect::<Vec<_>>();
-            batch.extend(taken);
+            batch.extend(values.take(to_take));
 
             if batch.len() >= TEST_MAX_CHUNK_ROWS {
                 BatchStatus::Ready

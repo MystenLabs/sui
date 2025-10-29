@@ -79,7 +79,7 @@ where
 
     fn batch(
         batch: &mut Self::Batch,
-        values: &mut Vec<Self::Value>,
+        values: &mut impl ExactSizeIterator<Item = Self::Value>,
     ) -> crate::pipeline::BatchStatus {
         let max_chunk_rows = max_chunk_rows::<H::Value>();
         let current_len = batch.len();
@@ -87,13 +87,11 @@ where
         if current_len + values.len() > max_chunk_rows {
             // Batch would exceed the limit, take only what fits
             let remaining_capacity = max_chunk_rows - current_len;
-            let mut for_batch = values.split_off(remaining_capacity);
-            std::mem::swap(values, &mut for_batch);
-            batch.extend(for_batch);
+            batch.extend(values.take(remaining_capacity));
             crate::pipeline::BatchStatus::Ready
         } else {
             // All values fit, take them all
-            batch.extend(std::mem::take(values));
+            batch.extend(values);
             crate::pipeline::BatchStatus::Pending
         }
     }

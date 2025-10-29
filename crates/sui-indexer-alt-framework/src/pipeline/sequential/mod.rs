@@ -55,14 +55,18 @@ pub trait Handler: Processor {
     type Batch: Default + Send + Sync + 'static;
 
     /// Add `values` from processing a checkpoint to the current `batch`. Checkpoints are
-    /// guaranteed to be presented to the batch in checkpoint order.
+    /// guaranteed to be presented to the batch in checkpoint order. The handler takes ownership
+    /// of the iterator and consumes all values.
     ///
     /// Returns `BatchStatus::Ready` if the batch is full and should be committed,
     /// or `BatchStatus::Pending` if the batch can accept more values.
     ///
     /// Note: The handler can signal batch readiness via `BatchStatus::Ready`, but the framework
     /// may also decide to commit a batch based on the trait parameters above.
-    fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) -> super::BatchStatus;
+    fn batch(
+        batch: &mut Self::Batch,
+        values: impl IntoIterator<Item = Self::Value>,
+    ) -> super::BatchStatus;
 
     /// Take a batch of values and commit them to the database, returning the number of rows
     /// affected.

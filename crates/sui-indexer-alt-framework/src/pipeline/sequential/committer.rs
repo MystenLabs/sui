@@ -432,7 +432,10 @@ mod tests {
         const MAX_BATCH_CHECKPOINTS: usize = 3; // Using small max value for testing.
         const MIN_EAGER_ROWS: usize = 4; // Using small eager value for testing.
 
-        fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) -> BatchStatus {
+        fn batch(
+            batch: &mut Self::Batch,
+            values: impl IntoIterator<Item = Self::Value>,
+        ) -> BatchStatus {
             batch.extend(values);
             BatchStatus::Pending
         }

@@ -61,15 +61,18 @@ pub trait Handler: Processor {
     /// checkpoints -- the size of these pipeline's batches will be dominated by watermark updates.
     const MAX_WATERMARK_UPDATES: usize = 10_000;
 
-    /// Add values from the vec to the batch. The implementation may take all, some, or none of
-    /// the values from the vec.
+    /// Add values from the iterator to the batch. The implementation may take all, some, or none
+    /// of the values from the iterator by calling `.next()`.
     ///
     /// Returns `BatchStatus::Ready` if the batch is full and should be committed,
     /// or `BatchStatus::Pending` if the batch can accept more values.
     ///
     /// Note: The handler can signal batch readiness via `BatchStatus::Ready`, but the framework
     /// may also decide to commit a batch based on the trait parameters above.
-    fn batch(batch: &mut Self::Batch, values: &mut Vec<Self::Value>) -> BatchStatus;
+    fn batch(
+        batch: &mut Self::Batch,
+        values: &mut impl ExactSizeIterator<Item = Self::Value>,
+    ) -> BatchStatus;
 
     /// Commit the batch to the database, returning the number of rows affected.
     async fn commit<'a>(
@@ -331,9 +334,12 @@ mod tests {
         const MAX_PENDING_ROWS: usize = 4; // Small value to trigger back pressure quickly
         const MAX_WATERMARK_UPDATES: usize = 1; // Each batch will have 1 checkpoint for an ease of testing.
 
-        fn batch(batch: &mut Self::Batch, values: &mut Vec<Self::Value>) -> BatchStatus {
+        fn batch(
+            batch: &mut Self::Batch,
+            values: &mut impl ExactSizeIterator<Item = Self::Value>,
+        ) -> BatchStatus {
             // Take all values
-            batch.append(values);
+            batch.extend(values);
             BatchStatus::Pending
         }
 

@@ -190,7 +190,7 @@ mod tests {
         type Store = Store<TestSchema>;
         type Batch = ();
 
-        fn batch(_: &mut (), _: Vec<()>) -> BatchStatus {
+        fn batch(_: &mut (), _: impl IntoIterator<Item = ()>) -> BatchStatus {
             BatchStatus::Pending
         }
 
