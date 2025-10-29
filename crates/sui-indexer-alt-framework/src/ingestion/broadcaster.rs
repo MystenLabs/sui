@@ -9,7 +9,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use super::{IngestionConfig, client::IngestionClient};
 use crate::{
@@ -103,7 +103,7 @@ where
                         let new_ingest_hi = min_hi + buffer_size as u64;
                         // Update the watch channel, which will notify all waiting tasks
                         let _ = ingest_hi_watch_tx.send(Some(new_ingest_hi));
-                        info!(ingest_hi = new_ingest_hi, "Updated ingest_hi");
+                        debug!(ingest_hi = new_ingest_hi);
                     }
                 }
                 // docs::/#regulator
@@ -190,7 +190,7 @@ async fn broadcast_range(
                 tokio::select! {
                     result = send_checkpoint(checkpoint, &subscribers) => {
                         if result.is_ok() {
-                            info!(checkpoint = cp, "Broadcasted checkpoint");
+                            debug!(checkpoint = cp, "Broadcasted checkpoint");
                             Ok(())
                         } else {
                             // An error is returned meaning some subscriber channel has closed, which we consider
