@@ -69,9 +69,9 @@ To mutate the data, the owner of the objects needs to call the contract function
 
 ## Programmable transaction blocks
 
-In Solidity, if want to do something that chains together the results of multiple contract calls or across different contracts, you need to have a function in the smart contract that composes other function calls. Chaining function calls with atomicity guarantees is not available on the client side.
+In Solidity, if you want to do something that chains together the results of multiple contract calls or across different contracts, you need to have a function in the smart contract that composes other function calls. Chaining function calls with atomicity guarantees is not available on the client side.
 
-In Move, PTBs solve this problem. It gives builders the ability to chain contract calls together with atomicity guarantees during runtime. A Sui PTB can have up to 1024 different contract calls in it, or other actions. PTBs effectively provide a limited scripting language that is straightforward yet expressive, powerful, and secure.
+In Move, PTBs solve this problem. PTBs give builders the ability to chain contract calls together with atomicity guarantees during runtime. A Sui PTB can have up to 1,024 different contract calls in it, or other actions. PTBs effectively provide a limited scripting language that is straightforward yet expressive, powerful, and secure.
 
 Builders on Sui leverage PTBs to provide experiences that would otherwise be intractable. A good example is a DeFi aggregator that routes token swaps across multiple DeFi protocols with the best price. On Sui, the aggregator would use a single PTB with the guarantee that the transaction would execute at the displayed price or it would revert completely. The PTB is one of the most powerful Sui features. Experience shows builders who are most successful on Sui are the ones who learn to leverage this feature early and often, leaning into it rather than treating it just as a way to batch transactions.
 
