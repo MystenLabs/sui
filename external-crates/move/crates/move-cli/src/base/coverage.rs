@@ -43,6 +43,8 @@ pub enum CoverageSummaryOptions {
         #[clap(long = "module")]
         module_name: String,
     },
+    /// Generate LCOV coverage information for the package. Requires traces to be present.
+    /// Run tests with `--trace` to generate traces.
     #[clap(name = "lcov")]
     Lcov {
         /// Compute differential coverage for the provided test name. Lines that are hit by this
@@ -167,7 +169,7 @@ impl Coverage {
             .next()
             .ok_or_else(|| {
                 anyhow::anyhow!(
-                    "No trace found for test {}. Please run with `--coverage` to generate traces.",
+                    "No trace found for test {}. Please run with `--trace` to generate traces.",
                     test_name
                 )
             })

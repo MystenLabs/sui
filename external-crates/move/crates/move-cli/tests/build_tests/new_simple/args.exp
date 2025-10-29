@@ -39,6 +39,7 @@ External Command `cat P1/.gitignore`:
 build/*
 .trace
 .coverage*
+traces/*
 Command `new P2 -p other_dir`:
 External Command `cat other_dir/Move.toml`:
 [package]
@@ -80,3 +81,4 @@ External Command `cat other_dir/.gitignore`:
 build/*
 .trace
 .coverage*
+traces/*

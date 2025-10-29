@@ -6,9 +6,9 @@ BUILDING test
 Summary generation successful. Summaries stored in 'package_summaries'
 External Command `ls -1 package_summaries/`:
 A
+address_mapping.json
 CA
 DA
-address_mapping.json
 External Command `cat package_summaries/A/A.json`:
 {
   "id": {
