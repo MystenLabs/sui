@@ -37,6 +37,7 @@ const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// This task will shutdown via its `cancel`lation token, or if its receiver or sender channels are
 /// closed.
 pub(super) fn committer<H: Handler + 'static>(
+    handler: Arc<H>,
     config: CommitterConfig,
     skip_watermark: bool,
     rx: mpsc::Receiver<BatchedRows<H>>,
@@ -62,6 +63,7 @@ pub(super) fn committer<H: Handler + 'static>(
                      watermark,
                  }| {
                     let batch = Arc::new(batch);
+                    let handler = handler.clone();
                     let tx = tx.clone();
                     let db = db.clone();
                     let metrics = metrics.clone();
@@ -86,6 +88,7 @@ pub(super) fn committer<H: Handler + 'static>(
                     use backoff::Error as BE;
                     let commit = move || {
                         let batch = batch.clone();
+                        let handler = handler.clone();
                         let db = db.clone();
                         let metrics = metrics.clone();
                         let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
@@ -118,7 +121,7 @@ pub(super) fn committer<H: Handler + 'static>(
                                 BE::transient(Break::Err(e))
                             })?;
 
-                            let affected = H::commit(&batch, &mut conn).await;
+                            let affected = handler.commit(&batch, &mut conn).await;
                             let elapsed = guard.stop_and_record();
 
                             match affected {
@@ -276,6 +279,7 @@ mod tests {
         type Batch = Vec<Self::Value>;
 
         fn batch(
+            &self,
             batch: &mut Self::Batch,
             values: &mut impl ExactSizeIterator<Item = Self::Value>,
         ) -> BatchStatus {
@@ -284,6 +288,7 @@ mod tests {
         }
 
         async fn commit<'a>(
+            &self,
             batch: &Self::Batch,
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
@@ -340,8 +345,10 @@ mod tests {
         let (watermark_tx, watermark_rx) = mpsc::channel(10);
 
         let store_clone = store.clone();
+        let handler = Arc::new(DataPipeline);
         let committer_handle = tokio::spawn(async move {
             let _ = committer(
+                handler,
                 config,
                 skip_watermark,
                 batch_rx,

@@ -64,6 +64,7 @@ pub trait Handler: Processor {
     /// Note: The handler can signal batch readiness via `BatchStatus::Ready`, but the framework
     /// may also decide to commit a batch based on the trait parameters above.
     fn batch(
+        &self,
         batch: &mut Self::Batch,
         values: impl IntoIterator<Item = Self::Value>,
     ) -> super::BatchStatus;
@@ -71,6 +72,7 @@ pub trait Handler: Processor {
     /// Take a batch of values and commit them to the database, returning the number of rows
     /// affected.
     async fn commit<'a>(
+        &self,
         batch: &Self::Batch,
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize>;
@@ -123,8 +125,10 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 ) -> JoinHandle<()> {
     let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
 
+    let handler = Arc::new(handler);
+
     let processor = processor(
-        Arc::new(handler),
+        handler.clone(),
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
@@ -132,6 +136,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let committer = committer::<H>(
+        handler,
         config,
         next_checkpoint,
         committer_rx,

@@ -67,6 +67,7 @@ impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
 /// This task will shutdown if canceled via the `cancel` token, or if any of its channels are
 /// closed.
 pub(super) fn collector<H: Handler + 'static>(
+    handler: Arc<H>,
     config: CommitterConfig,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::Sender<BatchedRows<H>>,
@@ -120,7 +121,7 @@ pub(super) fn collector<H: Handler + 'static>(
 
                         let indexed = entry.get_mut();
                         let before = indexed.values.len();
-                        let status = H::batch(&mut batch, &mut indexed.values);
+                        let status = handler.batch(&mut batch, &mut indexed.values);
                         let taken = before - indexed.values.len();
 
                         batch_len += taken;
@@ -247,6 +248,7 @@ mod tests {
         const MAX_PENDING_ROWS: usize = 10000;
 
         fn batch(
+            &self,
             batch: &mut Self::Batch,
             values: &mut impl ExactSizeIterator<Item = Self::Value>,
         ) -> BatchStatus {
@@ -263,6 +265,7 @@ mod tests {
         }
 
         async fn commit<'a>(
+            &self,
             _batch: &Self::Batch,
             _conn: &mut Connection<'a>,
         ) -> anyhow::Result<usize> {
@@ -298,7 +301,9 @@ mod tests {
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
         let cancel = CancellationToken::new();
 
+        let handler = Arc::new(TestHandler);
         let _collector = collector::<TestHandler>(
+            handler,
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
@@ -338,7 +343,9 @@ mod tests {
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
         let cancel = CancellationToken::new();
 
+        let handler = Arc::new(TestHandler);
         let collector = collector::<TestHandler>(
+            handler,
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
@@ -377,7 +384,9 @@ mod tests {
         let metrics = test_metrics();
         let cancel = CancellationToken::new();
 
+        let handler = Arc::new(TestHandler);
         let _collector = collector::<TestHandler>(
+            handler,
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
@@ -431,7 +440,9 @@ mod tests {
             collect_interval_ms: 60_000,
             ..CommitterConfig::default()
         };
+        let handler = Arc::new(TestHandler);
         let _collector = collector::<TestHandler>(
+            handler,
             config,
             processor_rx,
             collector_tx,
@@ -485,7 +496,9 @@ mod tests {
             collect_interval_ms: 60_000,
             ..CommitterConfig::default()
         };
+        let handler = Arc::new(TestHandler);
         let _collector = collector::<TestHandler>(
+            handler,
             config,
             processor_rx,
             collector_tx,
@@ -528,7 +541,9 @@ mod tests {
             collect_interval_ms: 3000,
             ..CommitterConfig::default()
         };
+        let handler = Arc::new(TestHandler);
         let _collector = collector::<TestHandler>(
+            handler,
             config,
             processor_rx,
             collector_tx,

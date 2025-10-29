@@ -39,6 +39,7 @@ use super::{Handler, SequentialConfig};
 ///
 /// The task can be shutdown using its `cancel` token or if either of its channels are closed.
 pub(super) fn committer<H>(
+    handler: Arc<H>,
     config: SequentialConfig,
     mut next_checkpoint: u64,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
@@ -151,7 +152,7 @@ where
                                 let indexed = entry.remove();
                                 batch_rows += indexed.len();
                                 batch_checkpoints += 1;
-                                let status = H::batch(&mut batch, indexed.values);
+                                let status = handler.batch(&mut batch, indexed.values);
                                 watermark = Some(indexed.watermark);
                                 next_checkpoint += 1;
 
@@ -236,7 +237,7 @@ where
                     let affected = store.transaction(|conn| {
                         async {
                             conn.set_committer_watermark(H::NAME, watermark).await?;
-                            H::commit(&batch, conn).await
+                            handler.commit(&batch, conn).await
                         }.scope_boxed()
                     }).await;
 
@@ -433,6 +434,7 @@ mod tests {
         const MIN_EAGER_ROWS: usize = 4; // Using small eager value for testing.
 
         fn batch(
+            &self,
             batch: &mut Self::Batch,
             values: impl IntoIterator<Item = Self::Value>,
         ) -> BatchStatus {
@@ -441,6 +443,7 @@ mod tests {
         }
 
         async fn commit<'a>(
+            &self,
             batch: &Self::Batch,
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
@@ -470,7 +473,9 @@ mod tests {
         let (commit_hi_tx, commit_hi_rx) = mpsc::unbounded_channel();
 
         let store_clone = store.clone();
+        let handler = Arc::new(TestHandler);
         let committer_handle = committer(
+            handler,
             config,
             next_checkpoint,
             checkpoint_rx,

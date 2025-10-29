@@ -477,6 +477,7 @@ mod tests {
         type Batch = Vec<MockValue>;
 
         fn batch(
+            &self,
             batch: &mut Self::Batch,
             values: &mut impl ExactSizeIterator<Item = Self::Value>,
         ) -> crate::pipeline::BatchStatus {
@@ -485,6 +486,7 @@ mod tests {
         }
 
         async fn commit<'a>(
+            &self,
             _batch: &Self::Batch,
             _conn: &mut <Self::Store as Store>::Connection<'a>,
         ) -> anyhow::Result<usize> {
@@ -498,6 +500,7 @@ mod tests {
         type Batch = Vec<Self::Value>;
 
         fn batch(
+            &self,
             batch: &mut Self::Batch,
             values: impl IntoIterator<Item = Self::Value>,
         ) -> crate::pipeline::BatchStatus {
@@ -506,6 +509,7 @@ mod tests {
         }
 
         async fn commit<'a>(
+            &self,
             _batch: &Self::Batch,
             _conn: &mut <Self::Store as Store>::Connection<'a>,
         ) -> anyhow::Result<usize> {
@@ -534,6 +538,7 @@ mod tests {
         type Batch = Vec<MockValue>;
 
         fn batch(
+            &self,
             batch: &mut Self::Batch,
             values: impl IntoIterator<Item = Self::Value>,
         ) -> crate::pipeline::BatchStatus {
@@ -542,6 +547,7 @@ mod tests {
         }
 
         async fn commit<'a>(
+            &self,
             _batch: &Self::Batch,
             _conn: &mut <Self::Store as Store>::Connection<'a>,
         ) -> anyhow::Result<usize> {

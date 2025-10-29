@@ -70,12 +70,14 @@ pub trait Handler: Processor {
     /// Note: The handler can signal batch readiness via `BatchStatus::Ready`, but the framework
     /// may also decide to commit a batch based on the trait parameters above.
     fn batch(
+        &self,
         batch: &mut Self::Batch,
         values: &mut impl ExactSizeIterator<Item = Self::Value>,
     ) -> BatchStatus;
 
     /// Commit the batch to the database, returning the number of rows affected.
     async fn commit<'a>(
+        &self,
         batch: &Self::Batch,
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize>;
@@ -220,6 +222,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let collector = collector::<H>(
+        handler.clone(),
         committer_config.clone(),
         collector_rx,
         collector_tx,
@@ -228,6 +231,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let committer = committer::<H>(
+        handler.clone(),
         committer_config.clone(),
         skip_watermark,
         committer_rx,
@@ -335,6 +339,7 @@ mod tests {
         const MAX_WATERMARK_UPDATES: usize = 1; // Each batch will have 1 checkpoint for an ease of testing.
 
         fn batch(
+            &self,
             batch: &mut Self::Batch,
             values: &mut impl ExactSizeIterator<Item = Self::Value>,
         ) -> BatchStatus {
@@ -344,6 +349,7 @@ mod tests {
         }
 
         async fn commit<'a>(
+            &self,
             batch: &Self::Batch,
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {

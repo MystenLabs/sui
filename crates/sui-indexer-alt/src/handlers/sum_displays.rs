@@ -66,6 +66,7 @@ impl Handler for SumDisplays {
     type Batch = BTreeMap<Vec<u8>, Self::Value>;
 
     fn batch(
+        &self,
         batch: &mut Self::Batch,
         values: impl IntoIterator<Item = Self::Value>,
     ) -> BatchStatus {
@@ -75,7 +76,7 @@ impl Handler for SumDisplays {
         BatchStatus::Pending
     }
 
-    async fn commit<'a>(batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
+    async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
         let values: Vec<_> = batch.values().cloned().collect();
         let updates = values
             .chunks(MAX_INSERT_CHUNK_ROWS)

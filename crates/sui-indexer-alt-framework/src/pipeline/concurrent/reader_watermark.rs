@@ -147,6 +147,7 @@ mod tests {
         type Batch = Vec<Self::Value>;
 
         fn batch(
+            &self,
             batch: &mut Self::Batch,
             values: &mut impl ExactSizeIterator<Item = Self::Value>,
         ) -> BatchStatus {
@@ -155,6 +156,7 @@ mod tests {
         }
 
         async fn commit<'a>(
+            &self,
             _batch: &Self::Batch,
             _conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {

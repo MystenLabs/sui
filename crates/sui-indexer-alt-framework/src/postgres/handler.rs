@@ -78,6 +78,7 @@ where
     const MAX_WATERMARK_UPDATES: usize = H::MAX_WATERMARK_UPDATES;
 
     fn batch(
+        &self,
         batch: &mut Self::Batch,
         values: &mut impl ExactSizeIterator<Item = Self::Value>,
     ) -> crate::pipeline::BatchStatus {
@@ -97,6 +98,7 @@ where
     }
 
     async fn commit<'a>(
+        &self,
         batch: &Self::Batch,
         conn: &mut <Self::Store as crate::store::Store>::Connection<'a>,
     ) -> anyhow::Result<usize> {

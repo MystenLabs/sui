@@ -190,11 +190,15 @@ mod tests {
         type Store = Store<TestSchema>;
         type Batch = ();
 
-        fn batch(_: &mut (), _: impl IntoIterator<Item = ()>) -> BatchStatus {
+        fn batch(&self, _: &mut (), _: impl IntoIterator<Item = ()>) -> BatchStatus {
             BatchStatus::Pending
         }
 
-        async fn commit<'a>(_: &(), _: &mut Connection<'a, TestSchema>) -> anyhow::Result<usize> {
+        async fn commit<'a>(
+            &self,
+            _: &(),
+            _: &mut Connection<'a, TestSchema>,
+        ) -> anyhow::Result<usize> {
             Ok(0)
         }
     }
