@@ -85,7 +85,7 @@ See [Programmable Transaction Blocks](/concepts/transactions/prog-txn-blocks.mdx
 | Consensus mechanism | DPoS | PoS |
 | VM and its languages | MoveVM, Move Lang | EVM, Solidity, Vyper |
 | Chain data structure | DAG | Blocks |
-| Common standards (coin, token, nft, and so on) | Currency, Token | ERC-20, ERC-721, ERC-1155 |
+| Common standards (coin, token, NFT, and so on) | Currency Standard, Closed-Loop Token | ERC-20, ERC-721, ERC-1155 |
 | Coin names, name of the smallest unit | SUI, MIST | ETH, Wei |
 | Available frameworks for development | Sui CLI | Foundry, Hardhat |
 | L1/L2 | No L2, relies on fast L1 | Many L2s |
@@ -93,20 +93,20 @@ See [Programmable Transaction Blocks](/concepts/transactions/prog-txn-blocks.mdx
 | Bridges | Supported | Supported |
 | Network security (stake required for control) | 66% of total stake | 51% of total stake |
 | Smart contract auditing | Less auditing required, language does some of the lifting (object model). | Solidity provides less protection requiring greater auditing. |
-| Private transactions | Public by design. | Public by design, L2 and 3rd party supports private transactions. |
-| TVL | ~1 billion | ~46 Billion |
+| Private transactions | Public by design. | Public by design, L2 and third party supports private transactions. |
+| TVL | ~1 billion | ~46 billion |
 | Implementation languages for clients | Rust, TypeScript | Many |
-| Eventing | Indexed by sender, object ID, type, timestamp. | Indexed by topic. | 
-| Indexing | High level tx data + objects, coins, and so on. | High level tx data. |
-| Oracles | 3rd party | 3rd party |
+| Eventing | Indexed by sender, object ID, type, timestamp. | Indexed by topic. |
+| Indexing | High level transaction data + objects, coins, and so on. | High level transaction data. |
+| Oracles | Third party | Third party |
 | Network upgrade strategy | Protocol flags and framework upgrades are voted on by validators then enabled. | EIPs + Hardforking, no on-chain mechanism. |
 | IDE | VSCode | Many |
-| Transaction lifecycle | Two round trips from client to validators to generate a transaction certificate (guaranteeing execution) another round trip for shared objects to ensure ordering. Very low latency. | Transaction gossiped to network, verified added to mempool, validators select transactions from mempool. Random validator proposes a block, other validators vote yes/no on block. After a sufficient number of blocks have passed a transaction is considered final. High latency due to block height requirement for finality. |
-| Parallel execution vs Ethereum serial execution, fast path | Transactions which can be parallel are run in parallel. | Every transaction is sequentially run. |
+| Transaction lifecycle | Two round trips from client to validators to generate a transaction certificate (guaranteeing execution) another round trip for shared objects to ensure ordering. Very low latency. | Transaction gossiped to network, verified added to mempool, validators select transactions from mempool. Random validator proposes a block, other validators vote yes or no on block. After a sufficient number of blocks have passed a transaction is considered final. High latency due to block height requirement for finality. |
+| Parallel execution vs Ethereum serial execution, fast path | Transactions that can be parallel are run in parallel. | Every transaction is sequentially run. |
 | Storage fees, storage rebates, storage accounts to pay for fees over time | Low, rebates on destroying objects. | High, no rebates. |
-| Contract immutability | Native mutable/immutable support using upgrade capabilities. | Not native, requires auditing the Solidity code deployed. Can be discerned by some operation codes. |
+| Contract immutability | Native mutable and immutable support using upgrade capabilities. | Not native, requires auditing the Solidity code deployed. Can be discerned by some operation codes. |
 | Contract upgrading | Native, upgrade capability mediated. | Achieved using proxy pattern to delegate calls. Upgrades change where calls are directed to. |
-| Composability | Call any number of functions within a single transaction using PTBs. Compose by taking the output of one contract call and passing it into another. Ensures atomic execution. | Each call is its own transaction which must be processed individually and serialized by the chain. Requires careful publishing to ensure execution. Not atomic. |
+| Composability | Call any number of functions within a single transaction using PTBs. Compose by taking the output of one contract call and passing it into another. Ensures atomic execution. | Each call is its own transaction that must be processed individually and serialized by the chain. Requires careful publishing to ensure execution. Not atomic. |
 | Token royalties | Enforced by the chain. | Only enforceable by marketplaces. |
 
 ## Related links
