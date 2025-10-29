@@ -250,7 +250,7 @@ mod tests {
         fn batch(
             &self,
             batch: &mut Self::Batch,
-            values: &mut impl ExactSizeIterator<Item = Self::Value>,
+            values: &mut std::vec::IntoIter<Self::Value>,
         ) -> BatchStatus {
             // Simulate batch size limit
             let remaining_capacity = TEST_MAX_CHUNK_ROWS.saturating_sub(batch.len());

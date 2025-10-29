@@ -386,7 +386,7 @@ mod tests {
         fn batch(
             &self,
             batch: &mut Self::Batch,
-            values: &mut impl ExactSizeIterator<Item = Self::Value>,
+            values: &mut std::vec::IntoIter<Self::Value>,
         ) -> BatchStatus {
             batch.extend(values);
             BatchStatus::Pending

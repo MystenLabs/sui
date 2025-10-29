@@ -92,11 +92,7 @@ impl sequential::Handler for ObjectByType {
     const MAX_BATCH_CHECKPOINTS: usize = 1;
 
     /// No batching actually happens, because `MAX_BATCH_CHECKPOINTS` is 1.
-    fn batch(
-        &self,
-        batch: &mut Self::Batch,
-        values: impl IntoIterator<Item = Value>,
-    ) -> BatchStatus {
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Value>) -> BatchStatus {
         batch.extend(values);
         BatchStatus::Pending
     }

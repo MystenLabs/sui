@@ -190,7 +190,7 @@ mod tests {
         type Store = Store<TestSchema>;
         type Batch = ();
 
-        fn batch(&self, _: &mut (), _: impl IntoIterator<Item = ()>) -> BatchStatus {
+        fn batch(&self, _: &mut (), _: std::vec::IntoIter<()>) -> BatchStatus {
             BatchStatus::Pending
         }
 

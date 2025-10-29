@@ -152,7 +152,7 @@ where
                                 let indexed = entry.remove();
                                 batch_rows += indexed.len();
                                 batch_checkpoints += 1;
-                                let status = handler.batch(&mut batch, indexed.values);
+                                let status = handler.batch(&mut batch, indexed.values.into_iter());
                                 watermark = Some(indexed.watermark);
                                 next_checkpoint += 1;
 
@@ -436,7 +436,7 @@ mod tests {
         fn batch(
             &self,
             batch: &mut Self::Batch,
-            values: impl IntoIterator<Item = Self::Value>,
+            values: std::vec::IntoIter<Self::Value>,
         ) -> BatchStatus {
             batch.extend(values);
             BatchStatus::Pending

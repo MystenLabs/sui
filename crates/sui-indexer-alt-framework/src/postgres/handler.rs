@@ -80,7 +80,7 @@ where
     fn batch(
         &self,
         batch: &mut Self::Batch,
-        values: &mut impl ExactSizeIterator<Item = Self::Value>,
+        values: &mut std::vec::IntoIter<Self::Value>,
     ) -> crate::pipeline::BatchStatus {
         let max_chunk_rows = max_chunk_rows::<H::Value>();
         let current_len = batch.len();

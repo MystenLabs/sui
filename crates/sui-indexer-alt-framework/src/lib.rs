@@ -479,7 +479,7 @@ mod tests {
         fn batch(
             &self,
             batch: &mut Self::Batch,
-            values: &mut impl ExactSizeIterator<Item = Self::Value>,
+            values: &mut std::vec::IntoIter<Self::Value>,
         ) -> crate::pipeline::BatchStatus {
             batch.extend(values);
             crate::pipeline::BatchStatus::Pending
@@ -502,7 +502,7 @@ mod tests {
         fn batch(
             &self,
             batch: &mut Self::Batch,
-            values: impl IntoIterator<Item = Self::Value>,
+            values: std::vec::IntoIter<Self::Value>,
         ) -> crate::pipeline::BatchStatus {
             batch.extend(values);
             crate::pipeline::BatchStatus::Pending
@@ -540,7 +540,7 @@ mod tests {
         fn batch(
             &self,
             batch: &mut Self::Batch,
-            values: impl IntoIterator<Item = Self::Value>,
+            values: std::vec::IntoIter<Self::Value>,
         ) -> crate::pipeline::BatchStatus {
             batch.extend(values);
             crate::pipeline::BatchStatus::Pending

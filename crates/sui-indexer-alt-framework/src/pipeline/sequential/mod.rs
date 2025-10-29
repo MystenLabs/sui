@@ -66,7 +66,7 @@ pub trait Handler: Processor {
     fn batch(
         &self,
         batch: &mut Self::Batch,
-        values: impl IntoIterator<Item = Self::Value>,
+        values: std::vec::IntoIter<Self::Value>,
     ) -> super::BatchStatus;
 
     /// Take a batch of values and commit them to the database, returning the number of rows

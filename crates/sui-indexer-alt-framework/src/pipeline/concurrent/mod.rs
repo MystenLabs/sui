@@ -72,7 +72,8 @@ pub trait Handler: Processor {
     fn batch(
         &self,
         batch: &mut Self::Batch,
-        values: &mut impl ExactSizeIterator<Item = Self::Value>,
+        values: &mut std::vec::IntoIter<Self::Value>,
+        // todo do we need this on sequential
     ) -> BatchStatus;
 
     /// Commit the batch to the database, returning the number of rows affected.
@@ -341,7 +342,7 @@ mod tests {
         fn batch(
             &self,
             batch: &mut Self::Batch,
-            values: &mut impl ExactSizeIterator<Item = Self::Value>,
+            values: &mut std::vec::IntoIter<Self::Value>,
         ) -> BatchStatus {
             // Take all values
             batch.extend(values);

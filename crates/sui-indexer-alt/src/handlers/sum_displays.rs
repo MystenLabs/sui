@@ -68,7 +68,7 @@ impl Handler for SumDisplays {
     fn batch(
         &self,
         batch: &mut Self::Batch,
-        values: impl IntoIterator<Item = Self::Value>,
+        values: std::vec::IntoIter<Self::Value>,
     ) -> BatchStatus {
         for value in values {
             batch.insert(value.object_type.clone(), value);
