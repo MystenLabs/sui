@@ -9,15 +9,15 @@ If you have worked with Ethereum Virtual Machine (EVM) before, the biggest diffe
 
 | Topic | Solidity | Move |
 |------|------|---------|
-| Account vs object-centric models | Custom ownership logic written within contracts typically using _mappings_. Only ethereum coins are first class citizens with global APIs. All ownership APIs are contract specific. | Object ownership inherent to Sui, objects are first class citizens and encompass everything _owned_ on Sui. |
+| Account vs object-centric models | Custom ownership logic written within contracts typically using _mappings_. Only Ethereum coins are first class citizens with global APIs. All ownership APIs are contract specific. | Object ownership inherent to Sui, objects are first class citizens and encompass everything _owned_ on Sui. |
 | Data storage | Data is stored in the smart contract. | Data is stored in Move objects. |
-| Inheritance | Supports multiple inheritance, including polymorphism | No interfaces, no polymorphism. However, Move has generics, like `Type<T>`. |
+| Inheritance | Supports multiple inheritance, including polymorphism. | No interfaces, no polymorphism. However, Move has generics, like `Type<T>`. |
 | Dynamic dispatch | Allowed | Not allowed |
 | Asset/Token accessibility | Bound to smart contract. | Anyone can access shared objects. Owned objects can only be accessed by object owner. |
-| Access control | Identity/role-based access control via `Ownable` and `AccessControl` contract. | Mostly [capability based access control](https://move-book.com/programmability/capability.html) via owned objects. Identity/role-based access control is possible. |
+| Access control | Identity/role-based access control through `Ownable` and `AccessControl` contract. | Mostly [capability based access control](https://move-book.com/programmability/capability.html) through owned objects. Identity/role-based access control is possible. |
 | Contract upgrades | Proxy contract forwards user transactions. | New contracts must be [layout-compatible](/concepts/sui-move-concepts/packages/upgrade#upgrade-requirements) with the old one. Need to consider versioning shared objects. |
-| Development environment | Hardhat, Foundry | [Move VSCode extension](https://marketplace.visualstudio.com/items?itemName=mysten.move) |
-| Mutate contract state | Sending transactions via compile time ABI interface. | Sending transaction via runtime [programmable transaction block](/concepts/transactions/prog-txn-blocks.mdx) (PTB) construction. | 
+| Development environment | Hardhat, Foundry | [Move VSCode extension](https://marketplace.visualstudio.com/items?itemName=mysten.move). |
+| Mutate contract state | Sending transactions through compile time ABI interface. | Sending transaction through runtime [programmable transaction block](/concepts/transactions/prog-txn-blocks.mdx) (PTB) construction. |
 
 ## Object model
 
