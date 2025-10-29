@@ -1170,6 +1170,9 @@ async fn start(
             fullnode_rpc_url: Some(fullnode_rpc_url.clone()),
         };
 
+        let mut graphql_config = GraphQlConfig::default();
+        graphql_config.zklogin.env = sui_indexer_alt_graphql::config::ZkLoginEnv::Test;
+
         let handle = start_graphql(
             database_url.clone(),
             None,
@@ -1180,7 +1183,7 @@ async fn start(
             graphql_args,
             SystemPackageTaskArgs::default(),
             "0.0.0",
-            GraphQlConfig::default(),
+            graphql_config,
             pipelines,
             &prometheus_registry,
             cancel.child_token(),
