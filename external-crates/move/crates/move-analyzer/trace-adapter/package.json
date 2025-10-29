@@ -1,8 +1,7 @@
 {
-  "name": "move-trace-adapter",
-  "displayName": "move-trace-adapter",
-  "description": "A Debug Adapter Protocol implementation for visualizing Move VM traces",
-  "version": "0.0.1",
+  "name": "@mysten/move-debug-trace-adapter",
+  "description": "A Debug Adapter Protocol implementation for visualizing both Move function call and external event traces",
+  "version": "0.1.0",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
   "main": "./out/adapter.js",
