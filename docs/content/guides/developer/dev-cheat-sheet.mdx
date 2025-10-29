@@ -24,7 +24,7 @@ Quick reference on best practices for Sui Network developers.
 - Use the [Sui Object Display](https://move-book.com/programmability/display) to customize how your objects show up in wallets, apps, and explorers.
 - Avoid “self-transfers”—whenever possible, return the object from the current function, so it can be used in a different command in a [Programmable Transaction Block](./sui-101/working-with-ptbs.mdx).
 
-### Package Upgrades
+### Package upgrades
 
 - Read about [package upgrades](../../concepts/sui-move-concepts/packages/upgrade.mdx) before publishing your package.
 - Packages are immutable, so any published package can be called forever. Use [object versioning](../../concepts/sui-move-concepts/packages/upgrade.mdx#versioned-shared-objects) to prevent older versions from being called.
