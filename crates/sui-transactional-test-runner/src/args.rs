@@ -479,18 +479,13 @@ impl SuiExtraValueArgs {
         let contents = parser.advance(ValueToken::Ident)?;
         ensure!(contents == "withdraw");
 
-        // Format: withdraw(amount, type::path::Type)
-        parser.advance(ValueToken::LParen)?;
+        // Format: withdraw<Type>(amount)
+        parser.advance(ValueToken::LAngle)?;
 
-        // Parse amount
-        let amount_str = parser.advance(ValueToken::Number)?;
-        let (amount, _) = parse_u64(amount_str)?;
-
-        parser.advance(ValueToken::Comma)?;
-
-        // Parse type as a path of identifiers separated by ::
-        // Collect all tokens until we hit RParen to build the type string
+        // Parse type - collect all tokens until we hit the matching RAngle
+        // Need to track nesting level for types like Balance<Coin<SUI>>
         let mut type_parts = Vec::new();
+        let mut angle_bracket_depth = 1; // We already consumed the opening <
         loop {
             let (tok, s) = match parser.peek() {
                 Some(v) => v,
@@ -512,17 +507,20 @@ impl SuiExtraValueArgs {
                 ValueToken::LAngle => {
                     parser.advance(ValueToken::LAngle)?;
                     type_parts.push("<".to_string());
+                    angle_bracket_depth += 1;
                 }
                 ValueToken::RAngle => {
                     parser.advance(ValueToken::RAngle)?;
+                    angle_bracket_depth -= 1;
+                    if angle_bracket_depth == 0 {
+                        // This is the closing > for withdraw<Type>
+                        break;
+                    }
                     type_parts.push(">".to_string());
                 }
                 ValueToken::Comma => {
                     parser.advance(ValueToken::Comma)?;
                     type_parts.push(",".to_string());
-                }
-                ValueToken::RParen => {
-                    break;
                 }
                 _ => bail!("Unexpected token {:?} while parsing withdraw type", tok),
             }
@@ -535,6 +533,10 @@ impl SuiExtraValueArgs {
         let mut type_parser = move_core_types::parsing::parser::Parser::new(type_tokens);
         let parsed_type = type_parser.parse_type()?;
 
+        // Now parse (amount)
+        parser.advance(ValueToken::LParen)?;
+        let amount_str = parser.advance(ValueToken::Number)?;
+        let (amount, _) = parse_u64(amount_str)?;
         parser.advance(ValueToken::RParen)?;
 
         Ok(SuiExtraValueArgs::Withdraw(amount, parsed_type))

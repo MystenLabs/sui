@@ -20,7 +20,7 @@ task 2, lines 14-16:
 Checkpoint created: 1
 
 task 3, lines 17-19:
-//# programmable --sender B --inputs withdraw(500,sui::balance::Balance<sui::sui::SUI>) @A
+//# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(500) @A
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
 mutated: object(0,1)
@@ -32,7 +32,7 @@ task 4, lines 21-23:
 Checkpoint created: 2
 
 task 5, lines 24-26:
-//# programmable --sender B --inputs withdraw(500,sui::balance::Balance<sui::sui::SUI>) @B
+//# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(500) @B
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
 mutated: object(0,1)
