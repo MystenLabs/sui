@@ -23,8 +23,6 @@
   "dependencies": {
     "@amplitude/analytics-browser": "^2.5.3",
     "@docusaurus/plugin-content-docs": "^3.8.0",
-    "@docusaurus/remark-plugin-npm2yarn": "3.1.1",
-    "@docusaurus/theme-common": "3.1.1",
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.0",
     "@graphql-markdown/docusaurus": "^1.24.0",
@@ -51,7 +49,7 @@
     "mdast-util-from-markdown": "^2.0.2",
     "mdast-util-gfm": "^3.1.0",
     "postcss": "^8.4.37",
-    "prism-react-renderer": "^1.3.5",
+    "prism-react-renderer": "^2.4.1",
     "prismjs": "^1.29.0",
     "pure-react-carousel-thumbs": "^1.0.6",
     "pushfeedback": "^0.1.73",
@@ -74,14 +72,14 @@
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "^7.23.4",
     "@docusaurus/core": "3.8.1",
-    "@docusaurus/module-type-aliases": "^3.1.1",
+    "@docusaurus/module-type-aliases": "^3.8.1",
     "@docusaurus/preset-classic": "3.8.1",
     "@docusaurus/remark-plugin-npm2yarn": "3.8.1",
     "@docusaurus/theme-classic": "3.8.1",
     "@docusaurus/theme-common": "3.8.1",
     "@docusaurus/theme-mermaid": "3.8.1",
     "@docusaurus/theme-search-algolia": "3.8.1",
-    "@docusaurus/types": "3.1.1",
+    "@docusaurus/types": "3.8.1",
     "@mdx-js/react": "3.1.0",
     "@tsconfig/docusaurus": "^1.0.5",
     "@types/webpack-env": "^1.18.8",
@@ -110,11 +108,6 @@
   "engines": {
     "node": ">=18.12",
     "pnpm": ">=8.6.5"
-  },
-  "pnpm": {
-    "overrides": {
-      "@docusaurus/types": "3.1.1"
-    }
   },
   "overrides": {
     "@docusaurus/*": "3.8.1"
