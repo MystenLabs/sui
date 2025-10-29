@@ -332,7 +332,21 @@ Transaction Digest: 8R39iKKLGPDG3QkW2SrRW3QX71csRP2BLhK9H7oz9SwW
 
 When you publish a Move package to the network, the network uploads and stores the bytecode as a Move package with a unique package ID and version number. The network consumes SUI tokens as gas and processes the transaction on-chain.
 
-After successfully executing, the output includes the new package ID, version number, and the object ID of the newly created and mutated objects. It also provides details about the transaction used to publish the package, including the gas cost, transaction digest, dependencies, owner, and sender. 
+After successfully executing, the output provides details about the transaction used to publish the package, including the gas cost, transaction digest, dependencies, owner, and sender. 
+
+For this guide, the most important section is **Published Objects**, which includes the package's ID, version, and its modules:
+
+```
+│ Published Objects:                                                                               │
+│  ┌──                                                                                             │
+│  │ PackageID: 0xa7ed855d30500c485a94c0849f70b508d6b6adf6b0767ab93cc0756c075ecbb1                 │
+│  │ Version: 1                                                                                    │
+│  │ Digest: EtGAG9RHHCsguX4iuX1cbRDvW4QAkJXgDCMJjiufHtxB                                          │
+│  │ Modules: greeting                                                                             │
+│  └──     
+```
+
+Both the package ID and module are required to interact with the package from the command line. Take note of both values for future use in the [Connecting a Frontend](/guides/developer/getting-started/app-frontends.mdx) guide.
 
 ## Interact with the Move package
 
@@ -420,6 +434,12 @@ Transactions also have limitations regarding total size, number of objects, and 
     <h3>Next steps</h3>
   </div>
   <div className="next-steps-grid">
+      <Card className="plausible-event-name=hello+frontend+button"
+      title="Create a Full Stack dApp" 
+      href="/guides/developer/getting-started/app-frontends"
+    >
+      Connect a frontend interface to your "Hello, World!" smart contract.
+    </Card>
     <Card className="plausible-event-name=hello+data+button"
       title="Access Sui Data" 
       href="/guides/developer/sui-101/data-serving"
