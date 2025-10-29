@@ -190,9 +190,13 @@ mod tests {
         type Store = Store<TestSchema>;
         type Batch = ();
 
-        fn batch(_: &mut (), _: Vec<()>) {}
+        fn batch(&self, _: &mut (), _: std::vec::IntoIter<()>) {}
 
-        async fn commit<'a>(_: &(), _: &mut Connection<'a, TestSchema>) -> anyhow::Result<usize> {
+        async fn commit<'a>(
+            &self,
+            _: &(),
+            _: &mut Connection<'a, TestSchema>,
+        ) -> anyhow::Result<usize> {
             Ok(0)
         }
     }

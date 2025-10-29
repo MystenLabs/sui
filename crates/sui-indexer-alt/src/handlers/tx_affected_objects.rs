@@ -8,8 +8,8 @@ use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{Processor, concurrent::Handler},
-    postgres::{Connection, Db},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
     types::{effects::TransactionEffectsAPI, full_checkpoint_content::Checkpoint},
 };
 use sui_indexer_alt_schema::{schema::tx_affected_objects, transactions::StoredTxAffectedObject};
@@ -58,8 +58,6 @@ impl Processor for TxAffectedObjects {
 
 #[async_trait]
 impl Handler for TxAffectedObjects {
-    type Store = Db;
-
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 

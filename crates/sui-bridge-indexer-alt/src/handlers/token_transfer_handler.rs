@@ -15,9 +15,8 @@ use sui_bridge::events::{
 use sui_bridge_schema::models::{BridgeDataSource, TokenTransfer, TokenTransferStatus};
 use sui_bridge_schema::schema::token_transfer;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::Handler;
-use sui_indexer_alt_framework::postgres::Db;
-use sui_indexer_alt_framework::store::Store;
+use sui_indexer_alt_framework::postgres::Connection;
+use sui_indexer_alt_framework::postgres::handler::Handler;
 use sui_indexer_alt_framework::types::BRIDGE_ADDRESS;
 use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
@@ -154,10 +153,9 @@ impl Processor for TokenTransferHandler {
 
 #[async_trait]
 impl Handler for TokenTransferHandler {
-    type Store = Db;
     async fn commit<'a>(
         values: &[Self::Value],
-        conn: &mut <Self::Store as Store>::Connection<'a>,
+        conn: &mut Connection<'a>,
     ) -> anyhow::Result<usize> {
         Ok(diesel::insert_into(token_transfer::table)
             .values(values)

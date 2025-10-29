@@ -8,8 +8,8 @@ use diesel::prelude::QueryableByName;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     FieldCount,
-    pipeline::{Processor, concurrent::Handler},
-    postgres::{Connection, Db},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
     types::{base_types::ObjectID, full_checkpoint_content::Checkpoint, object::Object},
 };
 use sui_indexer_alt_schema::{
@@ -96,8 +96,6 @@ impl Processor for ObjInfo {
 
 #[async_trait]
 impl Handler for ObjInfo {
-    type Store = Db;
-
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         let stored = values
             .iter()

@@ -9,8 +9,8 @@ use async_trait::async_trait;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{Processor, concurrent::Handler},
-    postgres::{Connection, Db},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
     types::full_checkpoint_content::Checkpoint,
 };
 use sui_indexer_alt_schema::cp_sequence_numbers::StoredCpSequenceNumbers;
@@ -40,8 +40,6 @@ impl Processor for CpSequenceNumbers {
 
 #[async_trait]
 impl Handler for CpSequenceNumbers {
-    type Store = Db;
-
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(cp_sequence_numbers::table)
             .values(values)

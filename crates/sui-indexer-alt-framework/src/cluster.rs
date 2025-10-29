@@ -251,7 +251,7 @@ mod tests {
     use crate::FieldCount;
     use crate::ingestion::ClientArgs;
     use crate::pipeline::Processor;
-    use crate::pipeline::concurrent::{self, ConcurrentConfig};
+    use crate::pipeline::concurrent::ConcurrentConfig;
     use crate::postgres::{
         Connection, Db, DbArgs,
         temp::{TempDb, get_available_port},
@@ -292,9 +292,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl concurrent::Handler for TxCounts {
-        type Store = Db;
-
+    impl crate::postgres::handler::Handler for TxCounts {
         async fn commit<'a>(
             values: &[Self::Value],
             conn: &mut Connection<'a>,

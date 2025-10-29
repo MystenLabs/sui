@@ -8,8 +8,8 @@ use diesel::prelude::QueryableByName;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     FieldCount,
-    pipeline::{Processor, concurrent::Handler},
-    postgres::{Connection, Db},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
     types::{
         TypeTag,
         base_types::{ObjectID, SuiAddress},
@@ -149,8 +149,6 @@ impl Processor for CoinBalanceBuckets {
 
 #[async_trait]
 impl Handler for CoinBalanceBuckets {
-    type Store = Db;
-
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         let stored = values
             .iter()

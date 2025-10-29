@@ -8,8 +8,8 @@ use anyhow::{Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{Processor, concurrent::Handler},
-    postgres::{Connection, Db},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
     types::{
         coin::Coin, effects::TransactionEffectsAPI, full_checkpoint_content::Checkpoint,
         gas_coin::GAS,
@@ -62,8 +62,6 @@ impl Processor for TxBalanceChanges {
 
 #[async_trait]
 impl Handler for TxBalanceChanges {
-    type Store = Db;
-
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
