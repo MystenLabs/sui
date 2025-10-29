@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_framework::{
-    pipeline::{BatchStatus, Processor, sequential},
+    pipeline::{Processor, sequential},
     types::{
         TypeTag,
         base_types::SuiAddress,
@@ -99,7 +99,7 @@ impl sequential::Handler for Balances {
 
     /// Values are not batched between checkpoints, but we can simplify the output for a single
     /// checkpoint by combining deltas for the same owner and type.
-    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Delta>) -> BatchStatus {
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Delta>) {
         for value in values {
             batch
                 .entry(Key {
@@ -109,7 +109,6 @@ impl sequential::Handler for Balances {
                 .and_modify(|v| *v += value.delta)
                 .or_insert(value.delta);
         }
-        BatchStatus::Pending
     }
 
     async fn commit<'a>(

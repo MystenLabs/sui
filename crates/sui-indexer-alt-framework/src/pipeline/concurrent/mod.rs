@@ -11,9 +11,7 @@ use tracing::info;
 
 use crate::{metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::Checkpoint};
 
-use super::{
-    BatchStatus, CommitterConfig, PIPELINE_BUFFER, Processor, WatermarkPart, processor::processor,
-};
+use super::{CommitterConfig, PIPELINE_BUFFER, Processor, WatermarkPart, processor::processor};
 
 use self::{
     collector::collector, commit_watermark::commit_watermark, committer::committer, pruner::pruner,
@@ -25,6 +23,15 @@ mod commit_watermark;
 mod committer;
 mod pruner;
 mod reader_watermark;
+
+/// Status returned by `Handler::batch` to indicate whether the batch is ready to be committed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BatchStatus {
+    /// The batch can accept more values.
+    Pending,
+    /// The batch is full and should be committed.
+    Ready,
+}
 
 /// Handlers implement the logic for a given indexing pipeline: How to process checkpoint data (by
 /// implementing [Processor]) into rows for their table, and how to write those rows to the database.

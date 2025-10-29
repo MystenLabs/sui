@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sui_indexer_alt_framework::{
-    pipeline::{BatchStatus, Processor, sequential},
+    pipeline::{Processor, sequential},
     types::{base_types::VersionDigest, full_checkpoint_content::Checkpoint, object::Object},
 };
 
@@ -92,9 +92,8 @@ impl sequential::Handler for ObjectByType {
     const MAX_BATCH_CHECKPOINTS: usize = 1;
 
     /// No batching actually happens, because `MAX_BATCH_CHECKPOINTS` is 1.
-    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Value>) -> BatchStatus {
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Value>) {
         batch.extend(values);
-        BatchStatus::Pending
     }
 
     async fn commit<'a>(

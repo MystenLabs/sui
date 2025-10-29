@@ -81,7 +81,7 @@ where
         &self,
         batch: &mut Self::Batch,
         values: &mut std::vec::IntoIter<Self::Value>,
-    ) -> crate::pipeline::BatchStatus {
+    ) -> crate::pipeline::concurrent::BatchStatus {
         let max_chunk_rows = max_chunk_rows::<H::Value>();
         let current_len = batch.len();
 
@@ -89,11 +89,11 @@ where
             // Batch would exceed the limit, take only what fits
             let remaining_capacity = max_chunk_rows - current_len;
             batch.extend(values.take(remaining_capacity));
-            crate::pipeline::BatchStatus::Ready
+            crate::pipeline::concurrent::BatchStatus::Ready
         } else {
             // All values fit, take them all
             batch.extend(values);
-            crate::pipeline::BatchStatus::Pending
+            crate::pipeline::concurrent::BatchStatus::Pending
         }
     }
 

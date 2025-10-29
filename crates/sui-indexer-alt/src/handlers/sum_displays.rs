@@ -10,7 +10,7 @@ use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
 use sui_indexer_alt_framework::{
     FieldCount,
-    pipeline::{BatchStatus, Processor, sequential::Handler},
+    pipeline::{Processor, sequential::Handler},
     postgres::{Connection, Db},
     types::{display::DisplayVersionUpdatedEvent, full_checkpoint_content::Checkpoint},
 };
@@ -65,15 +65,10 @@ impl Handler for SumDisplays {
     type Store = Db;
     type Batch = BTreeMap<Vec<u8>, Self::Value>;
 
-    fn batch(
-        &self,
-        batch: &mut Self::Batch,
-        values: std::vec::IntoIter<Self::Value>,
-    ) -> BatchStatus {
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
         for value in values {
             batch.insert(value.object_type.clone(), value);
         }
-        BatchStatus::Pending
     }
 
     async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {

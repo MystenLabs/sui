@@ -480,9 +480,9 @@ mod tests {
             &self,
             batch: &mut Self::Batch,
             values: &mut std::vec::IntoIter<Self::Value>,
-        ) -> crate::pipeline::BatchStatus {
+        ) -> crate::pipeline::concurrent::BatchStatus {
             batch.extend(values);
-            crate::pipeline::BatchStatus::Pending
+            crate::pipeline::concurrent::BatchStatus::Pending
         }
 
         async fn commit<'a>(
@@ -499,13 +499,8 @@ mod tests {
         type Store = MockStore;
         type Batch = Vec<Self::Value>;
 
-        fn batch(
-            &self,
-            batch: &mut Self::Batch,
-            values: std::vec::IntoIter<Self::Value>,
-        ) -> crate::pipeline::BatchStatus {
+        fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
             batch.extend(values);
-            crate::pipeline::BatchStatus::Pending
         }
 
         async fn commit<'a>(
@@ -537,13 +532,8 @@ mod tests {
         type Store = MockStore;
         type Batch = Vec<MockValue>;
 
-        fn batch(
-            &self,
-            batch: &mut Self::Batch,
-            values: std::vec::IntoIter<Self::Value>,
-        ) -> crate::pipeline::BatchStatus {
+        fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
             batch.extend(values);
-            crate::pipeline::BatchStatus::Pending
         }
 
         async fn commit<'a>(

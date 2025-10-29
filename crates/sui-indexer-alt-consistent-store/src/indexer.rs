@@ -153,7 +153,7 @@ mod tests {
     use std::sync::Arc;
 
     use sui_indexer_alt_framework::{
-        pipeline::{BatchStatus, Processor},
+        pipeline::Processor,
         types::{full_checkpoint_content::Checkpoint, object::Object},
     };
 
@@ -190,9 +190,7 @@ mod tests {
         type Store = Store<TestSchema>;
         type Batch = ();
 
-        fn batch(&self, _: &mut (), _: std::vec::IntoIter<()>) -> BatchStatus {
-            BatchStatus::Pending
-        }
+        fn batch(&self, _: &mut (), _: std::vec::IntoIter<()>) {}
 
         async fn commit<'a>(
             &self,

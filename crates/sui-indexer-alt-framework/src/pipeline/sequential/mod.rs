@@ -63,11 +63,7 @@ pub trait Handler: Processor {
     ///
     /// Note: The handler can signal batch readiness via `BatchStatus::Ready`, but the framework
     /// may also decide to commit a batch based on the trait parameters above.
-    fn batch(
-        &self,
-        batch: &mut Self::Batch,
-        values: std::vec::IntoIter<Self::Value>,
-    ) -> super::BatchStatus;
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>);
 
     /// Take a batch of values and commit them to the database, returning the number of rows
     /// affected.
