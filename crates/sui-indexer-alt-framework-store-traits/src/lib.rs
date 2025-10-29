@@ -10,11 +10,13 @@ use std::time::Duration;
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
 pub trait Connection: Send {
-    /// Given a pipeline, return the committer watermark from the `Store`. The indexer fetches this
-    /// value for each pipeline added to determine which checkpoint to resume processing from.
+    /// Given a `pipeline_task` representing either a pipeline name or a pipeline with an associated
+    /// task (formatted as `{pipeline}{Store::DELIMITER}{task}`), return the committer watermark
+    /// from the `Store`. The indexer fetches this value for each pipeline added to determine which
+    /// checkpoint to resume processing from.
     async fn committer_watermark(
         &mut self,
-        pipeline: &str,
+        pipeline_task: &str,
     ) -> anyhow::Result<Option<CommitterWatermark>>;
 
     /// Given a pipeline, return the reader watermark from the database. This is used by the indexer
@@ -36,11 +38,14 @@ pub trait Connection: Send {
         delay: Duration,
     ) -> anyhow::Result<Option<PrunerWatermark>>;
 
-    /// Upsert the high watermark as long as it raises the watermark stored in the database. Returns
-    /// a boolean indicating whether the watermark was actually updated or not.
+    /// Upsert the high watermark for the `pipeline_task` - representing either a pipeline name or a
+    /// pipeline with an associated task (formatted as `{pipeline}{Store::DELIMITER}{task}`) - as
+    /// long as it
+    /// raises the watermark stored in the database. Returns a boolean indicating whether the
+    /// watermark was actually updated or not.
     async fn set_committer_watermark(
         &mut self,
-        pipeline: &str,
+        watermark_key: &str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool>;
 

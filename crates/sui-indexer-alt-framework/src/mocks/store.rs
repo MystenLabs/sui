@@ -86,9 +86,9 @@ pub struct MockConnection<'c>(pub &'c MockStore);
 impl Connection for MockConnection<'_> {
     async fn committer_watermark(
         &mut self,
-        pipeline: &str,
+        pipeline_task: &str,
     ) -> Result<Option<CommitterWatermark>, anyhow::Error> {
-        let watermark = self.0.watermarks.get(pipeline);
+        let watermark = self.0.watermarks.get(pipeline_task);
         Ok(watermark.map(|w| CommitterWatermark {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
             checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
@@ -131,7 +131,7 @@ impl Connection for MockConnection<'_> {
 
     async fn set_committer_watermark(
         &mut self,
-        pipeline: &str,
+        pipeline_task: &str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
         // Check if we should simulate a commit failure
@@ -146,7 +146,11 @@ impl Connection for MockConnection<'_> {
             self.0.commit_watermark_failures.failures - prev
         );
 
-        let mut wm = self.0.watermarks.entry(pipeline.to_string()).or_default();
+        let mut wm = self
+            .0
+            .watermarks
+            .entry(pipeline_task.to_string())
+            .or_default();
 
         wm.epoch_hi_inclusive = watermark.epoch_hi_inclusive;
         wm.checkpoint_hi_inclusive = watermark.checkpoint_hi_inclusive;

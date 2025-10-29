@@ -161,17 +161,22 @@ impl<S: Send + Sync + 'static> store::TransactionalStore for Store<S> {
 impl<S: Send + Sync> store::Connection for Connection<'_, S> {
     async fn committer_watermark(
         &mut self,
-        pipeline: &str,
+        pipeline_task: &str,
     ) -> anyhow::Result<Option<CommitterWatermark>> {
-        Ok(self.store.0.db.commit_watermark(pipeline)?.map(Into::into))
+        Ok(self
+            .store
+            .0
+            .db
+            .commit_watermark(pipeline_task)?
+            .map(Into::into))
     }
 
     async fn set_committer_watermark(
         &mut self,
-        pipeline: &str,
+        pipeline_task: &str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
-        self.watermark = Some((pipeline.to_string(), watermark.into()));
+        self.watermark = Some((pipeline_task.to_string(), watermark.into()));
         Ok(true)
     }
 
