@@ -67,7 +67,7 @@ pub struct Header {
 
 // TODO: pkg-alt this needs to work with both old style and new style formats. Particularly, for
 // the new pkg system, the toolchain version is in the Published.toml file, or Pub.env.toml file.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ToolchainVersion {
     /// The Move compiler version used to compile this package.
     #[serde(rename = "compiler-version")]
@@ -112,26 +112,83 @@ impl Header {
 }
 
 impl ToolchainVersion {
-    // TODO: pkg-alt - make this work with both old style and new style formats.
-    /// Read toolchain version info from the lock file. Returns successfully with None if
-    /// parsing the lock file succeeds but an entry for `[toolchain-version]` does not exist.
-    pub fn read(lock: &mut impl Read) -> anyhow::Result<Option<ToolchainVersion>> {
-        todo!()
-        // let contents = {
-        //     let mut buf = String::new();
-        //     lock.read_to_string(&mut buf).context("Reading lock file")?;
-        //     buf
-        // };
-        //
-        // #[derive(serde::Deserialize)]
-        // struct TV {
-        //     #[serde(rename = "toolchain-version")]
-        //     toolchain_version: Option<ToolchainVersion>,
-        // }
-        // let Schema { move_: value } = toml::de::from_str::<Schema<TV>>(&contents)
-        //     .context("Deserializing toolchain version")?;
-        //
-        // Ok(value.toolchain_version)
+    /// Read toolchain version info from the root project directory. Tries to read Published.toml
+    /// first (new pkg-alt format), then falls back to Move.lock (old format). Returns None if
+    /// neither file exists or if no toolchain info is found.
+    pub fn read(root_path: &Path) -> anyhow::Result<Option<ToolchainVersion>> {
+        let published_path = root_path.join("Published.toml");
+        let lock_path = root_path.join(SourcePackageLayout::Lock.path());
+
+        if published_path.exists() {
+            let contents = std::fs::read_to_string(&published_path)
+                .context("Reading Published.toml file")?;
+
+            #[derive(serde::Deserialize)]
+            struct BuildConfig {
+                edition: Edition,
+                flavor: Flavor,
+            }
+
+            #[derive(serde::Deserialize)]
+            #[serde(rename_all = "kebab-case")]
+            struct Metadata {
+                toolchain_version: Option<String>,
+                build_config: Option<BuildConfig>,
+            }
+
+            #[derive(serde::Deserialize)]
+            struct Publication {
+                #[serde(flatten)]
+                metadata: Metadata,
+            }
+
+            #[derive(serde::Deserialize)]
+            struct PublishedFile {
+                published: std::collections::HashMap<String, Publication>,
+            }
+
+            let parsed: PublishedFile = toml::de::from_str(&contents)
+                .context("Deserializing Published.toml")?;
+
+            if let Some((_, publication)) = parsed.published.into_iter().next() {
+                if let (Some(compiler_version), Some(build_config)) =
+                    (publication.metadata.toolchain_version, publication.metadata.build_config) {
+                    println!("Found toolchain version in Published.toml file");
+                    return Ok(Some(ToolchainVersion {
+                        compiler_version,
+                        edition: build_config.edition,
+                        flavor: build_config.flavor,
+                    }));
+                }
+            }
+
+
+                    println!("Did not find toolchain version in Published.toml file");
+
+            return Ok(None);
+        }
+
+        if lock_path.exists() {
+            println!("Found Move.lock file, reading toolchain version from it");
+            let contents = std::fs::read_to_string(&lock_path)
+                .context("Reading Move.lock file")?;
+
+            #[derive(serde::Deserialize)]
+            struct TV {
+                #[serde(rename = "toolchain-version")]
+                toolchain_version: Option<ToolchainVersion>,
+            }
+
+            let Schema { move_: value } = toml::de::from_str::<Schema<TV>>(&contents)
+                .context("Deserializing toolchain version from Move.lock")?;
+
+            println!("Toolchain version read from Move.lock file {:?}", value.toolchain_version);
+            return Ok(value.toolchain_version);
+        }
+
+        println!("Did not find Move.lock nor Published.toml file");
+
+        Ok(None)
     }
 }
 
@@ -182,27 +239,8 @@ pub(crate) fn units_for_toolchain(
         }
 
         let package_root = SourcePackageLayout::try_find_root(&local_unit.source_path)?;
-        let lock_file = package_root.join(SourcePackageLayout::Lock.path());
-        if !lock_file.exists() {
-            // No lock file implies current compiler for this package.
-            package_version_map.insert(
-                Symbol::from(package.as_str()),
-                (current_toolchain(), vec![local_unit.clone()]),
-            );
-            continue;
-        }
 
-        // let mut lock_file = File::open(lock_file)?;
-        // let lock_version = Header::read(&mut lock_file)?.version;
-        if lock_version == PRE_TOOLCHAIN_MOVE_LOCK_VERSION {
-            // No need to attempt reading lock file toolchain
-            debug!("{package} on legacy compiler",);
-            package_version_map.insert(
-                Symbol::from(package.as_str()),
-                (legacy_toolchain(), vec![local_unit.clone()]),
-            );
-            continue;
-        }
+        let toolchain_version = ToolchainVersion::read(&package_root)?;
 
         match toolchain_version {
             // No ToolchainVersion and new Move.lock version implies current compiler.
