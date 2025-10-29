@@ -166,13 +166,13 @@ impl Coverage {
                         None
                     }
                 })
-            .next()
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "No trace found for test {}. Please run with `--trace` to generate traces.",
-                    test_name
-                )
-            })
+                .next()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "No trace found for test {}. Please run with `--trace` to generate traces.",
+                        test_name
+                    )
+                })
         };
 
         if let Some(test_name) = test {
