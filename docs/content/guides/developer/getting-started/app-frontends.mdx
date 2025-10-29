@@ -7,9 +7,9 @@ pagination_prev: null
 pagination_next: null
 ---
 
-In the previous guide, [Hello, World!](/guides/developer/getting-started/hello-world.mdx), you deployed a Move package and interacted with it to create an object that stored the text "Hello world!".
+In the previous guide, ["Hello, World!"](/guides/developer/getting-started/hello-world.mdx), you deployed a Move package and interacted with it to create an object that stored the text "Hello world!".
 
-This guide demonstrates how to connect a React interface to that Hello, World! package, giving any user a way to interact with the Move package from their browser and set a custom greeting.
+This guide demonstrates how to connect a React interface to that "Hello, World!" package, giving any user a way to interact with the Move package from their browser and set a custom greeting.
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
@@ -22,7 +22,7 @@ This guide demonstrates how to connect a React interface to that Hello, World! p
 
 - [x] [Get SUI Testnet tokens](/guides/developer/getting-started/get-coins.mdx).
 
-- [x] Complete the [Hello, World!](/guides/developer/getting-started/hello-world.mdx) guide and have your published Move package's ID. 
+- [x] Complete the ["Hello, World!"](/guides/developer/getting-started/hello-world.mdx) guide and have your published Move package's ID. 
 
 - [x] Install [`pnpm`](https://pnpm.io/installation) to use as the package manager.
 
@@ -33,7 +33,7 @@ This guide demonstrates how to connect a React interface to that Hello, World! p
 
 ## Call the Move package 
 
-First, confirm that you have [followed the Hello, World!](https://github.com/MystenLabs/sui-stack-hello-world.git) example guide and are within the `sui-stack-hello-world/move/hello-world` directory in your CLI.
+First, confirm that you have [followed the "Hello, World!"](https://github.com/MystenLabs/sui-stack-hello-world.git) example guide and are within the `sui-stack-hello-world/move/hello-world` directory in your CLI.
 
 Then, verify your Move package is still available on Testnet by obtaining its object information:
 
@@ -45,13 +45,13 @@ Replace `<PACKAGE_ID>` with your Move package's ID.
 
 :::danger
 
-If your package no longer exists, or if you need to obtain the package ID again, follow the steps in the [Hello, World!](https://github.com/MystenLabs/sui-stack-hello-world.git) guide.
+If your package no longer exists, or if you need to obtain the package ID again, follow the steps in the ["Hello, World!"](https://github.com/MystenLabs/sui-stack-hello-world.git) guide.
 
 :::
 
 ## View the frontend source code
 
-In the Hello, World! example project, the subdirectory `sui-stack-hello-world/ui` contains the frontend interface source code files:
+In the "Hello, World!" example project, the subdirectory `sui-stack-hello-world/ui` contains the frontend interface source code files:
 
 ```
 .
@@ -80,7 +80,7 @@ The `App.tsx` file contains code that creates a basic starter template for your 
 
 ### `CreateGreeting.tsx`
 
-The `CreateGreeting.tsx` file contains logic that creates and sends a transaction to your Move package. The transaction calls the `new` function of the package, which creates a Move object with the value `Hello world!`. In the [Hello, World!](/guides/developer/getting-started/hello-world.mdx) guide, you called this function manually through the CLI with the command `sui client call --package <PACKAGE_ID> --module greeting --function new`.
+The `CreateGreeting.tsx` file contains logic that creates and sends a transaction to your Move package. The transaction calls the `new` function of the package, which creates a Move object with the value `Hello world!`. In the ["Hello, World!"](/guides/developer/getting-started/hello-world.mdx) guide, you called this function manually through the CLI with the command `sui client call --package <PACKAGE_ID> --module greeting --function new`.
 
 <ImportContent source="/ui/src/CreateGreeting.tsx" mode="code" org="MystenLabs" repo="sui-stack-hello-world" />
 
@@ -144,11 +144,11 @@ After you approve the transaction, the browser window displays the `Greeting` ob
 
 To change this text, enter a different greeting in the text box below the default value and click **Update**. The Slush wallet prompts you to approve the transaction.
 
-![Hello, world! default greeting](./images/hello-world-default.png)
+!["Hello, World!" default greeting](./images/hello-world-default.png)
 
 After you approve the transaction, the new greeting is displayed:
 
-![Hello, world! modified greeting](./images/hello-world-modified.png)
+!["Hello, World!" modified greeting](./images/hello-world-modified.png)
 
 <div className="next-steps-module">
   <div className="next-steps-header">
