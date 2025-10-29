@@ -1072,13 +1072,13 @@ async fn start(
             };
 
             let url = db.url().clone();
-            info!("Starting indexer with local database at {url}");
+            info!("Starting indexer with local database");
             (Some(db), Some(url))
         }
 
         // Use provided database URL
         Some(Some(url)) => {
-            info!("Starting indexer with provided database at {url}");
+            info!("Starting indexer with provided database");
             (None, Some(url))
         }
     };
