@@ -156,6 +156,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    enable-transaction-orchestrator-early-validation: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -315,6 +316,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    enable-transaction-orchestrator-early-validation: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -474,6 +476,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    enable-transaction-orchestrator-early-validation: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -633,6 +636,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    enable-transaction-orchestrator-early-validation: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -792,6 +796,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    enable-transaction-orchestrator-early-validation: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -951,6 +956,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    enable-transaction-orchestrator-early-validation: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -1110,6 +1116,7 @@ validator_configs:
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
+    enable-transaction-orchestrator-early-validation: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
