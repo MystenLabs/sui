@@ -10,6 +10,7 @@ use crate::SUI_FRAMEWORK_ADDRESS;
 use crate::SUI_SYSTEM_ADDRESS;
 use crate::accumulator_root::extract_balance_type_from_field;
 use crate::accumulator_root::is_balance_accumulator_field;
+use crate::accumulator_root::is_balance_accumulator_metadata_field;
 use crate::balance::Balance;
 use crate::coin::COIN_MODULE_NAME;
 use crate::coin::COIN_STRUCT_NAME;
@@ -253,6 +254,14 @@ pub enum MoveObjectType_ {
     /// (i.e., `0x2::dynamic_field::Field<0x2::accumulator::Key<0x2::balance::Balance<T>>, 0x2::accumulator::U128>`
     /// where T != 0x2::sui::SUI)
     BalanceAccumulatorField(TypeTag),
+
+    /// A SUI balance accumulator metadata field
+    /// (i.e., `Field<MetadataKey<Balance<SUI>>, Metadata<Balance<SUI>>`)
+    SuiBalanceAccumulatorMetadataField,
+    /// A non-SUI balance accumulator metadata field
+    /// (i.e., `Field<MetadataKey<Balance<T>>, Metadata<Balance<T>>`)
+    /// where T != 0x2::sui::SUI)
+    BalanceAccumulatorMetadataField(TypeTag),
     // NOTE: if adding a new type here, and there are existing on-chain objects of that
     // type with Other(_), that is ok, but you must hand-roll PartialEq/Eq/Ord/maybe Hash
     // to make sure the new type and Other(_) are interpreted consistently.
@@ -284,7 +293,9 @@ impl MoveObjectType {
             MoveObjectType_::GasCoin | MoveObjectType_::Coin(_) => SUI_FRAMEWORK_ADDRESS,
             MoveObjectType_::StakedSui => SUI_SYSTEM_ADDRESS,
             MoveObjectType_::SuiBalanceAccumulatorField
-            | MoveObjectType_::BalanceAccumulatorField(_) => SUI_FRAMEWORK_ADDRESS,
+            | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::SuiBalanceAccumulatorMetadataField
+            | MoveObjectType_::BalanceAccumulatorMetadataField(_) => SUI_FRAMEWORK_ADDRESS,
             MoveObjectType_::Other(s) => s.address,
         }
     }
@@ -294,7 +305,9 @@ impl MoveObjectType {
             MoveObjectType_::GasCoin | MoveObjectType_::Coin(_) => COIN_MODULE_NAME,
             MoveObjectType_::StakedSui => STAKING_POOL_MODULE_NAME,
             MoveObjectType_::SuiBalanceAccumulatorField
-            | MoveObjectType_::BalanceAccumulatorField(_) => DYNAMIC_FIELD_MODULE_NAME,
+            | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::SuiBalanceAccumulatorMetadataField
+            | MoveObjectType_::BalanceAccumulatorMetadataField(_) => DYNAMIC_FIELD_MODULE_NAME,
             MoveObjectType_::Other(s) => &s.module,
         }
     }
@@ -304,7 +317,11 @@ impl MoveObjectType {
             MoveObjectType_::GasCoin | MoveObjectType_::Coin(_) => COIN_STRUCT_NAME,
             MoveObjectType_::StakedSui => STAKED_SUI_STRUCT_NAME,
             MoveObjectType_::SuiBalanceAccumulatorField
-            | MoveObjectType_::BalanceAccumulatorField(_) => DYNAMIC_FIELD_FIELD_STRUCT_NAME,
+            | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::SuiBalanceAccumulatorMetadataField
+            | MoveObjectType_::BalanceAccumulatorMetadataField(_) => {
+                DYNAMIC_FIELD_FIELD_STRUCT_NAME
+            }
             MoveObjectType_::Other(s) => &s.name,
         }
     }
@@ -319,6 +336,12 @@ impl MoveObjectType {
             }
             MoveObjectType_::BalanceAccumulatorField(inner) => {
                 Self::balance_accumulator_field_type_params(inner.clone())
+            }
+            MoveObjectType_::SuiBalanceAccumulatorMetadataField => {
+                Self::balance_accumulator_metadata_field_type_params(GAS::type_tag())
+            }
+            MoveObjectType_::BalanceAccumulatorMetadataField(inner) => {
+                Self::balance_accumulator_metadata_field_type_params(inner.clone())
             }
             MoveObjectType_::Other(s) => s.type_params.clone(),
         }
@@ -335,6 +358,12 @@ impl MoveObjectType {
             MoveObjectType_::BalanceAccumulatorField(inner) => {
                 Self::balance_accumulator_field_type_params(inner)
             }
+            MoveObjectType_::SuiBalanceAccumulatorMetadataField => {
+                Self::balance_accumulator_metadata_field_type_params(GAS::type_tag())
+            }
+            MoveObjectType_::BalanceAccumulatorMetadataField(inner) => {
+                Self::balance_accumulator_metadata_field_type_params(inner.clone())
+            }
             MoveObjectType_::Other(s) => s.type_params,
         }
     }
@@ -346,6 +375,8 @@ impl MoveObjectType {
             MoveObjectType_::StakedSui => None,
             MoveObjectType_::SuiBalanceAccumulatorField => None,
             MoveObjectType_::BalanceAccumulatorField(_) => None,
+            MoveObjectType_::SuiBalanceAccumulatorMetadataField => None,
+            MoveObjectType_::BalanceAccumulatorMetadataField(_) => None,
             MoveObjectType_::Other(_) => None,
         }
     }
@@ -370,6 +401,22 @@ impl MoveObjectType {
         matches!(self.0, MoveObjectType_::SuiBalanceAccumulatorField)
     }
 
+    pub fn balance_accumulator_metadata_field_type_maybe(&self) -> Option<TypeTag> {
+        match &self.0 {
+            MoveObjectType_::SuiBalanceAccumulatorMetadataField => Some(GAS::type_tag()),
+            MoveObjectType_::BalanceAccumulatorMetadataField(inner) => Some(inner.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn is_balance_accumulator_metadata_field(&self) -> bool {
+        matches!(
+            self.0,
+            MoveObjectType_::SuiBalanceAccumulatorMetadataField
+                | MoveObjectType_::BalanceAccumulatorMetadataField(_)
+        )
+    }
+
     pub fn module_id(&self) -> ModuleId {
         ModuleId::new(self.address(), self.module().to_owned())
     }
@@ -384,6 +431,10 @@ impl MoveObjectType {
             MoveObjectType_::BalanceAccumulatorField(inner) => {
                 bcs::serialized_size(inner).unwrap() + 1
             }
+            MoveObjectType_::SuiBalanceAccumulatorMetadataField => 1,
+            MoveObjectType_::BalanceAccumulatorMetadataField(inner) => {
+                bcs::serialized_size(inner).unwrap() + 1
+            }
             MoveObjectType_::Other(s) => bcs::serialized_size(s).unwrap() + 1,
         }
     }
@@ -395,6 +446,8 @@ impl MoveObjectType {
             MoveObjectType_::StakedSui
             | MoveObjectType_::SuiBalanceAccumulatorField
             | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::SuiBalanceAccumulatorMetadataField
+            | MoveObjectType_::BalanceAccumulatorMetadataField(_)
             | MoveObjectType_::Other(_) => false,
         }
     }
@@ -407,6 +460,8 @@ impl MoveObjectType {
             | MoveObjectType_::Coin(_)
             | MoveObjectType_::SuiBalanceAccumulatorField
             | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::SuiBalanceAccumulatorMetadataField
+            | MoveObjectType_::BalanceAccumulatorMetadataField(_)
             | MoveObjectType_::Other(_) => false,
         }
     }
@@ -419,6 +474,8 @@ impl MoveObjectType {
             MoveObjectType_::StakedSui
             | MoveObjectType_::SuiBalanceAccumulatorField
             | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::SuiBalanceAccumulatorMetadataField
+            | MoveObjectType_::BalanceAccumulatorMetadataField(_)
             | MoveObjectType_::Other(_) => false,
         }
     }
@@ -430,6 +487,8 @@ impl MoveObjectType {
             | MoveObjectType_::Coin(_)
             | MoveObjectType_::SuiBalanceAccumulatorField
             | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::SuiBalanceAccumulatorMetadataField
+            | MoveObjectType_::BalanceAccumulatorMetadataField(_)
             | MoveObjectType_::Other(_) => false,
         }
     }
@@ -440,7 +499,9 @@ impl MoveObjectType {
             | MoveObjectType_::StakedSui
             | MoveObjectType_::Coin(_)
             | MoveObjectType_::SuiBalanceAccumulatorField
-            | MoveObjectType_::BalanceAccumulatorField(_) => false,
+            | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::SuiBalanceAccumulatorMetadataField
+            | MoveObjectType_::BalanceAccumulatorMetadataField(_) => false,
             MoveObjectType_::Other(s) => CoinMetadata::is_coin_metadata(s),
         }
     }
@@ -451,7 +512,9 @@ impl MoveObjectType {
             | MoveObjectType_::StakedSui
             | MoveObjectType_::Coin(_)
             | MoveObjectType_::SuiBalanceAccumulatorField
-            | MoveObjectType_::BalanceAccumulatorField(_) => false,
+            | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::SuiBalanceAccumulatorMetadataField
+            | MoveObjectType_::BalanceAccumulatorMetadataField(_) => false,
             MoveObjectType_::Other(s) => Currency::is_currency(s),
         }
     }
@@ -462,7 +525,9 @@ impl MoveObjectType {
             | MoveObjectType_::StakedSui
             | MoveObjectType_::Coin(_)
             | MoveObjectType_::SuiBalanceAccumulatorField
-            | MoveObjectType_::BalanceAccumulatorField(_) => false,
+            | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::SuiBalanceAccumulatorMetadataField
+            | MoveObjectType_::BalanceAccumulatorMetadataField(_) => false,
             MoveObjectType_::Other(s) => TreasuryCap::is_treasury_type(s),
         }
     }
@@ -497,7 +562,9 @@ impl MoveObjectType {
                 false
             }
             MoveObjectType_::SuiBalanceAccumulatorField
-            | MoveObjectType_::BalanceAccumulatorField(_) => {
+            | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::SuiBalanceAccumulatorMetadataField
+            | MoveObjectType_::BalanceAccumulatorMetadataField(_) => {
                 true // These are dynamic fields
             }
             MoveObjectType_::Other(s) => DynamicFieldInfo::is_dynamic_field(s),
@@ -514,7 +581,9 @@ impl MoveObjectType {
                 .into())
             }
             MoveObjectType_::SuiBalanceAccumulatorField
-            | MoveObjectType_::BalanceAccumulatorField(_) => {
+            | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::SuiBalanceAccumulatorMetadataField
+            | MoveObjectType_::BalanceAccumulatorMetadataField(_) => {
                 let struct_tag: StructTag = self.clone().into();
                 DynamicFieldInfo::try_extract_field_name(&struct_tag, type_)
             }
@@ -532,7 +601,9 @@ impl MoveObjectType {
                 .into())
             }
             MoveObjectType_::SuiBalanceAccumulatorField
-            | MoveObjectType_::BalanceAccumulatorField(_) => {
+            | MoveObjectType_::BalanceAccumulatorField(_)
+            | MoveObjectType_::SuiBalanceAccumulatorMetadataField
+            | MoveObjectType_::BalanceAccumulatorMetadataField(_) => {
                 let struct_tag: StructTag = self.clone().into();
                 DynamicFieldInfo::try_extract_field_value(&struct_tag)
             }
@@ -555,6 +626,15 @@ impl MoveObjectType {
             }
             MoveObjectType_::BalanceAccumulatorField(inner) => {
                 is_balance_accumulator_field(s)
+                    && extract_balance_type_from_field(s)
+                        .map(|t| &t == inner)
+                        .unwrap_or(false)
+            }
+            MoveObjectType_::SuiBalanceAccumulatorMetadataField => {
+                is_balance_accumulator_metadata_field(s)
+            }
+            MoveObjectType_::BalanceAccumulatorMetadataField(inner) => {
+                is_balance_accumulator_metadata_field(s)
                     && extract_balance_type_from_field(s)
                         .map(|t| &t == inner)
                         .unwrap_or(false)
@@ -594,6 +674,24 @@ impl MoveObjectType {
         let u128_type = U128::get_type_tag();
         DynamicFieldInfo::dynamic_field_type(key_type, u128_type)
     }
+
+    fn balance_accumulator_metadata_field_struct_tag(inner_type: TypeTag) -> StructTag {
+        use crate::accumulator_metadata::{AccumulatorMetadata, MetadataKey};
+        let balance_type = Balance::type_tag(inner_type);
+        let key_type = MetadataKey::get_type_tag(std::slice::from_ref(&balance_type));
+        // Metadata also takes the same Balance<T> type parameter
+        let value_type = AccumulatorMetadata::get_type_tag(&[balance_type]);
+        DynamicFieldInfo::dynamic_field_type(key_type, value_type)
+    }
+
+    fn balance_accumulator_metadata_field_type_params(inner_type: TypeTag) -> Vec<TypeTag> {
+        use crate::accumulator_metadata::{AccumulatorMetadata, MetadataKey};
+        let balance_type = Balance::type_tag(inner_type);
+        let key_type = MetadataKey::get_type_tag(std::slice::from_ref(&balance_type));
+        // Metadata also takes the same Balance<T> type parameter
+        let value_type = AccumulatorMetadata::get_type_tag(&[balance_type]);
+        vec![key_type, value_type]
+    }
 }
 
 impl From<StructTag> for MoveObjectType {
@@ -615,6 +713,18 @@ impl From<StructTag> for MoveObjectType {
             } else {
                 MoveObjectType_::Other(s)
             }
+        } else if is_balance_accumulator_metadata_field(&s) {
+            // extract_balance_type_from_field works for metadata fields too
+            // since MetadataKey<Balance<T>> is the first type param
+            if let Some(balance_type) = extract_balance_type_from_field(&s) {
+                if GAS::is_gas_type(&balance_type) {
+                    MoveObjectType_::SuiBalanceAccumulatorMetadataField
+                } else {
+                    MoveObjectType_::BalanceAccumulatorMetadataField(balance_type)
+                }
+            } else {
+                MoveObjectType_::Other(s)
+            }
         } else {
             MoveObjectType_::Other(s)
         })
@@ -632,6 +742,12 @@ impl From<MoveObjectType> for StructTag {
             }
             MoveObjectType_::BalanceAccumulatorField(inner) => {
                 MoveObjectType::balance_accumulator_field_struct_tag(inner)
+            }
+            MoveObjectType_::SuiBalanceAccumulatorMetadataField => {
+                MoveObjectType::balance_accumulator_metadata_field_struct_tag(GAS::type_tag())
+            }
+            MoveObjectType_::BalanceAccumulatorMetadataField(inner) => {
+                MoveObjectType::balance_accumulator_metadata_field_struct_tag(inner)
             }
             MoveObjectType_::Other(s) => s,
         }

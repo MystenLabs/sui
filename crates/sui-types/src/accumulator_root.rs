@@ -26,6 +26,7 @@ use move_core_types::{
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 pub const ACCUMULATOR_ROOT_MODULE: &IdentStr = ident_str!("accumulator");
+pub const ACCUMULATOR_METADATA_MODULE: &IdentStr = ident_str!("accumulator_metadata");
 pub const ACCUMULATOR_SETTLEMENT_MODULE: &IdentStr = ident_str!("accumulator_settlement");
 pub const ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD: &IdentStr = ident_str!("EventStreamHead");
 pub const ACCUMULATOR_ROOT_CREATE_FUNC: &IdentStr = ident_str!("create");
@@ -35,6 +36,8 @@ pub const ACCUMULATOR_ROOT_SETTLEMENT_SETTLE_EVENTS_FUNC: &IdentStr = ident_str!
 
 const ACCUMULATOR_KEY_TYPE: &IdentStr = ident_str!("Key");
 const ACCUMULATOR_U128_TYPE: &IdentStr = ident_str!("U128");
+const ACCUMULATOR_METADATA_KEY_TYPE: &IdentStr = ident_str!("MetadataKey");
+const ACCUMULATOR_METADATA_TYPE: &IdentStr = ident_str!("Metadata");
 
 pub fn get_accumulator_root_obj_initial_shared_version(
     object_store: &dyn ObjectStore,
@@ -347,6 +350,58 @@ pub(crate) fn is_accumulator_u128(t: &TypeTag) -> bool {
             && s.module.as_ident_str() == ACCUMULATOR_ROOT_MODULE
             && s.name.as_ident_str() == ACCUMULATOR_U128_TYPE
             && s.type_params.is_empty()
+    } else {
+        false
+    }
+}
+
+pub(crate) fn is_balance_accumulator_metadata_field(s: &StructTag) -> bool {
+    if s.address != SUI_FRAMEWORK_ADDRESS
+        || s.module.as_ident_str() != DYNAMIC_FIELD_MODULE_NAME
+        || s.name.as_ident_str() != DYNAMIC_FIELD_FIELD_STRUCT_NAME
+        || s.type_params.len() != 2
+    {
+        return false;
+    }
+
+    // Check that both are the correct types
+    if !is_accumulator_metadata_key(&s.type_params[0]) || !is_accumulator_metadata(&s.type_params[1]) {
+        return false;
+    }
+
+    // Extract the type parameters from MetadataKey and Metadata
+    if let (TypeTag::Struct(key_struct), TypeTag::Struct(metadata_struct)) =
+        (&s.type_params[0], &s.type_params[1])
+    {
+        // Both should have exactly one type parameter (Balance<T>)
+        if key_struct.type_params.len() == 1 && metadata_struct.type_params.len() == 1 {
+            // Check that both have the same Balance<T> type parameter
+            key_struct.type_params[0] == metadata_struct.type_params[0]
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}
+
+pub(crate) fn is_accumulator_metadata_key(t: &TypeTag) -> bool {
+    if let TypeTag::Struct(s) = t {
+        s.address == SUI_FRAMEWORK_ADDRESS
+            && s.module.as_ident_str() == ACCUMULATOR_METADATA_MODULE
+            && s.name.as_ident_str() == ACCUMULATOR_METADATA_KEY_TYPE
+            && s.type_params.len() == 1
+    } else {
+        false
+    }
+}
+
+pub(crate) fn is_accumulator_metadata(t: &TypeTag) -> bool {
+    if let TypeTag::Struct(s) = t {
+        s.address == SUI_FRAMEWORK_ADDRESS
+            && s.module.as_ident_str() == ACCUMULATOR_METADATA_MODULE
+            && s.name.as_ident_str() == ACCUMULATOR_METADATA_TYPE
+            && s.type_params.len() == 1
     } else {
         false
     }

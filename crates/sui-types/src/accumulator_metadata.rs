@@ -6,8 +6,9 @@ use crate::{
     SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     collection_types::Bag,
-    dynamic_field::{BoundedDynamicFieldID, DynamicField, DynamicFieldKey, Field},
+    dynamic_field::{DynamicFieldKey, DynamicFieldObject},
     error::SuiResult,
+    object::Object,
     storage::ChildObjectResolver,
 };
 use move_core_types::{
@@ -21,6 +22,7 @@ pub const ACCUMULATOR_METADATA_MODULE: &IdentStr = ident_str!("accumulator_metad
 const ACCUMULATOR_OWNER_KEY_TYPE: &IdentStr = ident_str!("OwnerKey");
 const ACCUMULATOR_OWNER_TYPE: &IdentStr = ident_str!("Owner");
 const ACCUMULATOR_METADATA_KEY_TYPE: &IdentStr = ident_str!("MetadataKey");
+const ACCUMULATOR_METADATA_TYPE: &IdentStr = ident_str!("Metadata");
 
 #[derive(Serialize, Deserialize)]
 pub struct AccumulatorOwner {
@@ -46,6 +48,17 @@ impl MoveTypeTagTraitGeneric for MetadataKey {
 pub struct AccumulatorMetadata {
     /// Any per-balance fields we wish to add in the future.
     fields: Bag,
+}
+
+impl MoveTypeTagTraitGeneric for AccumulatorMetadata {
+    fn get_type_tag(type_params: &[TypeTag]) -> TypeTag {
+        TypeTag::Struct(Box::new(StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: ACCUMULATOR_METADATA_MODULE.to_owned(),
+            name: ACCUMULATOR_METADATA_TYPE.to_owned(),
+            type_params: type_params.to_vec(),
+        }))
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
