@@ -146,6 +146,8 @@ pub(super) fn collector<H: Handler + 'static>(
                         .start_timer();
 
                     let mut batch = BatchedRows::new();
+                    let mut skipped = 0;
+
                     while !batch.is_full() {
                         let Some(mut entry) = pending.first_entry() else {
                             break;
@@ -165,8 +167,11 @@ pub(super) fn collector<H: Handler + 'static>(
                             // SAFETY: We just waited for the value to be Some.
                             if indexed.watermark.checkpoint() < main_reader_lo_rx.borrow().unwrap() {
                                 println!("Ignore this one");
+                                // When the entire checkpoint is skipped, we need to adjust the
+                                // pending rows to account for the dropped values.
                                 pending_rows -= indexed.values.len();
                                 entry.remove();
+                                skipped += 1;
                                 continue;
                             }
                         }
@@ -204,6 +209,10 @@ pub(super) fn collector<H: Handler + 'static>(
                         .collector_batch_size
                         .with_label_values(&[H::NAME])
                         .observe(batch.len() as f64);
+
+                    metrics.collector_skipped_checkpoints
+                        .with_label_values(&[H::NAME])
+                        .inc_by(skipped as u64);
 
                     if tx.send(batch).await.is_err() {
                         info!(pipeline = H::NAME, "Committer closed channel, stopping collector");

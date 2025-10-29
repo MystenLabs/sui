@@ -221,12 +221,9 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let pruner_cancel = cancel.child_token();
     let handler = Arc::new(handler);
 
-    // If the watermark key does not match the pipeline name, then it is a tasked pipeline and we
-    // need to track the main reader lo.
-
-    // The watch channel is an Option<sender/receiver<Option<u64>>>. The other Option indicates
-    // whether the pipeline is tasked or main. The inner is the safety mechanism - consumers must
-    // wait until the task has started and provided a fresh value.
+    // The watch channel is an Option<channel<Option<u64>>>. The outer Option indicates whether the
+    // pipeline is tasked or main. The inner is the safety mechanism - consumers must wait until the
+    // task has started and provided a fresh value.
     let (main_reader_lo_tx, main_reader_lo_rx) = if task.is_some() {
         let (tx, rx) = watch::channel(None);
         (Some(tx), Some(rx))
@@ -234,7 +231,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         (None, None)
     };
 
-    // Any checkpoints below this watermark will not be passed to the tasked pipeline.
     let main_reader_lo_task = main_reader_lo::<H>(
         main_reader_lo_tx,
         pruner_config.clone(),

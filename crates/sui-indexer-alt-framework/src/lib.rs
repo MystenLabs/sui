@@ -256,57 +256,27 @@ impl<S: Store> Indexer<S> {
             return Ok(());
         };
 
-        // The only requirement for tasked pipelines is that they commit checkpoints no less than
-        // the main pipeline's reader watermark.
-        let next_checkpoint = if self.task.is_some() {
-            let mut conn = self
-                .store
-                .connect()
-                .await
-                .context("Failed to establish connection to store")?;
-
-            let main_reader_watermark = conn
-                .reader_watermark(H::NAME)
-                .await
-                .context("Failed to get reader watermark")?
-                .unwrap_or_default();
-
-            let next_checkpoint = watermark
-                .map(|w| w.checkpoint_hi_inclusive + 1)
-                .or(self.first_checkpoint)
-                .unwrap_or_default();
-
-            if next_checkpoint < main_reader_watermark.reader_lo {
-                warn!(
-                    pipeline = H::NAME,
-                    main_reader_lo = main_reader_watermark.reader_lo,
-                    "first_checkpoint or task committer watermark is below main pipeline's reader_lo. \
-                     Starting tasked pipeline from main pipeline's reader_lo to avoid writing pruned data."
-                );
-            }
-
-            main_reader_watermark.reader_lo.max(next_checkpoint)
-        } else {
-            // If this is not a tasked indexer, we're dealing with main pipelines. Check that the
-            // `--first-checkpoint` is not greater than this pipeline's committer watermark, as this
-            // would cause the pipeline to stall forever in wait of a checkpoint that will never be
-            // ingested.
-            match (watermark, self.first_checkpoint) {
-                (Some(watermark), Some(first_checkpoint)) => {
+        let next_checkpoint = match (watermark, self.first_checkpoint) {
+            (Some(watermark), Some(first_checkpoint)) => {
+                // If this is not a tasked indexer, we're dealing with main pipelines. Check that
+                // the `--first-checkpoint` is not greater than this pipeline's committer watermark,
+                // as this would cause the pipeline to stall forever in wait of a checkpoint that
+                // will never be ingested.
+                if self.task.is_none() {
                     ensure!(
                         first_checkpoint <= watermark.checkpoint_hi_inclusive + 1,
                         "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. \
-                        This could create gaps in the data.",
+                            This could create gaps in the data.",
                         H::NAME,
                         first_checkpoint,
                         watermark.checkpoint_hi_inclusive,
                     );
-                    watermark.checkpoint_hi_inclusive + 1
                 }
-                (Some(watermark), _) => watermark.checkpoint_hi_inclusive + 1,
-                (_, Some(first_checkpoint)) => first_checkpoint,
-                (None, None) => 0,
+                watermark.checkpoint_hi_inclusive + 1
             }
+            (Some(watermark), _) => watermark.checkpoint_hi_inclusive + 1,
+            (_, Some(first_checkpoint)) => first_checkpoint,
+            (None, None) => 0,
         };
 
         self.handles.push(concurrent::pipeline::<H>(
@@ -1127,9 +1097,9 @@ mod tests {
         assert_eq!(watermark2.unwrap().checkpoint_hi_inclusive, 19);
     }
 
-    /// When a tasked pipeline is run with a `first_checkpoint` less than the main pipeline's
-    /// reader_lo, the indexer will set the `next_checkpoint` of the tasked pipeline to the latest
-    /// `reader_lo`.
+    /// When a tasked indexer is initialized such that a tasked pipeline is run with a
+    /// `first_checkpoint` less than the main pipeline's reader_lo, the indexer will correctly skip
+    /// committing checkpoints less than the main pipeline's reader watermark.
     #[tokio::test]
     async fn test_tasked_pipelines_ignore_below_main_reader_lo() {
         let cancel = CancellationToken::new();
@@ -1209,7 +1179,14 @@ mod tests {
         tasked_indexer.run().await.unwrap().await.unwrap();
 
         assert_eq!(metrics.total_ingested_checkpoints.get(), 16);
-
+        assert_eq!(
+            metrics
+                .collector_skipped_checkpoints
+                .get_metric_with_label_values(&[MockCheckpointSequenceNumberHandler::NAME])
+                .unwrap()
+                .get(),
+            7
+        );
         let data = store
             .data
             .get(MockCheckpointSequenceNumberHandler::NAME)
@@ -1307,6 +1284,15 @@ mod tests {
                 .get(),
             0
         );
+        assert_eq!(
+            metrics
+                .collector_skipped_checkpoints
+                .get_metric_with_label_values(&[MockCheckpointSequenceNumberHandler::NAME])
+                .unwrap()
+                .get(),
+            0
+        );
+
         let data = store.data.get("test").unwrap();
         assert!(data.len() == 17);
         for i in 0..9 {
@@ -1323,8 +1309,6 @@ mod tests {
         assert_eq!(tasked_pipeline_watermark.checkpoint_hi_inclusive, 25);
         assert_eq!(tasked_pipeline_watermark.reader_lo, 0);
     }
-
-    // TODO: test that while tasked pipelines can surpass main pipeline committer hi, can't start if would create gap?
 
     /// During a run, the tasked pipeline will stop processing checkpoints before the main
     /// pipeline's reader watermark.
