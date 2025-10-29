@@ -211,7 +211,7 @@ impl AccumulatorValue {
             DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
                 .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
                 .load_object(child_object_resolver)?
-                .map(|o| o.as_object()),
+                .map(|o| o.into_object()),
         )
     }
 
@@ -226,7 +226,7 @@ impl AccumulatorValue {
             version_bound.unwrap_or(SequenceNumber::MAX),
         )
         .load_object(child_object_resolver)?
-        .map(|o| o.as_object()))
+        .map(|o| o.into_object()))
     }
 
     pub fn create_for_testing(owner: SuiAddress, type_tag: TypeTag, balance: u64) -> Object {

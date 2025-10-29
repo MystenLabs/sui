@@ -18,6 +18,8 @@ use sui_json_rpc_types::{
 use sui_storage::key_value_store::{
     KVStoreTransactionData, TransactionKeyValueStore, TransactionKeyValueStoreTrait,
 };
+use sui_types::accumulator_metadata::AccumulatorOwner;
+use sui_types::balance::Balance;
 use sui_types::base_types::{
     MoveObjectType, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
 };
@@ -42,6 +44,7 @@ use thiserror::Error;
 use tokio::task::JoinError;
 
 use crate::ObjectProvider;
+use crate::coin_api::parse_to_type_tag;
 #[cfg(test)]
 use mockall::automock;
 use typed_store_error::TypedStoreError;
@@ -413,6 +416,7 @@ impl StateRead for AuthorityState {
     fn find_publish_txn_digest(&self, package_id: ObjectID) -> StateReadResult<TransactionDigest> {
         Ok(self.find_publish_txn_digest(package_id)?)
     }
+
     fn get_owned_coins(
         &self,
         owner: SuiAddress,
@@ -420,8 +424,41 @@ impl StateRead for AuthorityState {
         limit: usize,
         one_coin_type_only: bool,
     ) -> StateReadResult<Vec<SuiCoin>> {
-        Ok(self
-            .get_owned_coins_iterator_with_cursor(owner, cursor, limit, one_coin_type_only)?
+        if !one_coin_type_only {
+            let child_object_resolver = self.get_child_object_resolver().as_ref();
+
+            if let Some(owner_obj) = AccumulatorOwner::load(child_object_resolver, None, owner)? {
+                assert_eq!(owner_obj.owner, owner);
+
+                let bag_id = owner_obj.balances.id;
+
+                dbg!(&bag_id);
+                // get all balance types for the owner
+                let balance_types: Vec<_> = self
+                    .indexes
+                    .as_ref()
+                    .ok_or(SuiErrorKind::IndexStoreNotAvailable)?
+                    .get_dynamic_fields_iterator(*bag_id.object_id(), None)?
+                    .collect();
+                dbg!(&balance_types);
+
+                for result in balance_types {
+                    let (object_id, _) = result?;
+
+                    if let Some(object) = self.get_object_cache_reader().get_object(&object_id) {
+                        let ty = object
+                            .data
+                            .try_as_move()
+                            .expect("accumulator metadata object is not a move object")
+                            .type_();
+                        dbg!(ty);
+                    }
+                }
+            }
+        }
+
+        let coins: Vec<_> = self
+            .get_owned_coins_iterator_with_cursor(owner, cursor.clone(), limit, one_coin_type_only)?
             .map(|(key, coin)| SuiCoin {
                 coin_type: key.coin_type,
                 coin_object_id: key.object_id,
@@ -430,7 +467,74 @@ impl StateRead for AuthorityState {
                 balance: coin.balance,
                 previous_transaction: coin.previous_transaction,
             })
-            .collect())
+            .collect();
+
+        // get all unique coin types in `coins` (coins appear in order by type)
+        let mut coin_types = Vec::new();
+
+        if coins.is_empty() {
+            coin_types.push(cursor.0);
+        }
+
+        for coin in &coins {
+            match coin_types.last() {
+                Some(last_coin_type) => {
+                    if last_coin_type != &coin.coin_type {
+                        coin_types.push(coin.coin_type.clone());
+                    }
+                }
+                None => {
+                    coin_types.push(coin.coin_type.clone());
+                }
+            }
+        }
+
+        // for each coin type, get the address balance
+        let mut addr_balance_coins = Vec::new();
+        for coin_type in coin_types {
+            let Ok(coin_type_tag) = parse_to_type_tag(Some(coin_type.clone())) else {
+                // This error should be unreachable since we are parsing chain data, not user input
+                return Err(anyhow::anyhow!("Invalid coin type: {}", coin_type).into());
+            };
+            let balance_type = Balance::type_tag(coin_type_tag);
+            tracing::info!(
+                "getting address balance coin info for {:?} {:?}",
+                owner,
+                balance_type
+            );
+            let Some((obj_ref, balance, previous_transaction)) =
+                self.get_address_balance_coin_info(owner, balance_type)?
+            else {
+                continue;
+            };
+            let sui_coin = SuiCoin {
+                coin_type,
+                coin_object_id: obj_ref.0,
+                version: obj_ref.1,
+                digest: obj_ref.2,
+                balance,
+                previous_transaction,
+            };
+            addr_balance_coins.push(sui_coin);
+        }
+
+        tracing::info!("addr_balance_coins: {:?}", addr_balance_coins);
+
+        // now put the addr balance "coin" for each type at the front of the sequence of coins for that type
+        let mut merged_coins = Vec::new();
+        let mut addr_balance_coins_iter = addr_balance_coins.into_iter().peekable();
+        for coin in coins {
+            if let Some(addr_balance_coin) = addr_balance_coins_iter.peek()
+                && addr_balance_coin.coin_type == coin.coin_type
+            {
+                merged_coins.push(addr_balance_coins_iter.next().unwrap());
+                merged_coins.push(coin);
+            } else {
+                merged_coins.push(coin);
+            }
+        }
+
+        Ok(merged_coins)
     }
 
     async fn get_executed_transaction_and_effects(

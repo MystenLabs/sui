@@ -4,9 +4,9 @@
 use crate::{
     MoveTypeTagTrait, MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
-    base_types::{SequenceNumber, SuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     collection_types::Bag,
-    dynamic_field::DynamicFieldKey,
+    dynamic_field::{BoundedDynamicFieldID, DynamicField, DynamicFieldKey, Field},
     error::SuiResult,
     storage::ChildObjectResolver,
 };
@@ -24,8 +24,8 @@ const ACCUMULATOR_METADATA_KEY_TYPE: &IdentStr = ident_str!("MetadataKey");
 
 #[derive(Serialize, Deserialize)]
 pub struct AccumulatorOwner {
-    balances: Bag,
-    owner: SuiAddress,
+    pub balances: Bag,
+    pub owner: SuiAddress,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -72,6 +72,16 @@ impl AccumulatorOwner {
             name: ACCUMULATOR_OWNER_TYPE.to_owned(),
             type_params: vec![],
         }
+    }
+
+    pub fn get_object_id(owner: SuiAddress) -> SuiResult<ObjectID> {
+        let key = OwnerKey { owner };
+        DynamicFieldKey(
+            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            key,
+            OwnerKey::get_type_tag(),
+        )
+        .object_id()
     }
 
     pub fn exists(
@@ -137,7 +147,10 @@ impl AccumulatorOwner {
         )
         .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
         .load_object(child_object_resolver)?
-        .map(|o| o.load_value::<AccumulatorMetadata>())
+        .map(|o| {
+            dbg!(o.as_object().data.try_as_move().unwrap().type_());
+            o.load_value::<AccumulatorMetadata>()
+        })
         .transpose()
     }
 }

@@ -13,6 +13,7 @@ use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::SchedulingSource;
+use crate::execution_scheduler::balance_withdraw_scheduler::balance_read::AccountBalanceRead;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
 use crate::traffic_controller::TrafficController;
@@ -64,6 +65,9 @@ use std::{
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_protocol_config::PerObjectCongestionControlMode;
+use sui_types::accumulator_root::AccumulatorValue;
+use sui_types::balance::Balance;
+use sui_types::coin_reservation;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
@@ -4337,6 +4341,55 @@ impl AuthorityState {
         } else {
             Err(SuiErrorKind::IndexStoreNotAvailable.into())
         }
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub fn get_address_balance_coin_info(
+        &self,
+        owner: SuiAddress,
+        balance_type: TypeTag,
+    ) -> SuiResult<Option<(ObjectRef, u64, TransactionDigest)>> {
+        // get address balance
+        let accumulator_id = AccumulatorValue::get_field_id(owner, &balance_type)?;
+        tracing::info!(
+            "accumulator_id: {:?} {} {:?}",
+            owner,
+            balance_type.to_canonical_display(true),
+            accumulator_id
+        );
+        let accumulator_obj = AccumulatorValue::load_object_by_id(
+            self.get_child_object_resolver().as_ref(),
+            None,
+            *accumulator_id.inner(),
+        )?;
+
+        let Some(accumulator_obj) = accumulator_obj else {
+            return Ok(None);
+        };
+
+        let balance = self
+            .get_object_store()
+            .get_latest_account_balance(&accumulator_id)
+            .map(|b| b.0 as u64);
+
+        // We do two different loads above for simplicity, so it is possible that the accumulator exists
+        // during one but not both of the reads.
+        let Some(balance) = balance else {
+            return Ok(None);
+        };
+
+        let object_ref = coin_reservation::encode_object_ref(
+            accumulator_obj.id(),
+            accumulator_obj.version(),
+            self.load_epoch_store_one_call_per_task().epoch(),
+            balance,
+        )?;
+
+        Ok(Some((
+            object_ref,
+            balance,
+            accumulator_obj.previous_transaction,
+        )))
     }
 
     #[instrument(level = "trace", skip_all)]

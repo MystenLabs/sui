@@ -2325,10 +2325,22 @@ async fn test_coin_reservation() {
     let (sender, gas) = get_sender_and_gas(&mut test_cluster.wallet).await;
     let (sender2, gas2) = get_nth_sender_and_gas(&mut test_cluster.wallet, 1).await;
 
-    // send 100 gas from the gas coins to the balances
+    // send 1000 gas from the gas coins to the balances
     let tx = make_send_to_account_tx(1000, sender, sender, gas, rgp);
     let res = test_cluster.sign_and_execute_transaction(&tx).await;
     let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
+
+    let coins = test_cluster
+        .fullnode_handle
+        .sui_client
+        .coin_read_api()
+        .get_all_coins(sender, None, None)
+        .await
+        .unwrap();
+
+    //assert_eq!(coins.data.len(), 1);
+    assert_eq!(coins.data[0].coin_type, "0x2::sui::SUI");
+    assert_eq!(coins.data[0].balance, 1000);
 
     // compute the sender's SUI accumulator object id
     let accumulator_obj_id = AccumulatorValue::get_field_id(
