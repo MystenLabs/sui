@@ -79,6 +79,7 @@ pub struct TransactionOrchestrator<A: Clone> {
     transaction_driver: Option<Arc<TransactionDriver<A>>>,
     td_percentage: u8,
     td_allowed_submission_list: Vec<String>,
+    enable_early_validation: bool,
 }
 
 impl TransactionOrchestrator<NetworkAuthorityClient> {
@@ -183,6 +184,7 @@ where
             transaction_driver,
             td_percentage,
             td_allowed_submission_list,
+            enable_early_validation: node_config.enable_transaction_orchestrator_early_validation,
         }
     }
 }
@@ -317,9 +319,12 @@ where
         let tx_digest = *verified_transaction.digest();
 
         // Early validation check against local state before submission to catch non-retriable errors
-        if let Err(e) = self
-            .validator_state
-            .check_transaction_validity(&epoch_store, &verified_transaction)
+        // Skip early validation if transaction has already been executed (allows retries to return cached results)
+        if self.enable_early_validation
+            && !self.validator_state.is_tx_already_executed(&tx_digest)
+            && let Err(e) = self
+                .validator_state
+                .check_transaction_validity(&epoch_store, &verified_transaction)
         {
             let error_category = e.categorize();
             if !error_category.is_submission_retriable() {

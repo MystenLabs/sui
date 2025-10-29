@@ -196,6 +196,12 @@ pub struct NodeConfig {
     #[serde(default = "bool_true")]
     pub enable_validator_tx_finalizer: bool,
 
+    /// Enable early transaction validation before submission to validator.
+    /// This checks for non-retriable errors (like old object versions) and rejects
+    /// transactions early to provide fast feedback to clients.
+    #[serde(default = "bool_true")]
+    pub enable_transaction_orchestrator_early_validation: bool,
+
     #[serde(default)]
     pub verifier_signing_config: VerifierSigningConfig,
 

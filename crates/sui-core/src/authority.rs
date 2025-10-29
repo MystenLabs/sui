@@ -1262,13 +1262,15 @@ impl AuthorityState {
             self.handle_transaction_deny_checks(transaction, epoch_store)?;
 
         // Check that owned object versions match live objects
-        // This replicates verify_live_object logic from acquire_transaction_locks
+        // This closely mimics verify_live_object logic from acquire_transaction_locks
         let owned_objects = checked_input_objects.inner().filter_owned_objects();
         let cache_reader = self.get_object_cache_reader();
 
         for obj_ref in &owned_objects {
             if let Some(live_object) = cache_reader.get_object(&obj_ref.0) {
-                if obj_ref.1 != live_object.version() {
+                // Only reject if transaction references an old version. Allow newer
+                // versions that may exist on validators but not yet synced to fullnode.
+                if obj_ref.1 < live_object.version() {
                     return Err(SuiErrorKind::UserInputError {
                         error: UserInputError::ObjectVersionUnavailableForConsumption {
                             provided_obj_ref: *obj_ref,
@@ -1278,7 +1280,8 @@ impl AuthorityState {
                     .into());
                 }
 
-                if obj_ref.2 != live_object.digest() {
+                // If version matches, verify digest also matches
+                if obj_ref.1 == live_object.version() && obj_ref.2 != live_object.digest() {
                     return Err(SuiErrorKind::UserInputError {
                         error: UserInputError::InvalidObjectDigest {
                             object_id: obj_ref.0,
@@ -3085,14 +3088,17 @@ impl AuthorityState {
                         .map(|type_| ObjectType::Struct(type_.clone()))
                         .unwrap_or(ObjectType::Package);
 
-                    new_owners.push(((addr, *id), ObjectInfo {
-                        object_id: *id,
-                        version: oref.1,
-                        digest: oref.2,
-                        type_,
-                        owner,
-                        previous_transaction: *effects.transaction_digest(),
-                    }));
+                    new_owners.push((
+                        (addr, *id),
+                        ObjectInfo {
+                            object_id: *id,
+                            version: oref.1,
+                            digest: oref.2,
+                            type_,
+                            owner,
+                            previous_transaction: *effects.transaction_digest(),
+                        },
+                    ));
                 }
                 Owner::ObjectOwner(owner) => {
                     let new_object = written.get(id).unwrap_or_else(
