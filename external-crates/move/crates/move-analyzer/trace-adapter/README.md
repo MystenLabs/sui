@@ -11,4 +11,4 @@ The feature set currently includes:
 - line breakpoints
 - "continue" action - continue execution to the next breakpoint or to the end of the trace
 - local variable value inspection
-- source-level and disassembly-level debugging of Move code (provides that Move sources and disassembled Move bytecode files are provided)
+- source- and disassembly-level debugging of Move code (provides that Move sources and disassembled Move bytecode files are provided)
