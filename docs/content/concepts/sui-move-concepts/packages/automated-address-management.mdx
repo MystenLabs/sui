@@ -1,12 +1,12 @@
 ---
 title: Automated Address Management
 description: Packages published across Mainnet, Testnet, and Devnet each have different addresses. Automated address management tracks these addresses for you.
-keywords: [ track address, track package address, package addresses, managing package addresses, managing addresses, tracking addresses, tracking packages, tracking mainnet address, track mainnet address, track testnet address, tracking testnet address, track devnet address, tracking devnet address, conflicting addresses, conflicting package addresses ] 
+keywords: [ track address, track package address, package addresses, managing package addresses, managing addresses, tracking addresses, tracking packages, tracking mainnet address, track mainnet address, track testnet address, tracking testnet address, track devnet address, tracking devnet address, conflicting addresses, conflicting package addresses ]
 ---
 
-When you publish or upgrade a package, its address (also called the package ID) is tracked in the `Move.lock` file. This happens automatically, so you don’t need to manually record or update hex addresses (for example, in the `Move.toml` file).  
+When you publish or upgrade a package, its address (also called the package ID) is tracked in the `Move.lock` file. This happens automatically, so you do not need to manually record or update hex addresses (for example, in the `Move.toml` file).
 
-When you publish or upgrade your package on multiple Sui networks (Mainnet, Testnet, Devnet), automated address management tracks separate addresses for each chain. Tracking is based on your active environment (run `sui client active-env` if unsure). For example, if your active environment is set to an RPC connected to `testnet` and you publish a package, the `Move.lock` records the address for that package and associates it with `testnet`.  
+When you publish or upgrade your package on multiple Sui networks (Mainnet, Testnet, Devnet), automated address management tracks separate addresses for each chain. Tracking is based on your active environment (run `sui client active-env` if unsure). For example, if your active environment is set to an RPC connected to `testnet` and you publish a package, the `Move.lock` records the address for that package and associates it with `testnet`.
 
 Automated address management works for one package published to one or more Sui networks. If a package is republished to a network, tracked addresses for that network are overwritten.
 
@@ -14,13 +14,13 @@ Automated address management works for one package published to one or more Sui 
 
 Previously, a `published-at` entry in `Move.toml` was **mandatory**. It is no longer required if the data is tracked in `Move.lock`. For an existing package, you can migrate to automated tracking as follows:
 
-1. Switch to your active environment for the chain where your package is published:  
+1. Switch to your active environment for the chain where your package is published:
 
    ```sh
    sui client --switch --env <YOUR-CHAIN-ENVIRONMENT>
    ```
 
-2. Run the `manage-package` command with details of your published package:  
+2. Run the `manage-package` command with details of your published package:
 
    ```sh
    sui move manage-package --environment "$(sui client active-env)" \
@@ -30,12 +30,12 @@ Previously, a `published-at` entry in `Move.toml` was **mandatory**. It is no lo
                            --version-number 'VERSION-NUMBER'
    ```
 
-   - `ORIGINAL-ADDRESS`: The address where your package was first published. If you never upgraded, this matches the `published-at` address in `Move.toml`.  
-   - `LATEST-ADDRESS`: The latest package address. If you never upgraded, this matches `ORIGINAL-ADDRESS`. If upgraded, it matches the current `published-at` address.  
-   - `VERSION-NUMBER`: `1` if you never upgraded. Otherwise, set to the upgrade count. Look up the package at `LATEST-ADDRESS` to confirm the version number.  
+   - `ORIGINAL-ADDRESS`: The address where your package was first published. If you never upgraded, this matches the `published-at` address in `Move.toml`.
+   - `LATEST-ADDRESS`: The latest package address. If you never upgraded, this matches `ORIGINAL-ADDRESS`. If upgraded, it matches the current `published-at` address.
+   - `VERSION-NUMBER`: `1` if you never upgraded. Otherwise, set to the upgrade count. Look up the package at `LATEST-ADDRESS` to confirm the version number.
 
-3. Delete the `published-at` line in your `Move.toml`.  
-4. Set your package’s address to `0x0` in the `[addresses]` section:  
+3. Delete the `published-at` line in your `Move.toml`.
+4. Set your package's address to `0x0` in the `[addresses]` section:
 
    ```toml
    [package]
@@ -52,29 +52,29 @@ Your package is now tracked. Repeat the steps to track addresses for additional 
 
 ## Package upgrade guidance
 
-- When [upgrading](./upgrade#upgrade-requirements), you need the `UpgradeCap` ID of your package. Automated address management does not track `UpgradeCap`.  
-- When [upgrading](./upgrade#example), set the `[addresses]` value for your package to `0x0` in `Move.toml`, and restore it with the `ORIGINAL-ADDRESS` after upgrading.  
+- When [upgrading](./upgrade#upgrade-requirements), you need the `UpgradeCap` ID of your package. Automated address management does not track `UpgradeCap`.
+- When [upgrading](./upgrade#example), set the `[addresses]` value for your package to `0x0` in `Move.toml`, and restore it with the `ORIGINAL-ADDRESS` after upgrading.
 
 ## Troubleshooting
 
-Conflicting addresses can occur if package data becomes inconsistent.  
+Conflicting addresses can occur if package data becomes inconsistent.
 
-For example, a package may still have a `published-at` value in `Move.toml` while also being tracked in `Move.lock`. The mismatch causes an error when publishing or upgrading.  
+For example, a package might still have a `published-at` value in `Move.toml` while also being tracked in `Move.lock`. The mismatch causes an error when publishing or upgrading.
 
-To fix conflicts:  
+To fix conflicts:
 
-- **For your own package:**  
-  - Delete the `published-at` value in `Move.toml` if it’s no longer needed. Then set the package’s address to `0x0` in `[addresses]`.  
-  - Or, follow the [adoption steps](#adopting-automated-address-management) above.  
+- **For your own package:**
+  - Delete the `published-at` value in `Move.toml` if it's no longer needed. Then set the package's address to `0x0` in `[addresses]`.
+  - Or, follow the [adoption steps](#adopting-automated-address-management) above.
 
-- **For a dependency package:**  
-  - Fix the issue locally using the same steps, or contact the package maintainer to update it upstream.  
+- **For a dependency package:**
+  - Fix the issue locally using the same steps, or contact the package maintainer to update it upstream.
 
 ## Internal reference
 
-This section explains the schema and internal operation of tracked addresses in `Move.lock`. Most developers do not need this detail.  
+This section explains the schema and internal operation of tracked addresses in `Move.lock`. Most developers do not need this detail.
 
-Example schema in a `Move.lock` file:  
+Example schema in a `Move.lock` file:
 
 ```toml
 [env]
@@ -93,7 +93,9 @@ published-version = "1"
 ```
 
 :::info
-- Each `[env]` table entry represents an environment. When a package is published, its entry is added or updated.  
-- Entries are keyed by `chain-id`, not the `[env.NAME]`. This ensures addresses are resolved consistently even if users assign arbitrary environment names.  
-- Key-value pairs correspond to the data described in [adopting automated address management](#adopting-automated-address-management). Use the `sui move manage-package` command as the frontend to modify these values.  
+
+- Each `[env]` table entry represents an environment. When a package is published, its entry is added or updated.
+- Entries are keyed by `chain-id`, not the `[env.NAME]`. This ensures addresses are resolved consistently even if users assign arbitrary environment names.
+- Key-value pairs correspond to the data described in [adopting automated address management](#adopting-automated-address-management). Use the `sui move manage-package` command as the frontend to modify these values.
+
 :::
