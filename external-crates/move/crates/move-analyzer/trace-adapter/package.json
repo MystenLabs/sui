@@ -15,6 +15,9 @@
     ".": "./out/adapter.js",
     "./server": "./out/server.js"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "compile": "tsc -p ./",
     "lint": "eslint src --ext ts",
