@@ -201,7 +201,7 @@ impl BlockManager {
                     }
                 });
         }
-        debug!("try_accept_one_committed_block accept {block:?}");
+        println!("try_accept_one_committed_block accept {block:?}");
 
         // Accept this block before any unsuspended children blocks
         self.dag_state.write().accept_blocks(vec![block.clone()]);
@@ -278,7 +278,7 @@ impl BlockManager {
     /// block is accepted then Some result is returned. None is returned when either the block is suspended or the block
     /// has been already accepted before.
     fn try_accept_one_block(&mut self, block: VerifiedBlock) -> TryAcceptResult {
-        debug!("try_accept_one_block {block:?}");
+        println!("try_accept_one_block {block:?}");
         let block_ref = block.reference();
         let mut missing_ancestors = BTreeSet::new();
         let mut ancestors_to_fetch = BTreeSet::new();
@@ -314,7 +314,7 @@ impl BlockManager {
             .filter(|ancestor| ancestor.round == GENESIS_ROUND || ancestor.round > gc_round)
             .cloned()
             .collect::<Vec<_>>();
-        debug!("ancestors {ancestors:?}, gc_round {gc_round}");
+        println!("ancestors {ancestors:?}, gc_round {gc_round}");
 
         // make sure that we have all the required ancestors in store
         for (found, ancestor) in dag_state
@@ -502,7 +502,7 @@ impl BlockManager {
                     blocks_unsuspended_below_gc_round += 1;
                 }
             });
-            debug!("try_accept_blocks_internal blocks_to_accept {unsuspended_blocks:?}, gc_round={gc_round}");
+            println!("try_accept_blocks_internal blocks_to_accept {unsuspended_blocks:?}, gc_round={gc_round}");
 
             // Now accept the unsuspended blocks
             self.dag_state
