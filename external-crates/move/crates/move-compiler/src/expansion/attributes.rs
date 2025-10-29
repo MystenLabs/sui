@@ -311,13 +311,15 @@ fn attribute(
             KA::Testing(TestingAttribute::ExpectedFailure(Box::new(failure)))
         }
         PA::RandomTest => KA::Testing(A::TestingAttribute::RandTest),
-        PA::Spec { focus, skip, prove, ignore_abort, no_opaque, target } => 
+        PA::Spec { focus, skip, prove, ignore_abort, no_opaque, target, boogie_opt, timeout } => 
             KA::Verification(A::VerificationAttribute::Spec { 
                 focus,
                 skip,
                 prove,
                 ignore_abort,
                 no_opaque,
+                boogie_opt,
+                timeout,
                 target: target
                     .map(|t| context.name_access_chain_to_module_access(crate::expansion::path_expander::Access::Term, t))
                     .flatten()
