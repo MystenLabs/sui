@@ -78,7 +78,7 @@ export default function CodeBlockContent({ className: classNameProp }) {
         return (
           <Pre
             ref={wordWrap.codeBlockRef}
-            className={clsx(classNameProp, className, "!py-4")}
+            className={clsx(classNameProp, className, "!pt-[14px]")}
             style={style}
           >
             <Code>
