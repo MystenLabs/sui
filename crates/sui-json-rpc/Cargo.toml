@@ -57,6 +57,7 @@ sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
 sui-transaction-builder.workspace = true
 mysten-metrics.workspace = true
+mysten-common.workspace = true
 shared-crypto.workspace = true
 typed-store-error.workspace = true
 cached.workspace = true
@@ -66,3 +67,6 @@ im.workspace = true
 mockall.workspace = true
 expect-test.workspace = true
 telemetry-subscribers.workspace = true
+
+[lints]
+workspace = true

@@ -113,6 +113,26 @@ impl AccumulatorOwner {
         .exists(child_object_resolver)
     }
 
+    pub fn load_object(
+        child_object_resolver: &dyn ChildObjectResolver,
+        root_version: Option<SequenceNumber>,
+        owner: SuiAddress,
+    ) -> SuiResult<Option<Object>> {
+        let key = OwnerKey { owner };
+        Ok(DynamicFieldKey(
+            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            key,
+            OwnerKey::get_type_tag(),
+        )
+        .into_id_with_bound(root_version.unwrap_or(SequenceNumber::MAX))?
+        .load_object(child_object_resolver)?
+        .map(|o| o.into_object()))
+    }
+
+    pub fn from_object(object: Object) -> SuiResult<Self> {
+        DynamicFieldObject::<OwnerKey>::new(object).load_value::<Self>()
+    }
+
     pub fn load(
         child_object_resolver: &dyn ChildObjectResolver,
         root_version: Option<SequenceNumber>,

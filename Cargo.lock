@@ -15259,6 +15259,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-package",
+ "mysten-common",
  "mysten-metrics",
  "once_cell",
  "prometheus",

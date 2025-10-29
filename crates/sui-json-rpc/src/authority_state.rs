@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use move_core_types::language_storage::TypeTag;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
+use sui_core::accumulators::metadata::get_currency_types_for_owner;
 use sui_core::authority::AuthorityState;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::execution_cache::ObjectCacheRead;
@@ -18,7 +19,6 @@ use sui_json_rpc_types::{
 use sui_storage::key_value_store::{
     KVStoreTransactionData, TransactionKeyValueStore, TransactionKeyValueStoreTrait,
 };
-use sui_types::accumulator_metadata::AccumulatorOwner;
 use sui_types::balance::Balance;
 use sui_types::base_types::{
     MoveObjectType, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
@@ -28,7 +28,7 @@ use sui_types::committee::{Committee, EpochId};
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::effects::TransactionEffects;
-use sui_types::error::{SuiError, SuiErrorKind, UserInputError};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::event::EventID;
 use sui_types::governance::StakedSui;
 use sui_types::messages_checkpoint::{
@@ -424,38 +424,27 @@ impl StateRead for AuthorityState {
         limit: usize,
         one_coin_type_only: bool,
     ) -> StateReadResult<Vec<SuiCoin>> {
-        if !one_coin_type_only {
+        // Get the currency types (e.g. `0x2::sui::SUI`) for all relevant address balances.
+        let mut address_balance_currency_types = if !one_coin_type_only {
             let child_object_resolver = self.get_child_object_resolver().as_ref();
 
-            if let Some(owner_obj) = AccumulatorOwner::load(child_object_resolver, None, owner)? {
-                assert_eq!(owner_obj.owner, owner);
-
-                let bag_id = owner_obj.balances.id;
-
-                dbg!(&bag_id);
-                // get all balance types for the owner
-                let balance_types: Vec<_> = self
-                    .indexes
+            get_currency_types_for_owner(
+                owner,
+                child_object_resolver,
+                self.indexes
                     .as_ref()
                     .ok_or(SuiErrorKind::IndexStoreNotAvailable)?
-                    .get_dynamic_fields_iterator(*bag_id.object_id(), None)?
-                    .collect();
-                dbg!(&balance_types);
+                    .tables(),
+            )?
+        } else {
+            // This error should be unreachable (the type has already been parsed earlier).
+            vec![
+                parse_to_type_tag(Some(cursor.0.clone()))
+                    .map_err(|_| anyhow::anyhow!("Invalid coin type: {}", cursor.0))?,
+            ]
+        };
 
-                for result in balance_types {
-                    let (object_id, _) = result?;
-
-                    if let Some(object) = self.get_object_cache_reader().get_object(&object_id) {
-                        let ty = object
-                            .data
-                            .try_as_move()
-                            .expect("accumulator metadata object is not a move object")
-                            .type_();
-                        dbg!(ty);
-                    }
-                }
-            }
-        }
+        address_balance_currency_types.sort();
 
         let coins: Vec<_> = self
             .get_owned_coins_iterator_with_cursor(owner, cursor.clone(), limit, one_coin_type_only)?
@@ -469,69 +458,57 @@ impl StateRead for AuthorityState {
             })
             .collect();
 
-        // get all unique coin types in `coins` (coins appear in order by type)
-        let mut coin_types = Vec::new();
+        let get_addr_balance_sui_coin = |coin_type: TypeTag| -> SuiResult<Option<SuiCoin>> {
+            if let Some((obj_ref, balance, previous_transaction)) =
+                self.get_address_balance_coin_info(owner, Balance::type_tag(coin_type.clone()))?
+            {
+                Ok(Some(SuiCoin {
+                    coin_type: coin_type.to_canonical_string(true),
+                    coin_object_id: obj_ref.0,
+                    version: obj_ref.1,
+                    digest: obj_ref.2,
+                    balance,
+                    previous_transaction,
+                }))
+            } else {
+                Ok(None)
+            }
+        };
 
-        if coins.is_empty() {
-            coin_types.push(cursor.0);
-        }
+        let mut addr_balance_currency_types_iter =
+            address_balance_currency_types.into_iter().peekable();
+        let mut merged_coins = vec![];
+        let mut last_seen_coin_type = None;
+        for coin in coins {
+            let cur_coin_type = coin.coin_type;
 
-        for coin in &coins {
-            match coin_types.last() {
-                Some(last_coin_type) => {
-                    if last_coin_type != &coin.coin_type {
-                        coin_types.push(coin.coin_type.clone());
+            if let Some(last_seen_coin_type) = last_seen_coin_type {
+                // check if we are starting a new coin type. There may be address balances to add at this point.
+                if last_seen_coin_type != cur_coin_type || cursor.2 == ObjectID::ZERO {
+                    // if the next address balance currency type is less than or equal to the current coin type,
+                    // merge the address balance coin next.
+                    let should_merge_next_addr_balance_coin =
+                        if let Some(addr_balance_currency_type) =
+                            addr_balance_currency_types_iter.peek()
+                        {
+                            addr_balance_currency_type.to_canonical_string(true) <= cur_coin_type
+                        } else {
+                            false
+                        };
+
+                    if should_merge_next_addr_balance_coin {
+                        let addr_balance_currency_type =
+                            addr_balance_currency_types_iter.next().unwrap();
+                        if let Some(addr_balance_sui_coin) =
+                            get_addr_balance_sui_coin(addr_balance_currency_type)?
+                        {
+                            merged_coins.push(addr_balance_sui_coin);
+                        };
                     }
                 }
-                None => {
-                    coin_types.push(coin.coin_type.clone());
-                }
             }
-        }
 
-        // for each coin type, get the address balance
-        let mut addr_balance_coins = Vec::new();
-        for coin_type in coin_types {
-            let Ok(coin_type_tag) = parse_to_type_tag(Some(coin_type.clone())) else {
-                // This error should be unreachable since we are parsing chain data, not user input
-                return Err(anyhow::anyhow!("Invalid coin type: {}", coin_type).into());
-            };
-            let balance_type = Balance::type_tag(coin_type_tag);
-            tracing::info!(
-                "getting address balance coin info for {:?} {:?}",
-                owner,
-                balance_type
-            );
-            let Some((obj_ref, balance, previous_transaction)) =
-                self.get_address_balance_coin_info(owner, balance_type)?
-            else {
-                continue;
-            };
-            let sui_coin = SuiCoin {
-                coin_type,
-                coin_object_id: obj_ref.0,
-                version: obj_ref.1,
-                digest: obj_ref.2,
-                balance,
-                previous_transaction,
-            };
-            addr_balance_coins.push(sui_coin);
-        }
-
-        tracing::info!("addr_balance_coins: {:?}", addr_balance_coins);
-
-        // now put the addr balance "coin" for each type at the front of the sequence of coins for that type
-        let mut merged_coins = Vec::new();
-        let mut addr_balance_coins_iter = addr_balance_coins.into_iter().peekable();
-        for coin in coins {
-            if let Some(addr_balance_coin) = addr_balance_coins_iter.peek()
-                && addr_balance_coin.coin_type == coin.coin_type
-            {
-                merged_coins.push(addr_balance_coins_iter.next().unwrap());
-                merged_coins.push(coin);
-            } else {
-                merged_coins.push(coin);
-            }
+            last_seen_coin_type = Some(cur_coin_type);
         }
 
         Ok(merged_coins)
