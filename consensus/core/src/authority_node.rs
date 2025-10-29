@@ -41,6 +41,7 @@ use crate::{
     transaction_certifier::TransactionCertifier,
     CommitConsumerArgs,
 };
+use crate::storage::comparing_store::ComparingStore;
 
 /// ConsensusAuthority is used by Sui to manage the lifetime of AuthorityNode.
 /// It hides the details of the implementation from the caller, MysticetiManager.
@@ -252,7 +253,7 @@ where
         };
 
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
-        let store = Arc::new(RocksDBStore::new(store_path));
+        let store = Arc::new(ComparingStore::new(store_path));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let block_verifier = Arc::new(SignedBlockVerifier::new(

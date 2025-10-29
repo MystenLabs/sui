@@ -26,7 +26,8 @@ use crate::{
 
 /// Persistent storage with RocksDB.
 #[derive(DBMapUtils)]
-pub struct RocksDBStore {
+#[tidehunter]
+pub struct TidehunterStore {
     /// Stores SignedBlock by refs.
     blocks: DBMap<(Round, AuthorityIndex, BlockDigest), Bytes>,
     /// A secondary index that orders refs first by authors.
@@ -44,7 +45,7 @@ pub struct RocksDBStore {
         DBMap<(CommitIndex, CommitDigest), BTreeMap<BlockRef, Vec<TransactionIndex>>>,
 }
 
-impl RocksDBStore {
+impl TidehunterStore {
     const BLOCKS_CF: &'static str = "blocks";
     const DIGESTS_BY_AUTHORITIES_CF: &'static str = "digests";
     const COMMITS_CF: &'static str = "commits";
@@ -52,47 +53,75 @@ impl RocksDBStore {
     const COMMIT_INFO_CF: &'static str = "commit_info";
     const FINALIZED_COMMITS_CF: &'static str = "finalized_commits";
 
-    /// Creates a new instance of RocksDB storage.
     pub fn new(path: &str) -> Self {
-        // Consensus data has high write throughput (all transactions) and is rarely read
-        // (only during recovery and when helping peers catch up).
-        let db_options = default_db_options().optimize_db_for_write_throughput(2);
-        let mut metrics_conf = MetricConf::new("consensus");
-        metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
-        let cf_options = default_db_options().optimize_for_write_throughput();
-        let column_family_options = DBMapTableConfigMap::new(BTreeMap::from([
+        tracing::warn!("Consensus store using tidehunter");
+        use typed_store::tidehunter_util::{
+            default_mutex_count, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+        };
+        let mutexes = default_mutex_count();
+        let index_digest_key = KeyIndexing::key_reduction(36, 0..12);
+        let index_index_digest_key = KeyIndexing::key_reduction(40, 0..24);
+        let commit_vote_key = KeyIndexing::key_reduction(76, 0..60);
+        let u32_prefix = KeyType::prefix_uniform(3, 0);
+        let u64_prefix = KeyType::prefix_uniform(6, 0);
+        let override_dirty_keys_config = KeySpaceConfig::new().with_max_dirty_keys(4_000);
+        let configs = vec![
             (
                 Self::BLOCKS_CF.to_string(),
-                default_db_options()
-                    .optimize_for_write_throughput_no_deletion()
-                    // Using larger block is ok since there is not much point reads on the cf.
-                    .set_block_options(512, 128 << 10),
+                ThConfig::new_with_config_indexing(
+                    index_index_digest_key.clone(),
+                    mutexes,
+                    u32_prefix.clone(),
+                    override_dirty_keys_config.clone(),
+                ),
             ),
             (
                 Self::DIGESTS_BY_AUTHORITIES_CF.to_string(),
-                cf_options.clone(),
+                ThConfig::new_with_config_indexing(
+                    index_index_digest_key.clone(),
+                    mutexes,
+                    u64_prefix.clone(),
+                    override_dirty_keys_config.clone(),
+                ),
             ),
-            (Self::COMMITS_CF.to_string(), cf_options.clone()),
-            (Self::COMMIT_VOTES_CF.to_string(), cf_options.clone()),
-            (Self::COMMIT_INFO_CF.to_string(), cf_options.clone()),
-            (Self::FINALIZED_COMMITS_CF.to_string(), cf_options.clone()),
-        ]));
+            (
+                Self::COMMITS_CF.to_string(),
+                ThConfig::new_with_indexing(index_digest_key.clone(), mutexes, u32_prefix.clone()),
+            ),
+            (
+                Self::COMMIT_VOTES_CF.to_string(),
+                ThConfig::new_with_config_indexing(
+                    commit_vote_key,
+                    mutexes,
+                    u32_prefix.clone(),
+                    override_dirty_keys_config.clone(),
+                ),
+            ),
+            (
+                Self::COMMIT_INFO_CF.to_string(),
+                ThConfig::new_with_indexing(index_digest_key.clone(), mutexes, u32_prefix.clone()),
+            ),
+            (
+                Self::FINALIZED_COMMITS_CF.to_string(),
+                ThConfig::new_with_indexing(index_digest_key.clone(), mutexes, u32_prefix.clone()),
+            ),
+        ];
         Self::open_tables_read_write(
             path.into(),
-            metrics_conf,
-            Some(db_options.options),
-            Some(column_family_options),
+            MetricConf::new("consensus")
+                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+            configs.into_iter().collect(),
         )
     }
 }
 
-impl Store for RocksDBStore {
+impl Store for TidehunterStore {
     fn write(&self, write_batch: WriteBatch) -> ConsensusResult<()> {
         fail_point!("consensus-store-before-write");
 
         let mut batch = self.blocks.batch();
         for block in write_batch.blocks {
-            tracing::debug!("Writing block {block:?}");
+            println!("Writing block {block:?}");
             let block_ref = block.reference();
             batch
                 .insert_batch(

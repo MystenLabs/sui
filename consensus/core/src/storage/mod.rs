@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod comparing_store;
 pub mod mem_store;
 pub mod rocksdb_store;
+pub mod tidehunter_store;
 
 #[cfg(test)]
 mod store_tests;
