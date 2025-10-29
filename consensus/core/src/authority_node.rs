@@ -41,7 +41,7 @@ use crate::{
     transaction_certifier::TransactionCertifier,
     CommitConsumerArgs,
 };
-use crate::storage::comparing_store::ComparingStore;
+use crate::storage::ComparingStore;
 
 /// ConsensusAuthority is used by Sui to manage the lifetime of AuthorityNode.
 /// It hides the details of the implementation from the caller, MysticetiManager.

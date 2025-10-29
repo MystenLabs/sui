@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(tidehunter)]
-pub mod comparing_store;
+mod comparing_store;
 pub mod mem_store;
 pub mod rocksdb_store;
 #[cfg(tidehunter)]
-pub mod tidehunter_store;
+mod tidehunter_store;
 
 #[cfg(not(tidehunter))]
-pub use rocksdb_store as comparing_store;
+pub use rocksdb_store::RocksDBStore as ComparingStore;
+#[cfg(tidehunter)]
+pub use comparing_store::ComparingStore as ComparingStore;
 
 #[cfg(test)]
 mod store_tests;
