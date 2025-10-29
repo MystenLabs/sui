@@ -1220,7 +1220,6 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "is_one_time_witness",
             make_native!(types::is_one_time_witness),
         ),
-        ("test_utils", "destroy", make_native!(test_utils::destroy)),
         (
             "test_utils",
             "create_one_time_witness",

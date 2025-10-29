@@ -104,6 +104,7 @@ impl GasParameters {
                 poison: unit_test::PoisonGasParameters {
                     base_cost: 0.into(),
                 },
+                destroy: unit_test::DestroyGasParameters { base: 0.into() },
             },
         }
     }
@@ -131,6 +132,7 @@ impl GasParameters {
                 poison: unit_test::PoisonGasParameters {
                     base_cost: 0.into(),
                 },
+                destroy: unit_test::DestroyGasParameters { base: 0.into() },
             },
         }
     }

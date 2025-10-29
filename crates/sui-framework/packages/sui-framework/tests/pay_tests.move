@@ -4,13 +4,12 @@
 #[test_only]
 module sui::pay_tests;
 
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, destroy};
 use sui::balance;
 use sui::coin::{Self, Coin};
 use sui::pay;
 use sui::sui::SUI;
 use sui::test_scenario;
-use sui::test_utils;
 
 const TEST_SENDER_ADDR: address = @0xA11CE;
 
@@ -35,9 +34,9 @@ fun test_coin_split_n() {
     assert_eq!(coin.value(), 4);
     assert!(!scenario.has_most_recent_for_sender<Coin<SUI>>(), 1);
 
-    test_utils::destroy(coin);
-    test_utils::destroy(coin1);
-    test_utils::destroy(coin2);
+    destroy(coin);
+    destroy(coin1);
+    destroy(coin2);
     scenario.end();
 }
 
@@ -58,9 +57,9 @@ fun test_coin_split_n_to_vec() {
     assert_eq!(coin.value(), 4);
 
     split_coins.destroy_empty();
-    test_utils::destroy(coin);
-    test_utils::destroy(coin1);
-    test_utils::destroy(coin2);
+    destroy(coin);
+    destroy(coin1);
+    destroy(coin2);
     scenario.end();
 }
 
@@ -84,9 +83,9 @@ fun test_split_vec() {
     assert_eq!(coin2.value(), 1);
     assert_eq!(coin.value(), 5);
 
-    test_utils::destroy(coin);
-    test_utils::destroy(coin1);
-    test_utils::destroy(coin2);
+    destroy(coin);
+    destroy(coin1);
+    destroy(coin2);
     scenario.end();
 }
 
@@ -105,8 +104,8 @@ fun test_split_and_transfer() {
     assert_eq!(coin1.value(), 3);
     assert_eq!(coin.value(), 7);
 
-    test_utils::destroy(coin);
-    test_utils::destroy(coin1);
+    destroy(coin);
+    destroy(coin1);
     scenario.end();
 }
 
@@ -123,8 +122,8 @@ fun test_split_and_transfer_fail() {
     let coin_transfer_fail = scenario.take_from_sender<Coin<SUI>>();
     assert_eq!(coin_transfer_fail.value(), 7);
 
-    test_utils::destroy(coin);
-    test_utils::destroy(coin_transfer_fail);
+    destroy(coin);
+    destroy(coin_transfer_fail);
     scenario.end();
 }
 
@@ -146,7 +145,7 @@ fun test_join_vec_and_transfer() {
     assert_eq!(coin1.value(), 6);
     assert_eq!(coin.value(), 4);
 
-    test_utils::destroy(coin);
-    test_utils::destroy(coin1);
+    destroy(coin);
+    destroy(coin1);
     scenario.end();
 }
