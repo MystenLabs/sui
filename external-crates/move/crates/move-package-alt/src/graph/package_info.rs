@@ -131,7 +131,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
     }
 
     /// Return an original id for this node; using the dummy address if needed
-    pub fn original_id(&self) -> OriginalID {
+    pub(crate) fn original_id(&self) -> OriginalID {
         match self.node_to_addr(self.node) {
             NamedAddress::RootPackage(original_id) => original_id.unwrap_or(0.into()),
             NamedAddress::Unpublished { dummy_addr } => dummy_addr,
