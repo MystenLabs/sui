@@ -115,8 +115,135 @@ function escapeRegex(s) {
 }
 
 const cutAtBodyStart = (text) => {
-  const brace = text.indexOf("{");
-  if (brace !== -1) return text.slice(0, brace).trimEnd();
+  // Return the portion of `text` up to (but not including) the first `{`
+  // that actually begins the function body.
+  // We skip any `{` that occur inside:
+  //   - parentheses (...)  (e.g., destructured params: ({a}: {a:number}))
+  //   - brackets [...]
+  //   - angle brackets <...> (TS/JS generics)
+  //   - strings ('', "", ``) and template ${ ... } expressions
+  //   - comments // ... and /* ... */
+  //
+  // This keeps behavior correct for:
+  //   - JS/TS function declarations
+  //   - Arrow functions (including curried arrows: () => () => { ... })
+  //   - Class methods/fields
+  //   - Rust/Move function headers (fn/fun ... { ... })
+  //
+  // If no body `{` is found, we fall back to trimming at the first `;`
+  // (e.g., Rust extern prototypes) or trimming the entire string.
+
+  let paren = 0;
+  let bracket = 0;
+  let angle = 0; // TS generics
+  let inSingle = false;
+  let inDouble = false;
+  let inTemplate = false;
+  let inBlockComment = false;
+  let inLineComment = false;
+
+  // Helper to check previous character safely
+  const prev = (i) => (i > 0 ? text[i - 1] : "");
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const p = prev(i);
+
+    // Handle comment states first
+    if (inLineComment) {
+      if (ch === "\n") inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (p === "*" && ch === "/") inBlockComment = false;
+      continue;
+    }
+
+    // Enter comments (only when not in a string/template)
+    if (!inSingle && !inDouble && !inTemplate) {
+      if (p === "/" && ch === "/") {
+        inLineComment = true;
+        continue;
+      }
+      if (p === "/" && ch === "*") {
+        inBlockComment = true;
+        continue;
+      }
+    }
+
+    // Handle string/template states
+    if (inSingle) {
+      if (ch === "'" && p !== "\\") inSingle = false;
+      continue;
+    }
+    if (inDouble) {
+      if (ch === '"' && p !== "\\") inDouble = false;
+      continue;
+    }
+    if (inTemplate) {
+      if (ch === "`" && p !== "\\") {
+        inTemplate = false;
+        continue;
+      }
+      // Inside template literal: skip content verbatim.
+      // We intentionally do not parse `${...}` here because `{` inside
+      // templates clearly isn't the function body start.
+      continue;
+    }
+
+    // Possibly enter a string/template
+    if (ch === "'") {
+      inSingle = true;
+      continue;
+    }
+    if (ch === '"') {
+      inDouble = true;
+      continue;
+    }
+    if (ch === "`") {
+      inTemplate = true;
+      continue;
+    }
+
+    // Track bracket/paren/angle depth (skip '=>' so its '>' doesn't affect angle)
+    if (ch === "(") {
+      paren++;
+      continue;
+    }
+    if (ch === ")") {
+      if (paren > 0) paren--;
+      continue;
+    }
+    if (ch === "[") {
+      bracket++;
+      continue;
+    }
+    if (ch === "]") {
+      if (bracket > 0) bracket--;
+      continue;
+    }
+    if (!(p === "=" && ch === ">")) {
+      if (ch === "<") {
+        angle++;
+        continue;
+      }
+      if (ch === ">") {
+        if (angle > 0) angle--;
+        // do not continue; allow further checks on the same char
+      }
+    }
+
+    // Identify the opening brace that starts the actual body.
+    // It must be outside parens/brackets/angles and not inside strings/comments.
+    if (ch === "{" && paren === 0 && bracket === 0 && angle === 0) {
+      let out = text.slice(0, i).trimEnd();
+      // If we cut right before the body of a curried arrow, the header may end with `=>`.
+      // Remove any trailing `=>` and whitespace so the signature is clean.
+      out = out.replace(/=>\s*$/, "").trimEnd();
+      return out;
+    }
+  }
+
   const semi = text.indexOf(";");
   return semi !== -1 ? text.slice(0, semi + 1).trimEnd() : text.trimEnd();
 };
@@ -158,7 +285,63 @@ exports.returnFunctions = (source, functions, language, sig) => {
       funContent.push(removeLeadingSpaces(out, pre));
       continue;
     } else if (language === "ts") {
-      funStr = `^(\\s*)(async )?(export (default )?)?function \\b${escapeRegex(fn)}\\b[\\s\\S]*?\\n\\1\\}`;
+      // Try multiple TS/JS shapes for a named function `fn`, then capture a balanced body
+      // A) function declaration (export/default/async)
+      // B) var decl assigned to function
+      // B2) var decl assigned to arrow(s) — supports curried arrows:  => ... => {
+      // C) class method (visibility/static/async)
+      // D) class field arrow — supports curried arrows
+
+      const heads = [
+        // A) function declaration
+        new RegExp(
+          String.raw`^(\s*)(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s+${escapeRegex(fn)}\b[^{]*\{`,
+          "m",
+        ),
+        // B) const/let/var name = function (...) { ... }
+        new RegExp(
+          String.raw`^(\s*)(?:export\s+)?(?:const|let|var)\s+${escapeRegex(fn)}\s*=\s*(?:async\s*)?function\b[^{]*\{`,
+          "m",
+        ),
+        // B2) const/let/var name = (..)=> ... => { ... }  (allow any number of curried arrows)
+        new RegExp(
+          String.raw`^(\s*)(?:export\s+)?(?:const|let|var)\s+${escapeRegex(fn)}\s*=\s*(?:async\s*)?(?:[^{}]*?=>\s*)*[^{}]*?\{`,
+          "m",
+        ),
+        // C) class method
+        new RegExp(
+          String.raw`^(\s*)(?:(?:public|private|protected)\s+)?(?:static\s+)?(?:async\s+)?${escapeRegex(fn)}\s*$begin:math:text$[^)]*$end:math:text$\s*\{`,
+          "m",
+        ),
+        // D) class field arrow, allowing curried arrows before body
+        new RegExp(
+          String.raw`^(\s*)(?:(?:public|private|protected)\s+)?(?:readonly\s+)?(?:static\s+)?${escapeRegex(fn)}\s*=\s*(?:async\s*)?(?:[^{}]*?=>\s*)*[^{}]*?\{`,
+          "m",
+        ),
+      ];
+
+      let m = null;
+      for (const re of heads) {
+        m = re.exec(source);
+        if (m) break;
+      }
+      if (!m) continue;
+
+      const startIdx = m.index;
+      const sub = source.slice(startIdx);
+      const bracePos = sub.indexOf("{");
+      if (bracePos === -1) continue;
+
+      // Capture a balanced body so nested braces are handled robustly
+      const block = captureBalanced(sub.slice(bracePos));
+      if (!block) continue;
+
+      const header = sub.slice(0, bracePos);
+      const full = header + block;
+      const pre = capturePrepend(m, source);
+      const out = sig ? cutAtBodyStart(full) : full;
+      funContent.push(removeLeadingSpaces(out, pre));
+      continue;
     } else if (language === "rust") {
       funStr = `^(\\s*)(?:pub\\s+)?(?:async\\s+)?(?:const\\s+)?(?:unsafe\\s+)?(?:extern\\s+(?:\"[^\"]+\"\\s*)?)?fn\\s+${escapeRegex(fn)}\\s*(?:<[^>]*>)?\\s*\\([^)]*\\)\\s*(?:->\\s*[^;{]+)?\\s*(?:;|\\{[\\s\\S]*?^\\1\\})`;
     }
@@ -412,7 +595,7 @@ exports.returnImplementations = (source, impl) => {
   for (const imp of impls) {
     const implRE = new RegExp(
       String.raw`^(\s*)(?:\uFEFF)?\s*impl(?:\s*<[\s\S]*?>)?\s+` +
-      String.raw`(?:` +
+        String.raw`(?:` +
         // A) impl <Trait> for <Type> { ... } where the searched name is the TRAIT
         String.raw`(?:(?:[\w:]+::)*${escapeRegex(imp)}(?:\s*<[\s\S]*?>)?\s+for\s+(?<type>[\s\S]*?)(?:\s+where\s+[\s\S]*?)?)` +
         String.raw`|` +
@@ -421,8 +604,8 @@ exports.returnImplementations = (source, impl) => {
         String.raw`|` +
         // C) impl <Type> { ... }  (inherent impl) where the searched name is the TYPE
         String.raw`(?:(?:[\w:]+::)*${escapeRegex(imp)}(?:\s*<[\s\S]*?>)?(?:\s+where\s+[\s\S]*?)?)` +
-      String.raw`)\s*\{`,
-      'ms'
+        String.raw`)\s*\{`,
+      "ms",
     );
 
     const m = implRE.exec(source);
@@ -444,7 +627,7 @@ exports.returnImplementations = (source, impl) => {
     out.push(removeLeadingSpaces(full, pre));
   }
   return out.join("\n").trim();
-}
+};
 
 exports.returnEnums = (source, enumVal) => {
   if (!enumVal) return source;

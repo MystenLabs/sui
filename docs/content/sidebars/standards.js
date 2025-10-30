@@ -56,6 +56,34 @@ const standards = [
 			},
 		],
 	},
+	{
+		type: 'category',
+		label: 'DeepBook Margin',
+		link: {
+			type: 'doc',
+			id: 'standards/deepbook-margin',
+		},
+		items: [
+			'standards/deepbook-margin/design',
+			'standards/deepbook-margin/margin-manager',
+			'standards/deepbook-margin/margin-pool',
+			'standards/deepbook-margin/orders',
+			{
+				type: 'category',
+				label: 'SDK',
+				link: {
+					type: 'doc',
+					id: 'standards/deepbook-margin-sdk',
+				},
+				items: [
+					'standards/deepbook-margin-sdk/orders',
+					'standards/deepbook-margin-sdk/margin-manager',
+					'standards/deepbook-margin-sdk/margin-pool',
+					'standards/deepbook-margin-sdk/maintainer',
+				],
+			},
+		],
+	},
 	'standards/display',
 	'standards/wallet-standard',
 ];
