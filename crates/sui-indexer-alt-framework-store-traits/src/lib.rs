@@ -86,10 +86,13 @@ pub trait Store: Send + Sync + 'static + Clone {
     where
         Self: 'c;
 
+    /// Delimiter used to separate pipeline names from task identifiers when reading or writing the
+    /// committer watermark.
     const DELIMITER: &'static str = "@";
 
     async fn connect<'c>(&'c self) -> Result<Self::Connection<'c>, anyhow::Error>;
 
+    /// Constructs the watermark key used to read or write the committer watermark.
     fn watermark_key(pipeline: &str, task: Option<&str>) -> String {
         match task {
             Some(task_name) => format!("{}{}{}", pipeline, Self::DELIMITER, task_name),

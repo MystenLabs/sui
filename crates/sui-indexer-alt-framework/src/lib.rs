@@ -42,18 +42,17 @@ pub mod mocks;
 #[derive(clap::Args, Default, Debug, Clone)]
 pub struct IndexerArgs {
     /// An optional task name for this indexer. When set, pipelines will record watermarks using the
-    /// format `{pipeline}{delimiter}{task}`. This allows the same pipelines to run under multiple
-    /// indexers (e.g. for backfills or temporary workflows) while maintaining separate watermark
-    /// entries in the database.
+    /// delimiter and format defined on the store. This allows the same pipelines to run under
+    /// multiple indexers (e.g. for backfills or temporary workflows) while maintaining separate
+    /// watermark entries in the database.
     ///
     /// By default there is no task name, and watermarks are keyed only by `pipeline`.
     ///
     /// Sequential pipelines cannot be attached to a tasked indexer.
     ///
     /// The framework ensures that tasked pipelines never commit checkpoints below the main
-    /// pipeline’s pruner watermark. If pruning is enabled for the main pipeline, the tasked
-    /// pipeline should use the same pruning configuration to correctly track both the main
-    /// pipeline’s pruning and reader watermarks.
+    /// pipeline’s pruner watermark. TODO (wlmyng) reference new `reader_interval_ms` on
+    /// `ConcurrentConfig`.
     #[arg(long)]
     pub task: Option<String>,
 
@@ -93,18 +92,16 @@ pub struct Indexer<S: Store> {
     ingestion_service: IngestionService,
 
     /// An optional task name associated with this indexer instance. When set, the indexer records
-    /// all pipeline watermarks using the format `{pipeline}{delimiter}{task}`. This allows multiple
-    /// indexers to run the same pipelines concurrently (e.g. for backfills or temporary workflows)
-    /// while maintaining separate watermark entries in the database.
+    /// all pipeline watermarks using the delimiter and format defined on the `Store`. This allows
+    /// multiple indexers to run the same pipelines concurrently (e.g. for backfills or temporary
+    /// workflows) while maintaining separate watermark entries in the database.
     ///
     /// By default there is no task name, and watermarks are keyed only by `pipeline`.
     ///
     /// Sequential pipelines cannot be attached to a tasked indexer.
     ///
     /// The framework ensures that tasked pipelines never commit checkpoints below the main
-    /// pipeline’s reader watermark. If pruning is enabled for the main pipeline, the tasked
-    /// pipeline should use the same pruning configuration to correctly track both the main
-    /// pipeline’s pruning and reader watermarks.
+    /// pipeline’s reader watermark.
     task: Option<String>,
 
     /// Optional override of the checkpoint lowerbound. By default, ingestion will start just after
@@ -237,13 +234,6 @@ impl<S: Store> Indexer<S> {
     /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
     /// keep the watermark table up-to-date with the highest point they can guarantee all data
     /// exists for, for their pipeline.
-    ///
-    /// If `--first-checkpoint` is set, this value is obeyed only if the pipeline does not already
-    /// have a watermark row. Otherwise, the concurrent pipeline will ignore the configured value
-    /// and instead resume committing from the existing committer watermark.
-    ///
-    /// Additionally, pipelines with a task name must respect the main pipeline's watermark row by
-    /// committing checkpoints no less than the main pipeline's pruner watermark.
     pub async fn concurrent_pipeline<H>(
         &mut self,
         handler: H,
@@ -404,14 +394,6 @@ impl<T: TransactionalStore> Indexer<T> {
     ///
     /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
     /// number of checkpoints (configured by `checkpoint_lag`).
-    ///
-    /// If `--first-checkpoint` is set, this value is obeyed only if the pipeline does not already
-    /// have a watermark row. Otherwise, the sequential pipeline will ignore the configured value
-    /// and instead resume committing from the existing committer watermark.
-    ///
-    /// Sequential pipelines do not support pipeline tasks. Because pipelines guarantee that each
-    /// checkpoint is committed exactly once and in order, running the same pipeline under a
-    /// different task would violate these guarantees.
     pub async fn sequential_pipeline<H>(
         &mut self,
         handler: H,
@@ -1310,10 +1292,10 @@ mod tests {
         assert_eq!(tasked_pipeline_watermark.reader_lo, 0);
     }
 
-    /// During a run, the tasked pipeline will stop processing checkpoints before the main
-    /// pipeline's reader watermark.
+    /// During a run, the tasked pipeline will stop sending checkpoints below the main pipeline's
+    /// reader watermark to the committer. Committer watermark should still advance.
     #[tokio::test]
-    async fn test_tasked_pipelines_stop_when_trailing_main_reader_lo() {
+    async fn test_tasked_pipelines_skip_checkpoints_trailing_main_reader_lo() {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
@@ -1424,5 +1406,16 @@ mod tests {
         assert_eq!(ge_250, 251);
         // Lenient check that not all checkpoints < 250 were committed.
         assert!(lt_250 < 250);
+        assert_eq!(
+            conn.committer_watermark(&MockStore::watermark_key(
+                MockCheckpointSequenceNumberHandler::NAME,
+                Some("task")
+            ))
+            .await
+            .unwrap()
+            .unwrap()
+            .checkpoint_hi_inclusive,
+            500
+        );
     }
 }

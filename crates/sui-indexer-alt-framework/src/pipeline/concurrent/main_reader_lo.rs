@@ -22,18 +22,14 @@ pub(super) fn main_reader_lo<H: Handler + 'static>(
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let Some(reader_lo_tx) = reader_lo_tx else {
-            println!("Skipping main reader lo task");
             info!(pipeline = H::NAME, "Skipping main reader lo task");
             return;
         };
 
         let Some(config) = config else {
-            println!("No pruner config, skipping reader lo task");
             info!(pipeline = H::NAME, "Skipping main reader lo task");
             return;
         };
-
-        println!("did not skip main reader lo task");
 
         let mut reader_interval = interval(config.interval() / 2);
         reader_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -50,22 +46,19 @@ pub(super) fn main_reader_lo<H: Handler + 'static>(
                     match store.connect().await {
                         Ok(mut conn) => {
                             match conn.reader_watermark(H::NAME).await {
-                                Ok(Some(main_reader_watermark)) => {
-                                    if reader_lo_tx.send(Some(main_reader_watermark.reader_lo)).is_err() {
+                                Ok(watermark_opt) => {
+                                    // If the reader watermark is not found, we assume that pruning
+                                    // is not enabled, and checkpoints >= 0 are valid.
+                                    if reader_lo_tx.send(Some(watermark_opt.map_or(0, |wm| wm.reader_lo))).is_err() {
                                         info!(pipeline = H::NAME, "Main reader lo receiver dropped, shutting down task");
                                         break;
                                     }
                                 }
-                                Ok(None) => {
-                                    warn!(pipeline = H::NAME, "No reader watermark found");
-                                }
-                                // TODO (wlmyng): store connection / query failures ... maybe have max retries?
                                 Err(e) => {
                                     warn!(pipeline = H::NAME, "Failed to get reader watermark: {e}");
                                 }
                             }
                         },
-                        // TODO (wlmyng): store connection failures
                         Err(e) => {
                             warn!(pipeline = H::NAME, "Failed to connect to store: {e}");
                         }
