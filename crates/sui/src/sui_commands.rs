@@ -590,7 +590,7 @@ impl SuiCommand {
                     }
                     sui_move::Command::Build(ref build) if build.dump_bytecode_as_base64 => {
                         // `sui move build` does not ordinarily require a network connection, but
-                        // for --dump-bytecode-as-base64 it might need one.
+                        // for --dump-bytecode-as-base64 it needs one due to tree shaking
                         let context = get_wallet_context(&client_config).await?;
 
                         let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;

@@ -2126,7 +2126,7 @@ pub(crate) fn check_for_unpublished_deps(
         ",
             package_dependencies
                 .unpublished
-                .into_keys()
+                .into_iter()
                 .map(|n| n.to_string())
                 .collect::<Vec<_>>()
                 .join(", ")

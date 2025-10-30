@@ -336,8 +336,8 @@ impl CompiledPackage {
         let modules = all_modules.compute_topological_order().unwrap();
 
         if with_unpublished_deps {
-            // For each transitive dependent module, include if it has a zero address or if it is
-            // in the set of unpublished dependencies
+            // For each transitive dependent module, if they are not to be published, they must have
+            // a non-zero address (meaning they are already published on-chain).
             modules
                 .filter(|module| module.address() == &AccountAddress::ZERO)
                 .cloned()
@@ -593,7 +593,7 @@ pub struct PackageDependencies {
     /// Set of published dependencies (name and address).
     pub published: BTreeMap<Symbol, ObjectID>,
     /// Set of unpublished dependencies (name and address).
-    pub unpublished: BTreeMap<Symbol, ObjectID>,
+    pub unpublished: BTreeSet<Symbol>,
     /// Set of dependencies with invalid `published-at` addresses.
     pub invalid: BTreeMap<Symbol, String>,
     /// Set of dependencies that have conflicting `published-at` addresses. The key refers to
@@ -604,7 +604,7 @@ pub struct PackageDependencies {
 impl PackageDependencies {
     pub fn new<F: MoveFlavor>(root_pkg: &RootPackage<F>) -> anyhow::Result<Self> {
         let mut published = BTreeMap::new();
-        let mut unpublished = BTreeMap::new();
+        let mut unpublished = BTreeSet::new();
 
         let packages = root_pkg.packages();
 
@@ -618,10 +618,7 @@ impl PackageDependencies {
                     ObjectID::from_address(addresses.published_at.0),
                 );
             } else {
-                unpublished.insert(
-                    p.display_name().into(),
-                    ObjectID::from_address(p.original_id().0),
-                );
+                unpublished.insert(p.display_name().into());
             }
         }
 
