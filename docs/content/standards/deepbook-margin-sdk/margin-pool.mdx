@@ -22,15 +22,13 @@ Supplying liquidity to margin pools enables lenders to earn interest on their as
 
 The DeepBook Margin SDK provides the following functions for interacting with margin pools.
 
-### mintSupplierCap
+### `mintSupplierCap`
 
 Use `mintSupplierCap` to create a new supplier capability that can be used to supply and withdraw from margin pools. One `SupplierCap` can be used across multiple margin pools. The call returns a function that takes a `Transaction` object.
 
-```tsx
-mintSupplierCap();
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="mintSupplierCap" signatureOnly />
 
-### supplyToMarginPool
+### `supplyToMarginPool`
 
 Use `supplyToMarginPool` to supply assets to a margin pool and earn interest. You can optionally provide a referral ID to share fees with the referrer. The call returns a function that takes a `Transaction` object.
 
@@ -41,16 +39,9 @@ Use `supplyToMarginPool` to supply assets to a margin pool and earn interest. Yo
 - `amountToDeposit`: Number representing the amount to supply.
 - `referralId`: Optional string representing the referral ID.
 
-```tsx
-supplyToMarginPool(
-	coinKey: string,
-	supplierCap: TransactionObjectArgument,
-	amountToDeposit: number,
-	referralId?: string,
-);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="supplyToMarginPool" signatureOnly />
 
-### withdrawFromMarginPool
+### `withdrawFromMarginPool`
 
 Use `withdrawFromMarginPool` to withdraw supplied assets from a margin pool. If no amount is specified, it withdraws all available shares. The call returns a function that takes a `Transaction` object.
 
@@ -60,15 +51,9 @@ Use `withdrawFromMarginPool` to withdraw supplied assets from a margin pool. If 
 - `supplierCap`: `TransactionObjectArgument` representing the supplier cap.
 - `amountToWithdraw`: Optional number representing the amount to withdraw.
 
-```tsx
-withdrawFromMarginPool(
-	coinKey: string,
-	supplierCap: TransactionObjectArgument,
-	amountToWithdraw?: number,
-);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="withdrawFromMarginPool" signatureOnly />
 
-### mintSupplyReferral
+### `mintSupplyReferral`
 
 Use `mintSupplyReferral` to create a supply referral for earning fees. The call returns a function that takes a `Transaction` object.
 
@@ -76,11 +61,9 @@ Use `mintSupplyReferral` to create a supply referral for earning fees. The call 
 
 - `coinKey`: String that identifies the asset type.
 
-```tsx
-mintSupplyReferral(coinKey: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="mintSupplyReferral" signatureOnly />
 
-### withdrawReferralFees
+### `withdrawReferralFees`
 
 Use `withdrawReferralFees` to withdraw accumulated referral fees. The call returns a function that takes a `Transaction` object.
 
@@ -89,9 +72,7 @@ Use `withdrawReferralFees` to withdraw accumulated referral fees. The call retur
 - `coinKey`: String that identifies the asset type.
 - `referralId`: String representing the referral ID.
 
-```tsx
-withdrawReferralFees(coinKey: string, referralId: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="withdrawReferralFees" signatureOnly />
 
 ## Read-only functions
 
@@ -101,43 +82,25 @@ The following functions query margin pool state without modifying it.
 
 Query basic pool information and configuration.
 
-```tsx
-getId(coinKey: string);
-deepbookPoolAllowed(coinKey: string, deepbookPoolId: string);
-supplyCap(coinKey: string);
-maxUtilizationRate(coinKey: string);
-protocolSpread(coinKey: string);
-minBorrow(coinKey: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getId,deepbookPoolAllowed,supplyCap,maxUtilizationRate,protocolSpread,minBorrow" signatureOnly />
 
 ### Supply and borrow metrics
 
 Query current supply and borrow amounts and shares.
 
-```tsx
-totalSupply(coinKey: string);
-supplyShares(coinKey: string);
-totalBorrow(coinKey: string);
-borrowShares(coinKey: string);
-lastUpdateTimestamp(coinKey: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="totalSupply,supplyShares,totalBorrow,borrowShares,lastUpdateTimestamp" signatureOnly />
 
 ### Interest rate
 
 Query the current interest rate based on utilization.
 
-```tsx
-interestRate(coinKey: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="interestRate" signatureOnly />
 
 ### User positions
 
 Query a supplier's position in the pool.
 
-```tsx
-userSupplyShares(coinKey: string, supplierCapId: string);
-userSupplyAmount(coinKey: string, supplierCapId: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="userSupplyShares,userSupplyAmount" signatureOnly />
 
 ## Examples
 

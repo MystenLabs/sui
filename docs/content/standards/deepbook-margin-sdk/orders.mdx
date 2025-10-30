@@ -22,7 +22,7 @@ Placing and managing orders through margin managers enables leveraged trading on
 
 The DeepBook Margin SDK provides the following functions for managing orders through margin managers.
 
-### placeLimitOrder
+### `placeLimitOrder`
 
 Use `placeLimitOrder` to place a limit order through a margin manager. The call returns a function that takes a `Transaction` object.
 
@@ -40,11 +40,9 @@ Use `placeLimitOrder` to place a limit order through a margin manager. The call 
   - `selfMatchingOption`: Optional `SelfMatchingOptions` enum
   - `payWithDeep`: Optional boolean to pay fees with DEEP tokens
 
-```tsx
-placeLimitOrder({ params: PlaceMarginLimitOrderParams });
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/poolProxy.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="placeLimitOrder" signatureOnly />
 
-### placeMarketOrder
+### `placeMarketOrder`
 
 Use `placeMarketOrder` to place a market order through a margin manager. The call returns a function that takes a `Transaction` object.
 
@@ -52,11 +50,9 @@ Use `placeMarketOrder` to place a market order through a margin manager. The cal
 
 - `params`: `PlaceMarginMarketOrderParams` object containing similar parameters to limit orders (without price and expiration).
 
-```tsx
-placeMarketOrder({ params: PlaceMarginMarketOrderParams });
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/poolProxy.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="placeMarketOrder" signatureOnly />
 
-### placeReduceOnlyLimitOrder
+### `placeReduceOnlyLimitOrder`
 
 Use `placeReduceOnlyLimitOrder` to place a limit order that can only reduce your existing debt position. Useful when margin trading is disabled and you need to close positions. The call returns a function that takes a `Transaction` object.
 
@@ -64,11 +60,9 @@ Use `placeReduceOnlyLimitOrder` to place a limit order that can only reduce your
 
 - `params`: `PlaceMarginLimitOrderParams` object (same as `placeLimitOrder`).
 
-```tsx
-placeReduceOnlyLimitOrder({ params: PlaceMarginLimitOrderParams });
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/poolProxy.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="placeReduceOnlyLimitOrder" signatureOnly />
 
-### placeReduceOnlyMarketOrder
+### `placeReduceOnlyMarketOrder`
 
 Use `placeReduceOnlyMarketOrder` to place a market order that can only reduce your existing debt position. The call returns a function that takes a `Transaction` object.
 
@@ -76,11 +70,9 @@ Use `placeReduceOnlyMarketOrder` to place a market order that can only reduce yo
 
 - `params`: `PlaceMarginMarketOrderParams` object (same as `placeMarketOrder`).
 
-```tsx
-placeReduceOnlyMarketOrder({ params: PlaceMarginMarketOrderParams });
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/poolProxy.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="placeReduceOnlyMarketOrder" signatureOnly />
 
-### modifyOrder
+### `modifyOrder`
 
 Use `modifyOrder` to modify the quantity of an existing order. The call returns a function that takes a `Transaction` object.
 
@@ -94,11 +86,9 @@ The `orderId` is the protocol `orderId` generated during order placement, which 
 - `orderId`: String of the protocol order ID.
 - `newQuantity`: Number representing the new order quantity.
 
-```tsx
-modifyOrder(marginManagerKey: string, orderId: string, newQuantity: number);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/poolProxy.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="modifyOrder" signatureOnly />
 
-### cancelOrder, cancelOrders, cancelAllOrders
+### `cancelOrder`, `cancelOrders`, `cancelAllOrders`
 
 Use these functions to cancel orders for a margin manager. The call returns a function that takes a `Transaction` object.
 
@@ -108,13 +98,9 @@ Use these functions to cancel orders for a margin manager. The call returns a fu
 - `orderId` (cancelOrder only): String of the protocol order ID.
 - `orderIds` (cancelOrders only): Array of protocol order IDs.
 
-```tsx
-cancelOrder(marginManagerKey: string, orderId: string);
-cancelOrders(marginManagerKey: string, orderIds: string[]);
-cancelAllOrders(marginManagerKey: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/poolProxy.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="cancelOrder,cancelOrders,cancelAllOrders" signatureOnly />
 
-### withdrawSettledAmounts
+### `withdrawSettledAmounts`
 
 Use `withdrawSettledAmounts` to withdraw settled amounts from completed trades. The call returns a function that takes a `Transaction` object.
 
@@ -122,11 +108,9 @@ Use `withdrawSettledAmounts` to withdraw settled amounts from completed trades. 
 
 - `marginManagerKey`: String that identifies the margin manager.
 
-```tsx
-withdrawSettledAmounts(marginManagerKey: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/poolProxy.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="withdrawSettledAmounts" signatureOnly />
 
-### stake, unstake
+### `stake`, `unstake`
 
 Use these functions to stake and unstake DEEP tokens through the margin manager for trading fee benefits. The call returns a function that takes a `Transaction` object.
 
@@ -135,12 +119,9 @@ Use these functions to stake and unstake DEEP tokens through the margin manager 
 - `marginManagerKey`: String that identifies the margin manager.
 - `stakeAmount` (stake only): Number representing the amount to stake.
 
-```tsx
-stake(marginManagerKey: string, stakeAmount: number);
-unstake(marginManagerKey: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/poolProxy.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="stake,unstake" signatureOnly />
 
-### submitProposal, vote
+### `submitProposal`, `vote`
 
 Use these functions to participate in pool governance through the margin manager. The call returns a function that takes a `Transaction` object.
 
@@ -150,12 +131,9 @@ Use these functions to participate in pool governance through the margin manager
 - `params` (submitProposal): `MarginProposalParams` object with `takerFee`, `makerFee`, and `stakeRequired`.
 - `proposalId` (vote): String representing the proposal ID.
 
-```tsx
-submitProposal(marginManagerKey: string, params: MarginProposalParams);
-vote(marginManagerKey: string, proposalId: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/poolProxy.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="submitProposal,vote" signatureOnly />
 
-### claimRebate
+### `claimRebate`
 
 Use `claimRebate` to claim trading rebates earned through the margin manager. The call returns a function that takes a `Transaction` object.
 
@@ -163,9 +141,7 @@ Use `claimRebate` to claim trading rebates earned through the margin manager. Th
 
 - `marginManagerKey`: String that identifies the margin manager.
 
-```tsx
-claimRebate(marginManagerKey: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/poolProxy.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="claimRebate" signatureOnly />
 
 ## Examples
 

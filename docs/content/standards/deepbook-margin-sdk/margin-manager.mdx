@@ -22,7 +22,7 @@ Managing margin accounts is essential for leveraged trading on DeepBook. The Mar
 
 The DeepBook Margin SDK provides the following functions for managing margin accounts.
 
-### newMarginManager
+### `newMarginManager`
 
 Use `newMarginManager` to create and share a new margin manager in one transaction. The call returns a function that takes a `Transaction` object.
 
@@ -30,11 +30,9 @@ Use `newMarginManager` to create and share a new margin manager in one transacti
 
 - `poolKey`: String that identifies the DeepBook pool.
 
-```tsx
-newMarginManager(poolKey: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="newMarginManager" signatureOnly />
 
-### newMarginManagerWithInitializer
+### `newMarginManagerWithInitializer`
 
 Use `newMarginManagerWithInitializer` to create a margin manager and return it with an initializer. You must call `shareMarginManager` afterward to share it. The call returns an object with `manager` and `initializer`.
 
@@ -42,11 +40,9 @@ Use `newMarginManagerWithInitializer` to create a margin manager and return it w
 
 - `poolKey`: String that identifies the DeepBook pool.
 
-```tsx
-newMarginManagerWithInitializer(poolKey: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="newMarginManagerWithInitializer" signatureOnly />
 
-### shareMarginManager
+### `shareMarginManager`
 
 Use `shareMarginManager` to share a margin manager created with `newMarginManagerWithInitializer`. The call returns a function that takes a `Transaction` object.
 
@@ -56,15 +52,9 @@ Use `shareMarginManager` to share a margin manager created with `newMarginManage
 - `manager`: `TransactionArgument` representing the margin manager.
 - `initializer`: `TransactionArgument` representing the initializer.
 
-```tsx
-shareMarginManager(
-	poolKey: string,
-	manager: TransactionArgument,
-	initializer: TransactionArgument,
-);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="shareMarginManager" signatureOnly />
 
-### depositBase, depositQuote, depositDeep
+### `depositBase`, `depositQuote`, `depositDeep`
 
 Use these functions to deposit assets into a margin manager. The call returns a function that takes a `Transaction` object.
 
@@ -73,13 +63,9 @@ Use these functions to deposit assets into a margin manager. The call returns a 
 - `managerKey`: String that identifies the margin manager.
 - `amount`: Number representing the amount to deposit.
 
-```tsx
-depositBase(managerKey: string, amount: number);
-depositQuote(managerKey: string, amount: number);
-depositDeep(managerKey: string, amount: number);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="depositBase,depositQuote,depositDeep" signatureOnly />
 
-### withdrawBase, withdrawQuote, withdrawDeep
+### `withdrawBase`, `withdrawQuote`, `withdrawDeep`
 
 Use these functions to withdraw assets from a margin manager. Withdrawals are subject to risk ratio limits. The call returns a function that takes a `Transaction` object.
 
@@ -88,13 +74,9 @@ Use these functions to withdraw assets from a margin manager. Withdrawals are su
 - `managerKey`: String that identifies the margin manager.
 - `amount`: Number representing the amount to withdraw.
 
-```tsx
-withdrawBase(managerKey: string, amount: number);
-withdrawQuote(managerKey: string, amount: number);
-withdrawDeep(managerKey: string, amount: number);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="withdrawBase,withdrawQuote,withdrawDeep" signatureOnly />
 
-### borrowBase, borrowQuote
+### `borrowBase`, `borrowQuote`
 
 Use these functions to borrow assets from margin pools. Borrowing is subject to risk ratio limits. The call returns a function that takes a `Transaction` object.
 
@@ -103,12 +85,9 @@ Use these functions to borrow assets from margin pools. Borrowing is subject to 
 - `managerKey`: String that identifies the margin manager.
 - `amount`: Number representing the amount to borrow.
 
-```tsx
-borrowBase(managerKey: string, amount: number);
-borrowQuote(managerKey: string, amount: number);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="borrowBase,borrowBase" signatureOnly />
 
-### repayBase, repayQuote
+### `repayBase`, `repayQuote`
 
 Use these functions to repay borrowed assets. If no amount is specified, it repays the maximum available balance up to the total debt. The call returns a function that takes a `Transaction` object.
 
@@ -117,12 +96,9 @@ Use these functions to repay borrowed assets. If no amount is specified, it repa
 - `managerKey`: String that identifies the margin manager.
 - `amount`: Optional number representing the amount to repay.
 
-```tsx
-repayBase(managerKey: string, amount?: number);
-repayQuote(managerKey: string, amount?: number);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="repayBase,repayQuote" signatureOnly />
 
-### liquidate
+### `liquidate`
 
 Use `liquidate` to liquidate an undercollateralized margin manager. The call returns a function that takes a `Transaction` object.
 
@@ -133,49 +109,29 @@ Use `liquidate` to liquidate an undercollateralized margin manager. The call ret
 - `debtIsBase`: Boolean indicating whether the debt is in the base asset.
 - `repayCoin`: `TransactionArgument` representing the coin to use for repayment.
 
-```tsx
-liquidate(
-	managerAddress: string,
-	poolKey: string,
-	debtIsBase: boolean,
-	repayCoin: TransactionArgument,
-);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="liquidate" signatureOnly />
 
 ## Read-only functions
 
 The following functions query margin manager state without modifying it.
 
-### owner, deepbookPool, marginPoolId
+### `owner`, `deepbookPool`, `marginPoolId`
 
 Query basic margin manager information.
 
-```tsx
-ownerByPoolKey(poolKey: string, marginManagerId: string);
-deepbookPool(poolKey: string, marginManagerId: string);
-marginPoolId(poolKey: string, marginManagerId: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="ownerByPoolKey,deepbookPool,marginPoolId" signatureOnly />
 
-### borrowedShares, borrowedBaseShares, borrowedQuoteShares, hasBaseDebt
+### `borrowedShares`, `borrowedBaseShares`, `borrowedQuoteShares`, `hasBaseDebt`
 
 Query borrowed position information.
 
-```tsx
-borrowedShares(poolKey: string, marginManagerId: string);
-borrowedBaseShares(poolKey: string, marginManagerId: string);
-borrowedQuoteShares(poolKey: string, marginManagerId: string);
-hasBaseDebt(poolKey: string, marginManagerId: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="borrowedShares,borrowedBaseShares,borrowedQuoteShares,hasBaseDebt" signatureOnly />
 
-### balanceManager, calculateAssets, calculateDebts
+### `balanceManager`, `calculateAssets`, `calculateDebts`
 
 Query balance and debt information.
 
-```tsx
-balanceManager(poolKey: string, marginManagerId: string);
-calculateAssets(poolKey: string, marginManagerId: string);
-calculateDebts(poolKey: string, coinKey: string, marginManagerId: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="balanceManager,calculateAssets,calculateDebts" signatureOnly />
 
 ## Examples
 
