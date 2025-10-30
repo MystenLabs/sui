@@ -5509,7 +5509,7 @@ fn update_toml_with_localnet_chain_id(package_path: &Path, chain_id: String) -> 
     orig_toml
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_move_build_dump_bytecode_as_base64() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
@@ -5533,6 +5533,9 @@ async fn test_move_build_dump_bytecode_as_base64() -> Result<(), anyhow::Error> 
     let output = cmd.output().expect("Failed to execute command");
     let stdout = String::from_utf8_lossy(&output.stdout);
 
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    println!("Stderr: {}", stderr);
+
     // check that the output contains the right output; this was computed with the old CLI before
     // the new pkg system to ensure the new one's output is correct
     let expected_output = r#"{"modules":["oRzrCwYAAAAKAQAMAgwkAzAyBGIMBW59B+sByAEIswNgBpMEDwqiBAUMpwRLABIBDQIHAhECEwIUAAMCAAECBwEAAAIADAEAAQIBDAEAAQIEDAEAAQQFAgAFBgcAAAoAAQAACwIBAAARAwEAAQwBBgEAAggICQECAgsQEQEAAw4LAQEMAw8PAQEMBBAMDQADBQQHBgoHDgUHBxICCAAHCAUAAwcLBAEIAAMHCAUCCwQBCAAFAgsDAQgACwQBCAABCAYBCwEBCQABCAAHCQACCgIKAgoCCwEBCAYHCAUCCwQBCQALAwEJAAELAwEIAAEJAAEGCAUBBQELBAEIAAIJAAUDBwsEAQkAAwcIBQELAgEJAAELAgEIAARDb2luDENvaW5NZXRhZGF0YQZPcHRpb24MVFJVU1RFRF9DT0lOC1RyZWFzdXJ5Q2FwCVR4Q29udGV4dANVcmwEY29pbg9jcmVhdGVfY3VycmVuY3kLZHVtbXlfZmllbGQEaW5pdARtaW50BG5vbmUGb3B0aW9uFHB1YmxpY19mcmVlemVfb2JqZWN0D3B1YmxpY190cmFuc2ZlcgZzZW5kZXIIdHJhbnNmZXIMdHJ1c3RlZF9jb2luCnR4X2NvbnRleHQDdXJsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACCgIIB1RSVVNURUQKAgEAAAIBCQEAAAAABBILADECBwAHAQcBOAAKATgBDAIMAwsCOAILAwsBLhEIOAMCAQEEAAEJCwALAQoCOAQLAi4RCDgFAgIBBAABBAsACwE4AwIA"],"dependencies":["0x0000000000000000000000000000000000000000000000000000000000000001","0x0000000000000000000000000000000000000000000000000000000000000002"],"digest":[116,71,103,38,103,86,151,240,229,223,244,179,42,122,231,174,91,111,66,161,82,255,105,49,217,76,108,41,249,110,214,137]}"#;
@@ -5548,7 +5551,7 @@ async fn test_move_build_dump_bytecode_as_base64() -> Result<(), anyhow::Error> 
     Ok(())
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_move_build_dump_bytecode_as_base64_with_unpublished_deps() -> Result<(), anyhow::Error>
 {
     let mut test_cluster = TestClusterBuilder::new().build().await;
@@ -5624,7 +5627,7 @@ async fn test_move_build_dump_bytecode_as_base64_with_unpublished_deps() -> Resu
     Ok(())
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_move_build_dump_bytecode_as_base64_no_chain_id() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
