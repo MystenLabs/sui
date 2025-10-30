@@ -23,9 +23,16 @@ use move_compiler::{
     shared::{SaveFlag, SaveHook, files::MappedFiles},
 };
 use move_package_alt::{
-    errors::PackageResult, flavor::MoveFlavor, package::RootPackage, schema::PackageName,
+    compatibility::legacy_parser::PACKAGE_NAME,
+    errors::PackageResult,
+    flavor::MoveFlavor,
+    package::{RootPackage, layout::SourcePackageLayout},
+    schema::PackageName,
 };
 use move_symbol_pool::Symbol;
+use toml_edit::{DocumentMut, value};
+
+const EDITION_NAME: &str = "edition";
 
 pub struct BuildPlan<'a, F: MoveFlavor> {
     root_pkg: &'a RootPackage<F>,
@@ -187,8 +194,17 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
     }
 
     /// Rewrite the edition field in Move.toml to the given edition.
-    pub fn record_package_edition(&self, _edition: Edition) -> anyhow::Result<()> {
-        todo!()
+    pub fn record_package_edition(&self, edition: Edition) -> anyhow::Result<()> {
+        let move_toml_path = self
+            .root_pkg
+            .package_path()
+            .join(SourcePackageLayout::Manifest.path());
+        let mut toml = std::fs::read_to_string(move_toml_path.clone())?
+            .parse::<DocumentMut>()
+            .expect("Failed to read TOML file to update edition");
+        toml[PACKAGE_NAME][EDITION_NAME] = value(edition.to_string());
+        std::fs::write(move_toml_path, toml.to_string())?;
+        Ok(())
     }
 
     /// Get the path to the root package.

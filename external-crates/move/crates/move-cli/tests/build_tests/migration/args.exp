@@ -1,0 +1,271 @@
+Command `migrate`:
+Package toml does not specify an edition. As of 2024, Move requires all packages to define a language edition.
+
+Please select one of the following editions:
+
+1) 2024
+2) legacy
+
+Selection (default=1): 
+
+Would you like the Move compiler to migrate your code to Move 2024? (Y/n) 
+Generated changes . . .
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING A
+
+The following changes will be made.
+============================================================
+
+--- ./sources/mod0.move
++++ ./sources/mod0.move
+@@ -2 +2 @@
+-    struct S { f: u64 }
++    public struct S { f: u64 }
+@@ -4 +4 @@
+-    struct LongerName {
++    public struct LongerName {
+@@ -9 +9 @@
+-    struct Positional(u64, u64, u64)
++    public struct Positional(u64, u64, u64)
+@@ -11,2 +11,2 @@
+-    entry fun t0(x: u64, s: S): u64 {
+-        let S { f: fin } = s;
++    entry fun t0(mut x: u64, s: S): u64 {
++        let S { f: mut fin } = s;
+--- ./sources/mod1.move
++++ ./sources/mod1.move
+@@ -3,3 +3,3 @@
+-    public fun t(x: u64, yip: u64, s: S): u64  {
+-        let yes = 0;
+-        let S { f: fin } = s;
++    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
++        let mut yes = 0;
++        let S { f: mut fin } = s;
+--- ./sources/mod2.move
++++ ./sources/mod2.move
+@@ -3,3 +3,3 @@
+-    public fun t(x: u64, yip: u64, s: S): u64  {
+-        let yes = 0;
+-        let S { f: fin } = s;
++    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
++        let mut yes = 0;
++        let S { f: mut fin } = s;
+@@ -15 +15 @@
+-        let x = 5; let y = 10;
++        let mut x = 5; let mut y = 10;
+--- ./sources/mod3_4.move
++++ ./sources/mod3_4.move
+@@ -2 +2 @@
+-    struct S { f: u64 }
++    public struct S { f: u64 }
+@@ -4 +4 @@
+-    struct LongerName {
++    public struct LongerName {
+@@ -9 +9 @@
+-    struct Positional(u64, u64, u64)
++    public struct Positional(u64, u64, u64)
+@@ -11,2 +11,2 @@
+-    entry fun t0(x: u64, s: S): u64 {
+-        let S { f: fin } = s;
++    entry fun t0(mut x: u64, s: S): u64 {
++        let S { f: mut fin } = s;
+@@ -22,3 +22,3 @@
+-    public fun t(x: u64, yip: u64, s: S): u64  {
+-        let yes = 0;
+-        let S { f: fin } = s;
++    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
++        let mut yes = 0;
++        let S { f: mut fin } = s;
+--- ./sources/mod5.move
++++ ./sources/mod5.move
+@@ -3,2 +3,2 @@
+-    struct UID { }
+-    struct TxContext { }
++    public struct UID { }
++    public struct TxContext { }
+@@ -14,2 +14,2 @@
+-        let v: vector<UID> = empty();
+-        let i = 0;
++        let mut v: vector<UID> = empty();
++        let mut i = 0;
+--- ./tests/test0.move
++++ ./tests/test0.move
+@@ -5,3 +5,3 @@
+-    struct R has store { }
+-    struct Droppable has drop {}
+-    struct NotDroppable {}
++    public struct R has store { }
++    public struct Droppable has drop {}
++    public struct NotDroppable {}
+@@ -30 +30 @@
+-        let v1 = V::empty<u64>();
++        let mut v1 = V::empty<u64>();
+@@ -38,2 +38,2 @@
+-        let v1 = V::empty();
+-        let v2 = V::empty();
++        let mut v1 = V::empty();
++        let mut v2 = V::empty();
+@@ -55 +55 @@
+-        let v1 = V::empty();
++        let mut v1 = V::empty();
+@@ -72,2 +72,2 @@
+-        let v1 = V::empty();
+-        let v2 = V::empty();
++        let mut v1 = V::empty();
++        let mut v2 = V::empty();
+@@ -85 +85 @@
+-        let i = 0;
++        let mut i = 0;
+@@ -95 +95 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -102 +102 @@
+-        let vec = V::empty();
++        let mut vec = V::empty();
+@@ -129 +129 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -138 +138 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -145 +145 @@
+-        let vec = V::empty();
++        let mut vec = V::empty();
+@@ -159 +159 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -165 +165 @@
+-        let vec = V::empty();
++        let mut vec = V::empty();
+@@ -180 +180 @@
+-        let vec = V::empty();
++        let mut vec = V::empty();
+@@ -194 +194 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -202 +202 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -217 +217 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -233 +233 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -240 +240 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -247 +247 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -255 +255 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -264 +264 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -285 +285 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -304 +304 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -311 +311 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -324 +324 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -330 +330 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -338 +338 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -360 +360 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -382 +382 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -389 +389 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -411 +411 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -420 +420 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -431 +431 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -442 +442 @@
+-        let empty = V::empty();
++        let mut empty = V::empty();
+@@ -444 +444 @@
+-        let i = 0;
++        let mut i = 0;
+@@ -455,2 +455,2 @@
+-        let v = V::empty();
+-        let i = 0;
++        let mut v = V::empty();
++        let mut i = 0;
+@@ -471,2 +471,2 @@
+-    fun test_natives_with_type<T>(x1: T, x2: T): (T, T) {
+-        let v = V::empty();
++    fun test_natives_with_type<T>(mut x1: T, mut x2: T): (T, T) {
++        let mut v = V::empty();
+@@ -509 +509 @@
+-        let v = vector[7];
++        let mut v = vector[7];
+@@ -513 +513 @@
+-        let v = vector[7, 9];
++        let mut v = vector[7, 9];
+@@ -517 +517 @@
+-        let v = vector[6, 7];
++        let mut v = vector[6, 7];
+@@ -521 +521 @@
+-        let v = vector[5, 6, 8];
++        let mut v = vector[5, 6, 8];
+@@ -528 +528 @@
+-        let v = vector[];
++        let mut v = vector[];
+@@ -539 +539 @@
+-        let v = vector[7];
++        let mut v = vector[7];
+@@ -545,2 +545,2 @@
+-        let v = V::empty();
+-        let i = 0;
++        let mut v = V::empty();
++        let mut i = 0;
+@@ -559,2 +559,2 @@
+-        let v = V::empty();
+-        let i = 0;
++        let mut v = V::empty();
++        let mut i = 0;
+
+
+============================================================
+Apply changes? (Y/n) 
+Updating "./sources/mod0.move" . . .
+Updating "./sources/mod1.move" . . .
+Updating "./sources/mod2.move" . . .
+Updating "./sources/mod3_4.move" . . .
+Updating "./sources/mod5.move" . . .
+Updating "./tests/test0.move" . . .
+
+Changes complete
+Wrote patchfile out to: ./migration.patch
+
+Recorded edition in 'Move.toml'
+External Command `diff -r -s sources migration_sources`:
+Files sources/mod0.move and migration_sources/mod0.move are identical
+Files sources/mod1.move and migration_sources/mod1.move are identical
+Files sources/mod2.move and migration_sources/mod2.move are identical
+Files sources/mod3_4.move and migration_sources/mod3_4.move are identical
+Files sources/mod5.move and migration_sources/mod5.move are identical
+External Command `diff -r -s tests migration_tests`:
+Files tests/test0.move and migration_tests/test0.move are identical
+External Command `diff -s Move.toml Move.toml.expected`:
+Files Move.toml and Move.toml.expected are identical
