@@ -103,6 +103,7 @@ members = [
   "crates/sui-bridge-indexer",
   "crates/sui-bridge-indexer-alt",
   "crates/sui-bridge-schema",
+  "crates/sui-checkpoint-blob-indexer",
   "crates/sui-cluster-test",
   "crates/sui-config",
   "crates/sui-core",
@@ -137,6 +138,7 @@ members = [
   "crates/sui-indexer-alt-graphql",
   "crates/sui-indexer-alt-jsonrpc",
   "crates/sui-indexer-alt-metrics",
+  "crates/sui-indexer-alt-object-store",
   "crates/sui-indexer-alt-reader",
   "crates/sui-indexer-alt-restorer",
   "crates/sui-indexer-alt-schema",
@@ -720,6 +722,7 @@ sui-indexer-alt-reader = { path = "crates/sui-indexer-alt-reader" }
 sui-indexer-alt-restorer = { path = "crates/sui-indexer-alt-restorer" }
 sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }
+sui-indexer-alt-object-store = { path = "crates/sui-indexer-alt-object-store" }
 sui-json = { path = "crates/sui-json" }
 sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
