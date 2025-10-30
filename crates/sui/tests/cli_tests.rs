@@ -607,7 +607,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
 
     let chain_id = client.read_api().get_chain_identifier().await.unwrap();
     let (_tmp, pkg_path) =
-        create_temp_dir_with_framework_packages("ptb_complex_args_test_functions", chain_id)?;
+        create_temp_dir_with_framework_packages("ptb_complex_args_test_functions", Some(chain_id))?;
 
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
@@ -723,7 +723,7 @@ async fn test_ptb_publish() -> Result<(), anyhow::Error> {
     let client = context.get_client().await?;
 
     let chain_id = client.read_api().get_chain_identifier().await.unwrap();
-    let (_tmp, pkg_path) = create_temp_dir_with_framework_packages("ptb_publish", chain_id)?;
+    let (_tmp, pkg_path) = create_temp_dir_with_framework_packages("ptb_publish", Some(chain_id))?;
 
     let publish_ptb_string = format!(
         r#"
@@ -1217,7 +1217,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     // Provide path to well formed package sources
     let chain_id = client.read_api().get_chain_identifier().await.unwrap();
     let (_tmp, package_path) =
-        create_temp_dir_with_framework_packages("dummy_modules_publish", chain_id)?;
+        create_temp_dir_with_framework_packages("dummy_modules_publish", Some(chain_id))?;
 
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
@@ -1301,7 +1301,7 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     let build_config = BuildConfig::new_for_testing().config;
 
     let (_tmp, pkg_path) =
-        create_temp_dir_with_framework_packages("pkg_mgmt_modules_publish", chain_id)?;
+        create_temp_dir_with_framework_packages("pkg_mgmt_modules_publish", Some(chain_id))?;
 
     // Publish the package
     let resp = SuiClientCommands::Publish(PublishArgs {
@@ -2322,7 +2322,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
 
     // Provide path to well formed package sources
     let (_tmp, package_path) =
-        create_temp_dir_with_framework_packages("dummy_modules_upgrade", chain_id)?;
+        create_temp_dir_with_framework_packages("dummy_modules_upgrade", Some(chain_id))?;
 
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish(PublishArgs {
@@ -2428,7 +2428,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
     let (_tmp, package_path) =
-        create_temp_dir_with_framework_packages("dummy_modules_upgrade", chain_id)?;
+        create_temp_dir_with_framework_packages("dummy_modules_upgrade", Some(chain_id))?;
 
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish(PublishArgs {
@@ -5118,7 +5118,6 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::E
         test.package_path("A").join("Published.toml"),
         test.package_path("A_v1").join("Published.toml"),
     )?;
-    println!("Upgrading package A to A_v1");
     let package_a_v1_id = test.upgrade_package("A_v1", cap).await?;
 
     // Publish D which depends on A_v1 but no code references A
@@ -5186,7 +5185,6 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
     let (package_d_id, package_d_upgrade_cap) =
         test.publish_package_without_tree_shaking("D_A").await;
     let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
-    // println!("linkage_table_d: {:#?}", linkage_table_d);
     assert!(
         linkage_table_d.contains_key(&package_a_id),
         "Package D should depend on A"
@@ -5435,7 +5433,7 @@ fn create_temp_dir_with_framework_packages(
     // The "folder" name of the test pkg.
     test_pkg_name: &str,
     // Pass in the chain-id if we wanna set a non-test environment for tests.
-    chain_id: String,
+    chain_id: Option<String>,
 ) -> Result<(TempDir, PathBuf), anyhow::Error> {
     let temp = tempdir()?;
 
@@ -5450,7 +5448,9 @@ fn create_temp_dir_with_framework_packages(
         tempdir.join("system-packages"),
     )?;
 
-    let _ = update_toml_with_localnet_chain_id(pkg_path, chain_id);
+    if let Some(chain_id) = chain_id {
+        let _ = update_toml_with_localnet_chain_id(pkg_path, chain_id);
+    }
 
     Ok((temp, pkg_path.clone()))
 }
@@ -5469,4 +5469,158 @@ fn update_toml_with_localnet_chain_id(package_path: &Path, chain_id: String) -> 
     .unwrap();
 
     orig_toml
+}
+
+#[tokio::test]
+async fn test_move_build_dump_bytecode_as_base64() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let context = &mut test_cluster.wallet;
+    let client_config_path = context.config.path();
+    let client = context.get_client().await?;
+    // we need to cache the chain id as it does not get automatically cached in TestClusterBuilder
+    let chain_id = context.cache_chain_id(&client).await?;
+
+    // Create temp directory with the test package and update the Move.toml with localnet chain id
+    let (temp_dir, pkg_path) =
+        create_temp_dir_with_framework_packages("dummy_modules_publish", Some(chain_id))?;
+    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
+    cmd.arg("move")
+        .arg("--client.config")
+        .arg(client_config_path)
+        .arg("build")
+        .arg("--dump-bytecode-as-base64")
+        .arg("--path")
+        .arg(pkg_path.to_str().unwrap());
+
+    let output = cmd.output().expect("Failed to execute command");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    println!("Stderr: {}", stderr);
+
+    // check that the output contains the right output; this was computed with the old CLI before
+    // the new pkg system to ensure the new one's output is correct
+    let expected_output = r#"{"modules":["oRzrCwYAAAAKAQAMAgwkAzAyBGIMBW59B+sByAEIswNgBpMEDwqiBAUMpwRLABIBDQIHAhECEwIUAAMCAAECBwEAAAIADAEAAQIBDAEAAQIEDAEAAQQFAgAFBgcAAAoAAQAACwIBAAARAwEAAQwBBgEAAggICQECAgsQEQEAAw4LAQEMAw8PAQEMBBAMDQADBQQHBgoHDgUHBxICCAAHCAUAAwcLBAEIAAMHCAUCCwQBCAAFAgsDAQgACwQBCAABCAYBCwEBCQABCAAHCQACCgIKAgoCCwEBCAYHCAUCCwQBCQALAwEJAAELAwEIAAEJAAEGCAUBBQELBAEIAAIJAAUDBwsEAQkAAwcIBQELAgEJAAELAgEIAARDb2luDENvaW5NZXRhZGF0YQZPcHRpb24MVFJVU1RFRF9DT0lOC1RyZWFzdXJ5Q2FwCVR4Q29udGV4dANVcmwEY29pbg9jcmVhdGVfY3VycmVuY3kLZHVtbXlfZmllbGQEaW5pdARtaW50BG5vbmUGb3B0aW9uFHB1YmxpY19mcmVlemVfb2JqZWN0D3B1YmxpY190cmFuc2ZlcgZzZW5kZXIIdHJhbnNmZXIMdHJ1c3RlZF9jb2luCnR4X2NvbnRleHQDdXJsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACCgIIB1RSVVNURUQKAgEAAAIBCQEAAAAABBILADECBwAHAQcBOAAKATgBDAIMAwsCOAILAwsBLhEIOAMCAQEEAAEJCwALAQoCOAQLAi4RCDgFAgIBBAABBAsACwE4AwIA"],"dependencies":["0x0000000000000000000000000000000000000000000000000000000000000001","0x0000000000000000000000000000000000000000000000000000000000000002"],"digest":[116,71,103,38,103,86,151,240,229,223,244,179,42,122,231,174,91,111,66,161,82,255,105,49,217,76,108,41,249,110,214,137]}"#;
+
+    // Simple contains check
+    assert!(
+        stdout.contains(expected_output),
+        "Expected JSON not found in output. Output was:\n{}",
+        stdout
+    );
+
+    temp_dir.close()?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_move_build_dump_bytecode_as_base64_with_unpublished_deps() -> Result<(), anyhow::Error>
+{
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let context = &mut test_cluster.wallet;
+    let client_config_path = context.config.path();
+    let client = context.get_client().await?;
+    let chain_id = context.cache_chain_id(&client).await?;
+
+    // Create temp directory with the test package
+    let (temp_dir, pkg_path) = create_temp_dir_with_framework_packages(
+        "dummy_module_publish_with_unpublished_dependency",
+        Some(chain_id.clone()),
+    )?;
+    // copy the unpublished dependency
+    copy_dir_all(
+        PathBuf::from(TEST_DATA_DIR).join("dummy_module_unpublished_dependency"),
+        pkg_path
+            .parent()
+            .unwrap()
+            .join("dummy_module_unpublished_dependency"),
+    )?;
+    update_toml_with_localnet_chain_id(
+        &pkg_path
+            .parent()
+            .unwrap()
+            .join("dummy_module_unpublished_dependency"),
+        chain_id,
+    );
+
+    // try to build without passing --with-unpublished-dependencies; should fail
+    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
+    cmd.arg("move")
+        .arg("--client.config")
+        .arg(client_config_path)
+        .arg("build")
+        .arg("--dump-bytecode-as-base64")
+        .arg("--path")
+        .arg(pkg_path.to_str().unwrap());
+
+    let output = cmd.output().expect("Failed to execute command");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let expected_output = "The package has unpublished dependencies";
+    assert!(
+        stdout.contains(expected_output),
+        "Expected to fail. Output was:\n{}",
+        stdout
+    );
+
+    // build by passing --with-unpublished-dependencies; should fail
+    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
+    cmd.arg("move")
+        .arg("--client.config")
+        .arg(client_config_path)
+        .arg("build")
+        .arg("--with-unpublished-dependencies")
+        .arg("--dump-bytecode-as-base64")
+        .arg("--path")
+        .arg(pkg_path.to_str().unwrap());
+
+    let output = cmd.output().expect("Failed to execute command");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let expected_output = r#"{"modules":["oRzrCwYAAAAGAQACAwIFBQcBBwgNCBUgDDUHAAAAAQAAAAAHaW52YWxpZARtYWluAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQQAAAECAA==","oRzrCwYAAAAGAQACAwIFBQcBBwgFCA0gDC0HAAAAAAAAAAAEbWFpbgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEEAAABAgA="],"dependencies":[],"digest":[251,6,57,223,220,227,253,129,151,82,18,74,115,140,93,99,17,131,143,75,136,154,202,251,185,60,187,107,11,151,91,34]}"#;
+    assert!(
+        stdout.contains(expected_output),
+        "Mismatched ouptut: \nExpected:\n{}\n\nOutput was:\n{}",
+        expected_output,
+        stdout
+    );
+
+    temp_dir.close()?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_move_build_dump_bytecode_as_base64_no_chain_id() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let context = &mut test_cluster.wallet;
+    let client_config_path = context.config.path();
+
+    // Create temp directory with the test package
+    let (temp_dir, pkg_path) =
+        create_temp_dir_with_framework_packages("dummy_modules_publish", None)?;
+
+    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
+    cmd.arg("move")
+        .arg("--client.config")
+        .arg(client_config_path)
+        .arg("build")
+        .arg("--dump-bytecode-as-base64")
+        .arg("--path")
+        .arg(pkg_path.to_str().unwrap());
+
+    let output = cmd.output().expect("Failed to execute command");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let expected_output = format!(
+        "No cached chain ID found for env {}. Please pass `-e env_name` to your command",
+        context.get_active_env()?.alias
+    );
+    assert!(
+        stdout.contains(&expected_output),
+        "Expected to say there's no cached chain ID. Output was:\n{}",
+        stdout
+    );
+
+    temp_dir.close()?;
+    Ok(())
 }
