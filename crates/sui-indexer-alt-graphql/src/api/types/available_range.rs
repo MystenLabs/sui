@@ -175,10 +175,7 @@ collect_pipelines! {
     CoinMetadata.[objectAt, objectVersionsAfter, objectVersionsBefore] => IObject.*;
     CoinMetadata.[digest, objectBcs, owner, previousTransaction, storageRebate, version] => IObject.*;
     CoinMetadata.[receivedTransactions] => IObject.receivedTransactions();
-    CoinMetadata.[supply] |pipelines, _filters| {
-        pipelines.insert("consistent".to_string());
-    };
-    CoinMetadata.[supplyState] |pipelines, _filters| {
+    CoinMetadata.[allowGlobalPause, denyCap, regulatedState, supply, supplyState] |pipelines, _filters| {
         pipelines.insert("consistent".to_string());
     };
 
@@ -199,11 +196,6 @@ collect_pipelines! {
         pipelines.insert("obj_versions".to_string());
     };
     Epoch.[transactions] => Query.transactions(.., "atCheckpoint");
-
-    Event.[contents, eventBcs, sender, sequenceNumber, timestamp, transaction, transactionModule] |pipelines, _filters| {
-        pipelines.insert("ev_struct_inst".to_string());
-        pipelines.insert("tx_digests".to_string());
-    };
 
     IAddressable.[balance, balances, multiGetBalances, objects] |pipelines, _filters| {
         pipelines.insert("consistent".to_string());

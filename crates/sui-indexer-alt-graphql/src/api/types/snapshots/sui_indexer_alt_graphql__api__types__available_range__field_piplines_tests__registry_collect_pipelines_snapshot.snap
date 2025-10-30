@@ -285,13 +285,13 @@ CoinMetadata.receivedTransactions
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
 CoinMetadata.regulatedState
-  => {}
+  => {"consistent"}
 
 CoinMetadata.allowGlobalPause
-  => {}
+  => {"consistent"}
 
 CoinMetadata.denyCap
-  => {}
+  => {"consistent"}
 
 CoinMetadata.supplyState
   => {"consistent"}
@@ -531,25 +531,25 @@ Epoch.liveObjectSetDigest
   => {}
 
 Event.contents
-  => {"ev_struct_inst", "tx_digests"}
+  => {}
 
 Event.eventBcs
-  => {"ev_struct_inst", "tx_digests"}
+  => {}
 
 Event.sender
-  => {"ev_struct_inst", "tx_digests"}
+  => {}
 
 Event.sequenceNumber
-  => {"ev_struct_inst", "tx_digests"}
+  => {}
 
 Event.timestamp
-  => {"ev_struct_inst", "tx_digests"}
+  => {}
 
 Event.transaction
-  => {"ev_struct_inst", "tx_digests"}
+  => {}
 
 Event.transactionModule
-  => {"ev_struct_inst", "tx_digests"}
+  => {}
 
 ExecutionError.abortCode
   => {}
