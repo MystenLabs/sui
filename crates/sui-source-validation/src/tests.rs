@@ -49,18 +49,6 @@ async fn successful_verification() -> anyhow::Result<()> {
         )
     };
 
-    println!("a_ref: {:?}", a_ref);
-    println!("A_pkg dep ids: {:?}", a_pkg.dependency_ids);
-
-    println!(
-        "A module bytecode deps: {:?}",
-        a_pkg
-            .get_sui_framework_modules()
-            .into_iter()
-            .map(|x| x.name())
-            .collect::<Vec<_>>()
-    );
-  
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
 
@@ -76,125 +64,126 @@ async fn successful_verification() -> anyhow::Result<()> {
         .await
         .unwrap();
 
-    // TODO: pkg-alt
     // // Skip deps but verify root
     verifier
         .verify(&a_pkg, ValidationMode::root_at(a_ref.0.into()))
         .await
         .unwrap();
-    //
+
     // // Verify both deps and root
-    // verifier
-    //     .verify(&a_pkg, ValidationMode::root_and_deps_at(a_ref.0.into()))
-    //     .await
-    //     .unwrap();
+    verifier
+        .verify(&a_pkg, ValidationMode::root_and_deps_at(a_ref.0.into()))
+        .await
+        .unwrap();
 
     Ok(())
 }
-//
-// #[tokio::test]
-// async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
-//     let mut cluster = TestClusterBuilder::new().build().await;
-//     let context = &mut cluster.wallet;
-//     let fixtures = tempfile::tempdir()?;
-//
-//     let a_src = {
-//         copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
-//         copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?
-//     };
-//
-//     let a_pkg = compile_package(a_src.clone());
-//     let a_ref = publish_package_and_deps(context, a_src).await;
-//
-//     let client = context.get_client().await?;
-//     let verifier = BytecodeSourceVerifier::new(client.read_api());
-//
-//     // Verify the root package which now includes dependency modules
-//     verifier
-//         .verify(&a_pkg, ValidationMode::root_at(a_ref.0.into()))
-//         .await
-//         .unwrap();
-//
-//     Ok(())
-// }
-//
-// #[tokio::test]
-// async fn successful_verification_module_ordering() -> anyhow::Result<()> {
-//     let mut cluster = TestClusterBuilder::new().build().await;
-//     let context = &mut cluster.wallet;
-//
-//     // This package contains a module that refers to itself, and also to the sui framework.  Its
-//     // self-address is `0x0` (i.e. compares lower than the framework's `0x2`) before publishing,
-//     // and will be greater after publishing.
-//     //
-//     // This is a regression test for a source validation bug related to module order instability
-//     // where the on-chain package (which is compiled with self-address = 0x0, and later substituted)
-//     // orders module handles (references to other modules) differently to the package compiled as a
-//     // dependency with its self-address already set as its published address.
-//     let z_ref_fixtures = tempfile::tempdir()?;
-//     let z_ref = {
-//         let z_src = copy_published_package(&z_ref_fixtures, "z", SuiAddress::ZERO).await?;
-//         publish_package(context, z_src).await.0
-//     };
-//
-//     let z_pkg_fixtures = tempfile::tempdir()?;
-//     let z_pkg = {
-//         let z_src = copy_published_package(&z_pkg_fixtures, "z", z_ref.0.into()).await?;
-//         compile_package(z_src)
-//     };
-//
-//     let client = context.get_client().await?;
-//     BytecodeSourceVerifier::new(client.read_api())
-//         .verify(&z_pkg, ValidationMode::root())
-//         .await
-//         .unwrap();
-//
-//     Ok(())
-// }
-//
-// #[tokio::test]
-// async fn successful_verification_upgrades() -> anyhow::Result<()> {
-//     let mut cluster = TestClusterBuilder::new().build().await;
-//     let context = &mut cluster.wallet;
-//
-//     let b_v1_fixtures = tempfile::tempdir()?;
-//     let (b_v1, b_cap) = {
-//         let b_src = copy_published_package(&b_v1_fixtures, "b", SuiAddress::ZERO).await?;
-//         publish_package(context, b_src).await
-//     };
-//
-//     let b_v2_fixtures = tempfile::tempdir()?;
-//     let b_v2 = {
-//         let b_src = copy_published_package(&b_v2_fixtures, "b-v2", SuiAddress::ZERO).await?;
-//         upgrade_package(context, b_v1.0, b_cap.0, b_src).await
-//     };
-//
-//     let b_fixtures = tempfile::tempdir()?;
-//     let (b_pkg, e_pkg) = {
-//         let b_src =
-//             copy_upgraded_package(&b_fixtures, "b-v2", b_v2.0.into(), b_v1.0.into()).await?;
-//         let e_src = copy_published_package(&b_fixtures, "e", SuiAddress::ZERO).await?;
-//         (compile_package(b_src), compile_package(e_src))
-//     };
-//
-//     let client = context.get_client().await?;
-//     let verifier = BytecodeSourceVerifier::new(client.read_api());
-//
-//     // Verify the upgraded package b-v2 as the root.
-//     verifier
-//         .verify(&b_pkg, ValidationMode::root())
-//         .await
-//         .unwrap();
-//
-//     // Verify the upgraded package b-v2 as a dep of e.
-//     verifier
-//         .verify(&e_pkg, ValidationMode::deps())
-//         .await
-//         .unwrap();
-//
-//     Ok(())
-// }
-//
+
+// TODO: pkg-alt not working. Probably due to the unpublished deps not being properly included in
+// the publication
+#[tokio::test]
+async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = &mut cluster.wallet;
+    let fixtures = tempfile::tempdir()?;
+
+    let a_src = {
+        copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?
+    };
+
+    let a_pkg = compile_package(a_src.clone());
+    let a_ref = publish_package_and_deps(context, a_src).await;
+
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
+
+    // Verify the root package which now includes dependency modules
+    verifier
+        .verify(&a_pkg, ValidationMode::root_at(a_ref.0.into()))
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn successful_verification_module_ordering() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = &mut cluster.wallet;
+
+    // This package contains a module that refers to itself, and also to the sui framework.  Its
+    // self-address is `0x0` (i.e. compares lower than the framework's `0x2`) before publishing,
+    // and will be greater after publishing.
+    //
+    // This is a regression test for a source validation bug related to module order instability
+    // where the on-chain package (which is compiled with self-address = 0x0, and later substituted)
+    // orders module handles (references to other modules) differently to the package compiled as a
+    // dependency with its self-address already set as its published address.
+    let z_ref_fixtures = tempfile::tempdir()?;
+    let z_ref = {
+        let z_src = copy_published_package(&z_ref_fixtures, "z", SuiAddress::ZERO).await?;
+        publish_package(context, z_src).await.0
+    };
+
+    let z_pkg_fixtures = tempfile::tempdir()?;
+    let z_pkg = {
+        let z_src = copy_published_package(&z_pkg_fixtures, "z", z_ref.0.into()).await?;
+        compile_package(z_src)
+    };
+
+    let client = context.get_client().await?;
+    BytecodeSourceVerifier::new(client.read_api())
+        .verify(&z_pkg, ValidationMode::root())
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn successful_verification_upgrades() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = &mut cluster.wallet;
+
+    let b_v1_fixtures = tempfile::tempdir()?;
+    let (b_v1, b_cap) = {
+        let b_src = copy_published_package(&b_v1_fixtures, "b", SuiAddress::ZERO).await?;
+        publish_package(context, b_src).await
+    };
+
+    let b_v2_fixtures = tempfile::tempdir()?;
+    let b_v2 = {
+        let b_src = copy_published_package(&b_v2_fixtures, "b-v2", SuiAddress::ZERO).await?;
+        upgrade_package(context, b_v1.0, b_cap.0, b_src).await
+    };
+
+    let b_fixtures = tempfile::tempdir()?;
+    let (b_pkg, e_pkg) = {
+        let b_src =
+            copy_upgraded_package(&b_fixtures, "b-v2", b_v2.0.into(), b_v1.0.into()).await?;
+        let e_src = copy_published_package(&b_fixtures, "e", SuiAddress::ZERO).await?;
+        (compile_package(b_src), compile_package(e_src))
+    };
+
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
+
+    // Verify the upgraded package b-v2 as the root.
+    verifier
+        .verify(&b_pkg, ValidationMode::root())
+        .await
+        .unwrap();
+
+    // Verify the upgraded package b-v2 as a dep of e.
+    verifier
+        .verify(&e_pkg, ValidationMode::deps())
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
 #[tokio::test]
 async fn fail_verification_bad_address() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
@@ -395,38 +384,38 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
 }
 
 // TODO: pkg-alt FAILING TEST
-// #[tokio::test]
-// async fn module_not_found_on_chain() -> anyhow::Result<()> {
-//     let mut cluster = TestClusterBuilder::new().build().await;
-//     let context = &mut cluster.wallet;
-//
-//     let b_ref_fixtures = tempfile::tempdir()?;
-//     let b_ref = {
-//         let b_src = copy_published_package(&b_ref_fixtures, "b", SuiAddress::ZERO).await?;
-//         tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
-//         publish_package(context, b_src).await.0
-//     };
-//
-//     let a_pkg_fixtures = tempfile::tempdir()?;
-//     let a_pkg = {
-//         copy_published_package(&a_pkg_fixtures, "b", b_ref.0.into()).await?;
-//         let a_src = copy_published_package(&a_pkg_fixtures, "a", SuiAddress::ZERO).await?;
-//         compile_package(a_src)
-//     };
-//
-//     let client = context.get_client().await?;
-//     let Err(err) = BytecodeSourceVerifier::new(client.read_api())
-//         .verify(&a_pkg, ValidationMode::deps())
-//         .await
-//     else {
-//         panic!("Expected verification to fail");
-//     };
-//
-//     let expected = expect!["On-chain version of dependency b::c was not found."];
-//     expected.assert_eq(&err.to_string());
-//
-//     Ok(())
-// }
+#[tokio::test]
+async fn module_not_found_on_chain() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = &mut cluster.wallet;
+
+    let b_ref_fixtures = tempfile::tempdir()?;
+    let b_ref = {
+        let b_src = copy_published_package(&b_ref_fixtures, "b", SuiAddress::ZERO).await?;
+        tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
+        publish_package(context, b_src).await.0
+    };
+
+    let a_pkg_fixtures = tempfile::tempdir()?;
+    let a_pkg = {
+        copy_published_package(&a_pkg_fixtures, "b", b_ref.0.into()).await?;
+        let a_src = copy_published_package(&a_pkg_fixtures, "a", SuiAddress::ZERO).await?;
+        compile_package(a_src)
+    };
+
+    let client = context.get_client().await?;
+    let Err(err) = BytecodeSourceVerifier::new(client.read_api())
+        .verify(&a_pkg, ValidationMode::deps())
+        .await
+    else {
+        panic!("Expected verification to fail");
+    };
+
+    let expected = expect!["On-chain version of dependency b::c was not found."];
+    expected.assert_eq(&err.to_string());
+
+    Ok(())
+}
 
 #[tokio::test]
 async fn module_not_found_locally() -> anyhow::Result<()> {
@@ -526,161 +515,161 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
 
     Ok(())
 }
-//
-// #[tokio::test]
-// async fn linkage_differs() -> anyhow::Result<()> {
-//     let mut cluster = TestClusterBuilder::new().build().await;
-//     let context = &mut cluster.wallet;
-//
-//     let b_v1_fixtures = tempfile::tempdir()?;
-//     let (b_v1, b_cap) = {
-//         let b_src = copy_published_package(&b_v1_fixtures, "b", SuiAddress::ZERO).await?;
-//         publish_package(context, b_src).await
-//     };
-//
-//     let b_v2_fixtures = tempfile::tempdir()?;
-//     let b_v2 = {
-//         let b_src =
-//             copy_upgraded_package(&b_v2_fixtures, "b-v2", b_v1.0.into(), SuiAddress::ZERO).await?;
-//         upgrade_package(context, b_v1.0, b_cap.0, b_src).await
-//     };
-//
-//     // Publish b-v2 a second time, to create a third version of the package that is otherwise
-//     // byte-for-byte identical with the second version;
-//     let b_v3_fixtures = tempfile::tempdir()?;
-//     let b_v3 = {
-//         let b_src =
-//             copy_upgraded_package(&b_v3_fixtures, "b-v2", b_v2.0.into(), SuiAddress::ZERO).await?;
-//         upgrade_package(context, b_v2.0, b_cap.0, b_src).await
-//     };
-//
-//     // Publish E pointing at v2 of B.
-//     let e_v1_fixtures = tempfile::tempdir()?;
-//     let (e_v1, _) = {
-//         copy_upgraded_package(&e_v1_fixtures, "b-v2", b_v2.0.into(), b_v1.0.into()).await?;
-//         let e_src = copy_published_package(&e_v1_fixtures, "e", SuiAddress::ZERO).await?;
-//         publish_package(context, e_src).await
-//     };
-//
-//     // Compile E pointing at v3 of B, which is byte-for-byte identical with v2, but nevertheless
-//     // has a different address.
-//     let e_v2_fixtures = tempfile::tempdir()?;
-//     let e_pkg = {
-//         copy_upgraded_package(&e_v2_fixtures, "b-v2", b_v3.0.into(), b_v1.0.into()).await?;
-//         let e_src = copy_published_package(&e_v2_fixtures, "e", e_v1.0.into()).await?;
-//         compile_package(e_src)
-//     };
-//
-//     let client = context.get_client().await?;
-//     let stable_ids = HashMap::from_iter([
-//         (b_v1.0.into(), "<b1>"),
-//         (b_v2.0.into(), "<b2>"),
-//         (b_v3.0.into(), "<b3>"),
-//     ]);
-//
-//     let error = BytecodeSourceVerifier::new(client.read_api())
-//         .verify(&e_pkg, ValidationMode::root())
-//         .await
-//         .unwrap_err()
-//         .to_string();
-//
-//     let expected = expect![[r#"
-//         Multiple source verification errors found:
-//
-//         - Source package depends on <b3> which is not in the linkage table.
-//         - On-chain package depends on <b2> which is not a source dependency."#]];
-//     expected.assert_eq(&sanitize_id(error, &stable_ids));
-//
-//     Ok(())
-// }
-//
-// #[tokio::test]
-// async fn multiple_failures() -> anyhow::Result<()> {
-//     let mut cluster = TestClusterBuilder::new().build().await;
-//     let context = &mut cluster.wallet;
-//     let mut stable_addrs = HashMap::new();
-//
-//     // Publish package `b::b` on-chain without c.move.
-//     let b_ref_fixtures = tempfile::tempdir()?;
-//     let b_ref = {
-//         let b_src = copy_published_package(&b_ref_fixtures, "b", SuiAddress::ZERO).await?;
-//         tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
-//         publish_package(context, b_src).await.0
-//     };
-//
-//     // Publish package `c::c` on-chain, unmodified.
-//     let c_ref_fixtures = tempfile::tempdir()?;
-//     let c_ref = {
-//         let c_src = copy_published_package(&c_ref_fixtures, "c", SuiAddress::ZERO).await?;
-//         publish_package(context, c_src).await.0
-//     };
-//
-//     // Compile local package `d` that references:
-//     // - `b::b` (c.move exists locally but not on chain => error)
-//     // - `c::c` (d.move exists on-chain but we delete it locally before compiling => error)
-//     let d_pkg_fixtures = tempfile::tempdir()?;
-//     let d_pkg = {
-//         let b_id = b_ref.0.into();
-//         let c_id = c_ref.0.into();
-//         stable_addrs.insert(b_id, "<b_id>");
-//         stable_addrs.insert(c_id, "<c_id>");
-//         copy_published_package(&d_pkg_fixtures, "b", b_id).await?;
-//         let c_src = copy_published_package(&d_pkg_fixtures, "c", c_id).await?;
-//         let d_src = copy_published_package(&d_pkg_fixtures, "d", SuiAddress::ZERO).await?;
-//         tokio::fs::remove_file(c_src.join("sources").join("d.move")).await?; // delete local module in `c`
-//         compile_package(d_src)
-//     };
-//
-//     let client = context.get_client().await?;
-//     let Err(err) = BytecodeSourceVerifier::new(client.read_api())
-//         .verify(&d_pkg, ValidationMode::deps())
-//         .await
-//     else {
-//         panic!("Expected verification to fail");
-//     };
-//
-//     let expected = expect![[r#"
-//         Multiple source verification errors found:
-//
-//         - On-chain version of dependency b::c was not found.
-//         - Local version of dependency <c_id>::d was not found."#]];
-//     expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
-//
-//     Ok(())
-// }
-//
-// #[tokio::test]
-// async fn successful_versioned_dependency_verification() -> anyhow::Result<()> {
-//     let mut cluster = TestClusterBuilder::new().build().await;
-//     let context = &mut cluster.wallet;
-//
-//     let b_ref_fixtures = tempfile::tempdir()?;
-//     let b_ref = {
-//         let b_src =
-//             copy_published_package(&b_ref_fixtures, "versioned-b", SuiAddress::ZERO).await?;
-//         publish_package(context, b_src).await.0
-//     };
-//
-//     let a_fixtures = tempfile::tempdir()?;
-//     let a_pkg = {
-//         copy_published_package(&a_fixtures, "versioned-b", b_ref.0.into()).await?;
-//         let a_src =
-//             copy_published_package(&a_fixtures, "versioned-a-depends-on-b", SuiAddress::ZERO)
-//                 .await?;
-//         compile_package(a_src.clone())
-//     };
-//
-//     let client = context.get_client().await?;
-//
-//     // Verify versioned dependency
-//     BytecodeSourceVerifier::new(client.read_api())
-//         .verify(&a_pkg, ValidationMode::deps())
-//         .await
-//         .unwrap();
-//
-//     Ok(())
-// }
-//
+
+#[tokio::test]
+async fn linkage_differs() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = &mut cluster.wallet;
+
+    let b_v1_fixtures = tempfile::tempdir()?;
+    let (b_v1, b_cap) = {
+        let b_src = copy_published_package(&b_v1_fixtures, "b", SuiAddress::ZERO).await?;
+        publish_package(context, b_src).await
+    };
+
+    let b_v2_fixtures = tempfile::tempdir()?;
+    let b_v2 = {
+        let b_src =
+            copy_upgraded_package(&b_v2_fixtures, "b-v2", b_v1.0.into(), SuiAddress::ZERO).await?;
+        upgrade_package(context, b_v1.0, b_cap.0, b_src).await
+    };
+
+    // Publish b-v2 a second time, to create a third version of the package that is otherwise
+    // byte-for-byte identical with the second version;
+    let b_v3_fixtures = tempfile::tempdir()?;
+    let b_v3 = {
+        let b_src =
+            copy_upgraded_package(&b_v3_fixtures, "b-v2", b_v2.0.into(), SuiAddress::ZERO).await?;
+        upgrade_package(context, b_v2.0, b_cap.0, b_src).await
+    };
+
+    // Publish E pointing at v2 of B.
+    let e_v1_fixtures = tempfile::tempdir()?;
+    let (e_v1, _) = {
+        copy_upgraded_package(&e_v1_fixtures, "b-v2", b_v2.0.into(), b_v1.0.into()).await?;
+        let e_src = copy_published_package(&e_v1_fixtures, "e", SuiAddress::ZERO).await?;
+        publish_package(context, e_src).await
+    };
+
+    // Compile E pointing at v3 of B, which is byte-for-byte identical with v2, but nevertheless
+    // has a different address.
+    let e_v2_fixtures = tempfile::tempdir()?;
+    let e_pkg = {
+        copy_upgraded_package(&e_v2_fixtures, "b-v2", b_v3.0.into(), b_v1.0.into()).await?;
+        let e_src = copy_published_package(&e_v2_fixtures, "e", e_v1.0.into()).await?;
+        compile_package(e_src)
+    };
+
+    let client = context.get_client().await?;
+    let stable_ids = HashMap::from_iter([
+        (b_v1.0.into(), "<b1>"),
+        (b_v2.0.into(), "<b2>"),
+        (b_v3.0.into(), "<b3>"),
+    ]);
+
+    let error = BytecodeSourceVerifier::new(client.read_api())
+        .verify(&e_pkg, ValidationMode::root())
+        .await
+        .unwrap_err()
+        .to_string();
+
+    let expected = expect![[r#"
+        Multiple source verification errors found:
+
+        - Source package depends on <b3> which is not in the linkage table.
+        - On-chain package depends on <b2> which is not a source dependency."#]];
+    expected.assert_eq(&sanitize_id(error, &stable_ids));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn multiple_failures() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = &mut cluster.wallet;
+    let mut stable_addrs = HashMap::new();
+
+    // Publish package `b::b` on-chain without c.move.
+    let b_ref_fixtures = tempfile::tempdir()?;
+    let b_ref = {
+        let b_src = copy_published_package(&b_ref_fixtures, "b", SuiAddress::ZERO).await?;
+        tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
+        publish_package(context, b_src).await.0
+    };
+
+    // Publish package `c::c` on-chain, unmodified.
+    let c_ref_fixtures = tempfile::tempdir()?;
+    let c_ref = {
+        let c_src = copy_published_package(&c_ref_fixtures, "c", SuiAddress::ZERO).await?;
+        publish_package(context, c_src).await.0
+    };
+
+    // Compile local package `d` that references:
+    // - `b::b` (c.move exists locally but not on chain => error)
+    // - `c::c` (d.move exists on-chain but we delete it locally before compiling => error)
+    let d_pkg_fixtures = tempfile::tempdir()?;
+    let d_pkg = {
+        let b_id = b_ref.0.into();
+        let c_id = c_ref.0.into();
+        stable_addrs.insert(b_id, "<b_id>");
+        stable_addrs.insert(c_id, "<c_id>");
+        copy_published_package(&d_pkg_fixtures, "b", b_id).await?;
+        let c_src = copy_published_package(&d_pkg_fixtures, "c", c_id).await?;
+        let d_src = copy_published_package(&d_pkg_fixtures, "d", SuiAddress::ZERO).await?;
+        tokio::fs::remove_file(c_src.join("sources").join("d.move")).await?; // delete local module in `c`
+        compile_package(d_src)
+    };
+
+    let client = context.get_client().await?;
+    let Err(err) = BytecodeSourceVerifier::new(client.read_api())
+        .verify(&d_pkg, ValidationMode::deps())
+        .await
+    else {
+        panic!("Expected verification to fail");
+    };
+
+    let expected = expect![[r#"
+        Multiple source verification errors found:
+
+        - On-chain version of dependency b::c was not found.
+        - Local version of dependency <c_id>::d was not found."#]];
+    expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn successful_versioned_dependency_verification() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = &mut cluster.wallet;
+
+    let b_ref_fixtures = tempfile::tempdir()?;
+    let b_ref = {
+        let b_src =
+            copy_published_package(&b_ref_fixtures, "versioned-b", SuiAddress::ZERO).await?;
+        publish_package(context, b_src).await.0
+    };
+
+    let a_fixtures = tempfile::tempdir()?;
+    let a_pkg = {
+        copy_published_package(&a_fixtures, "versioned-b", b_ref.0.into()).await?;
+        let a_src =
+            copy_published_package(&a_fixtures, "versioned-a-depends-on-b", SuiAddress::ZERO)
+                .await?;
+        compile_package(a_src.clone())
+    };
+
+    let client = context.get_client().await?;
+
+    // Verify versioned dependency
+    BytecodeSourceVerifier::new(client.read_api())
+        .verify(&a_pkg, ValidationMode::deps())
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
 // #[tokio::test]
 // #[ignore] // TODO: DVX-786
 // async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
@@ -740,66 +729,66 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
 //
 //     Ok(())
 // }
+
+// #[tokio::test]
+// #[ignore] // TODO: DVX-786
+// async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
+//     let mut cluster = TestClusterBuilder::new().build().await;
+//     let context = &mut cluster.wallet;
 //
-// // #[tokio::test]
-// // #[ignore] // TODO: DVX-786
-// // async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
-// //     let mut cluster = TestClusterBuilder::new().build().await;
-// //     let context = &mut cluster.wallet;
-// //
-// //     let tempdir = tempfile::tempdir()?;
-// //
-// //     {
-// //         // publish b
-// //         fs::create_dir_all(tempdir.path().join("publish"))?;
-// //         let b_src =
-// //             copy_published_package(&tempdir.path().join("publish"), "b", SuiAddress::ZERO).await?;
-// //         let b_ref = publish_package(context, b_src).await.0;
-// //
-// //         // setup b as a bytecode package
-// //         let pkg_path = copy_published_package(&tempdir, "b", b_ref.0.into()).await?;
-// //
-// //         BuildConfig::new_for_testing().build(&pkg_path).unwrap();
-// //
-// //         fs::remove_dir_all(pkg_path.join("sources"))?;
-// //     };
-// //
-// //     let (a_pkg, a_ref) = {
-// //         let a_src = copy_published_package(&tempdir, "a", SuiAddress::ZERO).await?;
-// //         (
-// //             compile_package(a_src.clone()),
-// //             publish_package(context, a_src).await.0,
-// //         )
-// //     };
-// //
-// //     assert!(
-// //         !a_pkg.bytecode_deps.is_empty(),
-// //         "Invalid test setup: expected bytecode deps to be present."
-// //     );
-// //
-// //     let client = context.get_client().await?;
-// //     let verifier = BytecodeSourceVerifier::new(client.read_api());
-// //
-// //     // Verify deps but skip root
-// //     verifier
-// //         .verify(&a_pkg, ValidationMode::deps())
-// //         .await
-// //         .unwrap();
-// //
-// //     // Skip deps but verify root
-// //     verifier
-// //         .verify(&a_pkg, ValidationMode::root_at(a_ref.0.into()))
-// //         .await
-// //         .unwrap();
-// //
-// //     // Verify both deps and root
-// //     verifier
-// //         .verify(&a_pkg, ValidationMode::root_and_deps_at(a_ref.0.into()))
-// //         .await
-// //         .unwrap();
-// //
-// //     Ok(())
-// // }
+//     let tempdir = tempfile::tempdir()?;
+//
+//     {
+//         // publish b
+//         fs::create_dir_all(tempdir.path().join("publish"))?;
+//         let b_src =
+//             copy_published_package(&tempdir.path().join("publish"), "b", SuiAddress::ZERO).await?;
+//         let b_ref = publish_package(context, b_src).await.0;
+//
+//         // setup b as a bytecode package
+//         let pkg_path = copy_published_package(&tempdir, "b", b_ref.0.into()).await?;
+//
+//         BuildConfig::new_for_testing().build(&pkg_path).unwrap();
+//
+//         fs::remove_dir_all(pkg_path.join("sources"))?;
+//     };
+//
+//     let (a_pkg, a_ref) = {
+//         let a_src = copy_published_package(&tempdir, "a", SuiAddress::ZERO).await?;
+//         (
+//             compile_package(a_src.clone()),
+//             publish_package(context, a_src).await.0,
+//         )
+//     };
+//
+//     assert!(
+//         !a_pkg.bytecode_deps.is_empty(),
+//         "Invalid test setup: expected bytecode deps to be present."
+//     );
+//
+//     let client = context.get_client().await?;
+//     let verifier = BytecodeSourceVerifier::new(client.read_api());
+//
+//     // Verify deps but skip root
+//     verifier
+//         .verify(&a_pkg, ValidationMode::deps())
+//         .await
+//         .unwrap();
+//
+//     // Skip deps but verify root
+//     verifier
+//         .verify(&a_pkg, ValidationMode::root_at(a_ref.0.into()))
+//         .await
+//         .unwrap();
+//
+//     // Verify both deps and root
+//     verifier
+//         .verify(&a_pkg, ValidationMode::root_and_deps_at(a_ref.0.into()))
+//         .await
+//         .unwrap();
+//
+//     Ok(())
+// }
 
 /// Compile the package at absolute path `package`.
 fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {
