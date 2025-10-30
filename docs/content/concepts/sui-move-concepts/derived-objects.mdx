@@ -4,11 +4,11 @@ description: Derived objects enable deterministic object addresses, Transfer-to-
 keywords: [ Derived objects, deterministic addresses, Transfer-to-Object, TTO, parallelization, object composition, scalability ]
 ---
 
-Sui objects get a unique ID assigned to them upon object creation. However, a **derived object** does not technically have an assigned ID; instead it has a _claimed_ ID created through the mapping of a parent object to a key. The parent object's unique ID that exists on-chain is mapped to an individual key, ensuring that the derived object's claimed ID is both deterministic and unique. You can deterministically compute derived object IDs using the parent ID and a key, both on- and off-chain. This means you can compute the ID of a derived object before you ever actually create it on the network. 
+Sui objects get a unique ID assigned to them upon object creation. However, a **derived object** does not technically have an assigned ID; instead it has a _claimed_ ID created through the mapping of a parent object to a key. The parent object's unique ID that exists on-chain is mapped to an individual key, ensuring that the derived object's claimed ID is both deterministic and unique. You can deterministically compute derived object IDs using the parent ID and a key, both on- and off-chain. This means you can compute the ID of a derived object before you ever actually create it on the network.
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/dJl1zlP_YR4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
-To claim an ID using the `derived_object` module, pass the parent object and key. The parent object might already exist on-chain, either through a published package or through a transaction. An existing parent object is not a requirement, however, as you could create a new parent object in a function and immediately claim a derived object UID from a provided key. This workflow would not support off-chain determinism, though, because you could not know the parent UID beforehand.  
+To claim an ID using the `derived_object` module, pass the parent object and key. The parent object might already exist on-chain, either through a published package or through a transaction. An existing parent object is not a requirement, however, as you could create a new parent object in a function and immediately claim a derived object UID from a provided key. This workflow would not support off-chain determinism, though, because you could not know the parent UID beforehand.
 
 :::info
 
@@ -20,7 +20,7 @@ The key can be an address or object ID, but using a unique value is not required
 
 Claiming the ID of derived objects requires a parent object, but the derived objects are not children of that parent. This is an important distinction because the lack of a hierarchal relationship means that using a derived object as input to a transaction does not require sequential processing through the parent. The derived object is its own entity; the parent only exists to ensure its uniqueness. This relationship provides parallelization that is not possible with parent-child relationships.
 
-If you know the parent ID, you can compute the ID of the derived object through off-chain logic using the [TypeScript](https://sdk.mystenlabs.com/typescript/utils/derived_objects) or [Rust SDK](https://mystenlabs.github.io/sui/sui_types/derived_object/index.html) helper functions. This functionality means your client logic can treat unclaimed IDs as if they already exist. 
+If you know the parent ID, you can compute the ID of the derived object through off-chain logic using the [TypeScript](https://sdk.mystenlabs.com/typescript/utils/derived_objects) or [Rust SDK](https://mystenlabs.github.io/sui/sui_types/derived_object/index.html) helper functions. This functionality means your client logic can treat unclaimed IDs as if they already exist.
 
 <details>
 <summary>
@@ -31,11 +31,11 @@ If you know the parent ID, you can compute the ID of the derived object through 
 
 ## Core capabilities
 
-Derived objects provide four fundamental capabilities: deterministic addresses, Transfer-to-Object compatibility, one-per-key uniqueness, and native parallelization. 
+Derived objects provide four fundamental capabilities: deterministic addresses, Transfer-to-Object compatibility, one-per-key uniqueness, and native parallelization.
 
 ### Deterministic addresses
 
-You can compute derived object IDs ahead of time using the `derived_object::derive_address(parent_id, key)` function. This means applications can predict where objects will live before they exist, enabling sophisticated coordination patterns and reducing the need for on-chain lookups.
+You can compute derived object IDs ahead of time using the `derived_object::derive_address(parent_id, key)` function. This means applications can predict where objects are going to live before they exist, enabling sophisticated coordination patterns and reducing the need for on-chain lookups.
 
 ### Transfer-to-Object (TTO) compatibility
 
@@ -61,15 +61,15 @@ These capabilities combine to enable entirely new design patterns that were prev
 
 **On-chain benefits**
 
--	Less contention and better parallelism: No parent bottleneck for unrelated keys.
--	Deterministic uniqueness: One object per `(parent, key)` without manual bookkeeping.
--	Top-level object ergonomics: Clean capability patterns, Object Display, and simpler permissioning.
+- Less contention and better parallelism: No parent bottleneck for unrelated keys.
+- Deterministic uniqueness: One object per `(parent, key)` without manual bookkeeping.
+- Top-level object ergonomics: Clean capability patterns, Object Display, and simpler permissioning.
 
 **Off-chain benefits**
 
--	Fewer hops: Clients can compute or look up the derived object ID directly without requiring a sequential operation to find it through the parent.
--	Better discoverability and indexing: SDKs can compute objects with fewer sequential queries.
--	Lean SDK calls: Less queries needed minimizes the SDK codebase and improves performance through reduced network traffic (object lookups can be bundled in multiGet queries).
+- Fewer hops: Clients can compute or look up the derived object ID directly without requiring a sequential operation to find it through the parent.
+- Better discoverability and indexing: SDKs can compute objects with fewer sequential queries.
+- Lean SDK calls: Fewer queries minimizes the SDK codebase and improves performance through reduced network traffic (object lookups can be bundled in multiGet queries).
 
 ## Derived objects and dynamic fields matrix
 
@@ -175,7 +175,7 @@ public fun receive_from_vault<T key + store>(
 
 ### Derived objects
 
-Using derived objects doesn't require a tradeoff between discoverability and parallelization.  
+Using derived objects doesn't require a tradeoff between discoverability and parallelization.
 
 ```move
 const EVaultAlreadyExists: u64 = 0;
