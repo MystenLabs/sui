@@ -51,6 +51,12 @@ Currencies can have different regulatory states:
 
 ## Treasury capability
 
+:::danger 
+
+While `TreasuryCap` is freely transferable, never freeze or share the `TreasuryCap`. Doing so might allow malicious actors to call functions as the currency owner and the latter allows anyone to mint new coins and act as the owner of the currency.
+
+:::
+
 The `TreasuryCap` object is required to mint new coins or to burn current ones. Consequently, only addresses that have access to this object can maintain the coin supply on the Sui network.
 
 The `TreasuryCap` object is transferable, so a third party can take over the management of a coin that you create if you transfer the `TreasuryCap`. After transferring the capability, however, you can no longer mint and burn tokens yourself.
@@ -132,11 +138,18 @@ The deny list is only applicable to regulated coins. As mentioned previously, wh
 
 <ImportContent source="coin-standards.mdx" mode="snippet" />
 
-## Query functions
+## Reading coin data
+
+### Metadata
+
+:::danger 
+
+`CoinMetadata` is planned for deprecation. The Coin standard itself is not.
+
+:::
 
 You can use the following functions to retrieve data from coins.
 
-### Metadata
 
 Use the following functions to get the values for the respective fields on the metadata object for coins.
 
@@ -148,7 +161,7 @@ Use the following functions to get the values for the respective fields on the m
 | `get_description` | `public fun get_description<T>(metadata: &coin::CoinMetadata<T>): string::String`        |
 | `get_icon_url`    | `public fun get_icon_url<T>(metadata: &coin::CoinMetadata<T>): option::Option<url::Url>` |
 
-### Supply information
+### Total supply
 
 Use the `coin::supply` function to get the current supply of a given coin.
 

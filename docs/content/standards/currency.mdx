@@ -2,7 +2,7 @@
 title: Currency Standard
 description: The Sui Currency Standard enables you to create a broad range of fungible tokens on the Sui network using either the legacy coin creation or the centralized coin registry system. 
 sidebar_label: Currency
-keywords: [ sui Currency Standard, erc-20, erc-20 equivalent, creating coins, Currency Standard, fungible tokens, fungible token standard, treasury capability, regulated coins, denylist object, coin metadata, coin registry, create coin with SDK, use SDK to create coin, mint coin, minting coins, currency registry ]
+keywords: [ sui Currency Standard, erc-20, erc-20 equivalent, creating coins, Currency Standard, fungible tokens, fungible token standard, treasury capability, regulated coins, denylist object, coin registry, create coin with SDK, use SDK to create coin, mint coin, minting coins, currency registry ]
 pagination_prev: null
 ---
 
@@ -10,17 +10,17 @@ pagination_prev: null
 
 The Coin and Currency standards are both used to create fungible tokens. However, they use different creation methods and store metadata in a different type of object. 
 
-Coin creates tokens using `coin::create_currency` while Currency uses `sui::coin_registry`.
+Coin creates assets using `coin::create_currency` while Currency uses `sui::coin_registry`.
 
-Coin uses `CoinMetadata` while Currency uses `Currency`. 
+Coin uses `CoinMetadata` while Currency uses `Currency`. Fungible tokens created on Sui using the Coin or Currency standard are referred to as _coins_. 
 
-Fungible tokens created on Sui using the Coin or Currency standard are referred to as _coins_. 
+**Coin** refers to a single object wrapper for a fungible asset, while the term **currency** refers to the object that is created in `CoinRegistry`, which describes the currency properties and setup.
 
 For fungible tokens created on Sui using the [Closed-Loop Token standard](/standards/closed-loop-token.mdx), the documentation uses the term _tokens_. In practice, the terms for both these objects are often interchangeable.
 
 :::
 
-The Currency Standard is a technical standard used by Move smart contracts for creating coins on Sui. The `sui::coin_registry` module provides the logic that defines the standard, providing unified metadata, enhanced supply tracking, and improved regulatory features.
+The Currency Standard is a technical standard used by Move smart contracts for creating coins on Sui. The `sui::coin_registry` module provides the logic that defines the standard, unifies metadata, enhances supply tracking, and improves regulatory features.
 
 The standardization of coin creation on Sui means that wallets, exchanges, and other smart contracts can manage coins created on Sui the same as they manage SUI, without any additional processing logic.
 
@@ -58,7 +58,7 @@ The registry is a system-level shared object located at address `0xc`.
 - **Metadata management:** Basic coin information like name, symbol, decimals, description, and icon URL.
 - **Supply tracking:** Maintains supply state information (fixed, burn-only, or unknown).
 - **Regulatory status:** Tracks whether the coin is regulated with deny list capabilities.
-- **Capability references:** Links to treasury and metadata capabilities for the coin type.
+- **Capability references:** Links to `TreasuryCap`s and `MetadataCap`s for the coin type.
 - **Extensibility:** Includes extra fields for future enhancements.
 
 ### Supply states
@@ -150,9 +150,9 @@ When the bearer of the `DenyCapV2` object for the coin type removes the pause us
 
 The global pause functionality does not affect the deny list for the coin. After clearing the pause for the coin, any addresses included in the deny list are still unable to interact with the coin.
 
-## Coin metadata
+## Currency metadata
 
-Coin metadata is stored centrally within the `Currency<T>` object in the registry. Metadata updates are controlled by the `MetadataCap<T>` capability, which can be:
+Currency metadata is stored centrally within the `Currency<T>` object in the registry. Metadata updates are controlled by the `MetadataCap<T>` capability, which can be:
 
 - **Unclaimed:** `MetadataCap` has not yet been claimed.
 - **Claimed:** `MetadataCap` has been claimed and can be used for updates.
@@ -165,11 +165,11 @@ The fields of the metadata objects include the following:
 | Name          | Description  |
 | ------------- | ---------------------|
 | `registry`    | The `CoinRegistry` system object ID (`0x3`). |
-| `decimals`    | The number of decimals the token uses. If you set this field to `3`, then a token of value `1000` displays as `1.000`.|
+| `decimals`    | The number of decimals the coin uses. If you set this field to `3`, then a coin of value `1000` displays as `1.000`.|
 | `name`        | Name of the coin. |
 | `symbol`      | Symbol for the coin. This might be the same as `name`, but is typically fewer than 5 all capital letters. For example, `SUI` is the `symbol` for the native coin on Sui but its `name` is also `SUI`. |
-| `description` | A short description to describe the token. |
-| `icon_url`    | The URL for the token's icon, used for display in wallets, explorers, and other apps. |
+| `description` | A short description to describe the coin. |
+| `icon_url`    | The URL for the coin's icon, used for display in wallets, explorers, and other apps. |
 
 ## Minting and burning coins
 
@@ -181,7 +181,7 @@ The Coin Registry supports advanced supply management models:
 
 ### Mint
 
-Use the `coin::mint` function to create new tokens.
+Use the `coin::mint` function to create new coins.
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="mint" signatureOnly noComments />
 
@@ -272,7 +272,7 @@ You can query information directly from the `Currency<T>` object.
 
     <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="deny_cap_id" noTitle signatureOnly noComments />
 
-## Update coin metadata
+## Update currency metadata
 
 Metadata updates require the `MetadataCap<T>` object, which is only available to the bearer of the `TreasuryCap` for a coin. The bearer of the `TreasuryCap` can claim the `MetadataCap` using the `claim_metadata_cap` function only once. `Currency` tracks the claimed status of the capability through its `metadata_cap_id` field.
 
