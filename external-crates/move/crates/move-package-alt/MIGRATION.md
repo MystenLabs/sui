@@ -58,34 +58,66 @@ Some of the benefits of the new system:
 **Baseline for new features**
  - the new implementation also sets us up to implement new features (or to
    properly implement old features that don't work well), such as more accurate
-   source verification, automatic dependency publication on local networks, and
-   on-chain dependencies.
+   source verification, automatic dependency publication on local networks,
+   stored build configuration, and on-chain dependencies.
 
-Installing and running the prototype
-====================================
 
-To install the prototype, run
-```sh
-suiup install sui --nightly=sui-pkg-alt -y
-```
+What you'll notice right away
+=============================
 
-This will compile `sui` from the prototype branch, so it will need the rust
-toolchain installed and it will take a while to finish.
+Although some of the features of the new package system will require you to
+update your manifest to the new format, some changes will take effect as soon
+as you install the new CLI:
 
-If you want to use `mvr` dependencies, you will need a patched version of `mvr`
-as well. You can install it using
+**Lockfile format change**
+ - when you run the new CLI, it will convert your lockfile to a new format.
 
-```sh
-suiup install mvr --nightly=ml/cli-pkg-alt -y
-```
+ - it will also move the published addresses to the `Published.toml` file; this
+   file stores all of the addresses and metadata for publications in each
+   environment.
+
+ - there will be some friction if you are using an old CLI and a new CLI on the
+   same project, but things will mostly work out OK
+
+**Pinning**
+ - When you build your package, the dependencies will only be updated if
+   your `Move.toml` file changes or if you run `sui move update-deps`.
+
+ - If your dependencies are not updated, the CLI will not run `mvr` or refetch
+   `git` dependencies, so you can build offline.
+
+**Environments**
+ - Because the set of dependencies is environment-specific, the CLI needs to
+   know which environment you are building for. For shared environments like
+   `mainnet` and `testnet`, the CLI can determine the correct environment
+   automatically based on its active environment. If your local environment is
+   set to another network, you will have to specify with `-e <envname>`
+
+**Ephemeral publication**
+ - On ephemeral networks like `localnet`, the dependency addresses from the
+   build environment don't make sense.
+
+ - The new `ephemeral-publish` command lets you supply a file containing the
+   local dependencies' addresses.
+
+ - We plan a fast-follow for automatically publishing dependencies and building
+   up an ephemeral publication file; right now the process is somewhat manual
+
+**Ancillary benefits**
+ - Efficient git operations
+
+ - If your `Published.toml` file contains the upgrade capability, you no longer
+   need to pass it on the command line (you still can if you want to)
 
 Changes to the `Move.toml` file
 ===============================
 
-As in the old system, packages in the new system are configured by the user
-using a `Move.toml`, and the system also manages its own information in
-`Move.lock` files. However, the format of these files has changed somewhat in
-the new system.
+Although you can continue to use the new package system without changing your
+`Move.toml` file, to get the full benefits of the new system you will need to
+update your `Move.toml` file to the new format. Currently this is a manual
+process but we have a migration tool planned as a fast-follow.
+
+This section describes the changes in more detail.
 
 ### No `[addresses]` section
 
@@ -145,7 +177,7 @@ section is how you refer to your own address in Move).
 
 There are two small changes to the `[package]` section of the manifest. The
 first is that you should change the `name` used in your manifest to match the
-name used in your code.
+name used in your code (since it is no longer in the `addresses` table).
 
 The second is the new `implicit-dependencies = false` field. In the old system,
 adding an explicit system dependency disabled implicit dependencies. In the new
@@ -192,8 +224,8 @@ This allows you to easily mix dependencies that happen to have the same name:
 
 ```toml
 [dependencies]
-alices_mathlib = { git = "https://github.com/alice.git", rename-from = "mathlib" }
-bobs_mathlib = { git = "https://github.com/bob.git", rename-from = "mathlib" }
+alice_mathlib = { git = "https://github.com/alice.git", rename-from = "mathlib" }
+bob_mathlib = { git = "https://github.com/bob.git", rename-from = "mathlib" }
 ```
 
 #### Note on git dependencies with short shas
