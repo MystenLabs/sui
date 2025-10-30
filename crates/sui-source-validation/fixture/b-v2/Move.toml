@@ -1,6 +1,7 @@
 [package]
 name = "b"
 version = "0.0.2"
+implicit-deps = false
 published-at = "$STORAGE_ID"
 
 [addresses]
