@@ -23,7 +23,7 @@ Each `MarginManager` is associated with a specific DeepBook pool and can borrow 
 
 Following are the different public functions that the `MarginManager` exposes.
 
-### Create a MarginManager
+### Create a `MarginManager`
 
 The `new()` function creates and shares a `MarginManager` in one transaction. It validates that margin trading is enabled for the specified pool.
 
@@ -36,7 +36,7 @@ The `new()` function creates and shares a `MarginManager` in one transaction. It
 	noComments
 />
 
-### Create a MarginManager with initializer
+### Create a `MarginManager` with initializer
 
 The `new_with_initializer()` function creates a `MarginManager` and returns it along with an initializer hot potato. The initializer ensures the margin manager is properly shared after creation using the `share()` function.
 
@@ -111,7 +111,7 @@ Repay borrowed assets to reduce debt. You can specify an exact amount or repay a
 
 ### Liquidate position
 
-Liquidate an undercollateralized margin manager. The liquidator provides repayment and receives collateral assets plus a liquidation reward. The margin pool may also receive a reward or incur bad debt depending on the position's health.
+Liquidate an undercollateralized margin manager. The liquidator provides repayment and receives collateral assets plus a liquidation reward. The margin pool might also receive a reward or incur bad debt depending on the position's health.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/margin_manager.move"
