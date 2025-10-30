@@ -49,6 +49,11 @@ where
         };
 
         let end_cp = match checkpoints.end_bound() {
+            // If u64::MAX is provided as an inclusive bound, the saturating_add
+            // here will prevent overflow but the broadcaster will actually
+            // only ingest up to u64::MAX - 1, since the range is [start..end).
+            // This isn't an issue in practice since we won't see that many checkpoints
+            // in our lifetime anyway.
             std::ops::Bound::Included(&n) => n.saturating_add(1),
             std::ops::Bound::Excluded(&n) => n,
             std::ops::Bound::Unbounded => u64::MAX,
@@ -62,7 +67,7 @@ where
         let mut subscribers_hi = HashMap::<&'static str, u64>::new();
 
         // Initialize ingest_hi watch channel.
-        // Start with None (no backpressure) or Some if we have been provided aninitial bound.
+        // Start with None (no backpressure) or Some if we have been provided an initial bound.
         let initial_ingest_hi = initial_commit_hi.map(|min_hi| min_hi + buffer_size);
         let (ingest_hi_watch_tx, ingest_hi_watch_rx) = watch::channel(initial_ingest_hi);
 
