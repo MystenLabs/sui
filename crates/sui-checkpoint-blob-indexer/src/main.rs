@@ -9,6 +9,7 @@ use object_store::{
 };
 use sui_checkpoint_blob_indexer::{CheckpointBlobPipeline, EpochsPipeline};
 use sui_indexer_alt_framework::{Indexer, IndexerArgs, ingestion::ClientArgs};
+use sui_indexer_alt_metrics::MetricsArgs;
 use sui_indexer_alt_object_store::ObjectStore;
 use url::Url;
 
@@ -55,6 +56,9 @@ struct Args {
     /// Optional Zstd compression level. If not provided, data will be stored uncompressed
     #[arg(long)]
     compression_level: Option<i32>,
+
+    #[command(flatten)]
+    metrics_args: MetricsArgs,
 
     #[command(flatten)]
     client_args: ClientArgs,
@@ -119,8 +123,14 @@ async fn main() -> anyhow::Result<()> {
 
     let store = ObjectStore::new(object_store);
 
-    let registry = prometheus::Registry::new();
     let cancel = tokio_util::sync::CancellationToken::new();
+
+    let registry = prometheus::Registry::new_custom(Some("checkpoint_blob_indexer".into()), None)?;
+    let metrics_service = sui_indexer_alt_metrics::MetricsService::new(
+        args.metrics_args,
+        registry.clone(),
+        cancel.clone(),
+    );
 
     let config = ConcurrentConfig {
         committer: CommitterConfig {
@@ -136,7 +146,7 @@ async fn main() -> anyhow::Result<()> {
         args.indexer_args,
         args.client_args,
         IngestionConfig::default(),
-        Some("checkpoint_blob_indexer"),
+        None,
         &registry,
         cancel.clone(),
     )
@@ -155,6 +165,7 @@ async fn main() -> anyhow::Result<()> {
         .concurrent_pipeline(EpochsPipeline, config.clone())
         .await?;
 
+    let h_metrics = metrics_service.run().await?;
     let mut h_indexer = indexer.run().await?;
 
     tokio::select! {
@@ -179,6 +190,7 @@ async fn main() -> anyhow::Result<()> {
     cancel.cancel();
     tracing::info!("Waiting for indexer to shut down gracefully...");
     h_indexer.await?;
+    h_metrics.await?;
 
     Ok(())
 }

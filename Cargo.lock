@@ -13939,6 +13939,7 @@ dependencies = [
  "sui-config",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-framework-store-traits",
+ "sui-indexer-alt-metrics",
  "sui-indexer-alt-object-store",
  "sui-rpc",
  "sui-types",
