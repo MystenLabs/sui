@@ -1,4 +1,3 @@
-> echo TODO: pkg-alt revisit this test - test of "move new" should be revised
 new P1
 > cat P1/Move.toml
 > cat P1/.gitignore

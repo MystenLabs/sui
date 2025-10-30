@@ -433,44 +433,6 @@ pub async fn fetch_move_packages(
         .collect()
 }
 
-// TODO: pkg-alt
-// /// Adds the `published-at` field to the Move.toml file. Pass in the `address_id` if you want to
-// /// set the `addresses` field in the Move.toml file.
-// ///
-// /// Note that address_id works only if there's one item in the addresses section. It does not know
-// /// how to handle multiple addresses / addresses from deps.
-// fn add_ids_to_manifest(
-//     package_path: &Path,
-//     published_at_id: &ObjectID,
-//     address_id: Option<ObjectID>,
-// ) -> Result<(), anyhow::Error> {
-//     let content = std::fs::read_to_string(package_path.join("Move.toml"))?;
-//     let mut toml: toml::Value = toml::from_str(&content)?;
-//     if let Some(tbl) = toml.get_mut("package")
-//         && let Some(tbl) = tbl.as_table_mut()
-//     {
-//         tbl.insert(
-//             "published-at".to_string(),
-//             toml::Value::String(published_at_id.to_hex_uncompressed()),
-//         );
-//     }
-//
-//     if let (Some(address_id), Some(tbl)) = (address_id, toml.get_mut("addresses"))
-//         && let Some(tbl) = tbl.as_table_mut()
-//     {
-//         // Get the first address item
-//         let first_key = tbl.keys().next().unwrap();
-//         tbl.insert(
-//             first_key.to_string(),
-//             toml::Value::String(address_id.to_hex_uncompressed()),
-//         );
-//     }
-//
-//     let toml_str = toml::to_string(&toml)?;
-//     std::fs::write(package_path.join("Move.toml"), toml_str)?;
-//     Ok(())
-// }
-
 #[sim_test]
 async fn test_genesis() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir()?;
