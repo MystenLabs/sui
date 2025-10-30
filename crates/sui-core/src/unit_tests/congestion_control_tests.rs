@@ -355,6 +355,7 @@ async fn test_congestion_control_execution_cancellation() {
         .acquire_shared_version_assignments_from_effects(
             &VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
             &effects,
+            None,
             authority_state_2.get_object_cache_reader().as_ref(),
         )
         .unwrap();
