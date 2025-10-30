@@ -1250,6 +1250,64 @@ impl AuthorityState {
         Ok(())
     }
 
+    /// Used for early client validation check for transactions before submission to server.
+    /// Performs the same validation checks as handle_vote_transaction without acquiring locks.
+    /// This allows for fast failure feedback to clients for non-retriable errors.
+    ///
+    /// The key addition is checking that owned object versions match live object versions.
+    /// This is necessary because handle_transaction_deny_checks fetches objects at their
+    /// requested version (which may exist in storage as historical versions), whereas
+    /// validators check against the live/current version during locking (verify_live_object).
+    pub fn check_transaction_validity(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        transaction: &VerifiedTransaction,
+    ) -> SuiResult<()> {
+        if !epoch_store
+            .get_reconfig_state_read_lock_guard()
+            .should_accept_user_certs()
+        {
+            return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
+        }
+
+        let checked_input_objects =
+            self.handle_transaction_deny_checks(transaction, epoch_store)?;
+
+        // Check that owned object versions match live objects
+        // This closely mimics verify_live_object logic from acquire_transaction_locks
+        let owned_objects = checked_input_objects.inner().filter_owned_objects();
+        let cache_reader = self.get_object_cache_reader();
+
+        for obj_ref in &owned_objects {
+            if let Some(live_object) = cache_reader.get_object(&obj_ref.0) {
+                // Only reject if transaction references an old version. Allow newer
+                // versions that may exist on validators but not yet synced to fullnode.
+                if obj_ref.1 < live_object.version() {
+                    return Err(SuiErrorKind::UserInputError {
+                        error: UserInputError::ObjectVersionUnavailableForConsumption {
+                            provided_obj_ref: *obj_ref,
+                            current_version: live_object.version(),
+                        },
+                    }
+                    .into());
+                }
+
+                // If version matches, verify digest also matches
+                if obj_ref.1 == live_object.version() && obj_ref.2 != live_object.digest() {
+                    return Err(SuiErrorKind::UserInputError {
+                        error: UserInputError::InvalidObjectDigest {
+                            object_id: obj_ref.0,
+                            expected_digest: live_object.digest(),
+                        },
+                    }
+                    .into());
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn check_system_overload_at_signing(&self) -> bool {
         self.config
             .authority_overload_config

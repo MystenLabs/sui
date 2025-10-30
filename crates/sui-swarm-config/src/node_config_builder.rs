@@ -255,7 +255,7 @@ impl ValidatorConfigBuilder {
             chain_override_for_testing: self.chain_override,
             validator_client_monitor_config: None,
             fork_recovery: None,
-            transaction_driver_config: None,
+            transaction_driver_config: Some(TransactionDriverConfig::default()),
         }
     }
 
@@ -582,7 +582,9 @@ impl FullnodeConfigBuilder {
             chain_override_for_testing: self.chain_override,
             validator_client_monitor_config: None,
             fork_recovery: None,
-            transaction_driver_config: self.transaction_driver_config,
+            transaction_driver_config: self
+                .transaction_driver_config
+                .or(Some(TransactionDriverConfig::default())),
         }
     }
 }
