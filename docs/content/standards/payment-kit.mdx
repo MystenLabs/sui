@@ -317,9 +317,7 @@ The destination address to receive the payment funds. Must be a valid Sui addres
 
 #### `amount`
 
-The `amount` field is a required pathname. The value must be a non-negative integer or decimal numbers. This field represents the display amount of a specified coin type (for example, 0.05 SUI).
-
-If an `amount` value represents a decimal that is less than `1`, it must must include a leading `0` before the decimal.
+The `amount` field is a required pathname. The value must be a `u64`. This field represents the native amount of a specified coin type (for example, 100000000 MISTS represents 0.1 SUI).
 
 #### `nonce`
 
@@ -327,7 +325,7 @@ The `nonce` field is a required pathname. This represents a unique ascii based i
 
 #### `coinType`
 
-The `coinType` field is a required pathname. The full type identifier of the coin to be transferred (for example, `0x2::sui::SUI`).
+The `coinType` field is a required pathname. The full type identifier of the coin to be transferred (for example, `0x2::sui::SUI` or `0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI`).
 
 #### `label`
 
@@ -351,7 +349,8 @@ The object ID or ascii represented `name` of the `PaymentRegistry` to use for pr
 
 ```
 sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=0.62
+    ?amount=1000000000 // (1 SUI represented as MISTS)
+    &coinType=0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI
     &nonce=550e8400-e29b-41d4-a716-446655440000
 ```
 
@@ -359,8 +358,8 @@ sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
 
 ```
 sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=50
-    &coinType=0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN
+    ?amount=1000000000 // (1 SUI represented as MISTS)
+    &coinType=0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI
     &nonce=550e8400-e29b-41d4-a716-446655440000
 ```
 
@@ -368,7 +367,8 @@ sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
 
 ```
 sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=1.2
+    ?amount=1000000000 // (1 SUI represented as MISTS)
+    &coinType=0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI
     &nonce=550e8400-e29b-41d4-a716-446655440000
     &label=Coffee%20Shop
     &icon=https://example.com/icon.png
@@ -379,7 +379,8 @@ sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
 
 ```
 sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=0.1
+    ?amount=1000000000 // (1 SUI represented as MISTS)
+    &coinType=0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI
     &nonce=550e8400-e29b-41d4-a716-446655440000
     &registry=0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890
 ```
@@ -388,7 +389,7 @@ sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
 
 ```
 sui:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
-    ?amount=0.1
+    ?amount=1000000000 // (1 SUI represented as MISTS)
     &nonce=550e8400-e29b-41d4-a716-446655440000
     &registry=default-payment-registry
 ```
