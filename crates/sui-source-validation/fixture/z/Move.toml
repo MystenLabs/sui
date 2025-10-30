@@ -1,7 +1,8 @@
 [package]
 name = "z"
 version = "0.0.1"
-published-at = "$STORAGE_ID"
+implicit-deps = false
+# published-at = "$STORAGE_ID"
 
 [dependencies]
 Sui = { local = "$REPO_ROOT/crates/sui-framework/packages/sui-framework" }
