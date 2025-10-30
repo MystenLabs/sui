@@ -136,7 +136,7 @@ async fn main() -> anyhow::Result<()> {
         args.indexer_args,
         args.client_args,
         IngestionConfig::default(),
-        Some("checkpoint_indexer"),
+        Some("checkpoint_blob_indexer"),
         &registry,
         cancel.clone(),
     )
