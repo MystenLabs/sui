@@ -116,6 +116,15 @@ impl New {
             # `--dev` modes. You can introduce test-only dependencies here.
             # Local = {{ local = "../path/to/dev-build" }}
 
+            # Named addresses will be accessible in Move as `@name`. They're also exported:
+            # for example, `std = "0x1"` is exported by the Standard Library.
+            # alice = "0xA11CE"
+
+            [dev-dependencies]
+            # The dev-dependencies section allows overriding dependencies for `--test` and
+            # `--dev` modes. You can introduce test-only dependencies here.
+            # local = {{ local = "../path/to/dev-build" }}
+
             [dev-addresses]
             # The dev-addresses section allows overwriting named addresses for the `--test`
             # and `--dev` modes.

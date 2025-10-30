@@ -30,7 +30,7 @@ p1 = "0x0"
 [dev-dependencies]
 # The dev-dependencies section allows overriding dependencies for `--test` and
 # `--dev` modes. You can introduce test-only dependencies here.
-# Local = { local = "../path/to/dev-build" }
+# local = { local = "../path/to/dev-build" }
 
 [dev-addresses]
 # The dev-addresses section allows overwriting named addresses for the `--test`
@@ -71,7 +71,7 @@ p2 = "0x0"
 [dev-dependencies]
 # The dev-dependencies section allows overriding dependencies for `--test` and
 # `--dev` modes. You can introduce test-only dependencies here.
-# Local = { local = "../path/to/dev-build" }
+# local = { local = "../path/to/dev-build" }
 
 [dev-addresses]
 # The dev-addresses section allows overwriting named addresses for the `--test`
