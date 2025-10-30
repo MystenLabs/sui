@@ -239,20 +239,36 @@ impl ConsensusManager {
         // For observer nodes, resolve the target validator hostname to an AuthorityIndex
         let target_validator_index = if is_observer {
             if let Some(ref target_hostname) = consensus_config.observer_target_validator {
+                info!("Observer looking for target validator hostname: '{}'", target_hostname);
+
+                // Log all authorities in committee for debugging
+                for (idx, auth) in committee.authorities() {
+                    info!("Committee authority {}: hostname='{}', address={}",
+                          idx, auth.hostname, auth.address);
+                }
+
                 // Find the authority with matching hostname
                 let index = committee
                     .authorities()
-                    .find(|(_, a)| &a.hostname == target_hostname)
+                    .find(|(_, a)| {
+                        let matches = a.hostname.trim() == target_hostname.trim();
+                        if matches {
+                            info!("Found hostname match: '{}' == '{}'", a.hostname, target_hostname);
+                        }
+                        matches
+                    })
                     .map(|(index, _)| index);
 
                 match index {
                     Some(idx) => {
-                        info!("Observer will connect to validator at {target_hostname} (index: {idx})");
+                        info!("Observer will connect to validator at {} (index: {})", target_hostname, idx);
                         Some(idx)
                     }
                     None => {
                         error!(
-                            "Observer target validator hostname '{target_hostname}' not found in committee. Will connect to first validator."
+                            "Observer target validator hostname '{}' not found in committee. Available hostnames: {:?}. Will connect to first validator.",
+                            target_hostname,
+                            committee.authorities().map(|(_, a)| &a.hostname).collect::<Vec<_>>()
                         );
                         None
                     }
