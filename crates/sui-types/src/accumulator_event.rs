@@ -7,10 +7,11 @@ use mysten_common::fatal;
 
 use crate::TypeTag;
 use crate::accumulator_root::AccumulatorObjId;
+use crate::base_types::SuiAddress;
 use crate::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
 };
-use crate::gas_coin::GasCoin;
+use crate::gas_coin::{GAS, GasCoin};
 
 pub const ACCUMULATOR_MODULE_NAME: &IdentStr = ident_str!("accumulator");
 
@@ -26,6 +27,29 @@ impl AccumulatorEvent {
             accumulator_obj,
             write,
         }
+    }
+
+    pub fn from_balance_change(
+        accumulator_obj: AccumulatorObjId,
+        address: SuiAddress,
+        net_change: i64,
+    ) -> Self {
+        let accumulator_address =
+            AccumulatorAddress::new(address, crate::balance::Balance::type_tag(GAS::type_tag()));
+
+        let (operation, amount) = if net_change > 0 {
+            (AccumulatorOperation::Split, net_change as u64)
+        } else {
+            (AccumulatorOperation::Merge, (-net_change) as u64)
+        };
+
+        let accumulator_write = AccumulatorWriteV1 {
+            address: accumulator_address,
+            operation,
+            value: AccumulatorValue::Integer(amount),
+        };
+
+        Self::new(accumulator_obj, accumulator_write)
     }
 
     pub fn total_sui_in_event(&self) -> (u64 /* input */, u64 /* output */) {

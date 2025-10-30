@@ -73,6 +73,7 @@ mod checked {
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
         ProgrammableTransaction, StoredExecutionTimeObservations, TransactionKind,
+        is_gas_paid_from_address_balance,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
@@ -136,11 +137,18 @@ mod checked {
         };
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
+        let address_balance_gas_payer =
+            if is_gas_paid_from_address_balance(&gas_data, &transaction_kind) {
+                Some(gas_data.owner)
+            } else {
+                None
+            };
         let mut gas_charger = GasCharger::new(
             transaction_digest,
             gas_data.payment,
             gas_status,
             protocol_config,
+            address_balance_gas_payer,
         );
 
         let tx_ctx = TxContext::new_from_components(

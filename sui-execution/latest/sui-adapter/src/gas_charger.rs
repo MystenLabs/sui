@@ -16,7 +16,10 @@ pub mod checked {
         charge_upgrades, dont_charge_budget_on_storage_oog,
     };
     use sui_types::{
-        base_types::{ObjectID, ObjectRef},
+        SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+        accumulator_event::AccumulatorEvent,
+        accumulator_root::AccumulatorObjId,
+        base_types::{ObjectID, ObjectRef, SuiAddress},
         digests::TransactionDigest,
         error::ExecutionError,
         gas_model::tables::GasStatus,
@@ -42,6 +45,8 @@ pub mod checked {
         // be smashed into. It can be None for system transactions when `gas_coins` is empty.
         smashed_gas_coin: Option<ObjectID>,
         gas_status: SuiGasStatus,
+        // For address balance payments: sender or sponsor address to charge
+        address_balance_gas_payer: Option<SuiAddress>,
     }
 
     impl GasCharger {
@@ -50,6 +55,7 @@ pub mod checked {
             gas_coins: Vec<ObjectRef>,
             gas_status: SuiGasStatus,
             protocol_config: &ProtocolConfig,
+            address_balance_gas_payer: Option<SuiAddress>,
         ) -> Self {
             let gas_model_version = protocol_config.gas_model_version();
             Self {
@@ -58,6 +64,7 @@ pub mod checked {
                 gas_coins,
                 smashed_gas_coin: None,
                 gas_status,
+                address_balance_gas_payer,
             }
         }
 
@@ -68,6 +75,7 @@ pub mod checked {
                 gas_coins: vec![],
                 smashed_gas_coin: None,
                 gas_status: SuiGasStatus::new_unmetered(),
+                address_balance_gas_payer: None,
             }
         }
 
@@ -291,7 +299,7 @@ pub mod checked {
             debug_assert!(self.gas_status.storage_rebate() == 0);
             debug_assert!(self.gas_status.storage_gas_units() == 0);
 
-            if self.smashed_gas_coin.is_some() {
+            if self.smashed_gas_coin.is_some() || self.address_balance_gas_payer.is_some() {
                 // bucketize computation cost
                 let is_move_abort = execution_result
                     .as_ref()
@@ -327,7 +335,34 @@ pub mod checked {
 
             // system transactions (None smashed_gas_coin)  do not have gas and so do not charge
             // for storage, however they track storage values to check for conservation rules
-            if let Some(gas_object_id) = self.smashed_gas_coin {
+            if let Some(payer_address) = self.address_balance_gas_payer {
+                let is_insufficient_balance_error = execution_result
+                    .as_ref()
+                    .err()
+                    .map(|err| matches!(err.kind(), sui_types::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw))
+                    .unwrap_or(false);
+
+                // If we don't have enough balance to withdraw, don't charge for gas
+                // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
+                if is_insufficient_balance_error {
+                    GasCostSummary::default()
+                } else {
+                    let cost_summary = self.gas_status.summary();
+                    let net_change = cost_summary.net_gas_usage();
+
+                    if net_change != 0 {
+                        let accumulator_event = AccumulatorEvent::from_balance_change(
+                            AccumulatorObjId::new_unchecked(SUI_ACCUMULATOR_ROOT_OBJECT_ID),
+                            payer_address,
+                            net_change,
+                        );
+
+                        temporary_store.add_accumulator_event(accumulator_event);
+                    }
+
+                    cost_summary
+                }
+            } else if let Some(gas_object_id) = self.smashed_gas_coin {
                 if dont_charge_budget_on_storage_oog(self.gas_model_version) {
                     self.handle_storage_and_rebate_v2(temporary_store, execution_result)
                 } else {
