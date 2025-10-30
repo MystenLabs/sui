@@ -232,7 +232,7 @@ pub struct NodeConfig {
 pub struct TransactionDriverConfig {
     /// The list of validators that are allowed to submit MFP transactions to (via the transaction driver).
     /// Each entry is a validator display name.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed_submission_validators: Vec<String>,
 
     /// Enable early transaction validation before submission to consensus.
