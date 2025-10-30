@@ -8,7 +8,6 @@ use indoc::formatdoc;
 use move_package_alt::package::layout::SourcePackageLayout;
 use move_package_alt::schema::PackageName;
 
-use std::fmt::Display;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::{fs::create_dir_all, io::Write, path::Path};
