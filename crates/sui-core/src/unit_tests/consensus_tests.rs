@@ -6,11 +6,10 @@ use std::time::Duration;
 
 use super::*;
 use crate::authority::ExecutionEnv;
-use crate::authority::shared_object_version_manager::AssignedTxAndVersions;
 use crate::authority::{AuthorityState, authority_tests::init_state_with_objects};
-use crate::checkpoints::CheckpointServiceNoop;
-use crate::consensus_handler::SequencedConsensusTransaction;
+use crate::consensus_handler::{SequencedConsensusTransaction, SequencedConsensusTransactionKind};
 
+use crate::authority::shared_object_version_manager::Schedulable;
 use crate::mock_consensus::with_block_status;
 use consensus_core::BlockStatus;
 use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX};
@@ -22,6 +21,7 @@ use rand::{Rng, SeedableRng, thread_rng};
 use sui_macros::sim_test;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::crypto::{AccountKeyPair, deterministic_random_account_key};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
@@ -34,7 +34,7 @@ use sui_types::{
     object::Object,
     transaction::{
         CallArg, CertifiedTransaction, ObjectArg, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
-        TransactionData, VerifiedTransaction,
+        TransactionData, VerifiedCertificate, VerifiedTransaction,
     },
 };
 use tokio::time::sleep;
@@ -215,79 +215,103 @@ pub fn make_consensus_adapter_for_test(
                 ));
             }
 
+            let num_transactions = transactions.len();
+            let mut executed_via_checkpoint = 0;
+
+            // Simple processing - just mark transactions for checkpoint execution if needed
+            for txn in transactions {
+                if let ConsensusTransactionKind::CertifiedTransaction(cert) = &txn.kind {
+                    let transaction_digest = cert.digest();
+                    if self.process_via_checkpoint.contains(transaction_digest) {
+                        epoch_store
+                            .insert_finalized_transactions(vec![*transaction_digest].as_slice(), 10)
+                            .expect("Should not fail");
+                        executed_via_checkpoint += 1;
+                    }
+                } else if let ConsensusTransactionKind::UserTransaction(tx) = &txn.kind {
+                    let transaction_digest = tx.digest();
+                    if self.process_via_checkpoint.contains(transaction_digest) {
+                        epoch_store
+                            .insert_finalized_transactions(vec![*transaction_digest].as_slice(), 10)
+                            .expect("Should not fail");
+                        executed_via_checkpoint += 1;
+                    }
+                }
+            }
+
             let sequenced_transactions: Vec<SequencedConsensusTransaction> = transactions
                 .iter()
                 .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
                 .collect();
 
-            let checkpoint_service = Arc::new(CheckpointServiceNoop {});
-            let mut transactions = Vec::new();
-            let mut assigned_versions = Vec::new();
-            let mut executed_via_checkpoint = 0;
+            let keys = sequenced_transactions
+                .iter()
+                .map(|tx| tx.key())
+                .collect::<Vec<_>>();
 
-            let num_transactions = sequenced_transactions.len();
-            for tx in sequenced_transactions {
-                if let Some(transaction_digest) = tx.transaction.executable_transaction_digest() {
-                    if self.process_via_checkpoint.contains(&transaction_digest) {
-                        epoch_store
-                            .insert_finalized_transactions(vec![transaction_digest].as_slice(), 10)
-                            .expect("Should not fail");
-                        executed_via_checkpoint += 1;
-                    } else {
-                        let (txns, versions) = epoch_store
-                            .process_consensus_transactions_for_tests(
-                                vec![tx],
-                                &checkpoint_service,
+            // Only execute transactions if explicitly requested and not via checkpoint
+            if self.execute {
+                for tx in sequenced_transactions {
+                    if let Some(transaction_digest) = tx.transaction.executable_transaction_digest()
+                    {
+                        // Skip if already executed via checkpoint
+                        if self.process_via_checkpoint.contains(&transaction_digest) {
+                            continue;
+                        }
+
+                        // Extract executable transaction from consensus transaction
+                        let executable_tx = match &tx.transaction {
+                            SequencedConsensusTransactionKind::External(ext) => match &ext.kind {
+                                ConsensusTransactionKind::CertifiedTransaction(cert) => {
+                                    Some(VerifiedExecutableTransaction::new_from_certificate(
+                                        VerifiedCertificate::new_unchecked(*cert.clone()),
+                                    ))
+                                }
+                                ConsensusTransactionKind::UserTransaction(tx) => {
+                                    Some(VerifiedExecutableTransaction::new_from_consensus(
+                                        VerifiedTransaction::new_unchecked(*tx.clone()),
+                                        0,
+                                    ))
+                                }
+                                _ => None,
+                            },
+                            SequencedConsensusTransactionKind::System(sys_tx) => {
+                                Some(sys_tx.clone())
+                            }
+                        };
+
+                        if let Some(exec_tx) = executable_tx {
+                            let versions = epoch_store.assign_shared_object_versions_for_tests(
                                 self.state.get_object_cache_reader().as_ref(),
-                                &self.state.metrics,
-                                true,
-                            )
-                            .await?;
+                                &vec![exec_tx.clone()],
+                            )?;
 
-                        transactions.extend(txns);
-                        assigned_versions.extend(versions.0);
+                            let assigned_version = versions
+                                .into_map()
+                                .into_iter()
+                                .next()
+                                .map(|(_, v)| v)
+                                .unwrap_or_default();
+
+                            self.state.execution_scheduler().enqueue(
+                                vec![(
+                                    Schedulable::Transaction(exec_tx),
+                                    ExecutionEnv::new().with_assigned_versions(assigned_version),
+                                )],
+                                epoch_store,
+                            );
+                        }
                     }
-                } else {
-                    let (txns, versions) = epoch_store
-                        .process_consensus_transactions_for_tests(
-                            vec![tx],
-                            &checkpoint_service,
-                            self.state.get_object_cache_reader().as_ref(),
-                            &self.state.metrics,
-                            true,
-                        )
-                        .await?;
-                    transactions.extend(txns);
-                    assigned_versions.extend(versions.0);
                 }
             }
+
+            epoch_store.process_notifications(keys.iter());
 
             assert_eq!(
                 executed_via_checkpoint,
                 self.process_via_checkpoint.len(),
                 "Some transactions were not executed via checkpoint"
             );
-
-            let assigned_versions = AssignedTxAndVersions::new(assigned_versions).into_map();
-            let transactions = transactions
-                .into_iter()
-                .map(|tx| {
-                    let assigned_versions = assigned_versions
-                        .get(&tx.key())
-                        .cloned()
-                        .unwrap_or_default();
-                    (
-                        tx,
-                        ExecutionEnv::new().with_assigned_versions(assigned_versions),
-                    )
-                })
-                .collect();
-
-            if self.execute {
-                self.state
-                    .execution_scheduler()
-                    .enqueue(transactions, epoch_store);
-            }
 
             assert!(
                 !self.mock_block_status_receivers.lock().is_empty(),
