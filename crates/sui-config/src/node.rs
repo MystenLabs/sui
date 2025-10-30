@@ -196,12 +196,6 @@ pub struct NodeConfig {
     #[serde(default = "bool_true")]
     pub enable_validator_tx_finalizer: bool,
 
-    /// Enable early transaction validation before submission to validator.
-    /// This checks for non-retriable errors (like old object versions) and rejects
-    /// transactions early to provide fast feedback to clients.
-    #[serde(default = "bool_true")]
-    pub enable_transaction_orchestrator_early_validation: bool,
-
     #[serde(default)]
     pub verifier_signing_config: VerifierSigningConfig,
 
@@ -233,13 +227,29 @@ pub struct NodeConfig {
     pub transaction_driver_config: Option<TransactionDriverConfig>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct TransactionDriverConfig {
     /// The list of validators that are allowed to submit MFP transactions to (via the transaction driver).
     /// Each entry is a validator display name.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub allowed_submission_validators: Vec<String>,
+
+    /// Enable early transaction validation before submission to consensus.
+    /// This checks for non-retriable errors (like old object versions) and rejects
+    /// transactions early to provide fast feedback to clients.
+    /// Note: Currently used in TransactionOrchestrator, but may be moved to TransactionDriver in future.
+    #[serde(default = "bool_true")]
+    pub enable_early_validation: bool,
+}
+
+impl Default for TransactionDriverConfig {
+    fn default() -> Self {
+        Self {
+            allowed_submission_validators: vec![],
+            enable_early_validation: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]

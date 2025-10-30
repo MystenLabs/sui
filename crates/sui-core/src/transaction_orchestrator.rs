@@ -174,6 +174,12 @@ where
             .map(|config| config.allowed_submission_validators.clone())
             .unwrap_or_default();
 
+        let enable_early_validation = node_config
+            .transaction_driver_config
+            .as_ref()
+            .map(|config| config.enable_early_validation)
+            .unwrap_or(true);
+
         Self {
             quorum_driver_handler,
             validator_state,
@@ -184,7 +190,7 @@ where
             transaction_driver,
             td_percentage,
             td_allowed_submission_list,
-            enable_early_validation: node_config.enable_transaction_orchestrator_early_validation,
+            enable_early_validation,
         }
     }
 }
@@ -319,29 +325,30 @@ where
         let tx_digest = *verified_transaction.digest();
 
         // Early validation check against local state before submission to catch non-retriable errors
-        // Skip early validation if transaction has already been executed (allows retries to return cached results)
+        // TODO: Consider moving this check to TransactionDriver for per-retry validation
         if self.enable_early_validation
-            && !self.validator_state.is_tx_already_executed(&tx_digest)
             && let Err(e) = self
                 .validator_state
                 .check_transaction_validity(&epoch_store, &verified_transaction)
         {
             let error_category = e.categorize();
             if !error_category.is_submission_retriable() {
-                self.metrics
-                    .early_validation_rejections
-                    .with_label_values(&[e.as_ref()])
-                    .inc();
-                debug!(
-                    ?tx_digest,
-                    error = ?e,
-                    "Transaction rejected during early validation"
-                );
+                // Skip early validation rejection if transaction has already been executed (allows retries to return cached results)
+                if !self.validator_state.is_tx_already_executed(&tx_digest) {
+                    self.metrics
+                        .early_validation_rejections
+                        .with_label_values(&[e.as_ref()])
+                        .inc();
+                    debug!(
+                        error = ?e,
+                        "Transaction rejected during early validation"
+                    );
 
-                return Err(QuorumDriverError::TransactionFailed {
-                    category: error_category,
-                    details: e.to_string(),
-                });
+                    return Err(QuorumDriverError::TransactionFailed {
+                        category: error_category,
+                        details: e.to_string(),
+                    });
+                }
             }
         }
 

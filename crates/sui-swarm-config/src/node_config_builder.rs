@@ -255,8 +255,7 @@ impl ValidatorConfigBuilder {
             chain_override_for_testing: self.chain_override,
             validator_client_monitor_config: None,
             fork_recovery: None,
-            transaction_driver_config: None,
-            enable_transaction_orchestrator_early_validation: true,
+            transaction_driver_config: Some(TransactionDriverConfig::default()),
         }
     }
 
@@ -583,8 +582,9 @@ impl FullnodeConfigBuilder {
             chain_override_for_testing: self.chain_override,
             validator_client_monitor_config: None,
             fork_recovery: None,
-            transaction_driver_config: self.transaction_driver_config,
-            enable_transaction_orchestrator_early_validation: true,
+            transaction_driver_config: self
+                .transaction_driver_config
+                .or(Some(TransactionDriverConfig::default())),
         }
     }
 }
