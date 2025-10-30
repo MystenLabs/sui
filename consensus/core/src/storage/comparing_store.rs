@@ -407,7 +407,7 @@ impl Store for ComparingStore {
 
         self.compare_blocks("read_blocks", &result_rocks, &result_tide);
 
-        Ok(result_rocks)
+        Ok(result_tide)
     }
 
     fn contains_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<bool>> {
@@ -416,7 +416,7 @@ impl Store for ComparingStore {
 
         self.compare_bool_vec("contains_blocks", &result_rocks, &result_tide);
 
-        Ok(result_rocks)
+        Ok(result_tide)
     }
 
     fn scan_blocks_by_author(
@@ -431,7 +431,7 @@ impl Store for ComparingStore {
         let tide_opts: Vec<Option<VerifiedBlock>> = result_tide.iter().map(|b| Some(b.clone())).collect();
         self.compare_blocks("scan_blocks_by_author", &rocks_opts, &tide_opts);
 
-        Ok(result_rocks)
+        Ok(result_tide)
     }
 
     fn scan_last_blocks_by_author(
@@ -447,7 +447,7 @@ impl Store for ComparingStore {
         let tide_opts: Vec<Option<VerifiedBlock>> = result_tide.iter().map(|b| Some(b.clone())).collect();
         self.compare_blocks("scan_last_blocks_by_author", &rocks_opts, &tide_opts);
 
-        Ok(result_rocks)
+        Ok(result_tide)
     }
 
     fn read_last_commit(&self) -> ConsensusResult<Option<TrustedCommit>> {
@@ -456,7 +456,7 @@ impl Store for ComparingStore {
 
         self.compare_option_commit("read_last_commit", &result_rocks, &result_tide);
 
-        Ok(result_rocks)
+        Ok(result_tide)
     }
 
     fn scan_commits(&self, range: CommitRange) -> ConsensusResult<Vec<TrustedCommit>> {
@@ -465,7 +465,7 @@ impl Store for ComparingStore {
 
         self.compare_commits("scan_commits", &result_rocks, &result_tide);
 
-        Ok(result_rocks)
+        Ok(result_tide)
     }
 
     fn read_commit_votes(&self, commit_index: CommitIndex) -> ConsensusResult<Vec<BlockRef>> {
@@ -474,7 +474,7 @@ impl Store for ComparingStore {
 
         self.compare_block_refs("read_commit_votes", &result_rocks, &result_tide);
 
-        Ok(result_rocks)
+        Ok(result_tide)
     }
 
     fn read_last_commit_info(&self) -> ConsensusResult<Option<(CommitRef, CommitInfo)>> {
@@ -483,7 +483,7 @@ impl Store for ComparingStore {
 
         self.compare_option_commit_info("read_last_commit_info", &result_rocks, &result_tide);
 
-        Ok(result_rocks)
+        Ok(result_tide)
     }
 
     fn read_last_finalized_commit(&self) -> ConsensusResult<Option<CommitRef>> {
@@ -492,7 +492,7 @@ impl Store for ComparingStore {
 
         self.compare_option_commit_ref("read_last_finalized_commit", &result_rocks, &result_tide);
 
-        Ok(result_rocks)
+        Ok(result_tide)
     }
 
     fn scan_finalized_commits(
@@ -504,6 +504,6 @@ impl Store for ComparingStore {
 
         self.compare_finalized_commits("scan_finalized_commits", &result_rocks, &result_tide);
 
-        Ok(result_rocks)
+        Ok(result_tide)
     }
 }
