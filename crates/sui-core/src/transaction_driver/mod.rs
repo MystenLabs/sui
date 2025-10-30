@@ -290,6 +290,14 @@ where
                         return Ok(resp);
                     }
                     Err(e) => {
+                        self.metrics
+                            .drive_transaction_errors
+                            .with_label_values(&[
+                                e.categorize().into(),
+                                tx_type.as_str(),
+                                ping_label,
+                            ])
+                            .inc();
                         if !e.is_submission_retriable() {
                             // Record the number of retries for failed transaction
                             self.metrics
