@@ -98,35 +98,34 @@ impl CheckpointTransactionData {
     ) -> Self {
         assert_eq!(transactions.len(), effects.len());
         assert_eq!(transactions.len(), executed_fx_digests.len());
-        let mut accumulator_versions = vec![None; transactions.len()];
-        let mut next_update_index = 0;
-        for (idx, efx) in effects.iter().enumerate() {
-            // Only the barrier settlement transaction mutates the accumulator root object.
-            // This filtering detects whether this transaction is the barrier settlement transaction.
-            // And if so we get the old version of the accumulator root object.
-            // Transactions prior to the barrier settlement transaction reads this accumulator version.
-            let acc_version = efx.object_changes().into_iter().find_map(|change| {
+        let mut accumulator_versions = Vec::with_capacity(transactions.len());
+        let mut cur_acc_version = None;
+        for efx in effects.iter() {
+            accumulator_versions.push(cur_acc_version);
+            // Only barrier settlement transactions mutate the accumulator root object.
+            // This filtering detects whether this transaction is a barrier settlement transaction.
+            // And if so we get the new version of the accumulator root object.
+            // Transactions after the barrier settlement transaction reads this accumulator version (until the next barrier settlement transaction)
+            let old_acc_version = efx.object_changes().into_iter().find_map(|change| {
                 if change.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID {
                     change.input_version
                 } else {
                     None
                 }
             });
-            if let Some(acc_version) = acc_version {
-                // Set version for transactions between [next_update_index, idx] inclusive.
-                for slot in accumulator_versions
-                    .iter_mut()
-                    .take(idx + 1)
-                    .skip(next_update_index)
-                {
-                    *slot = Some(acc_version);
+            if let Some(old_acc_version) = old_acc_version {
+                if cur_acc_version.is_none() {
+                    // First time seeing a barrier settlement transaction, we have been pushing None
+                    // so far, so we need to set all the slots to the old accumulator version.
+                    for slot in accumulator_versions.iter_mut() {
+                        *slot = Some(old_acc_version);
+                    }
                 }
-                next_update_index = idx + 1;
+                cur_acc_version = Some(old_acc_version.next());
             }
         }
-        // Either accumulator is not enabled, or the last transaction is the barrier settlement transaction.
-        // The last transaction must be the barrier settlement transaction.
-        assert!(next_update_index == transactions.len() || next_update_index == 0);
+        assert_eq!(accumulator_versions.len(), effects.len());
+
         Self {
             transactions,
             effects,
