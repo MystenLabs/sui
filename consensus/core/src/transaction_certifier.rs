@@ -136,7 +136,9 @@ impl TransactionCertifier {
             })
             .collect::<Vec<_>>();
         self.certifier_state.write().add_voted_blocks(voted_blocks);
-        // Do not send certified blocks to the fastpath output channel during recovery.
+        // Do not send certified blocks to the fastpath output channel during recovery,
+        // because these transactions could have been executed and fastpath latency optimization is
+        // unnecessary for recovered transactions.
     }
 
     /// Stores own reject votes on input blocks, and aggregates reject votes from the input blocks.
@@ -363,12 +365,20 @@ impl CertifierState {
             self.gc_round
         );
 
-        // Vote entry for the proposed block must exist.
-        assert!(
-            self.votes.contains_key(&proposed_block.reference()),
-            "Proposed block {} not found in certifier state, likely failed to be recovered or gc round is incorrect.",
-            proposed_block.reference()
-        );
+        if !self.votes.contains_key(&proposed_block.reference()) {
+            self.context
+                .metrics
+                .node_metrics
+                .certifier_missing_ancestor_during_certification
+                .with_label_values(&["proposed_block_not_found"])
+                .inc();
+            debug!(
+                "Proposed block {} not found in certifier state. GC round: {}",
+                proposed_block.reference(),
+                self.gc_round,
+            );
+            return vec![];
+        }
 
         let now = self.context.clock.timestamp_utc_ms();
 

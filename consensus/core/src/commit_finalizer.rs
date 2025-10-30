@@ -121,6 +121,9 @@ impl CommitFinalizer {
                 vec![committed_sub_dag]
             };
             if !finalized_commits.is_empty() {
+                // Transaction certifier state should be GC'ed as soon as new commits are finalized.
+                // But this is done outside of process_commit(), because during recovery process_commit()
+                // is not called to finalize commits, but GC still needs to run.
                 self.try_update_gc_round(finalized_commits.last().unwrap().leader.round);
                 let mut dag_state = self.dag_state.write();
                 if !already_finalized {
