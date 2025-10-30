@@ -19,7 +19,7 @@ The Maintainer SDK provides administrative functions for managing margin pools, 
 
 The DeepBook Margin SDK provides the following functions for pool administration and configuration.
 
-### createMarginPool
+### `createMarginPool`
 
 Use `createMarginPool` to create a new margin pool for a specific asset. Requires the maintainer capability. The call returns a function that takes a `Transaction` object.
 
@@ -28,11 +28,9 @@ Use `createMarginPool` to create a new margin pool for a specific asset. Require
 - `coinKey`: String that identifies the asset type.
 - `poolConfig`: `TransactionArgument` representing the protocol configuration.
 
-```tsx
-createMarginPool(coinKey: string, poolConfig: TransactionArgument);
-```
+<ImportContent source="/packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="createMarginPool" org="MystenLabs" repo="ts-sdks" signatureOnly />
 
-### newProtocolConfig
+### `newProtocolConfig`
 
 Use `newProtocolConfig` to create a new protocol configuration object combining margin pool settings and interest parameters. The call returns a function that takes a `Transaction` object.
 
@@ -42,15 +40,9 @@ Use `newProtocolConfig` to create a new protocol configuration object combining 
 - `marginPoolConfig`: `MarginPoolConfigParams` object with pool settings.
 - `interestConfig`: `InterestConfigParams` object with interest rate parameters.
 
-```tsx
-newProtocolConfig(
-	coinKey: string,
-	marginPoolConfig: MarginPoolConfigParams,
-	interestConfig: InterestConfigParams,
-);
-```
+<ImportContent source="/packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="newProtocolConfig" org="MystenLabs" repo="ts-sdks" signatureOnly />
 
-### newMarginPoolConfig
+### `newMarginPoolConfig`
 
 Use `newMarginPoolConfig` to create a margin pool configuration object. The call returns a function that takes a `Transaction` object.
 
@@ -63,11 +55,9 @@ Use `newMarginPoolConfig` to create a margin pool configuration object. The call
   - `referralSpread`: Number representing protocol spread percentage
   - `minBorrow`: Number representing minimum borrow amount
 
-```tsx
-newMarginPoolConfig(coinKey: string, marginPoolConfig: MarginPoolConfigParams);
-```
+<ImportContent source="/packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="newMarginPoolConfig" org="MystenLabs" repo="ts-sdks" signatureOnly />
 
-### newInterestConfig
+### `newInterestConfig`
 
 Use `newInterestConfig` to create an interest configuration object. The call returns a function that takes a `Transaction` object.
 
@@ -79,11 +69,9 @@ Use `newInterestConfig` to create an interest configuration object. The call ret
   - `optimalUtilization`: Number representing the kink point (e.g., 0.8)
   - `excessSlope`: Number representing interest rate slope after kink
 
-```tsx
-newInterestConfig(interestConfig: InterestConfigParams);
-```
+<ImportContent source="/packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="newInterestConfig" org="MystenLabs" repo="ts-sdks" signatureOnly />
 
-### enableDeepbookPoolForLoan, disableDeepbookPoolForLoan
+### `enableDeepbookPoolForLoan`, `disableDeepbookPoolForLoan`
 
 Use these functions to control which DeepBook pools can borrow from the margin pool. The call returns a function that takes a `Transaction` object.
 
@@ -93,20 +81,9 @@ Use these functions to control which DeepBook pools can borrow from the margin p
 - `coinKey`: String that identifies the margin pool asset.
 - `marginPoolCap`: String representing the margin pool capability ID.
 
-```tsx
-enableDeepbookPoolForLoan(
-	deepbookPoolKey: string,
-	coinKey: string,
-	marginPoolCap: string,
-);
-disableDeepbookPoolForLoan(
-	deepbookPoolKey: string,
-	coinKey: string,
-	marginPoolCap: string,
-);
-```
+<ImportContent source="/packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="enableDeepbookPoolForLoan,disableDeepbookPoolForLoan" org="MystenLabs" repo="ts-sdks" signatureOnly />
 
-### updateInterestParams
+### `updateInterestParams`
 
 Use `updateInterestParams` to update the interest rate parameters for a margin pool. The call returns a function that takes a `Transaction` object.
 
@@ -116,15 +93,9 @@ Use `updateInterestParams` to update the interest rate parameters for a margin p
 - `marginPoolCap`: String representing the margin pool capability ID.
 - `interestConfig`: `InterestConfigParams` object with new interest parameters.
 
-```tsx
-updateInterestParams(
-	coinKey: string,
-	marginPoolCap: string,
-	interestConfig: InterestConfigParams,
-);
-```
+<ImportContent source="/packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="updateInterestParams" org="MystenLabs" repo="ts-sdks" signatureOnly />
 
-### updateMarginPoolConfig
+### `updateMarginPoolConfig`
 
 Use `updateMarginPoolConfig` to update the configuration settings for a margin pool. The call returns a function that takes a `Transaction` object.
 
@@ -134,13 +105,7 @@ Use `updateMarginPoolConfig` to update the configuration settings for a margin p
 - `marginPoolCap`: String representing the margin pool capability ID.
 - `marginPoolConfig`: `MarginPoolConfigParams` object with new pool settings.
 
-```tsx
-updateMarginPoolConfig(
-	coinKey: string,
-	marginPoolCap: string,
-	marginPoolConfig: MarginPoolConfigParams,
-);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="updateMarginPoolConfig" org="MystenLabs" repo="ts-sdks" signatureOnly />
 
 ## Examples
 
