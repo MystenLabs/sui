@@ -67,7 +67,8 @@ use crate::{
         AuthorityMetrics, AuthorityState, ExecutionEnv,
     },
     checkpoints::{
-        CheckpointService, CheckpointServiceNotify, PendingCheckpoint, PendingCheckpointInfo,
+        CheckpointService, CheckpointServiceNoop, CheckpointServiceNotify, PendingCheckpoint,
+        PendingCheckpointInfo,
     },
     consensus_adapter::ConsensusAdapter,
     consensus_throughput_calculator::ConsensusThroughputCalculator,
@@ -82,10 +83,36 @@ use crate::{
     scoring_decision::update_low_scoring_authorities,
     traffic_controller::{policies::TrafficTally, TrafficController},
 };
+use sui_types::error::SuiResult;
+
+pub enum CheckpointServiceWrapper {
+    Full(Arc<CheckpointService>),
+    Noop(Arc<CheckpointServiceNoop>),
+}
+
+impl CheckpointServiceNotify for CheckpointServiceWrapper {
+    fn notify_checkpoint_signature(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        info: &CheckpointSignatureMessage,
+    ) -> SuiResult {
+        match self {
+            CheckpointServiceWrapper::Full(service) => service.notify_checkpoint_signature(epoch_store, info),
+            CheckpointServiceWrapper::Noop(service) => service.notify_checkpoint_signature(epoch_store, info),
+        }
+    }
+
+    fn notify_checkpoint(&self) -> SuiResult {
+        match self {
+            CheckpointServiceWrapper::Full(service) => service.notify_checkpoint(),
+            CheckpointServiceWrapper::Noop(service) => service.notify_checkpoint(),
+        }
+    }
+}
 
 pub struct ConsensusHandlerInitializer {
     state: Arc<AuthorityState>,
-    checkpoint_service: Arc<CheckpointService>,
+    checkpoint_service: Arc<CheckpointServiceWrapper>,
     epoch_store: Arc<AuthorityPerEpochStore>,
     consensus_adapter: Arc<ConsensusAdapter>,
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
@@ -96,7 +123,7 @@ pub struct ConsensusHandlerInitializer {
 impl ConsensusHandlerInitializer {
     pub fn new(
         state: Arc<AuthorityState>,
-        checkpoint_service: Arc<CheckpointService>,
+        checkpoint_service: Arc<CheckpointServiceWrapper>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_adapter: Arc<ConsensusAdapter>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
@@ -127,7 +154,7 @@ impl ConsensusHandlerInitializer {
             make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]);
         Self {
             state: state.clone(),
-            checkpoint_service,
+            checkpoint_service: Arc::new(CheckpointServiceWrapper::Full(checkpoint_service)),
             epoch_store: state.epoch_store_for_testing().clone(),
             consensus_adapter,
             low_scoring_authorities: Arc::new(Default::default()),
@@ -139,7 +166,7 @@ impl ConsensusHandlerInitializer {
         }
     }
 
-    pub(crate) fn new_consensus_handler(&self) -> ConsensusHandler<CheckpointService> {
+    pub(crate) fn new_consensus_handler(&self) -> ConsensusHandler<CheckpointServiceWrapper> {
         let new_epoch_start_state = self.epoch_store.epoch_start_state();
         let consensus_committee = new_epoch_start_state.get_consensus_committee();
 
@@ -2900,7 +2927,7 @@ pub(crate) struct MysticetiConsensusHandler {
 impl MysticetiConsensusHandler {
     pub(crate) fn new(
         last_processed_commit_at_startup: CommitIndex,
-        mut consensus_handler: ConsensusHandler<CheckpointService>,
+        mut consensus_handler: ConsensusHandler<CheckpointServiceWrapper>,
         consensus_block_handler: ConsensusBlockHandler,
         mut commit_receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
         mut block_receiver: UnboundedReceiver<consensus_core::CertifiedBlocksOutput>,

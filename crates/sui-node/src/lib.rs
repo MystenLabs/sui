@@ -86,13 +86,14 @@ use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
 use sui_core::checkpoints::checkpoint_executor::metrics::CheckpointExecutorMetrics;
 use sui_core::checkpoints::checkpoint_executor::{CheckpointExecutor, StopReason};
 use sui_core::checkpoints::{
-    CheckpointMetrics, CheckpointService, CheckpointStore, LogCheckpointOutput,
-    SendCheckpointToStateSync, SubmitCheckpointToConsensus,
+    CheckpointMetrics, CheckpointService, CheckpointServiceNoop, CheckpointServiceNotify,
+    CheckpointStore, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 use sui_core::consensus_adapter::{
     CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
     ConsensusOverloadChecker,
 };
+use sui_core::consensus_handler::CheckpointServiceWrapper;
 use sui_core::consensus_manager::ConsensusManager;
 use sui_core::consensus_throughput_calculator::{
     ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfileRanges,
@@ -1453,17 +1454,10 @@ impl SuiNode {
     ) -> Result<ObserverComponents> {
         info!("Starting consensus manager for observer node");
 
-        // Build checkpoint service for observer (uses LogCheckpointOutput instead of SubmitCheckpointToConsensus)
-        let checkpoint_service = Self::build_observer_checkpoint_service(
-            checkpoint_store.clone(),
-            epoch_store.clone(),
-            state.clone(),
-            state_sync_handle,
-            state_hasher,
-            checkpoint_metrics,
-        );
+        // Observer nodes don't build their own checkpoints - they only consume certified checkpoints
+        // from validators via state sync. Use CheckpointServiceNoop to skip checkpoint building.
+        let checkpoint_service_wrapper = Arc::new(CheckpointServiceWrapper::Noop(Arc::new(CheckpointServiceNoop {})));
 
-        // Create consensus handler initializer for observer node
         let low_scoring_authorities = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
 
         let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
@@ -1471,9 +1465,8 @@ impl SuiNode {
             state.metrics.clone(),
         ));
 
-        // For observer nodes, we need a ConsensusAdapter even though we won't submit to consensus
-        // The adapter is used by ConsensusHandlerInitializer and must exist
-        // We create it with minimal configuration - it won't actually be used to submit transactions
+        // Observer nodes need a minimal ConsensusAdapter for the ConsensusHandlerInitializer
+        // but it won't actually submit transactions to consensus
         let connection_monitor_status = Arc::new(ConnectionMonitorStatus {
             connection_statuses: Arc::new(Default::default()),
             authority_names_to_peer_ids: ArcSwap::new(Arc::new(HashMap::new())),
@@ -1490,34 +1483,16 @@ impl SuiNode {
             state.name,
             connection_monitor_status,
             consensus_config.max_pending_transactions(),
-            consensus_config.max_pending_transactions(), // max_pending_local_submissions
+            consensus_config.max_pending_transactions(),
             consensus_config.max_submit_position,
             consensus_config.submit_delay_step_override(),
             ConsensusAdapterMetrics::new(&Registry::new()),
             protocol_config.clone(),
         ));
 
-        // Initialize RandomnessManager for observer node
-        // Observer nodes track DKG state by observing validator messages and use it to align checkpoint heights.
-        // They don't send DKG messages or partial signatures themselves.
-        if epoch_store.randomness_state_enabled() {
-            let randomness_manager = RandomnessManager::try_new(
-                Arc::downgrade(&epoch_store),
-                Box::new(consensus_adapter.clone()),
-                randomness_handle,
-                config.protocol_key_pair(),
-            )
-            .await;
-            if let Some(randomness_manager) = randomness_manager {
-                epoch_store
-                    .set_randomness_manager(randomness_manager)
-                    .await?;
-            }
-        }
-
         let consensus_handler_initializer = ConsensusHandlerInitializer::new(
             state.clone(),
-            checkpoint_service.clone(),
+            checkpoint_service_wrapper.clone(),
             epoch_store.clone(),
             consensus_adapter.clone(),
             low_scoring_authorities,
@@ -1525,18 +1500,16 @@ impl SuiNode {
             backpressure_manager,
         );
 
-        // Create SuiTxValidator for observer nodes
         let sui_tx_validator_metrics = SuiTxValidatorMetrics::new(&Registry::new());
         let sui_tx_validator = SuiTxValidator::new(
             state.clone(),
             Arc::new(NoopConsensusOverloadChecker) as Arc<dyn ConsensusOverloadChecker>,
-            checkpoint_service.clone(),
+            checkpoint_service_wrapper as Arc<dyn CheckpointServiceNotify + Send + Sync>,
             sui_tx_validator_metrics,
         );
 
         info!("Starting consensus manager asynchronously for observer node");
 
-        // Spawn consensus startup asynchronously to avoid blocking other components
         tokio::spawn({
             let config = config.clone();
             let epoch_store = epoch_store.clone();
@@ -1552,18 +1525,6 @@ impl SuiNode {
                     .await;
             }
         });
-
-        let replay_waiter = consensus_manager.replay_waiter();
-
-        info!("Spawning checkpoint service for observer node");
-        let replay_waiter = if std::env::var("DISABLE_REPLAY_WAITER").is_ok() {
-            None
-        } else {
-            Some(replay_waiter)
-        };
-        checkpoint_service
-            .spawn(epoch_store.clone(), replay_waiter)
-            .await;
 
         Ok(ObserverComponents {
             consensus_manager,
@@ -1599,6 +1560,8 @@ impl SuiNode {
             state_hasher,
             checkpoint_metrics.clone(),
         );
+
+        let checkpoint_service_wrapper = Arc::new(CheckpointServiceWrapper::Full(checkpoint_service.clone()));
 
         // create a new map that gets injected into both the consensus handler and the consensus adapter
         // the consensus handler will write values forwarded from consensus, and the consensus adapter
@@ -1651,7 +1614,7 @@ impl SuiNode {
 
         let consensus_handler_initializer = ConsensusHandlerInitializer::new(
             state.clone(),
-            checkpoint_service.clone(),
+            checkpoint_service_wrapper,
             epoch_store.clone(),
             consensus_adapter.clone(),
             low_scoring_authorities,
@@ -1745,45 +1708,6 @@ impl SuiNode {
             metrics: checkpoint_metrics.clone(),
         });
 
-        let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
-        let max_tx_per_checkpoint = max_tx_per_checkpoint(epoch_store.protocol_config());
-        let max_checkpoint_size_bytes =
-            epoch_store.protocol_config().max_checkpoint_size_bytes() as usize;
-
-        CheckpointService::build(
-            state.clone(),
-            checkpoint_store,
-            epoch_store,
-            state.get_transaction_cache_reader().clone(),
-            state_hasher,
-            checkpoint_output,
-            Box::new(certified_checkpoint_output),
-            checkpoint_metrics,
-            max_tx_per_checkpoint,
-            max_checkpoint_size_bytes,
-        )
-    }
-
-    fn build_observer_checkpoint_service(
-        checkpoint_store: Arc<CheckpointStore>,
-        epoch_store: Arc<AuthorityPerEpochStore>,
-        state: Arc<AuthorityState>,
-        state_sync_handle: state_sync::Handle,
-        state_hasher: Weak<GlobalStateHasher>,
-        checkpoint_metrics: Arc<CheckpointMetrics>,
-    ) -> Arc<CheckpointService> {
-        let epoch_start_timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
-        let epoch_duration_ms = epoch_store.epoch_start_state().epoch_duration_ms();
-
-        debug!(
-            "Starting observer checkpoint service with epoch start timestamp {}
-            and epoch duration {}",
-            epoch_start_timestamp_ms, epoch_duration_ms
-        );
-
-        // Observer nodes use LogCheckpointOutput instead of SubmitCheckpointToConsensus
-        // They process checkpoints but don't submit signatures to consensus
-        let checkpoint_output = LogCheckpointOutput::boxed();
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
         let max_tx_per_checkpoint = max_tx_per_checkpoint(epoch_store.protocol_config());
         let max_checkpoint_size_bytes =
