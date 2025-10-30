@@ -81,12 +81,6 @@ impl Build {
             fs::write(layout_filename, layout_str)?
         }
 
-        // TODO: pkg-alt - do we need to fix this? Now publishing holds the build info
-        // pkg.package
-        //     .compiled_package_info
-        //     .build_flags
-        //     .update_lock_file_toolchain_version(rerooted_path, env!("CARGO_PKG_VERSION").into())?;
-
         Ok(())
     }
 }

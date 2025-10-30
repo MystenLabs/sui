@@ -2777,26 +2777,6 @@ fn ascii_tag() -> TypeTag {
     resolved_struct(RESOLVED_ASCII_STR, vec![])
 }
 
-// TODO: pkg-alt - fix this tests which requires to return a SuiError, and new pkg-system is
-// returning anyhow::Result / PackageResult
-// This SuiError::ExecutionError is very confusing as `build` returns a
-// #[tokio::test]
-// #[cfg_attr(msim, ignore)]
-// async fn test_object_no_id_error() {
-//     let mut build_config = BuildConfig::new_for_testing();
-//     build_config.config.test_mode = true;
-//     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-//     // in this package object struct (NotObject) is defined incorrectly and publishing should
-//     // fail (it's defined in test-only code hence cannot be checked by transactional testing
-//     // framework which goes through "normal" publishing path which excludes tests).
-//     path.extend(["src", "unit_tests", "data", "object_no_id"]);
-//     let res = build_config.build(&path);
-//
-//     matches!(res.err().map(|e|e.into_inner()), Some(SuiErrorKind::ExecutionError(err_str)) if
-//                  err_str.contains("SuiMoveVerificationError")
-//                  && err_str.contains("First field of struct NotObject must be 'id'"));
-// }
-
 pub fn build_test_package(test_dir: &str, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", test_dir]);

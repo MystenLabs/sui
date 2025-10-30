@@ -1,5 +1,3 @@
-External Command `echo TODO: pkg-alt revisit this test - test of "move new" should be revised`:
-TODO: pkg-alt revisit this test - test of move new should be revised
 Command `new P1`:
 External Command `cat P1/Move.toml`:
 [package]
