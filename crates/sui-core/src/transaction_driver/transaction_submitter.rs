@@ -152,11 +152,7 @@ impl TransactionSubmitter {
                     return Ok((name, result));
                 }
                 Some((name, display_name, Err(e))) => {
-                    let error_type = if e.is_submission_retriable() {
-                        "retriable"
-                    } else {
-                        "non_retriable"
-                    };
+                    let error_type = e.categorize().into();
                     self.metrics
                         .validator_submit_transaction_errors
                         .with_label_values(&[
