@@ -20,8 +20,7 @@ pub struct New {
 impl New {
     pub fn execute(self, path: Option<&Path>) -> anyhow::Result<()> {
         let name = self.new.name_var()?;
-        self.new
-            .execute(path, [] as [(&str, &str); 0], [(&name, "0x0")])?;
+        self.new.execute(path)?;
         std::fs::write(
             self.new.source_file_path(&path)?,
             formatdoc!(

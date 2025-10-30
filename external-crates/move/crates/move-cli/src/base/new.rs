@@ -27,20 +27,10 @@ pub struct New {
 
 impl New {
     pub fn execute_with_defaults(self, path: Option<&Path>) -> anyhow::Result<()> {
-        self.execute(
-            path,
-            std::iter::empty::<(&str, &str)>(),
-            std::iter::empty::<(&str, &str)>(),
-        )
+        self.execute(path)
     }
 
-    pub fn execute(
-        &self,
-        path: Option<&Path>,
-
-        deps: impl IntoIterator<Item = (impl Display, impl Display)>,
-        addrs: impl IntoIterator<Item = (impl Display, impl Display)>,
-    ) -> anyhow::Result<()> {
+    pub fn execute(&self, path: Option<&Path>) -> anyhow::Result<()> {
         std::fs::write(
             self.source_file_path(&path)?,
             formatdoc!(
@@ -57,7 +47,7 @@ impl New {
                 name = self.name_var()?,
             ),
         )?;
-        self.write_move_toml(&path, deps, addrs)?;
+        self.write_move_toml(&path)?;
         self.write_gitignore(&path)?;
         Ok(())
     }
@@ -92,68 +82,47 @@ impl New {
     }
 
     /// create default `Move.toml`
-    fn write_move_toml(
-        &self,
-        path: &Option<&Path>,
-        deps: impl IntoIterator<Item = (impl Display, impl Display)>,
-        addrs: impl IntoIterator<Item = (impl Display, impl Display)>,
-    ) -> anyhow::Result<()> {
+    fn write_move_toml(&self, path: &Option<&Path>) -> anyhow::Result<()> {
         let name = self.name_var()?;
-        let mut w = std::fs::File::create(self.manifest_path(path)?)
-            .context("Unexpected error creating Move.toml")?;
-        writeln!(
-            w,
-            r#"[package]
-name = "{name}"
-edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
-# license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
-# authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
+        std::fs::write(
+            self.manifest_path(path)?,
+            formatdoc!(
+                r#"[package]
+            name = "{name}"
+            edition = "2024" # edition = "legacy" to use legacy (pre-2024) Move
+            # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
+            # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 
-[dependencies]"#
-        )?;
-        for (dep_name, dep_val) in deps {
-            writeln!(w, "{dep_name} = {dep_val}")?;
-        }
+            [dependencies]
 
-        writeln!(
-            w,
-            r#"
-# For remote import, use the `{{ git = "...", subdir = "...", rev = "..." }}`.
-# Revision can be a branch, a tag, and a commit hash.
-# MyRemotePackage = {{ git = "https://some.remote/host.git", subdir = "remote/path", rev = "main" }}
+            # For remote import, use the `{{ git = "...", subdir = "...", rev = "..." }}`.
+            # Revision can be a branch, a tag, and a commit hash.
+            # myremotepackage = {{ git = "https://some.remote/host.git", subdir = "remote/path", rev = "main" }}
 
-# For local dependencies use `local = path`. Path is relative to the package root
-# Local = {{ local = "../path/to" }}
+            # For local dependencies use `local = path`. Path is relative to the package root
+            # local = {{ local = "../path/to" }}
 
-# To resolve a version conflict and force a specific version for dependency
-# override use `override = true`
-# Override = {{ local = "../conflicting/version", override = true }}
+            # To resolve a version conflict and force a specific version for dependency
+            # override use `override = true`
+            # override = {{ local = "../conflicting/version", override = true }}
 
-[addresses]"#
-        )?;
+            [addresses]
+            {name} = "0x0"
+            # Named addresses will be accessible in Move as `@name`. They're also exported:
+            # for example, `std = "0x1"` is exported by the Standard Library.
+            # alice = "0xA11CE"
 
-        // write named addresses
-        for (addr_name, addr_val) in addrs {
-            writeln!(w, "{addr_name} = \"{addr_val}\"")?;
-        }
+            [dev-dependencies]
+            # The dev-dependencies section allows overriding dependencies for `--test` and
+            # `--dev` modes. You can introduce test-only dependencies here.
+            # Local = {{ local = "../path/to/dev-build" }}
 
-        writeln!(
-            w,
-            r#"
-# Named addresses will be accessible in Move as `@name`. They're also exported:
-# for example, `std = "0x1"` is exported by the Standard Library.
-# alice = "0xA11CE"
-
-[dev-dependencies]
-# The dev-dependencies section allows overriding dependencies for `--test` and
-# `--dev` modes. You can introduce test-only dependencies here.
-# Local = {{ local = "../path/to/dev-build" }}
-
-[dev-addresses]
-# The dev-addresses section allows overwriting named addresses for the `--test`
-# and `--dev` modes.
-# alice = "0xB0B"
-"#
+            [dev-addresses]
+            # The dev-addresses section allows overwriting named addresses for the `--test`
+            # and `--dev` modes.
+            # alice = "0xB0B"
+            "#
+            ),
         )?;
 
         Ok(())
