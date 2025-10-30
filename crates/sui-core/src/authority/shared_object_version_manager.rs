@@ -32,10 +32,9 @@ pub struct SharedObjVerManager {}
 pub struct AssignedVersions {
     pub shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
     /// Accumulator version number at the beginning of the consensus commit
-    /// that this transaction belongs to. If this transaction does any
-    /// funds withdrawals, this version number determins the deterministic
-    /// balance state of the accounts involved in the withdrawals.
-    /// None only if accumulator is not enabled.
+    /// that this transaction belongs to. It is used to determine the deterministic
+    /// balance state of the accounts involved in funds withdrawals.
+    /// None only if accumulator is not enabled at protocol level.
     /// TODO: Make it required once accumulator is enabled.
     pub accumulator_version: Option<SequenceNumber>,
 }
@@ -464,6 +463,24 @@ fn get_or_init_versions<'a>(
     let mut shared_input_objects: Vec<_> = shared_input_objects
         .map(|so| so.into_id_and_version())
         .collect();
+
+    #[cfg(debug_assertions)]
+    {
+        // In tests, we often call assign_versions_from_consensus without going through consensus.
+        // When that happens, there is no settlement transaction to update the accumulator root object version.
+        // And hence the list of shared input objects does not contain the accumulator root object.
+        // We have to manually add it here to make sure we can access the version when needed
+        // when assigning versions for certificates.
+        if epoch_store.accumulators_enabled() {
+            shared_input_objects.push((
+                SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                epoch_store
+                    .epoch_start_config()
+                    .accumulator_root_obj_initial_shared_version()
+                    .expect("accumulator root obj initial shared version should be set"),
+            ));
+        }
+    }
 
     shared_input_objects.sort();
     shared_input_objects.dedup();
@@ -1223,20 +1240,6 @@ mod tests {
                 )]),
             }
         );
-    }
-
-    #[tokio::test]
-    #[should_panic(expected = "accumulator object must be in shared_input_next_versions")]
-    async fn test_assign_versions_from_consensus_with_withdraw_no_settlement_panics() {
-        // Test that having a withdrawal without a settlement should panic
-        // because the accumulator object version is not initialized properly
-        let mut ctx = WithdrawTestContext::new().await;
-
-        let _withdraw_key = ctx.add_withdraw_transaction();
-        // No settlement added - this should cause a panic because the accumulator
-        // object is not properly initialized in shared_input_next_versions
-
-        let _ = ctx.assign_versions_from_consensus();
     }
 
     #[tokio::test]

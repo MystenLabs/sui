@@ -101,8 +101,8 @@ impl CheckpointTransactionData {
         let mut accumulator_versions = vec![None; transactions.len()];
         let mut next_update_index = 0;
         for (idx, efx) in effects.iter().enumerate() {
-            // Only the barrier settlement transaction mutates the accumulator root object.
-            // This filtering detects whether this transaction is the barrier settlement transaction.
+            // Only barrier settlement transactions mutate the accumulator root object.
+            // This filtering detects whether this transaction is a barrier settlement transaction.
             // And if so we get the old version of the accumulator root object.
             // Transactions prior to the barrier settlement transaction reads this accumulator version.
             let acc_version = efx.object_changes().into_iter().find_map(|change| {
@@ -124,9 +124,19 @@ impl CheckpointTransactionData {
                 next_update_index = idx + 1;
             }
         }
-        // Either accumulator is not enabled, or the last transaction is the barrier settlement transaction.
-        // The last transaction must be the barrier settlement transaction.
-        assert!(next_update_index == transactions.len() || next_update_index == 0);
+        // Either accumulator is not enabled, then next_update_index == 0;
+        // or the last transaction is the barrier settlement transaction, and next_update_index == transactions.len();
+        // or the last transaction is the end of epoch transaction, and next_update_index == transactions.len() - 1.
+        assert!(
+            next_update_index == 0
+                || next_update_index == transactions.len()
+                || (next_update_index == transactions.len() - 1
+                    && transactions
+                        .last()
+                        .unwrap()
+                        .transaction_data()
+                        .is_end_of_epoch_tx())
+        );
         Self {
             transactions,
             effects,
