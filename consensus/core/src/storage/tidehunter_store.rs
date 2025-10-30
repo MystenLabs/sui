@@ -121,7 +121,6 @@ impl Store for TidehunterStore {
 
         let mut batch = self.blocks.batch();
         for block in write_batch.blocks {
-            println!("Writing block {block:?}");
             let block_ref = block.reference();
             batch
                 .insert_batch(
@@ -149,6 +148,7 @@ impl Store for TidehunterStore {
         }
 
         for commit in write_batch.commits {
+            info!("Writing commit {}", commit.index());
             batch
                 .insert_batch(
                     &self.commits,
