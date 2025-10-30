@@ -365,7 +365,9 @@ pub(crate) fn is_balance_accumulator_metadata_field(s: &StructTag) -> bool {
     }
 
     // Check that both are the correct types
-    if !is_accumulator_metadata_key(&s.type_params[0]) || !is_accumulator_metadata(&s.type_params[1]) {
+    if !is_accumulator_metadata_key(&s.type_params[0])
+        || !is_accumulator_metadata(&s.type_params[1])
+    {
         return false;
     }
 
