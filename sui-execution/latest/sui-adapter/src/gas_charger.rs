@@ -21,9 +21,7 @@ pub mod checked {
         accumulator_root::AccumulatorObjId,
         base_types::{ObjectID, ObjectRef, SuiAddress},
         digests::TransactionDigest,
-        effects::{AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1},
         error::ExecutionError,
-        gas_coin::GAS,
         gas_model::tables::GasStatus,
         is_system_package,
         object::Data,
@@ -350,30 +348,13 @@ pub mod checked {
                     GasCostSummary::default()
                 } else {
                     let cost_summary = self.gas_status.summary();
-                    let gas_used = cost_summary.net_gas_usage();
+                    let net_change = cost_summary.net_gas_usage();
 
-                    if gas_used != 0 {
-                        let accumulator_address = AccumulatorAddress::new(
-                            payer_address,
-                            sui_types::balance::Balance::type_tag(GAS::type_tag()),
-                        );
-
-                        let (operation, amount) = if gas_used > 0 {
-                            // Net gas usage positive: withdraw from address balance
-                            (AccumulatorOperation::Split, gas_used as u64)
-                        } else {
-                            // Net gas usage negative: credit back to address balance (storage rebate exceeds costs)
-                            (AccumulatorOperation::Merge, (-gas_used) as u64)
-                        };
-
-                        let accumulator_write = AccumulatorWriteV1 {
-                            address: accumulator_address,
-                            operation,
-                            value: AccumulatorValue::Integer(amount),
-                        };
-                        let accumulator_event = AccumulatorEvent::new(
+                    if net_change != 0 {
+                        let accumulator_event = AccumulatorEvent::from_balance_change(
                             AccumulatorObjId::new_unchecked(SUI_ACCUMULATOR_ROOT_OBJECT_ID),
-                            accumulator_write,
+                            payer_address,
+                            net_change,
                         );
 
                         temporary_store.add_accumulator_event(accumulator_event);
