@@ -4217,6 +4217,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_poseidon = true;
                     }
+
+                    cfg.feature_flags.mysticeti_num_leaders_per_round = Some(2);
                 }
                 // Use this template when making changes:
                 //
