@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CloudProvider"],"fn":["default_logs_dir","default_results_dir","default_working_dir","parse_url","resolve_env"],"struct":["Repository","Settings"]};

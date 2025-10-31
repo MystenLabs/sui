@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ACCUMULATOR_METADATA_MODULE"],"struct":["AccumulatorMetadata","AccumulatorOwner","MetadataKey","OwnerKey"]};

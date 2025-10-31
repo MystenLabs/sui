@@ -1,0 +1,1 @@
+searchState.loadedDescShard("sui_field_count", 0, "Trait that provides a constant indicating the number of …")

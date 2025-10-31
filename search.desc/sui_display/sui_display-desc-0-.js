@@ -1,0 +1,1 @@
+searchState.loadedDescShard("sui_display", 0, "Format strings extracted from a <code>Display</code> object or …\nInterpret the fields of this <code>Format</code> structure for the …\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nConvert the contents of a <code>Display</code> object or …")
