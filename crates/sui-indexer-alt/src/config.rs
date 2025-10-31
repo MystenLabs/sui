@@ -53,9 +53,8 @@ pub struct IngestionLayer {
     pub checkpoint_buffer_size: Option<usize>,
     pub ingest_concurrency: Option<usize>,
     pub retry_interval_ms: Option<u64>,
-    pub streaming_backoff_initial_delay_ms: Option<u64>,
-    pub streaming_backoff_max_delay_ms: Option<u64>,
-    pub ingestion_batch_size: Option<usize>,
+    pub streaming_backoff_initial_batch_size: Option<usize>,
+    pub streaming_backoff_max_batch_size: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -173,15 +172,12 @@ impl IngestionLayer {
                 .unwrap_or(base.checkpoint_buffer_size),
             ingest_concurrency: self.ingest_concurrency.unwrap_or(base.ingest_concurrency),
             retry_interval_ms: self.retry_interval_ms.unwrap_or(base.retry_interval_ms),
-            streaming_backoff_initial_delay_ms: self
-                .streaming_backoff_initial_delay_ms
-                .unwrap_or(base.streaming_backoff_initial_delay_ms),
-            streaming_backoff_max_delay_ms: self
-                .streaming_backoff_max_delay_ms
-                .unwrap_or(base.streaming_backoff_max_delay_ms),
-            ingestion_batch_size: self
-                .ingestion_batch_size
-                .unwrap_or(base.ingestion_batch_size),
+            streaming_backoff_initial_batch_size: self
+                .streaming_backoff_initial_batch_size
+                .unwrap_or(base.streaming_backoff_initial_batch_size),
+            streaming_backoff_max_batch_size: self
+                .streaming_backoff_max_batch_size
+                .unwrap_or(base.streaming_backoff_max_batch_size),
         })
     }
 }
@@ -288,13 +284,12 @@ impl Merge for IngestionLayer {
             checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
             ingest_concurrency: other.ingest_concurrency.or(self.ingest_concurrency),
             retry_interval_ms: other.retry_interval_ms.or(self.retry_interval_ms),
-            streaming_backoff_initial_delay_ms: other
-                .streaming_backoff_initial_delay_ms
-                .or(self.streaming_backoff_initial_delay_ms),
-            streaming_backoff_max_delay_ms: other
-                .streaming_backoff_max_delay_ms
-                .or(self.streaming_backoff_max_delay_ms),
-            ingestion_batch_size: other.ingestion_batch_size.or(self.ingestion_batch_size),
+            streaming_backoff_initial_batch_size: other
+                .streaming_backoff_initial_batch_size
+                .or(self.streaming_backoff_initial_batch_size),
+            streaming_backoff_max_batch_size: other
+                .streaming_backoff_max_batch_size
+                .or(self.streaming_backoff_max_batch_size),
         })
     }
 }
@@ -393,9 +388,8 @@ impl From<IngestionConfig> for IngestionLayer {
             checkpoint_buffer_size: Some(config.checkpoint_buffer_size),
             ingest_concurrency: Some(config.ingest_concurrency),
             retry_interval_ms: Some(config.retry_interval_ms),
-            streaming_backoff_initial_delay_ms: Some(config.streaming_backoff_initial_delay_ms),
-            streaming_backoff_max_delay_ms: Some(config.streaming_backoff_max_delay_ms),
-            ingestion_batch_size: Some(config.ingestion_batch_size),
+            streaming_backoff_initial_batch_size: Some(config.streaming_backoff_initial_batch_size),
+            streaming_backoff_max_batch_size: Some(config.streaming_backoff_max_batch_size),
         }
     }
 }

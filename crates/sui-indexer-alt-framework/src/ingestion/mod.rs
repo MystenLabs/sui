@@ -72,14 +72,11 @@ pub struct IngestionConfig {
     /// Polling interval to retry fetching checkpoints that do not exist, in milliseconds.
     pub retry_interval_ms: u64,
 
-    /// Number of checkpoints to process in a batch using ingestion when streaming doesn't work.
-    pub ingestion_batch_size: usize,
+    /// Initial number of checkpoints to process using ingestion after a streaming connection failure.
+    pub streaming_backoff_initial_batch_size: usize,
 
-    /// Initial backoff delay for streaming service connection retries, in milliseconds.
-    pub streaming_backoff_initial_delay_ms: u64,
-
-    /// Maximum backoff delay for streaming service connection retries, in milliseconds.
-    pub streaming_backoff_max_delay_ms: u64,
+    /// Maximum number of checkpoints to process using ingestion after repeated streaming connection failures.
+    pub streaming_backoff_max_batch_size: usize,
 }
 
 pub struct IngestionService {
@@ -96,14 +93,6 @@ pub struct IngestionService {
 impl IngestionConfig {
     pub fn retry_interval(&self) -> Duration {
         Duration::from_millis(self.retry_interval_ms)
-    }
-
-    pub fn streaming_backoff_initial_delay(&self) -> Duration {
-        Duration::from_millis(self.streaming_backoff_initial_delay_ms)
-    }
-
-    pub fn streaming_backoff_max_delay(&self) -> Duration {
-        Duration::from_millis(self.streaming_backoff_max_delay_ms)
     }
 }
 
@@ -232,9 +221,8 @@ impl Default for IngestionConfig {
             checkpoint_buffer_size: 5000,
             ingest_concurrency: 200,
             retry_interval_ms: 200,
-            ingestion_batch_size: 1000,
-            streaming_backoff_initial_delay_ms: 1000,
-            streaming_backoff_max_delay_ms: 64000,
+            streaming_backoff_initial_batch_size: 10, // 10 checkpoints, ~ 2 seconds
+            streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
         }
     }
 }
