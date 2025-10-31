@@ -189,7 +189,7 @@ pub async fn submit(
     let exec_request = ExecuteTransactionRequest::default()
         .with_transaction(proto_transaction)
         .with_signatures(signatures)
-        .with_read_mask(FieldMask::from_paths(["transaction"]));
+        .with_read_mask(FieldMask::from_paths(["*"]));
 
     let grpc_response = execution_client
         .execute_transaction(exec_request)
