@@ -1,7 +1,7 @@
 ---
 title: Build Your First Custom Indexer
-description: Build a custom indexer using the `sui-indexer-alt-framework` module. The example indexer demonstrates a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL.
-keywords: [ indexer, custom indexer, indexer framework, indexer pipeline ]
+description: Build a custom indexer using the `sui-indexer-alt-framework` module. Learn how to implement sequential and concurrent pipelines that extract transaction digests from Sui checkpoints and store them in PostgreSQL.
+keywords: [ indexer, custom indexer, indexer framework, indexer pipeline, sequential pipeline, concurrent pipeline ]
 ---
 
 :::info
@@ -12,7 +12,11 @@ Refer to [Custom Indexing Framework](/concepts/custom-indexing-framework.mdx) an
 
 :::
 
-To build a complete custom indexer, you use the `sui-indexer-alt-framework`. The steps that follow demonstrate how to create a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
+To build a complete custom indexer, you use the `sui-indexer-alt-framework`. The steps that follow demonstrate how to create both sequential and concurrent pipelines that extract transaction digests from Sui checkpoints and store them in a local PostgreSQL. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
+
+Each pipeline handles checkpoints differently:
+- **Sequential pipeline:** Processes and commits checkpoints in strict order.
+- **Concurrent pipeline:** Processes checkpoints in parallel while ensuring batches are committed in order, resulting in higher throughput.
 
 :::tip
 
@@ -51,13 +55,15 @@ $ diesel --version
 
 ## What you build
 
-The following steps show how to create an indexer that:
+The following steps show how to create an indexer with multiple pipeline types:
 
 - Connects to Sui Testnet: Uses the remote checkpoint store at https://checkpoints.testnet.sui.io.
 - Processes checkpoints: Streams checkpoint data continuously.
 - Extracts transaction data: Pulls transaction digests from each checkpoint.
 - Stores in local PostgreSQL: Commits data to a local PostgreSQL database.
-- Implements sequential pipeline: Uses in-order processing with batching for optimal consistency and performance.
+- Implements multiple handler patterns:
+  - **Sequential handler:** Guarantees each checkpoint is processed and committed in order.
+  - **Concurrent handler:** Allows batches of checkpoints to process in parallel while ensuring commits are ordered.
 
 In the end, you have a working indexer that demonstrates all core framework concepts and can serve as a foundation for more complex custom indexers.
 
@@ -69,6 +75,15 @@ Sui provides checkpoint stores for both Mainnet and Testnet.
 - Mainnet: `https://checkpoints.mainnet.sui.io`
 
 :::
+
+## Choosing a pipeline type
+
+Consider how each pipeline architecture handles checkpoints to determine the best approach for your project:
+
+- **Sequential:** Processes and commits each checkpoint in strict order. Choose this when ordering guarantees are essential or when you're just getting started.
+- **Concurrent:** Processes batches of checkpoints in parallel for higher throughput, but relaxes ordering guarantees.
+
+This guide demonstrates both patterns using the same transaction digest extraction example.
 
 ##step Project setup
 
@@ -248,9 +263,9 @@ Key annotations:
 - `diesel(table_name = transaction_digests)`: Maps this Rust struct to the `transaction_digests` table, whose schema is generated in a previous step.
 - `Insertable`: Allows this struct to be inserted into the database using Diesel.
 
-##step Define the `Handler` struct in `handler.rs`
+##step Define the sequential handler struct
 
-Create a `handlers.rs` file in your `src` directory.
+Create a `handlers.rs` file in your `src` directory to implement your sequential handler.
 
 ```sh
 $ touch ./src/handlers.rs
@@ -294,9 +309,9 @@ Processor trait definition
   
 </details>
 
-##step Implement the `Handler`
+##step Implement the sequential `Handler`
 
-The `Handler` trait defines how to commit data to the database. Append the `Handler` dependencies to bottom of the dependency list you created in the previous step.
+The sequential `Handler` trait defines how to commit data to the database. Append the `Handler` dependencies to bottom of the dependency list you created in the previous step.
 
 <ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" tag="handlerdeps" />
 
@@ -307,8 +322,10 @@ Add the logic for `Handler` after the `Processor` code. The complete code is ava
 How sequential batching works:
 
 1. `process()` returns values for each checkpoint.
-1. `batch()` accumulates values from multiple checkpoints.
-1. `commit()` writes the batch when framework reaches limits (`H::MAX_BATCH_CHECKPOINTS`).
+1. `batch()` receives an iterator and must consume all values from it, accumulating them across multiple checkpoints.
+1. `commit()` writes the batch when the framework reaches limits (`H::MAX_BATCH_CHECKPOINTS`).
+
+Sequential handlers guarantee strict checkpoint ordering by consuming entire iterators. They cannot implement custom batching logic.
 
 <ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/sequential/committer.rs" mode="code" tag="batch" />
 
@@ -324,7 +341,7 @@ The `handlers.rs` file is now complete. Save the file.
   
 <summary>
   
-Complete `handler.rs` file
+Complete `handlers.rs` file
   
 </summary>
   
@@ -340,9 +357,67 @@ Handler trait definition
   
 </summary>
   
-<ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs" mode="code" trait="Handler" />
+<ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/sequential/mod.rs" mode="code" trait="Handler" />
   
 </details>
+
+##step Implement a concurrent handler (optional)
+
+For higher throughput, you can implement a concurrent handler that processes batches of checkpoints in parallel. Create a new file `handlers_concurrent_generic.rs` in your `src` directory:
+
+```sh
+$ touch ./src/handlers_concurrent_generic.rs
+```
+
+The concurrent handler uses the same `Processor` trait but a different `Handler` trait from `pipeline::concurrent`:
+
+<ImportContent source="examples/rust/basic-sui-indexer/src/handlers_concurrent_generic.rs" mode="code" tag="imports" />
+
+Implement the same `Processor` logic:
+
+<ImportContent source="examples/rust/basic-sui-indexer/src/handlers_concurrent_generic.rs" mode="code" tag="processor" />
+
+Now, implement the concurrent `Handler` trait:
+
+<ImportContent source="examples/rust/basic-sui-indexer/src/handlers_concurrent_generic.rs" mode="code" tag="handler" />
+
+Key differences from sequential handlers:
+
+- **`BatchStatus`:** Return `Pending` to continue accumulating values, or `Ready` to signal the batch should be committed. Returning `Pending` for all batches lets the framework decide when to commit based on `MIN_EAGER_ROWS` and `MAX_PENDING_ROWS`.
+- **Custom batching logic:** Concurrent handlers can implement custom batching by conditionally returning `Ready` based on batch size or other criteria, enabling finer control over commit behavior.
+
+The concurrent handler processes checkpoints in parallel, while the framework ensures commits happen in order.
+
+##step PostgreSQL concurrent handler (recommended for concurrent + PostgreSQL)
+
+If you're using PostgreSQL with concurrent pipelines, the framework provides a specialized handler trait that simplifies the implementation and automatically manages PostgreSQL's parameter count limit (32,767 parameters per query).
+
+Create a new file `handlers_concurrent_postgres.rs`:
+
+```sh
+$ touch ./src/handlers_concurrent_postgres.rs
+```
+
+Add the imports:
+
+<ImportContent source="examples/rust/basic-sui-indexer/src/handlers_concurrent_postgres.rs" mode="code" tag="imports" />
+
+Use the same `Processor` implementation:
+
+<ImportContent source="examples/rust/basic-sui-indexer/src/handlers_concurrent_postgres.rs" mode="code" tag="processor" />
+
+Implement the PostgreSQL `Handler` trait:
+
+<ImportContent source="examples/rust/basic-sui-indexer/src/handlers_concurrent_postgres.rs" mode="code" tag="handler" />
+
+Benefits of the PostgreSQL handler:
+
+- **No `type Store` or `type Batch` needed:** The trait provides these automatically.
+- **No `batch()` method:** The framework handles batching based on your `Value` type's `FieldCount`.
+- **Automatic parameter limit enforcement:** Prevents exceeding the PostgreSQL 32,767 parameter limit.
+- **Simpler API:** Just implement `commit()` with your insert logic.
+
+The PostgreSQL handler is a blanket implementation over the generic concurrent handler, so you get all the concurrent benefits with less code.
 
 ##step Create `.env` file
 
@@ -374,22 +449,43 @@ echo "DATABASE_URL=$PSQL_URL" > .env
 
 After running the command for your environment, make sure the `.env` file exists at your project root with the correct data.
 
-##step Create main function
+##step Create main function and register your handler
 
-Now, to tie everything together in the main function, open your `main.rs` file. Replace the default code with the following and save the file:
+Now, to tie everything together in the main function, open your `main.rs` file. The setup is the same regardless of which handler type you use:
 
 <ImportContent source="examples/rust/basic-sui-indexer/src/main.rs" mode="code" />
 
-Key components explained:
+To register a different handler type, replace the `sequential_pipeline()` line with one of the following:
 
-- `embed_migrations!`: Includes your migration files in the binary so the indexer automatically updates the database schema on startup.
-- `Args::parse()`: Provides command-line configuration like `--first-checkpoint`, `--remote-store-url`, and so on.
-- `IndexerCluster::builder()`: Sets up the framework infrastructure (database connections, checkpoint streaming, monitoring).
-- `sequential_pipeline()`: Registers a sequential pipeline that processes checkpoints in order with smart batching.
-- `SequentialConfig::default()`: Uses framework defaults for batch sizes and checkpoint lag (how many checkpoints to batch together).
-- `cluster.run()`: Starts processing checkpoints and blocks until completion.
+**For sequential handler (shown previously):**
+```rust
+cluster.sequential_pipeline(TransactionDigestHandler)
+    .run()
+    .await?;
+```
 
-Your indexer is now complete. The next steps walk you through running the indexer and checking its functionality.
+**For concurrent handler (generic):**
+```rust
+cluster.concurrent_pipeline(ConcurrentTransactionDigestHandler)
+    .run()
+    .await?;
+```
+
+**For concurrent handler (PostgreSQL):**
+```rust
+cluster.concurrent_pipeline(PostgresTransactionDigestHandler)
+    .run()
+    .await?;
+```
+
+Key components:
+
+- `embed_migrations!`: Includes migration files in the binary for automatic schema updates.
+- `IndexerCluster::builder()`: Sets up framework infrastructure (database connections, checkpoint streaming, monitoring).
+- `sequential_pipeline()` / `concurrent_pipeline()`: Registers your handler with the appropriate pipeline type.
+- `cluster.run()`: Starts processing checkpoints.
+
+Your indexer is now complete. The next steps walk you through running it and verifying results.
 
 ##step Run your indexer
 

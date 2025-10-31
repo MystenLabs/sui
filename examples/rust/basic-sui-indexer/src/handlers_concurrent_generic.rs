@@ -1,30 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// docs::#processordeps (see sui/docs/content/guides/developer/advanced/custom-indexer.mdx)
+// Example of using the generic concurrent Handler trait
+// docs::#imports
 use std::sync::Arc;
 use anyhow::Result;
+use async_trait::async_trait;
+use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::Processor,
+    pipeline::{Processor, concurrent::{Handler, BatchStatus}},
+    postgres::{Connection, Db},
     types::full_checkpoint_content::Checkpoint,
 };
 
 use crate::models::StoredTransactionDigest;
-use crate::schema::transaction_digests::dsl::*;
-// docs::/#processordeps
-// docs::#handlerdeps
-use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::{
-    postgres::{Connection, Db},
-    pipeline::sequential::Handler,
-};
-// docs::/#handlerdeps
+use crate::schema::transaction_digests;
+// docs::/#imports
 
-pub struct TransactionDigestHandler;
+pub struct ConcurrentTransactionDigestHandler;
 
 // docs::#processor
-impl Processor for TransactionDigestHandler {
-    const NAME: &'static str = "transaction_digest_handler";
+#[async_trait]
+impl Processor for ConcurrentTransactionDigestHandler {
+    const NAME: &'static str = "concurrent_transaction_digest_handler";
 
     type Value = StoredTransactionDigest;
 
@@ -42,14 +40,20 @@ impl Processor for TransactionDigestHandler {
     }
 }
 // docs::/#processor
+
 // docs::#handler
-#[async_trait::async_trait]
-impl Handler for TransactionDigestHandler {
+#[async_trait]
+impl Handler for ConcurrentTransactionDigestHandler {
     type Store = Db;
     type Batch = Vec<Self::Value>;
 
-    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
+    fn batch(
+        &self,
+        batch: &mut Self::Batch,
+        values: &mut std::vec::IntoIter<Self::Value>,
+    ) -> BatchStatus {
         batch.extend(values);
+        BatchStatus::Pending
     }
 
     async fn commit<'a>(
@@ -57,14 +61,12 @@ impl Handler for TransactionDigestHandler {
         batch: &Self::Batch,
         conn: &mut Connection<'a>,
     ) -> Result<usize> {
-        let inserted = diesel::insert_into(transaction_digests)
+        Ok(diesel::insert_into(transaction_digests::table)
             .values(batch)
-            .on_conflict(tx_digest)
+            .on_conflict(transaction_digests::tx_digest)
             .do_nothing()
             .execute(conn)
-            .await?;
-
-        Ok(inserted)
+            .await?)
     }
 }
 // docs::/#handler
