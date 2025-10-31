@@ -231,9 +231,41 @@ task 13, lines 95-103:
 Response: {
   "jsonrpc": "2.0",
   "id": 6,
-  "error": {
-    "code": -32602,
-    "message": "Invalid Params: Pagination issue: Requested page size 10000 exceeds maximum 100"
+  "result": {
+    "data": [
+      {
+        "digest": "3FJ4fSrf7toVCANccxAbeJ5A1iSzwKLghCYcaz9atbCD",
+        "timestampMs": "0",
+        "checkpoint": "0"
+      },
+      {
+        "digest": "Fx83wfghpUeiBQJ2C1Vt9WwY5rkGUWWgoXSCGfomqqnv",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "4tTfhF9TpbEbJ1efxQbc6A4DWVbBzUYwNhXgt7zsmJsc",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "BULsDepy775taHDviboyivQdnoWkB5QMDYiM1kGcfbQ9",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "3H9FD5LGcHgFSQBfiziYa5f31b86iuQe9Cn5DVMenMAG",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "8p2kdvQUf3TKihDPyC62ggc79intjzNW7TnfaA7an9At",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      }
+    ],
+    "nextCursor": "NQ==",
+    "hasNextPage": false
   }
 }
 
