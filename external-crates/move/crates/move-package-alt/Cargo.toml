@@ -13,6 +13,7 @@ append-only-vec.workspace = true
 bimap.workspace = true
 clap.workspace = true
 codespan-reporting.workspace = true
+colored.workspace = true
 derive-where.workspace = true
 futures.workspace = true
 indexmap.workspace = true
@@ -58,4 +59,3 @@ path = "src/mocks/mock-resolver.rs"
 [[bin]]
 name = "mock-resolver-2"
 path = "src/mocks/mock-resolver-2.rs"
-
