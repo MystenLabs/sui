@@ -31,16 +31,13 @@ pub(super) fn broadcaster<R>(
     initial_commit_hi: Option<u64>,
     config: IngestionConfig,
     client: IngestionClient,
-    mut ingest_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
+    mut commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
     cancel: CancellationToken,
 ) -> JoinHandle<()>
 where
     R: std::ops::RangeBounds<u64> + Send + 'static,
 {
-    let retry_interval = config.retry_interval();
-    let concurrency = config.ingest_concurrency;
-
     tokio::spawn(async move {
         info!("Starting broadcaster");
 
@@ -52,35 +49,34 @@ where
         };
 
         let end_cp = match checkpoints.end_bound() {
-            std::ops::Bound::Included(&n) => n,
-            std::ops::Bound::Excluded(&n) => n.saturating_sub(1),
+            // If u64::MAX is provided as an inclusive bound, the saturating_add
+            // here will prevent overflow but the broadcaster will actually
+            // only ingest up to u64::MAX - 1, since the range is [start..end).
+            // This isn't an issue in practice since we won't see that many checkpoints
+            // in our lifetime anyway.
+            std::ops::Bound::Included(&n) => n.saturating_add(1),
+            std::ops::Bound::Excluded(&n) => n,
             std::ops::Bound::Unbounded => u64::MAX,
         };
 
-        let buffer_size = config.checkpoint_buffer_size;
+        let buffer_size = config.checkpoint_buffer_size as u64;
 
         let subscribers = Arc::new(subscribers);
 
         // Track subscriber watermarks
         let mut subscribers_hi = HashMap::<&'static str, u64>::new();
 
-        // Try to receive initial subscriber feedback before spawning the broadcaster.
-        // This ensures we don't miss early watermark updates.
-        if let Ok((name, hi)) = ingest_hi_rx.try_recv() {
-            subscribers_hi.insert(name, hi);
-        }
-
         // Initialize ingest_hi watch channel.
-        // Start with None (no backpressure) or Some if we have been provided aninitial bound.
-        let initial_ingest_hi = initial_commit_hi.map(|min_hi| min_hi + buffer_size as u64);
+        // Start with None (no backpressure) or Some if we have been provided an initial bound.
+        let initial_ingest_hi = initial_commit_hi.map(|min_hi| min_hi + buffer_size);
         let (ingest_hi_watch_tx, ingest_hi_watch_rx) = watch::channel(initial_ingest_hi);
 
         // Spawn the broadcaster task.
-        let mut broadcaster_handle = tokio::spawn(broadcast_range(
+        let mut broadcaster_handle = tokio::spawn(ingest_and_broadcast_range(
             start_cp,
             end_cp,
-            retry_interval,
-            concurrency,
+            config.retry_interval(),
+            config.ingest_concurrency,
             ingest_hi_watch_rx.clone(),
             client.clone(),
             subscribers.clone(),
@@ -96,11 +92,11 @@ where
 
                 // Subscriber watermark update
                 // docs::#regulator (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                Some((name, hi)) = ingest_hi_rx.recv() => {
+                Some((name, hi)) = commit_hi_rx.recv() => {
                     subscribers_hi.insert(name, hi);
 
                     if let Some(min_hi) = subscribers_hi.values().copied().min() {
-                        let new_ingest_hi = min_hi + buffer_size as u64;
+                        let new_ingest_hi = min_hi + buffer_size;
                         // Update the watch channel, which will notify all waiting tasks
                         let _ = ingest_hi_watch_tx.send(Some(new_ingest_hi));
                         debug!(ingest_hi = new_ingest_hi);
@@ -138,11 +134,11 @@ where
     })
 }
 
-/// Fetch and broadcasts checkpoints from a range to subscribers.
+/// Fetch and broadcasts checkpoints from a range [start..end) to subscribers.
 /// This task is ingest_hi-aware and will wait if it encounters a checkpoint
 /// beyond the current ingest_hi, resuming when ingest_hi advances to currently
 /// ingesting checkpoints.
-async fn broadcast_range(
+async fn ingest_and_broadcast_range(
     start: u64,
     end: u64,
     retry_interval: Duration,
@@ -152,7 +148,7 @@ async fn broadcast_range(
     subscribers: Arc<Vec<mpsc::Sender<Arc<CheckpointData>>>>,
     cancel: CancellationToken,
 ) -> Result<(), Error> {
-    stream::iter(start..=end)
+    stream::iter(start..end)
         .try_for_each_spawned(ingest_concurrency, |cp| {
             let mut ingest_hi_rx = ingest_hi_rx.clone();
             let client = client.clone();
@@ -167,7 +163,7 @@ async fn broadcast_range(
             async move {
                 // docs::#bound (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                 // Wait until ingest_hi allows processing this checkpoint.
-                // None means no backpressure limit. If we get Some(hi) we wait until cp <= hi.
+                // None means no backpressure limit. If we get Some(hi) we wait until cp < hi.
                 // wait_for only errors if the sender is dropped (main broadcaster shut down) so
                 // we treat an error returned here as cancellation too.
                 if tokio::select! {
