@@ -221,12 +221,17 @@ impl<C: NetworkClient> CommitSyncer<C> {
         {
             // Create range with inclusive start and end.
             let range_start = prev_end + 1;
-            let range_end = prev_end + self.inner.context.parameters.commit_sync_batch_size;
-            // Commit range is not fetched when [range_start, range_end] contains less number of commits
-            // than the target batch size. This is to avoid the cost of processing more and smaller batches.
-            // Block broadcast, subscription and synchronization will help the node catchup.
+            let mut range_end = prev_end + self.inner.context.parameters.commit_sync_batch_size;
+
+            // Allow partial batches if quorum is at least 20 commits ahead
+            const MIN_PARTIAL_BATCH_BUFFER: u32 = 20;
             if quorum_commit_index < range_end {
-                break;
+                // If we're within 50 commits of quorum, adjust range_end to match quorum
+                if range_start + MIN_PARTIAL_BATCH_BUFFER <= quorum_commit_index {
+                    range_end = quorum_commit_index;
+                } else {
+                    break;
+                }
             }
             // Pause scheduling new fetches when handling of commits is lagging.
             if highest_handled_index + unhandled_commits_threshold < range_end {
