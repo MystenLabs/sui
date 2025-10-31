@@ -210,7 +210,7 @@ async fn test_pay_custom_coin_no_balance() -> anyhow::Result<()> {
     };
     let details = Some(json!(
         {
-            "error": format!("status: FailedPrecondition, message: \"Insufficient funds for address [{sender}], requested amount: {total_balance}, total available: 0\", details: [], metadata: MetadataMap {{ headers: {{}} }}"),
+            "error": format!("status: 'The system is not in a state required for the operation's execution', self: \"Insufficient funds for address [{sender}], requested amount: {total_balance}, total available: 0\""),
         }
     ));
     assert_eq!(
