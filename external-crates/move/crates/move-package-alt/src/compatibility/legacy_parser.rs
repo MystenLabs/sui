@@ -17,6 +17,7 @@ use crate::{
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+use oxford_join::OxfordJoin;
 use serde_spanned::Spanned;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -24,7 +25,7 @@ use std::{
     str::FromStr,
 };
 use toml::Value as TV;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use super::{legacy::LegacyData, legacy_lockfile::load_legacy_lockfile, parse_address_literal};
 use move_compiler::editions::Edition;
@@ -190,23 +191,11 @@ fn parse_source_manifest(
                 programmatic_addresses.insert(name, addr);
             }
 
-            // Check if the package has any system package on its deps.
-            let has_system_package = dependencies
-                .iter()
-                .any(|(name, _)| LEGACY_SYSTEM_DEPS_NAMES.contains(&name.as_str()));
-
-            // Check if the name of the package refers to a system package
-            let is_system_package =
-                LEGACY_SYSTEM_DEPS_NAMES.contains(&metadata.legacy_name.as_str());
-
-            // IF we have one system package OR this package is a system package itself (OR
-            // implicit deps are explicitly disabled), we disable implicit deps.
-            let system_dependencies =
-                if has_system_package || is_system_package || !metadata.implicit_deps {
-                    Some(vec![])
-                } else {
-                    None
-                };
+            let implicit_dependencies = check_implicits(
+                metadata.legacy_name.as_str(),
+                &dependencies,
+                metadata.implicit_deps,
+            );
 
             // We create a normalized legacy name, to make sure we can always use a package
             // as an Identifier.
@@ -220,7 +209,7 @@ fn parse_source_manifest(
                 package: PackageMetadata {
                     name: new_name,
                     edition: metadata.edition,
-                    system_dependencies,
+                    implicit_dependencies,
                     unrecognized_fields: metadata.unrecognized_fields,
                 },
 
@@ -252,6 +241,45 @@ fn parse_source_manifest(
             )
         }
     }
+}
+
+/// Returns true if implicit dependencies should be added. This is true unless either:
+///  - implicit_deps_flag is false,
+///  - name is a system dep name,
+///  - deps or contains a system dep name
+fn check_implicits(
+    name: &str,
+    deps: &BTreeMap<Identifier, DefaultDependency>,
+    implicit_deps_flag: bool,
+) -> bool {
+    if !implicit_deps_flag {
+        return false;
+    }
+
+    if LEGACY_SYSTEM_DEPS_NAMES.contains(&name) {
+        return false;
+    }
+
+    let explicit_implicits: Vec<&str> = deps
+        .keys()
+        .map(|id| id.as_str())
+        .filter(|name| LEGACY_SYSTEM_DEPS_NAMES.contains(name))
+        .collect();
+
+    if explicit_implicits.is_empty() {
+        return true;
+    }
+
+    warn!(
+        "[{}] Dependencies on {} are automatically added, but this feature is \
+            disabled for your package because you have explicitly included dependencies on {}. Consider \
+            removing these dependencies from `Move.toml`.",
+        "NOTE",
+        LEGACY_SYSTEM_DEPS_NAMES.oxford_and(),
+        explicit_implicits.oxford_and(),
+    );
+
+    false
 }
 
 pub fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {

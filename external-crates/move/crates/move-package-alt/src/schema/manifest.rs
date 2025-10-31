@@ -19,6 +19,9 @@ pub type EnvironmentID = String;
 /// The name of a mode
 pub type ModeName = String;
 
+/// The identifier for a system dependency (in `{system = "dep_id"}` dependencies
+pub type SystemDepName = String;
+
 // Note: [Manifest] objects should not be mutated or serialized; they are user-defined files so
 // tools that write them should use [toml_edit] to set / preserve the formatting. However, we do
 // implement [Serialize] and provide [render_as_toml], primarily for generating tests
@@ -53,11 +56,15 @@ pub struct PackageMetadata {
     #[serde(default, deserialize_with = "from_str_option")]
     pub edition: Option<Edition>,
 
-    #[serde(default)]
-    pub system_dependencies: Option<Vec<String>>,
+    #[serde(default = "return_true")]
+    pub implicit_dependencies: bool,
 
     #[serde(flatten)]
     pub unrecognized_fields: BTreeMap<String, toml::Value>,
+}
+
+fn return_true() -> bool {
+    true
 }
 
 /// An entry in the `[dependencies]` section of a manifest
@@ -103,6 +110,7 @@ pub enum ManifestDependencyInfo {
     External(ExternalDependency),
     Local(LocalDepInfo),
     OnChain(OnChainDepInfo),
+    System(SystemDependency),
 }
 
 /// An external dependency has the form `{ r.<res> = <data> }`. External
@@ -133,10 +141,34 @@ pub struct ManifestGitDependency {
     pub subdir: PathBuf,
 }
 
+/// A `{system = "..."}` dependency in a manifest
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SystemDependency {
+    pub system: SystemDepName,
+}
+
 /// Convenience type for serializing/deserializing external deps
 #[derive(Serialize, Deserialize)]
 struct RField {
     r: BTreeMap<String, toml::Value>,
+}
+
+impl ReplacementDependency {
+    /// Convenience method for creating a `{ system = <name>, override = true }` dep
+    pub fn override_system_dep(name: &str) -> ReplacementDependency {
+        ReplacementDependency {
+            dependency: Some(DefaultDependency {
+                dependency_info: ManifestDependencyInfo::System(SystemDependency {
+                    system: name.into(),
+                }),
+                is_override: true,
+                rename_from: None,
+                modes: None,
+            }),
+            addresses: None,
+            use_environment: None,
+        }
+    }
 }
 
 impl RenderToml for ParsedManifest {
@@ -404,7 +436,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(manifest.package.system_dependencies.is_none());
+        assert!(manifest.package.implicit_dependencies);
     }
 
     /// You can turn implicit deps off
@@ -415,34 +447,13 @@ mod tests {
             [package]
             name = "test"
             edition = "2024"
-            system-dependencies = []
+            implicit-dependencies = false
             "#,
         )
         .unwrap();
 
-        assert!(manifest.package.system_dependencies == Some(vec![]));
+        assert!(manifest.package.implicit_dependencies == false);
     }
-
-    /// You can define specific implicit deps.
-    #[test]
-    fn parse_specific_implicit_deps() {
-        let manifest: ParsedManifest = toml_edit::de::from_str(
-            r#"
-                [package]
-                name = "test"
-                edition = "2024"
-                system-dependencies = ["foo", "bar"]
-                "#,
-        )
-        .unwrap();
-
-        assert_eq!(
-            manifest.package.system_dependencies,
-            Some(vec!["foo".to_string(), "bar".to_string()])
-        );
-    }
-
-    // Dependency and dep-replacement parsing ////////////////////////////////////////////
 
     /// You need the `git` field to have a git dependency
     #[test]
@@ -672,7 +683,7 @@ mod tests {
         assert_snapshot!(error, @r###"
         TOML parse error at line 1, column 1
           |
-        1 | 
+        1 |
           | ^
         missing field `package`
         "###);
