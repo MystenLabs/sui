@@ -303,7 +303,7 @@ pub fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
                 .map(|v| v.as_str().unwrap_or_default().to_string());
 
             let implicit_deps = table
-                .remove("implicit-deps")
+                .remove("implicit-dependencies")
                 .map(|v| v.as_bool().unwrap_or(true))
                 .unwrap_or(true);
 

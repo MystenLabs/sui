@@ -3,7 +3,7 @@ name = "B"
 version = "0.0.1"
 published-at = "0xb0"
 edition = "development"
-implicit-deps = false
+implicit-dependencies = false
 
 [dependencies]
 A = { local = "../a0" }

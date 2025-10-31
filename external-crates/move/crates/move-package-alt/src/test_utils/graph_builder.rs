@@ -388,7 +388,7 @@ impl TestPackageGraph {
         let implicits = if package.implicit_deps {
             ""
         } else {
-            "implicit-deps = false\n"
+            "implicit-dependencies = false\n"
         };
 
         let mut move_toml = formatdoc!(
@@ -873,7 +873,7 @@ mod tests {
         [package]
         name = "B"
         edition = "2024"
-        implicit-deps = false
+        implicit-dependencies = false
 
 
         [dependencies]
