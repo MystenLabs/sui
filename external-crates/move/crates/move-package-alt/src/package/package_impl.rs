@@ -18,7 +18,7 @@ use crate::dependency::FetchedDependency;
 use crate::errors::FileHandle;
 use crate::{
     dependency::Pinned,
-    schema::{ParsedManifest, Publication, ReplacementDependency},
+    schema::{ParsedManifest, Publication},
 };
 use crate::{
     dependency::{CombinedDependency, PinnedDependencyInfo},
@@ -254,9 +254,16 @@ impl<F: MoveFlavor> Package<F> {
         manifest: &ParsedManifest,
         env: &Environment,
     ) -> PackageResult<Vec<PinnedDependencyInfo>> {
-        debug!("adding system dependencies");
-        let system_dependencies =
-            Self::system_dependencies(env, manifest.package.system_dependencies.clone())?;
+        let implicits = F::implicit_dependencies(env.id());
+        let is_implicit = implicits.contains_key(manifest.package.name.as_ref());
+
+        let system_dependencies = if manifest.package.implicit_dependencies && !is_implicit {
+            debug!("adding implicit dependencies");
+            F::implicit_dependencies(env.id())
+        } else {
+            debug!("no implicit dependencies");
+            BTreeMap::new()
+        };
 
         debug!("combining [dependencies] with [dep-replacements] for {env:?}");
         let combined_deps = CombinedDependency::combine_deps(
@@ -276,43 +283,6 @@ impl<F: MoveFlavor> Package<F> {
 
         debug!("pinning dependencies");
         PinnedDependencyInfo::pin::<F>(parent, combined_deps, env.id()).await
-    }
-
-    /// Return system dependencies depending on the manifest setup.
-    fn system_dependencies(
-        env: &Environment,
-        system_dependencies: Option<Vec<String>>,
-    ) -> PackageResult<BTreeMap<PackageName, ReplacementDependency>> {
-        if let Some(system_dependencies) = system_dependencies {
-            // Only include the specified system dependencies.
-            let all_flavor_deps = F::system_dependencies(env.id().to_string());
-            let valid = format!(
-                "[{}]",
-                all_flavor_deps
-                    .keys()
-                    .map(|k| k.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-
-            let mut result = BTreeMap::new();
-
-            for dep in system_dependencies {
-                let Ok(name) = PackageName::new(dep.clone()) else {
-                    return Err(PackageError::InvalidSystemDep { dep, valid });
-                };
-
-                if let Some(dep) = all_flavor_deps.get(&name) {
-                    result.insert(name, dep.clone());
-                } else {
-                    return Err(PackageError::InvalidSystemDep { dep, valid });
-                }
-            }
-            return Ok(result);
-        }
-
-        // If no system dependencies are specified, we include the default system dependencies.
-        Ok(F::default_system_dependencies(env.id().to_string()))
     }
 }
 
@@ -354,10 +324,18 @@ fn check_for_environment<F: MoveFlavor>(
 
 #[cfg(test)]
 mod tests {
-    use move_command_line_common::testing::insta::assert_snapshot;
+    use crate::{
+        flavor::vanilla::{DEFAULT_ENV_ID, DEFAULT_ENV_NAME, default_environment},
+        package::RootPackage,
+        schema::{LocalDepInfo, LockfileDependencyInfo, ReplacementDependency, SystemDepName},
+        test_utils::graph_builder::TestPackageGraph,
+    };
 
     use super::*;
+
     use indexmap::IndexMap;
+    use insta::assert_snapshot;
+    use test_log::test;
 
     #[derive(Debug)]
     struct TestFlavor;
@@ -371,121 +349,132 @@ mod tests {
             "test".to_string()
         }
 
-        fn default_environments() -> IndexMap<String, String> {
-            IndexMap::new()
+        fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID> {
+            IndexMap::from([(DEFAULT_ENV_NAME.into(), DEFAULT_ENV_ID.into())])
         }
 
         // Our test flavor has `[foo, bar, baz]` system dependencies.
-        fn system_dependencies(_: String) -> BTreeMap<PackageName, ReplacementDependency> {
+        fn system_deps(_env: &EnvironmentID) -> BTreeMap<SystemDepName, LockfileDependencyInfo> {
             let mut deps = BTreeMap::new();
             deps.insert(
-                new_package_name("foo"),
-                ReplacementDependency {
-                    dependency: None,
-                    addresses: None,
-                    use_environment: None,
-                },
+                "FOO".into(),
+                LockfileDependencyInfo::Local(LocalDepInfo {
+                    local: "../foo".into(),
+                }),
             );
             deps.insert(
-                new_package_name("bar"),
-                ReplacementDependency {
-                    dependency: None,
-                    addresses: None,
-                    use_environment: None,
-                },
+                "BAR".into(),
+                LockfileDependencyInfo::Local(LocalDepInfo {
+                    local: "../bar".into(),
+                }),
             );
-
             deps.insert(
-                new_package_name("baz"),
-                ReplacementDependency {
-                    dependency: None,
-                    addresses: None,
-                    use_environment: None,
-                },
+                "BAZ".into(),
+                LockfileDependencyInfo::Local(LocalDepInfo {
+                    local: "../baz".into(),
+                }),
             );
-
             deps
         }
 
         // In this flavor, only `[foo, bar]` are enabled by default.
-        fn default_system_dependencies(
-            environment: EnvironmentID,
+        fn implicit_dependencies(
+            _env: &EnvironmentID,
         ) -> BTreeMap<PackageName, ReplacementDependency> {
-            let default_deps = [new_package_name("foo"), new_package_name("bar")];
+            let mut result = BTreeMap::new();
 
-            Self::system_dependencies(environment)
-                .into_iter()
-                .filter(|(name, _)| default_deps.contains(name))
-                .collect()
+            result.insert(
+                new_package_name("foo"),
+                ReplacementDependency::override_system_dep("FOO"),
+            );
+
+            result.insert(
+                new_package_name("bar"),
+                ReplacementDependency::override_system_dep("BAR"),
+            );
+
+            result
         }
     }
 
-    #[test]
-    /// We enable the default system deps.
-    fn test_default_system_dependencies() {
-        let env = test_environment();
-        let implicit_deps = None;
+    /// Loading a package includes the implicit dependencies, and the system dependencies are
+    /// resolved to the right packages
+    #[test(tokio::test)]
+    async fn test_default_implicit_deps() {
+        let scenario = TestPackageGraph::new(["root", "foo", "bar", "baz"]).build();
 
-        let deps = Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap();
-        let dep_keys: Vec<_> = deps.keys().cloned().collect();
+        let root = RootPackage::<TestFlavor>::load(
+            scenario.path_for("root"),
+            default_environment(),
+            vec![],
+        )
+        .await
+        .unwrap();
 
-        assert_eq!(dep_keys.len(), 2);
-        assert!(dep_keys.contains(&new_package_name("foo")));
-        assert!(dep_keys.contains(&new_package_name("bar")));
-    }
+        assert_eq!(
+            root.package_info()
+                .direct_deps()
+                .keys()
+                .map(|k| k.as_str())
+                .collect::<Vec<_>>(),
+            vec!["bar", "foo"]
+        );
 
-    #[test]
-    /// We enable system deps, but specifying which ones we want.
-    fn test_explicit_system_deps() {
-        let env = test_environment();
-        let implicit_deps = Some(vec!["foo".to_string()]);
-
-        let deps = Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap();
-        let dep_keys: Vec<_> = deps.keys().cloned().collect();
-
-        assert_eq!(dep_keys.len(), 1);
-        assert!(dep_keys.contains(&new_package_name("foo")));
-        assert!(!dep_keys.contains(&new_package_name("bar")));
-    }
-
-    #[test]
-    /// Test that we can also "add" deps that are not in the default list of the flavor.
-    fn test_explicit_deps_with_more_than_default_names() {
-        let env = test_environment();
-        let implicit_deps = Some(vec!["foo".to_string(), "baz".to_string()]);
-
-        let deps = Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap();
-        let dep_keys: Vec<_> = deps.keys().cloned().collect();
-
-        assert_eq!(dep_keys.len(), 2);
-        assert!(dep_keys.contains(&new_package_name("foo")));
-        assert!(dep_keys.contains(&new_package_name("baz")));
-    }
-
-    #[test]
-    fn test_explicit_system_deps_with_invalid_names() {
-        let env = test_environment();
-        let implicit_deps = Some(vec!["ignore".to_string(), "foo".to_string()]);
-
-        assert_snapshot!(
-            Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap_err(),
-            @"Invalid system dependency `ignore`; the allowed system dependencies are: [bar, baz, foo]"
+        assert_eq!(
+            root.package_info()
+                .direct_deps()
+                .get("foo")
+                .unwrap()
+                .name()
+                .as_str(),
+            "foo"
         );
     }
 
-    #[test]
-    /// We disable system dependencies altogether.
-    fn test_no_system_deps() {
-        let env = test_environment();
-        let implicit_deps = Some(vec![]);
+    /// Loading a package includes the implicit dependencies, and the system dependencies are
+    /// resolved to the right packages
+    #[test(tokio::test)]
+    async fn test_disabled_implicit_deps() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_package("a", |a| a.implicit_deps(false))
+            .build();
 
-        let deps = Package::<TestFlavor>::system_dependencies(&env, implicit_deps).unwrap();
+        let root =
+            RootPackage::<TestFlavor>::load(scenario.path_for("a"), default_environment(), vec![])
+                .await
+                .unwrap();
 
-        assert_eq!(deps.len(), 0);
+        assert!(root.package_info().direct_deps().is_empty());
     }
 
-    fn test_environment() -> Environment {
-        Environment::new("test".to_string(), "test".to_string())
+    /// Loading a package with an explicit dep with the same name as an implicit dep fails
+    #[test(tokio::test)]
+    async fn test_explicit_implicit() {
+        let scenario = TestPackageGraph::new(["a", "b"])
+            .add_dep("a", "b", |dep| dep.name("foo").rename_from("b"))
+            .build();
+
+        let err =
+            RootPackage::<TestFlavor>::load(scenario.path_for("a"), default_environment(), vec![])
+                .await
+                .unwrap_err();
+
+        assert_snapshot!(err.to_string(), @"The `foo` dependency is implicitly provided and should not be defined in your manifest.");
+    }
+
+    /// Loading a package with an explicit dep with the same name as an implicit succeeds if
+    /// implicit deps are disabled
+    #[test(tokio::test)]
+    async fn test_explicit_with_implicits_disabled() {
+        let scenario = TestPackageGraph::new(["dummy"])
+            .add_package("a", |pkg| pkg.implicit_deps(false))
+            .add_package("b", |pkg| pkg.implicit_deps(false))
+            .add_dep("a", "b", |dep| dep.name("foo").rename_from("b"))
+            .build();
+
+        RootPackage::<TestFlavor>::load(scenario.path_for("a"), default_environment(), vec![])
+            .await
+            .unwrap();
     }
 
     fn new_package_name(name: &str) -> PackageName {

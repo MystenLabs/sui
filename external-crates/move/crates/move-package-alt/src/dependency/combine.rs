@@ -17,6 +17,7 @@ use crate::{
 
 use super::Dependency;
 
+// TODO: this should probably be its own type (not including system deps)
 pub(super) type Combined = ManifestDependencyInfo;
 
 /// [CombinedDependency]s contain the dependency-type-specific things that users write in their
@@ -40,6 +41,11 @@ impl CombinedDependency {
         let mut replacements = dep_replacements.clone();
 
         for (pkg, default) in dependencies.iter() {
+            if system_dependencies.contains_key(pkg) {
+                return Err(ManifestError::with_file(file)(
+                    ManifestErrorKind::ExplicitImplicit { name: pkg.clone() },
+                ));
+            }
             let combined = if let Some(replacement) = replacements.remove(pkg) {
                 Self::from_default_with_replacement(
                     *file,
