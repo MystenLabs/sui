@@ -59,6 +59,11 @@ pub enum ManifestErrorKind {
 
     #[error("{0}")]
     RenameFromError(String),
+
+    #[error(
+        "The `{name}` dependency is implicitly provided and should not be defined in your manifest."
+    )]
+    ExplicitImplicit { name: PackageName },
 }
 
 pub type ManifestResult<T> = Result<T, ManifestError>;

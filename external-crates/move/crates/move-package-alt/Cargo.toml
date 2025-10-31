@@ -26,6 +26,7 @@ move-core-types.workspace = true
 move-symbol-pool.workspace = true
 named-lock.workspace = true
 once_cell.workspace = true
+oxford_join.workspace = true
 path-clean.workspace = true
 petgraph.workspace = true
 pretty_assertions.workspace = true

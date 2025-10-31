@@ -21,6 +21,7 @@ use tracing::{debug, info};
 
 use crate::{
     dependency::combine::Combined,
+    flavor::MoveFlavor,
     package::{EnvironmentID, EnvironmentName},
     schema::{
         EXTERNAL_RESOLVE_ARG, PackageName, ResolveRequest, ResolveResponse, ResolverDependencyInfo,
@@ -30,7 +31,7 @@ use crate::{
 use super::{CombinedDependency, Dependency};
 
 /// A [Dependency<Resolved>] is like a [Dependency<Combined>] except that it no longer has
-/// externally resolved dependencies
+/// externally resolved or system dependencies
 pub type Resolved = ResolverDependencyInfo;
 
 pub type ResolverName = String;
@@ -83,7 +84,9 @@ pub enum ResolverError {
 impl ResolvedDependency {
     /// Replace all external dependencies in `deps` with internal dependencies by invoking their
     /// resolvers.
-    pub async fn resolve(
+    ///
+    /// Precondition: there are no `System` dependencies (TODO: this needs better design)
+    pub async fn resolve<F: MoveFlavor>(
         deps: Vec<CombinedDependency>,
         environment_id: &EnvironmentID,
     ) -> ResolverResult<Vec<ResolvedDependency>> {
@@ -92,14 +95,17 @@ impl ResolvedDependency {
             BTreeMap::new();
 
         for dep in deps.iter() {
-            if let Combined::External(ext) = &dep.0.dep_info {
-                requests.entry(ext.resolver.clone()).or_default().insert(
-                    dep.0.name.clone(),
-                    ResolveRequest {
-                        env: environment_id.clone(),
-                        data: ext.data.clone(),
-                    },
-                );
+            match &dep.0.dep_info {
+                Combined::External(ext) => {
+                    requests.entry(ext.resolver.clone()).or_default().insert(
+                        dep.0.name.clone(),
+                        ResolveRequest {
+                            env: environment_id.clone(),
+                            data: ext.data.clone(),
+                        },
+                    );
+                }
+                _ => (),
             }
         }
 
@@ -123,6 +129,9 @@ impl ResolvedDependency {
                 Combined::Git(git) => Resolved::Git(git),
                 Combined::OnChain(onchain) => Resolved::OnChain(onchain),
                 Combined::External(_) => ext.expect("resolve_single outputs same keys as input"),
+                Combined::System(_) => panic!(
+                    "invariant violation; all system dependencies should already be transformed"
+                ),
             })));
         }
         assert!(responses.is_empty());

@@ -107,6 +107,9 @@ pub struct PackageSpec {
 
     /// Additional files
     files: BTreeMap<PathBuf, String>,
+
+    /// Are implicit deps included?
+    implicit_deps: bool,
 }
 
 struct GitSpec {
@@ -313,12 +316,19 @@ impl TestPackageGraph {
             None => "".into(),
         };
 
+        let implicits = if self.inner[node].implicit_deps {
+            ""
+        } else {
+            "implicit-dependencies = false\n"
+        };
+
         let mut move_toml = formatdoc!(
             r#"
                 [package]
                 name = "{}"
                 edition = "2024"
                 {version_str}
+                {implicits}
                 [environments]
                 {DEFAULT_ENV_NAME} = "{DEFAULT_ENV_ID}"
 
@@ -375,12 +385,19 @@ impl TestPackageGraph {
             .map(|it| format!("published-at = {}", it.addresses.published_at))
             .unwrap_or_default();
 
+        let implicits = if package.implicit_deps {
+            ""
+        } else {
+            "implicit-deps = false\n"
+        };
+
         let mut move_toml = formatdoc!(
             r#"
             [package]
             name = "{}"
             edition = "2024"
             {published_at}
+            {implicits}
             "#,
             package
                 .legacy_name
@@ -540,6 +557,7 @@ impl PackageSpec {
             git_deps: vec![],
             version: None,
             files: BTreeMap::new(),
+            implicit_deps: true,
         }
     }
 
@@ -596,6 +614,11 @@ impl PackageSpec {
 
     pub fn version(mut self, version: impl AsRef<str>) -> Self {
         self.version = Some(version.as_ref().to_string());
+        self
+    }
+
+    pub fn implicit_deps(mut self, implicits: bool) -> Self {
+        self.implicit_deps = implicits;
         self
     }
 }
@@ -760,6 +783,7 @@ mod tests {
                     .publish(OriginalID::from(0xcc00), PublishedID::from(0xcccc), None)
                     .version("v1.2.3")
                     .add_file("sources/extra.move", "// comment")
+                    .implicit_deps(false)
             })
             .add_deps([("b", "c")])
             .add_dep("a", "b", |dep| {
@@ -807,6 +831,7 @@ mod tests {
         name = "c_name"
         edition = "2024"
         version = "v1.2.3"
+        implicit-dependencies = false
 
         [environments]
         _test_env = "_test_env_id"
@@ -836,11 +861,10 @@ mod tests {
         let graph = TestPackageGraph::new(["a", "c"])
             .add_legacy_packages(["b"])
             .add_package("d", |d| {
-                d.set_legacy().set_legacy_name("Any").publish(
-                    OriginalID::from(0x4444),
-                    PublishedID::from(0x5555),
-                    None,
-                )
+                d.set_legacy()
+                    .set_legacy_name("Any")
+                    .publish(OriginalID::from(0x4444), PublishedID::from(0x5555), None)
+                    .implicit_deps(false)
             })
             .add_deps([("a", "b"), ("b", "c"), ("c", "d")])
             .build();
@@ -849,6 +873,7 @@ mod tests {
         [package]
         name = "B"
         edition = "2024"
+        implicit-deps = false
 
 
         [dependencies]
