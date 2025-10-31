@@ -14209,6 +14209,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-executor-minimal"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bcs",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-core-types",
+ "parking_lot 0.12.3",
+ "prometheus",
+ "serde",
+ "serde_json",
+ "sui-execution",
+ "sui-framework",
+ "sui-macros",
+ "sui-protocol-config",
+ "sui-storage",
+ "sui-test-transaction-builder",
+ "sui-transaction-checks",
+ "sui-types",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-faucet"
 version = "1.59.0"
 dependencies = [

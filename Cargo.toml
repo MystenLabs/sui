@@ -176,6 +176,7 @@ members = [
   "crates/sui-sdk",
   "crates/sui-security-watchdog",
   "crates/sui-simulator",
+  "crates/sui-executor-minimal",
   "crates/sui-single-node-benchmark",
   "crates/sui-snapshot",
   "crates/sui-source-validation",

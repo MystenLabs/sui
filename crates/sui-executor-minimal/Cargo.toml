@@ -1,0 +1,38 @@
+[package]
+name = "sui-executor-minimal"
+version = "0.1.0"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+description = "Minimal isolated executor for Sui transactions"
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[dependencies]
+sui-execution = { path = "../../sui-execution" }
+sui-types.workspace = true
+sui-protocol-config.workspace = true
+sui-transaction-checks.workspace = true
+sui-storage.workspace = true
+
+move-core-types.workspace = true
+move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
+
+sui-test-transaction-builder.workspace = true
+sui-framework.workspace = true
+
+tokio = { workspace = true, features = ["full"] }
+async-trait.workspace = true
+
+bcs.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+tracing.workspace = true
+anyhow.workspace = true
+
+parking_lot.workspace = true
+prometheus.workspace = true
+
+[dev-dependencies]
+sui-macros.workspace = true
