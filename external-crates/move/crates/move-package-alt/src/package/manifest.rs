@@ -56,6 +56,9 @@ pub enum ManifestErrorKind {
         "Dependency must have a `git`, `local`, or `r` field in the `[dependencies]` or the `[dep-replacements]` section"
     )]
     NoDepInfo,
+
+    #[error("{0}")]
+    RenameFromError(String),
 }
 
 pub type ManifestResult<T> = Result<T, ManifestError>;
