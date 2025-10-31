@@ -27,5 +27,5 @@ pub enum Error {
     RpcClientError(#[from] tonic::Status),
 
     #[error("Streaming error: {0}")]
-    StreamingError(String),
+    StreamingError(#[from] anyhow::Error),
 }

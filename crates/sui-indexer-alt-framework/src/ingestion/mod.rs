@@ -17,7 +17,7 @@ use url::Url;
 use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::client::IngestionClient;
 use crate::ingestion::error::{Error, Result};
-use crate::ingestion::streaming_service::GRPCStreamingService;
+use crate::ingestion::streaming_client::GrpcStreamingClient;
 use crate::metrics::IndexerMetrics;
 use crate::types::full_checkpoint_content::CheckpointData;
 
@@ -27,7 +27,7 @@ pub mod error;
 mod local_client;
 pub mod remote_client;
 mod rpc_client;
-mod streaming_service;
+mod streaming_client;
 #[cfg(test)]
 mod test_utils;
 
@@ -58,7 +58,7 @@ pub struct ClientArgs {
 
     /// gRPC endpoint for streaming checkpoints
     #[clap(long, env)]
-    pub streaming_uri: Option<Uri>,
+    pub streaming_url: Option<Uri>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -76,7 +76,7 @@ pub struct IngestionConfig {
 pub struct IngestionService {
     config: IngestionConfig,
     client: IngestionClient,
-    streaming_service: Option<GRPCStreamingService>,
+    streaming_client: Option<GrpcStreamingClient>,
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
@@ -115,14 +115,14 @@ impl IngestionService {
             panic!("One of remote_store_url, local_ingestion_path or rpc_api_url must be provided");
         };
 
-        let streaming_service = args.streaming_uri.map(GRPCStreamingService::new);
+        let streaming_client = args.streaming_url.map(GrpcStreamingClient::new);
 
         let subscribers = Vec::new();
         let (commit_hi_tx, commit_hi_rx) = mpsc::unbounded_channel();
         Ok(Self {
             config,
             client,
-            streaming_service,
+            streaming_client,
             commit_hi_tx,
             commit_hi_rx,
             subscribers,
@@ -181,7 +181,7 @@ impl IngestionService {
         let IngestionService {
             config,
             client,
-            streaming_service,
+            streaming_client,
             commit_hi_tx: _,
             commit_hi_rx,
             subscribers,
@@ -196,7 +196,7 @@ impl IngestionService {
         let broadcaster = broadcaster(
             checkpoints,
             initial_commit_hi,
-            streaming_service,
+            streaming_client,
             config,
             client,
             commit_hi_rx,
@@ -241,11 +241,7 @@ mod tests {
         IngestionService::new(
             ClientArgs {
                 remote_store_url: Some(Url::parse(&uri).unwrap()),
-                local_ingestion_path: None,
-                rpc_api_url: None,
-                rpc_username: None,
-                rpc_password: None,
-                streaming_uri: None,
+                ..Default::default()
             },
             IngestionConfig {
                 checkpoint_buffer_size,
