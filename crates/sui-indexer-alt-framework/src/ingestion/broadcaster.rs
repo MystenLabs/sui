@@ -34,10 +34,10 @@ use crate::{
 ///    channel when they hit the ingest_hi limit.
 ///
 /// The task will shut down if the `cancel` token is signalled, or if the `checkpoints` range completes.
-pub(super) fn broadcaster<R, C>(
+pub(super) fn broadcaster<R, S>(
     checkpoints: R,
     initial_commit_hi: Option<u64>,
-    mut streaming_client: Option<C>,
+    mut streaming_client: Option<S>,
     config: IngestionConfig,
     client: IngestionClient,
     mut commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
@@ -47,7 +47,7 @@ pub(super) fn broadcaster<R, C>(
 ) -> JoinHandle<()>
 where
     R: std::ops::RangeBounds<u64> + Send + 'static,
-    C: CheckpointStreamingClient + Send + 'static,
+    S: CheckpointStreamingClient + Send + 'static,
 {
     tokio::spawn(async move {
         info!("Starting broadcaster");
@@ -87,11 +87,16 @@ where
         let mut streaming_backoff_batch_size = config.streaming_backoff_initial_batch_size as u64;
 
         // Initialize the overall checkpoint_hi watermark to start_cp.
-        // This value is updated every outer loop iteration
-        // after both streaming and broadcasting complete.
+        // This value is updated every outer loop iteration after both streaming and broadcasting complete.
         let mut checkpoint_hi = start_cp;
 
         'outer: while checkpoint_hi < end_cp {
+            // Set up the streaming task for the current range [checkpoint_hi, end_cp). This function
+            // will return a handle to the streaming task and the end cp of the ingestion task, calculated
+            // based on 1) if streaming is used, 2) streaming connection success status, and 3) the network
+            // latest checkpoint we get from a success streaming connection.
+            // The ingestion task fill up the gap from checkpoint_hi to ingestion_end (exclusive) while the streaming
+            // task covers from ingestion_end to end_cp.
             let (streaming_handle, ingestion_end) = setup_streaming_task(
                 &mut streaming_client,
                 checkpoint_hi,
@@ -327,9 +332,10 @@ async fn stream_and_broadcast_range(
 }
 
 /// Sets up either a noop or real streaming task based on network state and proximity to
-/// the current checkpoint_hi, and returns a streaming task handle and the ingestion endpoint.
-async fn setup_streaming_task<C>(
-    streaming_client: &mut Option<C>,
+/// the current checkpoint_hi, and returns a streaming task handle and the `ingestion_end`
+/// telling the main task that ingestion should be used up to this point.
+async fn setup_streaming_task<S>(
+    streaming_client: &mut Option<S>,
     checkpoint_hi: u64,
     end_cp: u64,
     streaming_backoff_batch_size: &mut u64,
@@ -340,14 +346,16 @@ async fn setup_streaming_task<C>(
     cancel: &CancellationToken,
 ) -> (JoinHandle<u64>, u64)
 where
-    C: CheckpointStreamingClient,
+    S: CheckpointStreamingClient,
 {
+    // No streaming client configured so we ingest all the way to end_cp.
     let Some(streaming_client) = streaming_client else {
         return (noop_streaming_task(end_cp), end_cp);
     };
 
     let backoff_batch_size = *streaming_backoff_batch_size;
 
+    // Convenient closure to handle streaming fallback logic due to connection or peek failure.
     let mut handle_streaming_fallback = |reason: &str| {
         let ingestion_end = (checkpoint_hi + backoff_batch_size).min(end_cp);
         warn!(
@@ -369,6 +377,10 @@ where
     let Some(Ok(peeked_checkpoint)) = Pin::new(&mut peekable_stream).peek().await else {
         return handle_streaming_fallback("Failed to peek latest checkpoint");
     };
+
+    // We have successfully connected and peeked, reset backoff batch size.
+    *streaming_backoff_batch_size = config.streaming_backoff_initial_batch_size as u64;
+
     let network_latest_cp = *peeked_checkpoint.checkpoint_summary.sequence_number();
 
     let ingestion_end = network_latest_cp.min(end_cp);
@@ -1211,7 +1223,6 @@ mod tests {
 
     #[tokio::test]
     async fn streaming_start_failure_fallback_to_ingestion() {
-        telemetry_subscribers::init_for_testing();
         let (_, hi_rx) = mpsc::unbounded_channel();
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
         let cancel = CancellationToken::new();
@@ -1257,7 +1268,6 @@ mod tests {
 
     #[tokio::test]
     async fn streaming_peek_failure_fallback_to_ingestion() {
-        telemetry_subscribers::init_for_testing();
         let (_, hi_rx) = mpsc::unbounded_channel();
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
         let cancel = CancellationToken::new();
@@ -1306,20 +1316,19 @@ mod tests {
 
     #[tokio::test]
     async fn streaming_connection_retry_with_backoff() {
-        telemetry_subscribers::init_for_testing();
         let (_, hi_rx) = mpsc::unbounded_channel();
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(50);
         let cancel = CancellationToken::new();
 
-        // Streaming service where peek always fails (never recovers)
-        let streaming_service = MockStreamingClient::new(30..50).fail_connection_times(usize::MAX);
+        // Streaming client where connection always fails (never recovers)
+        let streaming_client = MockStreamingClient::new(0..50).fail_connection_times(usize::MAX);
 
         let metrics = test_metrics();
 
         let h_broadcaster = broadcaster(
             0..50,
             None,
-            Some(streaming_service),
+            Some(streaming_client),
             test_config(),
             mock_client(metrics.clone()),
             hi_rx,
@@ -1340,6 +1349,68 @@ mod tests {
         // Verify only ingestion was used (streaming never succeeded)
         assert_eq!(metrics.total_ingested_checkpoints.get(), 50);
         assert_eq!(metrics.total_streamed_checkpoints.get(), 0);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_connection_failure_backoff_reset() {
+        // Test that after a successful streaming connection, the backoff state resets.
+
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(50);
+        let cancel = CancellationToken::new();
+
+        let mut streaming_client = MockStreamingClient::new(0..40).fail_connection_times(4);
+        streaming_client.insert_error(); // First error to get back to main loop
+        streaming_client.insert_error(); // Then fail peek
+        streaming_client.insert_checkpoint_range(40..50); // Complete the rest
+
+        let metrics = test_metrics();
+
+        let h_broadcaster = broadcaster(
+            0..50,
+            None,
+            Some(streaming_client),
+            test_config(),
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        // Should fallback to ingestion for first 2 + 4 + 8 + 16 = 30 checkpoints
+        assert_eq!(
+            recv_set(&mut subscriber_rx, 30).await,
+            BTreeSet::from_iter(0..30)
+        );
+
+        // Then should stream 30-40 before peek fails
+        assert_eq!(
+            recv_vec(&mut subscriber_rx, 10).await,
+            Vec::from_iter(30..40)
+        );
+
+        // Then fallback to ingestion for the next 2 checkpoints, since backoff should have reset
+        assert_eq!(
+            recv_set(&mut subscriber_rx, 2).await,
+            BTreeSet::from_iter(40..42)
+        );
+
+        // Finally stream the last 8 checkpoints
+        assert_eq!(
+            recv_vec(&mut subscriber_rx, 8).await,
+            Vec::from_iter(42..50)
+        );
+
+        // Verify failure counter incremented 5 times
+        assert_eq!(metrics.total_streaming_connection_failures.get(), 5);
+
+        // Ingestion was used for 2 + 4 + 8 + 16 + 2 = 32 checkpoints
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 32);
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 18);
 
         cancel.cancel();
         h_broadcaster.await.unwrap();
