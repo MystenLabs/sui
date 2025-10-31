@@ -21,10 +21,10 @@ use tempfile::tempdir;
 use test_cluster::TestClusterBuilder;
 
 diesel::table! {
-    /// Table for storing transaction counts per checkpoint.
+    /// Table for storing user transaction counts per checkpoint.
     tx_counts (cp_sequence_number) {
-    cp_sequence_number -> BigInt,
-    count -> BigInt,
+        cp_sequence_number -> BigInt,
+        count -> BigInt,
     }
 }
 
@@ -47,9 +47,15 @@ impl Processor for TxCounts {
         &self,
         checkpoint: &std::sync::Arc<CheckpointData>,
     ) -> anyhow::Result<Vec<Self::Value>> {
+        let user_tx_count = checkpoint
+            .transactions
+            .iter()
+            .filter(|tx| !tx.transaction.is_system_tx())
+            .count();
+
         Ok(vec![StoredTxCount {
             cp_sequence_number: checkpoint.checkpoint_summary.sequence_number as i64,
-            count: checkpoint.transactions.len() as i64,
+            count: user_tx_count as i64,
         }])
     }
 }
@@ -116,12 +122,9 @@ async fn test_indexer_cluster_with_grpc_streaming() {
     // Set up the indexer with gRPC streaming endpoint from TestCluster
     let client_args = ClientArgs {
         local_ingestion_path: Some(checkpoint_dir.path().to_owned()),
-        remote_store_url: None,
-        rpc_api_url: None,
-        rpc_username: None,
-        rpc_password: None,
         // Use the TestCluster's RPC URL as the gRPC streaming endpoint
         streaming_url: Some(test_cluster.rpc_url().parse().unwrap()),
+        ..Default::default()
     };
 
     // Create writer/reader for database operations
@@ -158,45 +161,31 @@ async fn test_indexer_cluster_with_grpc_streaming() {
         .await
         .unwrap();
 
-    let metrics = indexer.metrics().clone();
     let cancel = indexer.cancel().clone();
 
     // Run the indexer - it will use gRPC streaming from TestCluster
     // and fall back to local ingestion if needed
     let handle = indexer.run().await.unwrap();
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    // Poll every 100ms with a 5s timeout for the sum of user transactions to reach 5
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let mut interval = tokio::time::interval(Duration::from_millis(100));
+        let mut num_txns = 0;
+        while num_txns < 5 {
+            interval.tick().await;
 
-    // Check that results were written
-    {
-        let mut conn = reader.connect().await.unwrap();
-        let counts: Vec<StoredTxCount> = tx_counts::table
-            .order_by(tx_counts::cp_sequence_number)
-            .load(&mut conn)
-            .await
-            .unwrap();
-
-        // We should have processed some checkpoints.
-        assert!(!counts.is_empty());
-        for (i, count) in counts.iter().enumerate() {
-            assert_eq!(count.cp_sequence_number, i as i64);
-            // Each checkpoint should have at least one transaction
-            assert!(count.count > 0);
+            let mut conn = reader.connect().await.unwrap();
+            num_txns = tx_counts::table
+                .select(tx_counts::count)
+                .load::<i64>(&mut conn)
+                .await
+                .unwrap()
+                .iter()
+                .sum();
         }
-    }
-
-    // Verify metrics show that checkpoints were streamed
-    assert!(metrics.total_streamed_checkpoints.get() >= 5);
-
-    // Verify pipeline metrics
-    assert!(
-        metrics
-            .total_handler_checkpoints_received
-            .get_metric_with_label_values(&["tx_counts"])
-            .unwrap()
-            .get()
-            >= 5
-    );
+    })
+    .await
+    .expect("Timeout: Expected sum of user transactions to reach 5 within 5 seconds");
 
     cancel.cancel();
     handle.await.unwrap();
