@@ -70,7 +70,7 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
         .await;
     let scheduler = Arc::new(ExecutionScheduler::new(
         state.get_object_cache_reader().clone(),
-        state.get_object_store().clone(),
+        state.get_child_object_resolver().clone(),
         state.get_transaction_cache_reader().clone(),
         tx_ready_certificates,
         &state.epoch_store_for_testing(),
