@@ -11,7 +11,7 @@ use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{Processor, concurrent::Handler},
     postgres::{Connection, Db},
-    types::full_checkpoint_content::CheckpointData,
+    types::full_checkpoint_content::Checkpoint,
 };
 use sui_indexer_alt_schema::cp_sequence_numbers::StoredCpSequenceNumbers;
 use sui_indexer_alt_schema::schema::cp_sequence_numbers;
@@ -24,12 +24,12 @@ impl Processor for CpSequenceNumbers {
 
     type Value = StoredCpSequenceNumbers;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number as i64;
-        let network_total_transactions =
-            checkpoint.checkpoint_summary.network_total_transactions as i64;
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let cp_sequence_number = checkpoint.summary.sequence_number as i64;
+        let network_total_transactions = checkpoint.summary.network_total_transactions as i64;
+
         let tx_lo = network_total_transactions - checkpoint.transactions.len() as i64;
-        let epoch = checkpoint.checkpoint_summary.epoch as i64;
+        let epoch = checkpoint.summary.epoch as i64;
         Ok(vec![StoredCpSequenceNumbers {
             cp_sequence_number,
             tx_lo,

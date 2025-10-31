@@ -11,7 +11,7 @@ use sui_indexer_alt_framework::{
         TypeTag,
         base_types::SuiAddress,
         coin::Coin,
-        full_checkpoint_content::CheckpointData,
+        full_checkpoint_content::Checkpoint,
         object::{Object, Owner},
     },
 };
@@ -49,7 +49,7 @@ impl Processor for Balances {
     const NAME: &'static str = "balances";
     type Value = Delta;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Delta>> {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Delta>> {
         let mut deltas = vec![];
 
         for (_, (i, _)) in checkpoint_input_objects(checkpoint)? {

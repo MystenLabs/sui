@@ -40,7 +40,7 @@ use sui_pg_db::{
     temp::{TempDb, get_available_port},
 };
 use sui_storage::blob::{Blob, BlobEncoding};
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::full_checkpoint_content::{Checkpoint, CheckpointData};
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
@@ -703,7 +703,10 @@ pub fn local_ingestion_client_args() -> (ClientArgs, TempDir) {
 }
 
 /// Writes a checkpoint file to the given path.
-pub async fn write_checkpoint(path: &Path, checkpoint_data: CheckpointData) -> anyhow::Result<()> {
+pub async fn write_checkpoint(path: &Path, checkpoint: Checkpoint) -> anyhow::Result<()> {
+    // Convert to CheckpointData for serialization
+    // TODO: Change to proto format once we merge pull/24066
+    let checkpoint_data: CheckpointData = checkpoint.into();
     let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
     let file_path = path.join(file_name);
     let blob = Blob::encode(&checkpoint_data, BlobEncoding::Bcs)?;

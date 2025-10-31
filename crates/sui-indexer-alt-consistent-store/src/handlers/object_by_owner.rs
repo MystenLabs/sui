@@ -6,7 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use sui_indexer_alt_framework::{
     pipeline::{Processor, sequential},
-    types::{base_types::VersionDigest, full_checkpoint_content::CheckpointData, object::Object},
+    types::{base_types::VersionDigest, full_checkpoint_content::Checkpoint, object::Object},
 };
 
 use crate::store::{Connection, Store};
@@ -29,7 +29,7 @@ impl Processor for ObjectByOwner {
     const NAME: &'static str = "object_by_owner";
     type Value = Value;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Value>> {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Value>> {
         let input_objects = checkpoint_input_objects(checkpoint)?;
         let output_objects = checkpoint_output_objects(checkpoint)?;
         let mut values = vec![];
