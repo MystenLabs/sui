@@ -424,7 +424,7 @@ mod tests {
 
     // Implicit dependency parsing ///////////////////////////////////////////////////////
 
-    /// The default value for `implicit-deps` is `Enabled`
+    /// The default value for `implicit-dependencies` is `Enabled`
     #[test]
     fn parse_implicit_deps() {
         let manifest: ParsedManifest = toml_edit::de::from_str(
