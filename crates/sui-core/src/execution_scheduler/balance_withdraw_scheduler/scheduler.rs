@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use crate::execution_scheduler::balance_withdraw_scheduler::{
     BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
@@ -13,7 +10,7 @@ use crate::execution_scheduler::balance_withdraw_scheduler::{
 };
 use futures::stream::FuturesUnordered;
 use mysten_metrics::monitored_mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
-use sui_types::{accumulator_root::AccumulatorObjId, base_types::SequenceNumber};
+use sui_types::base_types::SequenceNumber;
 use tokio::sync::oneshot;
 use tracing::debug;
 
@@ -72,14 +69,6 @@ impl WithdrawReservations {
                 status: ScheduleStatus::SkipSchedule,
             });
         }
-    }
-
-    pub fn all_accounts(&self) -> BTreeSet<AccumulatorObjId> {
-        self.withdraws
-            .iter()
-            .flat_map(|withdraw| withdraw.reservations.keys())
-            .cloned()
-            .collect::<BTreeSet<_>>()
     }
 }
 
