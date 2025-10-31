@@ -93,12 +93,12 @@ as you install the new CLI:
    automatically based on its active environment. If your local environment is
    set to another network, you will have to specify with `-e <envname>`
 
-**Ephemeral publication**
+**Test publication**
  - On ephemeral networks like `localnet`, the dependency addresses from the
    build environment don't make sense.
 
- - The new `ephemeral-publish` command lets you supply a file containing the
-   local dependencies' addresses.
+ - The new `test-publish` command lets you supply a file containing
+   dependencies' ephemeral addresses.
 
  - We plan a fast-follow for automatically publishing dependencies and building
    up an ephemeral publication file; right now the process is somewhat manual
@@ -307,27 +307,3 @@ that you can add to dependencies in the `[dep-replacements]` section:
    field in the `[dep-replacements]`, you must also give the `git` field.
    Moreover, if you do give a `git` field, the `subdir` and `rev` fields are
    not copied over. We are considering changing this behavior
-
-
-CLI changes
-===========
-
-Our prototype is integrated into the `sui` binary, so most of the commands you
-are familiar with work the same way. There are a few changes though:
-
-### Compiling for specific environments
-
-Because of `dep-replacements` (and also some details about how package
-conflicts are determined), all operations must be done in a specific
-environment. By default, the `sui` binary tries to choose the right environment
-based on the sui client environment (as determined by `sui client active-env`).
-
-If there is not an obvious choice of environment (either because the manifest
-declares multiple environments with the same chain ID or because it doesn't
-declare one at all[^1]), you will have to choose a specific environment by
-passing `-e <environment>`.
-
-[^1]: In the current prototype, that means that to publish to devnet or
-    localnet you will need to have environments defined for them. We have a
-    `[dev-environments]` feature for this purpose, but the implementation of
-    that feature is not currently complete.
