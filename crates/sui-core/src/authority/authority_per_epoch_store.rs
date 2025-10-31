@@ -19,9 +19,9 @@ use futures::FutureExt;
 use futures::future::{Either, join_all, select};
 use itertools::{Itertools, izip};
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use mysten_common::assert_reachable;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
+use mysten_common::{assert_reachable, assert_sometimes};
 use mysten_common::{debug_fatal, fatal};
 use mysten_metrics::monitored_scope;
 use nonempty::NonEmpty;
@@ -4705,11 +4705,11 @@ impl AuthorityPerEpochStore {
                     ) {
                         ConsensusCertificateResult::Deferred(deferral_key)
                     } else {
-                        antithesis_sdk::assert_sometimes!(
+                        assert_sometimes!(
                             transaction.transaction_data().uses_randomness(),
                             "cancelled randomness-using transaction (old handler)"
                         );
-                        antithesis_sdk::assert_sometimes!(
+                        assert_sometimes!(
                             !transaction.transaction_data().uses_randomness(),
                             "cancelled non-randomness-using transaction (old handler)"
                         );
