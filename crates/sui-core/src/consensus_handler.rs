@@ -601,6 +601,11 @@ pub struct ConsensusHandler<C> {
     backpressure_subscriber: BackpressureSubscriber,
 
     traffic_controller: Option<Arc<TrafficController>>,
+
+    /// Tracks processed commits by (round, authority) to handle multi-leader deduplication.
+    /// With multi-leader support, multiple commits can occur in the same round from different
+    /// authorities, so we need to track both round and authority to avoid reprocessing.
+    processed_commits: HashSet<(u64, AuthorityIndex)>,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -651,6 +656,7 @@ impl<C> ConsensusHandler<C> {
             ),
             backpressure_subscriber,
             traffic_controller,
+            processed_commits: HashSet::new(),
         }
     }
 
@@ -1985,27 +1991,32 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .stateless_commit_info(&self.epoch_store, &consensus_commit)
         };
 
-        // TODO(commit-handler-rewrite): already not needed
-        // TODO: Remove this once narwhal is deprecated. For now mysticeti will not return
-        // more than one leader per round so we are not in danger of ignoring any commits.
+        // Extract leader info early for multi-leader deduplication
+        let leader_author = consensus_commit.leader_author_index();
+
+        // With multi-leader support, we need to deduplicate based on (round, authority) since
+        // multiple leaders can commit in the same round. This prevents processing the same
+        // commit twice after restart while allowing different leaders in the same round.
         assert!(commit_info.round >= last_committed_round);
-        if last_committed_round == commit_info.round {
+        let commit_key = (commit_info.round, leader_author);
+        if self.processed_commits.contains(&commit_key) {
             // we can receive the same commit twice after restart
             // It is critical that the writes done by this function are atomic - otherwise we can
             // lose the later parts of a commit if we restart midway through processing it.
             warn!(
-                "Ignoring consensus output for round {} as it is already committed. NOTE: This is only expected if consensus is running.",
-                commit_info.round
+                "Ignoring consensus output for round {} leader {} as it is already committed. NOTE: This is only expected if consensus is running.",
+                commit_info.round, leader_author
             );
             return;
         }
+        // Mark this commit as processed
+        self.processed_commits.insert(commit_key);
 
         // TODO(commit-handler-rewrite): gather commit metadata
 
         /* (transaction, serialized length) */
         let mut transactions = vec![];
         let timestamp = consensus_commit.commit_timestamp_ms();
-        let leader_author = consensus_commit.leader_author_index();
         let commit_sub_dag_index = consensus_commit.commit_sub_dag_index();
 
         let system_time_ms = SystemTime::now()

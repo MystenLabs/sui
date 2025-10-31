@@ -3,7 +3,7 @@
 
 use std::{
     cmp::max,
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
     ops::Bound::{Excluded, Included, Unbounded},
     panic,
     sync::Arc,
@@ -81,9 +81,13 @@ pub struct DagState {
     scoring_subdag: ScoringSubdag,
 
     // Commit votes pending to be included in new blocks.
-    // TODO: limit to 1st commit per round with multi-leader.
+    // With multi-leader, limit to 1st commit per round to avoid vote spam.
     // TODO: recover unproposed pending commit votes at startup.
     pending_commit_votes: VecDeque<CommitVote>,
+
+    // Tracks rounds that already have a pending commit vote to enforce one vote per round.
+    // This prevents vote spam when multiple leaders commit in the same round.
+    pending_commit_votes_rounds: HashSet<Round>,
 
     // Blocks and commits must be buffered for persistence before they can be
     // inserted into the local DAG or sent to output.
@@ -173,6 +177,7 @@ impl DagState {
             last_commit_round_advancement_time: None,
             last_committed_rounds: last_committed_rounds.clone(),
             pending_commit_votes: VecDeque::new(),
+            pending_commit_votes_rounds: HashSet::new(),
             blocks_to_write: vec![],
             commits_to_write: vec![],
             commit_info_to_write: vec![],
@@ -910,7 +915,14 @@ impl DagState {
                 .set((*round).into());
         }
 
-        self.pending_commit_votes.push_back(commit.reference());
+        // With multi-leader, only add a commit vote for the first commit in each round
+        // to prevent vote spam when multiple leaders commit in the same round.
+        let commit_round = commit.round();
+        if !self.pending_commit_votes_rounds.contains(&commit_round) {
+            self.pending_commit_votes.push_back(commit.reference());
+            self.pending_commit_votes_rounds.insert(commit_round);
+        }
+
         self.commits_to_write.push(commit);
     }
 
@@ -957,8 +969,19 @@ impl DagState {
     pub(crate) fn take_commit_votes(&mut self, limit: usize) -> Vec<CommitVote> {
         let mut votes = Vec::new();
         while !self.pending_commit_votes.is_empty() && votes.len() < limit {
-            votes.push(self.pending_commit_votes.pop_front().unwrap());
+            let vote = self.pending_commit_votes.pop_front().unwrap();
+            votes.push(vote);
         }
+
+        // Clean up tracking for rounds that are significantly behind the current round.
+        // We only need to track recent rounds for vote deduplication.
+        if let Some(last_commit) = &self.last_commit {
+            let current_round = last_commit.round();
+            let cleanup_threshold = current_round.saturating_sub(100);
+            self.pending_commit_votes_rounds
+                .retain(|&round| round > cleanup_threshold);
+        }
+
         votes
     }
 

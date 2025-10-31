@@ -776,3 +776,127 @@ fn basic_dag_builder_test_setup() -> TestSetup {
         committer,
     }
 }
+
+/// Test multi-leader commit with configurable number of leaders per round
+#[tokio::test]
+async fn multi_leader_commit() {
+    telemetry_subscribers::init_for_testing();
+
+    // Test with different leader counts
+    for num_leaders in [1, 2, 3, 4] {
+        tracing::info!("Testing with {} leaders per round", num_leaders);
+
+        let context = Arc::new(Context::new_for_test(4).0);
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
+
+        // Create committer with specified number of leaders
+        let committer = UniversalCommitterBuilder::new(
+            context.clone(),
+            leader_schedule,
+            dag_state.clone(),
+        )
+        .with_number_of_leaders(num_leaders)
+        .build();
+
+        // With N leaders per round, we should have N committers (without pipelining)
+        assert_eq!(committer.committers.len(), num_leaders);
+
+        // Build a fully connected DAG
+        let leader_round_wave_1 = committer.committers[0].leader_round(1);
+        let decision_round_wave_1 = committer.committers[0].decision_round(1);
+        build_dag(context.clone(), dag_state.clone(), None, decision_round_wave_1);
+
+        // Try to decide leaders
+        let last_decided = Slot::new_for_test(0, 0);
+        let sequence = committer.try_decide(last_decided);
+
+        tracing::info!(
+            "With {} leaders: committed {} leaders in round {}",
+            num_leaders,
+            sequence.len(),
+            leader_round_wave_1
+        );
+
+        // We should commit up to num_leaders for the wave
+        // Note: actual committed count may vary based on DAG structure
+        assert!(
+            !sequence.is_empty(),
+            "Should commit at least one leader with {} leaders per round",
+            num_leaders
+        );
+        assert!(
+            sequence.len() <= num_leaders,
+            "Should not commit more than {} leaders",
+            num_leaders
+        );
+
+        // Verify that all committed leaders are from the correct round
+        for decided in &sequence {
+            if let DecidedLeader::Commit(block, _) = decided {
+                assert_eq!(
+                    block.round(),
+                    leader_round_wave_1,
+                    "All committed leaders should be from leader round"
+                );
+            }
+        }
+
+        // Verify all committed leaders are unique authorities
+        let mut authorities = std::collections::HashSet::new();
+        for decided in &sequence {
+            if let DecidedLeader::Commit(block, _) = decided {
+                assert!(
+                    authorities.insert(block.author()),
+                    "Should not commit duplicate authorities in same round"
+                );
+            }
+        }
+    }
+}
+
+/// Test that commit votes are limited to one per round with multi-leader
+#[tokio::test]
+async fn multi_leader_commit_vote_limiting() {
+    telemetry_subscribers::init_for_testing();
+
+    let context = Arc::new(Context::new_for_test(4).0);
+    let mut dag_state = DagState::new(context.clone(), Arc::new(MemStore::new()));
+
+    // Create multiple commits for the same round
+    use consensus_types::block::{BlockRef, BlockDigest};
+    let commit1 = crate::commit::TrustedCommit::new_for_test(
+        1,
+        crate::commit::CommitDigest::MIN,
+        0,
+        BlockRef::new(3, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
+        vec![],
+    );
+    let commit2 = crate::commit::TrustedCommit::new_for_test(
+        2,
+        crate::commit::CommitDigest::MIN,
+        0,
+        BlockRef::new(3, AuthorityIndex::new_for_test(1), BlockDigest::MIN),
+        vec![],
+    );
+
+    // Add both commits (same round, different leaders)
+    dag_state.add_commit(commit1);
+    dag_state.add_commit(commit2);
+
+    // Take commit votes
+    let votes = dag_state.take_commit_votes(10);
+
+    // Should only get one vote for the round (the first commit)
+    assert_eq!(
+        votes.len(),
+        1,
+        "Should only have one commit vote per round"
+    );
+}
