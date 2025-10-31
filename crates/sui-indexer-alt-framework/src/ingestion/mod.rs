@@ -71,6 +71,12 @@ pub struct IngestionConfig {
 
     /// Polling interval to retry fetching checkpoints that do not exist, in milliseconds.
     pub retry_interval_ms: u64,
+
+    /// Initial number of checkpoints to process using ingestion after a streaming connection failure.
+    pub streaming_backoff_initial_batch_size: usize,
+
+    /// Maximum number of checkpoints to process using ingestion after repeated streaming connection failures.
+    pub streaming_backoff_max_batch_size: usize,
 }
 
 pub struct IngestionService {
@@ -215,6 +221,8 @@ impl Default for IngestionConfig {
             checkpoint_buffer_size: 5000,
             ingest_concurrency: 200,
             retry_interval_ms: 200,
+            streaming_backoff_initial_batch_size: 10, // 10 checkpoints, ~ 2 seconds
+            streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
         }
     }
 }
