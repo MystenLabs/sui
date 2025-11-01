@@ -52,7 +52,7 @@ pub(crate) struct MockBalanceRead {
 #[cfg(test)]
 struct MockBalanceReadInner {
     cur_version: SequenceNumber,
-    balances: BTreeMap<AccumulatorObjId, BTreeMap<SequenceNumber, u128>>,
+    balances: BTreeMap<AccumulatorObjId, BTreeMap<SequenceNumber, Option<u128>>>,
 }
 
 #[cfg(test)]
@@ -66,7 +66,7 @@ impl MockBalanceRead {
             .map(|(account_id, balance)| {
                 (
                     AccumulatorObjId::new_unchecked(*account_id),
-                    BTreeMap::from_iter([(init_version, *balance)]),
+                    BTreeMap::from_iter([(init_version, Some(*balance))]),
                 )
             })
             .collect::<BTreeMap<_, _>>();
@@ -110,13 +110,20 @@ impl MockBalanceReadInner {
         assert_eq!(new_accumulator_version, next_accumulator_version);
         self.cur_version = new_accumulator_version;
         for (account_id, balance_change) in balance_changes {
-            let balance = self.get_account_balance(&account_id, self.cur_version);
+            let balance = self
+                .get_account_balance(&account_id, self.cur_version)
+                .unwrap_or_default();
             let new_balance = balance as i128 + balance_change;
             assert!(new_balance >= 0);
+            let new_entry = if new_balance == 0 {
+                None
+            } else {
+                Some(new_balance as u128)
+            };
             self.balances
                 .entry(account_id)
                 .or_default()
-                .insert(new_accumulator_version, new_balance as u128);
+                .insert(new_accumulator_version, new_entry);
         }
     }
 
@@ -124,15 +131,12 @@ impl MockBalanceReadInner {
         &self,
         account_id: &AccumulatorObjId,
         accumulator_version: SequenceNumber,
-    ) -> u128 {
-        let Some(account_balances) = self.balances.get(account_id) else {
-            return 0;
-        };
+    ) -> Option<u128> {
+        let account_balances = self.balances.get(account_id)?;
         account_balances
             .range(..=accumulator_version)
             .last()
-            .map(|(_, balance)| *balance)
-            .unwrap_or_default()
+            .and_then(|(_, balance)| *balance)
     }
 }
 
@@ -147,6 +151,8 @@ impl AccountBalanceRead for MockBalanceRead {
         accumulator_version: SequenceNumber,
     ) -> u128 {
         let inner = self.inner.read();
-        inner.get_account_balance(account_id, accumulator_version)
+        inner
+            .get_account_balance(account_id, accumulator_version)
+            .unwrap_or_default()
     }
 }
