@@ -119,6 +119,7 @@ impl Pool {
 mod tests {
     use std::borrow::Cow;
 
+    use super::NB_BUCKETS;
     use crate::Pool;
 
     #[test]
@@ -127,5 +128,13 @@ mod tests {
         let e1 = pool.insert(Cow::Borrowed("hi"));
         let e2 = pool.insert(Cow::Owned("hi".to_owned()));
         assert_eq!(e1, e2);
+    }
+    #[test]
+    fn test_insert_unique() {
+        let mut pool = Pool::new();
+        assert_eq!(pool.0.len(), NB_BUCKETS);
+        pool.insert(Cow::Borrowed("hi"));
+        pool.insert(Cow::Borrowed("abcd"));
+        assert_eq!(pool.0.iter().filter(|b| b.is_some()).count(), 2);
     }
 }
