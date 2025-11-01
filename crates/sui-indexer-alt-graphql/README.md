@@ -23,16 +23,15 @@ answer key-value queries (fetching an object by its ID and version, a
 checkpoint by its sequence number, or a transaction by its digest), instead of
 the relevant postgres tables.
 
-### (TBD) Consistent Store
+### (optional) Consistent Store
 
 The consistent store is used to answer queries about the live object set (live
 objects by owner or by type, balances per address, etc) parametrized by a
-recent checkpoint, but is not yet ready or integrated into GraphQL Beta.
+recent checkpoint.
 
-### (TBD) Fullnode
+### (optional) Fullnode
 
-Fullnodes are used to execute and simulate transactions, but are not yet
-integrated into GraphQL Beta.
+Fullnodes are used to execute and simulate transactions.
 
 ## Tests
 
