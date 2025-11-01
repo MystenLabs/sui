@@ -2,15 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::dataloader::Loader;
+
+use anyhow::{Context, anyhow};
 use diesel::{ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper};
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
+use prost_types::FieldMask;
+use std::collections::{BTreeSet, HashMap};
 use sui_indexer_alt_schema::schema::kv_transactions;
 use sui_kvstore::TransactionEventsData;
-use sui_types::digests::TransactionDigest;
+use sui_rpc::proto::sui::rpc::v2 as proto;
+use sui_rpc::{field::FieldMaskUtil, proto::proto_to_timestamp_ms};
+use sui_types::{digests::TransactionDigest, effects::TransactionEvents};
 
+use crate::ledger_grpc_reader::LedgerGrpcReader;
 use crate::{bigtable_reader::BigtableReader, error::Error, pg_reader::PgReader};
 
 /// Key for fetching transaction events contents (Events, TimestampMs) by digest.
@@ -40,7 +43,7 @@ impl Loader<TransactionEventsKey> for PgReader {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let digests: BTreeSet<_> = keys.iter().map(|d| d.0.into_inner()).collect();
         let transactions: Vec<(Vec<u8>, StoredTransactionEvents)> = conn
@@ -85,5 +88,66 @@ impl Loader<TransactionEventsKey> for BigtableReader {
             .into_iter()
             .map(|(digest, events)| (TransactionEventsKey(digest), events))
             .collect())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<TransactionEventsKey> for LedgerGrpcReader {
+    type Value = TransactionEventsData;
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[TransactionEventsKey],
+    ) -> Result<HashMap<TransactionEventsKey, Self::Value>, Self::Error> {
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut results = HashMap::new();
+        for key in keys {
+            let request = proto::GetTransactionRequest::new(&key.0.into())
+                .with_read_mask(FieldMask::from_paths(["events.bcs", "timestamp"]));
+
+            match self.0.clone().get_transaction(request).await {
+                Ok(response) => {
+                    let executed = response
+                        .into_inner()
+                        .transaction
+                        .context("No transaction returned")?;
+
+                    let events = executed
+                        .events
+                        .as_ref()
+                        .and_then(|e| e.bcs.as_ref())
+                        .map(|bcs| -> anyhow::Result<_> {
+                            let tx_events: TransactionEvents = bcs
+                                .deserialize()
+                                .context("Failed to deserialize transaction events")?;
+                            Ok(tx_events.data)
+                        })
+                        .transpose()?
+                        .unwrap_or_default();
+
+                    let timestamp_ms = executed
+                        .timestamp
+                        .map(proto_to_timestamp_ms)
+                        .transpose()
+                        .map_err(|e| anyhow!("Failed to parse timestamp: {}", e))?
+                        .unwrap_or(0);
+
+                    results.insert(
+                        *key,
+                        TransactionEventsData {
+                            events,
+                            timestamp_ms,
+                        },
+                    );
+                }
+                Err(status) if status.code() == tonic::Code::NotFound => continue,
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Ok(results)
     }
 }

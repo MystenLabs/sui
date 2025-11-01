@@ -65,7 +65,8 @@ use sui_indexer_alt_graphql::{
 };
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
-    fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
+    fullnode_client::FullnodeArgs, ledger_grpc_reader::LedgerGrpcArgs,
+    system_package_task::SystemPackageTaskArgs,
 };
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::read_key;
@@ -1179,6 +1180,7 @@ async fn start(
             fullnode_args,
             DbArgs::default(),
             BigtableArgs::default(),
+            LedgerGrpcArgs::default(),
             consistent_reader_args,
             graphql_args,
             SystemPackageTaskArgs::default(),
