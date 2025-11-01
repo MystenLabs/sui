@@ -36,6 +36,8 @@ sui-verifier = { path = "../sui-verifier", package = "sui-verifier-latest" }
 move-vm-types = { path = "../../../external-crates/move/crates/move-vm-types" }
 move-regex-borrow-graph = { path = "../../../external-crates/move/crates/move-regex-borrow-graph" }
 
+similar.workspace = true
+
 sui-macros.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
