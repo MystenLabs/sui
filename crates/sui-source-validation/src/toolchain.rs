@@ -120,8 +120,8 @@ impl ToolchainVersion {
         let lock_path = root_path.join(SourcePackageLayout::Lock.path());
 
         if published_path.exists() {
-            let contents = std::fs::read_to_string(&published_path)
-                .context("Reading Published.toml file")?;
+            let contents =
+                std::fs::read_to_string(&published_path).context("Reading Published.toml file")?;
 
             #[derive(serde::Deserialize)]
             struct BuildConfig {
@@ -147,12 +147,14 @@ impl ToolchainVersion {
                 published: std::collections::HashMap<String, Publication>,
             }
 
-            let parsed: PublishedFile = toml::de::from_str(&contents)
-                .context("Deserializing Published.toml")?;
+            let parsed: PublishedFile =
+                toml::de::from_str(&contents).context("Deserializing Published.toml")?;
 
             if let Some((_, publication)) = parsed.published.into_iter().next() {
-                if let (Some(compiler_version), Some(build_config)) =
-                    (publication.metadata.toolchain_version, publication.metadata.build_config) {
+                if let (Some(compiler_version), Some(build_config)) = (
+                    publication.metadata.toolchain_version,
+                    publication.metadata.build_config,
+                ) {
                     println!("Found toolchain version in Published.toml file");
                     return Ok(Some(ToolchainVersion {
                         compiler_version,
@@ -162,16 +164,14 @@ impl ToolchainVersion {
                 }
             }
 
-
-                    println!("Did not find toolchain version in Published.toml file");
+            println!("Did not find toolchain version in Published.toml file");
 
             return Ok(None);
         }
 
         if lock_path.exists() {
             println!("Found Move.lock file, reading toolchain version from it");
-            let contents = std::fs::read_to_string(&lock_path)
-                .context("Reading Move.lock file")?;
+            let contents = std::fs::read_to_string(&lock_path).context("Reading Move.lock file")?;
 
             #[derive(serde::Deserialize)]
             struct TV {
@@ -182,7 +182,10 @@ impl ToolchainVersion {
             let Schema { move_: value } = toml::de::from_str::<Schema<TV>>(&contents)
                 .context("Deserializing toolchain version from Move.lock")?;
 
-            println!("Toolchain version read from Move.lock file {:?}", value.toolchain_version);
+            println!(
+                "Toolchain version read from Move.lock file {:?}",
+                value.toolchain_version
+            );
             return Ok(value.toolchain_version);
         }
 
