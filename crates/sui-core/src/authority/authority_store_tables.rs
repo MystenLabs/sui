@@ -141,6 +141,11 @@ pub struct AuthorityPerpetualTables {
     /// previous epochs other than the current epoch may be pruned safely.
     pub(crate) object_per_epoch_marker_table: DBMap<(EpochId, ObjectKey), MarkerValue>,
     pub(crate) object_per_epoch_marker_table_v2: DBMap<(EpochId, FullObjectKey), MarkerValue>,
+
+    /// Tracks executed transaction digests across epochs.
+    /// Used to support address balance gas payments feature.
+    /// This table uses epoch-prefixed keys to support efficient pruning via range delete.
+    pub(crate) executed_transaction_digests: DBMap<(EpochId, TransactionDigest), ()>,
 }
 
 #[derive(DBMapUtils)]
@@ -243,6 +248,8 @@ impl AuthorityPerpetualTables {
         digest_prefix[7] = 32;
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
         let epoch_prefix_key = KeyType::from_prefix_bits(9 * 8 + 4);
+        // (EpochId + TransactionDigest prefix) * 8 + 12
+        let epoch_tx_digest_prefix_key = KeyType::from_prefix_bits((8 + 8) * 8 + 12);
         let object_indexing = KeyIndexing::key_reduction(32 + 8, 16..(32 + 8));
         // todo can figure way to scramble off 8 bytes in the middle
         let obj_ref_size = 32 + 8 + 32 + 8;
@@ -400,6 +407,21 @@ impl AuthorityPerpetualTables {
                         bloom_config.clone(),
                         pruner_watermark.clone(),
                         |(epoch_id, _): (EpochId, FullObjectKey)| epoch_id,
+                        true,
+                    ),
+                ),
+            ),
+            (
+                "executed_transaction_digests".to_string(),
+                ThConfig::new_with_config_indexing(
+                    // EpochId + (TransactionDigest)
+                    KeyIndexing::fixed(8 + (32 + 8)),
+                    mutexes,
+                    epoch_tx_digest_prefix_key,
+                    apply_relocation_filter(
+                        bloom_config.clone(),
+                        pruner_watermark.clone(),
+                        |(epoch_id, _): (EpochId, TransactionDigest)| epoch_id,
                         true,
                     ),
                 ),
@@ -585,6 +607,18 @@ impl AuthorityPerpetualTables {
             return Ok(None);
         };
         Ok(Some(transaction))
+    }
+
+    /// Insert an executed transaction digest into the executed_transaction_digests table.
+    /// Used by formal snapshot restore to backfill transaction digests from the previous epoch.
+    pub fn insert_executed_transaction_digest(
+        &self,
+        epoch: EpochId,
+        digest: &TransactionDigest,
+    ) -> SuiResult {
+        self.executed_transaction_digests
+            .insert(&(epoch, *digest), &())?;
+        Ok(())
     }
 
     pub fn get_effects(&self, digest: &TransactionDigest) -> SuiResult<Option<TransactionEffects>> {
