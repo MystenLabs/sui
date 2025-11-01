@@ -163,12 +163,7 @@ async fn successful_verification_upgrades() -> anyhow::Result<()> {
     let (b_pkg, e_pkg) = {
         let b_src =
             copy_upgraded_package(&b_fixtures, "b-v2", b_v2.0.into(), b_v1.0.into()).await?;
-        write_published_toml(
-            &b_src.clone(),
-            b_v2.0.into(),
-            b_v1.0.into(),
-        )
-        .await?;
+        write_published_toml(&b_src.clone(), b_v2.0.into(), b_v1.0.into()).await?;
         let e_src = copy_published_package(&b_fixtures, "e", SuiAddress::ZERO).await?;
         (compile_package(b_src), compile_package(e_src))
     };
@@ -826,11 +821,8 @@ fn compile_package_with_unpublished_deps(package: impl AsRef<Path>) -> CompiledP
 fn _compile(package: impl AsRef<Path>, with_unpublished_deps: bool) -> CompiledPackage {
     let mut config = BuildConfig::new_for_testing();
     config.config.set_unpublished_deps_to_zero = with_unpublished_deps;
-    config
-        .build(package.as_ref())
-        .unwrap()
+    config.build(package.as_ref()).unwrap()
 }
-
 
 fn sanitize_id(mut message: String, m: &HashMap<SuiAddress, &str>) -> String {
     for (addr, label) in m {
