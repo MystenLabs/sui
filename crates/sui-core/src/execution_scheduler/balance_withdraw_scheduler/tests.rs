@@ -318,7 +318,7 @@ async fn test_withdraw_already_settled_account_object() {
     let receivers = scheduler.schedule_withdraws(v1, vec![withdraw.clone()]);
     wait_for_results(
         receivers,
-        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SkipSchedule)]),
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
     )
     .await
     .unwrap();
@@ -383,6 +383,40 @@ async fn test_settle_just_updated_account_object() {
     wait_for_results(
         receivers2,
         BTreeMap::from([(withdraw2.tx_digest, ScheduleStatus::InsufficientBalance)]),
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn test_withdraw_settle_and_deleted_account() {
+    let v0 = SequenceNumber::from_u64(0);
+    let v1 = v0.next();
+    let account = ObjectID::random();
+    let account_id = AccumulatorObjId::new_unchecked(account);
+    // Mimic the scenario where while we haven't processed the settlement for version `v1`,
+    // the underlying store has already observed a newer version of the account object through
+    // the execution of settlement transactions.
+    let mock_read = Arc::new(MockBalanceRead::new(
+        v0,
+        BTreeMap::from([(account, 100u128)]),
+    ));
+    let scheduler = TestScheduler::new_with_mock_read(mock_read.clone());
+
+    // Only update the account balance, without calling the scheduler to settle the balances.
+    // This means that the scheduler still thinks we are at v0.
+    // The settlement of -100 should lead to 0 balance, causing the account to be deleted.
+    mock_read.settle_balance_changes(BTreeMap::from([(account_id, -100)]), v1);
+
+    let withdraw = TxBalanceWithdraw {
+        tx_digest: TransactionDigest::random(),
+        reservations: BTreeMap::from([(account_id, 100)]),
+    };
+
+    let receivers = scheduler.schedule_withdraws(v0, vec![withdraw.clone()]);
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
     )
     .await
     .unwrap();
