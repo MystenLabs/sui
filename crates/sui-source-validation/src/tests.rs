@@ -92,7 +92,7 @@ async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
         copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?
     };
 
-    let a_pkg = compile_package(a_src.clone());
+    let a_pkg = compile_package_with_unpublished_deps(a_src.clone());
     let a_ref = publish_package_and_deps(context, a_src).await;
 
     let client = context.get_client().await?;
@@ -818,6 +818,16 @@ fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {
         .build(package.as_ref())
         .unwrap()
 }
+
+/// Compile the package at absolute path `package`.
+fn compile_package_with_unpublished_deps(package: impl AsRef<Path>) -> CompiledPackage {
+    let mut config = BuildConfig::new_for_testing();
+    config.config.set_unpublished_deps_to_zero = true;
+    config
+        .build(package.as_ref())
+        .unwrap()
+}
+
 
 fn sanitize_id(mut message: String, m: &HashMap<SuiAddress, &str>) -> String {
     for (addr, label) in m {
