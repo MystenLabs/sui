@@ -6,214 +6,131 @@ use std::str::FromStr;
 
 use anyhow::{Result, anyhow};
 
-use move_cli::base;
 use shared_crypto::intent::Intent;
-use sui_json_rpc_types::{
-    ObjectChange, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponseQuery, SuiRawData,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-};
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_move_build::BuildConfig;
-
-use sui_sdk::SuiClient;
+use sui_rpc::client::Client as GrpcClient;
+use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::COIN_MODULE_NAME;
-use sui_types::gas_coin::GasCoin;
-use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::{
     Command, ObjectArg, Transaction, TransactionData, TransactionDataAPI,
 };
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag};
 
-use tracing::debug;
-
 const DEFAULT_GAS_BUDGET: u64 = 900_000_000;
 pub const TEST_COIN_DECIMALS: u64 = 6;
-
-pub struct GasRet {
-    pub object: ObjectRef,
-    pub budget: u64,
-    pub price: u64,
-}
-
-pub async fn select_gas(
-    client: &SuiClient,
-    signer_addr: SuiAddress,
-    input_gas: Option<ObjectID>,
-    budget: Option<u64>,
-    exclude_objects: Vec<ObjectID>,
-    gas_price: Option<u64>,
-) -> Result<GasRet> {
-    let price = match gas_price {
-        Some(p) => p,
-        None => {
-            debug!("No gas price given, fetching from fullnode");
-            client.read_api().get_reference_gas_price().await?
-        }
-    };
-    let budget = budget.unwrap_or_else(|| {
-        debug!("No gas budget given, defaulting to {DEFAULT_GAS_BUDGET}");
-        debug_assert!(DEFAULT_GAS_BUDGET > price);
-        DEFAULT_GAS_BUDGET
-    });
-    if budget < price {
-        return Err(anyhow!(
-            "Gas budget {budget} is less than the reference gas price {price}.
-              The gas budget must be at least the current reference gas price of {price}."
-        ));
-    }
-
-    if let Some(gas) = input_gas {
-        let read_api = client.read_api();
-        let object = read_api
-            .get_object_with_options(gas, SuiObjectDataOptions::new())
-            .await?
-            .object_ref_if_exists()
-            .ok_or(anyhow!("No object-ref"))?;
-        return Ok(GasRet {
-            object,
-            budget,
-            price,
-        });
-    }
-
-    let read_api = client.read_api();
-    let gas_objs = read_api
-        .get_owned_objects(
-            signer_addr,
-            Some(SuiObjectResponseQuery {
-                filter: Some(SuiObjectDataFilter::StructType(GasCoin::type_())),
-                options: Some(SuiObjectDataOptions::new().with_bcs()),
-            }),
-            None,
-            None,
-        )
-        .await?
-        .data;
-
-    for obj in gas_objs {
-        let SuiRawData::MoveObject(raw_obj) = &obj
-            .data
-            .as_ref()
-            .ok_or_else(|| anyhow!("data field is unexpectedly empty"))?
-            .bcs
-            .as_ref()
-            .ok_or_else(|| anyhow!("bcs field is unexpectedly empty"))?
-        else {
-            continue;
-        };
-
-        let gas: GasCoin = bcs::from_bytes(&raw_obj.bcs_bytes)?;
-
-        let Some(obj_ref) = obj.object_ref_if_exists() else {
-            continue;
-        };
-        if !exclude_objects.contains(&obj_ref.0) && gas.value() >= budget {
-            return Ok(GasRet {
-                object: obj_ref,
-                budget,
-                price,
-            });
-        }
-    }
-    Err(anyhow!(
-        "Cannot find gas coin for signer address [{signer_addr}] with amount sufficient for the required gas amount [{budget}]."
-    ))
-}
 
 #[derive(Debug, Clone)]
 pub struct InitRet {
     pub owner: SuiAddress,
     pub treasury_cap: ObjectRef,
     pub coin_tag: TypeTag,
+    pub changed_objects: Vec<ObjectID>,
 }
 pub async fn init_package(
-    client: &SuiClient,
+    test_cluster: &test_cluster::TestCluster,
+    client: &mut GrpcClient,
     keystore: &Keystore,
     sender: SuiAddress,
     path: &Path,
 ) -> Result<InitRet> {
-    let path_buf = base::reroot_path(Some(path))?;
+    let path_buf = path
+        .canonicalize()
+        .map_err(|e| anyhow!("Failed to canonicalize path {}: {}", path.display(), e))?;
 
     let move_build_config = BuildConfig::new_for_testing();
-    let compiled_modules = move_build_config.build(path_buf.as_path())?;
+    let compiled_modules = move_build_config.build(&path_buf)?;
     let modules_bytes = compiled_modules.get_package_bytes(false);
 
-    let tx_kind = client
-        .transaction_builder()
-        .publish_tx_kind(
-            sender,
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.publish_immutable(
             modules_bytes,
             vec![
                 ObjectID::from_hex_literal("0x1").unwrap(),
                 ObjectID::from_hex_literal("0x2").unwrap(),
             ],
-        )
-        .await?;
+        );
+        builder.finish()
+    };
 
-    let gas_data = select_gas(client, sender, None, None, vec![], None).await?;
-    let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
-        tx_kind,
-        sender,
-        vec![gas_data.object],
-        gas_data.budget,
-        gas_data.price,
-        sender,
-    );
+    let price = client.get_reference_gas_price().await?;
+    let budget = DEFAULT_GAS_BUDGET;
+    let (_, gas_object_data) = test_cluster
+        .wallet
+        .gas_for_owner_budget(sender, budget, Default::default())
+        .await?;
+    let gas_object = gas_object_data.object_ref();
+    let tx_data = TransactionData::new_programmable(sender, vec![gas_object], pt, budget, price);
 
     let sig = keystore
         .sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())
         .await?;
 
-    let res = client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            Transaction::from_data(tx_data, vec![sig]),
-            SuiTransactionBlockResponseOptions::new()
-                .with_effects()
-                .with_object_changes()
-                .with_input(),
-            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-        )
-        .await?;
+    let signed_tx = Transaction::from_data(tx_data, vec![sig]);
+    let response = crate::test_utils::execute_transaction(client, &signed_tx).await?;
 
-    let treasury_cap = res.object_changes.unwrap().into_iter().find_map(|change| {
-        if let ObjectChange::Created {
-            object_type,
-            object_id,
-            version,
-            digest,
-            owner,
-            ..
-        } = change
-            && object_type.to_string().contains("2::coin::TreasuryCap")
-        {
-            let Owner::AddressOwner(owner) = owner else {
-                return None;
-            };
-            let coin_tag = object_type.type_params.into_iter().next().unwrap();
-            return Some(InitRet {
-                owner,
-                treasury_cap: (object_id, version, digest),
-                coin_tag,
-            });
-        }
-        None
-    });
+    let effects = response.effects();
+    assert!(
+        effects.status().success(),
+        "Transaction failed: {:?}",
+        effects.status().error()
+    );
 
-    Ok(treasury_cap.unwrap())
+    let mut changed_object_ids = Vec::new();
+    for obj in effects.changed_objects() {
+        changed_object_ids.push(ObjectID::from_str(obj.object_id())?);
+    }
+
+    let treasury_cap = effects
+        .changed_objects()
+        .iter()
+        .find_map(|obj| {
+            let type_str = obj.object_type();
+            if type_str.contains("TreasuryCap") {
+                let object_id = ObjectID::from_str(obj.object_id()).ok()?;
+                let version = obj.output_version();
+                let digest = obj.output_digest().parse().ok()?;
+
+                let start = type_str.find("TreasuryCap<")?;
+                let start_idx = start + "TreasuryCap<".len();
+                let end = type_str[start_idx..].find('>')?;
+                let coin_type_str = &type_str[start_idx..start_idx + end];
+                let coin_tag: TypeTag = coin_type_str.parse().ok()?;
+
+                Some(InitRet {
+                    owner: sender,
+                    treasury_cap: (object_id, version.into(), digest),
+                    coin_tag,
+                    changed_objects: changed_object_ids.clone(),
+                })
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| anyhow!("No TreasuryCap found in transaction effects"))?;
+
+    Ok(treasury_cap)
 }
 
 pub async fn mint(
-    client: &SuiClient,
+    test_cluster: &test_cluster::TestCluster,
+    client: &mut GrpcClient,
     keystore: &Keystore,
     init_ret: InitRet,
     balances_to: Vec<(u64, SuiAddress)>,
-) -> Result<SuiTransactionBlockResponse> {
+) -> Result<ExecutedTransaction> {
     let treasury_cap_owner = init_ret.owner;
-    let gas_data = select_gas(client, treasury_cap_owner, None, None, vec![], None).await?;
+    let price = client.get_reference_gas_price().await?;
+    let budget = DEFAULT_GAS_BUDGET;
+    let forbidden_objects = init_ret.changed_objects.iter().cloned().collect();
+    let (_gas_balance, gas_object_data) = test_cluster
+        .wallet
+        .gas_for_owner_budget(treasury_cap_owner, budget, forbidden_objects)
+        .await?;
+    let gas_object = gas_object_data.object_ref();
 
     let mut ptb = ProgrammableTransactionBuilder::new();
 
@@ -231,30 +148,26 @@ pub async fn mint(
     }
     let builder = ptb.finish();
 
-    // Sign transaction
     let tx_data = TransactionData::new_programmable(
         treasury_cap_owner,
-        vec![gas_data.object],
+        vec![gas_object],
         builder,
-        gas_data.budget,
-        gas_data.price,
+        budget,
+        price,
     );
 
     let sig = keystore
         .sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())
         .await?;
 
-    let res = client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            Transaction::from_data(tx_data, vec![sig]),
-            SuiTransactionBlockResponseOptions::new()
-                .with_effects()
-                .with_object_changes()
-                .with_input(),
-            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-        )
-        .await?;
+    let signed_tx = Transaction::from_data(tx_data, vec![sig]);
+    let executed_tx = crate::test_utils::execute_transaction(client, &signed_tx).await?;
 
-    Ok(res)
+    assert!(
+        executed_tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        executed_tx.effects().status().error()
+    );
+
+    Ok(executed_tx)
 }

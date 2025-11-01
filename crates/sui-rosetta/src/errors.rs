@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
+use sui_rpc::proto::sui::rpc::v2::ExecutionError;
 use sui_types::error::{SuiError, SuiErrorKind};
 
 use crate::types::{BlockHash, OperationType, PublicKey, SuiEnv};
@@ -57,10 +58,10 @@ pub enum Error {
     PublicKeyDeserializationError(PublicKey),
 
     #[error("Error executing transaction: {0}")]
-    TransactionExecutionError(String),
+    TransactionExecutionError(Box<ExecutionError>),
 
     #[error("{0}")]
-    TransactionDryRunError(String),
+    TransactionDryRunError(Box<ExecutionError>),
 
     #[error(transparent)]
     InternalError(#[from] anyhow::Error),
@@ -71,7 +72,7 @@ pub enum Error {
     #[error(transparent)]
     SuiError(#[from] SuiError),
     #[error(transparent)]
-    SuiRpcError(#[from] sui_sdk::error::Error),
+    SuiRpcError(#[from] tonic::Status),
     #[error(transparent)]
     EncodingError(#[from] eyre::Report),
     #[error(transparent)]

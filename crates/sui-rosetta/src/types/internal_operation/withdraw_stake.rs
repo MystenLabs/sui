@@ -2,21 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use prost_types::FieldMask;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+use sui_rpc::client::Client;
 
-use sui_json_rpc_types::{StakeStatus, SuiObjectDataOptions};
-use sui_sdk::SuiClient;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::{GetObjectRequest, ListOwnedObjectsRequest};
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
-use sui_types::error::{SuiError, SuiErrorKind, UserInputError};
 use sui_types::governance::WITHDRAW_STAKE_FUN_NAME;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::rpc_proto_conversions::ObjectReferenceExt;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{CallArg, Command, ObjectArg, ProgrammableTransaction};
 
 use crate::errors::Error;
 
-use super::{MAX_GAS_COINS, TransactionObjectData, TryConstructTransaction, budget_from_dry_run};
+use super::{TransactionObjectData, TryConstructTransaction, simulate_transaction};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WithdrawStake {
@@ -29,7 +32,7 @@ pub struct WithdrawStake {
 impl TryConstructTransaction for WithdrawStake {
     async fn try_fetch_needed_objects(
         self,
-        client: &SuiClient,
+        client: &mut Client,
         gas_price: Option<u64>,
         budget: Option<u64>,
     ) -> Result<TransactionObjectData, Error> {
@@ -37,22 +40,24 @@ impl TryConstructTransaction for WithdrawStake {
 
         let withdraw_all = stake_ids.is_empty();
         let stake_ids = if withdraw_all {
-            // unstake all
+            use futures::TryStreamExt;
+
+            let list_request = ListOwnedObjectsRequest::default()
+                .with_owner(sender.to_string())
+                .with_object_type("0x3::staking_pool::StakedSui".to_string())
+                .with_page_size(1000u32)
+                .with_read_mask(FieldMask::from_paths(["object_id"]));
+
             client
-                .governance_api()
-                .get_stakes(sender)
-                .await?
-                .into_iter()
-                .flat_map(|s| {
-                    s.stakes.into_iter().filter_map(|s| {
-                        if let StakeStatus::Active { .. } = s.status {
-                            Some(s.staked_sui_id)
-                        } else {
-                            None
-                        }
-                    })
+                .list_owned_objects(list_request)
+                .map_err(Error::from)
+                .and_then(|object| async move {
+                    let object_id = ObjectID::from_hex_literal(object.object_id())
+                        .map_err(|e| Error::InvalidInput(format!("Invalid object_id: {}", e)))?;
+                    Ok(object_id)
                 })
-                .collect()
+                .try_collect::<Vec<_>>()
+                .await?
         } else {
             stake_ids
         };
@@ -61,47 +66,60 @@ impl TryConstructTransaction for WithdrawStake {
             return Err(Error::InvalidInput("No active stake to withdraw".into()));
         }
 
-        let responses = client
-            .read_api()
-            .multi_get_object_with_options(stake_ids, SuiObjectDataOptions::default())
-            .await?;
-        let stake_refs = responses
-            .into_iter()
-            .map(|stake| stake.into_object().map(|o| o.object_ref()))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(SuiError::from)?;
+        let mut stake_refs = Vec::new();
+        for stake_id in &stake_ids {
+            let stake_address: sui_sdk_types::Address = (*stake_id).into();
+            let request = GetObjectRequest::new(&stake_address)
+                .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"]));
 
-        // dry run
-        let budget = match budget {
-            Some(budget) => budget,
-            None => {
-                let pt = withdraw_stake_pt(stake_refs.clone(), withdraw_all)?;
-                budget_from_dry_run(client, pt.clone(), sender, gas_price).await?
-            }
-        };
+            let response = client
+                .ledger_client()
+                .get_object(request)
+                .await?
+                .into_inner();
 
-        let gas_coins = client
-            .coin_read_api()
-            .select_coins(sender, None, budget as u128, vec![])
-            .await?;
-        if gas_coins.len() > MAX_GAS_COINS {
-            return Err(SuiErrorKind::UserInputError {
-                error: UserInputError::SizeLimitExceeded {
-                    limit: "maximum number of gas payment objects".to_string(),
-                    value: MAX_GAS_COINS.to_string(),
-                },
+            if let Some(object) = response.object {
+                let object_id = object.object_id.ok_or_else(|| {
+                    Error::InvalidInput("Object ID missing in response".to_string())
+                })?;
+                let version = object.version.ok_or_else(|| {
+                    Error::InvalidInput("Version missing in response".to_string())
+                })?;
+                let digest = object
+                    .digest
+                    .ok_or_else(|| Error::InvalidInput("Digest missing in response".to_string()))?;
+
+                stake_refs.push((
+                    ObjectID::from_str(&object_id).map_err(|e| {
+                        Error::InvalidInput(format!("Failed to parse object ID: {}", e))
+                    })?,
+                    version.into(),
+                    digest.parse().map_err(|e| {
+                        Error::InvalidInput(format!("Failed to parse digest: {}", e))
+                    })?,
+                ));
+            } else {
+                return Err(Error::InvalidInput(format!(
+                    "Stake object {} not found",
+                    stake_id
+                )));
             }
-            .into());
         }
 
-        let gas_coins_iter = gas_coins.into_iter();
-        let total_sui_balance = gas_coins_iter.clone().map(|c| c.balance).sum::<u64>() as i128;
-        let gas_coins = gas_coins_iter.map(|c| c.object_ref()).collect();
+        let pt = withdraw_stake_pt(stake_refs.clone(), withdraw_all)?;
+        let (budget, gas_coin_objs) =
+            simulate_transaction(client, pt, sender, vec![], gas_price, budget).await?;
+
+        let total_sui_balance = gas_coin_objs.iter().map(|c| c.balance()).sum::<u64>() as i128;
+        let gas_coins = gas_coin_objs
+            .iter()
+            .map(|obj| obj.object_reference().try_to_object_ref())
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(TransactionObjectData {
             gas_coins,
-            extra_gas_coins: vec![],
             objects: stake_refs,
+            party_objects: vec![],
             total_sui_balance,
             budget,
         })
