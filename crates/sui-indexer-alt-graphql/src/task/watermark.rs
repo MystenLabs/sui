@@ -24,7 +24,7 @@ use tokio::{join, sync::RwLock, task::JoinHandle, time};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use crate::{config::WatermarkConfig, metrics::RpcMetrics};
+use crate::{config::WatermarkConfig, error::RpcError, metrics::RpcMetrics};
 
 /// Background task responsible for tracking per-pipeline upper- and lower-bounds.
 ///
@@ -221,10 +221,12 @@ impl Watermarks {
     }
 
     /// The reader_lo for a pipeline. Returned as an inclusive checkpoint number.
-    pub(crate) fn pipeline_lo_watermark(&self, pipeline: &str) -> anyhow::Result<&Watermark> {
+    pub(crate) fn pipeline_lo_watermark(&self, pipeline: &str) -> Result<&Watermark, RpcError> {
         self.pipeline_lo
             .get(pipeline)
-            .ok_or_else(|| anyhow!("'{pipeline}' not found in pipeline_lo watermarks"))
+            .ok_or_else(|| RpcError::FeatureUnavailable {
+                what: "pipeline data",
+            })
     }
 
     /// Timestamp corresponding to high watermark. Can be `None` if the timestamp is out of range
