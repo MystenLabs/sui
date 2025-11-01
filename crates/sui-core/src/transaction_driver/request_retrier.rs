@@ -29,6 +29,9 @@ const SELECT_LATENCY_DELTA: f64 = 0.02;
 /// When an `allowed_validators` is provided, only the validators in the list will be used to submit the transaction to.
 /// When the allowed validator list is empty, any validator can be used an then the validators are selected based on their scores.
 ///
+/// When a `blocked_validators` is provided, the validators in the list cannot be used to submit the transaction to.
+/// When the blocked validator list is empty, no restrictions are applied.
+///
 /// This component helps to manager this retry pattern.
 pub(crate) struct RequestRetrier<A: Clone> {
     ranked_clients: VecDeque<(AuthorityName, Arc<SafeClient<A>>)>,
@@ -42,6 +45,7 @@ impl<A: Clone> RequestRetrier<A> {
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_type: TxType,
         allowed_validators: Vec<String>,
+        blocked_validators: Vec<String>,
     ) -> Self {
         let ranked_validators = client_monitor.select_shuffled_preferred_validators(
             &auth_agg.committee,
@@ -50,11 +54,14 @@ impl<A: Clone> RequestRetrier<A> {
         );
         let ranked_clients = ranked_validators
             .into_iter()
-            .filter(|name| {
-                let display_name = auth_agg.get_display_name(name);
-                allowed_validators.is_empty() || allowed_validators.contains(&display_name)
+            .map(|name| (name, auth_agg.get_display_name(&name)))
+            .filter(|(_name, display_name)| {
+                allowed_validators.is_empty() || allowed_validators.contains(display_name)
             })
-            .filter_map(|name| {
+            .filter(|(_name, display_name)| {
+                blocked_validators.is_empty() || !blocked_validators.contains(display_name)
+            })
+            .filter_map(|(name, _display_name)| {
                 // There is not guarantee that the `name` are in the `auth_agg.authority_clients` if those are coming from the list
                 // of `allowed_validators`, as the provided `auth_agg` might have been updated with a new committee that doesn't contain the validator in question.
                 auth_agg
@@ -167,8 +174,13 @@ mod tests {
     async fn test_next_target() {
         let auth_agg = Arc::new(get_authority_aggregator(4));
         let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-        let mut retrier =
-            RequestRetrier::new(&auth_agg, &client_monitor, TxType::SingleWriter, vec![]);
+        let mut retrier = RequestRetrier::new(
+            &auth_agg,
+            &client_monitor,
+            TxType::SingleWriter,
+            vec![],
+            vec![],
+        );
 
         for name in auth_agg.committee.names() {
             retrier.next_target().unwrap();
@@ -215,6 +227,7 @@ mod tests {
                 &client_monitor,
                 TxType::SingleWriter,
                 allowed_validators,
+                vec![],
             );
 
             // Should only have 1 remaining client (the known validator)
@@ -234,11 +247,46 @@ mod tests {
                 &client_monitor,
                 TxType::SingleWriter,
                 allowed_validators,
+                vec![],
             );
 
             // Should have no remaining clients since none of the allowed validators exist
             assert_eq!(retrier.ranked_clients.len(), 0);
         }
+    }
+
+    #[tokio::test]
+    async fn test_blocked_validators() {
+        let auth_agg = Arc::new(get_authority_aggregator(4));
+        let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+
+        // Create a list of validators that should be blocked and never picked up by the retrier.
+        let blocked_validators = auth_agg
+            .committee
+            .names()
+            .take(3)
+            .copied()
+            .collect::<Vec<_>>();
+        let blocked_display_names = blocked_validators
+            .iter()
+            .map(|name| auth_agg.get_display_name(name))
+            .collect::<Vec<_>>();
+
+        // Only the last validator will be picked up.
+        let allowed_validator = auth_agg.committee.names().nth(3).unwrap();
+
+        let mut retrier = RequestRetrier::new(
+            &auth_agg,
+            &client_monitor,
+            TxType::SingleWriter,
+            vec![],
+            blocked_display_names,
+        );
+
+        // The last validator will be picked up.
+        assert_eq!(retrier.next_target().unwrap().0, *allowed_validator);
+        // No more validators will be picked up.
+        assert!(retrier.next_target().is_err());
     }
 
     #[tokio::test]
@@ -249,8 +297,13 @@ mod tests {
         // Add retriable errors.
         {
             let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-            let mut retrier =
-                RequestRetrier::new(&auth_agg, &client_monitor, TxType::SingleWriter, vec![]);
+            let mut retrier = RequestRetrier::new(
+                &auth_agg,
+                &client_monitor,
+                TxType::SingleWriter,
+                vec![],
+                vec![],
+            );
 
             // 25% stake.
             retrier
@@ -286,8 +339,13 @@ mod tests {
         // Add mix of retriable and non-retriable errors.
         {
             let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-            let mut retrier =
-                RequestRetrier::new(&auth_agg, &client_monitor, TxType::SingleWriter, vec![]);
+            let mut retrier = RequestRetrier::new(
+                &auth_agg,
+                &client_monitor,
+                TxType::SingleWriter,
+                vec![],
+                vec![],
+            );
 
             // 25% stake retriable error.
             retrier

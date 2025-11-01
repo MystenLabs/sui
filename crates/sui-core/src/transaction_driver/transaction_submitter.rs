@@ -71,6 +71,7 @@ impl TransactionSubmitter {
             client_monitor,
             tx_type,
             options.allowed_validators.clone(),
+            options.blocked_validators.clone(),
         );
 
         let ping_label = if request.ping_type.is_some() {
