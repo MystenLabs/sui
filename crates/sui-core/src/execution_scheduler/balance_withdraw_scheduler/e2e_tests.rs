@@ -158,7 +158,7 @@ impl TestEnv {
             let cert = self.receive_certificate().await.unwrap();
             results.insert(
                 *cert.certificate.digest(),
-                cert.execution_env.withdraw_status,
+                cert.execution_env.balance_withdraw_status,
             );
         }
         assert_eq!(results, expected_results);
@@ -212,14 +212,8 @@ async fn test_withdraw_schedule_e2e() {
     test_env.enqueue_transactions(transactions.clone());
     test_env
         .expect_withdraw_results(BTreeMap::from([
-            (
-                *transactions[0].digest(),
-                BalanceWithdrawStatus::SufficientBalance,
-            ),
-            (
-                *transactions[1].digest(),
-                BalanceWithdrawStatus::SufficientBalance,
-            ),
+            (*transactions[0].digest(), BalanceWithdrawStatus::Unknown),
+            (*transactions[1].digest(), BalanceWithdrawStatus::Unknown),
             (
                 *transactions[2].digest(),
                 BalanceWithdrawStatus::InsufficientBalance,
@@ -235,10 +229,7 @@ async fn test_withdraw_schedule_e2e() {
     test_env.settle_balances(BTreeMap::from([(test_env.account_objects[0], -500)]));
     test_env
         .expect_withdraw_results(BTreeMap::from([
-            (
-                *transactions[0].digest(),
-                BalanceWithdrawStatus::SufficientBalance,
-            ),
+            (*transactions[0].digest(), BalanceWithdrawStatus::Unknown),
             (
                 *transactions[1].digest(),
                 BalanceWithdrawStatus::InsufficientBalance,
