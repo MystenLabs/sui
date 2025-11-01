@@ -814,15 +814,18 @@ async fn successful_versioned_dependency_verification() -> anyhow::Result<()> {
 
 /// Compile the package at absolute path `package`.
 fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {
-    BuildConfig::new_for_testing()
-        .build(package.as_ref())
-        .unwrap()
+    _compile(package, false)
 }
 
-/// Compile the package at absolute path `package`.
+/// Compile the package at absolute path `package` and instruct compiler to include unpublished
+/// dependencies.
 fn compile_package_with_unpublished_deps(package: impl AsRef<Path>) -> CompiledPackage {
+    _compile(package, true)
+}
+
+fn _compile(package: impl AsRef<Path>, with_unpublished_deps: bool) -> CompiledPackage {
     let mut config = BuildConfig::new_for_testing();
-    config.config.set_unpublished_deps_to_zero = true;
+    config.config.set_unpublished_deps_to_zero = with_unpublished_deps;
     config
         .build(package.as_ref())
         .unwrap()
