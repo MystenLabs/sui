@@ -5,7 +5,10 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{
+    sync::{mpsc, watch},
+    task::JoinHandle,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -17,13 +20,14 @@ use crate::{
 use super::{CommitterConfig, PIPELINE_BUFFER, Processor, WatermarkPart, processor::processor};
 
 use self::{
-    collector::collector, commit_watermark::commit_watermark, committer::committer, pruner::pruner,
-    reader_watermark::reader_watermark,
+    collector::collector, commit_watermark::commit_watermark, committer::committer,
+    main_reader_lo::main_reader_lo, pruner::pruner, reader_watermark::reader_watermark,
 };
 
 mod collector;
 mod commit_watermark;
 mod committer;
+mod main_reader_lo;
 mod pruner;
 mod reader_watermark;
 
@@ -177,8 +181,7 @@ impl Default for PrunerConfig {
 /// time.
 ///
 /// The pipeline also maintains a row in the `watermarks` table for the pipeline which tracks the
-/// watermark below which all data has been committed (modulo pruning), as long as `skip_watermark`
-/// is not true.
+/// watermark below which all data has been committed (modulo pruning).
 ///
 /// Checkpoint data is fed into the pipeline through the `checkpoint_rx` channel, and internal
 /// channels are created to communicate between its various components. The pipeline can be
@@ -188,8 +191,8 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
     next_checkpoint: u64,
     config: ConcurrentConfig,
-    skip_watermark: bool,
     store: H::Store,
+    task: Option<String>,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -218,6 +221,23 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let pruner_cancel = cancel.child_token();
     let handler = Arc::new(handler);
 
+    // The watch channel is an Option<channel<Option<u64>>>. The outer Option indicates whether the
+    // pipeline is tasked or main. The inner is the safety mechanism - consumers must wait until the
+    // task has started and provided a fresh value.
+    let (main_reader_lo_tx, main_reader_lo_rx) = if task.is_some() {
+        let (tx, rx) = watch::channel(None);
+        (Some(tx), Some(rx))
+    } else {
+        (None, None)
+    };
+
+    let main_reader_lo_task = main_reader_lo::<H>(
+        main_reader_lo_tx,
+        pruner_config.clone(),
+        cancel.clone(),
+        store.clone(),
+    );
+
     let processor = processor(
         handler.clone(),
         checkpoint_rx,
@@ -230,13 +250,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer_config.clone(),
         collector_rx,
         collector_tx,
+        main_reader_lo_rx,
         metrics.clone(),
         cancel.clone(),
     );
 
     let committer = committer::<H>(
         committer_config.clone(),
-        skip_watermark,
         committer_rx,
         committer_tx,
         store.clone(),
@@ -247,12 +267,16 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let commit_watermark = commit_watermark::<H>(
         next_checkpoint,
         committer_config,
-        skip_watermark,
         watermark_rx,
         store.clone(),
+        task.clone(),
         metrics.clone(),
         cancel,
     );
+
+    // Tasked pipelines will skip reader_watermark and pruner. Setting the pruner config to None
+    // will result in the tasks returning early.
+    let pruner_config = if task.is_some() { None } else { pruner_config };
 
     let reader_watermark = reader_watermark::<H>(
         pruner_config.clone(),
@@ -270,7 +294,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     tokio::spawn(async move {
-        let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);
+        let (_, _, _, _, _) = futures::join!(
+            main_reader_lo_task,
+            processor,
+            collector,
+            committer,
+            commit_watermark
+        );
 
         pruner_cancel.cancel();
         let _ = futures::join!(reader_watermark, pruner);
@@ -391,13 +421,12 @@ mod tests {
             let metrics = IndexerMetrics::new(None, &Registry::default());
             let cancel = CancellationToken::new();
 
-            let skip_watermark = false;
             let pipeline_handle = pipeline(
                 DataPipeline,
                 next_checkpoint,
                 config,
-                skip_watermark,
                 store.clone(),
+                None,
                 checkpoint_rx,
                 metrics,
                 cancel.clone(),

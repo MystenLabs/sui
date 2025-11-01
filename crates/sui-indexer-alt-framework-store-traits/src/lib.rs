@@ -10,11 +10,13 @@ use std::time::Duration;
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
 pub trait Connection: Send {
-    /// Given a pipeline, return the committer watermark from the `Store`. This is used by the
-    /// indexer on startup to determine which checkpoint to resume processing from.
+    /// Given a `pipeline_task` representing either a pipeline name or a pipeline with an associated
+    /// task (formatted as `{pipeline}{Store::DELIMITER}{task}`), return the committer watermark
+    /// from the `Store`. The indexer fetches this value for each pipeline added to determine which
+    /// checkpoint to resume processing from.
     async fn committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline_task: &str,
     ) -> anyhow::Result<Option<CommitterWatermark>>;
 
     /// Given a pipeline, return the reader watermark from the database. This is used by the indexer
@@ -36,11 +38,14 @@ pub trait Connection: Send {
         delay: Duration,
     ) -> anyhow::Result<Option<PrunerWatermark>>;
 
-    /// Upsert the high watermark as long as it raises the watermark stored in the database. Returns
-    /// a boolean indicating whether the watermark was actually updated or not.
+    /// Upsert the high watermark for the `pipeline_task` - representing either a pipeline name or a
+    /// pipeline with an associated task (formatted as `{pipeline}{Store::DELIMITER}{task}`) - as
+    /// long as it
+    /// raises the watermark stored in the database. Returns a boolean indicating whether the
+    /// watermark was actually updated or not.
     async fn set_committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        watermark_key: &str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool>;
 
@@ -63,7 +68,7 @@ pub trait Connection: Send {
         reader_lo: u64,
     ) -> anyhow::Result<bool>;
 
-    /// Update the pruner watermark, returns true if the watermark was actually updated
+    /// Update the pruner watermark, returns true if the watermark was actually updated.
     async fn set_pruner_watermark(
         &mut self,
         pipeline: &'static str,
@@ -81,7 +86,19 @@ pub trait Store: Send + Sync + 'static + Clone {
     where
         Self: 'c;
 
+    /// Delimiter used to separate pipeline names from task identifiers when reading or writing the
+    /// committer watermark.
+    const DELIMITER: &'static str = "@";
+
     async fn connect<'c>(&'c self) -> Result<Self::Connection<'c>, anyhow::Error>;
+
+    /// Constructs the watermark key used to read or write the committer watermark.
+    fn watermark_key(pipeline: &str, task: Option<&str>) -> String {
+        match task {
+            Some(task_name) => format!("{}{}{}", pipeline, Self::DELIMITER, task_name),
+            None => pipeline.to_string(),
+        }
+    }
 }
 
 /// Extends the Store trait with transactional capabilities, to be used within the framework for

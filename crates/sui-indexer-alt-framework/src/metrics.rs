@@ -108,6 +108,7 @@ pub struct IndexerMetrics {
 
     pub collector_gather_latency: HistogramVec,
     pub collector_batch_size: HistogramVec,
+    pub collector_skipped_checkpoints: IntCounterVec,
     pub committer_commit_latency: HistogramVec,
     pub committer_tx_rows: HistogramVec,
     pub watermark_gather_latency: HistogramVec,
@@ -447,6 +448,12 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            collector_skipped_checkpoints: register_int_counter_vec_with_registry!(
+                name("collector_skipped_checkpoints"),
+                "Number of checkpoints skipped by the tasked pipeline's collector due to being below the main reader lo watermark",
+                &["pipeline"],
+                registry,
+            ).unwrap(),
             committer_commit_latency: register_histogram_vec_with_registry!(
                 name("committer_commit_latency"),
                 "Time taken to write a batch of rows to the database by this committer",

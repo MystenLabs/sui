@@ -27,37 +27,37 @@ use super::Handler;
 /// updating its row in the `watermarks` table when a continuous run of checkpoints have landed
 /// since the last watermark update.
 ///
-/// It receives watermark "parts" that detail the proportion of each checkpoint's data that has
-/// been written out by the committer and periodically (on a configurable interval) checks if the
+/// It receives watermark "parts" that detail the proportion of each checkpoint's data that has been
+/// written out by the committer and periodically (on a configurable interval) checks if the
 /// watermark for the pipeline can be pushed forward. The watermark can be pushed forward if there
 /// is one or more complete (all data for that checkpoint written out) watermarks spanning
 /// contiguously from the current high watermark into the future.
 ///
-/// If it detects that more than [WARN_PENDING_WATERMARKS] watermarks have built up, it will issue
-/// a warning, as this could be the indication of a memory leak, and the caller probably intended
-/// to run the indexer with watermarking disabled (e.g. if they are running a backfill).
+/// If it detects that more than [WARN_PENDING_WATERMARKS] watermarks have built up, it will issue a
+/// warning, as this could be the indication of a memory leak, and the caller probably intended to
+/// run the indexer with watermarking disabled (e.g. if they are running a backfill).
 ///
 /// The task regularly traces its progress, outputting at a higher log level every
 /// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
 ///
-/// The task will shutdown if the `cancel` token is signalled, or if the `rx` channel closes and
-/// the watermark cannot be progressed. If `skip_watermark` is set, the task will shutdown
-/// immediately.
+/// The `watermark_key` is used to set and read the committer watermark. This will be the same value
+/// as the pipeline name if the indexer does not have a `--task` configured. Any logs will continue
+/// to use the pipeline name.
+///
+/// The task will shutdown if the `cancel` token is signalled, or if the `rx` channel closes and the
+/// watermark cannot be progressed.
 pub(super) fn commit_watermark<H: Handler + 'static>(
     mut next_checkpoint: u64,
     config: CommitterConfig,
-    skip_watermark: bool,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
     store: H::Store,
+    task: Option<String>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        if skip_watermark {
-            info!(pipeline = H::NAME, "Skipping commit watermark task");
-            return;
-        }
+    let watermark_key = H::Store::watermark_key(H::NAME, task.as_deref());
 
+    tokio::spawn(async move {
         let mut poll = interval(config.watermark_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
@@ -87,7 +87,6 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             tokio::select! {
                 _ = cancel.cancelled() => {}
                 _ = poll.tick() => {}
-
                 Some(parts) = rx.recv() => {
                     for part in parts {
                         match precommitted.entry(part.checkpoint()) {
@@ -205,7 +204,10 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
                 // TODO: If initial_watermark is empty, when we update watermark
                 // for the first time, we should also update the low watermark.
-                match conn.set_committer_watermark(H::NAME, watermark).await {
+                match conn
+                    .set_committer_watermark(&watermark_key, watermark)
+                    .await
+                {
                     // If there's an issue updating the watermark, log it but keep going,
                     // it's OK for the watermark to lag from a correctness perspective.
                     Err(e) => {
@@ -333,9 +335,9 @@ mod tests {
         let commit_watermark_handle = commit_watermark::<H>(
             next_checkpoint,
             config,
-            false,
             watermark_rx,
             store_clone,
+            None,
             metrics,
             cancel_clone,
         );
