@@ -29,13 +29,13 @@ impl AccumulatorEvent {
         }
     }
 
-    pub fn from_balance_change(
-        accumulator_obj: AccumulatorObjId,
-        address: SuiAddress,
-        net_change: i64,
-    ) -> Self {
-        let accumulator_address =
-            AccumulatorAddress::new(address, crate::balance::Balance::type_tag(GAS::type_tag()));
+    pub fn from_balance_change(address: SuiAddress, net_change: i64) -> Self {
+        let balance_type = crate::balance::Balance::type_tag(GAS::type_tag());
+        let accumulator_obj =
+            crate::accumulator_root::AccumulatorValue::get_field_id(address, &balance_type)
+                .expect("Failed to compute accumulator field ID for balance change");
+
+        let accumulator_address = AccumulatorAddress::new(address, balance_type);
 
         let (operation, amount) = if net_change > 0 {
             (AccumulatorOperation::Split, net_change as u64)

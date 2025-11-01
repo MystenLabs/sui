@@ -16,9 +16,7 @@ pub mod checked {
         charge_upgrades, dont_charge_budget_on_storage_oog,
     };
     use sui_types::{
-        SUI_ACCUMULATOR_ROOT_OBJECT_ID,
         accumulator_event::AccumulatorEvent,
-        accumulator_root::AccumulatorObjId,
         base_types::{ObjectID, ObjectRef, SuiAddress},
         digests::TransactionDigest,
         error::ExecutionError,
@@ -351,11 +349,8 @@ pub mod checked {
                     let net_change = cost_summary.net_gas_usage();
 
                     if net_change != 0 {
-                        let accumulator_event = AccumulatorEvent::from_balance_change(
-                            AccumulatorObjId::new_unchecked(SUI_ACCUMULATOR_ROOT_OBJECT_ID),
-                            payer_address,
-                            net_change,
-                        );
+                        let accumulator_event =
+                            AccumulatorEvent::from_balance_change(payer_address, net_change);
 
                         temporary_store.add_accumulator_event(accumulator_event);
                     }
