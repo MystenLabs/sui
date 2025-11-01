@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use mysten_common::in_test_configuration;
 use parking_lot::Mutex;
 use sui_types::{
     accumulator_root::AccumulatorObjId, base_types::SequenceNumber, digests::TransactionDigest,
@@ -52,14 +53,6 @@ struct AccountState {
     /// It is the amount of guaranteed balance that we could withdraw from this account at this point.
     /// This is maintained as the most recent settled balance, subtracted by the reserved balance.
     balance_lower_bound: u128,
-    /// The version of the accumulator object when this account object was read
-    /// into the scheduler. We need to know this because when we read an account object
-    /// during scheduling, we always read the latest version, which can have data
-    /// races with executions that are bumping the accumulator version at the same time.
-    /// It is possible that we read a version of the account object that we have not
-    /// yet processed the settle_balances call for that version. When we settle latter,
-    /// we need to ensure that we won't update this account object if we are already at the latest version.
-    init_version: Option<SequenceNumber>,
 }
 
 struct PendingWithdraw {
@@ -104,44 +97,6 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
             return;
         }
 
-        let all_accounts = withdraws.all_accounts();
-        let mut new_accounts = Vec::new();
-        for account_id in all_accounts {
-            if !inner_state.tracked_accounts.contains_key(&account_id) {
-                let (balance, version) = match self
-                    .balance_read
-                    .get_latest_account_balance(&account_id)
-                {
-                    Some((balance, version)) => {
-                        if version > withdraws.accumulator_version {
-                            // This account object is already at the next version, indicating
-                            // that a settlement transaction touching this account object has already been executed.
-                            // It doesn't mean all settlement transactions from the same commit batch have been executed,
-                            // but we are at a minimum in the process of executing them.
-                            // This means that all withdraw transactions in this commit have already been executed.
-                            // Hence we can skip scheduling the withdraws.
-                            debug!(
-                                ?account_id,
-                                "Accumulator account object is already at version {:?}, but the withdraws are at version {:?}",
-                                version,
-                                withdraws.accumulator_version
-                            );
-                            withdraws.notify_skip_schedule();
-                            return;
-                        }
-                        (balance, Some(version))
-                    }
-                    None => (0, None),
-                };
-                new_accounts.push(AccountState::new(account_id, balance, version));
-            }
-        }
-        for account_state in new_accounts {
-            inner_state
-                .tracked_accounts
-                .insert(account_state.account_id, account_state);
-        }
-
         for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
             let accounts = withdraw.reservations.keys().cloned().collect::<Vec<_>>();
             inner_state
@@ -152,7 +107,19 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
             let pending_withdraw =
                 PendingWithdraw::new(withdraws.accumulator_version, withdraw, sender);
             for account_id in accounts {
-                let account_state = inner_state.tracked_accounts.get_mut(&account_id).unwrap();
+                let account_state = inner_state
+                    .tracked_accounts
+                    .entry(account_id)
+                    .or_insert_with(|| {
+                        // TODO: This will be doing a DF read while holding the state lock.
+                        // We may need to look at ways to make the DF reads non-blocking.
+                        // We also need to get rid of the need to read old versions of the account balance.
+                        AccountState::new(
+                            self.balance_read.as_ref(),
+                            account_id,
+                            cur_accumulator_version,
+                        )
+                    });
                 let has_blocking_reservations = !account_state.pending_reservations.is_empty();
                 let result = account_state.try_reserve(
                     cur_accumulator_version,
@@ -214,41 +181,27 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
             let Some(account_state) = inner_state.tracked_accounts.get_mut(&object_id) else {
                 continue;
             };
-            let already_settled = match account_state.init_version {
-                Some(init_version) if init_version >= next_accumulator_version => {
-                    debug!(
-                        ?init_version,
-                        ?next_accumulator_version,
-                        account_id = ?object_id,
-                        "Account state is already at latest version, skip settling",
-                    );
-                    true
-                }
-                _ => false,
-            };
             debug!(
                 account_id = ?object_id,
                 "Settling account",
             );
-            if !already_settled {
-                let reserved = account_state
-                    .reserved_balance
-                    .remove(&cleanup_version)
-                    .unwrap_or_default() as i128;
-                let settled = settlement
-                    .balance_changes
-                    .get(&object_id)
-                    .copied()
-                    .unwrap_or_default();
-                // Withdraw amounts must be bounded by reservations.
-                let net = u128::try_from(reserved.checked_add(settled).unwrap()).unwrap();
-                account_state.balance_lower_bound += net;
-                debug!(
-                    account_id = ?object_id,
-                    "Reserved balance: {:?}, settled balance: {:?}, new min guaranteed balance: {:?}",
-                    reserved, settled, account_state.balance_lower_bound,
-                );
-            }
+            let reserved = account_state
+                .reserved_balance
+                .remove(&cleanup_version)
+                .unwrap_or_default() as i128;
+            let settled = settlement
+                .balance_changes
+                .get(&object_id)
+                .copied()
+                .unwrap_or_default();
+            // Withdraw amounts must be bounded by reservations.
+            let net = u128::try_from(reserved.checked_add(settled).unwrap()).unwrap();
+            account_state.balance_lower_bound += net;
+            debug!(
+                account_id = ?object_id,
+                "Reserved balance: {:?}, settled balance: {:?}, new min guaranteed balance: {:?}",
+                reserved, settled, account_state.balance_lower_bound,
+            );
 
             while !account_state.pending_reservations.is_empty() {
                 let pending_withdraw = account_state.pending_reservations.pop_front().unwrap();
@@ -262,6 +215,13 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                         .push_front(pending_withdraw);
                     break;
                 }
+            }
+
+            if in_test_configuration() {
+                account_state.debug_check_account_state_invariants(
+                    self.balance_read.as_ref(),
+                    next_accumulator_version,
+                );
             }
 
             if account_state.is_empty() {
@@ -292,22 +252,22 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
 
 impl AccountState {
     fn new(
+        balance_read: &dyn AccountBalanceRead,
         account_id: AccumulatorObjId,
-        balance: u128,
-        last_read_version: Option<SequenceNumber>,
+        last_settled_version: SequenceNumber,
     ) -> Self {
+        let balance = balance_read.get_account_balance(&account_id, last_settled_version);
         debug!(
+            last_settled_version =? last_settled_version.value(),
             account_id = ?account_id.inner(),
-            "New account state tracked with initial balance {:?}, read at version {:?}",
+            "New account state tracked with initial balance {:?}",
             balance,
-            last_read_version,
         );
         Self {
             account_id,
             reserved_balance: HashMap::new(),
             pending_reservations: VecDeque::new(),
             balance_lower_bound: balance,
-            init_version: last_read_version,
         }
     }
 
@@ -375,6 +335,18 @@ impl AccountState {
 
     fn is_empty(&self) -> bool {
         self.reserved_balance.is_empty() && self.pending_reservations.is_empty()
+    }
+
+    fn debug_check_account_state_invariants(
+        &self,
+        balance_read: &dyn AccountBalanceRead,
+        last_settled_version: SequenceNumber,
+    ) {
+        let total_reserved = self.reserved_balance.values().sum::<u128>();
+        let expected_balance = self.balance_lower_bound + total_reserved;
+        let actual_balance =
+            balance_read.get_account_balance(&self.account_id, last_settled_version);
+        assert_eq!(expected_balance, actual_balance);
     }
 }
 
