@@ -11,6 +11,7 @@ pub mod new;
 pub mod profile;
 pub mod summary;
 pub mod test;
+pub mod update_deps;
 
 use move_package_alt::package::layout::SourcePackageLayout;
 use std::path::{Path, PathBuf};
