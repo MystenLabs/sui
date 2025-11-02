@@ -133,7 +133,11 @@ impl Value<'_> {
         // 'display').
         match transform {
             Transform::Base64(xmod) => Atom::try_from(self)?.format_as_base64(xmod.engine(), w),
-            Transform::Bcs => Ok(write!(w, "{}", STANDARD.encode(bcs::to_bytes(&self)?))?),
+            Transform::Bcs(xmod) => {
+                let bytes = bcs::to_bytes(&self)?;
+                Ok(write!(w, "{}", xmod.engine().encode(bytes))?)
+            }
+
             Transform::Hex => Atom::try_from(self)?.format_as_hex(w),
             Transform::Str => Atom::try_from(self)?.format_as_str(w),
             Transform::Timestamp => Atom::try_from(self)?.format_as_timestamp(w),

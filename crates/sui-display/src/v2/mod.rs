@@ -1362,6 +1362,107 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_bcs_modifiers() {
+        let bytes = bcs::to_bytes(&00u8).unwrap();
+        let layout = struct_("0x1::m::S", vec![("dummy_field", T::Bool)]);
+
+        let formats = [
+            ("byte", "{0u8:bcs}"),
+            ("byte_nopad", "{0u8:bcs(nopad)}"),
+            ("byte_url", "{0u8:bcs(url)}"),
+            ("byte_url_nopad", "{0u8:bcs(url, nopad)}"),
+            ("long", "{0xf8fbu64:bcs}"),
+            ("long_nopad", "{0xf8fbu64:bcs(nopad)}"),
+            ("long_url", "{0xf8fbu64:bcs(url)}"),
+            ("long_url_nopad", "{0xf8fbu64:bcs(nopad, url)}"),
+            ("str", "{'hello':bcs}"),
+            ("str_nopad", "{'hello':bcs(nopad)}"),
+            ("str_url", "{'hello':bcs(url)}"),
+            ("str_url_nopad", "{'hello':bcs(url, nopad)}"),
+            (
+                "flatland",
+                "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:bcs(url)}",
+            ),
+            (
+                "flatland_nopad",
+                "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:bcs(nopad)}",
+            ),
+            (
+                "flatland_url",
+                "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:bcs(url)}",
+            ),
+            (
+                "flatland_url_nopad",
+                "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:bcs(url, nopad)}",
+            ),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "byte": Ok(
+                String("AA=="),
+            ),
+            "byte_nopad": Ok(
+                String("AA"),
+            ),
+            "byte_url": Ok(
+                String("AA=="),
+            ),
+            "byte_url_nopad": Ok(
+                String("AA"),
+            ),
+            "long": Ok(
+                String("+/gAAAAAAAA="),
+            ),
+            "long_nopad": Ok(
+                String("+/gAAAAAAAA"),
+            ),
+            "long_url": Ok(
+                String("-_gAAAAAAAA="),
+            ),
+            "long_url_nopad": Ok(
+                String("-_gAAAAAAAA"),
+            ),
+            "str": Ok(
+                String("BWhlbGxv"),
+            ),
+            "str_nopad": Ok(
+                String("BWhlbGxv"),
+            ),
+            "str_url": Ok(
+                String("BWhlbGxv"),
+            ),
+            "str_url_nopad": Ok(
+                String("BWhlbGxv"),
+            ),
+            "flatland": Ok(
+                String("0tGFaqPKhfWCrycZHVcT6lgF7C-YIrMMzORXFwcsGmE="),
+            ),
+            "flatland_nopad": Ok(
+                String("0tGFaqPKhfWCrycZHVcT6lgF7C+YIrMMzORXFwcsGmE"),
+            ),
+            "flatland_url": Ok(
+                String("0tGFaqPKhfWCrycZHVcT6lgF7C-YIrMMzORXFwcsGmE="),
+            ),
+            "flatland_url_nopad": Ok(
+                String("0tGFaqPKhfWCrycZHVcT6lgF7C-YIrMMzORXFwcsGmE"),
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn test_string_hardening() {
         let bytes = bcs::to_bytes(&("ascii", "🔥", vec![0xC3u8])).unwrap();
         let layout = struct_(
