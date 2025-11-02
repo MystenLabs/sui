@@ -198,7 +198,7 @@ fn code_as_str(code: tonic::Code) -> &'static str {
 #[derive(Clone)]
 pub(crate) struct SubscriptionMetrics {
     pub inflight_subscribers: IntGauge,
-    pub last_recieved_checkpoint: IntGauge,
+    pub last_received_checkpoint: IntGauge,
 }
 
 impl SubscriptionMetrics {

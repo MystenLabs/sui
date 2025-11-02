@@ -25,18 +25,18 @@ pub struct SubscriptionServiceHandle {
 
 impl SubscriptionServiceHandle {
     pub async fn register_subscription(&self) -> Option<mpsc::Receiver<Arc<Checkpoint>>> {
-        let (sender, reciever) = oneshot::channel();
+        let (sender, receiver) = oneshot::channel();
         let request = SubscriptionRequest { sender };
         self.sender.send(request).await.ok()?;
 
-        reciever.await.ok()
+        receiver.await.ok()
     }
 }
 
 pub struct SubscriptionService {
-    // Mailbox for recieving `Checkpoint` from the Checkpoint Executor
+    // Mailbox for receiving `Checkpoint` from the Checkpoint Executor
     //
-    // Expectation is that checkpoints are recieved in-order
+    // Expectation is that checkpoints are received in-order
     checkpoint_mailbox: mpsc::Receiver<Checkpoint>,
     mailbox: mpsc::Receiver<SubscriptionRequest>,
     subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
@@ -99,21 +99,21 @@ impl SubscriptionService {
     }
 
     fn handle_checkpoint(&mut self, checkpoint: Checkpoint) {
-        // Check that we recieved checkpoints in-order
+        // Check that we received checkpoints in-order
         {
-            let last_sequence_number = self.metrics.last_recieved_checkpoint.get();
+            let last_sequence_number = self.metrics.last_received_checkpoint.get();
             let sequence_number = *checkpoint.summary.sequence_number() as i64;
 
             if last_sequence_number != 0 && (last_sequence_number + 1) != sequence_number {
                 panic!(
-                    "recieved checkpoint out-of-order. expected checkpoint {}, recieved {}",
+                    "received checkpoint out-of-order. expected checkpoint {}, received {}",
                     last_sequence_number + 1,
                     sequence_number
                 );
             }
 
             // Update the metric marking the latest checkpoint we've seen
-            self.metrics.last_recieved_checkpoint.set(sequence_number);
+            self.metrics.last_received_checkpoint.set(sequence_number);
         }
 
         let checkpoint = Arc::new(checkpoint);
@@ -123,7 +123,7 @@ impl SubscriptionService {
         self.subscribers.retain(|subscriber| {
             match subscriber.try_send(Arc::clone(&checkpoint)) {
                 Ok(()) => {
-                    trace!("succesfully enqueued checkpont for subscriber");
+                    trace!("successfully enqueued checkpoint for subscriber");
                     true // Retain this subscriber
                 }
                 Err(e) => {
@@ -146,10 +146,10 @@ impl SubscriptionService {
             return;
         }
 
-        let (sender, reciever) = mpsc::channel(SUBSCRIPTION_CHANNEL_SIZE);
-        match request.sender.send(reciever) {
+        let (sender, receiver) = mpsc::channel(SUBSCRIPTION_CHANNEL_SIZE);
+        match request.sender.send(receiver) {
             Ok(()) => {
-                trace!("succesfully registered new subscriber");
+                trace!("successfully registered new subscriber");
                 self.metrics.inflight_subscribers.inc();
                 self.subscribers.push(sender);
             }
