@@ -132,12 +132,7 @@ impl Value<'_> {
         // TODO(amnn): Detect transforms that can't be applied in this context (e.g. 'json' and
         // 'display').
         match transform {
-            Transform::Base64 => Atom::try_from(self)?.format_as_base64(&STANDARD, w),
-            Transform::Base64NoPad => Atom::try_from(self)?.format_as_base64(&STANDARD_NO_PAD, w),
-            Transform::Base64Url => Atom::try_from(self)?.format_as_base64(&URL_SAFE, w),
-            Transform::Base64UrlNoPad => {
-                Atom::try_from(self)?.format_as_base64(&URL_SAFE_NO_PAD, w)
-            }
+            Transform::Base64(xmod) => Atom::try_from(self)?.format_as_base64(xmod.engine(), w),
             Transform::Bcs => Ok(write!(w, "{}", STANDARD.encode(bcs::to_bytes(&self)?))?),
             Transform::Hex => Atom::try_from(self)?.format_as_hex(w),
             Transform::Str => Atom::try_from(self)?.format_as_str(w),

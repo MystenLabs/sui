@@ -5,6 +5,9 @@
 use std::borrow::Cow;
 use std::fmt;
 
+use base64::engine::general_purpose::{
+    GeneralPurpose, STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD,
+};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -124,10 +127,7 @@ pub enum Fields<'s> {
 /// Ways to modify a value before displaying it.
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
 pub enum Transform {
-    Base64,
-    Base64NoPad,
-    Base64Url,
-    Base64UrlNoPad,
+    Base64(Base64Modifier),
     Bcs,
     Hex,
     #[default]
@@ -135,6 +135,9 @@ pub enum Transform {
     Timestamp,
     Url,
 }
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct Base64Modifier(u8);
 
 pub(crate) struct Parser<'s> {
     lexer: Peekable2<Lexer<'s>>,
@@ -259,14 +262,14 @@ macro_rules! match_token_opt {
 ///
 ///   xform    ::= 'str'
 ///              | 'hex'
-///              | 'base64'
-///              | 'base64_nopad'
-///              | 'base64url'
-///              | 'base64url_nopad'
+///              | 'base64' xmod?
 ///              | 'bcs'
 ///              | 'timestamp'
 ///              | 'url'
 ///
+///  xmod      ::= '(' b64mod (',' b64mod)* ','? )'
+///
+///  b64mod    ::= 'url' | 'nopad'
 ///
 impl<'s> Parser<'s> {
     /// Construct a new parser, consuming input from the `src` string.
@@ -925,22 +928,7 @@ impl<'s> Parser<'s> {
         Ok(match_token! { self.lexer;
             Lit(_, T::Ident, _, "base64") => {
                 self.lexer.next();
-                Transform::Base64
-            },
-
-            Lit(_, T::Ident, _, "base64_nopad") => {
-                self.lexer.next();
-                Transform::Base64NoPad
-            },
-
-            Lit(_, T::Ident, _, "base64url") => {
-                self.lexer.next();
-                Transform::Base64Url
-            },
-
-            Lit(_, T::Ident, _, "base64url_nopad") => {
-                self.lexer.next();
-                Transform::Base64UrlNoPad
+                Transform::Base64(self.parse_xmod()?)
             },
 
             Lit(_, T::Ident, _, "bcs") => {
@@ -968,6 +956,81 @@ impl<'s> Parser<'s> {
                 Transform::Url
             },
         })
+    }
+
+    fn parse_xmod(&mut self) -> Result<Base64Modifier, FormatError> {
+        let mut xmod = Base64Modifier::EMPTY;
+        if match_token_opt! { self.lexer; Tok(_, T::LParen, _, _) => { self.lexer.next(); } }
+            .is_not_found()
+        {
+            return Ok(xmod);
+        }
+
+        loop {
+            xmod = xmod.union(match_token! { self.lexer;
+                Lit(_, T::Ident, _, "url") => { self.lexer.next(); Base64Modifier::URL },
+                Lit(_, T::Ident, _, "nopad") => { self.lexer.next(); Base64Modifier::NOPAD },
+            });
+
+            let delimited = match_token_opt! { self.lexer;
+                Tok(_, T::Comma, _, _) => { self.lexer.next(); }
+            };
+
+            let terminated = match_token_opt! { self.lexer;
+                Tok(_, T::RParen, _, _) => { self.lexer.next(); }
+            };
+
+            match (delimited, terminated) {
+                (_, Match::Found(_)) => break,
+                (Match::Found(_), _) => continue,
+                (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
+                    return Err(delimited.union(terminated).into_error(self.lexer.peek()));
+                }
+            }
+        }
+
+        Ok(xmod)
+    }
+}
+
+impl Base64Modifier {
+    /// Use a standard Base64 encoding.
+    const EMPTY: Self = Self(0);
+
+    /// Use the URL-safe character set.
+    const URL: Self = Self(1 << 1);
+
+    /// Don't add padding characters.
+    const NOPAD: Self = Self(1 << 2);
+
+    pub fn standard(&self) -> bool {
+        self.0 == Self::EMPTY.0
+    }
+
+    pub fn url(&self) -> bool {
+        self.0 & Self::URL.0 > 0
+    }
+
+    pub fn nopad(&self) -> bool {
+        self.0 & Self::NOPAD.0 > 0
+    }
+
+    /// The Base64 encoding engine for this set of modifiers
+    pub fn engine(&self) -> &'static GeneralPurpose {
+        if self.url() && self.nopad() {
+            &URL_SAFE_NO_PAD
+        } else if self.url() {
+            &URL_SAFE
+        } else if self.nopad() {
+            &STANDARD_NO_PAD
+        } else {
+            &STANDARD
+        }
+    }
+
+    #[must_use]
+    pub fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
     }
 }
 
@@ -1133,16 +1196,36 @@ impl fmt::Debug for Enum<'_> {
 impl fmt::Debug for Transform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Transform::Base64 => write!(f, "base64"),
-            Transform::Base64NoPad => write!(f, "base64_nopad"),
-            Transform::Base64Url => write!(f, "base64url"),
-            Transform::Base64UrlNoPad => write!(f, "base64url_nopad"),
+            Transform::Base64(xmod) => write!(f, "base64{xmod:?}"),
             Transform::Bcs => write!(f, "bcs"),
             Transform::Hex => write!(f, "hex"),
             Transform::Str => write!(f, "str"),
             Transform::Timestamp => write!(f, "ts"),
             Transform::Url => write!(f, "url"),
         }
+    }
+}
+
+impl fmt::Debug for Base64Modifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut prefix = "(";
+
+        if self.url() {
+            f.write_str(prefix)?;
+            f.write_str("url")?;
+            prefix = ", ";
+        }
+
+        if self.nopad() {
+            f.write_str(prefix)?;
+            f.write_str("nopad")?;
+        }
+
+        if prefix != "(" {
+            f.write_str(")")?;
+        }
+
+        Ok(())
     }
 }
 
