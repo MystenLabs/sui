@@ -128,7 +128,7 @@ pub enum Fields<'s> {
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
 pub enum Transform {
     Base64(Base64Modifier),
-    Bcs,
+    Bcs(Base64Modifier),
     Hex,
     #[default]
     Str,
@@ -933,7 +933,7 @@ impl<'s> Parser<'s> {
 
             Lit(_, T::Ident, _, "bcs") => {
                 self.lexer.next();
-                Transform::Bcs
+                Transform::Bcs(self.parse_xmod()?)
             },
 
             Lit(_, T::Ident, _, "hex") => {
@@ -1197,7 +1197,7 @@ impl fmt::Debug for Transform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Transform::Base64(xmod) => write!(f, "base64{xmod:?}"),
-            Transform::Bcs => write!(f, "bcs"),
+            Transform::Bcs(xmod) => write!(f, "bcs{xmod:?}"),
             Transform::Hex => write!(f, "hex"),
             Transform::Str => write!(f, "str"),
             Transform::Timestamp => write!(f, "ts"),
