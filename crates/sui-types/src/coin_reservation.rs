@@ -104,18 +104,22 @@ pub fn parse_object_ref(object_ref: &ObjectRef) -> Option<ParsedObjectRefWithdra
     let (object_id, _version, digest) = object_ref;
     let (epoch_id, reservation_amount) = parse_digest(digest)?;
 
-    let object_id_bytes = object_id.into_bytes();
-    let mut unmasked_object_id_bytes = [0; 32];
-    for i in 0..32 {
-        unmasked_object_id_bytes[i] = object_id_bytes[i] ^ ID_XOR_MASK[i];
-    }
+    let unmasked_object_id = mask_or_unmask_id(*object_id);
 
-    let unmasked_object_id = ObjectID::new(unmasked_object_id_bytes);
     Some(ParsedObjectRefWithdrawal {
         unmasked_object_id,
         epoch_id,
         reservation_amount,
     })
+}
+
+pub fn mask_or_unmask_id(object_id: ObjectID) -> ObjectID {
+    let object_id_bytes = object_id.into_bytes();
+    let mut masked_object_id_bytes = [0; 32];
+    for i in 0..32 {
+        masked_object_id_bytes[i] = object_id_bytes[i] ^ ID_XOR_MASK[i];
+    }
+    ObjectID::new(masked_object_id_bytes)
 }
 
 pub fn encode_object_ref(
@@ -125,12 +129,7 @@ pub fn encode_object_ref(
     reservation_amount: u64,
 ) -> Result<ObjectRef, SuiError> {
     let digest = encode_digest(epoch_id, reservation_amount)?;
-    let object_id_bytes = object_id.into_bytes();
-    let mut masked_object_id_bytes = [0; 32];
-    for i in 0..32 {
-        masked_object_id_bytes[i] = object_id_bytes[i] ^ ID_XOR_MASK[i];
-    }
-    let masked_object_id = ObjectID::new(masked_object_id_bytes);
+    let masked_object_id = mask_or_unmask_id(object_id);
     Ok((masked_object_id, sequence_number, digest))
 }
 

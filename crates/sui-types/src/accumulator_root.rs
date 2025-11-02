@@ -112,6 +112,12 @@ impl std::fmt::Display for AccumulatorObjId {
 }
 
 impl AccumulatorValue {
+    pub fn as_u128(&self) -> Option<u128> {
+        match self {
+            AccumulatorValue::U128(value) => Some(value.value),
+        }
+    }
+
     pub fn get_field_id(owner: SuiAddress, type_: &TypeTag) -> SuiResult<AccumulatorObjId> {
         if !Balance::is_balance_type(type_) {
             return Err(SuiErrorKind::TypeError {

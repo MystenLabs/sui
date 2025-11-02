@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::base_types::SuiAddress;
-use sui_types::coin::{COIN_MODULE_NAME, COIN_REDEEM_FUNDS_FUNCTION_NAME};
+use sui_types::coin::{
+    COIN_MODULE_NAME, COIN_REDEEM_FUNDS_FUNCTION_NAME, COIN_SEND_FUNDS_FUNCTION_NAME,
+};
 use sui_types::coin_reservation::{self, CoinReservationResolverTrait};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
@@ -44,6 +46,7 @@ fn rewrite_programmable_transaction_for_coin_reservations(
     let mut builder = ProgrammableTransactionBuilder::new();
 
     let mut rewritten_inputs = BTreeMap::new();
+    let mut ephemeral_coins = Vec::new();
 
     for (index, input) in pt.inputs.into_iter().enumerate() {
         let index: u16 = index.try_into().expect("too many inputs");
@@ -73,6 +76,8 @@ fn rewrite_programmable_transaction_for_coin_reservations(
                         type_arguments: vec![balance_type_input.clone()],
                         arguments: vec![withdraw_arg],
                     })));
+
+                ephemeral_coins.push((balance_type_input, coin_result));
 
                 // any command that refers to the coin reservation should now refer to the ephemeral coin
                 rewritten_inputs.insert(index, coin_result);
@@ -149,6 +154,21 @@ fn rewrite_programmable_transaction_for_coin_reservations(
                 builder.command(Command::Upgrade(items, object_ids, object_id, argument));
             }
         }
+    }
+
+    let sender_arg = builder
+        .pure(sender)
+        .expect("SuiAddress cannot fail to serialize");
+
+    // now add a command to send all ephemeral coins back to the sender
+    for (balance_type_input, coin_result) in ephemeral_coins {
+        builder.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+            package: SUI_FRAMEWORK_PACKAGE_ID,
+            module: COIN_MODULE_NAME.to_string(),
+            function: COIN_SEND_FUNDS_FUNCTION_NAME.to_string(),
+            type_arguments: vec![balance_type_input],
+            arguments: vec![coin_result, sender_arg],
+        })));
     }
 
     builder.finish()

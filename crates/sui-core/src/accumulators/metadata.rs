@@ -3,8 +3,8 @@
 
 use mysten_common::debug_fatal;
 use sui_types::{
-    TypeTag, accumulator_metadata::AccumulatorOwner, balance::Balance, base_types::SuiAddress,
-    error::SuiResult, storage::ChildObjectResolver,
+    TypeTag, accumulator_metadata::AccumulatorOwner, base_types::SuiAddress, error::SuiResult,
+    storage::ChildObjectResolver,
 };
 
 use crate::jsonrpc_index::IndexStoreTables;
@@ -34,7 +34,7 @@ pub fn get_currency_types_for_owner(
         .get_dynamic_fields_iterator(*bag_id, None)?
         .collect();
 
-    let mut coin_types = Vec::new();
+    let mut currency_types = Vec::new();
     for result in accumulator_metadata {
         let (object_id, _) = result?;
 
@@ -47,7 +47,8 @@ pub fn get_currency_types_for_owner(
                 .expect("accumulator metadata object is not a move object")
                 .type_();
 
-            let Some(balance_type) = ty.balance_accumulator_metadata_field_type_maybe() else {
+            let Some(currency_type) = ty.balance_accumulator_metadata_field_type_maybe() else {
+                dbg!(&ty);
                 // This should currently never happen. But in the future, there may be non-balance
                 // accumulator types, in which case we would need to skip them here.
                 debug_fatal!(
@@ -56,12 +57,9 @@ pub fn get_currency_types_for_owner(
                 continue;
             };
 
-            let coin_type = Balance::maybe_get_balance_type_param(&balance_type)
-                .expect("must be a balance type");
-
-            coin_types.push(coin_type);
+            currency_types.push(currency_type);
         }
     }
 
-    Ok(coin_types)
+    Ok(currency_types)
 }

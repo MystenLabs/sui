@@ -2390,7 +2390,16 @@ impl AuthorityState {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
-        let (inner_temp_store, _, effects, _timings, execution_error) = executor
+
+        let num_commands_original = kind.num_commands();
+        let kind = rewrite_transaction_for_coin_reservations(
+            &self.coin_reservation_resolver,
+            transaction.sender(),
+            kind,
+        );
+        let command_offset = kind.num_commands().saturating_sub(num_commands_original);
+
+        let (inner_temp_store, _, mut effects, _timings, execution_error) = executor
             .execute_transaction_to_effects(
                 self.get_backing_store().as_ref(),
                 protocol_config,
@@ -2410,6 +2419,9 @@ impl AuthorityState {
                 transaction_digest,
                 &mut None,
             );
+
+        effects.rewrite_failure_command_index(command_offset);
+
         let tx_digest = *effects.transaction_digest();
 
         let module_cache =
@@ -4293,7 +4305,7 @@ impl AuthorityState {
         Ok(Some((object, layout)))
     }
 
-    fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
+    pub fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
         let layout = object
             .data
             .try_as_move()
