@@ -16,9 +16,7 @@ pub mod checked {
         charge_upgrades, dont_charge_budget_on_storage_oog,
     };
     use sui_types::{
-        SUI_ACCUMULATOR_ROOT_OBJECT_ID,
         accumulator_event::AccumulatorEvent,
-        accumulator_root::AccumulatorObjId,
         base_types::{ObjectID, ObjectRef, SuiAddress},
         digests::TransactionDigest,
         error::ExecutionError,
@@ -351,11 +349,15 @@ pub mod checked {
                     let net_change = cost_summary.net_gas_usage();
 
                     if net_change != 0 {
-                        let accumulator_event = AccumulatorEvent::from_balance_change(
-                            AccumulatorObjId::new_unchecked(SUI_ACCUMULATOR_ROOT_OBJECT_ID),
-                            payer_address,
-                            net_change,
+                        let balance_type = sui_types::balance::Balance::type_tag(
+                            sui_types::gas_coin::GAS::type_tag(),
                         );
+                        let accumulator_event = AccumulatorEvent::from_balance_change(
+                            payer_address,
+                            balance_type,
+                            net_change,
+                        )
+                        .expect("Failed to create accumulator event for gas balance");
 
                         temporary_store.add_accumulator_event(accumulator_event);
                     }

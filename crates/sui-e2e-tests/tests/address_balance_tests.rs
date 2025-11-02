@@ -2146,3 +2146,158 @@ async fn test_insufficient_balance_charges_zero_gas() {
 
     test_cluster.trigger_reconfiguration().await;
 }
+
+#[sim_test]
+async fn test_soft_bundle_different_gas_payers() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.enable_address_balance_gas_payments_for_testing();
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let addresses = test_cluster.wallet.get_addresses();
+    let sender1 = addresses[0];
+    let sender2 = addresses[1];
+
+    let rgp = test_cluster.wallet.get_reference_gas_price().await.unwrap();
+    let chain_id = test_cluster.get_chain_identifier();
+
+    let gas_test_package_id = setup_test_package(&mut test_cluster.wallet).await;
+
+    let sender1_gas = test_cluster
+        .wallet
+        .gas_objects(sender1)
+        .await
+        .unwrap()
+        .pop()
+        .unwrap()
+        .1
+        .object_ref();
+    let deposit_tx1 = make_send_to_account_tx(10_000_000, sender1, sender1, sender1_gas, rgp);
+    test_cluster
+        .sign_and_execute_transaction(&deposit_tx1)
+        .await;
+
+    let sender2_gas = test_cluster
+        .wallet
+        .gas_objects(sender2)
+        .await
+        .unwrap()
+        .pop()
+        .unwrap()
+        .1
+        .object_ref();
+    let deposit_tx2 = make_send_to_account_tx(10_000_000, sender2, sender2, sender2_gas, rgp);
+    test_cluster
+        .sign_and_execute_transaction(&deposit_tx2)
+        .await;
+
+    let tx1 = create_storage_test_transaction_address_balance(
+        sender1,
+        gas_test_package_id,
+        rgp,
+        chain_id,
+        None,
+        0,
+    );
+
+    let tx2 = create_storage_test_transaction_address_balance(
+        sender2,
+        gas_test_package_id,
+        rgp,
+        chain_id,
+        None,
+        1,
+    );
+
+    let signed_tx1 = test_cluster.sign_transaction(&tx1).await;
+    let signed_tx2 = test_cluster.sign_transaction(&tx2).await;
+
+    let tx1_digest = *signed_tx1.digest();
+    let tx2_digest = *signed_tx2.digest();
+
+    assert_ne!(
+        tx1_digest, tx2_digest,
+        "Transaction digests should be different"
+    );
+
+    let agg = test_cluster.authority_aggregator();
+    let authority_client = agg
+        .authority_clients
+        .iter()
+        .next()
+        .unwrap()
+        .1
+        .authority_client();
+
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&signed_tx1).unwrap().into(),
+            bcs::to_bytes(&signed_tx2).unwrap().into(),
+        ],
+        submit_type: SubmitTxType::SoftBundle.into(),
+    };
+
+    let mut validator_client = authority_client.get_client_for_testing().unwrap();
+    let result = validator_client
+        .submit_transaction(request.into_request())
+        .await
+        .map(tonic::Response::into_inner)
+        .unwrap();
+
+    assert_eq!(result.results.len(), 2, "Should have 2 submission results");
+
+    let validator_handle = test_cluster
+        .swarm
+        .validator_node_handles()
+        .into_iter()
+        .next()
+        .expect("No validator found");
+
+    let tx1_effects = wait_for_effects(&validator_handle, &tx1_digest).await;
+    let tx2_effects = wait_for_effects(&validator_handle, &tx2_digest).await;
+
+    assert!(tx1_effects.status().is_ok(), "Transaction 1 should succeed");
+    assert!(tx2_effects.status().is_ok(), "Transaction 2 should succeed");
+
+    let acc_events1 = tx1_effects.accumulator_events();
+    let acc_events2 = tx2_effects.accumulator_events();
+
+    tracing::info!("Sender1: {:?}", sender1);
+    tracing::info!("Sender2: {:?}", sender2);
+    tracing::info!("Transaction 1 accumulator events: {:?}", acc_events1);
+    tracing::info!("Transaction 2 accumulator events: {:?}", acc_events2);
+
+    let gas_summary1 = tx1_effects.gas_cost_summary();
+    let gas_used1 = calculate_total_gas_cost(gas_summary1);
+    let gas_summary2 = tx2_effects.gas_cost_summary();
+    let gas_used2 = calculate_total_gas_cost(gas_summary2);
+
+    let expected_balance1 = 10_000_000 - gas_used1;
+    let expected_balance2 = 10_000_000 - gas_used2;
+
+    validator_handle.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+
+        let actual_balance1 = get_balance(child_object_resolver, sender1);
+        let actual_balance2 = get_balance(child_object_resolver, sender2);
+
+        assert_eq!(
+            actual_balance1, expected_balance1,
+            "Sender1 balance should be {} after gas deduction, got {}",
+            expected_balance1, actual_balance1
+        );
+        assert_eq!(
+            actual_balance2, expected_balance2,
+            "Sender2 balance should be {} after gas deduction, got {}",
+            expected_balance2, actual_balance2
+        );
+    });
+
+    test_cluster.trigger_reconfiguration().await;
+}
