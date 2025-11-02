@@ -8,7 +8,7 @@ use anyhow::bail;
 use clap::{ArgAction, Parser};
 
 use move_package_alt::{
-    flavor::{MoveFlavor, Vanilla},
+    flavor::{MoveFlavor},
     package::RootPackage,
     schema::{Environment, EnvironmentName, ModeName},
 };
@@ -34,7 +34,7 @@ impl UpdateDeps {
     pub async fn execute<F: MoveFlavor>(&self, path: Option<&Path>) -> anyhow::Result<()> {
         let default = PathBuf::from(".");
         let path = path.unwrap_or(&default);
-        let envs = RootPackage::<Vanilla>::environments(&path)?;
+        let envs = RootPackage::<F>::environments(&path)?;
 
         let Some(chain_id) = envs.get(&self.environment) else {
             bail!("Environment {} not found", self.environment);
