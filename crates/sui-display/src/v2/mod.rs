@@ -1513,6 +1513,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_vector_literal_type_mismatch() {
+        let bytes = bcs::to_bytes(&0u8).unwrap();
+        let layout = struct_("0x1::m::S", vec![("byte", T::U8)]);
+
+        let formats = [
+            ("between_literals", "{vector[42u8, 42u64]:bcs}"),
+            ("between_field_and_literal", "{vector[42u64, byte]:bcs}"),
+            ("between_annotation_and_element", "{vector<u64>[byte]:bcs}"),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "between_literals": Err(
+                VectorTypeMismatch(
+                    U8,
+                    U64,
+                ),
+            ),
+            "between_field_and_literal": Err(
+                VectorTypeMismatch(
+                    U64,
+                    U8,
+                ),
+            ),
+            "between_annotation_and_element": Err(
+                VectorTypeMismatch(
+                    U64,
+                    U8,
+                ),
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn test_output_node_limits() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
 

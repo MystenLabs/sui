@@ -91,7 +91,7 @@ pub struct Slice<'s> {
 /// An evaluated vector literal.
 #[derive(Clone)]
 pub struct Vector<'s> {
-    pub(crate) type_: Option<&'s TypeTag>,
+    pub(crate) type_: Cow<'s, TypeTag>,
     pub(crate) elements: Vec<Value<'s>>,
 }
 
@@ -373,13 +373,7 @@ impl<'s> Accessor<'s> {
 
 impl Vector<'_> {
     fn type_(&self) -> TypeTag {
-        TypeTag::Vector(Box::new(if let Some(explicit) = self.type_ {
-            explicit.clone()
-        } else if let Some(first) = self.elements.first() {
-            first.type_()
-        } else {
-            unreachable!("SAFETY: vectors either have a type annotation or at least one element")
-        }))
+        TypeTag::Vector(Box::new(self.type_.clone().into_owned()))
     }
 }
 
@@ -563,7 +557,7 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
 
             // Vector literals are supported if they are byte vectors.
             V::Vector(Vector { type_, elements }) => {
-                if type_.is_some_and(|t| t != &T::U8) {
+                if *type_ != T::U8 {
                     return Err(FormatError::TransformInvalid("unexpected vector"));
                 }
 
@@ -628,6 +622,7 @@ pub(crate) mod tests {
         MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout as L,
     };
     use move_core_types::identifier::Identifier;
+    use sui_types::base_types::{STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME};
     use sui_types::dynamic_field::{DynamicFieldInfo, Field, derive_dynamic_field_id};
     use sui_types::id::{ID, UID};
 
@@ -1008,7 +1003,7 @@ pub(crate) mod tests {
     #[test]
     fn test_serialize_vector() {
         let vec = Value::Vector(Vector {
-            type_: None,
+            type_: Cow::Owned(TypeTag::U64),
             elements: vec![Value::U64(10), Value::U64(20), Value::U64(30)],
         });
 
@@ -1019,7 +1014,12 @@ pub(crate) mod tests {
 
         // Test vector of strings
         let vec = Value::Vector(Vector {
-            type_: None,
+            type_: Cow::Owned(TypeTag::Struct(Box::new(StructTag {
+                address: MOVE_STDLIB_ADDRESS,
+                module: STD_ASCII_MODULE_NAME.to_owned(),
+                name: STD_ASCII_STRUCT_NAME.to_owned(),
+                type_params: vec![],
+            }))),
             elements: vec![
                 Value::String(Cow::Borrowed("hello".as_bytes())),
                 Value::String(Cow::Borrowed("world".as_bytes())),
@@ -1033,7 +1033,7 @@ pub(crate) mod tests {
 
         // Test empty vector
         let vec = Value::Vector(Vector {
-            type_: None,
+            type_: Cow::Owned(TypeTag::U64),
             elements: vec![],
         });
 
@@ -1054,21 +1054,13 @@ pub(crate) mod tests {
             Value::String(Cow::Borrowed("hello".as_bytes())),
             Value::Bytes(Cow::Borrowed(&[1, 2, 3])),
             Value::Vector(Vector {
-                type_: Some(&TypeTag::U8),
-                elements: vec![Value::U8(4), Value::U8(5), Value::U8(6)],
-            }),
-            Value::Vector(Vector {
-                type_: None,
-                elements: vec![Value::U8(7), Value::U8(8), Value::U8(9)],
-            }),
-            Value::Vector(Vector {
-                type_: None,
+                type_: Cow::Owned(TypeTag::U8),
                 elements: vec![
-                    Value::U8(10),
-                    Value::U16(11),
+                    Value::U8(4),
+                    Value::U8(5),
                     Value::Slice(Slice {
                         layout: &L::U8,
-                        bytes: &[12],
+                        bytes: &[6],
                     }),
                 ],
             }),
@@ -1086,9 +1078,9 @@ pub(crate) mod tests {
             Atom::Bytes(Cow::Borrowed("hello".as_bytes())),
             Atom::Bytes(Cow::Borrowed(&[1, 2, 3])),
             Atom::Bytes(Cow::Borrowed(&[4, 5, 6])),
-            Atom::Bytes(Cow::Borrowed(&[7, 8, 9])),
         ];
 
+        assert_eq!(values.len(), atoms.len());
         for (value, expect) in values.into_iter().zip(atoms.into_iter()) {
             let actual = Atom::try_from(value).unwrap();
             assert_eq!(actual, expect);

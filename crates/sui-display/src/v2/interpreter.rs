@@ -323,12 +323,33 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
                 Cow::Owned(s) => Some(V::String(Cow::Owned(s.into_bytes()))),
             },
 
-            L::Vector(v) => self.eval_chains(&v.elements).await?.map(|elements| {
-                V::Vector(Vector {
-                    type_: v.type_.as_ref(),
-                    elements,
-                })
-            }),
+            L::Vector(v) => self.eval_chains(&v.elements).await.and_then(|elements| {
+                let Some(elements) = elements else {
+                    return Ok(None);
+                };
+
+                // Evaluate the vector's element type and check that it is consistent across all
+                // elements.
+                let type_ = if let Some(explicit) = &v.type_ {
+                    Cow::Borrowed(explicit)
+                } else if let Some(first) = elements.first() {
+                    Cow::Owned(first.type_())
+                } else {
+                    return Err(FormatError::VectorNoType);
+                };
+
+                for e in &elements {
+                    let element_type = e.type_();
+                    if element_type != *type_ {
+                        return Err(FormatError::VectorTypeMismatch(
+                            type_.into_owned(),
+                            element_type,
+                        ));
+                    }
+                }
+
+                Ok(Some(V::Vector(Vector { type_, elements })))
+            })?,
 
             L::Struct(s) => self.eval_fields(&s.fields).await?.map(|fields| {
                 V::Struct(Struct {

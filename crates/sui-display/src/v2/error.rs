@@ -5,7 +5,7 @@ use std::mem;
 use std::sync::Arc;
 use std::{collections::BTreeSet, fmt};
 
-use move_core_types::annotated_visitor;
+use move_core_types::{annotated_visitor, language_storage::TypeTag};
 
 use super::lexer::{Lexeme, OwnedLexeme, Token};
 use super::peek::Peekable2Ext;
@@ -83,8 +83,18 @@ pub enum FormatError {
         expect: ExpectedSet,
     },
 
-    #[error("vector at offset {offset} requires 1 type parameter, found {arity}")]
+    #[error("Vector at offset {offset} requires 1 type parameter, found {arity}")]
     VectorArity { offset: usize, arity: usize },
+
+    #[error("Internal error: vector without element type")]
+    VectorNoType,
+
+    #[error(
+        "Vector literal's element type, could be {} or {}",
+        .0.to_canonical_display(true),
+        .1.to_canonical_display(true),
+    )]
+    VectorTypeMismatch(TypeTag, TypeTag),
 
     #[error("Deserialization error: {0}")]
     Visitor(#[from] annotated_visitor::Error),
