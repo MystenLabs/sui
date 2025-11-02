@@ -101,7 +101,9 @@ use super::transaction_reject_reason_cache::TransactionRejectReasonCache;
 use crate::authority::AuthorityMetrics;
 use crate::authority::ResolverWrapper;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use crate::authority::execution_time_estimator::EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY;
+use crate::authority::execution_time_estimator::{
+    EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY, EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY,
+};
 use crate::authority::shared_object_version_manager::{
     AssignedTxAndVersions, ConsensusSharedObjVerAssignment, Schedulable, SharedObjVerManager,
 };
@@ -127,6 +129,7 @@ use crate::module_cache_metrics::ResolverMetrics;
 use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
 use crate::signature_verifier::*;
 use crate::stake_aggregator::{GenericMultiStakeAggregator, StakeAggregator};
+use sui_types::execution::ExecutionTimeObservationChunkKey;
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
@@ -1654,22 +1657,60 @@ impl AuthorityPerEpochStore {
                 return itertools::Either::Left(std::iter::empty());
             }
         };
-        // This is stored as a vector<u8> in Move, so we double-deserialize to get back
-        //`StoredExecutionTimeObservations`.
-        let Ok::<Vec<u8>, _>(stored_observations_bytes) = get_dynamic_field_from_store(
-            object_store,
-            system_state.extra_fields.id.id.bytes,
-            &EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY,
-        ) else {
-            warn!(
-                "Could not find stored execution time observations. This should only happen in the first epcoh where ExecutionTimeEstimate mode is enabled."
-            );
-            return itertools::Either::Left(std::iter::empty());
+        let stored_observations = if protocol_config.enable_observation_chunking() {
+            if let Ok::<u64, _>(chunk_count) = get_dynamic_field_from_store(
+                object_store,
+                system_state.extra_fields.id.id.bytes,
+                &EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY,
+            ) {
+                let mut chunks = Vec::new();
+                for chunk_index in 0..chunk_count {
+                    let chunk_key = ExecutionTimeObservationChunkKey { chunk_index };
+                    let Ok::<Vec<u8>, _>(chunk_bytes) = get_dynamic_field_from_store(
+                        object_store,
+                        system_state.extra_fields.id.id.bytes,
+                        &chunk_key,
+                    ) else {
+                        debug_fatal!(
+                            "Could not find stored execution time observation chunk {}",
+                            chunk_index
+                        );
+                        return itertools::Either::Left(std::iter::empty());
+                    };
+
+                    // This is stored as a vector<u8> in Move, so we double-deserialize to get back
+                    // the observation chunk.
+                    let chunk: StoredExecutionTimeObservations = bcs::from_bytes(&chunk_bytes)
+                        .expect("failed to deserialize stored execution time estimates chunk");
+                    chunks.push(chunk);
+                }
+
+                StoredExecutionTimeObservations::merge_sorted_chunks(chunks).unwrap_v1()
+            } else {
+                warn!(
+                    "Could not read stored execution time chunk count. This should only happen in the first epoch where chunking is enabled."
+                );
+                return itertools::Either::Left(std::iter::empty());
+            }
+        } else {
+            // TODO: Remove this once we've enabled chunking on mainnet.
+            let Ok::<Vec<u8>, _>(stored_observations_bytes) = get_dynamic_field_from_store(
+                object_store,
+                system_state.extra_fields.id.id.bytes,
+                &EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY,
+            ) else {
+                warn!(
+                    "Could not find stored execution time observations. This should only happen in the first epoch where ExecutionTimeEstimate mode is enabled."
+                );
+                return itertools::Either::Left(std::iter::empty());
+            };
+            // This is stored as a vector<u8> in Move, so we double-deserialize to get back
+            //`StoredExecutionTimeObservations`.
+            let stored_observations: StoredExecutionTimeObservations =
+                bcs::from_bytes(&stored_observations_bytes)
+                    .expect("failed to deserialize stored execution time estimates");
+            stored_observations.unwrap_v1()
         };
-        let stored_observations: StoredExecutionTimeObservations =
-            bcs::from_bytes(&stored_observations_bytes)
-                .expect("failed to deserialize stored execution time estimates");
-        let stored_observations = stored_observations.unwrap_v1();
 
         info!(
             "loaded stored execution time observations for {} keys",

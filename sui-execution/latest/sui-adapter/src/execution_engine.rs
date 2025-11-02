@@ -771,11 +771,20 @@ mod checked {
                             builder = setup_bridge_committee_update(builder, bridge_shared_version)
                         }
                         EndOfEpochTransactionKind::StoreExecutionTimeObservations(estimates) => {
-                            assert!(matches!(
-                                protocol_config.per_object_congestion_control_mode(),
-                                PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
-                            ));
-                            builder = setup_store_execution_time_estimates(builder, estimates);
+                            if let PerObjectCongestionControlMode::ExecutionTimeEstimate(params) =
+                                protocol_config.per_object_congestion_control_mode()
+                            {
+                                if let Some(chunk_size) = params.observations_chunk_size {
+                                    builder = setup_store_execution_time_estimates_v2(
+                                        builder,
+                                        estimates,
+                                        chunk_size as usize,
+                                    );
+                                } else {
+                                    builder =
+                                        setup_store_execution_time_estimates(builder, estimates);
+                                }
+                            }
                         }
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
                             assert!(protocol_config.create_root_accumulator_object());
@@ -1437,6 +1446,32 @@ mod checked {
             ident_str!("store_execution_time_estimates").to_owned(),
             vec![],
             vec![system_state, estimates_arg],
+        );
+        builder
+    }
+
+    fn setup_store_execution_time_estimates_v2(
+        mut builder: ProgrammableTransactionBuilder,
+        estimates: StoredExecutionTimeObservations,
+        chunk_size: usize,
+    ) -> ProgrammableTransactionBuilder {
+        let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+
+        let estimate_chunks = estimates.chunk_observations(chunk_size);
+
+        let chunk_bytes: Vec<Vec<u8>> = estimate_chunks
+            .into_iter()
+            .map(|chunk| bcs::to_bytes(&chunk).unwrap())
+            .collect();
+
+        let chunks_arg = builder.pure(chunk_bytes).unwrap();
+
+        builder.programmable_move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            ident_str!("store_execution_time_estimates_v2").to_owned(),
+            vec![],
+            vec![system_state, chunks_arg],
         );
         builder
     }

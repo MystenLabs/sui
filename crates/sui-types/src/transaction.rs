@@ -359,6 +359,38 @@ impl StoredExecutionTimeObservations {
             ),
         }
     }
+
+    /// Split observations into chunks of the specified size.
+    /// Returns a vector of chunks, each containing up to `chunk_size` observations.
+    pub fn chunk_observations(&self, chunk_size: usize) -> Vec<Self> {
+        match self {
+            Self::V1(observations) => {
+                if chunk_size == 0 {
+                    return vec![];
+                }
+                observations
+                    .chunks(chunk_size)
+                    .map(|chunk| Self::V1(chunk.to_vec()))
+                    .collect()
+            }
+        }
+    }
+
+    /// Merge multiple chunks into a single observation set.
+    /// Chunks must be provided in order and already sorted.
+    pub fn merge_sorted_chunks(chunks: Vec<Self>) -> Self {
+        let mut all_observations = Vec::new();
+
+        for chunk in chunks {
+            match chunk {
+                Self::V1(observations) => {
+                    all_observations.extend(observations);
+                }
+            }
+        }
+
+        Self::V1(all_observations)
+    }
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
