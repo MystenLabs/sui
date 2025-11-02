@@ -133,7 +133,14 @@ impl<'s> Format<'s> {
         }));
 
         let (names, values) = join!(names, values);
-        for ((field, name), value) in self.fields.iter().zip(names?).zip(values?) {
+
+        let names = names?;
+        debug_assert_eq!(self.fields.len(), names.len());
+
+        let values = values?;
+        debug_assert_eq!(self.fields.len(), values.len());
+
+        for ((field, name), value) in self.fields.iter().zip(names).zip(values) {
             use indexmap::map::Entry;
             use serde_json::Value as JSON;
 
