@@ -349,8 +349,15 @@ pub mod checked {
                     let net_change = cost_summary.net_gas_usage();
 
                     if net_change != 0 {
-                        let accumulator_event =
-                            AccumulatorEvent::from_balance_change(payer_address, net_change);
+                        let balance_type = sui_types::balance::Balance::type_tag(
+                            sui_types::gas_coin::GAS::type_tag(),
+                        );
+                        let accumulator_event = AccumulatorEvent::from_balance_change(
+                            payer_address,
+                            balance_type,
+                            net_change,
+                        )
+                        .expect("Failed to create accumulator event for gas balance");
 
                         temporary_store.add_accumulator_event(accumulator_event);
                     }
