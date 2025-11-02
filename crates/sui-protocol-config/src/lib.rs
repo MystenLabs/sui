@@ -2396,13 +2396,10 @@ impl ProtocolConfig {
     }
 
     pub fn enable_observation_chunking(&self) -> bool {
-        if let PerObjectCongestionControlMode::ExecutionTimeEstimate(params) =
-            &self.feature_flags.per_object_congestion_control_mode
-        {
-            params.observations_chunk_size.is_some()
-        } else {
-            false
-        }
+        matches!(self.feature_flags.per_object_congestion_control_mode,
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(ref params)
+                if params.observations_chunk_size.is_some()
+        )
     }
 }
 

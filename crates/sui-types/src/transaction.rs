@@ -378,7 +378,7 @@ impl StoredExecutionTimeObservations {
 
     /// Merge multiple chunks into a single observation set.
     /// Chunks must be provided in order and already sorted.
-    pub fn merge_chunks(chunks: Vec<Self>) -> Self {
+    pub fn merge_sorted_chunks(chunks: Vec<Self>) -> Self {
         let mut all_observations = Vec::new();
 
         for chunk in chunks {
