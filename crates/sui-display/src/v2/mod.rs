@@ -1188,32 +1188,32 @@ mod tests {
 
         let formats = [
             ("byte", "{0u8:base64}"),
-            ("byte_nopad", "{0u8:base64_nopad}"),
-            ("byte_url", "{0u8:base64url}"),
-            ("byte_url_nopad", "{0u8:base64url_nopad}"),
+            ("byte_nopad", "{0u8:base64(nopad)}"),
+            ("byte_url", "{0u8:base64(url)}"),
+            ("byte_url_nopad", "{0u8:base64(url, nopad)}"),
             ("long", "{0xf8fbu64:base64}"),
-            ("long_nopad", "{0xf8fbu64:base64_nopad}"),
-            ("long_url", "{0xf8fbu64:base64url}"),
-            ("long_url_nopad", "{0xf8fbu64:base64url_nopad}"),
+            ("long_nopad", "{0xf8fbu64:base64(nopad)}"),
+            ("long_url", "{0xf8fbu64:base64(url)}"),
+            ("long_url_nopad", "{0xf8fbu64:base64(nopad, url)}"),
             ("str", "{'hello':base64}"),
-            ("str_nopad", "{'hello':base64_nopad}"),
-            ("str_url", "{'hello':base64url}"),
-            ("str_url_nopad", "{'hello':base64url_nopad}"),
+            ("str_nopad", "{'hello':base64(nopad)}"),
+            ("str_url", "{'hello':base64(url)}"),
+            ("str_url_nopad", "{'hello':base64(url, nopad)}"),
             (
                 "flatland",
-                "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:base64url}",
+                "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:base64(url)}",
             ),
             (
                 "flatland_nopad",
-                "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:base64_nopad}",
+                "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:base64(nopad)}",
             ),
             (
                 "flatland_url",
-                "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:base64url}",
+                "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:base64(url)}",
             ),
             (
                 "flatland_url_nopad",
-                "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:base64url_nopad}",
+                "{43920588204278303214855528440570972873796977361529388163322669436471087583698u256:base64(url, nopad)}",
             ),
         ];
 
@@ -1476,15 +1476,6 @@ mod tests {
                         tried: [
                             Literal(
                                 "base64",
-                            ),
-                            Literal(
-                                "base64_nopad",
-                            ),
-                            Literal(
-                                "base64url",
-                            ),
-                            Literal(
-                                "base64url_nopad",
                             ),
                             Literal(
                                 "bcs",
