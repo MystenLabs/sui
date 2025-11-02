@@ -223,20 +223,21 @@ macro_rules! match_token_opt {
 ///
 ///   accessor ::= '.' IDENT
 ///              | '.' NUM_DEC
+///              | '[' chain ']'
 ///              | '->' '[' chain ']'
 ///              | '=>' '[' chain ']'
 ///
 ///   literal  ::= address | bool | number | string | vector | struct | enum
 ///
-///   address  ::= '@' NUM_HEX
+///   address  ::= '@' (NUM_DEC | NUM_HEX)
 ///
 ///   bool     ::= 'true' | 'false'
 ///
-///   number   ::= (NUM_DEC | NUM_HEX) numeric?
+///   number   ::= (NUM_DEC | NUM_HEX) numeric
 ///
 ///   string   ::= ('b' | 'x')? STRING
 ///
-///   vector   ::= 'vector'  '<' type ','? '>'
+///   vector   ::= 'vector'  '<' type ','? '>' ('[' ']')?
 ///              | 'vector' ('<' type ','? '>')?  array
 ///
 ///   array    ::= '[' chain (',' chain)* ','? ']'
@@ -250,13 +251,22 @@ macro_rules! match_token_opt {
 ///
 ///   named    ::= IDENT ':' chain
 ///
-///   type     ::= 'address' | 'bool' | | 'vector' '<' type '>' |  numtype | datatype
+///   type     ::= 'address' | 'bool' | | 'vector' '<' type '>' |  numeric | datatype
 ///
 ///   datatype ::= NUM_HEX '::' IDENT ('<' type (',' type)* ','? '>')?
 ///
 ///   numeric  ::= 'u8' | 'u16' | 'u32' | 'u64' | 'u128' | 'u256'
 ///
 ///   xform    ::= 'str'
+///              | 'hex'
+///              | 'base64'
+///              | 'base64_nopad'
+///              | 'base64url'
+///              | 'base64url_nopad'
+///              | 'bcs'
+///              | 'timestamp'
+///              | 'url'
+///
 ///
 impl<'s> Parser<'s> {
     /// Construct a new parser, consuming input from the `src` string.
