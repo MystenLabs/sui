@@ -605,7 +605,9 @@ fn resolve_shared_input_with_object(
                 let arg_type = arg_type_of_move_call_input(called_packages, move_call, idx)?;
                 if matches!(
                     &*arg_type,
-                    normalized::Type::Reference(/* mut */ true, _) | normalized::Type::Datatype(_)
+                    normalized::Type::Reference(/* mut */ true, _)
+                        | normalized::Type::Datatype(_)
+                        | normalized::Type::TypeParameter(_)
                 ) {
                     mutable = true;
                 }
