@@ -1,23 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
+
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use parking_lot::RwLock;
 use prometheus::core::{Atomic, AtomicU64};
-use std::collections::HashMap;
-use std::sync::Arc;
 use sui_storage::package_object_cache::PackageObjectCache;
-use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
-use sui_types::error::{SuiError, SuiResult};
-use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::object::{Object, Owner};
-use sui_types::storage::{
-    get_module_by_id, BackingPackageStore, ChildObjectResolver, ObjectStore, PackageObject,
-    ParentSync,
+use sui_types::{
+    base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, VersionNumber},
+    error::{SuiError, SuiResult},
+    inner_temporary_store::InnerTemporaryStore,
+    object::{Object, Owner},
+    storage::{
+        BackingPackageStore,
+        ChildObjectResolver,
+        ObjectStore,
+        PackageObject,
+        ParentSync,
+        get_module_by_id,
+    },
+    transaction::{InputObjectKind, InputObjects, ObjectReadResult},
 };
-use sui_types::transaction::{InputObjectKind, InputObjects, ObjectReadResult};
 
 #[derive(Clone)]
 pub struct InMemoryObjectStore {
@@ -79,22 +88,31 @@ impl InMemoryObjectStore {
         }
     }
 
-    pub fn read_input_objects(&self, input_object_kinds: &[InputObjectKind]) -> SuiResult<InputObjects> {
+    pub fn read_input_objects(
+        &self,
+        input_object_kinds: &[InputObjectKind],
+        shared_version_assignments: &BTreeMap<(ObjectID, SequenceNumber), SequenceNumber>,
+    ) -> SuiResult<InputObjects> {
         let mut input_objects = Vec::new();
         for kind in input_object_kinds {
             let obj: Option<Object> = match kind {
-                InputObjectKind::MovePackage(id) => {
-                    self.get_package_object(id)?.map(|o| o.into())
-                }
+                InputObjectKind::MovePackage(id) => self.get_package_object(id)?.map(|o| o.into()),
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
                     self.get_object_by_key(&objref.0, objref.1)
                 }
-                InputObjectKind::SharedMoveObject { .. } => {
-                    return Err(SuiError::UserInputError {
-                        error: sui_types::error::UserInputError::Unsupported(
-                            "Shared objects not supported in minimal executor yet".to_string()
-                        ),
-                    });
+                InputObjectKind::SharedMoveObject {
+                    id,
+                    initial_shared_version,
+                    ..
+                } => {
+                    let version = shared_version_assignments
+                        .get(&(*id, *initial_shared_version))
+                        .ok_or_else(|| SuiError::UserInputError {
+                            error: sui_types::error::UserInputError::Unsupported(
+                                format!("Shared object version assignment not found for object {} at initial version {}", id, initial_shared_version)
+                            ),
+                        })?;
+                    self.get_object_by_key(id, *version)
                 }
             };
 

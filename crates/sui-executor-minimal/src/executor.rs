@@ -1,20 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::storage::InMemoryObjectStore;
-use anyhow::Result;
+use std::collections::BTreeMap;
 use std::sync::Arc;
+
+use anyhow::Result;
 use sui_execution::Executor;
 use sui_protocol_config::ProtocolConfig;
 use sui_transaction_checks::check_certificate_input;
-use sui_types::base_types::EpochId;
-use sui_types::effects::TransactionEffects;
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::execution_params::ExecutionOrEarlyError;
-use sui_types::gas::SuiGasStatus;
-use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::metrics::LimitsMetrics;
-use sui_types::transaction::{Transaction, TransactionDataAPI, VerifiedTransaction};
+use sui_types::{
+    base_types::{EpochId, ObjectID, SequenceNumber},
+    effects::TransactionEffects,
+    executable_transaction::VerifiedExecutableTransaction,
+    execution_params::ExecutionOrEarlyError,
+    gas::SuiGasStatus,
+    inner_temporary_store::InnerTemporaryStore,
+    metrics::LimitsMetrics,
+    transaction::{Transaction, TransactionDataAPI, VerifiedTransaction},
+};
+
+use crate::storage::InMemoryObjectStore;
 
 pub struct MinimalExecutor {
     executor: Arc<dyn Executor + Send + Sync>,
@@ -52,9 +57,10 @@ impl MinimalExecutor {
         transaction: Transaction,
         epoch_id: EpochId,
         epoch_timestamp_ms: u64,
+        shared_version_assignments: &BTreeMap<(ObjectID, SequenceNumber), SequenceNumber>,
     ) -> Result<ExecutionResult> {
         let input_object_kinds = transaction.data().intent_message().value.input_objects()?;
-        let input_objects = store.read_input_objects(&input_object_kinds)?;
+        let input_objects = store.read_input_objects(&input_object_kinds, shared_version_assignments)?;
 
         let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
             VerifiedTransaction::new_unchecked(transaction),
@@ -89,7 +95,7 @@ impl MinimalExecutor {
             );
 
         if let Err(e) = execution_error {
-            anyhow::bail!("Transaction execution failed: {:?}", e);
+            anyhow::bail!("Transaction execution failed: {e:?}");
         }
 
         Ok(ExecutionResult {
