@@ -4571,6 +4571,8 @@ impl ProtocolConfig {
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
         self.enable_accumulators_for_testing();
         self.feature_flags.enable_authenticated_event_streams = true;
+        self.feature_flags
+            .include_checkpoint_artifacts_digest_in_summary = true;
     }
 
     pub fn enable_non_exclusive_writes_for_testing(&mut self) {

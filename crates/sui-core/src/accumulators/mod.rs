@@ -71,11 +71,11 @@ impl MergedValue {
         split: Self,
         root: Argument,
         address: &AccumulatorAddress,
+        checkpoint_seq: u64,
         builder: &mut ProgrammableTransactionBuilder,
     ) {
         let ty = ClassifiedType::classify(&address.ty);
         let address_arg = builder.pure(address.address).unwrap();
-        let checkpoint_seq = 0u64; /* TODO: replace with actual checkpoint sequence number */
 
         match (ty, merge, split) {
             (
@@ -214,10 +214,9 @@ impl AccumulatorSettlementTxBuilder {
     pub fn new(
         cache: Option<&dyn TransactionCacheRead>,
         ckpt_effects: &[TransactionEffects],
+        checkpoint_seq: u64,
         tx_index_offset: u64,
     ) -> Self {
-        let checkpoint_seq = 0u64; /* TODO: replace with actual checkpoint sequence number */
-
         let mut updates = BTreeMap::<_, _>::new();
 
         let mut addresses = HashMap::<_, _>::new();
@@ -322,6 +321,7 @@ impl AccumulatorSettlementTxBuilder {
         epoch: u64,
         accumulator_root_obj_initial_shared_version: SequenceNumber,
         checkpoint_height: u64,
+        checkpoint_seq: u64,
     ) -> (
         Vec<TransactionKind>, /* settlements */
         TransactionKind,      /* barrier */
@@ -348,6 +348,7 @@ impl AccumulatorSettlementTxBuilder {
                 updates.drain(..),
                 total_input_sui,
                 total_output_sui,
+                checkpoint_seq,
             )
         };
 
@@ -439,6 +440,7 @@ impl AccumulatorSettlementTxBuilder {
         updates: impl Iterator<Item = (AccumulatorObjId, Update)>,
         total_input_sui: u64,
         total_output_sui: u64,
+        checkpoint_seq: u64,
     ) -> TransactionKind {
         let mut builder = ProgrammableTransactionBuilder::new();
 
@@ -465,7 +467,14 @@ impl AccumulatorSettlementTxBuilder {
             let address = addresses.get(&accumulator_obj).unwrap();
             let merged_value = MergedValue::from(merge);
             let split_value = MergedValue::from(split);
-            MergedValue::add_move_call(merged_value, split_value, root, address, &mut builder);
+            MergedValue::add_move_call(
+                merged_value,
+                split_value,
+                root,
+                address,
+                checkpoint_seq,
+                &mut builder,
+            );
         }
 
         TransactionKind::ProgrammableSystemTransaction(builder.finish())
