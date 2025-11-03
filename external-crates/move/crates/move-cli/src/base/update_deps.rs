@@ -8,7 +8,7 @@ use anyhow::bail;
 use clap::{ArgAction, Parser};
 
 use move_package_alt::{
-    flavor::{MoveFlavor},
+    flavor::MoveFlavor,
     package::RootPackage,
     schema::{Environment, EnvironmentName, ModeName},
 };
