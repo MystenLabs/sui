@@ -78,6 +78,19 @@ pub trait Handler: Processor<Value: FieldCount> {
     ) -> anyhow::Result<usize> {
         Ok(0)
     }
+
+    /// Clean up data between checkpoints `_from` and `_to_exclusive` (exclusive) in the database, returning
+    /// the number of rows affected. This function is optional, and defaults to not pruning at all.
+    async fn prune_v2<'a>(
+        &self,
+        _from: u64,
+        _to_exclusive: u64,
+        _task_idx: usize,
+        _total_tasks: usize,
+        _conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> anyhow::Result<usize> {
+        Ok(0)
+    }
 }
 
 /// Configuration for a concurrent pipeline
