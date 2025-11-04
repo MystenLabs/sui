@@ -103,7 +103,7 @@ const concepts = [
 	},
 	{
 		type: 'category',
-		label: 'Data access',
+		label: 'Data Access',
 		items: [
 			'concepts/grpc-overview',
 			{ 
