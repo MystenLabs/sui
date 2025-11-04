@@ -85,6 +85,7 @@ const standards = [
 		],
 	},
 	'standards/display',
+	'standards/payment-kit',
 	'standards/wallet-standard',
 ];
 export default standards;
