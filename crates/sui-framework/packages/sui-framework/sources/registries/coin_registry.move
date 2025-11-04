@@ -52,6 +52,8 @@ const ESupplyNotBurnOnly: vector<u8> = b"Cannot burn on a non burn-only supply."
 const EInvariantViolation: vector<u8> = b"Code invariant violation.";
 #[error(code = 12)]
 const EDeletionNotSupported: vector<u8> = b"Deleting legacy metadata is not supported.";
+#[error(code = 13)]
+const EIsNotOTW: vector<u8> = b"Is not one-time witness.";
 
 /// Incremental identifier for regulated coin versions in the deny list.
 /// We start from `0` in the new system, which aligns with the state of `DenyCapV2`.
@@ -70,7 +72,6 @@ public struct CoinRegistry has key {
 /// Store only object that enables more flexible coin data
 /// registration, allowing for additional fields to be added
 /// without changing the `Currency` structure.
-#[allow(unused_field)]
 public struct ExtraField(TypeName, vector<u8>) has store;
 
 /// Key used to derive addresses when creating `Currency<T>` objects.
@@ -205,7 +206,7 @@ public fun new_currency_with_otw<T: drop>(
     icon_url: String,
     ctx: &mut TxContext,
 ): (CurrencyInitializer<T>, TreasuryCap<T>) {
-    assert!(sui::types::is_one_time_witness(&otw));
+    assert!(sui::types::is_one_time_witness(&otw), EIsNotOTW);
     assert!(is_ascii_printable!(&symbol), EInvalidSymbol);
 
     let treasury_cap = coin::new_treasury_cap(ctx);
