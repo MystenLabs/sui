@@ -197,6 +197,29 @@ impl MovePackage {
         type_origin_table: Vec<TypeOrigin>,
         linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
     ) -> Result<Self, ExecutionError> {
+        Self::new_with_linkage_size(
+            id,
+            version,
+            module_map,
+            max_move_package_size,
+            type_origin_table,
+            linkage_table,
+            None,
+            None,
+        )
+    }
+
+    /// Create a package with all required data and optional total linkage size check.
+    pub fn new_with_linkage_size(
+        id: ObjectID,
+        version: SequenceNumber,
+        module_map: BTreeMap<String, Vec<u8>>,
+        max_move_package_size: u64,
+        type_origin_table: Vec<TypeOrigin>,
+        linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
+        total_linkage_size: Option<u64>,
+        max_total_linkage_size: Option<u64>,
+    ) -> Result<Self, ExecutionError> {
         let pkg = Self {
             id,
             version,
@@ -212,6 +235,17 @@ impl MovePackage {
             }
             .into());
         }
+
+        if let (Some(total_size), Some(max_size)) = (total_linkage_size, max_total_linkage_size) {
+            if total_size > max_size {
+                return Err(ExecutionErrorKind::MovePackageTooBig {
+                    object_size: total_size,
+                    max_object_size: max_size,
+                }
+                .into());
+            }
+        }
+
         Ok(pkg)
     }
 
@@ -404,18 +438,30 @@ impl MovePackage {
         }
 
         immediate_dependencies.remove(&self_id);
-        let linkage_table = build_linkage_table(
+        let (linkage_table, total_deps_size) = build_linkage_table(
             immediate_dependencies,
             transitive_dependencies,
             protocol_config,
         )?;
-        Self::new(
-            storage_id,
+
+        let pkg = Self {
+            id: storage_id,
             version,
             module_map,
-            protocol_config.max_move_package_size(),
             type_origin_table,
             linkage_table,
+        };
+        let total_linkage_size = pkg.size() as u64 + total_deps_size;
+
+        Self::new_with_linkage_size(
+            storage_id,
+            version,
+            pkg.module_map,
+            protocol_config.max_move_package_size(),
+            pkg.type_origin_table,
+            pkg.linkage_table,
+            Some(total_linkage_size),
+            protocol_config.max_total_linkage_size_as_option(),
         )
     }
 
@@ -728,9 +774,10 @@ fn build_linkage_table<'p>(
     mut immediate_dependencies: BTreeSet<ObjectID>,
     transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     protocol_config: &ProtocolConfig,
-) -> Result<BTreeMap<ObjectID, UpgradeInfo>, ExecutionError> {
+) -> Result<(BTreeMap<ObjectID, UpgradeInfo>, u64), ExecutionError> {
     let mut linkage_table = BTreeMap::new();
     let mut dep_linkage_tables = vec![];
+    let mut total_deps_size = 0u64;
 
     for transitive_dep in transitive_dependencies.into_iter() {
         // original_package_id will deserialize a module but only for the purpose of obtaining
@@ -767,6 +814,8 @@ fn build_linkage_table<'p>(
                 },
             );
         }
+
+        total_deps_size += transitive_dep.size() as u64;
     }
     // (1) Every dependency is represented in the transitive dependencies
     if !immediate_dependencies.is_empty() {
@@ -786,7 +835,7 @@ fn build_linkage_table<'p>(
         }
     }
 
-    Ok(linkage_table)
+    Ok((linkage_table, total_deps_size))
 }
 
 fn build_initial_type_origin_table(modules: &[CompiledModule]) -> Vec<TypeOrigin> {
@@ -875,5 +924,162 @@ fn build_upgraded_type_origin_table(
         }
     } else {
         Ok(new_table)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use move_binary_format::file_format::{
+        empty_module, Bytecode, CodeUnit, FunctionDefinition, FunctionHandle,
+        FunctionHandleIndex, IdentifierIndex, ModuleHandleIndex, Signature, SignatureIndex,
+        Visibility,
+    };
+    use move_core_types::identifier::Identifier;
+
+    fn create_test_module(name: &str, address: AccountAddress, num_functions: usize) -> CompiledModule {
+        let mut module = empty_module();
+        module.version = VERSION_6;
+
+        module.address_identifiers.push(address);
+        module.identifiers.push(Identifier::new(name).unwrap());
+
+        module.module_handles[0] = move_binary_format::file_format::ModuleHandle {
+            address: move_binary_format::file_format::AddressIdentifierIndex(0),
+            name: IdentifierIndex(0),
+        };
+
+        for i in 0..num_functions {
+            let func_name = format!("func_{}", i);
+            module.identifiers.push(Identifier::new(func_name).unwrap());
+
+            let sig_idx = module.signatures.len();
+            module.signatures.push(Signature(vec![]));
+
+            module.function_handles.push(FunctionHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex((module.identifiers.len() - 1) as u16),
+                parameters: SignatureIndex(sig_idx as u16),
+                return_: SignatureIndex(sig_idx as u16),
+                type_parameters: vec![],
+            });
+
+            module.function_defs.push(FunctionDefinition {
+                function: FunctionHandleIndex(module.function_handles.len() as u16 - 1),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(sig_idx as u16),
+                    code: vec![Bytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            });
+        }
+
+        module
+    }
+
+    #[test]
+    fn test_max_total_linkage_size_check_passes() {
+        let addr1 = AccountAddress::random();
+        let addr2 = AccountAddress::random();
+
+        let dep_module = create_test_module("dependency", addr1, 5);
+        let dep_package = MovePackage::new(
+            ObjectID::from(addr1),
+            OBJECT_START_VERSION,
+            BTreeMap::from([(
+                "dependency".to_string(),
+                {
+                    let mut bytes = vec![];
+                    dep_module.serialize_with_version(6, &mut bytes).unwrap();
+                    bytes
+                },
+            )]),
+            u64::MAX,
+            vec![],
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let main_module = create_test_module("main", addr2, 5);
+        let main_modules = vec![main_module];
+
+        let protocol_config = ProtocolConfig::get_for_min_version();
+
+        let result = MovePackage::new_initial(
+            &main_modules,
+            &protocol_config,
+            vec![&dep_package],
+        );
+
+        assert!(result.is_ok(), "Package creation should succeed when under size limit");
+    }
+
+    #[test]
+    fn test_max_total_linkage_size_check_fails() {
+        let addr1 = AccountAddress::random();
+        let addr2 = AccountAddress::random();
+
+        let dep_module = create_test_module("large_dependency", addr1, 200);
+        let dep_package = MovePackage::new(
+            ObjectID::from(addr1),
+            OBJECT_START_VERSION,
+            BTreeMap::from([(
+                "large_dependency".to_string(),
+                {
+                    let mut bytes = vec![];
+                    dep_module.serialize_with_version(VERSION_6, &mut bytes).unwrap();
+                    bytes
+                },
+            )]),
+            u64::MAX,
+            vec![],
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let main_module = create_test_module("large_main", addr2, 200);
+        let main_modules = vec![main_module];
+
+        let protocol_config = ProtocolConfig::get_for_min_version();
+        let total_size = dep_package.size() as u64;
+
+        let result = MovePackage::new_with_linkage_size(
+            ObjectID::from(addr2),
+            OBJECT_START_VERSION,
+            BTreeMap::from([(
+                "large_main".to_string(),
+                {
+                    let mut bytes = vec![];
+                    main_modules[0].serialize_with_version(VERSION_6, &mut bytes).unwrap();
+                    bytes
+                },
+            )]),
+            protocol_config.max_move_package_size(),
+            vec![],
+            BTreeMap::from([(
+                ObjectID::from(addr1),
+                UpgradeInfo {
+                    upgraded_id: ObjectID::from(addr1),
+                    upgraded_version: OBJECT_START_VERSION,
+                },
+            )]),
+            Some(total_size + 1000),
+            Some(100),
+        );
+
+        assert!(result.is_err(), "Expected error for package exceeding max_total_linkage_size");
+
+        if let Err(err) = result {
+            match err.kind() {
+                ExecutionErrorKind::MovePackageTooBig { object_size, max_object_size } => {
+                    assert_eq!(*object_size, total_size + 1000);
+                    assert_eq!(*max_object_size, 100);
+                }
+                _ => panic!("Expected MovePackageTooBig error, got: {:?}", err.kind()),
+            }
+        }
     }
 }
