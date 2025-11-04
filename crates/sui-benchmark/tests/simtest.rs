@@ -1647,7 +1647,7 @@ mod test {
         let test_cluster = build_test_cluster(4, 30_000, 1).await;
 
         test_simulated_load(test_cluster.clone(), 25).await;
-        test_cluster.wait_for_epoch_all_nodes(1).await;
+        test_cluster.trigger_reconfiguration().await;
         validate_chunked_execution_time_storage(&test_cluster).await;
     }
 }
