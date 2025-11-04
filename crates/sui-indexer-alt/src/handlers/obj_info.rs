@@ -146,17 +146,18 @@ impl Handler for ObjInfo {
             .execute(conn)
             .await?;
 
-        let deleted_refs = if !references.is_empty() {
-            diesel::insert_into(obj_info_deletion_reference::table)
-                .values(&references)
-                .on_conflict_do_nothing()
-                .execute(conn)
-                .await?
-        } else {
-            0
-        };
+        // let deleted_refs = if !references.is_empty() {
+        // diesel::insert_into(obj_info_deletion_reference::table)
+        // .values(&references)
+        // .on_conflict_do_nothing()
+        // .execute(conn)
+        // .await?
+        // } else {
+        // 0
+        // };
 
-        Ok(count + deleted_refs)
+        // Ok(count + deleted_refs)
+        Ok(count)
     }
 
     /// To prune `obj_info`, entries between `[from, to_exclusive)` are read from the reference
