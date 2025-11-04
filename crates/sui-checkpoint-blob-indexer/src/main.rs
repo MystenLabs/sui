@@ -57,6 +57,10 @@ struct Args {
     #[arg(long)]
     compression_level: Option<i32>,
 
+    /// Optional watermark task name to override the watermark path
+    #[arg(long)]
+    watermark_task: Option<String>,
+
     #[command(flatten)]
     metrics_args: MetricsArgs,
 
@@ -121,7 +125,7 @@ async fn main() -> anyhow::Result<()> {
         unreachable!("clap ensures exactly one storage backend is provided");
     };
 
-    let store = ObjectStore::new(object_store);
+    let store = ObjectStore::new(object_store, args.watermark_task);
 
     let cancel = tokio_util::sync::CancellationToken::new();
 
