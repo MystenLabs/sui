@@ -116,7 +116,7 @@ impl Parameters {
             // Avoid excessive CPU, data and logs in tests.
             Duration::from_millis(250)
         } else {
-            Duration::from_millis(200)
+            Duration::from_millis(50)
         }
     }
 
@@ -313,7 +313,7 @@ impl TonicParameters {
     }
 
     fn default_connection_buffer_size() -> usize {
-        32 << 20
+        64 << 20
     }
 
     fn default_excessive_message_size() -> usize {
