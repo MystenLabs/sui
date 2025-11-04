@@ -4,7 +4,7 @@ CREATE TABLE obj_versions
 (
     object_id          BYTEA  NOT NULL,
     object_version     BIGINT NOT NULL,
-    object_digest      BYTEA  NOT NULL,
+    object_digest      BYTEA,
     cp_sequence_number BIGINT NOT NULL,
     PRIMARY KEY (object_id, object_version)
 ) PARTITION BY HASH (object_id);

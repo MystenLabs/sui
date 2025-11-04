@@ -202,7 +202,9 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
             // Spawn all tasks in parallel, but limit the number of concurrent tasks.
             let semaphore = Arc::new(Semaphore::new(config.prune_concurrency as usize));
             let mut tasks = FuturesUnordered::new();
-            for (from, to_exclusive) in pending_prune_ranges.iter() {
+            let total_tasks = pending_prune_ranges.len();
+
+            for (task_idx, (from, to_exclusive)) in pending_prune_ranges.iter().enumerate() {
                 let semaphore = semaphore.clone();
                 let cancel = cancel.child_token();
                 let metrics = metrics.clone();
@@ -219,7 +221,16 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                             return ((from, to_exclusive), Err(anyhow::anyhow!("Cancelled")));
                         }
                     };
-                    let result = prune_task_impl(metrics, db, handler, from, to_exclusive).await;
+                    let result = prune_task_impl(
+                        metrics,
+                        db,
+                        handler,
+                        from,
+                        to_exclusive,
+                        task_idx,
+                        total_tasks,
+                    )
+                    .await;
                     ((from, to_exclusive), result)
                 }));
             }
@@ -302,6 +313,8 @@ async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
     handler: Arc<H>,
     from: u64,
     to_exclusive: u64,
+    task_idx: usize,
+    total_tasks: usize,
 ) -> Result<(), anyhow::Error> {
     metrics
         .total_pruner_chunks_attempted
@@ -317,7 +330,11 @@ async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
 
     debug!(pipeline = H::NAME, "Pruning from {from} to {to_exclusive}");
 
-    let affected = match handler.prune(from, to_exclusive, &mut conn).await {
+    // TODO (wlmyng) scrappiness
+    let affected = match handler
+        .prune_v2(from, to_exclusive, task_idx, total_tasks, &mut conn)
+        .await
+    {
         Ok(affected) => {
             guard.stop_and_record();
             affected
