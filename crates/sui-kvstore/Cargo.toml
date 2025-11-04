@@ -26,7 +26,3 @@ tokio = { workspace = true, features = ["full"] }
 tonic = { workspace = true, features = ["transport"] }
 tonic-prost.workspace = true
 tracing.workspace = true
-
-[build-dependencies]
-tonic-prost-build.workspace = true
-protox.workspace = true

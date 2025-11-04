@@ -1,26 +1,41 @@
 ---
 title: Currency Standard
-description: The Sui Currency Standard enables you to create a broad range of fungible tokens on the Sui network using either the legacy coin creation or the centralized coin registry system. The Currency Standard on Sui is equivalent to the ERC-20 technical standard on Ethereum.
+description: The Sui Currency Standard enables you to create a broad range of fungible tokens on the Sui network using either the legacy coin creation or the centralized coin registry system. 
 sidebar_label: Currency
-keywords: [ sui Currency Standard, erc-20, erc-20 equivalent, creating coins, Currency Standard, fungible tokens, fungible token standard, treasury capability, regulated coins, denylist object, coin metadata, coin registry, create coin with SDK, use SDK to create coin, mint coin, minting coins, currency registry ]
+keywords: [ sui Currency Standard, erc-20, erc-20 equivalent, creating coins, Currency Standard, fungible tokens, fungible token standard, treasury capability, regulated coins, denylist object, coin registry, create coin with SDK, use SDK to create coin, mint coin, minting coins, currency registry ]
 pagination_prev: null
 ---
 
-The Currency Standard is a technical standard used by Move smart contracts for creating currency on Sui. The `sui::coin_registry` module provides the logic that defines the standard, providing unified metadata, enhanced supply tracking, and improved regulatory features.
+:::danger
 
-The standardization of currency creation on Sui means that wallets, exchanges, and other smart contracts can manage currency created on Sui the same as they manage SUI, without any additional processing logic.
+The Coin and Currency standards are both used to create fungible tokens. However, they use different creation methods and store metadata in a different type of object. 
+
+Coin creates assets using `coin::create_currency` while Currency uses `sui::coin_registry`.
+
+Coin uses `CoinMetadata` while Currency uses `Currency`. Fungible tokens created on Sui using the Coin or Currency standard are referred to as _coins_. 
+
+**Coin** refers to a single object wrapper for a fungible asset, while the term **currency** refers to the object that is created in `CoinRegistry`, which describes the currency properties and setup.
+
+For fungible tokens created on Sui using the [Closed-Loop Token standard](/standards/closed-loop-token.mdx), the documentation uses the term _tokens_. In practice, the terms for both these objects are often interchangeable.
+
+:::
+
+The Currency Standard is a technical standard used by Move smart contracts for creating coins on Sui. The `sui::coin_registry` module provides the logic that defines the standard, unifies metadata, enhances supply tracking, and improves regulatory features.
+
+The standardization of coin creation on Sui means that wallets, exchanges, and other smart contracts can manage coins created on Sui the same as they manage SUI, without any additional processing logic.
 
 See [Sui Tokenomics](/concepts/tokenomics.mdx) to learn more about the SUI native currency and its use on the network.
 
-Currency on Sui can offer specialized abilities while following the Currency Standard. For example, you can create regulated currency that allows its creator to add specific addresses to a deny list, so that the identified addresses cannot use the currency as inputs to transactions. Both legacy and registry systems support regulated currency with varying levels of sophistication.
+Coins on Sui can offer specialized abilities while following the Currency Standard. For example, you can create regulated coins that allow their creator to add specific addresses to a deny list, so that the identified addresses cannot use the coin as inputs to transactions.
 
 ## Fungible tokens
 
-On Sui, the `Currency<T>` type represents open-loop fungible tokens (see `Token<T>` for closed-loop tokens). Currencies are denominated by their type parameter, `T`, which is also associated with metadata (like name, symbol, decimal precision, and so on) that applies to all instances of `Currency<T>`. The `sui::coin_registry` module exposes an interface over `Currency<T>` that treats it as fungible, meaning that a unit of `T` held in one instance of `Currency<T>` is interchangeable with any other unit of `T`, much like how traditional fiat currencies operate.
+The `Currency<T>` type represents open-loop fungible tokens (see `Token<T>` for closed-loop tokens). Currencies are denominated by their type parameter, `T`, which is also associated with metadata (like name, symbol, decimal precision, and so on) that applies to all instances of `Currency<T>`. The `sui::coin_registry` module exposes an interface over `Currency<T>` that treats it as fungible, meaning that a unit of `T` held in one instance of `Currency<T>` is interchangeable with any other unit of `T`, much like how traditional fiat currencies operate.
 
-## Currency creation
 
-The Coin Registry is a centralized system that provides unified currency management through the `sui::coin_registry` module.
+## Coin creation
+
+The Coin Registry is a centralized system that provides unified coin management through the `sui::coin_registry` module.
 
 :::info
 
@@ -35,18 +50,18 @@ The registry is a system-level shared object located at address `0xc`.
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" />
 </details>
 
-#### Core components
+### Core components
 
-**`CoinRegistry`:** The main system object that coordinates all currency-related operations. This shared object serves as the entry point for all registry operations and is created once during network initialization. It's address is `0xc`.
+**`CoinRegistry`:** The main system object that coordinates all coin-related operations. This shared object serves as the entry point for all registry operations and is created once during network initialization. Its address is `0xc`.
 
 **`Currency<T>`:** The core of the registry system, storing comprehensive information about each coin type including:
-- **Metadata management:** Basic currency information like name, symbol, decimals, description, and icon URL.
+- **Metadata management:** Basic coin information like name, symbol, decimals, description, and icon URL.
 - **Supply tracking:** Maintains supply state information (fixed, burn-only, or unknown).
 - **Regulatory status:** Tracks whether the coin is regulated with deny list capabilities.
 - **Capability references:** Links to `TreasuryCap`s and `MetadataCap`s for the coin type.
 - **Extensibility:** Includes extra fields for future enhancements.
 
-#### Supply states
+### Supply states
 
 The registry supports three different supply management models:
 
@@ -54,21 +69,21 @@ The registry supports three different supply management models:
 - **Burn-only supply:** New coins cannot be minted, but existing coins can be burned.
 - **Uncontrolled supply:** `TreasuryCap` holder controls minting and burning.
 
-#### Regulatory states
+### Regulatory states
 
-Currencies can have different regulatory states:
+Coins can have different regulatory states:
 
-- **Regulated:** The currency has an associated `DenyCapV2` that can restrict addresses from using it.
-- **Unregulated:** The currency was created without any deny list capabilities.
+- **Regulated:** The coin has an associated `DenyCapV2` that can restrict addresses from using it.
+- **Unregulated:** The coin was created without any deny list capabilities.
 - **Unknown:** Regulatory status is undetermined, typically from legacy migrations.
 
-#### Creation options
+### Creation options
 
-The registry supports two different currency creation flows:
+The registry supports two different coin creation flows:
 
 - **Standard creation (recommended):**
 
-    Use the `new_currency` function at any time after the currency type is published. The function immediately creates a shared `Currency<T>` object. The type `T` must be a key-only type, as in `public struct MyCoin has key { id: UID }`.
+    Use the `new_currency` function at any time after the coin type is published. The function immediately creates a shared `Currency<T>` object. The type `T` must be a key-only type, as in `public struct MyCoin has key { id: UID }`.
 
     <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="new_currency" signatureOnly noComments />
 
@@ -76,7 +91,7 @@ The registry supports two different currency creation flows:
 
     :::caution
 
-    OTW creation of a new currency is a two-step process. The initialization process begins with package publication. Then, a call to `finalize_registration` is needed to place the currency into the registry.
+    OTW creation of a new coin is a two-step process. The initialization process begins with package publication. Then, a call to `finalize_registration` is needed to place the coin into the registry.
 
     :::
 
@@ -84,7 +99,7 @@ The registry supports two different currency creation flows:
 
     <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="new_currency_with_otw" signatureOnly noComments />
 
-#### Currency initialization
+### Coin initialization
 
 Both creation methods return a `CurrencyInitializer<T>` that allows for additional configuration:
 
@@ -94,17 +109,25 @@ Both creation methods return a `CurrencyInitializer<T>` that allows for addition
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" struct="CurrencyInitializer" />
 
-#### Currency finalization
+### Coin finalization
 
-A currency is not complete until after you call the `finalize` function. The function returns the `MetadataCap<T>` for metadata management. If you used an OTW to create the currency, the function sends the currency to the coin registry; otherwise, it creates the final shared `Currency<T>` object.
+A coin is not complete until after you call the `finalize` function. The function returns the `MetadataCap<T>` for metadata management. If you used an OTW to create the coin, the function sends the coin to the coin registry. Otherwise, it creates the final shared `Currency<T>` object.
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize" signatureOnly />
 
-If you publish a package that uses an OTW to create a currency in the package `init` function, then a call must be made to `finalize_registration` after initialization. The function transforms the currency into a shared object.
+If you publish a package that uses an OTW to create a coin in the package `init` function, then a call must be made to `finalize_registration` after initialization. The function transforms the coin into a shared object.
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize_registration" signatureOnly />
 
-## Regulated currency
+
+## Treasury capability
+
+When you create a coin using the `coin_registry::new_currency` or `coin_registry::new_currency_with_otw` functions, the publisher of the smart contract that creates the coin receives a `TreasuryCap` object upon finalization of the coin. The `TreasuryCap` object is required to mint new coins or to burn current ones (depending on coin supply state). Consequently, only addresses that have access to this object can maintain the coin supply on the Sui network.
+
+The `TreasuryCap` object is transferable, so a third party can take over the management of a coin that you create if you transfer the `TreasuryCap` to them. After transferring the object, you can no longer mint and burn coins yourself.
+
+
+## Regulated coins
 
 The Currency Standard supports creating regulated coins. Use the `make_regulated` function during the initialization phase before calling `finalize`. The function adds deny list capabilities to the `Currency<T>` and tracks the regulatory status within the Coin Registry. The function returns a `DenyCap` that allows the bearer to maintain the list of addresses on the deny list.
 
@@ -117,21 +140,15 @@ Regulated coin example
 
 ### `DenyList` object
 
-A `DenyList` shared object created by the system contains addresses that aren't able to use a particular regulated currency. If you have access to the `DenyCap`, then you can use the `sui::coin` module to maintain the list of users. Use the functions `coin::deny_list_v2_add` and `coin::deny_list_v2_remove` functions to add and remove addresses.
+The list of addresses that cannot use a particular regulated coin is held within a system-created `DenyList` shared object. If you have access to the `DenyCap`, then you can use the `coin::deny_list_v2_add` and `coin::deny_list_v2_remove` functions to add and remove addresses.
 
 ### Global pause switch
 
-Regulated currencies include an `allow_global_pause` Boolean field. When set to `true`, the bearer of the `DenyCapV2` object for the currency coin type can use the `coin::deny_list_v2_enable_global_pause` function to pause coin activity indefinitely. Immediately upon the bearer initiating the pause, the network disallows the coin type as input for any transactions. At the start of the next epoch (epochs last ~24 hours), the network additionally disallows all addresses from receiving the coin type.
+Regulated coin objects include an `allow_global_pause` Boolean field. When set to `true`, the bearer of the `DenyCapV2` object for the coin type can use the `coin::deny_list_v2_enable_global_pause` function to pause coin activity indefinitely. Immediately upon the bearer initiating the pause, the network disallows the coin type as input for any transactions. At the start of the next epoch (epochs last approximately 24 hours), the network additionally disallows all addresses from receiving the coin type.
 
-When the bearer of the `DenyCapV2` object for the currency coin type removes the pause using `coin::deny_list_v2_disable_global_pause`, the coins are immediately available to use again as transaction inputs. Addresses cannot receive the coin type, however, until the following epoch.
+When the bearer of the `DenyCapV2` object for the coin type removes the pause using `coin::deny_list_v2_disable_global_pause`, the coins are immediately available to use again as transaction inputs. Addresses cannot receive the coin type, however, until the following epoch.
 
-The global pause functionality does not affect the deny list for the currency. After clearing the pause for the currency, any addresses included in the deny list are still unable to interact with the currency's coin.
-
-## `TreasuryCap`
-
-When you create a currency using the `coin_registry::new_currency` or `coin_registry::new_currency_with_otw` functions, the publisher of the smart contract that creates the coin receives a `TreasuryCap` object upon finalization of the currency. The `TreasuryCap` object is required to mint new currency coins or to burn current ones (depending on currency supply state). Consequently, only addresses that have access to this object are able to maintain the currency supply on the Sui network.
-
-The `TreasuryCap` object is transferable, so a third party can take over the management of a currency that you create if you transfer the `TreasuryCap` to them. After transferring the object, you are no longer able to mint and burn coins yourself.
+The global pause functionality does not affect the deny list for the coin. After clearing the pause for the coin, any addresses included in the deny list are still unable to interact with the coin.
 
 ## Currency metadata
 
@@ -145,16 +162,14 @@ Currency metadata is stored centrally within the `Currency<T>` object in the reg
 
 The fields of the metadata objects include the following:
 
-#### `CoinMetadata`
-
-| Name          | Description                                                                                                                                                                                              |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `registry`          | The `CoinRegistry` system object ID (`0x3`).                                                                                                                                                             |
-| `decimals`    | The number of decimals the token uses. If you set this field to `3`, then a token of value `1000` would display as `1.000`.                                                                              |
-| `name`        | Name of the coin.                                                                                                                                                                                        |
-| `symbol`      | Symbol for the coin. This might be the same value as `name`, but is typically fewer than five letters, all capitals. For example, `SUI` is the `symbol` for the native coin on Sui but its `name` is also `SUI`. **Only ASCII printable characters allowed**.|
-| `description` | A short description to describe the token.                                                                                                                                                               |
-| `icon_url`    | **Required field**. The URL for the token's icon, used for display in wallets, explorers, and other apps.                                                                                                                    |
+| Name          | Description  |
+| ------------- | ---------------------|
+| `registry`    | The `CoinRegistry` system object ID (`0x3`). |
+| `decimals`    | The number of decimals the coin uses. If you set this field to `3`, then a coin of value `1000` displays as `1.000`.|
+| `name`        | Name of the coin. |
+| `symbol`      | Symbol for the coin. This might be the same as `name`, but is typically fewer than 5 all capital letters. For example, `SUI` is the `symbol` for the native coin on Sui but its `name` is also `SUI`. |
+| `description` | A short description to describe the coin. |
+| `icon_url`    | The URL for the coin's icon, used for display in wallets, explorers, and other apps. |
 
 ## Minting and burning coins
 
@@ -173,12 +188,11 @@ Use the `coin::mint` function to create new coins.
 The signature shows that a `Coin<T>` results from calling the function with a `TreasuryCap`, value for the coin created, and the transaction context. The function updates the total supply in `TreasuryCap` automatically. Upon display, the coin `value` respects the `decimals` value in the metadata. So, if you supply 1000000 as the coin `value` that has a `decimal` value of `6`, the coin's value displays as `1.000000`.
 
 ### Burn
-
-For currencies with a burn-only supply status, coins can be burned directly through the registry using `coin_registry::burn` and `coin_registry::burn_balance` functions without requiring the `TreasuryCap`.
+Coins with a burn-only supply status can be burned directly through the registry using `coin_registry::burn` and `coin_registry::burn_balance` functions without requiring the `TreasuryCap`.
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="burn,burn_balance" signatureOnly noComments />
 
-For currencies with an unknown supply status, use the `coin::burn` function to destroy current coins.
+For coins with an unknown supply status, use the `coin::burn` function to destroy current coins.
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/coin.move" mode="code" fun="burn" signatureOnly noComments />
 
@@ -186,17 +200,17 @@ The signature shows that only the `TreasuryCap` and coin object you want to burn
 
 ## Adding and removing addresses to and from the deny list
 
-The deny list is only applicable to regulated currencies. When you create a regulated currency, you receive a `DenyCapV2` that authorizes the bearer to add and remove addresses from the system-created `DenyList` object. Any address on the list for your currency is unable to use its coins as an input to transactions, starting immediately upon being added. At the epoch that follows address addition to the deny list, the addresses additionally cannot receive the coin type. In other words, an address that gets added to the deny list for a currency is immediately unable to send the coin. At the start of the following epoch, the address is still unable to send the coin but is also unable to receive it. From that point, the address cannot interact with the currency until expressly removed from the deny list by the `DenyCapV2` bearer.
+The deny list is only applicable to regulated coins. As mentioned previously, when you create a regulated coin you receive a `DenyCapV2` that authorizes the bearer to add and remove addresses from the system-created `DenyList` object. Any address on the list for your coin cannot use the coin as an input to transactions starting immediately upon being added. At the epoch that follows address addition to the deny list, the addresses additionally cannot receive the coin type. In other words, an address that gets added to the deny list for a coin type is immediately unable to send the coin. At the start of the following epoch, the address is still unable to send the coin but is also unable to receive it. From that point, the address cannot interact with the coin until expressly removed from the deny list by the `DenyCapV2` bearer.
 
 <ImportContent source="coin-standards.mdx" mode="snippet" />
 
-## Registry query functions
+## Query functions
 
 You can query information directly from the `Currency<T>` object.
 
-### Basic metadata
+### Metadata
 
-- `decimals<T>()`: Get decimal precision.
+- `decimals<T>()`: Get number of decimals.
 
     <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="decimals" noTitle signatureOnly noComments />
 
@@ -258,9 +272,9 @@ You can query information directly from the `Currency<T>` object.
 
     <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="deny_cap_id" noTitle signatureOnly noComments />
 
-## Update coin metadata
+## Update currency metadata
 
-Metadata updates require the `MetadataCap<T>` object, which is only available to the bearer of the `TreasuryCap` for a currency. The bearer of the `TreasuryCap` can claim the `MetadataCap` using the `claim_metadata_cap` function only once. The `Currency` tracks the claimed status of the capability through its `metadata_cap_id` field.
+Metadata updates require the `MetadataCap<T>` object, which is only available to the bearer of the `TreasuryCap` for a coin. The bearer of the `TreasuryCap` can claim the `MetadataCap` using the `claim_metadata_cap` function only once. `Currency` tracks the claimed status of the capability through its `metadata_cap_id` field.
 
 The bearer of the `MetadataCap` can use the available getter functions to update values.
 
@@ -296,51 +310,11 @@ Manage the metadata capability using:
 
     :::
 
-## Migration from Coin to Currency Standard
-
-The Currency Standard replaces the legacy Coin Standard. Sui provides a migration path from the `CoinMetadata<T>` system while maintaining backward compatibility.
-
-The migration system is designed with specific constraints to maintain data integrity and preserve existing functionality. Migration can only occur permissionlessly when done by reference, meaning the original `CoinMetadata` object remains intact while its data is copied to create a new `Currency` entry in the registry. This approach allows for safe registration of new currency data and updates to existing currency data, but only as long as the `MetadataCap` has not yet been claimed.
-
-The system cannot allow permissionless migration by value, however, where the original `CoinMetadata` object would be consumed or destroyed during migration. This restriction exists because some coins have governance mechanisms that control `CoinMetadata` updates. Allowing value-based migration would irreversibly break those existing governance workflows by destroying the metadata objects that governance systems expect to manage.
-
-The destruction of legacy `CoinMetadata` objects is only permitted after the corresponding `MetadataCap` has been claimed, serving as proof that the currency's owner has taken control through the new registry system. This ensures that legacy metadata cannot be accidentally destroyed while governance systems still depend on it, and provides a clear transition path where owners must explicitly claim control before legacy objects can be cleaned up.
-
-This design preserves backward compatibility while enabling a smooth transition to the centralized registry system, protecting existing governance mechanisms until owners are ready to migrate fully to the new system.
-
-Some of the benefits to migrate to the Coin Registry include:
-
-- **Centralized management:** Single source of truth for all coin information.
-- **Enhanced features:** Access to advanced supply models and regulatory tracking.
-- **Ecosystem integration:** Better support for wallets, exchanges, and dApps.
-- **Future-proofing:** Access to ongoing registry enhancements.
-
-### Migration process
-
-1. **Metadata migration:** Use `migrate_legacy_metadata<T>()` to create a new `Currency<T>` entry based on existing `CoinMetadata<T>` information.
-    <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="migrate_legacy_metadata" noTitle signatureOnly noComments />
-
-1. **Regulatory migration:** For coins with deny list capabilities, use:
-   - `migrate_regulated_state_by_metadata<T>()`: Migrate based on existing metadata.
-
-        <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="migrate_regulated_state_by_metadata" noTitle signatureOnly noComments />
-
-   - `migrate_regulated_state_by_cap<T>()`: Migrate based on deny capability.
-
-        <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="migrate_regulated_state_by_cap" noTitle signatureOnly noComments />
-
-### Migration function mappings
-
-Smart contracts should update logic that relies on the `coin` module to use the `coin_registry` module instead:
-
-- `coin::create_currency` -> `coin_registry::new_currency_with_otw`
-- `coin::create_regulated_currency_v2` -> `coin_registry::new_currency_with_otw`
-
-<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="new_currency_with_otw" signatureOnly noComments />
+<ImportContent source="coin-standards-migrate.mdx" mode="snippet" />
 
 ## Best practices
 
-### For currency creators
+### For coin creators
 
 - **Set supply model early:** Decide on supply model during initialization (fixed, burn-only, or flexible).
 - **Consider regulation:** Evaluate whether deny list capabilities are needed.
@@ -364,7 +338,7 @@ Smart contracts should update logic that relies on the `coin` module to use the 
 
 **Capability security:**
 - **`MetadataCap`:** Protect metadata capabilities as they control coin branding.
-- **`TreasuryCap`:** Treasury capabilities determine minting/burning permissions.
+- **`TreasuryCap`:** Treasury capabilities determine minting and burning permissions.
 - **`DenyCapV2`:** Deny capabilities can restrict coin usage.
 
 **Validation:**

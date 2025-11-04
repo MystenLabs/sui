@@ -1117,7 +1117,7 @@ async fn finalize_registration(
     let signed_tx = test_cluster.wallet.sign_transaction(&tx_data).await;
 
     // Execute the finalize_registration transaction and wait for checkpoint
-    let mut client = sui_rpc::client::v2::Client::new(test_cluster.rpc_url().to_owned()).unwrap();
+    let mut client = sui_rpc::Client::new(test_cluster.rpc_url().to_owned()).unwrap();
 
     let _finalize_tx = super::super::execute_transaction(&mut client, &signed_tx).await;
 }

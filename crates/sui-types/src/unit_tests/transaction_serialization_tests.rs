@@ -8,15 +8,6 @@ use crate::transaction::{ObjectArg, SharedObjectMutability};
 fn test_shared_object_backward_compatibility() {
     use bcs;
 
-    // Old version of SharedObject with bool field
-    #[derive(serde::Serialize, serde::Deserialize)]
-    #[allow(dead_code)]
-    struct OldSharedObject {
-        id: ObjectID,
-        initial_shared_version: SequenceNumber,
-        mutable: bool,
-    }
-
     // Old version of ObjectArg enum
     #[derive(serde::Serialize, serde::Deserialize)]
     enum OldObjectArg {

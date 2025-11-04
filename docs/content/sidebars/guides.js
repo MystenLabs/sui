@@ -33,6 +33,7 @@ const guides = [
 			'guides/developer/getting-started/get-address',
 			'guides/developer/getting-started/get-coins',
 			'guides/developer/getting-started/hello-world',
+			'guides/developer/getting-started/app-frontends',
 			'guides/developer/getting-started/next-steps',
 		],
 	},
@@ -203,6 +204,7 @@ const guides = [
 			'guides/operator/archives',
 			'guides/operator/exchange-integration',
 			'guides/operator/bridge-node-configuration',
+			'guides/operator/indexer-stack-setup',
 			{
 				type: 'category',
 				label: 'Sui Validator Nodes',

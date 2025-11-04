@@ -58,7 +58,6 @@ tap.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
-tokio-retry.workspace = true
 tokio-stream.workspace = true
 tracing.workspace = true
 twox-hash.workspace = true

@@ -5232,6 +5232,7 @@ async fn test_consensus_message_processed() {
                 .acquire_shared_version_assignments_from_effects(
                     &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
                     &effects1,
+                    None,
                     authority2.get_object_cache_reader().as_ref(),
                 )
                 .unwrap();

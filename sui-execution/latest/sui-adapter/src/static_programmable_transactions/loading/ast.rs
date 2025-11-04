@@ -53,9 +53,16 @@ pub enum ObjectArg {
     SharedObject {
         id: ObjectID,
         initial_shared_version: SequenceNumber,
-        mutable: bool,
+        mutability: ObjectMutability,
         kind: SharedObjectKind,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObjectMutability {
+    Mutable,
+    Immutable,
+    NonExclusiveWrite,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -149,11 +156,11 @@ impl ObjectArg {
         }
     }
 
-    pub fn is_mutable(&self) -> bool {
+    pub fn mutability(&self) -> ObjectMutability {
         match self {
-            ObjectArg::ImmObject(_) => false,
-            ObjectArg::OwnedObject(_) => true,
-            ObjectArg::SharedObject { mutable, .. } => *mutable,
+            ObjectArg::ImmObject(_) => ObjectMutability::Immutable,
+            ObjectArg::OwnedObject(_) => ObjectMutability::Mutable,
+            ObjectArg::SharedObject { mutability, .. } => *mutability,
         }
     }
 }

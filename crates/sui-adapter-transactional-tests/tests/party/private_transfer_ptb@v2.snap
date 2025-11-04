@@ -38,7 +38,7 @@ task 5, lines 36-40:
 //> sui::transfer::party_transfer<ex::m::Priv>(Input(0), Result(0))
 // Private transfer
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::party_transfer. Use the public variant instead, sui::transfer::public_party_transfer"), command: Some(1) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call function 'sui::transfer::party_transfer' since type parameter #0 can only be instantiated with types defined within the caller's module. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_party_transfer'."), command: Some(1) } }
 
 task 6, lines 41-44:
 //# programmable --inputs @0
@@ -46,4 +46,4 @@ task 6, lines 41-44:
 //> 1: sui::party::single_owner(Input(0));
 //> sui::transfer::party_transfer<ex::m::Priv>(Result(0), Result(1))
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::party_transfer. Use the public variant instead, sui::transfer::public_party_transfer"), command: Some(2) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call function 'sui::transfer::party_transfer' since type parameter #0 can only be instantiated with types defined within the caller's module. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_party_transfer'."), command: Some(2) } }

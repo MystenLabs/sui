@@ -104,10 +104,21 @@ const DEFAULT_GRAPHQL_PORT: u16 = 9125;
 
 #[derive(Args)]
 pub struct RpcArgs {
-    /// Start an indexer with a local PostgreSQL database.
-    /// The database will be created/opened in the network's configuration directory.
-    #[clap(long)]
-    with_indexer: bool,
+    /// Start an indexer with a PostgreSQL database.
+    ///
+    /// Three modes of operation:
+    /// - Not specified: No indexer is started (unless --with-graphql is set)
+    /// - `--with-indexer`: Create/use a temporary database in the network's configuration directory
+    /// - `--with-indexer=<URL>`: Use the provided PostgreSQL database URL
+    ///
+    /// When providing a database URL, use the = sign: `--with-indexer=postgres://user:pass@host:5432/db`
+    #[clap(
+        long,
+        num_args = 0..=1,
+        require_equals = true,
+        value_name = "DATABASE_URL"
+    )]
+    with_indexer: Option<Option<Url>>,
 
     /// Start a Consistent Store with default host and port: 0.0.0.0:9124. This flag accepts also a
     /// port, a host, or both (e.g., 0.0.0.0:9124).
@@ -145,7 +156,7 @@ pub struct RpcArgs {
 impl RpcArgs {
     pub fn for_testing() -> Self {
         Self {
-            with_indexer: false,
+            with_indexer: None,
             with_consistent_store: None,
             with_graphql: None,
         }
@@ -859,8 +870,14 @@ async fn start(
     }
 
     // Automatically enable indexer if GraphQL is enabled
-    let with_indexer = with_indexer || with_graphql.is_some();
-    if with_indexer {
+    // If with_indexer is None but with_graphql is Some, default to temporary database (Some(None))
+    let with_indexer = match (with_indexer, with_graphql.is_some()) {
+        (Some(db_url), _) => Some(db_url),
+        (None, true) => Some(None),
+        (None, false) => None,
+    };
+
+    if with_indexer.is_some() {
         ensure!(
             !no_full_node,
             "Cannot start the indexer without a fullnode."
@@ -997,7 +1014,7 @@ async fn start(
     // the indexer requires to set the fullnode's data ingestion directory
     // note that this overrides the default configuration that is set when running the genesis
     // command, which sets data_ingestion_dir to None.
-    if with_indexer && data_ingestion_dir.is_none() {
+    if with_indexer.is_some() && data_ingestion_dir.is_none() {
         data_ingestion_dir = Some(mysten_common::tempdir()?.keep())
     }
 
@@ -1035,31 +1052,38 @@ async fn start(
     let cancel = CancellationToken::new();
     let mut rpc_services = vec![];
 
-    // Start a local PostgreSQL database if needed
-    let database = if with_indexer {
-        let pg_dir = config_dir.join("indexer");
-        let port = get_available_port();
+    // Set-up the database for the indexer, if needed
+    let (_database, database_url) = match with_indexer {
+        None => (None, None),
 
-        info!("Starting local PostgreSQL database at {pg_dir:?} on port {port}");
+        // Temporary (local) database in config directory
+        Some(None) => {
+            let pg_dir = config_dir.join("indexer");
+            let port = get_available_port();
 
-        let db = if pg_dir.exists() {
-            LocalDatabase::new(pg_dir, port).context("Failed to start local PostgreSQL database")?
-        } else {
-            LocalDatabase::new_initdb(pg_dir, port)
-                .context("Failed to initialize and start local PostgreSQL database")?
-        };
+            info!("Starting local PostgreSQL database at {pg_dir:?} on port {port}");
 
-        info!("Local PostgreSQL database started at {}", db.url());
-        Some(db)
-    } else {
-        None
+            let db = if pg_dir.exists() {
+                LocalDatabase::new(pg_dir, port)
+                    .context("Failed to start local PostgreSQL database")?
+            } else {
+                LocalDatabase::new_initdb(pg_dir, port)
+                    .context("Failed to initialize and start local PostgreSQL database")?
+            };
+
+            let url = db.url().clone();
+            info!("Starting indexer with local database");
+            (Some(db), Some(url))
+        }
+
+        // Use provided database URL
+        Some(Some(url)) => {
+            info!("Starting indexer with provided database");
+            (None, Some(url))
+        }
     };
 
-    // Get the database URL from the local database
-    let database_url = database.as_ref().map(|db| db.url().clone());
     let pipelines = if let Some(ref db_url) = database_url {
-        info!("Starting the indexer with database: {db_url}");
-
         let client_args = ClientArgs {
             local_ingestion_path: data_ingestion_dir.clone(),
             ..Default::default()
@@ -1146,6 +1170,9 @@ async fn start(
             fullnode_rpc_url: Some(fullnode_rpc_url.clone()),
         };
 
+        let mut graphql_config = GraphQlConfig::default();
+        graphql_config.zklogin.env = sui_indexer_alt_graphql::config::ZkLoginEnv::Test;
+
         let handle = start_graphql(
             database_url.clone(),
             None,
@@ -1156,7 +1183,7 @@ async fn start(
             graphql_args,
             SystemPackageTaskArgs::default(),
             "0.0.0",
-            GraphQlConfig::default(),
+            graphql_config,
             pipelines,
             &prometheus_registry,
             cancel.child_token(),
@@ -1203,6 +1230,7 @@ async fn start(
                     rpc: fullnode_rpc_url,
                     ws: None,
                     basic_auth: None,
+                    chain_id: None,
                 }],
                 active_address: Some(address),
                 active_env: Some("localnet".to_string()),
@@ -1255,7 +1283,10 @@ async fn start(
     // Trigger cancellation to shut down all RPC services, and wait for all services to exit
     // cleanly.
     cancel.cancel();
-    future::join_all(rpc_services).await;
+    // TODO (amnn): The indexer can take some time to shut down if the database it is talking to
+    // stops responding. Re-enable graceful shutdown once cancel handling is revamped across the
+    // framework.
+    // future::join_all(rpc_services).await;
     Ok(())
 }
 
@@ -1507,6 +1538,7 @@ async fn genesis(
         ),
         ws: None,
         basic_auth: None,
+        chain_id: None,
     });
     client_config.add_env(SuiEnv::devnet());
 
@@ -1532,6 +1564,7 @@ async fn prompt_if_no_config(
                 rpc: v.into_string().unwrap(),
                 ws: None,
                 basic_auth: None,
+                chain_id: None,
             }),
             None => {
                 if accept_defaults {
@@ -1571,6 +1604,7 @@ async fn prompt_if_no_config(
                             rpc: url,
                             ws: None,
                             basic_auth: None,
+                            chain_id: None,
                         }
                     })
                 } else {
@@ -1631,6 +1665,9 @@ async fn prompt_if_no_config(
             }
             .persisted(wallet_conf_path)
             .save()?;
+
+            let context = WalletContext::new(wallet_conf_path)?;
+            let _ = context.cache_chain_id(&context.get_client().await?).await?;
         }
     }
     Ok(())

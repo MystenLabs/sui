@@ -16,7 +16,7 @@ use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSeque
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
 
-pub use sui_rpc::client::AuthInterceptor;
+pub use sui_rpc::client::HeadersInterceptor;
 pub use sui_rpc::client::ResponseExt;
 
 pub type Result<T, E = tonic::Status> = std::result::Result<T, E>;
@@ -25,7 +25,7 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 use tonic::Status;
 
 #[derive(Clone)]
-pub struct Client(sui_rpc::client::v2::Client);
+pub struct Client(sui_rpc::Client);
 
 impl Client {
     pub fn new<T>(uri: T) -> Result<Self>
@@ -33,11 +33,11 @@ impl Client {
         T: TryInto<http::Uri>,
         T::Error: Into<BoxError>,
     {
-        sui_rpc::client::v2::Client::new(uri).map(Self)
+        sui_rpc::Client::new(uri).map(Self)
     }
 
-    pub fn with_auth(self, auth: AuthInterceptor) -> Self {
-        Self(self.0.with_auth(auth))
+    pub fn with_headers(self, headers: HeadersInterceptor) -> Self {
+        Self(self.0.with_headers(headers))
     }
 
     pub async fn get_latest_checkpoint(&mut self) -> Result<CertifiedCheckpointSummary> {

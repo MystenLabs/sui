@@ -244,6 +244,9 @@ pub enum ExecutionFailureStatus {
 
     #[error("Insufficient balance for transaction withdrawal")]
     InsufficientBalanceForWithdraw,
+
+    #[error("Non-exclusive write input object {id} has been modified")]
+    NonExclusiveWriteInputObjectModified { id: ObjectID },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

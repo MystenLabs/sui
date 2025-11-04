@@ -125,7 +125,7 @@ where
         .save_loaded_runtime_objects(loaded_runtime_objects);
     env.state_view
         .save_wrapped_object_containers(wrapped_object_containers);
-    env.state_view.record_execution_results(finished?);
+    env.state_view.record_execution_results(finished?)?;
     env.state_view
         .record_generated_object_ids(generated_object_ids);
     Ok(mode_results)

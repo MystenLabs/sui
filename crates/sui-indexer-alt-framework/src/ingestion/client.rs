@@ -9,7 +9,7 @@ use backoff::Error as BE;
 use backoff::ExponentialBackoff;
 use backoff::backoff::Constant;
 use sui_rpc_api::Client;
-use sui_rpc_api::client::AuthInterceptor;
+use sui_rpc_api::client::HeadersInterceptor;
 use sui_storage::blob::Blob;
 use tokio_util::bytes::Bytes;
 use tracing::{debug, warn};
@@ -97,7 +97,9 @@ impl IngestionClient {
         metrics: Arc<IndexerMetrics>,
     ) -> IngestionResult<Self> {
         let client = if let Some(username) = username {
-            Client::new(url.to_string())?.with_auth(AuthInterceptor::basic(username, password))
+            let mut headers = HeadersInterceptor::new();
+            headers.basic_auth(username, password);
+            Client::new(url.to_string())?.with_headers(headers)
         } else {
             Client::new(url.to_string())?
         };

@@ -11,7 +11,7 @@ use move_core_types::language_storage::StructTag;
 use sui_types::{
     error::ExecutionError,
     object::Owner,
-    transaction::{self as P, CallArg, ObjectArg},
+    transaction::{self as P, CallArg, ObjectArg, SharedObjectMutability},
 };
 
 pub fn transaction(
@@ -82,7 +82,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
                 L::InputArg::Object(L::ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
-                    mutable: mutability.is_mutable(),
+                    mutability: object_mutability(mutability),
                     kind,
                 }),
                 L::InputType::Fixed(ty),
@@ -93,6 +93,14 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
             todo!("Load balance withdraw call arg")
         }
     })
+}
+
+fn object_mutability(mutability: SharedObjectMutability) -> L::ObjectMutability {
+    match mutability {
+        SharedObjectMutability::Mutable => L::ObjectMutability::Mutable,
+        SharedObjectMutability::NonExclusiveWrite => L::ObjectMutability::NonExclusiveWrite,
+        SharedObjectMutability::Immutable => L::ObjectMutability::Immutable,
+    }
 }
 
 fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError> {

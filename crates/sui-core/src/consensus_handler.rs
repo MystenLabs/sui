@@ -17,7 +17,7 @@ use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use itertools::Itertools as _;
 use lru::LruCache;
 use mysten_common::{
-    assert_reachable, debug_fatal, in_test_configuration,
+    assert_reachable, assert_sometimes, debug_fatal, in_test_configuration,
     random_util::randomize_cache_capacity_in_tests,
 };
 use mysten_metrics::{
@@ -1437,11 +1437,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             .or_default()
                             .push(transaction);
                     } else {
-                        antithesis_sdk::assert_sometimes!(
+                        assert_sometimes!(
                             transaction.transaction_data().uses_randomness(),
                             "cancelled randomness-using transaction"
                         );
-                        antithesis_sdk::assert_sometimes!(
+                        assert_sometimes!(
                             !transaction.transaction_data().uses_randomness(),
                             "cancelled non-randomness-using transaction"
                         );

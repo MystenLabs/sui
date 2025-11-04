@@ -248,6 +248,10 @@ impl MoveObject {
         self.version
     }
 
+    pub fn contents_and_type_equal(&self, other: &Self) -> bool {
+        self.contents == other.contents && self.type_ == other.type_
+    }
+
     /// Contents of the object that are specific to its type--i.e., not its ID and version, which all objects have
     /// For example if the object was declared as `struct S has key { id: ID, f1: u64, f2: bool },
     /// this returns the slice containing `f1` and `f2`.
