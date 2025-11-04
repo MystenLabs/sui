@@ -116,7 +116,7 @@ impl Parameters {
             // Avoid excessive CPU, data and logs in tests.
             Duration::from_millis(250)
         } else {
-            Duration::from_millis(50)
+            Duration::from_millis(200)
         }
     }
 
