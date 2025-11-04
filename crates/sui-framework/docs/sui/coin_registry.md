@@ -658,6 +658,16 @@ Attempt to migrate legacy metadata for a <code><a href="../sui/coin_registry.md#
 
 
 
+<a name="sui_coin_registry_ENotOneTimeWitness"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_ENotOneTimeWitness">ENotOneTimeWitness</a>: vector&lt;u8&gt; = b"Type is expected to be OTW";
+</code></pre>
+
+
+
 <a name="sui_coin_registry_REGULATED_COIN_VERSION"></a>
 
 Incremental identifier for regulated coin versions in the deny list.
@@ -760,7 +770,7 @@ This is a two-step operation:
     <a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>: String,
     ctx: &<b>mut</b> TxContext,
 ): (<a href="../sui/coin_registry.md#sui_coin_registry_CurrencyInitializer">CurrencyInitializer</a>&lt;T&gt;, TreasuryCap&lt;T&gt;) {
-    <b>assert</b>!(<a href="../sui/types.md#sui_types_is_one_time_witness">sui::types::is_one_time_witness</a>(&otw));
+    <b>assert</b>!(<a href="../sui/types.md#sui_types_is_one_time_witness">sui::types::is_one_time_witness</a>(&otw), <a href="../sui/coin_registry.md#sui_coin_registry_ENotOneTimeWitness">ENotOneTimeWitness</a>);
     <b>assert</b>!(<a href="../sui/coin_registry.md#sui_coin_registry_is_ascii_printable">is_ascii_printable</a>!(&<a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>), <a href="../sui/coin_registry.md#sui_coin_registry_EInvalidSymbol">EInvalidSymbol</a>);
     <b>let</b> treasury_cap = <a href="../sui/coin.md#sui_coin_new_treasury_cap">coin::new_treasury_cap</a>(ctx);
     <b>let</b> currency = <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt; {
