@@ -1551,7 +1551,7 @@ mod checked {
                             );
                         };
                         let digest = event.digest();
-                        AccumulatorValue::EventDigest(event_idx, digest)
+                        AccumulatorValue::EventDigest(vec![(event_idx, digest)])
                     }
                 };
 
