@@ -100,6 +100,38 @@ async fn emit_test_event(
     test_cluster.sign_and_execute_transaction(&tx_data).await;
 }
 
+async fn emit_multiple_test_events(
+    test_cluster: &TestCluster,
+    package_id: ObjectID,
+    sender: SuiAddress,
+    values: Vec<u64>,
+) -> sui_json_rpc_types::SuiTransactionBlockResponse {
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let vals = ptb.pure(values).unwrap();
+    ptb.programmable_move_call(
+        package_id,
+        move_core_types::identifier::Identifier::new("events").unwrap(),
+        move_core_types::identifier::Identifier::new("emit_multiple").unwrap(),
+        vec![],
+        vec![vals],
+    );
+    let gas_object = test_cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(sender)
+        .await
+        .unwrap()
+        .unwrap();
+    let tx_data = TransactionData::new(
+        sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb.finish()),
+        sender,
+        gas_object,
+        50_000_000_000,
+        rgp,
+    );
+    test_cluster.sign_and_execute_transaction(&tx_data).await
+}
+
 async fn query_authenticated_events(
     rpc_url: &str,
     stream_id: &str,
@@ -808,5 +840,85 @@ async fn authenticated_events_backfill_test() {
     assert_eq!(
         count, 5,
         "expected 5 authenticated events after backfill, got {count}"
+    );
+}
+
+#[sim_test]
+async fn authenticated_events_multiple_events_per_transaction() {
+    let _guard: sui_protocol_config::OverrideGuard =
+        ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+            cfg.enable_authenticated_event_streams_for_testing();
+            cfg
+        });
+
+    let rpc_config = create_rpc_config_with_authenticated_events();
+
+    let test_cluster = TestClusterBuilder::new()
+        .disable_fullnode_pruning()
+        .with_rpc_config(rpc_config)
+        .build()
+        .await;
+
+    let package_id = publish_test_package(&test_cluster).await;
+    let sender = test_cluster.wallet.config.keystore.addresses()[0];
+
+    let _response =
+        emit_multiple_test_events(&test_cluster, package_id, sender, vec![100, 200, 300]).await;
+
+    let mut event_client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let mut req = ListAuthenticatedEventsRequest::default();
+    req.stream_id = Some(package_id.to_string());
+    req.start_checkpoint = Some(0);
+    req.page_size = None;
+    req.page_token = None;
+    let response = event_client
+        .list_authenticated_events(req)
+        .await
+        .unwrap()
+        .into_inner();
+
+    let count = response.events.len();
+    assert_eq!(
+        count, 3,
+        "expected 3 authenticated events (all from one transaction), got {count}"
+    );
+
+    #[derive(serde::Deserialize)]
+    struct E {
+        value: u64,
+    }
+
+    let values: Vec<u64> = response
+        .events
+        .iter()
+        .filter_map(|event| {
+            event.event.as_ref().and_then(|e| {
+                e.contents.as_ref().and_then(|c| {
+                    c.value
+                        .as_ref()
+                        .and_then(|v| bcs::from_bytes::<E>(v).ok().map(|e| e.value))
+                })
+            })
+        })
+        .collect();
+
+    assert_eq!(values.len(), 3, "should extract 3 event values");
+    assert!(values.contains(&100), "should contain event with value 100");
+    assert!(values.contains(&200), "should contain event with value 200");
+    assert!(values.contains(&300), "should contain event with value 300");
+
+    let tx_indices: std::collections::HashSet<u32> = response
+        .events
+        .iter()
+        .filter_map(|event| event.transaction_idx)
+        .collect();
+
+    assert_eq!(
+        tx_indices.len(),
+        1,
+        "all events should be from the same transaction"
     );
 }

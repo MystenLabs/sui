@@ -162,7 +162,7 @@ impl MergedValueIntermediate {
         match value {
             AccumulatorValue::Integer(_) => Self::SumU128(0),
             AccumulatorValue::IntegerTuple(_, _) => Self::SumU128U128(0, 0),
-            AccumulatorValue::EventDigest(_, _) => Self::Events(vec![]),
+            AccumulatorValue::EventDigest(_) => Self::Events(vec![]),
         }
     }
 
@@ -178,13 +178,15 @@ impl MergedValueIntermediate {
                 *v1 += w1 as u128;
                 *v2 += w2 as u128;
             }
-            (Self::Events(commitments), AccumulatorValue::EventDigest(event_idx, digest)) => {
-                commitments.push(EventCommitment::new(
-                    checkpoint_seq,
-                    transaction_idx,
-                    event_idx,
-                    digest,
-                ));
+            (Self::Events(commitments), AccumulatorValue::EventDigest(event_digests)) => {
+                for (event_idx, digest) in event_digests {
+                    commitments.push(EventCommitment::new(
+                        checkpoint_seq,
+                        transaction_idx,
+                        event_idx,
+                        digest,
+                    ));
+                }
             }
             _ => {
                 fatal!("invalid merge");
