@@ -415,7 +415,7 @@ mod tests {
                 tx_sequence_numbers: vec![7, 8, 9],
                 ..Default::default()
             }],
-            batch_len: 2,
+            batch_len: 1,
             watermark: vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
