@@ -1,0 +1,31 @@
+# Build output
+build/
+
+# Deployment artifacts
+deployment-info.json
+
+# Move build cache
+.move/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*~
+
+# Frontend (if applicable)
+node_modules/
+dist/
+.env
+.env.local

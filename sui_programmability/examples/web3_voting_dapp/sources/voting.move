@@ -5,23 +5,23 @@
 /// This module implements a simple voting system on Sui blockchain
 /// Users can create polls, vote on them, and view results
 module voting::voting {
-    use sui::object::{Self, UID};
+    use sui::object::{Self, ID, Info};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use std::string::{Self, String};
     use std::vector;
     use sui::event;
 
     /// Error codes
     const EInvalidOption: u64 = 0;
-    const EAlreadyVoted: u64 = 1;
-    const EPollNotActive: u64 = 2;
+    const EPollNotActive: u64 = 1;
+    const ENotCreator: u64 = 2;
+    const EInsufficientOptions: u64 = 3;
 
     /// Poll object - represents a voting poll
-    struct Poll has key, store {
-        id: UID,
-        question: String,
-        options: vector<String>,
+    struct Poll has key {
+        info: Info,
+        question: vector<u8>,
+        options: vector<vector<u8>>,
         votes: vector<u64>,
         total_votes: u64,
         creator: address,
@@ -30,47 +30,46 @@ module voting::voting {
 
     /// Vote record - tracks who voted on which poll
     struct VoteReceipt has key {
-        id: UID,
-        poll_id: address,
+        info: Info,
+        poll_id: ID,
         voter: address,
         option_index: u64,
     }
 
     /// Event emitted when a new poll is created
     struct PollCreated has copy, drop {
-        poll_id: address,
-        question: String,
+        poll_id: ID,
         creator: address,
     }
 
     /// Event emitted when someone votes
     struct VoteCast has copy, drop {
-        poll_id: address,
+        poll_id: ID,
         voter: address,
         option_index: u64,
     }
 
-    /// Create a new poll with a question and options
+    /// Create a new poll with a question and two options
     public entry fun create_poll(
         question: vector<u8>,
         option1: vector<u8>,
         option2: vector<u8>,
         ctx: &mut TxContext
     ) {
-        let poll_uid = object::new(ctx);
-        let poll_id = object::uid_to_address(&poll_uid);
+        let info = object::new(ctx);
+        let poll_id = *object::info_id(&info);
 
-        let mut options = vector::empty<String>();
-        vector::push_back(&mut options, string::utf8(option1));
-        vector::push_back(&mut options, string::utf8(option2));
+        let options = vector::empty<vector<u8>>();
+        vector::push_back(&mut options, option1);
+        vector::push_back(&mut options, option2);
 
-        let mut votes = vector::empty<u64>();
+        let votes = vector::empty<u64>();
         vector::push_back(&mut votes, 0);
         vector::push_back(&mut votes, 0);
 
         let poll = Poll {
-            id: poll_uid,
-            question: string::utf8(question),
+            info,
+            question,
             options,
             votes,
             total_votes: 0,
@@ -80,7 +79,6 @@ module voting::voting {
 
         event::emit(PollCreated {
             poll_id,
-            question: poll.question,
             creator: tx_context::sender(ctx),
         });
 
@@ -93,24 +91,26 @@ module voting::voting {
         options_data: vector<vector<u8>>,
         ctx: &mut TxContext
     ) {
-        let poll_uid = object::new(ctx);
-        let poll_id = object::uid_to_address(&poll_uid);
-
-        let mut options = vector::empty<String>();
-        let mut votes = vector::empty<u64>();
         let options_len = vector::length(&options_data);
+        assert!(options_len >= 2, EInsufficientOptions);
 
-        let mut i = 0;
+        let info = object::new(ctx);
+        let poll_id = *object::info_id(&info);
+
+        let options = vector::empty<vector<u8>>();
+        let votes = vector::empty<u64>();
+
+        let i = 0;
         while (i < options_len) {
             let option = vector::borrow(&options_data, i);
-            vector::push_back(&mut options, string::utf8(*option));
+            vector::push_back(&mut options, *option);
             vector::push_back(&mut votes, 0);
             i = i + 1;
         };
 
         let poll = Poll {
-            id: poll_uid,
-            question: string::utf8(question),
+            info,
+            question,
             options,
             votes,
             total_votes: 0,
@@ -120,7 +120,6 @@ module voting::voting {
 
         event::emit(PollCreated {
             poll_id,
-            question: poll.question,
             creator: tx_context::sender(ctx),
         });
 
@@ -137,7 +136,7 @@ module voting::voting {
         assert!(option_index < vector::length(&poll.options), EInvalidOption);
 
         let voter = tx_context::sender(ctx);
-        let poll_id = object::uid_to_address(&poll.id);
+        let poll_id = *object::info_id(&poll.info);
 
         // Increment vote count for selected option
         let vote_count = vector::borrow_mut(&mut poll.votes, option_index);
@@ -146,7 +145,7 @@ module voting::voting {
 
         // Create vote receipt for the voter
         let receipt = VoteReceipt {
-            id: object::new(ctx),
+            info: object::new(ctx),
             poll_id,
             voter,
             option_index,
@@ -166,7 +165,7 @@ module voting::voting {
         poll: &mut Poll,
         ctx: &mut TxContext
     ) {
-        assert!(poll.creator == tx_context::sender(ctx), 0);
+        assert!(poll.creator == tx_context::sender(ctx), ENotCreator);
         poll.is_active = false;
     }
 
@@ -175,25 +174,30 @@ module voting::voting {
         poll: &mut Poll,
         ctx: &mut TxContext
     ) {
-        assert!(poll.creator == tx_context::sender(ctx), 0);
+        assert!(poll.creator == tx_context::sender(ctx), ENotCreator);
         poll.is_active = true;
     }
 
     // === View functions ===
 
     /// Get poll question
-    public fun get_question(poll: &Poll): String {
-        poll.question
+    public fun get_question(poll: &Poll): &vector<u8> {
+        &poll.question
     }
 
-    /// Get poll options
-    public fun get_options(poll: &Poll): vector<String> {
-        poll.options
+    /// Get poll options count
+    public fun get_options_count(poll: &Poll): u64 {
+        vector::length(&poll.options)
     }
 
-    /// Get poll votes
-    public fun get_votes(poll: &Poll): vector<u64> {
-        poll.votes
+    /// Get specific option by index
+    public fun get_option(poll: &Poll, index: u64): &vector<u8> {
+        vector::borrow(&poll.options, index)
+    }
+
+    /// Get votes count for specific option
+    public fun get_votes_for_option(poll: &Poll, index: u64): u64 {
+        *vector::borrow(&poll.votes, index)
     }
 
     /// Get total votes
@@ -209,5 +213,11 @@ module voting::voting {
     /// Get poll creator
     public fun get_creator(poll: &Poll): address {
         poll.creator
+    }
+
+    #[test_only]
+    /// Module initializer for tests
+    public fun init_for_testing(ctx: &mut TxContext) {
+        // Initialize module for testing
     }
 }
