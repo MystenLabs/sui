@@ -16,8 +16,6 @@ use crate::{
     task::TrySpawnStreamExt,
 };
 
-#[cfg(test)]
-use super::BatchStatus;
 use super::{BatchedRows, Handler};
 
 /// If the committer needs to retry a commit, it will wait this long initially.
@@ -247,7 +245,7 @@ mod tests {
         store::CommitterWatermark,
     };
 
-    use super::*;
+    use super::{super::BatchStatus, *};
 
     #[derive(Clone, FieldCount, Default)]
     pub struct StoredData {

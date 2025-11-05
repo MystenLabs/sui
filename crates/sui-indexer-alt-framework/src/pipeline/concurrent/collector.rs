@@ -16,8 +16,6 @@ use crate::{
     pipeline::{CommitterConfig, IndexedCheckpoint, WatermarkPart},
 };
 
-#[cfg(test)]
-use super::BatchStatus;
 use super::{BatchedRows, Handler};
 
 /// Processed values that are waiting to be written to the database. This is an internal type used
@@ -218,7 +216,7 @@ mod tests {
         types::full_checkpoint_content::Checkpoint,
     };
 
-    use super::*;
+    use super::{super::BatchStatus, *};
 
     #[derive(Clone)]
     struct Entry;

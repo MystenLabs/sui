@@ -12,8 +12,6 @@ use crate::{
     store::{Connection, Store},
 };
 
-#[cfg(test)]
-use super::BatchStatus;
 use super::{Handler, PrunerConfig};
 
 /// The reader watermark task is responsible for updating the `reader_lo` and `pruner_timestamp`
@@ -119,7 +117,7 @@ mod tests {
 
     use crate::{metrics::IndexerMetrics, mocks::store::*, pipeline::Processor};
 
-    use super::*;
+    use super::{super::BatchStatus, *};
 
     // Fixed retention value used across all tests
     const TEST_RETENTION: u64 = 5;

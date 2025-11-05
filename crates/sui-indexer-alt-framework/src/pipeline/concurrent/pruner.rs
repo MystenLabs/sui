@@ -19,8 +19,6 @@ use crate::{
     store::{Connection, Store},
 };
 
-#[cfg(test)]
-use super::BatchStatus;
 use super::{Handler, PrunerConfig};
 
 #[derive(Default)]
@@ -360,7 +358,7 @@ mod tests {
 
     use crate::{FieldCount, metrics::IndexerMetrics, mocks::store::*, pipeline::Processor};
 
-    use super::*;
+    use super::{super::BatchStatus, *};
 
     #[derive(Clone, FieldCount)]
     pub struct StoredData;

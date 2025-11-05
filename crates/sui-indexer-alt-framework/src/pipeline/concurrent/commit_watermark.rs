@@ -21,8 +21,6 @@ use crate::{
     store::{Connection, Store},
 };
 
-#[cfg(test)]
-use super::BatchStatus;
 use super::Handler;
 
 use crate::store::CommitterWatermark;
@@ -344,7 +342,7 @@ mod tests {
         store::CommitterWatermark,
     };
 
-    use super::*;
+    use super::{super::BatchStatus, *};
 
     #[derive(Clone, FieldCount)]
     pub struct StoredData;
