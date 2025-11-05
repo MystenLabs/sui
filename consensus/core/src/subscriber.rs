@@ -6,10 +6,10 @@ use std::{sync::Arc, time::Duration};
 use consensus_config::AuthorityIndex;
 use consensus_types::block::Round;
 use futures::StreamExt;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_mpsc, monitored_scope, spawn_monitored_task};
 use parking_lot::{Mutex, RwLock};
-use tokio::{task::JoinHandle, time::sleep};
-use tracing::{debug, error, info};
+use tokio::{task::{JoinHandle, JoinSet}, time::sleep};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     block::BlockAPI as _,
@@ -194,44 +194,129 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                 .with_label_values(&[peer_hostname])
                 .set(1);
 
-            'stream: loop {
-                match blocks.next().await {
-                    Some(block) => {
-                        context
-                            .metrics
-                            .node_metrics
-                            .subscribed_blocks
-                            .with_label_values(&[peer_hostname])
-                            .inc();
-                        let result = authority_service
-                            .handle_send_block(peer, block.clone())
-                            .await;
-                        if let Err(e) = result {
-                            match e {
-                                ConsensusError::BlockRejected { block_ref, reason } => {
-                                    debug!(
-                                        "Failed to process block from peer {} {} for block {:?}: {}",
-                                        peer, peer_hostname, block_ref, reason
-                                    );
-                                }
-                                _ => {
-                                    info!(
-                                        "Invalid block received from peer {} {}: {}",
-                                        peer, peer_hostname, e
-                                    );
+            // For observers, use a worker pool to decouple stream consumption from block processing.
+            // For validators, use sequential processing to maintain ordering guarantees.
+            if context.is_observer {
+                let num_workers = context.committee.size();
+                let channel_capacity = 2 * num_workers;
+
+                // Create monitored bounded channel for passing blocks from stream to workers
+                let (block_tx, block_rx) = monitored_mpsc::channel(
+                    &format!("subscriber_blocks_peer_{}", peer_hostname),
+                    channel_capacity,
+                );
+                let block_rx = Arc::new(tokio::sync::Mutex::new(block_rx));
+
+                // Spawn worker pool - each worker processes blocks independently
+                let mut workers = JoinSet::new();
+                for worker_id in 0..num_workers {
+                    let rx = block_rx.clone();
+                    let authority_service = authority_service.clone();
+                    let peer_hostname_clone = peer_hostname.to_string();
+
+                    workers.spawn(async move {
+                        while let Some(block) = rx.lock().await.recv().await {
+                            let result = authority_service.handle_send_block(peer, block).await;
+                            if let Err(e) = result {
+                                match e {
+                                    ConsensusError::BlockRejected { block_ref, reason } => {
+                                        debug!(
+                                            "Worker {} failed to process block from peer {} for block {:?}: {}",
+                                            worker_id, peer_hostname_clone, block_ref, reason
+                                        );
+                                    }
+                                    _ => {
+                                        info!(
+                                            "Worker {} received invalid block from peer {}: {}",
+                                            worker_id, peer_hostname_clone, e
+                                        );
+                                    }
                                 }
                             }
                         }
-                        // Reset retries when a block is received.
-                        retries = 0;
+                        debug!("Worker {} for peer {} shutting down", worker_id, peer_hostname_clone);
+                    });
+                }
+
+                // Stream consumer - continuously feeds blocks to worker pool
+                'stream: loop {
+                    let _scope = monitored_scope("SubscriberStreamConsumer");
+
+                    match blocks.next().await {
+                        Some(block) => {
+                            context
+                                .metrics
+                                .node_metrics
+                                .subscribed_blocks
+                                .with_label_values(&[peer_hostname])
+                                .inc();
+
+                            // Send to worker pool (backpressures naturally when channel is full)
+                            if block_tx.send(block).await.is_err() {
+                                warn!("Worker channel closed for peer {}", peer_hostname);
+                                break 'stream;
+                            }
+
+                            // Reset retries when a block is received.
+                            retries = 0;
+                        }
+                        None => {
+                            debug!(
+                                "Subscription to blocks from peer {} {} ended",
+                                peer, peer_hostname
+                            );
+                            retries += 1;
+                            break 'stream;
+                        }
                     }
-                    None => {
-                        debug!(
-                            "Subscription to blocks from peer {} {} ended",
-                            peer, peer_hostname
-                        );
-                        retries += 1;
-                        break 'stream;
+                }
+
+                // Signal workers to exit by dropping the sender
+                drop(block_tx);
+
+                // Wait for all workers to complete processing
+                while workers.join_next().await.is_some() {}
+            } else {
+                // Sequential processing for validators to maintain ordering
+                'stream: loop {
+                    match blocks.next().await {
+                        Some(block) => {
+                            context
+                                .metrics
+                                .node_metrics
+                                .subscribed_blocks
+                                .with_label_values(&[peer_hostname])
+                                .inc();
+                            let result = authority_service
+                                .handle_send_block(peer, block.clone())
+                                .await;
+                            if let Err(e) = result {
+                                match e {
+                                    ConsensusError::BlockRejected { block_ref, reason } => {
+                                        debug!(
+                                            "Failed to process block from peer {} {} for block {:?}: {}",
+                                            peer, peer_hostname, block_ref, reason
+                                        );
+                                    }
+                                    _ => {
+                                        info!(
+                                            "Invalid block received from peer {} {}: {}",
+                                            peer, peer_hostname, e
+                                        );
+                                    }
+                                }
+                            }
+                            // Reset retries when a block is received.
+                            retries = 0;
+                        }
+                        None => {
+                            debug!(
+                                "Subscription to blocks from peer {} {} ended",
+                                peer, peer_hostname
+                            );
+                            retries += 1;
+                            break 'stream;
+                        }
                     }
                 }
             }
