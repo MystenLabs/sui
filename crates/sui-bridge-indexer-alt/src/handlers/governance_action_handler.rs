@@ -16,9 +16,8 @@ use sui_bridge::events::{
 use sui_bridge_schema::models::{BridgeDataSource, GovernanceAction};
 use sui_bridge_schema::schema;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::Handler;
-use sui_indexer_alt_framework::postgres::Db;
-use sui_indexer_alt_framework::store::Store;
+use sui_indexer_alt_framework::postgres::Connection;
+use sui_indexer_alt_framework::postgres::handler::Handler;
 use sui_indexer_alt_framework::types::BRIDGE_ADDRESS;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_framework::types::transaction::TransactionDataAPI;
@@ -164,11 +163,9 @@ impl Processor for GovernanceActionHandler {
 
 #[async_trait]
 impl Handler for GovernanceActionHandler {
-    type Store = Db;
-
     async fn commit<'a>(
         values: &[Self::Value],
-        conn: &mut <Self::Store as Store>::Connection<'a>,
+        conn: &mut Connection<'a>,
     ) -> anyhow::Result<usize> {
         Ok(diesel::insert_into(schema::governance_actions::table)
             .values(values)

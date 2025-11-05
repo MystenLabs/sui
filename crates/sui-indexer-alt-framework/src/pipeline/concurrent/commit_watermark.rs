@@ -338,7 +338,7 @@ mod tests {
         FieldCount,
         metrics::IndexerMetrics,
         mocks::store::*,
-        pipeline::{CommitterConfig, Processor, WatermarkPart},
+        pipeline::{CommitterConfig, Processor, WatermarkPart, concurrent::BatchStatus},
         store::CommitterWatermark,
     };
 
@@ -362,9 +362,20 @@ mod tests {
     #[async_trait]
     impl Handler for DataPipeline {
         type Store = MockStore;
+        type Batch = Vec<Self::Value>;
+
+        fn batch(
+            &self,
+            batch: &mut Self::Batch,
+            values: &mut std::vec::IntoIter<Self::Value>,
+        ) -> BatchStatus {
+            batch.extend(values);
+            BatchStatus::Pending
+        }
 
         async fn commit<'a>(
-            _values: &[StoredData],
+            &self,
+            _batch: &Self::Batch,
             _conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(0)

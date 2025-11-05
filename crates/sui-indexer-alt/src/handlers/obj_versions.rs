@@ -7,8 +7,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{Processor, concurrent::Handler},
-    postgres::{Connection, Db},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
     types::{effects::TransactionEffectsAPI, full_checkpoint_content::Checkpoint},
 };
 use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
@@ -52,8 +52,6 @@ impl Processor for ObjVersions {
 
 #[async_trait]
 impl Handler for ObjVersions {
-    type Store = Db;
-
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 

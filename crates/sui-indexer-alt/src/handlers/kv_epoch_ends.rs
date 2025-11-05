@@ -8,8 +8,8 @@ use anyhow::{Context, Result, bail};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{Processor, concurrent::Handler},
-    postgres::{Connection, Db},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
     types::{
         event::SystemEpochInfoEvent,
         full_checkpoint_content::Checkpoint,
@@ -124,8 +124,6 @@ impl Processor for KvEpochEnds {
 
 #[async_trait]
 impl Handler for KvEpochEnds {
-    type Store = Db;
-
     const MIN_EAGER_ROWS: usize = 1;
 
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {

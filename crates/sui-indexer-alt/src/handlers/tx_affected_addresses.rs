@@ -9,8 +9,8 @@ use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use itertools::Itertools;
 use sui_indexer_alt_framework::{
-    pipeline::{Processor, concurrent::Handler},
-    postgres::{Connection, Db},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
     types::{full_checkpoint_content::Checkpoint, object::Owner},
 };
 use sui_indexer_alt_schema::{
@@ -68,8 +68,6 @@ impl Processor for TxAffectedAddresses {
 
 #[async_trait]
 impl Handler for TxAffectedAddresses {
-    type Store = Db;
-
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 

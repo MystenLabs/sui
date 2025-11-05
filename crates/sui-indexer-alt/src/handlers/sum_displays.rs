@@ -65,13 +65,13 @@ impl Handler for SumDisplays {
     type Store = Db;
     type Batch = BTreeMap<Vec<u8>, Self::Value>;
 
-    fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
         for value in values {
             batch.insert(value.object_type.clone(), value);
         }
     }
 
-    async fn commit<'a>(batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
+    async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
         let values: Vec<_> = batch.values().cloned().collect();
         let updates = values
             .chunks(MAX_INSERT_CHUNK_ROWS)

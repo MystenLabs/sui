@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{Processor, concurrent::Handler},
-    postgres::{Connection, Db},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
     types::full_checkpoint_content::Checkpoint,
 };
 use sui_indexer_alt_schema::{checkpoints::StoredCheckpoint, schema::kv_checkpoints};
@@ -40,8 +40,6 @@ impl Processor for KvCheckpoints {
 
 #[async_trait]
 impl Handler for KvCheckpoints {
-    type Store = Db;
-
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(kv_checkpoints::table)
             .values(values)

@@ -356,7 +356,12 @@ mod tests {
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
 
-    use crate::{FieldCount, metrics::IndexerMetrics, mocks::store::*, pipeline::Processor};
+    use crate::{
+        FieldCount,
+        metrics::IndexerMetrics,
+        mocks::store::*,
+        pipeline::{Processor, concurrent::BatchStatus},
+    };
 
     use super::*;
 
@@ -379,12 +384,23 @@ mod tests {
     #[async_trait]
     impl Handler for DataPipeline {
         type Store = MockStore;
+        type Batch = Vec<Self::Value>;
+
+        fn batch(
+            &self,
+            batch: &mut Self::Batch,
+            values: &mut std::vec::IntoIter<Self::Value>,
+        ) -> BatchStatus {
+            batch.extend(values);
+            BatchStatus::Pending
+        }
 
         async fn commit<'a>(
-            values: &[Self::Value],
+            &self,
+            batch: &Self::Batch,
             _conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
-            Ok(values.len())
+            Ok(batch.len())
         }
 
         async fn prune<'a>(

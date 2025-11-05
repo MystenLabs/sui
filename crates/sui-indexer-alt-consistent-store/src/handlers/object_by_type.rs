@@ -92,11 +92,12 @@ impl sequential::Handler for ObjectByType {
     const MAX_BATCH_CHECKPOINTS: usize = 1;
 
     /// No batching actually happens, because `MAX_BATCH_CHECKPOINTS` is 1.
-    fn batch(batch: &mut Self::Batch, values: Vec<Value>) {
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Value>) {
         batch.extend(values);
     }
 
     async fn commit<'a>(
+        &self,
         batch: &Self::Batch,
         conn: &mut Connection<'a, Schema>,
     ) -> anyhow::Result<usize> {
