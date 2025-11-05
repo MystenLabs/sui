@@ -2,6 +2,7 @@
 name = "sui-checkpoint-blob-indexer"
 edition = "2024"
 version.workspace = true
+license = "Apache-2.0"
 publish = false
 
 [lib]
