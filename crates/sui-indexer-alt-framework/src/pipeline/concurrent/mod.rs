@@ -80,7 +80,6 @@ pub trait Handler: Processor {
         &self,
         batch: &mut Self::Batch,
         values: &mut std::vec::IntoIter<Self::Value>,
-        // todo do we need this on sequential
     ) -> BatchStatus;
 
     /// Commit the batch to the database, returning the number of rows affected.
