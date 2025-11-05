@@ -144,11 +144,11 @@ struct BatchedRows<H: Handler> {
     watermark: Vec<WatermarkPart>,
 }
 
-#[cfg(test)]
 impl<H, V> BatchedRows<H>
 where
     H: Handler<Batch = Vec<V>, Value = V>,
 {
+    #[cfg(test)]
     pub fn from_vec(batch: Vec<V>, watermark: Vec<WatermarkPart>) -> Self {
         let batch_len = batch.len();
         Self {
