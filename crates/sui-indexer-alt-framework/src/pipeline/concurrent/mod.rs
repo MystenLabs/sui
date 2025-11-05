@@ -144,6 +144,21 @@ struct BatchedRows<H: Handler> {
     watermark: Vec<WatermarkPart>,
 }
 
+#[cfg(test)]
+impl<H, V> BatchedRows<H>
+where
+    H: Handler<Batch = Vec<V>, Value = V>,
+{
+    pub fn from_vec(batch: Vec<V>, watermark: Vec<WatermarkPart>) -> Self {
+        let batch_len = batch.len();
+        Self {
+            batch,
+            batch_len,
+            watermark,
+        }
+    }
+}
+
 impl PrunerConfig {
     pub fn interval(&self) -> Duration {
         Duration::from_millis(self.interval_ms)

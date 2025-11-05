@@ -371,8 +371,8 @@ mod tests {
         let mut setup = setup_test(MockStore::default(), false).await;
 
         // Send batches
-        let batch1 = BatchedRows {
-            batch: vec![
+        let batch1 = BatchedRows::from_vec(
+            vec![
                 StoredData {
                     cp_sequence_number: 1,
                     tx_sequence_numbers: vec![1, 2, 3],
@@ -384,8 +384,7 @@ mod tests {
                     ..Default::default()
                 },
             ],
-            batch_len: 2,
-            watermark: vec![
+            vec![
                 WatermarkPart {
                     watermark: CommitterWatermark {
                         epoch_hi_inclusive: 0,
@@ -407,16 +406,15 @@ mod tests {
                     total_rows: 1, // Total rows from checkpoint 2
                 },
             ],
-        };
+        );
 
-        let batch2 = BatchedRows {
-            batch: vec![StoredData {
+        let batch2 = BatchedRows::from_vec(
+            vec![StoredData {
                 cp_sequence_number: 3,
                 tx_sequence_numbers: vec![7, 8, 9],
                 ..Default::default()
             }],
-            batch_len: 1,
-            watermark: vec![WatermarkPart {
+            vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
                     checkpoint_hi_inclusive: 3,
@@ -426,7 +424,7 @@ mod tests {
                 batch_rows: 1,
                 total_rows: 1, // Total rows from checkpoint 3
             }],
-        };
+        );
 
         setup.batch_tx.send(batch1).await.unwrap();
         setup.batch_tx.send(batch2).await.unwrap();
@@ -456,15 +454,14 @@ mod tests {
         let mut setup = setup_test(MockStore::default(), false).await;
 
         // Create a batch with a single item that will fail once before succeeding
-        let batch = BatchedRows {
-            batch: vec![StoredData {
+        let batch = BatchedRows::from_vec(
+            vec![StoredData {
                 cp_sequence_number: 1,
                 tx_sequence_numbers: vec![1, 2, 3],
                 commit_failure_remaining: Arc::new(AtomicUsize::new(1)),
                 commit_delay_ms: 1_000, // Long commit delay for testing state between retry
             }],
-            batch_len: 2,
-            watermark: vec![WatermarkPart {
+            vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
                     checkpoint_hi_inclusive: 1,
@@ -474,7 +471,7 @@ mod tests {
                 batch_rows: 1,
                 total_rows: 1,
             }],
-        };
+        );
 
         // Send the batch
         setup.batch_tx.send(batch).await.unwrap();
@@ -525,14 +522,13 @@ mod tests {
         };
         let mut setup = setup_test(store, false).await;
 
-        let batch = BatchedRows {
-            batch: vec![StoredData {
+        let batch = BatchedRows::from_vec(
+            vec![StoredData {
                 cp_sequence_number: 1,
                 tx_sequence_numbers: vec![1, 2, 3],
                 ..Default::default()
             }],
-            batch_len: 1,
-            watermark: vec![WatermarkPart {
+            vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
                     checkpoint_hi_inclusive: 1,
@@ -542,7 +538,7 @@ mod tests {
                 batch_rows: 1,
                 total_rows: 1,
             }],
-        };
+        );
 
         // Send the batch
         setup.batch_tx.send(batch).await.unwrap();
@@ -583,10 +579,9 @@ mod tests {
     async fn test_empty_batch_handling() {
         let mut setup = setup_test(MockStore::default(), false).await;
 
-        let empty_batch = BatchedRows {
-            batch: vec![], // Empty batch
-            batch_len: 0,
-            watermark: vec![WatermarkPart {
+        let empty_batch = BatchedRows::from_vec(
+            vec![], // Empty batch
+            vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
                     checkpoint_hi_inclusive: 1,
@@ -596,7 +591,7 @@ mod tests {
                 batch_rows: 0,
                 total_rows: 0,
             }],
-        };
+        );
 
         // Send the empty batch
         setup.batch_tx.send(empty_batch).await.unwrap();
@@ -625,14 +620,13 @@ mod tests {
     async fn test_skip_watermark_mode() {
         let mut setup = setup_test(MockStore::default(), true).await;
 
-        let batch = BatchedRows {
-            batch: vec![StoredData {
+        let batch = BatchedRows::from_vec(
+            vec![StoredData {
                 cp_sequence_number: 1,
                 tx_sequence_numbers: vec![1, 2, 3],
                 ..Default::default()
             }],
-            batch_len: 1,
-            watermark: vec![WatermarkPart {
+            vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
                     checkpoint_hi_inclusive: 1,
@@ -642,7 +636,7 @@ mod tests {
                 batch_rows: 1,
                 total_rows: 1,
             }],
-        };
+        );
 
         // Send the batch
         setup.batch_tx.send(batch).await.unwrap();
@@ -671,14 +665,13 @@ mod tests {
     async fn test_watermark_channel_closed() {
         let setup = setup_test(MockStore::default(), false).await;
 
-        let batch = BatchedRows {
-            batch: vec![StoredData {
+        let batch = BatchedRows::from_vec(
+            vec![StoredData {
                 cp_sequence_number: 1,
                 tx_sequence_numbers: vec![1, 2, 3],
                 ..Default::default()
             }],
-            batch_len: 1,
-            watermark: vec![WatermarkPart {
+            vec![WatermarkPart {
                 watermark: CommitterWatermark {
                     epoch_hi_inclusive: 0,
                     checkpoint_hi_inclusive: 1,
@@ -688,7 +681,7 @@ mod tests {
                 batch_rows: 1,
                 total_rows: 1,
             }],
-        };
+        );
 
         // Send the batch
         setup.batch_tx.send(batch).await.unwrap();
