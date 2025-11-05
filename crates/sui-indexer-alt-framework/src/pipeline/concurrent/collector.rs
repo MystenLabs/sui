@@ -16,7 +16,7 @@ use crate::{
     pipeline::{CommitterConfig, IndexedCheckpoint, WatermarkPart},
 };
 
-use super::{BatchedRows, Handler};
+use super::{BatchStatus, BatchedRows, Handler};
 
 /// Processed values that are waiting to be written to the database. This is an internal type used
 /// by the concurrent collector to hold data it is waiting to send to the committer.
@@ -132,7 +132,7 @@ pub(super) fn collector<H: Handler + 'static>(
                             entry.remove();
                         }
 
-                        if status == super::BatchStatus::Ready {
+                        if status == BatchStatus::Ready {
                             // Batch is full, send it
                             break;
                         }
@@ -212,11 +212,12 @@ mod tests {
     use tokio::sync::mpsc;
 
     use crate::{
-        metrics::tests::test_metrics, pipeline::Processor,
+        metrics::tests::test_metrics,
+        pipeline::{Processor, concurrent::BatchStatus},
         types::full_checkpoint_content::Checkpoint,
     };
 
-    use super::{super::BatchStatus, *};
+    use super::*;
 
     #[derive(Clone)]
     struct Entry;

@@ -338,11 +338,11 @@ mod tests {
         FieldCount,
         metrics::IndexerMetrics,
         mocks::store::*,
-        pipeline::{CommitterConfig, Processor, WatermarkPart},
+        pipeline::{CommitterConfig, Processor, WatermarkPart, concurrent::BatchStatus},
         store::CommitterWatermark,
     };
 
-    use super::{super::BatchStatus, *};
+    use super::*;
 
     #[derive(Clone, FieldCount)]
     pub struct StoredData;

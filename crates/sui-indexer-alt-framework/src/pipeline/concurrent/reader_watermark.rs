@@ -115,9 +115,13 @@ mod tests {
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
 
-    use crate::{metrics::IndexerMetrics, mocks::store::*, pipeline::Processor};
+    use crate::{
+        metrics::IndexerMetrics,
+        mocks::store::*,
+        pipeline::{Processor, concurrent::BatchStatus},
+    };
 
-    use super::{super::BatchStatus, *};
+    use super::*;
 
     // Fixed retention value used across all tests
     const TEST_RETENTION: u64 = 5;

@@ -240,12 +240,12 @@ mod tests {
         mocks::store::*,
         pipeline::{
             Processor, WatermarkPart,
-            concurrent::{BatchedRows, Handler},
+            concurrent::{BatchStatus, BatchedRows, Handler},
         },
         store::CommitterWatermark,
     };
 
-    use super::{super::BatchStatus, *};
+    use super::*;
 
     #[derive(Clone, FieldCount, Default)]
     pub struct StoredData {

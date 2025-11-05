@@ -356,9 +356,14 @@ mod tests {
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
 
-    use crate::{FieldCount, metrics::IndexerMetrics, mocks::store::*, pipeline::Processor};
+    use crate::{
+        FieldCount,
+        metrics::IndexerMetrics,
+        mocks::store::*,
+        pipeline::{Processor, concurrent::BatchStatus},
+    };
 
-    use super::{super::BatchStatus, *};
+    use super::*;
 
     #[derive(Clone, FieldCount)]
     pub struct StoredData;
