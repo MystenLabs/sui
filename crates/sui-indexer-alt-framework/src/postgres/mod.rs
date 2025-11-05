@@ -112,7 +112,7 @@ pub mod tests {
     use async_trait::async_trait;
     use std::sync::Arc;
     use sui_indexer_alt_framework_store_traits::{
-        CommitterWatermark, Connection as ConnectionTrait,
+        CommitterWatermark, Connection as _,
     };
     use sui_types::full_checkpoint_content::Checkpoint;
 
