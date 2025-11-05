@@ -96,7 +96,7 @@ impl Connection for ObjectStoreConnection {
         pipeline: &'static str,
     ) -> anyhow::Result<Option<framework_traits::CommitterWatermark>> {
         let object_path = if let Some(ref task) = self.watermark_task {
-            ObjectPath::from(format!("_metadata/watermarks/{}/{}.json", task, pipeline))
+            ObjectPath::from(format!("_metadata/watermarks/{}@{}.json", pipeline, task))
         } else {
             ObjectPath::from(format!("_metadata/watermarks/{}.json", pipeline))
         };
@@ -141,7 +141,7 @@ impl Connection for ObjectStoreConnection {
     ) -> anyhow::Result<bool> {
         let new_watermark: ComitterWatermark = watermark.into();
         let object_path = if let Some(ref task) = self.watermark_task {
-            ObjectPath::from(format!("_metadata/watermarks/{}/{}.json", task, pipeline))
+            ObjectPath::from(format!("_metadata/watermarks/{}@{}.json", pipeline, task))
         } else {
             ObjectPath::from(format!("_metadata/watermarks/{}.json", pipeline))
         };
