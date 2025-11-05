@@ -1,0 +1,9 @@
+[package]
+name = "VotingDApp"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework" }
+
+[addresses]
+voting = "0x0"

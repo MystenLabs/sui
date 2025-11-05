@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sui Voting DApp</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🗳️ Sui Voting DApp</h1>
+            <p class="subtitle">Decentralized voting on Sui blockchain</p>
+        </header>
+
+        <div id="wallet-section">
+            <button id="connect-wallet" class="btn btn-primary">Connect Wallet</button>
+            <div id="wallet-info" style="display: none;">
+                <p>Connected: <span id="wallet-address"></span></p>
+                <button id="disconnect-wallet" class="btn btn-secondary">Disconnect</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="create">Create Poll</button>
+            <button class="tab-btn" data-tab="vote">Vote</button>
+            <button class="tab-btn" data-tab="results">View Results</button>
+        </div>
+
+        <!-- Create Poll Tab -->
+        <div id="create-tab" class="tab-content active">
+            <h2>Create New Poll</h2>
+            <form id="create-poll-form">
+                <div class="form-group">
+                    <label for="question">Question:</label>
+                    <input type="text" id="question" required placeholder="What's your question?">
+                </div>
+
+                <div class="form-group">
+                    <label>Options:</label>
+                    <input type="text" id="option1" required placeholder="Option 1">
+                    <input type="text" id="option2" required placeholder="Option 2">
+                    <div id="extra-options"></div>
+                    <button type="button" id="add-option" class="btn btn-secondary">+ Add Option</button>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Create Poll</button>
+            </form>
+            <div id="create-result" class="result-message"></div>
+        </div>
+
+        <!-- Vote Tab -->
+        <div id="vote-tab" class="tab-content">
+            <h2>Cast Your Vote</h2>
+            <div class="form-group">
+                <label for="poll-id">Poll ID:</label>
+                <input type="text" id="poll-id" placeholder="Enter poll object ID">
+                <button id="load-poll" class="btn btn-secondary">Load Poll</button>
+            </div>
+
+            <div id="poll-details" style="display: none;">
+                <h3 id="poll-question"></h3>
+                <form id="vote-form">
+                    <div id="vote-options"></div>
+                    <button type="submit" class="btn btn-primary">Submit Vote</button>
+                </form>
+            </div>
+            <div id="vote-result" class="result-message"></div>
+        </div>
+
+        <!-- Results Tab -->
+        <div id="results-tab" class="tab-content">
+            <h2>Poll Results</h2>
+            <div class="form-group">
+                <label for="results-poll-id">Poll ID:</label>
+                <input type="text" id="results-poll-id" placeholder="Enter poll object ID">
+                <button id="load-results" class="btn btn-secondary">Load Results</button>
+            </div>
+
+            <div id="results-display" style="display: none;">
+                <h3 id="results-question"></h3>
+                <div id="results-chart"></div>
+                <p class="total-votes">Total Votes: <span id="total-votes">0</span></p>
+                <div id="poll-actions" style="display: none;">
+                    <button id="close-poll" class="btn btn-danger">Close Poll</button>
+                    <button id="reopen-poll" class="btn btn-success" style="display: none;">Reopen Poll</button>
+                </div>
+            </div>
+            <div id="results-result" class="result-message"></div>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
