@@ -459,7 +459,7 @@ mod tests {
         type Value = MockValue;
         async fn process(
             &self,
-            _checkpoint: &Arc<sui_types::full_checkpoint_content::CheckpointData>,
+            _checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
         ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![MockValue(1)])
         }
@@ -474,9 +474,20 @@ mod tests {
     #[async_trait]
     impl crate::pipeline::concurrent::Handler for MockHandler {
         type Store = MockStore;
+        type Batch = Vec<MockValue>;
+
+        fn batch(
+            &self,
+            batch: &mut Self::Batch,
+            values: &mut std::vec::IntoIter<Self::Value>,
+        ) -> crate::pipeline::concurrent::BatchStatus {
+            batch.extend(values);
+            crate::pipeline::concurrent::BatchStatus::Pending
+        }
 
         async fn commit<'a>(
-            _values: &[Self::Value],
+            &self,
+            _batch: &Self::Batch,
             _conn: &mut <Self::Store as Store>::Connection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(1)
@@ -488,11 +499,12 @@ mod tests {
         type Store = MockStore;
         type Batch = Vec<Self::Value>;
 
-        fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+        fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
             batch.extend(values);
         }
 
         async fn commit<'a>(
+            &self,
             _batch: &Self::Batch,
             _conn: &mut <Self::Store as Store>::Connection<'a>,
         ) -> anyhow::Result<usize> {
@@ -509,7 +521,7 @@ mod tests {
         type Value = MockValue;
         async fn process(
             &self,
-            _checkpoint: &Arc<sui_types::full_checkpoint_content::CheckpointData>,
+            _checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
         ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![MockValue(1)])
         }
@@ -520,11 +532,12 @@ mod tests {
         type Store = MockStore;
         type Batch = Vec<MockValue>;
 
-        fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+        fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
             batch.extend(values);
         }
 
         async fn commit<'a>(
+            &self,
             _batch: &Self::Batch,
             _conn: &mut <Self::Store as Store>::Connection<'a>,
         ) -> anyhow::Result<usize> {

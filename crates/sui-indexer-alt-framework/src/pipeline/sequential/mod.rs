@@ -12,7 +12,7 @@ use super::{CommitterConfig, PIPELINE_BUFFER, Processor, processor::processor};
 use crate::{
     metrics::IndexerMetrics,
     store::{Store, TransactionalStore},
-    types::full_checkpoint_content::CheckpointData,
+    types::full_checkpoint_content::Checkpoint,
 };
 
 use self::committer::committer;
@@ -55,12 +55,20 @@ pub trait Handler: Processor {
     type Batch: Default + Send + Sync + 'static;
 
     /// Add `values` from processing a checkpoint to the current `batch`. Checkpoints are
-    /// guaranteed to be presented to the batch in checkpoint order.
-    fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>);
+    /// guaranteed to be presented to the batch in checkpoint order. The handler takes ownership
+    /// of the iterator and consumes all values.
+    ///
+    /// Returns `BatchStatus::Ready` if the batch is full and should be committed,
+    /// or `BatchStatus::Pending` if the batch can accept more values.
+    ///
+    /// Note: The handler can signal batch readiness via `BatchStatus::Ready`, but the framework
+    /// may also decide to commit a batch based on the trait parameters above.
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>);
 
     /// Take a batch of values and commit them to the database, returning the number of rows
     /// affected.
     async fn commit<'a>(
+        &self,
         batch: &Self::Batch,
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize>;
@@ -106,15 +114,17 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     next_checkpoint: u64,
     config: SequentialConfig,
     db: H::Store,
-    checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
+    checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     watermark_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
     let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
 
+    let handler = Arc::new(handler);
+
     let processor = processor(
-        Arc::new(handler),
+        handler.clone(),
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
@@ -122,6 +132,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let committer = committer::<H>(
+        handler,
         config,
         next_checkpoint,
         committer_rx,
