@@ -197,25 +197,28 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             // For observers, use a worker pool to decouple stream consumption from block processing.
             // For validators, use sequential processing to maintain ordering guarantees.
             if context.is_observer {
-                let num_workers = 3 * context.committee.size();
-                let channel_capacity = 2 * num_workers;
-
-                // Create monitored bounded channel for passing blocks from stream to workers
-                let (block_tx, block_rx) = monitored_mpsc::channel(
-                    &format!("subscriber_blocks_peer_{}", peer_hostname),
-                    channel_capacity,
-                );
-                let block_rx = Arc::new(tokio::sync::Mutex::new(block_rx));
+                let num_workers = context.committee.size();
+                let channel_capacity = 10 * num_workers;
 
                 // Spawn worker pool - each worker processes blocks independently
+                // Each worker gets its own channel to eliminate mutex contention
                 let mut workers = JoinSet::new();
+                let mut senders = Vec::new();
+
                 for worker_id in 0..num_workers {
-                    let rx = block_rx.clone();
+                    let (block_tx, mut block_rx) = monitored_mpsc::channel(
+                        &format!("subscriber_blocks_peer_{}_worker_{}", peer_hostname, worker_id),
+                        channel_capacity / num_workers,
+                    );
+                    senders.push(block_tx);
+
                     let authority_service = authority_service.clone();
                     let peer_hostname_clone = peer_hostname.to_string();
 
                     workers.spawn(async move {
-                        while let Some(block) = rx.lock().await.recv().await {
+                        while let Some(block) = block_rx.recv().await {
+                            let _scope = monitored_scope("SubscriberWorker::handle_block");
+
                             let result = authority_service.handle_send_block(peer, block).await;
                             if let Err(e) = result {
                                 match e {
@@ -238,7 +241,9 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                     });
                 }
 
-                // Stream consumer - continuously feeds blocks to worker pool
+                let mut next_worker = 0;
+
+                // Stream consumer - continuously feeds blocks to worker pool via round-robin
                 'stream: loop {
                     let _scope = monitored_scope("SubscriberStreamConsumer");
 
@@ -251,11 +256,12 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                                 .with_label_values(&[peer_hostname])
                                 .inc();
 
-                            // Send to worker pool (backpressures naturally when channel is full)
-                            if block_tx.send(block).await.is_err() {
-                                warn!("Worker channel closed for peer {}", peer_hostname);
+                            // Round-robin distribution to workers to avoid mutex contention
+                            if senders[next_worker].send(block).await.is_err() {
+                                warn!("Worker {} channel closed for peer {}", next_worker, peer_hostname);
                                 break 'stream;
                             }
+                            next_worker = (next_worker + 1) % num_workers;
 
                             // Reset retries when a block is received.
                             retries = 0;
@@ -271,8 +277,8 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                     }
                 }
 
-                // Signal workers to exit by dropping the sender
-                drop(block_tx);
+                // Signal workers to exit by dropping all senders
+                drop(senders);
 
                 // Wait for all workers to complete processing
                 while workers.join_next().await.is_some() {}
