@@ -94,6 +94,16 @@ where
         if receipt_block_num.as_u64() > last_finalized_block_id {
             return Err(BridgeError::TxNotFinalized);
         }
+
+        let block = self
+            .provider
+            .get_block(receipt_block_num)
+            .await
+            .map_err(BridgeError::from)?
+            .ok_or(BridgeError::ProviderError(
+                "Provider returns block without data".into(),
+            ))?;
+        let block_timestamp = Some(block.timestamp.as_u64());
         let log = receipt
             .logs
             .get(event_idx as usize)
@@ -109,11 +119,12 @@ where
             tx_hash,
             log_index_in_tx: event_idx,
             log: log.clone(),
+            block_timestamp,
         };
         let bridge_event = EthBridgeEvent::try_from_eth_log(&eth_log)
             .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
         bridge_event
-            .try_into_bridge_action(tx_hash, event_idx)?
+            .try_into_bridge_action(tx_hash, event_idx, block_timestamp)?
             .ok_or(BridgeError::BridgeEventNotActionable)
     }
 
@@ -281,18 +292,30 @@ where
             log, tx_hash
         )))?;
 
+        // get block 
+        let block = self
+            .provider
+            .get_block(block_number)
+            .await
+            .map_err(BridgeError::from)?
+            .ok_or(BridgeError::ProviderError(
+                "Provider returns block without data".into(),
+            ))?;
+        let block_timestamp_ms = Some(block.timestamp.as_u64()) * 1000;
+
         Ok(EthLog {
             block_number,
             tx_hash,
             log_index_in_tx: log_index_in_tx as u16,
             log,
+            block_timestamp_ms,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use ethers::types::{Address as EthAddress, Log, TransactionReceipt, U64};
+    use ethers::types::{Address as EthAddress, Block, Log, TransactionReceipt, TxHash, U256, U64};
     use prometheus::Registry;
 
     use super::*;
@@ -344,6 +367,18 @@ mod tests {
 
         // 778 is now finalized
         mock_last_finalized_block(&mock_provider, 778);
+
+        mock_provider
+            .add_response(
+                "eth_getBlockByNumber",
+                (format!("0x{:x}", 778), false),
+                Block::<TxHash> {
+                    number: Some(778.into()),
+                    timestamp: U256::from(1),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
         let error = client
             .get_finalized_bridge_action_maybe(eth_tx_hash, 2)
@@ -406,6 +441,17 @@ mod tests {
                 },
             )
             .unwrap();
+        mock_provider
+            .add_response(
+                "eth_getBlockByNumber",
+                (format!("0x{:x}", 777), false),
+                Block::<TxHash> {
+                    number: Some(777.into()),
+                    timestamp: U256::from(1),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
         let error = client
             .get_finalized_bridge_action_maybe(eth_tx_hash, 0)
@@ -426,6 +472,17 @@ mod tests {
                 TransactionReceipt {
                     block_number: log.block_number,
                     logs: vec![log],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        mock_provider
+            .add_response(
+                "eth_getBlockByNumber",
+                (format!("0x{:x}", 777), false),
+                Block::<TxHash> {
+                    number: Some(777.into()),
+                    timestamp: U256::from(1),
                     ..Default::default()
                 },
             )

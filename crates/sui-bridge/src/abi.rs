@@ -7,7 +7,7 @@ use crate::encoding::{
 };
 use crate::encoding::{
     COMMITTEE_BLOCKLIST_MESSAGE_VERSION, EMERGENCY_BUTTON_MESSAGE_VERSION,
-    TOKEN_TRANSFER_MESSAGE_VERSION,
+    TOKEN_TRANSFER_MESSAGE_VERSION_V1, TOKEN_TRANSFER_MESSAGE_VERSION_V2,
 };
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::ParsedTokenTransferMessage;
@@ -99,12 +99,13 @@ impl EthBridgeEvent {
         self,
         eth_tx_hash: ethers::types::H256,
         eth_event_index: u16,
+        block_timestamp: Option<u64>,
     ) -> BridgeResult<Option<BridgeAction>> {
         Ok(match self {
             EthBridgeEvent::EthSuiBridgeEvents(event) => {
                 match event {
                     EthSuiBridgeEvents::TokensDepositedFilter(event) => {
-                        let bridge_event = match EthToSuiTokenBridgeV1::try_from(&event) {
+                        let mut bridge_event = match EthToSuiTokenBridgeV1::try_from(&event) {
                             Ok(bridge_event) => {
                                 if bridge_event.sui_adjusted_amount == 0 {
                                     return Err(BridgeError::ZeroValueBridgeTransfer(format!(
@@ -125,6 +126,10 @@ impl EthBridgeEvent {
                                 )));
                             }
                         };
+
+                        if bridge_event.block_timestamp.is_none() {
+                            bridge_event.block_timestamp = block_timestamp;
+                        }
 
                         Some(BridgeAction::EthToSuiBridgeAction(EthToSuiBridgeAction {
                             eth_tx_hash,
@@ -185,6 +190,8 @@ pub struct EthToSuiTokenBridgeV1 {
     pub eth_address: EthAddress,
     pub token_id: u8,
     pub sui_adjusted_amount: u64,
+    #[serde(default)]
+    pub block_timestamp: Option<u64>,
 }
 
 impl TryFrom<&TokensDepositedFilter> for EthToSuiTokenBridgeV1 {
@@ -198,6 +205,7 @@ impl TryFrom<&TokensDepositedFilter> for EthToSuiTokenBridgeV1 {
             eth_address: event.sender_address,
             token_id: event.token_id,
             sui_adjusted_amount: event.sui_adjusted_amount,
+            block_timestamp: None,
         })
     }
 }
@@ -210,9 +218,14 @@ impl TryFrom<SuiToEthBridgeAction> for eth_sui_bridge::Message {
     type Error = BridgeError;
 
     fn try_from(action: SuiToEthBridgeAction) -> BridgeResult<Self> {
+        let version = if action.timestamp_seconds().is_some() {
+            TOKEN_TRANSFER_MESSAGE_VERSION_V2
+        } else {
+            TOKEN_TRANSFER_MESSAGE_VERSION_V1
+        };
         Ok(eth_sui_bridge::Message {
             message_type: BridgeActionType::TokenTransfer as u8,
-            version: TOKEN_TRANSFER_MESSAGE_VERSION,
+            version,
             nonce: action.sui_bridge_event.nonce,
             chain_id: action.sui_bridge_event.sui_chain_id as u8,
             payload: action
@@ -546,7 +559,8 @@ mod tests {
                 transaction_log_index: None,
                 log_type: None,
                 removed: Some(false),
-            }
+            },
+            block_timestamp: Some(123),
         };
         let event = EthBridgeEvent::try_from_eth_log(&action).unwrap();
         assert_eq!(
@@ -589,11 +603,10 @@ mod tests {
                 ),
             },
         ));
-        assert!(
-            e.try_into_bridge_action(TxHash::random(), 0)
-                .unwrap()
-                .is_some()
-        );
+        assert!(e
+            .try_into_bridge_action(TxHash::random(), 0, Some(0))
+            .unwrap()
+            .is_some());
 
         let e = EthBridgeEvent::EthSuiBridgeEvents(EthSuiBridgeEvents::TokensDepositedFilter(
             TokensDepositedFilter {
@@ -608,7 +621,10 @@ mod tests {
                 ),
             },
         ));
-        match e.try_into_bridge_action(TxHash::random(), 0).unwrap_err() {
+        match e
+            .try_into_bridge_action(TxHash::random(), 0, None)
+            .unwrap_err()
+        {
             BridgeError::ZeroValueBridgeTransfer(_) => {}
             e => panic!("Unexpected error: {:?}", e),
         }

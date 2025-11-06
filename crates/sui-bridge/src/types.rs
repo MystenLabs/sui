@@ -250,6 +250,12 @@ pub struct SuiToEthBridgeAction {
     pub sui_bridge_event: EmittedSuiToEthTokenBridgeV1,
 }
 
+impl SuiToEthBridgeAction {
+    pub fn timestamp_seconds(&self) -> Option<u64> {
+        self.sui_bridge_event.timestamp_ms.map(|ms| ms / 1000)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SuiToEthTokenTransfer {
     pub nonce: u64,
@@ -269,6 +275,12 @@ pub struct EthToSuiBridgeAction {
     // The index of the event in the transaction
     pub eth_event_index: u16,
     pub eth_bridge_event: EthToSuiTokenBridgeV1,
+}
+
+impl EthToSuiBridgeAction {
+    pub fn timestamp_seconds(&self) -> Option<u64> {
+        self.eth_bridge_event.block_timestamp
+    }
 }
 
 #[derive(
@@ -597,6 +609,7 @@ pub struct EthLog {
     pub tx_hash: H256,
     pub log_index_in_tx: u16,
     pub log: Log,
+    pub block_timestamp_ms: Option<u64>,
 }
 
 /// The version of EthLog that does not have

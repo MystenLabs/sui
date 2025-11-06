@@ -219,6 +219,8 @@ pub struct EmittedSuiToEthTokenBridgeV1 {
     pub token_id: u8,
     // The amount of tokens deposited with decimal points on Sui side
     pub amount_sui_adjusted: u64,
+    #[serde(default)]
+    pub timestamp_ms: Option<u64>,
 }
 
 // Sanitized version of MoveCommitteeUpdateEvent
@@ -338,6 +340,8 @@ impl TryFrom<MoveTokenDepositedEvent> for EmittedSuiToEthTokenBridgeV1 {
             eth_address,
             token_id,
             amount_sui_adjusted: event.amount_sui_adjusted,
+            // TODO: get timestamp from event
+            timestamp_ms: None,
         })
     }
 }
@@ -365,6 +369,22 @@ crate::declare_events!(
     // EnumVariantName(Struct) => ("{module}::{event_struct}", CorrespondingMoveStruct)
 );
 
+impl SuiBridgeEvent {
+    pub fn try_from_sui_event(event: &SuiEvent) -> BridgeResult<Option<SuiBridgeEvent>> {
+        match Self::try_from_sui_event_internal(event)? {
+            Some(SuiBridgeEvent::SuiToEthTokenBridgeV1(mut bridge_event)) => {
+                if bridge_event.timestamp_ms.is_none() {
+                    if let Some(timestamp_ms) = event.timestamp_ms {
+                        bridge_event.timestamp_ms = Some(timestamp_ms);
+                    }
+                }
+                Ok(Some(SuiBridgeEvent::SuiToEthTokenBridgeV1(bridge_event)))
+            }
+            other => Ok(other),
+        }
+    }
+}
+
 #[macro_export]
 macro_rules! declare_events {
     ($($variant:ident($type:path) => ($event_tag:expr, $event_struct:path)),* $(,)?) => {
@@ -384,7 +404,9 @@ macro_rules! declare_events {
 
         // Try to convert a SuiEvent into SuiBridgeEvent
         impl SuiBridgeEvent {
-            pub fn try_from_sui_event(event: &SuiEvent) -> BridgeResult<Option<SuiBridgeEvent>> {
+            fn try_from_sui_event_internal(
+                event: &SuiEvent,
+            ) -> BridgeResult<Option<SuiBridgeEvent>> {
                 init_all_struct_tags(); // Ensure all tags are initialized
 
                 // Unwrap safe: we inited above
@@ -474,6 +496,7 @@ pub mod tests {
             eth_address: EthAddress::random(),
             token_id: TOKEN_ID_SUI,
             amount_sui_adjusted: 100,
+            timestamp_ms: Some(1725000000),
         };
         let emitted_event = MoveTokenDepositedEvent {
             seq_num: sanitized_event.nonce,

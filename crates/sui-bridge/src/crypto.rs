@@ -351,6 +351,7 @@ mod tests {
                     .unwrap(),
                 token_id: TOKEN_ID_ETH,
                 amount_sui_adjusted: 100000u64,
+                timestamp_ms: None,
             },
         });
         let sig = BridgeAuthoritySignInfo {

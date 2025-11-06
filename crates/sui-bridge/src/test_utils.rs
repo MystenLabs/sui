@@ -22,7 +22,7 @@ use crate::{
 use ethers::abi::{ParamType, long_signature};
 use ethers::types::Address as EthAddress;
 use ethers::types::{
-    Block, BlockNumber, Filter, FilterBlockOption, Log, TransactionReceipt, TxHash, U64,
+    Block, BlockNumber, Filter, FilterBlockOption, Log, TransactionReceipt, TxHash, U256, U64,
     ValueOrArray,
 };
 use fastcrypto::encoding::{Encoding, Hex};
@@ -96,6 +96,7 @@ pub fn get_test_sui_to_eth_bridge_action(
             eth_address: recipient_address.unwrap_or_else(EthAddress::random),
             token_id: token_id.unwrap_or(TOKEN_ID_USDC),
             amount_sui_adjusted: amount_sui_adjusted.unwrap_or(100_000),
+            timestamp_ms: None,
         },
     })
 }
@@ -117,6 +118,7 @@ pub fn get_test_eth_to_sui_bridge_action(
             sui_adjusted_amount: amount.unwrap_or(100_000),
             sui_address: sui_address.unwrap_or_else(SuiAddress::random_for_testing_only),
             eth_address: EthAddress::random(),
+            block_timestamp: None,
         },
     })
 }
@@ -204,6 +206,20 @@ pub fn mock_get_logs(
     ).unwrap();
 
     for log in logs {
+        if let Some(block_number) = log.block_number {
+            let block = Block::<TxHash> {
+                number: Some(block_number),
+                timestamp: U256::from(1),
+                ..Default::default()
+            };
+            mock_provider
+                .add_response(
+                    "eth_getBlockByNumber",
+                    (format!("0x{:x}", block_number.as_u64()), false),
+                    block,
+                )
+                .unwrap();
+        }
         mock_provider
             .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
                 "eth_getTransactionReceipt",
@@ -278,6 +294,7 @@ pub fn get_test_log_and_action(
             sui_adjusted_amount,
             sui_address,
             eth_address: source_address,
+            block_timestamp: None,
         },
     });
     (log, bridge_action)

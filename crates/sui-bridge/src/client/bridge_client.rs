@@ -452,6 +452,7 @@ mod tests {
                 eth_address: EthAddress::random(),
                 token_id: TOKEN_ID_USDT,
                 amount_sui_adjusted: 1,
+                timestamp_ms: None,
             },
         });
         assert_eq!(
@@ -475,6 +476,7 @@ mod tests {
                 sui_address: SuiAddress::random_for_testing_only(),
                 token_id: TOKEN_ID_USDT,
                 sui_adjusted_amount: 1,
+                block_timestamp: None,
             },
         });
 

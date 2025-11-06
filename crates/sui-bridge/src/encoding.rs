@@ -18,7 +18,8 @@ use enum_dispatch::enum_dispatch;
 use ethers::types::Address as EthAddress;
 use sui_types::base_types::SUI_ADDRESS_LENGTH;
 
-pub const TOKEN_TRANSFER_MESSAGE_VERSION: u8 = 1;
+pub const TOKEN_TRANSFER_MESSAGE_VERSION_V1: u8 = 1;
+pub const TOKEN_TRANSFER_MESSAGE_VERSION_V2: u8 = 2;
 pub const COMMITTEE_BLOCKLIST_MESSAGE_VERSION: u8 = 1;
 pub const EMERGENCY_BUTTON_MESSAGE_VERSION: u8 = 1;
 pub const LIMIT_UPDATE_MESSAGE_VERSION: u8 = 1;
@@ -50,7 +51,13 @@ impl BridgeMessageEncoding for SuiToEthBridgeAction {
         // Add message type
         bytes.push(BridgeActionType::TokenTransfer as u8);
         // Add message version
-        bytes.push(TOKEN_TRANSFER_MESSAGE_VERSION);
+        let timestamp_seconds = self.timestamp_seconds();
+        let version = if timestamp_seconds.is_some() {
+            TOKEN_TRANSFER_MESSAGE_VERSION_V2
+        } else {
+            TOKEN_TRANSFER_MESSAGE_VERSION_V1
+        };
+        bytes.push(version);
         // Add nonce
         bytes.extend_from_slice(&e.nonce.to_be_bytes());
         // Add source chain id
@@ -82,6 +89,10 @@ impl BridgeMessageEncoding for SuiToEthBridgeAction {
 
         // Add token amount
         bytes.extend_from_slice(&e.amount_sui_adjusted.to_be_bytes());
+
+        if let Some(timestamp_seconds) = self.timestamp_seconds() {
+            bytes.extend_from_slice(&timestamp_seconds.to_be_bytes());
+        }
 
         Ok(bytes)
     }
@@ -136,7 +147,12 @@ impl BridgeMessageEncoding for EthToSuiBridgeAction {
         // Add message type
         bytes.push(BridgeActionType::TokenTransfer as u8);
         // Add message version
-        bytes.push(TOKEN_TRANSFER_MESSAGE_VERSION);
+        let version = if self.timestamp_seconds().is_some() {
+            TOKEN_TRANSFER_MESSAGE_VERSION_V2
+        } else {
+            TOKEN_TRANSFER_MESSAGE_VERSION_V1
+        };
+        bytes.push(version);
         // Add nonce
         bytes.extend_from_slice(&e.nonce.to_be_bytes());
         // Add source chain id
@@ -168,6 +184,10 @@ impl BridgeMessageEncoding for EthToSuiBridgeAction {
 
         // Add token amount
         bytes.extend_from_slice(&e.sui_adjusted_amount.to_be_bytes());
+
+        if let Some(timestamp_seconds) = self.timestamp_seconds() {
+            bytes.extend_from_slice(&timestamp_seconds.to_be_bytes());
+        }
 
         Ok(bytes)
     }
@@ -425,7 +445,7 @@ impl BridgeAction {
 
 #[cfg(test)]
 mod tests {
-    use crate::abi::EthToSuiTokenBridgeV1;
+    use crate::abi::{eth_sui_bridge, EthToSuiTokenBridgeV1};
     use crate::crypto::BridgeAuthorityKeyPair;
     use crate::crypto::BridgeAuthorityPublicKeyBytes;
     use crate::crypto::BridgeAuthoritySignInfo;
@@ -473,6 +493,7 @@ mod tests {
             eth_address,
             token_id,
             amount_sui_adjusted,
+            timestamp_ms: None,
         };
 
         let encoded_bytes = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
@@ -485,7 +506,7 @@ mod tests {
         // Construct the expected bytes
         let prefix_bytes = BRIDGE_MESSAGE_PREFIX.to_vec(); // len: 18
         let message_type = vec![BridgeActionType::TokenTransfer as u8]; // len: 1
-        let message_version = vec![TOKEN_TRANSFER_MESSAGE_VERSION]; // len: 1
+        let message_version = vec![TOKEN_TRANSFER_MESSAGE_VERSION_V1]; // len: 1
         let nonce_bytes = nonce.to_be_bytes().to_vec(); // len: 8
         let source_chain_id_bytes = vec![sui_chain_id as u8]; // len: 1
 
@@ -552,6 +573,7 @@ mod tests {
             eth_address,
             token_id,
             amount_sui_adjusted,
+            timestamp_ms: None,
         };
         let encoded_bytes = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
             sui_tx_digest,
@@ -937,6 +959,7 @@ mod tests {
             eth_address,
             token_id,
             sui_adjusted_amount,
+            block_timestamp: None,
         };
         let encoded_bytes = BridgeAction::EthToSuiBridgeAction(EthToSuiBridgeAction {
             eth_tx_hash,
@@ -957,6 +980,79 @@ mod tests {
                 .unwrap(),
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_sui_to_eth_token_transfer_version_2_with_timestamp() {
+        telemetry_subscribers::init_for_testing();
+        let registry = Registry::new();
+        mysten_metrics::init_metrics(&registry);
+
+        let timestamp_ms = 1_700_000_000_123u64;
+        let timestamp_seconds = timestamp_ms / 1000;
+
+        let sui_to_eth_action = SuiToEthBridgeAction {
+            sui_tx_digest: TransactionDigest::random(),
+            sui_tx_event_index: 0,
+            sui_bridge_event: EmittedSuiToEthTokenBridgeV1 {
+                nonce: 42,
+                sui_chain_id: BridgeChainId::SuiTestnet,
+                sui_address: SuiAddress::random_for_testing_only(),
+                eth_chain_id: BridgeChainId::EthSepolia,
+                eth_address: EthAddress::random(),
+                token_id: TOKEN_ID_USDC,
+                amount_sui_adjusted: 500,
+                timestamp_ms: Some(timestamp_ms),
+            },
+        };
+
+        let encoded_bytes =
+            BridgeAction::SuiToEthBridgeAction(sui_to_eth_action.clone()).to_bytes();
+        assert_eq!(encoded_bytes[19], TOKEN_TRANSFER_MESSAGE_VERSION_V2);
+        assert_eq!(
+            &encoded_bytes[encoded_bytes.len() - 8..],
+            &timestamp_seconds.to_be_bytes()
+        );
+
+        let eth_message: eth_sui_bridge::Message = sui_to_eth_action.clone().into();
+        assert_eq!(eth_message.version, TOKEN_TRANSFER_MESSAGE_VERSION_V2);
+        assert_eq!(eth_message.payload.len(), 64 + 8);
+    }
+
+    #[test]
+    fn test_eth_to_sui_token_transfer_version_2_with_timestamp() {
+        telemetry_subscribers::init_for_testing();
+        let registry = Registry::new();
+        mysten_metrics::init_metrics(&registry);
+
+        let timestamp_seconds = 1_700_000_123u64;
+
+        let eth_to_sui_action = EthToSuiBridgeAction {
+            eth_tx_hash: TxHash::random(),
+            eth_event_index: 5,
+            eth_bridge_event: EthToSuiTokenBridgeV1 {
+                nonce: 99,
+                sui_chain_id: BridgeChainId::SuiTestnet,
+                eth_chain_id: BridgeChainId::EthSepolia,
+                sui_address: SuiAddress::random_for_testing_only(),
+                eth_address: EthAddress::random(),
+                token_id: TOKEN_ID_USDC,
+                sui_adjusted_amount: 1_234,
+                block_timestamp: Some(timestamp_seconds),
+            },
+        };
+
+        let encoded_bytes =
+            BridgeAction::EthToSuiBridgeAction(eth_to_sui_action.clone()).to_bytes();
+        assert_eq!(encoded_bytes[19], TOKEN_TRANSFER_MESSAGE_VERSION_V2);
+        assert_eq!(
+            &encoded_bytes[encoded_bytes.len() - 8..],
+            &timestamp_seconds.to_be_bytes()
+        );
+
+        let eth_message: eth_sui_bridge::Message = eth_to_sui_action.into();
+        assert_eq!(eth_message.version, TOKEN_TRANSFER_MESSAGE_VERSION_V2);
+        assert_eq!(eth_message.payload.len(), 64 + 8);
     }
 
     #[test]
