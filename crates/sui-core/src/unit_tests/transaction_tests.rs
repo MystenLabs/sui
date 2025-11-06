@@ -6,9 +6,9 @@ use crate::mock_consensus::with_block_status;
 use consensus_core::BlockStatus;
 use consensus_types::block::BlockRef;
 use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
-use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
-use move_core_types::ident_str;
-use rand::{rngs::StdRng, SeedableRng};
+use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, ZkLoginInputs, parse_jwks};
+use move_core_types::{ident_str, identifier::Identifier};
+use rand::{SeedableRng, rngs::StdRng};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::Deref;
@@ -17,14 +17,16 @@ use sui_types::messages_grpc::HandleSoftBundleCertificatesRequestV3;
 use sui_types::utils::get_one_zklogin_inputs;
 use sui_types::{
     authenticator_state::ActiveJwk,
-    base_types::{dbg_addr, FullObjectRef},
-    crypto::{get_key_pair, AccountKeyPair, Signature, SuiKeyPair},
-    error::{SuiError, UserInputError},
+    base_types::{FullObjectRef, dbg_addr},
+    crypto::{AccountKeyPair, Signature, SuiKeyPair, get_key_pair},
+    error::UserInputError,
     messages_consensus::ConsensusDeterminedVersionAssignments,
     multisig::{MultiSig, MultiSigPublicKey},
     signature::GenericSignature,
     transaction::{
-        AuthenticatorStateUpdate, GenesisTransaction, TransactionDataAPI, TransactionKind,
+        Argument, AuthenticatorStateUpdate, CallArg, Command, GenesisTransaction, ObjectArg,
+        ProgrammableTransaction, SharedObjectMutability, TransactionData, TransactionDataAPI,
+        TransactionKind,
     },
     utils::{load_test_vectors, to_sender_signed_transaction},
     zk_login_authenticator::ZkLoginAuthenticator,
@@ -35,8 +37,9 @@ use crate::authority::authority_test_utils::send_batch_consensus_no_execution;
 use crate::authority::authority_tests::{call_move_, create_gas_objects, publish_object_basics};
 use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
-use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
+use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
+use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
 
 use sui_macros::sim_test;
 macro_rules! assert_matches {
@@ -80,7 +83,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
                 vec![Signature::new_secure(data.intent_message(), &unknown_key).into()];
         },
         |err| {
-            assert_matches!(err, SuiError::SignerSignatureAbsent { .. });
+            assert_matches!(err, SuiErrorKind::SignerSignatureAbsent { .. });
         },
     )
     .await;
@@ -96,7 +99,7 @@ async fn test_handle_transfer_transaction_no_signature() {
         |err| {
             assert_matches!(
                 err,
-                SuiError::SignerSignatureNumberMismatch {
+                SuiErrorKind::SignerSignatureNumberMismatch {
                     expected: 1,
                     actual: 0
                 }
@@ -117,7 +120,7 @@ async fn test_handle_transfer_transaction_extra_signature() {
         |err| {
             assert_matches!(
                 err,
-                SuiError::SignerSignatureNumberMismatch {
+                SuiErrorKind::SignerSignatureNumberMismatch {
                     expected: 1,
                     actual: 2
                 }
@@ -137,7 +140,7 @@ async fn test_empty_gas_data() {
         |err| {
             assert_matches!(
                 err,
-                SuiError::UserInputError {
+                SuiErrorKind::UserInputError {
                     error: UserInputError::MissingGasPayment
                 }
             );
@@ -158,7 +161,7 @@ async fn test_duplicate_gas_data() {
         |err| {
             assert_matches!(
                 err,
-                SuiError::UserInputError {
+                SuiErrorKind::UserInputError {
                     error: UserInputError::MutableObjectUsedMoreThanOnce { .. }
                 }
             );
@@ -178,7 +181,7 @@ async fn test_gas_wrong_owner_matches_sender() {
         },
         |_| {},
         |err| {
-            assert_matches!(err, SuiError::SignerSignatureAbsent { .. });
+            assert_matches!(err, SuiErrorKind::SignerSignatureAbsent { .. });
         },
     )
     .await;
@@ -196,7 +199,7 @@ async fn test_gas_wrong_owner() {
         |err| {
             assert_matches!(
                 err,
-                SuiError::SignerSignatureNumberMismatch {
+                SuiErrorKind::SignerSignatureNumberMismatch {
                     expected: 2,
                     actual: 1
                 }
@@ -284,7 +287,7 @@ async fn test_user_sends_system_transaction_impl(transaction_kind: TransactionKi
         |err| {
             assert_matches!(
                 err,
-                SuiError::UserInputError {
+                SuiErrorKind::UserInputError {
                     error: UserInputError::Unsupported { .. }
                 }
             );
@@ -300,10 +303,10 @@ async fn test_sender_is_not_consensus_v2_owner() {
     let (sender1, sender_key1): (_, AccountKeyPair) = get_key_pair();
     let (sender2, sender_key2): (_, AccountKeyPair) = get_key_pair();
     let start_version = SequenceNumber::new();
-    let err_check = |err: &SuiError| {
+    let err_check = |err: &SuiErrorKind| {
         assert_matches!(
             err,
-            SuiError::UserInputError {
+            SuiErrorKind::UserInputError {
                 error: UserInputError::IncorrectUserSignature { .. }
             }
         );
@@ -368,7 +371,7 @@ pub fn init_move_call_transaction(
         FullObjectID::Consensus((id, initial_shared_version)) => ObjectArg::SharedObject {
             id,
             initial_shared_version,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         },
     });
     let mut data = TransactionData::new_move_call(
@@ -390,7 +393,7 @@ pub fn init_move_call_transaction(
 async fn do_transaction_test_skip_cert_checks(
     pre_sign_mutations: impl Fn(&mut TransactionData),
     post_sign_mutations: impl Fn(&mut Transaction),
-    err_check: impl Fn(&SuiError),
+    err_check: impl Fn(&SuiErrorKind),
 ) {
     let (sender1, sender_key1): (_, AccountKeyPair) = get_key_pair();
     let (sender2, sender_key2): (_, AccountKeyPair) = get_key_pair();
@@ -410,7 +413,7 @@ async fn do_transaction_test_skip_cert_checks(
 async fn do_transaction_test(
     pre_sign_mutations: impl Fn(&mut TransactionData),
     post_sign_mutations: impl Fn(&mut Transaction),
-    err_check: impl Fn(&SuiError),
+    err_check: impl Fn(&SuiErrorKind),
 ) {
     let (sender1, sender_key1): (_, AccountKeyPair) = get_key_pair();
     let (sender2, sender_key2): (_, AccountKeyPair) = get_key_pair();
@@ -435,7 +438,7 @@ async fn do_transaction_test_impl(
     post_sign_mutations: impl Fn(&mut Transaction),
     transfer_sender: usize,
     move_call_sender: usize,
-    err_check: impl Fn(&SuiError),
+    err_check: impl Fn(&SuiErrorKind),
 ) {
     telemetry_subscribers::init_for_testing();
 
@@ -508,7 +511,7 @@ async fn do_transaction_test_impl(
             .handle_transaction(transaction.clone(), Some(socket_addr))
             .await
             .unwrap_err();
-        err_check(&err);
+        err_check(err.as_inner());
     }
 
     check_locks(authority_state.clone(), vec![input_object_id]).await;
@@ -539,13 +542,13 @@ async fn do_transaction_test_impl(
                 .handle_certificate_v2(ct.clone(), Some(socket_addr))
                 .await
                 .unwrap_err();
-            err_check(&err);
+            err_check(err.as_inner());
             epoch_store.clear_signature_cache();
             let err = client
                 .handle_certificate_v2(ct.clone(), Some(socket_addr))
                 .await
                 .unwrap_err();
-            err_check(&err);
+            err_check(err.as_inner());
 
             // Additionally, if the tx contains access to shared objects, check if Soft Bundle handler returns the same error.
             if ct.is_consensus_tx() {
@@ -626,10 +629,12 @@ async fn test_zklogin_transfer_with_large_address_seed() {
     )
     .await;
 
-    assert!(client
-        .handle_transaction(tx, Some(make_socket_addr()))
-        .await
-        .is_err());
+    assert!(
+        client
+            .handle_transaction(tx, Some(make_socket_addr()))
+            .await
+            .is_err()
+    );
 }
 
 #[sim_test]
@@ -706,8 +711,9 @@ async fn zklogin_test_caching_scenarios() {
         client
             .handle_transaction(txn.clone(), Some(socket_addr))
             .await
-            .unwrap_err(),
-        SuiError::InvalidSignature { .. }
+            .unwrap_err()
+            .into_inner(),
+        SuiErrorKind::InvalidSignature { .. }
     ));
     assert_eq!(metrics.signature_errors.get(), 1);
 
@@ -742,10 +748,12 @@ async fn zklogin_test_caching_scenarios() {
     )
     .await;
 
-    assert!(client
-        .handle_transaction(txn3, Some(socket_addr))
-        .await
-        .is_ok());
+    assert!(
+        client
+            .handle_transaction(txn3, Some(socket_addr))
+            .await
+            .is_ok()
+    );
 
     assert_eq!(
         epoch_store
@@ -772,10 +780,12 @@ async fn zklogin_test_caching_scenarios() {
         multisig_pk.clone(),
     )
     .await;
-    assert!(client
-        .handle_transaction(multisig_txn, Some(socket_addr))
-        .await
-        .is_ok());
+    assert!(
+        client
+            .handle_transaction(multisig_txn, Some(socket_addr))
+            .await
+            .is_ok()
+    );
 
     assert_eq!(
         epoch_store
@@ -808,8 +818,9 @@ async fn zklogin_test_caching_scenarios() {
         client
             .handle_transaction(txn.clone(), Some(socket_addr))
             .await
-            .unwrap_err(),
-        SuiError::InvalidSignature { .. }
+            .unwrap_err()
+            .into_inner(),
+        SuiErrorKind::InvalidSignature { .. }
     ));
     assert_eq!(metrics.signature_errors.get(), 2);
 
@@ -858,8 +869,9 @@ async fn zklogin_test_caching_scenarios() {
         client
             .handle_transaction(transfer_transaction3.clone(), Some(socket_addr))
             .await
-            .unwrap_err(),
-        SuiError::InvalidSignature { .. }
+            .unwrap_err()
+            .into_inner(),
+        SuiErrorKind::InvalidSignature { .. }
     ));
     assert_eq!(metrics.signature_errors.get(), 3);
 
@@ -891,8 +903,9 @@ async fn zklogin_test_caching_scenarios() {
         client
             .handle_transaction(multisig_txn.clone(), Some(socket_addr))
             .await
-            .unwrap_err(),
-        SuiError::InvalidSignature { .. }
+            .unwrap_err()
+            .into_inner(),
+        SuiErrorKind::InvalidSignature { .. }
     ));
 
     assert_eq!(
@@ -933,8 +946,9 @@ async fn zklogin_test_caching_scenarios() {
         client
             .handle_transaction(txn4.clone(), Some(socket_addr))
             .await
-            .unwrap_err(),
-        SuiError::InvalidSignature { .. }
+            .unwrap_err()
+            .into_inner(),
+        SuiErrorKind::InvalidSignature { .. }
     ));
     assert_eq!(metrics.signature_errors.get(), 5);
 
@@ -968,10 +982,12 @@ async fn do_zklogin_transaction_test(
 
     post_sign_mutations(&mut transfer_transaction);
 
-    assert!(client
-        .handle_transaction(transfer_transaction, Some(make_socket_addr()))
-        .await
-        .is_err());
+    assert!(
+        client
+            .handle_transaction(transfer_transaction, Some(make_socket_addr()))
+            .await
+            .is_err()
+    );
 
     assert_eq!(
         epoch_store
@@ -990,14 +1006,16 @@ async fn do_zklogin_transaction_test(
 async fn check_locks(authority_state: Arc<AuthorityState>, object_ids: Vec<ObjectID>) {
     for object_id in object_ids {
         let object = authority_state.get_object(&object_id).await.unwrap();
-        assert!(authority_state
-            .get_transaction_lock(
-                &object.compute_object_reference(),
-                &authority_state.epoch_store_for_testing()
-            )
-            .await
-            .unwrap()
-            .is_none());
+        assert!(
+            authority_state
+                .get_transaction_lock(
+                    &object.compute_object_reference(),
+                    &authority_state.epoch_store_for_testing()
+                )
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 }
 
@@ -1439,11 +1457,12 @@ async fn test_oversized_txn() {
         .handle_transaction(txn, Some(make_socket_addr()))
         .await;
     // The txn should be rejected due to its size.
-    assert!(res
-        .err()
-        .unwrap()
-        .to_string()
-        .contains("serialized transaction size exceeded maximum"));
+    assert!(
+        res.err()
+            .unwrap()
+            .to_string()
+            .contains("serialized transaction size exceeded maximum")
+    );
 }
 
 #[tokio::test]
@@ -1506,7 +1525,7 @@ async fn test_very_large_certificate() {
     let quorum_signature = sui_types::crypto::AuthorityQuorumSignInfo {
         epoch: 0,
         signature: sui_types::crypto::AggregateAuthoritySignature::aggregate(&sigs)
-            .map_err(|e| SuiError::InvalidSignature {
+            .map_err(|e| SuiErrorKind::InvalidSignature {
                 error: e.to_string(),
             })
             .expect("Validator returned invalid signature"),
@@ -1522,7 +1541,7 @@ async fn test_very_large_certificate() {
     let err = res.err().unwrap();
     // The resulting error should be a RpcError with a message length too large.
     assert!(
-        matches!(err, SuiError::RpcError(..))
+        matches!(err.as_inner(), SuiErrorKind::RpcError(..))
             && err.to_string().contains("message length too large")
     );
 }
@@ -1591,8 +1610,8 @@ async fn test_handle_certificate_errors() {
         .await
         .unwrap_err();
     assert_matches!(
-        err,
-        SuiError::WrongEpoch {
+        err.into_inner(),
+        SuiErrorKind::WrongEpoch {
             expected_epoch: 0,
             actual_epoch: 1
         }
@@ -1622,8 +1641,8 @@ async fn test_handle_certificate_errors() {
         .unwrap_err();
 
     assert_matches!(
-        err,
-        SuiError::UserInputError {
+        err.into_inner(),
+        SuiErrorKind::UserInputError {
             error: UserInputError::Unsupported(message)
         } if message == "SenderSignedData must not contain system transaction"
     );
@@ -1640,11 +1659,12 @@ async fn test_handle_certificate_errors() {
     let err = client
         .handle_certificate_v2(ct.clone(), Some(socket_addr))
         .await
-        .unwrap_err();
+        .unwrap_err()
+        .into_inner();
 
     assert_matches!(
         err,
-        SuiError::SignerSignatureNumberMismatch {
+        SuiErrorKind::SignerSignatureNumberMismatch {
             expected: 1,
             actual: 0
         }
@@ -1667,7 +1687,7 @@ async fn test_handle_certificate_errors() {
         .await
         .unwrap_err();
 
-    assert_matches!(err, SuiError::SignerSignatureAbsent { .. });
+    assert_matches!(err.into_inner(), SuiErrorKind::SignerSignatureAbsent { .. });
 }
 
 #[sim_test]
@@ -1719,7 +1739,7 @@ async fn test_handle_soft_bundle_certificates() {
         .await
         .unwrap();
         effects.status().unwrap();
-        let shared_object_id = effects.created()[0].0 .0;
+        let shared_object_id = effects.created()[0].0.0;
         authority.get_object(&shared_object_id).await.unwrap()
     };
     let initial_shared_version = shared_object.version();
@@ -1785,7 +1805,7 @@ async fn test_handle_soft_bundle_certificates() {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: shared_object.id(),
                         initial_shared_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure((i as u64).to_le_bytes().to_vec()),
                 ],
@@ -1820,9 +1840,12 @@ async fn test_handle_soft_bundle_certificates() {
     let mut expected_object_version = initial_shared_version;
     for response in responses {
         let input_objects = response.input_objects.unwrap();
-        assert!(input_objects
-            .iter()
-            .any(|obj| obj.id() == shared_object.id() && obj.version() == expected_object_version));
+        assert!(
+            input_objects
+                .iter()
+                .any(|obj| obj.id() == shared_object.id()
+                    && obj.version() == expected_object_version)
+        );
 
         let output_objects = response.output_objects.unwrap();
         let output_object = output_objects
@@ -1879,7 +1902,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
         .await
         .unwrap();
         effects.status().unwrap();
-        let shared_object_id = effects.created()[0].0 .0;
+        let shared_object_id = effects.created()[0].0.0;
         authority.get_object(&shared_object_id).await.unwrap()
     };
     let initial_shared_version = shared_object.version();
@@ -1938,8 +1961,8 @@ async fn test_handle_soft_bundle_certificates_errors() {
             .await;
         assert!(response.is_err());
         assert_matches!(
-            response.unwrap_err(),
-            SuiError::NoCertificateProvidedError { .. }
+            response.unwrap_err().into_inner(),
+            SuiErrorKind::NoCertificateProvidedError
         );
     }
 
@@ -1985,8 +2008,8 @@ async fn test_handle_soft_bundle_certificates_errors() {
             .await;
         assert!(response.is_err());
         assert_matches!(
-            response.unwrap_err(),
-            SuiError::UserInputError {
+            response.unwrap_err().into_inner(),
+            SuiErrorKind::UserInputError {
                 error: UserInputError::TooManyTransactionsInBatch { .. },
             }
         );
@@ -2030,8 +2053,8 @@ async fn test_handle_soft_bundle_certificates_errors() {
             .await;
         assert!(response.is_err());
         assert_matches!(
-            response.unwrap_err(),
-            SuiError::UserInputError {
+            response.unwrap_err().into_inner(),
+            SuiErrorKind::UserInputError {
                 error: UserInputError::NoSharedObjectError { .. },
             }
         );
@@ -2059,7 +2082,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: shared_object.id(),
                         initial_shared_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure(11u64.to_le_bytes().to_vec()),
                 ],
@@ -2088,7 +2111,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: shared_object.id(),
                         initial_shared_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure(12u64.to_le_bytes().to_vec()),
                 ],
@@ -2114,8 +2137,8 @@ async fn test_handle_soft_bundle_certificates_errors() {
             .await;
         assert!(response.is_err());
         assert_matches!(
-            response.unwrap_err(),
-            SuiError::UserInputError {
+            response.unwrap_err().into_inner(),
+            SuiErrorKind::UserInputError {
                 error: UserInputError::GasPriceMismatchError { .. },
             }
         );
@@ -2143,7 +2166,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: shared_object.id(),
                         initial_shared_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure(11u64.to_le_bytes().to_vec()),
                 ],
@@ -2172,7 +2195,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: shared_object.id(),
                         initial_shared_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure(12u64.to_le_bytes().to_vec()),
                 ],
@@ -2200,9 +2223,9 @@ async fn test_handle_soft_bundle_certificates_errors() {
             .await;
         assert!(response.is_err());
         assert_matches!(
-            response.unwrap_err(),
-            SuiError::UserInputError {
-                error: UserInputError::CertificateAlreadyProcessed { .. },
+            response.unwrap_err().into_inner(),
+            SuiErrorKind::UserInputError {
+                error: UserInputError::CertificateAlreadyProcessed,
             }
         );
     }
@@ -2266,8 +2289,8 @@ async fn test_handle_soft_bundle_certificates_errors() {
             .await;
         assert!(response.is_err());
         assert_matches!(
-            response.unwrap_err(),
-            SuiError::UserInputError {
+            response.unwrap_err().into_inner(),
+            SuiErrorKind::UserInputError {
                 error: UserInputError::TotalTransactionSizeTooLargeInBatch {
                     size: 25116,
                     limit: 5000
@@ -2335,11 +2358,12 @@ fn test_gas_payment_limit_check() {
     // 1 < 1 is false
     protocol_config.set_correct_gas_payment_limit_check_for_testing(false);
     protocol_config.set_max_gas_payment_objects_for_testing(1);
-    assert!(data
-        .validity_check(&protocol_config)
-        .unwrap_err()
-        .to_string()
-        .contains("maximum number of gas payment objects"));
+    assert!(
+        data.validity_check(&protocol_config)
+            .unwrap_err()
+            .to_string()
+            .contains("maximum number of gas payment objects")
+    );
 
     // 1 < 2 is true
     protocol_config.set_correct_gas_payment_limit_check_for_testing(false);
@@ -2350,4 +2374,165 @@ fn test_gas_payment_limit_check() {
     protocol_config.set_correct_gas_payment_limit_check_for_testing(true);
     protocol_config.set_max_gas_payment_objects_for_testing(1);
     assert!(data.validity_check(&protocol_config).is_ok());
+}
+
+#[tokio::test]
+async fn test_shared_object_v2_denied() {
+    // Create test setup with sender and gas objects
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+    let gas_objects = create_gas_objects(2, sender);
+
+    // Create an authority
+    let authority = TestAuthorityBuilder::new()
+        .with_reference_gas_price(1000)
+        .build()
+        .await;
+
+    // Insert genesis objects
+    authority.insert_genesis_objects(&gas_objects).await;
+
+    // Publish the object_basics package
+    let (authority, package) = publish_object_basics(authority).await;
+
+    // Create a shared object
+    let shared_object = {
+        let effects = call_move_(
+            &authority,
+            None,
+            &gas_objects[0].id(),
+            &sender,
+            &keypair,
+            &package.0,
+            "object_basics",
+            "share",
+            vec![],
+            vec![],
+            true,
+        )
+        .await
+        .unwrap();
+
+        effects.status().unwrap();
+        let shared_object_id = effects.created()[0].0.0;
+        authority.get_object(&shared_object_id).await.unwrap()
+    };
+
+    let initial_shared_version = shared_object.version();
+
+    // Create a NetworkAuthorityClient for testing
+    let server = AuthorityServer::new_for_test(authority.clone());
+    let server_handle = server.spawn_for_test().await.unwrap();
+    let _client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        authority.config.network_key_pair().public().to_owned(),
+    )
+    .await
+    .unwrap();
+
+    // Test 1: Normal transaction with SharedObject should work
+    {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .input(CallArg::Object(ObjectArg::SharedObject {
+                id: shared_object.id(),
+                initial_shared_version,
+                mutability: SharedObjectMutability::Mutable,
+            }))
+            .unwrap();
+        builder
+            .input(CallArg::Pure(bcs::to_bytes(&42u64).unwrap()))
+            .unwrap();
+        builder.command(Command::move_call(
+            package.0,
+            Identifier::new("object_basics").unwrap(),
+            Identifier::new("set_value").unwrap(),
+            vec![],
+            vec![Argument::Input(0), Argument::Input(1)],
+        ));
+
+        let rgp = authority.reference_gas_price_for_testing().unwrap();
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![gas_objects[1].compute_object_reference()],
+            builder.finish(),
+            rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+            rgp,
+        );
+
+        let transaction = to_sender_signed_transaction(data, &keypair);
+
+        // This should succeed
+        let epoch_store = authority.load_epoch_store_one_call_per_task();
+        let verified_tx = epoch_store.verify_transaction(transaction).unwrap();
+        let response = authority
+            .handle_transaction(&epoch_store, verified_tx)
+            .await;
+
+        assert!(
+            response.is_ok(),
+            "Normal shared object transaction should succeed"
+        );
+    }
+
+    // Test 2: Transaction with NonExclusiveWrite should be rejected during validation
+    {
+        // Create a programmable transaction manually to bypass builder validation
+        let pt = ProgrammableTransaction {
+            inputs: vec![
+                CallArg::Object(ObjectArg::SharedObject {
+                    id: shared_object.id(),
+                    initial_shared_version,
+                    mutability: SharedObjectMutability::NonExclusiveWrite,
+                }),
+                CallArg::Pure(bcs::to_bytes(&42u64).unwrap()),
+            ],
+            commands: vec![Command::move_call(
+                package.0,
+                Identifier::new("object_basics").unwrap(),
+                Identifier::new("set_value").unwrap(),
+                vec![],
+                vec![Argument::Input(0), Argument::Input(1)],
+            )],
+        };
+
+        let rgp = authority.reference_gas_price_for_testing().unwrap();
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![gas_objects[1].compute_object_reference()],
+            pt,
+            rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+            rgp,
+        );
+
+        let transaction = to_sender_signed_transaction(data, &keypair);
+
+        // Try to verify the transaction - this should fail at validity check
+        let epoch_store = authority.load_epoch_store_one_call_per_task();
+        let result = transaction.validity_check(&epoch_store.tx_validity_check_context());
+
+        assert!(
+            result.is_err(),
+            "Transaction with NonExclusiveWrite should fail validity check"
+        );
+
+        if let Err(e) = result {
+            // Check that the error is a UserInputError about SharedObject
+            match e.as_inner() {
+                SuiErrorKind::UserInputError { error } => match error {
+                    UserInputError::Unsupported(msg) => {
+                        assert!(
+                            msg.contains("NonExclusiveWrite"),
+                            "Expected error about NonExclusiveWrite, got: {}",
+                            msg
+                        );
+                    }
+                    _ => panic!("Expected UserInputError::Unsupported, got: {:?}", error),
+                },
+                _ => panic!("Expected SuiError::UserInputError, got: {:?}", e),
+            }
+        }
+    }
+
+    // Clean up
+    drop(server_handle);
 }

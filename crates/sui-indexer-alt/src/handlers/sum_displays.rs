@@ -3,16 +3,16 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use diesel::{upsert::excluded, ExpressionMethods};
+use diesel::{ExpressionMethods, upsert::excluded};
 use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
 use sui_indexer_alt_framework::{
-    pipeline::{sequential::Handler, Processor},
-    postgres::{Connection, Db},
-    types::{display::DisplayVersionUpdatedEvent, full_checkpoint_content::CheckpointData},
     FieldCount,
+    pipeline::{Processor, sequential::Handler},
+    postgres::{Connection, Db},
+    types::{display::DisplayVersionUpdatedEvent, full_checkpoint_content::Checkpoint},
 };
 use sui_indexer_alt_schema::{displays::StoredDisplay, schema::sum_displays};
 
@@ -26,8 +26,8 @@ impl Processor for SumDisplays {
 
     type Value = StoredDisplay;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData { transactions, .. } = checkpoint.as_ref();
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint { transactions, .. } = checkpoint.as_ref();
 
         let mut values = vec![];
         for tx in transactions {
@@ -65,13 +65,13 @@ impl Handler for SumDisplays {
     type Store = Db;
     type Batch = BTreeMap<Vec<u8>, Self::Value>;
 
-    fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
         for value in values {
             batch.insert(value.object_type.clone(), value);
         }
     }
 
-    async fn commit<'a>(batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
+    async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
         let values: Vec<_> = batch.values().cloned().collect();
         let updates = values
             .chunks(MAX_INSERT_CHUNK_ROWS)

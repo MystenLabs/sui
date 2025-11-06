@@ -14,7 +14,7 @@ use mysten_metrics::spawn_logged_monitored_task;
 use std::{collections::HashMap, sync::Arc};
 use sui_json_rpc_types::SuiEvent;
 use sui_types::BRIDGE_PACKAGE_ID;
-use sui_types::{event::EventID, Identifier};
+use sui_types::{Identifier, event::EventID};
 use tokio::{
     sync::Notify,
     task::JoinHandle,
@@ -115,7 +115,9 @@ where
                     sui_client_clone.get_latest_checkpoint_sequence_number(),
                     Duration::from_secs(120)
                 ) else {
-                    tracing::error!("Failed to query latest checkpoint sequence number from sui client after retry");
+                    tracing::error!(
+                        "Failed to query latest checkpoint sequence number from sui client after retry"
+                    );
                     continue;
                 };
                 last_synced_sui_checkpoints_metric.set(latest_checkpoint_sequence_number as i64);
@@ -159,7 +161,7 @@ mod tests {
     use crate::{sui_client::SuiClient, sui_mock_client::SuiMockClient};
     use prometheus::Registry;
     use sui_json_rpc_types::EventPage;
-    use sui_types::{digests::TransactionDigest, event::EventID, Identifier};
+    use sui_types::{Identifier, digests::TransactionDigest, event::EventID};
     use tokio::time::timeout;
 
     #[tokio::test]

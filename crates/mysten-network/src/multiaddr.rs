@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use std::{
     borrow::Cow,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},

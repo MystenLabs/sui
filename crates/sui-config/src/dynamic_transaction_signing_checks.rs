@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{
+    Deserialize,
     de::{self, Deserializer},
     ser::Serializer,
-    Deserialize,
 };
 use serde_json::Value as JsonValue;
 use starlark::{
+    ErrorKind,
     environment::{Globals, Module},
     eval::Evaluator,
     syntax::{AstModule, Dialect, DialectTypes},
-    values::{dict::AllocDict, AllocValue, Heap, Value},
-    ErrorKind,
+    values::{AllocValue, Heap, Value, dict::AllocDict},
 };
 use sui_types::{
     base_types::ObjectRef,

@@ -6,7 +6,7 @@ use std::{pin::pin, time::Duration};
 use http::{Request, Response};
 use tracing::{debug, trace};
 
-use crate::{fuse::Fuse, ActiveConnections, BoxError, ConnectionId};
+use crate::{ActiveConnections, BoxError, ConnectionId, fuse::Fuse};
 
 // This is moved to its own function as a way to get around
 // https://github.com/rust-lang/rust/issues/102211

@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::Worker;
 use crate::progress_store::{
     ExecutorProgress, ProgressStore, ProgressStoreWrapper, ShimProgressStore,
 };
 use crate::reader::CheckpointReader;
 use crate::worker_pool::WorkerPool;
-use crate::Worker;
 use crate::{DataIngestionMetrics, ReaderOptions};
 use anyhow::Result;
 use futures::Future;
@@ -126,11 +126,10 @@ impl<P: ProgressStore> IndexerExecutor<P> {
                         reader_checkpoint_number = seq_number;
                     }
                     self.metrics.data_ingestion_checkpoint.with_label_values(&[&task_name]).set(sequence_number as i64);
-                    if let Some(limit) = upper_limit {
-                        if sequence_number > limit && self.pool_senders.len() == 1 {
+                    if let Some(limit) = upper_limit
+                        && sequence_number > limit && self.pool_senders.len() == 1 {
                             break;
                         }
-                    }
                 }
                 Some(checkpoint) = checkpoint_recv.recv() => {
                     for sender in &self.pool_senders {

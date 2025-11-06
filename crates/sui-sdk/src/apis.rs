@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::encoding::Base64;
-use futures::stream;
 use futures::StreamExt;
+use futures::stream;
 use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
 use std::collections::BTreeMap;
@@ -16,8 +16,8 @@ use sui_json_rpc_types::SuiData;
 use sui_json_rpc_types::ZkLoginIntentScope;
 use sui_json_rpc_types::ZkLoginVerifyResult;
 
-use crate::error::{Error, SuiRpcResult};
 use crate::RpcClient;
+use crate::error::{Error, SuiRpcResult};
 use sui_json_rpc_api::{
     CoinReadApiClient, GovernanceReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient,
     WriteApiClient,
@@ -660,8 +660,8 @@ impl ReadApi {
     ///   construct calls involving objects you do not own).
     /// - Calls are not checked for visibility (you can call private functions on modules)
     /// - Inputs of any type can be constructed and passed in, (including
-    ///    Coins and other objects that would usually need to be constructed
-    ///    with a move call).
+    ///   Coins and other objects that would usually need to be constructed
+    ///   with a move call).
     /// - Function returns do not need to be used, even if they do not have `drop`.
     ///
     /// Dev inspect's output includes a breakdown of results returned by every transaction

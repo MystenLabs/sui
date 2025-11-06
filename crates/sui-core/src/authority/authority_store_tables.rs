@@ -14,14 +14,14 @@ use sui_types::storage::{FullObjectKey, MarkerValue};
 use tracing::error;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{
-    default_db_options, read_size_from_env, DBBatch, DBMap, DBMapTableConfigMap, DBOptions,
-    MetricConf,
+    DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, default_db_options,
+    read_size_from_env,
 };
 use typed_store::traits::Map;
 
 use crate::authority::authority_store_pruner::ObjectsCompactionFilter;
 use crate::authority::authority_store_types::{
-    get_store_object, try_construct_object, StoreObject, StoreObjectValue, StoreObjectWrapper,
+    StoreObject, StoreObjectValue, StoreObjectWrapper, get_store_object, try_construct_object,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store::rocksdb::compaction_filter::Decision;
@@ -82,9 +82,9 @@ pub struct AuthorityPerpetualTables {
     /// A map between the transaction digest of a certificate to the effects of its execution.
     /// We store effects into this table in two different cases:
     /// 1. When a transaction is synced through state_sync, we store the effects here. These effects
-    ///     are known to be final in the network, but may not have been executed locally yet.
+    ///    are known to be final in the network, but may not have been executed locally yet.
     /// 2. When the transaction is executed locally on this node, we store the effects here. This means that
-    ///     it's possible to store the same effects twice (once for the synced transaction, and once for the executed).
+    ///    it's possible to store the same effects twice (once for the synced transaction, and once for the executed).
     ///
     /// It's also possible for the effects to be reverted if the transaction didn't make it into the epoch.
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
@@ -215,8 +215,8 @@ impl AuthorityPerpetualTables {
         use crate::authority::authority_store_pruner::apply_relocation_filter;
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, default_mutex_count, default_value_cache_size, Bytes,
-            Decision, IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+            Bytes, Decision, IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+            default_cells_per_mutex, default_mutex_count, default_value_cache_size,
         };
         let mutexes = default_mutex_count() * 2;
         let value_cache_size = default_value_cache_size();
@@ -242,7 +242,7 @@ impl AuthorityPerpetualTables {
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
-        let epoch_prefix_key = KeyType::prefix_uniform(10, 4);
+        let epoch_prefix_key = KeyType::from_prefix_bits(9 * 8 + 4);
         let object_indexing = KeyIndexing::key_reduction(32 + 8, 16..(32 + 8));
         // todo can figure way to scramble off 8 bytes in the middle
         let obj_ref_size = 32 + 8 + 32 + 8;
@@ -459,7 +459,7 @@ impl AuthorityPerpetualTables {
         let StoreObject::Value(store_object) = store_object.migrate().into_inner() else {
             return Ok(None);
         };
-        Ok(Some(self.construct_object(object_key, store_object)?))
+        Ok(Some(self.construct_object(object_key, *store_object)?))
     }
 
     pub fn object_reference(
@@ -469,7 +469,7 @@ impl AuthorityPerpetualTables {
     ) -> Result<ObjectRef, SuiError> {
         let obj_ref = match store_object.migrate().into_inner() {
             StoreObject::Value(object) => self
-                .construct_object(object_key, object)?
+                .construct_object(object_key, *object)?
                 .compute_object_reference(),
             StoreObject::Deleted => (
                 object_key.0,
@@ -515,10 +515,10 @@ impl AuthorityPerpetualTables {
             Some(ObjectKey::max_for_id(&object_id)),
         )?;
 
-        if let Some(Ok((object_key, value))) = iterator.next() {
-            if object_key.0 == object_id {
-                return Ok(Some(self.object_reference(&object_key, value)?));
-            }
+        if let Some(Ok((object_key, value))) = iterator.next()
+            && object_key.0 == object_id
+        {
+            return Ok(Some(self.object_reference(&object_key, value)?));
         }
         Ok(None)
     }
@@ -532,10 +532,10 @@ impl AuthorityPerpetualTables {
             Some(ObjectKey::max_for_id(&object_id)),
         )?;
 
-        if let Some(Ok((object_key, value))) = iterator.next() {
-            if object_key.0 == object_id {
-                return Ok(Some((object_key, value)));
-            }
+        if let Some(Ok((object_key, value))) = iterator.next()
+            && object_key.0 == object_id
+        {
+            return Ok(Some((object_key, value)));
         }
         Ok(None)
     }
@@ -789,7 +789,7 @@ impl LiveSetIter<'_> {
             StoreObject::Value(object) => {
                 let object = self
                     .tables
-                    .construct_object(&object_key, object)
+                    .construct_object(&object_key, *object)
                     .expect("Constructing object from store cannot fail");
                 Some(LiveObject::Normal(object))
             }
@@ -814,13 +814,13 @@ impl Iterator for LiveSetIter<'_> {
                 let prev = self.prev.take();
                 self.prev = Some((next_key, next_value));
 
-                if let Some((prev_key, prev_value)) = prev {
-                    if prev_key.0 != next_key.0 {
-                        let live_object =
-                            self.store_object_wrapper_to_live_object(prev_key, prev_value);
-                        if live_object.is_some() {
-                            return live_object;
-                        }
+                if let Some((prev_key, prev_value)) = prev
+                    && prev_key.0 != next_key.0
+                {
+                    let live_object =
+                        self.store_object_wrapper_to_live_object(prev_key, prev_value);
+                    if live_object.is_some() {
+                        return live_object;
                     }
                 }
                 continue;

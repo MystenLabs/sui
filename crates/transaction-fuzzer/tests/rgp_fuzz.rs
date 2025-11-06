@@ -4,10 +4,10 @@
 use proptest::collection::vec;
 use proptest::prelude::*;
 use proptest::proptest;
-use transaction_fuzzer::account_universe::default_num_accounts;
-use transaction_fuzzer::account_universe::default_num_transactions;
 use transaction_fuzzer::account_universe::AccountUniverseGen;
 use transaction_fuzzer::account_universe::P2PTransferGenGasPriceInRange;
+use transaction_fuzzer::account_universe::default_num_accounts;
+use transaction_fuzzer::account_universe::default_num_transactions;
 use transaction_fuzzer::config_fuzzer::run_rgp;
 
 proptest! {

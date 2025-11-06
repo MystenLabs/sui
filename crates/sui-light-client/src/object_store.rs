@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::Config;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use object_store::{path::Path, ObjectStore};
+use object_store::{ObjectStore, path::Path};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CertifiedCheckpointSummary;
 use tracing::info;

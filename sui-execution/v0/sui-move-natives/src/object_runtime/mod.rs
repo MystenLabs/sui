@@ -664,6 +664,6 @@ pub fn get_all_uids(
         fully_annotated_layout,
         &mut UIDTraversal(&mut ids),
     )
-    .map_err(|e| format!("Failed to deserialize. {e:?}"))?;
+    .map_err(|e| format!("Failed to deserialize. {e}"))?;
     Ok(ids)
 }

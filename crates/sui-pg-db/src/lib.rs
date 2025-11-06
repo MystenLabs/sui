@@ -6,17 +6,17 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::anyhow;
+use diesel::ConnectionError;
 use diesel::migration::{Migration, MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
-use diesel::ConnectionError;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
 use diesel_async::pooled_connection::ManagerConfig;
 use diesel_async::{
-    pooled_connection::{
-        bb8::{Pool, PooledConnection},
-        AsyncDieselConnectionManager,
-    },
     AsyncPgConnection, RunQueryDsl,
+    pooled_connection::{
+        AsyncDieselConnectionManager,
+        bb8::{Pool, PooledConnection},
+    },
 };
 use futures::FutureExt;
 use tracing::info;
@@ -35,7 +35,7 @@ pub mod schema;
 pub mod store;
 pub mod temp;
 
-use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use diesel_migrations::{EmbeddedMigrations, embed_migrations};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 

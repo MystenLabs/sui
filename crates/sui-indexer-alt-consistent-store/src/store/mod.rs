@@ -4,7 +4,7 @@
 use std::sync::OnceLock;
 use std::{path::Path, sync::Arc, time::Duration};
 
-use anyhow::{anyhow, bail, Context as _};
+use anyhow::{Context as _, anyhow, bail};
 use prometheus::Registry;
 use scoped_futures::ScopedBoxFuture;
 use sui_indexer_alt_framework::store::{self, CommitterWatermark, Store as _};

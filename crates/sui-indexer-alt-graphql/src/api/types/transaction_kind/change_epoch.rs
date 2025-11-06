@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, Context, Object};
-use move_binary_format::{errors::PartialVMResult, CompiledModule};
+use async_graphql::{Context, Object, connection::Connection};
+use move_binary_format::{CompiledModule, errors::PartialVMResult};
 use sui_types::{
     digests::TransactionDigest, object::Object as NativeObject,
     transaction::ChangeEpoch as NativeChangeEpoch,

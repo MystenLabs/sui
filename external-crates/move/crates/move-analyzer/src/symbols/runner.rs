@@ -19,11 +19,16 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Condvar, Mutex},
     thread,
+    time::Duration,
 };
+use sysinfo::{Pid, ProcessesToUpdate, System};
 use vfs::VfsPath;
 
 use move_compiler::{editions::Flavor, linters::LintLevel};
 use move_package::source_package::parsed_manifest::Dependencies;
+
+/// Interval for checking if the parent process is still alive (in seconds)
+const PARENT_LIVENESS_MONITORING_INTERVAL_SECS: u64 = 10;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum RunnerState {
@@ -53,6 +58,7 @@ impl SymbolicatorRunner {
         lint: LintLevel,
         implicit_deps: Dependencies,
         flavor: Option<Flavor>,
+        parent_process_id: Option<u32>,
     ) -> Self {
         let mtx_cvar = Arc::new((Mutex::new(RunnerState::Wait), Condvar::new()));
         let thread_mtx_cvar = mtx_cvar.clone();
@@ -63,6 +69,20 @@ impl SymbolicatorRunner {
                 let (mtx, cvar) = &*thread_mtx_cvar;
                 // Locations opened in the IDE (files or directories) for which manifest file is missing
                 let mut missing_manifests = BTreeSet::new();
+
+                // Initialize system info for parent process monitoring if needed
+                let mut system = match parent_process_id {
+                    Some(parent_pid) => {
+                        eprintln!("parent process monitoring enabled for PID: {}", parent_pid);
+                        Some(System::new())
+                    }
+                    None => {
+                        eprintln!("parent process monitoring disabled (no PID provided)");
+                        None
+                    }
+                };
+                let parent_check_interval = Duration::from_secs(PARENT_LIVENESS_MONITORING_INTERVAL_SECS);
+
                 // infinite loop to wait for symbolication requests
                 eprintln!("starting symbolicator runner loop");
                 loop {
@@ -77,8 +97,33 @@ impl SymbolicatorRunner {
                                 Some(starting_paths)
                             }
                             RunnerState::Wait => {
-                                // wait for next request
-                                symbolicate = cvar.wait(symbolicate).unwrap();
+                                // wait for next request, with timeout for parent process monitoring
+                                if let Some(parent_pid) = parent_process_id {
+                                    let (guard, timeout_result) = cvar.wait_timeout(symbolicate, parent_check_interval).unwrap();
+                                    // guard is the re-acquired MutexGuard<RunnerState>
+                                    // timeout_result indicates whether we woke due to timeout (true) or notification (false)
+                                    symbolicate = guard;
+
+                                    // Check if we woke up due to timeout (for parent process check)
+                                    if timeout_result.timed_out() {
+                                        // Safe to unwrap: we only enter this branch when `parent_process_id` is `Some`
+                                        // which guarantees that `system` is `Some`
+                                        let sys = system.as_mut().unwrap();
+
+                                        // Refresh the specific parent process
+                                        let parent_pid_obj = Pid::from_u32(parent_pid);
+                                        sys.refresh_processes(ProcessesToUpdate::Some(&[parent_pid_obj]), /* remove_dead_processes */ true);
+
+                                        if sys.process(parent_pid_obj).is_none() {
+                                            eprintln!("parent process (PID: {}) is no longer alive, shutting down", parent_pid);
+                                            *symbolicate = RunnerState::Quit;
+                                        }
+                                    }
+                                } else {
+                                    // No parent monitoring, just wait indefinitely
+                                    symbolicate = cvar.wait(symbolicate).unwrap();
+                                }
+
                                 match symbolicate.clone() {
                                     RunnerState::Quit => break,
                                     RunnerState::Run(starting_paths) => {

@@ -7,7 +7,7 @@ use crate::{
     api::types::available_range::{AvailableRange, AvailableRangeKey},
     config::Limits,
     error::RpcError,
-    pagination::{is_connection, PaginationConfig},
+    pagination::{PaginationConfig, is_connection},
     scope::Scope,
 };
 

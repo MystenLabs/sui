@@ -9,6 +9,10 @@ use std::{
 
 use clap::*;
 use fastcrypto::encoding::{Base58, Encoding, Hex};
+use move_binary_format::{
+    binary_config::{BinaryConfig, TableConfig},
+    file_format_common::VERSION_1,
+};
 use move_vm_config::verifier::VerifierConfig;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -19,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 98;
+const MAX_PROTOCOL_VERSION: u64 = 102;
 
 // Record history of protocol version allocations here:
 //
@@ -267,6 +271,10 @@ const MAX_PROTOCOL_VERSION: u64 = 98;
 // Version 97: Enable additional borrow checks
 // Version 98: Add authenticated event streams support via emit_authenticated function.
 //             Add better error messages to the loader.
+// Version 99: Enable new commit handler.
+// Version 100: Framework update
+// Version 101: Framework update
+//              Set max updates per settlement txn to 100.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -281,7 +289,7 @@ impl ProtocolVersion {
     pub const MAX: Self = Self(MAX_PROTOCOL_VERSION);
 
     #[cfg(not(msim))]
-    const MAX_ALLOWED: Self = Self::MAX;
+    pub const MAX_ALLOWED: Self = Self::MAX;
 
     // We create one additional "fake" version in simulator builds so that we can test upgrades.
     #[cfg(msim)]
@@ -299,6 +307,10 @@ impl ProtocolVersion {
     // universally appropriate default value.
     pub fn max() -> Self {
         Self::MAX
+    }
+
+    pub fn prev(self) -> Self {
+        Self(self.0.checked_sub(1).unwrap())
     }
 }
 
@@ -747,6 +759,11 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
 
+    // If true, create the root accumulator object in the change epoch transaction.
+    // This must be enabled and shipped before `enable_accumulators` is set to true.
+    #[serde(skip_serializing_if = "is_false")]
+    create_root_accumulator_object: bool,
+
     // Enable authenticated event streams
     #[serde(skip_serializing_if = "is_false")]
     enable_authenticated_event_streams: bool,
@@ -849,6 +866,19 @@ struct FeatureFlags {
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
     enable_display_registry: bool,
+
+    // If true, enable private generics verifier v2
+    #[serde(skip_serializing_if = "is_false")]
+    private_generics_verifier_v2: bool,
+
+    // If true, deprecate global storage ops during Move module deserialization
+    #[serde(skip_serializing_if = "is_false")]
+    deprecate_global_storage_ops_during_deserialization: bool,
+
+    // If true, enable non-exclusive writes for user transactions.
+    // DO NOT ENABLE outside of the transaction test runner.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_non_exclusive_writes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -912,6 +942,10 @@ pub struct ExecutionTimeEstimateParams {
     // This can be removed once set to "true" on mainnet.
     #[serde(skip_serializing_if = "is_false")]
     pub default_none_duration_for_new_keys: bool,
+
+    // Number of observations per chunk. When None, chunking is disabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observations_chunk_size: Option<u64>,
 }
 
 // The config for per object congestion control in consensus handler.
@@ -1678,6 +1712,37 @@ pub struct ProtocolConfig {
     /// listed in `tx_digests`
     #[serde(skip_serializing_if = "Vec::is_empty")]
     aliased_addresses: Vec<AliasedAddress>,
+
+    /// The base charge for each command in a programmable transaction. This is a fixed cost to
+    /// account for the overhead of processing each command.
+    translation_per_command_base_charge: Option<u64>,
+
+    /// The base charge for each input in a programmable transaction regardless of if it is used or
+    /// not, or a pure/object/funds withdrawal input.
+    translation_per_input_base_charge: Option<u64>,
+
+    /// The base charge for each byte of pure input in a programmable transaction.
+    translation_pure_input_per_byte_charge: Option<u64>,
+
+    /// The multiplier for the number of type nodes when charging for type loading.
+    /// This is multiplied by the number of type nodes to get the total cost.
+    /// This should be a small number to avoid excessive gas costs for loading types.
+    translation_per_type_node_charge: Option<u64>,
+
+    /// The multiplier for the number of type references when charging for type checking and reference
+    /// checking.
+    translation_per_reference_node_charge: Option<u64>,
+
+    /// The metering step resolution for translation costs. This is the granularity at which we
+    /// step up the metering for translation costs.
+    translation_metering_step_resolution: Option<u64>,
+
+    /// The multiplier for each linkage entry when charging for linkage tables that we have
+    /// created.
+    translation_per_linkage_entry_charge: Option<u64>,
+
+    /// The maximum number of updates per settlement transaction.
+    max_updates_per_settlement_txn: Option<u32>,
 }
 
 /// An aliased address.
@@ -1953,12 +2018,20 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators
     }
 
+    pub fn create_root_accumulator_object(&self) -> bool {
+        self.feature_flags.create_root_accumulator_object
+    }
+
     pub fn enable_address_balance_gas_payments(&self) -> bool {
         self.feature_flags.enable_address_balance_gas_payments
     }
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
         self.feature_flags.enable_authenticated_event_streams && self.enable_accumulators()
+    }
+
+    pub fn enable_non_exclusive_writes(&self) -> bool {
+        self.feature_flags.enable_non_exclusive_writes
     }
 
     pub fn enable_coin_registry(&self) -> bool {
@@ -2208,7 +2281,21 @@ impl ProtocolConfig {
     }
 
     pub fn enable_ptb_execution_v2(&self) -> bool {
-        self.feature_flags.enable_ptb_execution_v2
+        let enabled = self.feature_flags.enable_ptb_execution_v2;
+        // PTB execution v2 requires gas model version > 10 and the translation charges to be set.
+        if enabled {
+            debug_assert!(self.translation_per_command_base_charge.is_some());
+            debug_assert!(self.translation_per_input_base_charge.is_some());
+            debug_assert!(self.translation_pure_input_per_byte_charge.is_some());
+            debug_assert!(self.translation_per_type_node_charge.is_some());
+            debug_assert!(self.translation_per_reference_node_charge.is_some());
+            debug_assert!(self.translation_metering_step_resolution.is_some());
+            debug_assert!(self.translation_per_linkage_entry_charge.is_some());
+            debug_assert!(self.feature_flags.abstract_size_in_object_runtime);
+            debug_assert!(self.feature_flags.object_runtime_charge_cache_load_gas);
+            debug_assert!(self.gas_model_version.is_some_and(|version| version > 10));
+        }
+        enabled
     }
 
     pub fn better_adapter_type_resolution_errors(&self) -> bool {
@@ -2298,6 +2385,22 @@ impl ProtocolConfig {
     pub fn allow_references_in_ptbs(&self) -> bool {
         self.feature_flags.allow_references_in_ptbs
     }
+
+    pub fn private_generics_verifier_v2(&self) -> bool {
+        self.feature_flags.private_generics_verifier_v2
+    }
+
+    pub fn deprecate_global_storage_ops_during_deserialization(&self) -> bool {
+        self.feature_flags
+            .deprecate_global_storage_ops_during_deserialization
+    }
+
+    pub fn enable_observation_chunking(&self) -> bool {
+        matches!(self.feature_flags.per_object_congestion_control_mode,
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(ref params)
+                if params.observations_chunk_size.is_some()
+        )
+    }
 }
 
 #[cfg(not(msim))]
@@ -2342,7 +2445,9 @@ impl ProtocolConfig {
         });
 
         if std::env::var("SUI_PROTOCOL_CONFIG_OVERRIDE_ENABLE").is_ok() {
-            warn!("overriding ProtocolConfig settings with custom settings; this may break non-local networks");
+            warn!(
+                "overriding ProtocolConfig settings with custom settings; this may break non-local networks"
+            );
             let overrides: ProtocolConfigOptional =
                 serde_env::from_env_with_prefix("SUI_PROTOCOL_CONFIG_OVERRIDE")
                     .expect("failed to parse ProtocolConfig override env variables");
@@ -2860,6 +2965,16 @@ impl ProtocolConfig {
             consensus_commit_rate_estimation_window_size: None,
 
             aliased_addresses: vec![],
+
+            translation_per_command_base_charge: None,
+            translation_per_input_base_charge: None,
+            translation_pure_input_per_byte_charge: None,
+            translation_per_type_node_charge: None,
+            translation_per_reference_node_charge: None,
+            translation_metering_step_resolution: None,
+            translation_per_linkage_entry_charge: None,
+
+            max_updates_per_settlement_txn: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -3812,6 +3927,7 @@ impl ProtocolConfig {
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
                                     default_none_duration_for_new_keys: false,
+                                    observations_chunk_size: None,
                                 },
                             );
                     }
@@ -3893,6 +4009,7 @@ impl ProtocolConfig {
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
                                     default_none_duration_for_new_keys: false,
+                                    observations_chunk_size: None,
                                 },
                             );
 
@@ -3924,6 +4041,7 @@ impl ProtocolConfig {
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
                                     default_none_duration_for_new_keys: false,
+                                    observations_chunk_size: None,
                                 },
                             );
 
@@ -3948,6 +4066,7 @@ impl ProtocolConfig {
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 0,
                                 default_none_duration_for_new_keys: false,
+                                observations_chunk_size: None,
                             },
                         );
                     cfg.feature_flags.allow_unbounded_system_objects = true;
@@ -3971,6 +4090,7 @@ impl ProtocolConfig {
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 0,
                                 default_none_duration_for_new_keys: false,
+                                observations_chunk_size: None,
                             },
                         );
                 }
@@ -3990,6 +4110,7 @@ impl ProtocolConfig {
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 3334,
                                 default_none_duration_for_new_keys: false,
+                                observations_chunk_size: None,
                             },
                         );
                     // Enable party transfer for testnet.
@@ -4022,6 +4143,7 @@ impl ProtocolConfig {
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 3334,
                                 default_none_duration_for_new_keys: true,
+                                observations_chunk_size: None,
                             },
                         );
                 }
@@ -4066,6 +4188,7 @@ impl ProtocolConfig {
                                 stored_observations_limit: 18,
                                 stake_weighted_median_threshold: 3334,
                                 default_none_duration_for_new_keys: true,
+                                observations_chunk_size: None,
                             },
                         );
 
@@ -4100,6 +4223,38 @@ impl ProtocolConfig {
                     cfg.event_emit_auth_stream_cost = Some(52);
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
+                }
+                99 => {
+                    cfg.feature_flags.use_new_commit_handler = true;
+                }
+                100 => {
+                    cfg.feature_flags.private_generics_verifier_v2 = true;
+                }
+                101 => {
+                    cfg.feature_flags.create_root_accumulator_object = true;
+                    cfg.max_updates_per_settlement_txn = Some(100);
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_poseidon = true;
+                    }
+                }
+                102 => {
+                    // Enable execution time observation chunking and increase limit to 180.
+                    // max_move_object_size is 250 KB, we've experientially determined that fits ~ 18 estimates
+                    // so if we have 10 chunks, that's 2.5MB, < 8MB max_serialized_tx_effects_size_bytes_system_tx
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                            ExecutionTimeEstimateParams {
+                                target_utilization: 50,
+                                allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
+                                randomness_scalar: 20,
+                                max_estimate_us: 1_500_000, // 1.5s
+                                stored_observations_num_included_checkpoints: 10,
+                                stored_observations_limit: 180,
+                                stake_weighted_median_threshold: 3334,
+                                default_none_duration_for_new_keys: true,
+                                observations_chunk_size: Some(18),
+                            },
+                        );
                 }
                 // Use this template when making changes:
                 //
@@ -4183,8 +4338,57 @@ impl ProtocolConfig {
             max_variants_in_enum: self.max_move_enum_variants_as_option(),
             additional_borrow_checks,
             better_loader_errors: self.better_loader_errors(),
+            private_generics_verifier_v2: self.private_generics_verifier_v2(),
             sanity_check_with_regex_reference_safety,
         }
+    }
+
+    pub fn binary_config(
+        &self,
+        override_deprecate_global_storage_ops_during_deserialization: Option<bool>,
+    ) -> BinaryConfig {
+        let deprecate_global_storage_ops_during_deserialization =
+            override_deprecate_global_storage_ops_during_deserialization
+                .unwrap_or_else(|| self.deprecate_global_storage_ops_during_deserialization());
+        BinaryConfig::new(
+            self.move_binary_format_version(),
+            self.min_move_binary_format_version_as_option()
+                .unwrap_or(VERSION_1),
+            self.no_extraneous_module_bytes(),
+            deprecate_global_storage_ops_during_deserialization,
+            TableConfig {
+                module_handles: self.binary_module_handles_as_option().unwrap_or(u16::MAX),
+                datatype_handles: self.binary_struct_handles_as_option().unwrap_or(u16::MAX),
+                function_handles: self.binary_function_handles_as_option().unwrap_or(u16::MAX),
+                function_instantiations: self
+                    .binary_function_instantiations_as_option()
+                    .unwrap_or(u16::MAX),
+                signatures: self.binary_signatures_as_option().unwrap_or(u16::MAX),
+                constant_pool: self.binary_constant_pool_as_option().unwrap_or(u16::MAX),
+                identifiers: self.binary_identifiers_as_option().unwrap_or(u16::MAX),
+                address_identifiers: self
+                    .binary_address_identifiers_as_option()
+                    .unwrap_or(u16::MAX),
+                struct_defs: self.binary_struct_defs_as_option().unwrap_or(u16::MAX),
+                struct_def_instantiations: self
+                    .binary_struct_def_instantiations_as_option()
+                    .unwrap_or(u16::MAX),
+                function_defs: self.binary_function_defs_as_option().unwrap_or(u16::MAX),
+                field_handles: self.binary_field_handles_as_option().unwrap_or(u16::MAX),
+                field_instantiations: self
+                    .binary_field_instantiations_as_option()
+                    .unwrap_or(u16::MAX),
+                friend_decls: self.binary_friend_decls_as_option().unwrap_or(u16::MAX),
+                enum_defs: self.binary_enum_defs_as_option().unwrap_or(u16::MAX),
+                enum_def_instantiations: self
+                    .binary_enum_def_instantiations_as_option()
+                    .unwrap_or(u16::MAX),
+                variant_handles: self.binary_variant_handles_as_option().unwrap_or(u16::MAX),
+                variant_instantiation_handles: self
+                    .binary_variant_instantiation_handles_as_option()
+                    .unwrap_or(u16::MAX),
+            },
+        )
     }
 
     /// Override one or more settings in the config, for testing.
@@ -4322,8 +4526,27 @@ impl ProtocolConfig {
         self.feature_flags.consensus_batched_block_sync = val;
     }
 
+    /// NB: We are setting a number of feature flags and protocol config fields here to to
+    /// facilitate testing of PTB execution v2. These feature flags and config fields should be set
+    /// with or before enabling PTB execution v2 in a real protocol upgrade.
     pub fn set_enable_ptb_execution_v2_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_ptb_execution_v2 = val;
+        // Remove this and set these fields when we move this to be set for a specific protocol
+        // version.
+        if val {
+            self.translation_per_command_base_charge = Some(1);
+            self.translation_per_input_base_charge = Some(1);
+            self.translation_pure_input_per_byte_charge = Some(1);
+            self.translation_per_type_node_charge = Some(1);
+            self.translation_per_reference_node_charge = Some(1);
+            self.translation_metering_step_resolution = Some(1000);
+            self.translation_per_linkage_entry_charge = Some(10);
+            if self.gas_model_version.is_some_and(|version| version <= 10) {
+                self.gas_model_version = Some(11);
+            }
+            self.feature_flags.abstract_size_in_object_runtime = true;
+            self.feature_flags.object_runtime_charge_cache_load_gas = true;
+        }
     }
 
     pub fn set_record_time_estimate_processed_for_testing(&mut self, val: bool) {
@@ -4340,7 +4563,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
-        self.feature_flags.allow_private_accumulator_entrypoints = true;
+    }
+
+    pub fn create_root_accumulator_object_for_testing(&mut self) {
+        self.feature_flags.create_root_accumulator_object = true;
     }
 
     pub fn enable_address_balance_gas_payments_for_testing(&mut self) {
@@ -4352,6 +4578,12 @@ impl ProtocolConfig {
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
         self.enable_accumulators_for_testing();
         self.feature_flags.enable_authenticated_event_streams = true;
+        self.feature_flags
+            .include_checkpoint_artifacts_digest_in_summary = true;
+    }
+
+    pub fn enable_non_exclusive_writes_for_testing(&mut self) {
+        self.feature_flags.enable_non_exclusive_writes = true;
     }
 
     pub fn set_ignore_execution_time_observations_after_certs_closed_for_testing(
@@ -4568,9 +4800,10 @@ mod test {
         );
 
         // We didnt have this in version 1
-        assert!(prot
-            .lookup_attr("max_move_identifier_len".to_string())
-            .is_none());
+        assert!(
+            prot.lookup_attr("max_move_identifier_len".to_string())
+                .is_none()
+        );
 
         // But we did in version 9
         let prot: ProtocolConfig =
@@ -4583,11 +4816,12 @@ mod test {
         let prot: ProtocolConfig =
             ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // We didnt have this in version 1
-        assert!(prot
-            .attr_map()
-            .get("max_move_identifier_len")
-            .unwrap()
-            .is_none());
+        assert!(
+            prot.attr_map()
+                .get("max_move_identifier_len")
+                .unwrap()
+                .is_none()
+        );
         // We had this in version 1
         assert!(
             prot.attr_map().get("max_arguments").unwrap()
@@ -4598,14 +4832,17 @@ mod test {
         let prot: ProtocolConfig =
             ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // Does not exist
-        assert!(prot
-            .feature_flags
-            .lookup_attr("some random string".to_owned())
-            .is_none());
-        assert!(!prot
-            .feature_flags
-            .attr_map()
-            .contains_key("some random string"));
+        assert!(
+            prot.feature_flags
+                .lookup_attr("some random string".to_owned())
+                .is_none()
+        );
+        assert!(
+            !prot
+                .feature_flags
+                .attr_map()
+                .contains_key("some random string")
+        );
 
         // Was false in v1
         assert!(

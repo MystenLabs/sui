@@ -52,9 +52,6 @@ mod checked {
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         SUI_FRAMEWORK_ADDRESS,
-        balance::{
-            BALANCE_MODULE_NAME, SEND_TO_ACCOUNT_FUNCTION_NAME, WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME,
-        },
         base_types::{
             MoveLegacyTxContext, MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
             RESOLVED_UTF8_STR, SuiAddress, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
@@ -63,7 +60,6 @@ mod checked {
         coin::Coin,
         error::{ExecutionError, ExecutionErrorKind, command_argument_error},
         execution::{ExecutionTiming, ResultWithTimings},
-        execution_config_utils::to_binary_config,
         execution_status::{CommandArgumentError, PackageUpgradeError, TypeArgumentError},
         id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
@@ -79,6 +75,7 @@ mod checked {
     use sui_verifier::{
         INIT_FN_NAME,
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
+        private_generics_verifier_v2,
     };
     use tracing::instrument;
 
@@ -190,7 +187,7 @@ mod checked {
         // Save loaded objects for debug. We dont want to lose the info
         state_view.save_loaded_runtime_objects(loaded_runtime_objects);
         state_view.save_wrapped_object_containers(wrapped_object_containers);
-        state_view.record_execution_results(finished?);
+        state_view.record_execution_results(finished?)?;
         state_view.record_generated_object_ids(generated_object_ids);
         Ok(mode_results)
     }
@@ -875,7 +872,7 @@ mod checked {
         };
 
         let pool = &mut normalized::RcPool::new();
-        let binary_config = to_binary_config(protocol_config);
+        let binary_config = protocol_config.binary_config(None);
         let Ok(current_normalized) =
             existing_package.normalize(pool, &binary_config, /* include code */ true)
         else {
@@ -1236,31 +1233,10 @@ mod checked {
                 FunctionKind::NonEntry
             }
             (Visibility::Private | Visibility::Friend, false) => {
-                // TODO: delete this as soon as the accumulator Move API is available
-                if context
-                    .protocol_config
-                    .allow_private_accumulator_entrypoints()
-                {
-                    // Allow access to private address balance functions in simtests only.
-                    let function = module.function_handle_at(fdef.function);
-                    let function_name = module.identifier_at(function.name);
-                    if (function_name == SEND_TO_ACCOUNT_FUNCTION_NAME
-                        || function_name == WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME)
-                        && module_id.name() == BALANCE_MODULE_NAME
-                    {
-                        FunctionKind::NonEntry
-                    } else {
-                        return Err(ExecutionError::new_with_source(
-                            ExecutionErrorKind::NonEntryFunctionInvoked,
-                            "Can only call `entry` or `public` functions",
-                        ));
-                    }
-                } else {
-                    return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::NonEntryFunctionInvoked,
-                        "Can only call `entry` or `public` functions",
-                    ));
-                }
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::NonEntryFunctionInvoked,
+                    "Can only call `entry` or `public` functions",
+                ));
             }
         };
         let signature = context
@@ -1280,7 +1256,11 @@ mod checked {
                 check_non_entry_signature::<Mode>(context, module_id, function, &signature)?
             }
         };
-        check_private_generics(module_id, function)?;
+        if context.protocol_config.private_generics_verifier_v2() {
+            check_private_generics_v2(module_id, function)?;
+        } else {
+            check_private_generics(module_id, function)?;
+        }
         Ok(LoadedFunctionInfo {
             kind: function_kind,
             signature,
@@ -1411,6 +1391,47 @@ mod checked {
         }
 
         Ok(())
+    }
+
+    pub fn check_private_generics_v2(
+        callee_package: &ModuleId,
+        callee_function: &IdentStr,
+    ) -> Result<(), ExecutionError> {
+        let callee_address = *callee_package.address();
+        let callee_module = callee_package.name();
+        let callee = (callee_address, callee_module, callee_function);
+        let Some((_f, internal_type_parameters)) = private_generics_verifier_v2::FUNCTIONS_TO_CHECK
+            .iter()
+            .find(|(f, _)| &callee == f)
+        else {
+            return Ok(());
+        };
+        // If we find an internal type parameter, the call is automatically invalid--since we
+        // are not in a module and cannot define any types to satisfy the internal constraint.
+        let Some((internal_idx, _)) = internal_type_parameters
+            .iter()
+            .enumerate()
+            .find(|(_, is_internal)| **is_internal)
+        else {
+            // No `internal` type parameters, so it is ok to call
+            return Ok(());
+        };
+        let callee_package_name =
+            private_generics_verifier_v2::callee_package_name(&callee_address);
+        let help = private_generics_verifier_v2::help_message(
+            &callee_address,
+            callee_module,
+            callee_function,
+        );
+        let msg = format!(
+            "Cannot directly call function '{}::{}::{}' since type parameter #{} can \
+                 only be instantiated with types defined within the caller's module.{}",
+            callee_package_name, callee_module, callee_function, internal_idx, help,
+        );
+        Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            msg,
+        ))
     }
 
     type ArgInfo = (
@@ -1586,13 +1607,13 @@ mod checked {
             }
             Value::Receiving(_, _, assigned_type) => {
                 // If the type has been fixed, make sure the types match up
-                if let Some(assigned_type) = assigned_type {
-                    if assigned_type != param_ty {
-                        return Err(command_argument_error(
-                            CommandArgumentError::TypeMismatch,
-                            idx,
-                        ));
-                    }
+                if let Some(assigned_type) = assigned_type
+                    && assigned_type != param_ty
+                {
+                    return Err(command_argument_error(
+                        CommandArgumentError::TypeMismatch,
+                        idx,
+                    ));
                 }
 
                 // Now make sure the param type is a struct instantiation of the receiving struct

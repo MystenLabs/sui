@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::AuthorityStore;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use crate::authority::AuthorityStore;
 use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 use either::Either;
@@ -15,7 +15,7 @@ use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::bridge::Bridge;
 
-use futures::{future::BoxFuture, FutureExt};
+use futures::{FutureExt, future::BoxFuture};
 use prometheus::Registry;
 use std::collections::HashSet;
 use std::path::Path;
@@ -25,7 +25,7 @@ use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{FullObjectID, VerifiedExecutionData};
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -229,7 +229,7 @@ pub trait ObjectCacheRead: Send + Sync {
                             version: Some(object_ref.1),
                         }
                     };
-                    return Err(SuiError::UserInputError { error });
+                    return Err(SuiErrorKind::UserInputError { error }.into());
                 }
                 Some(object) => {
                     result.push(object);
@@ -341,7 +341,7 @@ pub trait ObjectCacheRead: Send + Sync {
 
     /// Get the marker at a specific version
     fn get_marker_value(&self, object_key: FullObjectKey, epoch_id: EpochId)
-        -> Option<MarkerValue>;
+    -> Option<MarkerValue>;
 
     /// Get the latest marker for a given object.
     fn get_latest_marker(
@@ -722,11 +722,12 @@ macro_rules! implement_storage_traits {
 
                 let parent = *parent;
                 if child_object.owner != Owner::ObjectOwner(parent.into()) {
-                    return Err(SuiError::InvalidChildObjectAccess {
+                    return Err(SuiErrorKind::InvalidChildObjectAccess {
                         object: *child,
                         given_parent: parent,
                         actual_owner: child_object.owner.clone(),
-                    });
+                    }
+                    .into());
                 }
                 Ok(Some(child_object))
             }

@@ -5,17 +5,17 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail};
 use axum::{
+    Extension, Json,
     extract::Query,
     http::StatusCode,
     response::{IntoResponse, Response as AxumResponse},
-    Extension, Json,
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
 use url::Url;
 
-use crate::{config::HealthConfig, WatermarksLock};
+use crate::{WatermarksLock, config::HealthConfig};
 
 /// Extension that holds a DB URL to probe as part of health checks.
 #[derive(Clone)]

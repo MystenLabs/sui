@@ -11,7 +11,7 @@ use crate::{
 use sui_types::transaction::write_sep;
 use tabled::{
     builder::Builder as TableBuilder,
-    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
+    settings::{Panel as TablePanel, Style as TableStyle, style::HorizontalLine},
 };
 
 impl Display for Pretty<'_, SuiProgrammableTransactionBlock> {

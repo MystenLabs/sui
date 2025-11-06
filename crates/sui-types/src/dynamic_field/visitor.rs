@@ -50,7 +50,7 @@ impl FieldVisitor {
     pub fn deserialize<'b, 'l>(
         bytes: &'b [u8],
         layout: &'l A::MoveTypeLayout,
-    ) -> anyhow::Result<Field<'b, 'l>> {
+    ) -> Result<Field<'b, 'l>, Error> {
         A::MoveValue::visit_deserialize(bytes, layout, &mut FieldVisitor)
     }
 }

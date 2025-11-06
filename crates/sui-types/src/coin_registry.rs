@@ -9,13 +9,13 @@ use move_core_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    SUI_COIN_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_ADDRESS,
     base_types::{ObjectID, SequenceNumber},
     collection_types::VecMap,
     derived_object,
     error::SuiResult,
     object::Owner,
     storage::ObjectStore,
-    SUI_COIN_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_ADDRESS,
 };
 
 pub const COIN_REGISTRY_MODULE_NAME: &IdentStr = ident_str!("coin_registry");

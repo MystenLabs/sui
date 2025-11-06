@@ -9,7 +9,6 @@ use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
-use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionService;
 use sui_rpc::proto::sui::rpc::v2::ExecuteTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::ExecuteTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
@@ -21,6 +20,7 @@ use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_rpc::proto::sui::rpc::v2::TransactionEffects;
 use sui_rpc::proto::sui::rpc::v2::TransactionEvents;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
+use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionService;
 use sui_sdk_types::Address;
 use sui_types::balance_change::derive_balance_changes;
 use sui_types::transaction_executor::TransactionExecutor;
@@ -138,15 +138,15 @@ pub async fn execute_transaction(
         let input_objects = input_objects.unwrap_or_default();
         let output_objects = output_objects.unwrap_or_default();
 
-        let balance_changes = read_mask
-            .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
-            .then(|| {
-                derive_balance_changes(&effects, &input_objects, &output_objects)
-                    .into_iter()
-                    .map(Into::into)
-                    .collect()
-            })
-            .unwrap_or_default();
+        let balance_changes = if read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
+        {
+            derive_balance_changes(&effects, &input_objects, &output_objects)
+                .into_iter()
+                .map(Into::into)
+                .collect()
+        } else {
+            vec![]
+        };
 
         let input_objects = input_objects
             .into_iter()

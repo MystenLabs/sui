@@ -83,6 +83,6 @@ function handleTestResult(dirname, action, rt) {
     const exp_out = fs.readFileSync(exp_path, { encoding: 'utf8' });
     if (result !== exp_out) {
         const out_diff = new linediff(exp_out, result).toString();
-        assert.fail(`${out_diff}\nCurrent output does not match the expected one (run with UB=1 to save the current output)`);
+        assert.fail(`\n${out_diff}\nCurrent output does not match the expected one (run with UB=1 to save the current output)`);
     }
 }

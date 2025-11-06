@@ -6,15 +6,15 @@ use std::time::Duration;
 use fastcrypto::encoding::{Base58, Encoding};
 use jsonrpsee::core::Serialize;
 use reqwest::Client;
-use serde::de::DeserializeOwned;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde::de::DeserializeOwned;
+use serde_json::{Value, json};
 use sui_indexer_alt::{
-    config::{IndexerConfig, PipelineLayer},
     BootstrapGenesis,
+    config::{IndexerConfig, PipelineLayer},
 };
 use sui_indexer_alt_e2e_tests::{
-    local_ingestion_client_args, write_checkpoint, OffchainCluster, OffchainClusterConfig,
+    OffchainCluster, OffchainClusterConfig, local_ingestion_client_args, write_checkpoint,
 };
 use sui_indexer_alt_schema::{checkpoints::StoredGenesis, epochs::StoredEpochStart};
 use sui_types::{
@@ -22,10 +22,10 @@ use sui_types::{
     digests::Digest,
     messages_checkpoint::{CheckpointCommitment, ECMHLiveObjectSetDigest},
     sui_system_state::{
-        mock, sui_system_state_inner_v1::SuiSystemStateInnerV1,
-        sui_system_state_inner_v2::SuiSystemStateInnerV2, SuiSystemState,
+        SuiSystemState, mock, sui_system_state_inner_v1::SuiSystemStateInnerV1,
+        sui_system_state_inner_v2::SuiSystemStateInnerV2,
     },
-    test_checkpoint_data_builder::{AdvanceEpochConfig, TestCheckpointDataBuilder},
+    test_checkpoint_data_builder::{AdvanceEpochConfig, TestCheckpointBuilder},
 };
 use tokio_util::sync::CancellationToken;
 
@@ -230,8 +230,8 @@ async fn test_graphql<T: DeserializeOwned>(
     )
     .await?;
 
-    let checkpoint_data = TestCheckpointDataBuilder::new(0).advance_epoch(advance_epoch_config);
-    write_checkpoint(temp_dir.path(), checkpoint_data).await?;
+    let checkpoint = TestCheckpointBuilder::new(0).advance_epoch(advance_epoch_config);
+    write_checkpoint(temp_dir.path(), checkpoint).await?;
 
     offchain
         .wait_for_graphql(0, Duration::from_secs(10))

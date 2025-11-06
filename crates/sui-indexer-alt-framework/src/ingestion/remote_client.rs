@@ -6,8 +6,8 @@ use std::time::Duration;
 use tracing::{debug, error};
 use url::Url;
 
-use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
 use crate::ingestion::Result as IngestionResult;
+use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
 
 /// Default timeout for remote checkpoint fetches.
 /// This prevents requests from hanging indefinitely due to network issues,
@@ -149,12 +149,12 @@ pub(crate) mod tests {
     use crate::metrics::tests::test_metrics;
     use axum::http::StatusCode;
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Mutex,
+        atomic::{AtomicUsize, Ordering},
     };
     use wiremock::{
-        matchers::{method, path_regex},
         Mock, MockServer, Request, Respond, ResponseTemplate,
+        matchers::{method, path_regex},
     };
 
     pub(crate) async fn respond_with(server: &MockServer, response: impl Respond + 'static) {
@@ -213,7 +213,7 @@ pub(crate) mod tests {
         let client = remote_test_client(server.uri());
         let checkpoint = client.fetch(42).await.unwrap();
 
-        assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
+        assert_eq!(42, checkpoint.summary.sequence_number)
     }
 
     /// Assume that certain errors will recover by themselves, and keep retrying with an
@@ -238,11 +238,11 @@ pub(crate) mod tests {
         let client = remote_test_client(server.uri());
         let checkpoint = client.fetch(42).await.unwrap();
 
-        assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
+        assert_eq!(42, checkpoint.summary.sequence_number)
     }
 
     /// Treat deserialization failure as another kind of transient error -- all checkpoint data
-    /// that is fetched should be valid (deserializable as a `CheckpointData`).
+    /// that is fetched should be valid (deserializable as a `Checkpoint`).
     #[tokio::test]
     async fn retry_on_deserialization_error() {
         let server = MockServer::start().await;
@@ -261,7 +261,7 @@ pub(crate) mod tests {
         let client = remote_test_client(server.uri());
         let checkpoint = client.fetch(42).await.unwrap();
 
-        assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
+        assert_eq!(42, checkpoint.summary.sequence_number)
     }
 
     /// Test that timeout errors are retried as transient errors.
@@ -300,7 +300,7 @@ pub(crate) mod tests {
 
         // This should timeout once, then succeed on retry
         let checkpoint = ingestion_client.fetch(42).await.unwrap();
-        assert_eq!(42, checkpoint.checkpoint_summary.sequence_number);
+        assert_eq!(42, checkpoint.summary.sequence_number);
 
         // Verify that the server received exactly 2 requests (1 timeout + 1 successful retry)
         let final_count = times.load(Ordering::Relaxed);

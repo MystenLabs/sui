@@ -12,7 +12,7 @@ use tokio::join;
 use crate::{
     context::Context,
     data::load_live,
-    error::{invalid_params, InternalContext, RpcError},
+    error::{InternalContext, RpcError, invalid_params},
 };
 
 use super::Error;

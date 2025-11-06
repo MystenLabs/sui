@@ -10,8 +10,8 @@ use crate::{
     safe_client::SafeClient,
     status_aggregator::StatusAggregator,
     transaction_driver::error::{
-        aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
-        TransactionRequestError,
+        AggregatedEffectsDigests, TransactionDriverError, TransactionRequestError,
+        aggregate_request_errors,
     },
     validator_client_monitor::ValidatorClientMonitor,
 };
@@ -144,7 +144,7 @@ impl<A: Clone> RequestRetrier<A> {
 mod tests {
     use sui_types::{
         base_types::ConciseableName,
-        error::{SuiError, UserInputError},
+        error::{SuiErrorKind, UserInputError},
     };
 
     use crate::{
@@ -188,7 +188,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_allowed_validators() {
-        use sui_types::crypto::{get_key_pair, AuthorityKeyPair, KeypairTraits};
+        use sui_types::crypto::{AuthorityKeyPair, KeypairTraits, get_key_pair};
 
         let auth_agg = Arc::new(get_authority_aggregator(4));
         let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
@@ -300,18 +300,24 @@ mod tests {
             retrier
                 .add_error(
                     authorities[1],
-                    TransactionRequestError::RejectedAtValidator(SuiError::UserInputError {
-                        error: UserInputError::EmptyCommandInput,
-                    }),
+                    TransactionRequestError::RejectedAtValidator(
+                        SuiErrorKind::UserInputError {
+                            error: UserInputError::EmptyCommandInput,
+                        }
+                        .into(),
+                    ),
                 )
                 .unwrap();
             // 50% stake non-retriable error. Above validity threshold.
             let aggregated_error = retrier
                 .add_error(
                     authorities[2],
-                    TransactionRequestError::RejectedAtValidator(SuiError::UserInputError {
-                        error: UserInputError::EmptyCommandInput,
-                    }),
+                    TransactionRequestError::RejectedAtValidator(
+                        SuiErrorKind::UserInputError {
+                            error: UserInputError::EmptyCommandInput,
+                        }
+                        .into(),
+                    ),
                 )
                 .unwrap_err();
             // The aggregated error is non-retriable.

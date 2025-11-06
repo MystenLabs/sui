@@ -287,10 +287,10 @@ impl VMTracer<'_> {
         let global = self.loaded_data.get_mut(idx)?;
 
         // This was an alias to a local reference further up the call stack -- do nothing.
-        if let GlobalValue::InLocal(fidx, _) = global {
-            if current_frame_identifier != *fidx {
-                return Some(());
-            }
+        if let GlobalValue::InLocal(fidx, _) = global
+            && current_frame_identifier != *fidx
+        {
+            return Some(());
         }
 
         let new_state = GlobalValue::AtStackOffset(interpreter.operand_stack.value.len() - 1);

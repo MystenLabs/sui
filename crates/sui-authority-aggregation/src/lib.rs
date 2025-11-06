@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::Future;
-use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use mysten_metrics::monitored_future;
 
 use std::collections::{BTreeMap, BTreeSet};

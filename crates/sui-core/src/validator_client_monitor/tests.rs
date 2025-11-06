@@ -8,7 +8,7 @@ use std::time::Duration;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::base_types::{AuthorityName, ConciseableName};
 use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair, AuthorityKeyPair, KeypairTraits};
+use sui_types::crypto::{AuthorityKeyPair, KeypairTraits, get_key_pair};
 
 mod client_stats_tests {
 

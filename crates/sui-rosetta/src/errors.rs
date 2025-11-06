@@ -4,24 +4,23 @@
 use axum::extract::rejection::JsonRejection;
 use std::fmt::Debug;
 
+use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use fastcrypto::error::FastCryptoError;
 use serde::Serialize;
 use serde::Serializer;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, SuiErrorKind};
 
 use crate::types::{BlockHash, OperationType, PublicKey, SuiEnv};
 use strum::EnumProperty;
 use strum_macros::Display;
 use strum_macros::EnumDiscriminants;
 use thiserror::Error;
-use typed_store::TypedStoreError;
 
 /// Sui-Rosetta specific error types.
 /// This contains all the errors returns by the sui-rosetta server.
@@ -76,13 +75,17 @@ pub enum Error {
     #[error(transparent)]
     EncodingError(#[from] eyre::Report),
     #[error(transparent)]
-    DBError(#[from] TypedStoreError),
-    #[error(transparent)]
     JsonExtractorRejection(#[from] JsonRejection),
 
     #[error("Retries exhausted while getting balance. try again.")]
     #[strum(props(retriable = "true"))]
     RetryExhausted(String),
+}
+
+impl From<SuiErrorKind> for Error {
+    fn from(e: SuiErrorKind) -> Self {
+        Error::SuiError(SuiError::from(e))
+    }
 }
 
 impl Serialize for ErrorType {

@@ -1,0 +1,15 @@
+// Move bytecode v6
+module ceeff9b1343a15cb6a1e88fbb42584824dca9c3b58c6c9a34f20959622ca40fc.my_struct {
+
+struct SomeStruct has copy, drop {
+	f: u64
+}
+
+public crate_struct(Arg0: u64): SomeStruct {
+B0:
+	0: MoveLoc[0](Arg0: u64)
+	1: Pack[0](SomeStruct)
+	2: Ret
+}
+
+}

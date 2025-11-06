@@ -110,7 +110,7 @@ impl<'env> FunctionTarget<'env> {
     }
 
     /// Shortcut for accessing the module env of this function.
-    pub fn module_env(&self) -> &ModuleEnv {
+    pub fn module_env(&self) -> &ModuleEnv<'_> {
         &self.func_env.module_env
     }
 

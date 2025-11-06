@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use axum::{extract::Extension, http::StatusCode, routing::get, Router};
+use axum::{Router, extract::Extension, http::StatusCode, routing::get};
 use mysten_metrics::RegistryService;
 use prometheus::{Registry, TextEncoder};
 use std::net::TcpListener;
 use std::sync::{Arc, RwLock};
 use tower::ServiceBuilder;
-use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
+use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
 const METRICS_ROUTE: &str = "/metrics";

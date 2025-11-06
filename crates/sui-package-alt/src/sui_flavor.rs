@@ -19,7 +19,7 @@ use move_package_alt::{
 };
 use serde::{Deserialize, Serialize};
 use sui_package_management::system_package_versions::{
-    latest_system_packages, system_packages_for_protocol, SystemPackagesVersion, SYSTEM_GIT_REPO,
+    SYSTEM_GIT_REPO, SystemPackagesVersion, latest_system_packages, system_packages_for_protocol,
 };
 
 #[derive(Debug)]
@@ -160,8 +160,8 @@ impl MoveFlavor for SuiFlavor {
 mod tests {
 
     use super::*;
-    use move_package_alt::package::manifest::Manifest;
     use move_package_alt::package::RootPackage;
+    use move_package_alt::package::manifest::Manifest;
     use move_package_alt::schema::{Environment, PackageName};
 
     #[test]

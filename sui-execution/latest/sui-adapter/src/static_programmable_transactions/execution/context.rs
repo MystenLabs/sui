@@ -13,6 +13,7 @@ use crate::{
         env::Env,
         execution::values::{Local, Locals, Value},
         linkage::resolved_linkage::{ResolvedLinkage, RootedLinkage},
+        loading::ast::ObjectMutability,
         typing::ast::{self as T, Type},
     },
 };
@@ -48,7 +49,6 @@ use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, TxContext},
     error::{ExecutionError, ExecutionErrorKind},
     execution::ExecutionResults,
-    execution_config_utils::to_binary_config,
     metrics::LimitsMetrics,
     move_package::{MovePackage, UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::{MoveObject, Object, Owner},
@@ -96,7 +96,7 @@ pub struct CtxValue(Value);
 #[derive(Clone, Debug)]
 pub struct InputObjectMetadata {
     pub id: ObjectID,
-    pub is_mutable_input: bool,
+    pub mutability: ObjectMutability,
     pub owner: Owner,
     pub version: SequenceNumber,
     pub type_: Type,
@@ -162,7 +162,7 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
 impl Locations {
     /// NOTE! This does not charge gas and should not be used directly. It is exposed for
     /// dev-inspect
-    fn resolve(&mut self, location: T::Location) -> Result<ResolvedLocation, ExecutionError> {
+    fn resolve(&mut self, location: T::Location) -> Result<ResolvedLocation<'_>, ExecutionError> {
         Ok(match location {
             T::Location::TxContext => ResolvedLocation::Local(self.tx_context_value.local(0)?),
             T::Location::GasCoin => {
@@ -235,7 +235,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                     env,
                     &mut input_object_map,
                     gas_coin,
-                    true,
+                    ObjectMutability::Mutable,
                     ty,
                 )?;
                 let mut gas_locals = Locals::new([Some(gas_value)])?;
@@ -309,14 +309,17 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         for (metadata, value_opt) in object_inputs.into_iter().chain(gas) {
             let InputObjectMetadata {
                 id,
-                is_mutable_input,
+                mutability,
                 owner,
                 version,
                 type_,
             } = metadata;
-            // We are only interested in mutable inputs.
-            if !is_mutable_input {
-                continue;
+            match mutability {
+                ObjectMutability::Immutable => continue,
+                // It is illegal to mutate NonExclusiveWrites, but they are passed as &mut T,
+                // so we need to treat them as mutable here. After execution, we check if they
+                // have been mutated, and abort the tx if they have.
+                ObjectMutability::NonExclusiveWrite | ObjectMutability::Mutable => (),
             }
             loaded_runtime_objects.insert(
                 id,
@@ -425,7 +428,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         )
     }
 
-    pub fn object_runtime(&self) -> Result<&ObjectRuntime, ExecutionError> {
+    pub fn object_runtime(&self) -> Result<&ObjectRuntime<'_>, ExecutionError> {
         self.native_extensions
             .get::<ObjectRuntime>()
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))
@@ -669,7 +672,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             self.gas_charger.charge_publish_package(total_bytes)?
         }
 
-        let binary_config = to_binary_config(self.env.protocol_config);
+        let binary_config = self.env.protocol_config.binary_config(None);
         let modules = module_bytes
             .iter()
             .map(|b| {
@@ -1168,9 +1171,9 @@ fn load_object_arg(
     input: T::ObjectInput,
 ) -> Result<(T::InputIndex, InputObjectMetadata, Value), ExecutionError> {
     let id = input.arg.id();
-    let is_mutable_input = input.arg.is_mutable();
+    let mutability = input.arg.mutability();
     let (metadata, value) =
-        load_object_arg_impl(meter, env, input_object_map, id, is_mutable_input, input.ty)?;
+        load_object_arg_impl(meter, env, input_object_map, id, mutability, input.ty)?;
     Ok((input.original_input_index, metadata, value))
 }
 
@@ -1179,7 +1182,7 @@ fn load_object_arg_impl(
     env: &Env,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     id: ObjectID,
-    is_mutable_input: bool,
+    mutability: ObjectMutability,
     ty: T::Type,
 ) -> Result<(InputObjectMetadata, Value), ExecutionError> {
     let obj = env.read_object(&id)?;
@@ -1187,7 +1190,7 @@ fn load_object_arg_impl(
     let version = obj.version();
     let object_metadata = InputObjectMetadata {
         id,
-        is_mutable_input,
+        mutability,
         owner: owner.clone(),
         version,
         type_: ty.clone(),

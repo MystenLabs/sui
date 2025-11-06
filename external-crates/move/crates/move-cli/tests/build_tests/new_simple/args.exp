@@ -37,6 +37,7 @@ edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
 
 External Command `cat P1/.gitignore`:
 build/*
+traces/*
 .trace
 .coverage*
 Command `new P2 -p other_dir`:
@@ -78,5 +79,6 @@ edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
 
 External Command `cat other_dir/.gitignore`:
 build/*
+traces/*
 .trace
 .coverage*

@@ -7,16 +7,16 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use backoff::future::retry;
 use backoff::ExponentialBackoff;
+use backoff::future::retry;
 use fastcrypto::encoding::Base64;
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::join_all;
 use im::hashmap::HashMap as ImHashMap;
 use indexmap::map::IndexMap;
 use itertools::Itertools;
-use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+use jsonrpsee::core::RpcResult;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
@@ -35,8 +35,8 @@ use mysten_metrics::add_server_timing;
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::{
-    validate_limit, JsonRpcMetrics, ReadApiOpenRpc, ReadApiServer, QUERY_MAX_RESULT_LIMIT,
-    QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
+    JsonRpcMetrics, QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS, ReadApiOpenRpc,
+    ReadApiServer, validate_limit,
 };
 use sui_json_rpc_types::{
     BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse, EventFilter,
@@ -62,15 +62,15 @@ use sui_types::transaction::{Transaction, TransactionData};
 
 use crate::authority_state::{StateRead, StateReadError, StateReadResult};
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
+use crate::{ObjectProvider, with_tracing};
 use crate::{
-    get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
+    ObjectProviderCache, SuiRpcModule, get_balance_changes_from_effect, get_object_changes,
 };
-use crate::{with_tracing, ObjectProvider};
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::ToFromBytes;
 use shared_crypto::intent::Intent;
 use sui_json_rpc_types::ZkLoginVerifyResult;
-use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
+use sui_types::authenticator_state::{ActiveJwk, get_authenticator_state};
 
 /// A field access in a  Display string cannot exceed this level of nesting.
 const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
@@ -341,10 +341,10 @@ impl ReadApi {
             trace!("getting events");
             let mut non_empty_digests = vec![];
             for cache_entry in temp_response.values() {
-                if let Some(effects) = &cache_entry.effects {
-                    if effects.events_digest().is_some() {
-                        non_empty_digests.push(cache_entry.digest);
-                    }
+                if let Some(effects) = &cache_entry.effects
+                    && effects.events_digest().is_some()
+                {
+                    non_empty_digests.push(cache_entry.digest);
                 }
             }
             // fetch events from the DB with retry, retry each 0.5s for 3s
@@ -373,8 +373,8 @@ impl ReadApi {
             .await
             .map_err(|e| {
                 Error::UnexpectedError(format!(
-                "Retrieving events with retry failed for transaction digests {digests:?}: {e:?}"
-            ))
+                    "Retrieving events with retry failed for transaction digests {digests:?}: {e:?}"
+                ))
             })?
             .into_iter();
 
@@ -390,7 +390,9 @@ impl ReadApi {
                                 Some(to_sui_transaction_events(self, cache_entry.digest, ev)?)
                         }
                         None | Some(None) => {
-                            error!("Failed to fetch events with event digest {events_digest:?} for txn {transaction_digest}");
+                            error!(
+                                "Failed to fetch events with event digest {events_digest:?} for txn {transaction_digest}"
+                            );
                             cache_entry.errors.push(format!(
                                 "Failed to fetch events with event digest {events_digest:?}",
                             ))
@@ -877,50 +879,45 @@ impl ReadApiServer for ReadApi {
 
             let object_cache =
                 ObjectProviderCache::new((self.state.clone(), self.transaction_kv_store.clone()));
-            if opts.show_balance_changes {
-                if let Some(effects) = &temp_response.effects {
-                    let balance_changes = get_balance_changes_from_effect(
-                        &object_cache,
-                        effects,
-                        input_objects,
-                        None,
-                    )
-                    .await;
+            if opts.show_balance_changes
+                && let Some(effects) = &temp_response.effects
+            {
+                let balance_changes =
+                    get_balance_changes_from_effect(&object_cache, effects, input_objects, None)
+                        .await;
 
-                    if let Ok(balance_changes) = balance_changes {
-                        temp_response.balance_changes = Some(balance_changes);
-                    } else {
-                        temp_response.errors.push(format!(
-                            "Cannot retrieve balance changes: {}",
-                            balance_changes.unwrap_err()
-                        ));
-                    }
+                if let Ok(balance_changes) = balance_changes {
+                    temp_response.balance_changes = Some(balance_changes);
+                } else {
+                    temp_response.errors.push(format!(
+                        "Cannot retrieve balance changes: {}",
+                        balance_changes.unwrap_err()
+                    ));
                 }
             }
 
-            if opts.show_object_changes {
-                if let (Some(effects), Some(input)) =
+            if opts.show_object_changes
+                && let (Some(effects), Some(input)) =
                     (&temp_response.effects, &temp_response.transaction)
-                {
-                    let sender = input.data().intent_message().value.sender();
-                    let object_changes = get_object_changes(
-                        &object_cache,
-                        effects,
-                        sender,
-                        effects.modified_at_versions(),
-                        effects.all_changed_objects(),
-                        effects.all_removed_objects(),
-                    )
-                    .await;
+            {
+                let sender = input.data().intent_message().value.sender();
+                let object_changes = get_object_changes(
+                    &object_cache,
+                    effects,
+                    sender,
+                    effects.modified_at_versions(),
+                    effects.all_changed_objects(),
+                    effects.all_removed_objects(),
+                )
+                .await;
 
-                    if let Ok(object_changes) = object_changes {
-                        temp_response.object_changes = Some(object_changes);
-                    } else {
-                        temp_response.errors.push(format!(
-                            "Cannot retrieve object changes: {}",
-                            object_changes.unwrap_err()
-                        ));
-                    }
+                if let Ok(object_changes) = object_changes {
+                    temp_response.object_changes = Some(object_changes);
+                } else {
+                    temp_response.errors.push(format!(
+                        "Cannot retrieve object changes: {}",
+                        object_changes.unwrap_err()
+                    ));
                 }
             }
             let epoch_store = self.state.load_epoch_store_one_call_per_task();

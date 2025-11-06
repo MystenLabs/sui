@@ -18,14 +18,14 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
+use sui_rosetta::CoinMetadataCache;
+use sui_rosetta::SUI;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Amount, Currency,
     CurrencyMetadata, NetworkIdentifier, SuiEnv,
 };
 use sui_rosetta::types::{Currencies, OperationType};
-use sui_rosetta::CoinMetadataCache;
-use sui_rosetta::SUI;
 use sui_types::coin::COIN_MODULE_NAME;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -35,9 +35,9 @@ use sui_types::transaction::{
 };
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::TestClusterBuilder;
-use test_coin_utils::{init_package, mint, TEST_COIN_DECIMALS};
+use test_coin_utils::{TEST_COIN_DECIMALS, init_package, mint};
 
-use crate::rosetta_client::{start_rosetta_test_server, RosettaEndpoint};
+use crate::rosetta_client::{RosettaEndpoint, start_rosetta_test_server};
 
 #[tokio::test]
 async fn test_mint() {

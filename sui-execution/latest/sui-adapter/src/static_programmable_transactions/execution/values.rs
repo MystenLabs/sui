@@ -65,7 +65,7 @@ impl Locals {
         Ok(Self(VMLocals::new(n)))
     }
 
-    pub fn local(&mut self, index: u16) -> Result<Local, ExecutionError> {
+    pub fn local(&mut self, index: u16) -> Result<Local<'_>, ExecutionError> {
         Ok(Local(self, index))
     }
 }

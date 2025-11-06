@@ -1,7 +1,7 @@
 [package]
 name = "sui-move-build"
 version.workspace = true
-edition = "2021"
+edition = "2024"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
 description = "Logic for building Sui Move Packages"
 license = "Apache-2.0"
@@ -29,4 +29,3 @@ move-core-types.workspace = true
 move-ir-types.workspace = true
 move-package.workspace = true
 move-symbol-pool.workspace = true
-

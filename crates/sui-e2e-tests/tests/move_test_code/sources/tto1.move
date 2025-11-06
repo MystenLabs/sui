@@ -34,3 +34,7 @@ public fun deleter(parent: &mut A, x: Receiving<B>) {
     let B { id } = transfer::receive(&mut parent.id, x);
     id.delete();
 }
+
+public fun receive_by_immutable_ref(_parent: &mut A, _x: &Receiving<B>) {}
+
+public fun receive_by_mutable_ref(_parent: &mut A, _x: &mut Receiving<B>) {}

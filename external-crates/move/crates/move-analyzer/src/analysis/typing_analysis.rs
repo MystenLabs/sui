@@ -1136,13 +1136,12 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                     // assume that constant is defined in the same module where it's used
                     // TODO: if above ever changes, we need to update this (presumably
                     // `ErrorConstant` will carry module ident at this point)
-                    if let Some(name) = error_constant {
-                        if let Some(mod_def) = visitor
+                    if let Some(name) = error_constant
+                        && let Some(mod_def) = visitor
                             .mod_outer_defs
                             .get(visitor.current_mod_ident_str.as_ref().unwrap())
-                        {
-                            visitor.add_const_use_def(&mod_def.ident.clone(), name);
-                        }
+                    {
+                        visitor.add_const_use_def(&mod_def.ident.clone(), name);
                     };
                     true
                 }

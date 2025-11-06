@@ -2,19 +2,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{base_types::*, error::*, SUI_BRIDGE_OBJECT_ID};
+use super::{SUI_BRIDGE_OBJECT_ID, base_types::*, error::*};
 use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::Balance;
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
-    default_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    AuthorityStrongQuorumSignInfo, DefaultHash, Ed25519SuiSignature, EmptySignInfo,
-    RandomnessRound, Signature, Signer, SuiSignatureInner, ToFromBytes,
+    AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, AuthorityStrongQuorumSignInfo,
+    DefaultHash, Ed25519SuiSignature, EmptySignInfo, RandomnessRound, Signature, Signer,
+    SuiSignatureInner, ToFromBytes, default_hash,
 };
 use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
+use crate::gas_coin::GAS;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::{
@@ -25,7 +26,7 @@ use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{GenericSignature, VerifyParams};
 use crate::signature_verification::{
-    verify_sender_signed_data_message_signatures, VerifiedDigestCache,
+    VerifiedDigestCache, verify_sender_signed_data_message_signatures,
 };
 use crate::type_input::TypeInput;
 use crate::{
@@ -38,7 +39,7 @@ use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::{Either, Itertools};
 use move_core_types::{ident_str, identifier};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
-use nonempty::{nonempty, NonEmpty};
+use nonempty::{NonEmpty, nonempty};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::btree_map::Entry;
@@ -56,6 +57,10 @@ use strum::IntoStaticStr;
 use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use tap::Pipe;
 use tracing::trace;
+
+#[cfg(test)]
+#[path = "unit_tests/transaction_serialization_tests.rs"]
+mod transaction_serialization_tests;
 
 pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 10_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 50_000;
@@ -104,12 +109,12 @@ impl CallArg {
     pub const CLOCK_IMM: Self = Self::Object(ObjectArg::SharedObject {
         id: SUI_CLOCK_OBJECT_ID,
         initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-        mutable: false,
+        mutability: SharedObjectMutability::Immutable,
     });
     pub const CLOCK_MUT: Self = Self::Object(ObjectArg::SharedObject {
         id: SUI_CLOCK_OBJECT_ID,
         initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     });
 }
 
@@ -122,7 +127,9 @@ pub enum ObjectArg {
     SharedObject {
         id: ObjectID,
         initial_shared_version: SequenceNumber,
-        mutable: bool,
+        // Note: this used to be a bool, but because true/false encode to 0x00/0x01, we are able to
+        // be backward compatible.
+        mutability: SharedObjectMutability,
     },
     // A Move object that can be received in this transaction.
     Receiving(ObjectRef),
@@ -182,7 +189,9 @@ pub struct FundsWithdrawalArg {
 pub enum WithdrawFrom {
     /// Withdraw from the sender of the transaction.
     Sender,
-    // TODO(address-balances): Add more options here, such as Sponsor, or even multi-party withdraws.
+    /// Withdraw from the sponsor of the transaction (gas owner).
+    Sponsor,
+    // TODO(address-balances): Add more options here, such as multi-party withdraws.
 }
 
 impl FundsWithdrawalArg {
@@ -192,6 +201,15 @@ impl FundsWithdrawalArg {
             reservation: Reservation::MaxAmountU64(amount),
             type_arg: WithdrawalTypeArg::Balance(balance_type),
             withdraw_from: WithdrawFrom::Sender,
+        }
+    }
+
+    /// Withdraws from `Balance<balance_type>` in the sponsor's address (gas owner).
+    pub fn balance_from_sponsor(amount: u64, balance_type: TypeInput) -> Self {
+        Self {
+            reservation: Reservation::MaxAmountU64(amount),
+            type_arg: WithdrawalTypeArg::Balance(balance_type),
+            withdraw_from: WithdrawFrom::Sponsor,
         }
     }
 }
@@ -340,6 +358,38 @@ impl StoredExecutionTimeObservations {
                     .collect(),
             ),
         }
+    }
+
+    /// Split observations into chunks of the specified size.
+    /// Returns a vector of chunks, each containing up to `chunk_size` observations.
+    pub fn chunk_observations(&self, chunk_size: usize) -> Vec<Self> {
+        match self {
+            Self::V1(observations) => {
+                if chunk_size == 0 {
+                    return vec![];
+                }
+                observations
+                    .chunks(chunk_size)
+                    .map(|chunk| Self::V1(chunk.to_vec()))
+                    .collect()
+            }
+        }
+    }
+
+    /// Merge multiple chunks into a single observation set.
+    /// Chunks must be provided in order and already sorted.
+    pub fn merge_sorted_chunks(chunks: Vec<Self>) -> Self {
+        let mut all_observations = Vec::new();
+
+        for chunk in chunks {
+            match chunk {
+                Self::V1(observations) => {
+                    all_observations.extend(observations);
+                }
+            }
+        }
+
+        Self::V1(all_observations)
     }
 }
 
@@ -512,7 +562,7 @@ impl EndOfEpochTransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::AuthenticatorStateCreate => vec![],
@@ -520,7 +570,7 @@ impl EndOfEpochTransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: expire.authenticator_obj_initial_shared_version(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::RandomnessStateCreate => vec![],
@@ -530,19 +580,19 @@ impl EndOfEpochTransactionKind {
                 InputObjectKind::SharedMoveObject {
                     id: SUI_BRIDGE_OBJECT_ID,
                     initial_shared_version: *bridge_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
                 InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
             ],
             Self::StoreExecutionTimeObservations(_) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::AccumulatorRootCreate => vec![],
@@ -560,7 +610,7 @@ impl EndOfEpochTransactionKind {
                 vec![SharedInputObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: expire.authenticator_obj_initial_shared_version(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
                 .into_iter(),
             ),
@@ -573,7 +623,7 @@ impl EndOfEpochTransactionKind {
                     SharedInputObject {
                         id: SUI_BRIDGE_OBJECT_ID,
                         initial_shared_version: *bridge_version,
-                        mutable: true,
+                        mutability: SharedObjectMutability::Mutable,
                     },
                     SharedInputObject::SUI_SYSTEM_OBJ,
                 ]
@@ -642,7 +692,7 @@ impl EndOfEpochTransactionKind {
                 }
             }
             Self::AccumulatorRootCreate => {
-                if !config.enable_accumulators() {
+                if !config.create_root_accumulator_object() {
                     return Err(UserInputError::Unsupported(
                         "accumulators not enabled".to_string(),
                     ));
@@ -677,17 +727,12 @@ impl CallArg {
             CallArg::Object(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutable,
-            }) => {
-                let id = *id;
-                let initial_shared_version = *initial_shared_version;
-                let mutable = *mutable;
-                vec![InputObjectKind::SharedMoveObject {
-                    id,
-                    initial_shared_version,
-                    mutable,
-                }]
-            }
+                mutability,
+            }) => vec![InputObjectKind::SharedMoveObject {
+                id: *id,
+                initial_shared_version: *initial_shared_version,
+                mutability: *mutability,
+            }],
             // Receiving objects are not part of the input objects.
             CallArg::Object(ObjectArg::Receiving(_)) => vec![],
             // While we do read accumulator state when processing withdraws,
@@ -721,7 +766,18 @@ impl CallArg {
                 );
             }
             CallArg::Object(o) => match o {
-                ObjectArg::ImmOrOwnedObject(_) | ObjectArg::SharedObject { .. } => (),
+                ObjectArg::ImmOrOwnedObject(_) => (),
+                ObjectArg::SharedObject { mutability, .. } => match mutability {
+                    SharedObjectMutability::Mutable | SharedObjectMutability::Immutable => (),
+                    SharedObjectMutability::NonExclusiveWrite => {
+                        if !config.enable_non_exclusive_writes() {
+                            return Err(UserInputError::Unsupported(
+                                "User transactions cannot use SharedObjectMutability::NonExclusiveWrite".to_string(),
+                            ));
+                        }
+                    }
+                },
+
                 ObjectArg::Receiving(_) => {
                     if !config.receiving_objects_supported() {
                         return Err(UserInputError::Unsupported(format!(
@@ -796,7 +852,7 @@ impl ObjectArg {
     pub const SUI_SYSTEM_MUT: Self = Self::SharedObject {
         id: SUI_SYSTEM_STATE_OBJECT_ID,
         initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     };
 
     pub fn id(&self) -> ObjectID {
@@ -840,6 +896,14 @@ pub struct ProgrammableTransaction {
     /// The commands to be executed sequentially. A failure in any command will
     /// result in the failure of the entire transaction.
     pub commands: Vec<Command>,
+}
+
+impl ProgrammableTransaction {
+    pub fn has_shared_inputs(&self) -> bool {
+        self.inputs
+            .iter()
+            .any(|input| matches!(input, CallArg::Object(ObjectArg::SharedObject { .. })))
+    }
 }
 
 /// A single command in a programmable transaction.
@@ -1196,7 +1260,10 @@ impl ProgrammableTransaction {
         // If randomness is used, it must be enabled by protocol config.
         // A command that uses Random can only be followed by TransferObjects or MergeCoins.
         if let Some(random_index) = inputs.iter().position(|obj| {
-            matches!(obj, CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
+            matches!(
+                obj,
+                CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID
+            )
         }) {
             fp_ensure!(
                 config.random_beacon(),
@@ -1233,11 +1300,11 @@ impl ProgrammableTransaction {
             CallArg::Object(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutable,
+                mutability,
             }) => Some(SharedInputObject {
                 id: *id,
                 initial_shared_version: *initial_shared_version,
-                mutable: *mutable,
+                mutability: *mutability,
             }),
         })
     }
@@ -1355,14 +1422,14 @@ impl Display for ProgrammableTransaction {
 pub struct SharedInputObject {
     pub id: ObjectID,
     pub initial_shared_version: SequenceNumber,
-    pub mutable: bool,
+    pub mutability: SharedObjectMutability,
 }
 
 impl SharedInputObject {
     pub const SUI_SYSTEM_OBJ: Self = Self {
         id: SUI_SYSTEM_STATE_OBJECT_ID,
         initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     };
 
     pub fn id(&self) -> ObjectID {
@@ -1375,6 +1442,10 @@ impl SharedInputObject {
 
     pub fn into_id_and_version(self) -> (ObjectID, SequenceNumber) {
         (self.id, self.initial_shared_version)
+    }
+
+    pub fn is_accessed_exclusively(&self) -> bool {
+        self.mutability.is_exclusive()
     }
 }
 
@@ -1445,21 +1516,21 @@ impl TransactionKind {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 })))
             }
             Self::AuthenticatorStateUpdate(update) => {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: update.authenticator_obj_initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 })))
             }
             Self::RandomnessStateUpdate(update) => {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_RANDOMNESS_STATE_OBJECT_ID,
                     initial_shared_version: update.randomness_obj_initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 })))
             }
             Self::EndOfEpochTransaction(txns) => Either::Left(Either::Right(
@@ -1505,7 +1576,7 @@ impl TransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::Genesis(_) => {
@@ -1518,21 +1589,21 @@ impl TransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::AuthenticatorStateUpdate(update) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: update.authenticator_obj_initial_shared_version(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::RandomnessStateUpdate(update) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_RANDOMNESS_STATE_OBJECT_ID,
                     initial_shared_version: update.randomness_obj_initial_shared_version(),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }]
             }
             Self::EndOfEpochTransaction(txns) => {
@@ -1752,10 +1823,15 @@ pub struct GasData {
     pub budget: u64,
 }
 
-impl GasData {
-    pub fn is_paid_from_address_balance(&self) -> bool {
-        self.payment.is_empty()
-    }
+pub fn is_gas_paid_from_address_balance(
+    gas_data: &GasData,
+    transaction_kind: &TransactionKind,
+) -> bool {
+    gas_data.payment.is_empty()
+        && matches!(
+            transaction_kind,
+            TransactionKind::ProgrammableTransaction(_)
+        )
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
@@ -1766,7 +1842,7 @@ pub enum TransactionExpiration {
     /// is greater than or equal to the current epoch
     Epoch(EpochId),
     /// ValidDuring enables gas payments from address balances.
-    ///  
+    ///
     /// When transactions use address balances for gas payment instead of explicit gas coins,
     /// we lose the natural transaction uniqueness and replay prevention that comes from
     /// mutation of gas coin objects.
@@ -2117,17 +2193,17 @@ impl TransactionData {
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.0,
                     initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 },
                 Owner::Immutable => {
                     return Err(anyhow::anyhow!(
                         "Upgrade capability is stored immutably and cannot be used for upgrades"
-                    ))
+                    ));
                 }
                 // If the capability is owned by an object, then the module defining the owning
                 // object gets to decide how the upgrade capability should be used.
                 Owner::ObjectOwner(_) => {
-                    return Err(anyhow::anyhow!("Upgrade capability controlled by object"))
+                    return Err(anyhow::anyhow!("Upgrade capability controlled by object"));
                 }
             };
             builder.obj(capability_arg).unwrap();
@@ -2286,6 +2362,8 @@ pub trait TransactionDataAPI {
     /// Check if the transaction is sponsored (namely gas owner != sender)
     fn is_sponsored_tx(&self) -> bool;
 
+    fn is_gas_paid_from_address_balance(&self) -> bool;
+
     fn sender_mut_for_testing(&mut self) -> &mut SuiAddress;
 
     fn gas_data_mut(&mut self) -> &mut GasData;
@@ -2391,9 +2469,31 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
-        let withdraws = self.get_funds_withdrawals();
-        // TODO(address-balances): Once we support paying gas using address balances,
-        // we add gas reservations here.
+        let mut withdraws = self.get_funds_withdrawals();
+
+        for withdraw in &withdraws {
+            if matches!(withdraw.withdraw_from, WithdrawFrom::Sponsor) {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: "Explicit sponsor withdrawals are not yet supported".to_string(),
+                });
+            }
+        }
+
+        if self.is_gas_paid_from_address_balance() {
+            let gas_withdraw = if self.sender() != self.gas_owner() {
+                FundsWithdrawalArg::balance_from_sponsor(
+                    self.gas_data().budget,
+                    TypeInput::from(GAS::type_tag()),
+                )
+            } else {
+                FundsWithdrawalArg::balance_from_sender(
+                    self.gas_data().budget,
+                    TypeInput::from(GAS::type_tag()),
+                )
+            };
+            withdraws.push(gas_withdraw);
+        }
+
         // TODO(address-balances): Use a protocol config parameter for max_withdraws.
         let max_withdraws = 10;
         if withdraws.len() > max_withdraws {
@@ -2422,9 +2522,12 @@ impl TransactionDataAPI for TransactionDataV1 {
                     error: "Balance withdraw reservation amount must be non-zero".to_string(),
                 });
             }
-            let WithdrawFrom::Sender = withdraw.withdraw_from;
+            let account_address = match withdraw.withdraw_from {
+                WithdrawFrom::Sender => self.sender(),
+                WithdrawFrom::Sponsor => self.gas_owner(),
+            };
             let account_id =
-                AccumulatorValue::get_field_id(self.sender(), &withdraw.type_arg.to_type_tag()?)
+                AccumulatorValue::get_field_id(account_address, &withdraw.type_arg.to_type_tag()?)
                     .map_err(|e| UserInputError::InvalidWithdrawReservation {
                         error: e.to_string(),
                     })?;
@@ -2449,6 +2552,9 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn has_funds_withdrawals(&self) -> bool {
+        if self.is_gas_paid_from_address_balance() {
+            return true;
+        }
         if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
             for input in &pt.inputs {
                 if matches!(input, CallArg::FundsWithdrawal(_)) {
@@ -2510,7 +2616,7 @@ impl TransactionDataAPI for TransactionDataV1 {
 
         if config.enable_accumulators()
             && config.enable_address_balance_gas_payments()
-            && self.gas_data().is_paid_from_address_balance()
+            && self.is_gas_paid_from_address_balance()
         {
             match self.expiration() {
                 TransactionExpiration::None => {
@@ -2558,6 +2664,10 @@ impl TransactionDataAPI for TransactionDataV1 {
     /// Check if the transaction is sponsored (namely gas owner != sender)
     fn is_sponsored_tx(&self) -> bool {
         self.gas_owner() != self.sender
+    }
+
+    fn is_gas_paid_from_address_balance(&self) -> bool {
+        is_gas_paid_from_address_balance(&self.gas_data, &self.kind)
     }
 
     /// Check if the transaction is compliant with sponsorship.
@@ -2795,8 +2905,11 @@ impl SenderSignedData {
     }
 
     pub fn serialized_size(&self) -> SuiResult<usize> {
-        bcs::serialized_size(self).map_err(|e| SuiError::TransactionSerializationError {
-            error: e.to_string(),
+        bcs::serialized_size(self).map_err(|e| {
+            SuiErrorKind::TransactionSerializationError {
+                error: e.to_string(),
+            }
+            .into()
         })
     }
 
@@ -2805,29 +2918,32 @@ impl SenderSignedData {
             match sig {
                 GenericSignature::MultiSig(_) => {
                     if !config.supports_upgraded_multisig() {
-                        return Err(SuiError::UserInputError {
+                        return Err(SuiErrorKind::UserInputError {
                             error: UserInputError::Unsupported(
                                 "upgraded multisig format not enabled on this network".to_string(),
                             ),
-                        });
+                        }
+                        .into());
                     }
                 }
                 GenericSignature::ZkLoginAuthenticator(_) => {
                     if !config.zklogin_auth() {
-                        return Err(SuiError::UserInputError {
+                        return Err(SuiErrorKind::UserInputError {
                             error: UserInputError::Unsupported(
                                 "zklogin is not enabled on this network".to_string(),
                             ),
-                        });
+                        }
+                        .into());
                     }
                 }
                 GenericSignature::PasskeyAuthenticator(_) => {
                     if !config.passkey_auth() {
-                        return Err(SuiError::UserInputError {
+                        return Err(SuiErrorKind::UserInputError {
                             error: UserInputError::Unsupported(
                                 "passkey is not enabled on this network".to_string(),
                             ),
-                        });
+                        }
+                        .into());
                     }
                 }
                 GenericSignature::Signature(_) | GenericSignature::MultiSigLegacy(_) => (),
@@ -2850,11 +2966,12 @@ impl SenderSignedData {
         let tx_data = &self.transaction_data();
         fp_ensure!(
             !tx_data.is_system_tx(),
-            SuiError::UserInputError {
+            SuiErrorKind::UserInputError {
                 error: UserInputError::Unsupported(
                     "SenderSignedData must not contain system transaction".to_string()
                 )
             }
+            .into()
         );
 
         // Checks to see if the transaction has expired
@@ -2864,7 +2981,7 @@ impl SenderSignedData {
             }
             TransactionExpiration::Epoch(exp_epoch) => {
                 if *exp_epoch < context.epoch {
-                    return Err(SuiError::TransactionExpired);
+                    return Err(SuiErrorKind::TransactionExpired.into());
                 }
             }
             TransactionExpiration::ValidDuring {
@@ -2874,36 +2991,45 @@ impl SenderSignedData {
                 ..
             } => {
                 if *chain != context.chain_identifier {
-                    return Err(SuiError::UserInputError {
+                    return Err(SuiErrorKind::UserInputError {
                         error: UserInputError::InvalidChainId {
                             provided: format!("{:?}", chain),
                             expected: format!("{:?}", context.chain_identifier),
                         },
-                    });
+                    }
+                    .into());
                 }
 
-                if let Some(min) = min_epoch {
-                    if context.epoch < *min {
-                        return Err(SuiError::TransactionExpired);
-                    }
+                if let Some(min) = min_epoch
+                    && context.epoch < *min
+                {
+                    return Err(SuiErrorKind::TransactionExpired.into());
                 }
-                if let Some(max) = max_epoch {
-                    if context.epoch > *max {
-                        return Err(SuiError::TransactionExpired);
-                    }
+                if let Some(max) = max_epoch
+                    && context.epoch > *max
+                {
+                    return Err(SuiErrorKind::TransactionExpired.into());
                 }
             }
         }
 
         if tx_data.has_funds_withdrawals() {
             fp_ensure!(
+                !tx_data.gas().is_empty() || context.config.enable_address_balance_gas_payments(),
+                SuiErrorKind::UserInputError {
+                    error: UserInputError::MissingGasPayment
+                }
+                .into()
+            );
+            fp_ensure!(
                 context.config.enable_accumulators()
                     && context.accumulator_object_init_shared_version.is_some(),
-                SuiError::UserInputError {
+                SuiErrorKind::UserInputError {
                     error: UserInputError::Unsupported(
                         "Address balance withdraw is not enabled".to_string()
                     )
                 }
+                .into()
             );
             tx_data.process_funds_withdrawals()?;
         }
@@ -2913,7 +3039,7 @@ impl SenderSignedData {
         let max_tx_size_bytes = context.config.max_tx_size_bytes();
         fp_ensure!(
             tx_size as u64 <= max_tx_size_bytes,
-            SuiError::UserInputError {
+            SuiErrorKind::UserInputError {
                 error: UserInputError::SizeLimitExceeded {
                     limit: format!(
                         "serialized transaction size exceeded maximum of {max_tx_size_bytes}"
@@ -2921,6 +3047,7 @@ impl SenderSignedData {
                     value: tx_size.to_string(),
                 }
             }
+            .into()
         );
 
         tx_data
@@ -3354,8 +3481,29 @@ pub enum InputObjectKind {
     SharedMoveObject {
         id: ObjectID,
         initial_shared_version: SequenceNumber,
-        mutable: bool,
+        mutability: SharedObjectMutability,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord, Hash)]
+pub enum SharedObjectMutability {
+    // The "classic" mutable/immutable modes.
+    Immutable,
+    Mutable,
+    // Non-exclusive write is used to allow multiple transactions to
+    // simultaneously add disjoint dynamic fields to an object.
+    // (Currently only used by settlement transactions).
+    NonExclusiveWrite,
+}
+
+impl SharedObjectMutability {
+    pub fn is_exclusive(&self) -> bool {
+        match self {
+            SharedObjectMutability::Mutable => true,
+            SharedObjectMutability::Immutable => false,
+            SharedObjectMutability::NonExclusiveWrite => false,
+        }
+    }
 }
 
 impl InputObjectKind {
@@ -3402,14 +3550,6 @@ impl InputObjectKind {
     pub fn is_shared_object(&self) -> bool {
         matches!(self, Self::SharedMoveObject { .. })
     }
-
-    pub fn is_mutable(&self) -> bool {
-        match self {
-            Self::MovePackage(..) => false,
-            Self::ImmOrOwnedMoveObject((_, _, _)) => true,
-            Self::SharedMoveObject { mutable, .. } => *mutable,
-        }
-    }
 }
 
 /// The result of reading an object for execution. Because shared objects may be deleted, one
@@ -3428,6 +3568,23 @@ pub enum ObjectReadResultKind {
     ObjectConsensusStreamEnded(SequenceNumber, TransactionDigest),
     // A shared object in a cancelled transaction. The sequence number embeds cancellation reason.
     CancelledTransactionSharedObject(SequenceNumber),
+}
+
+impl ObjectReadResultKind {
+    pub fn is_cancelled(&self) -> bool {
+        matches!(
+            self,
+            ObjectReadResultKind::CancelledTransactionSharedObject(_)
+        )
+    }
+
+    pub fn version(&self) -> SequenceNumber {
+        match self {
+            ObjectReadResultKind::Object(object) => object.version(),
+            ObjectReadResultKind::ObjectConsensusStreamEnded(seq, _) => *seq,
+            ObjectReadResultKind::CancelledTransactionSharedObject(seq) => *seq,
+        }
+    }
 }
 
 impl std::fmt::Debug for ObjectReadResultKind {
@@ -3510,7 +3667,11 @@ impl ObjectReadResult {
                 InputObjectKind::ImmOrOwnedMoveObject(_),
                 ObjectReadResultKind::CancelledTransactionSharedObject(_),
             ) => unreachable!(),
-            (InputObjectKind::SharedMoveObject { mutable, .. }, _) => *mutable,
+            (InputObjectKind::SharedMoveObject { mutability, .. }, _) => match mutability {
+                SharedObjectMutability::Mutable => true,
+                SharedObjectMutability::Immutable => false,
+                SharedObjectMutability::NonExclusiveWrite => false,
+            },
         }
     }
 
@@ -3563,12 +3724,12 @@ impl ObjectReadResult {
         match self.input_object_kind {
             InputObjectKind::MovePackage(_) => None,
             InputObjectKind::ImmOrOwnedMoveObject(_) => None,
-            InputObjectKind::SharedMoveObject { id, mutable, .. } => Some(match &self.object {
+            InputObjectKind::SharedMoveObject { id, mutability, .. } => Some(match &self.object {
                 ObjectReadResultKind::Object(obj) => {
                     SharedInput::Existing(obj.compute_object_reference())
                 }
                 ObjectReadResultKind::ObjectConsensusStreamEnded(seq, digest) => {
-                    SharedInput::ConsensusStreamEnded((id, *seq, mutable, *digest))
+                    SharedInput::ConsensusStreamEnded((id, *seq, mutability, *digest))
                 }
                 ObjectReadResultKind::CancelledTransactionSharedObject(seq) => {
                     SharedInput::Cancelled((id, *seq))
@@ -3721,62 +3882,122 @@ impl InputObjects {
             .collect()
     }
 
-    pub fn mutable_inputs(&self) -> BTreeMap<ObjectID, (VersionDigest, Owner)> {
+    /// All inputs that will be directly mutated by the transaction. This does
+    /// not include SharedObjectMutability::NonExclusiveWrite inputs.
+    pub fn exclusive_mutable_inputs(&self) -> BTreeMap<ObjectID, (VersionDigest, Owner)> {
+        self.mutables_with_input_kinds()
+            .filter_map(|(id, (version, owner, kind))| match kind {
+                InputObjectKind::SharedMoveObject { mutability, .. } => match mutability {
+                    SharedObjectMutability::Mutable => Some((id, (version, owner))),
+                    SharedObjectMutability::Immutable => None,
+                    SharedObjectMutability::NonExclusiveWrite => None,
+                },
+                _ => Some((id, (version, owner))),
+            })
+            .collect()
+    }
+
+    pub fn non_exclusive_input_objects(&self) -> BTreeMap<ObjectID, Object> {
         self.objects
             .iter()
-            .filter_map(
-                |ObjectReadResult {
-                     input_object_kind,
-                     object,
-                 }| match (input_object_kind, object) {
-                    (InputObjectKind::MovePackage(_), _) => None,
+            .filter_map(|read_result| {
+                match (read_result.as_object(), read_result.input_object_kind) {
                     (
-                        InputObjectKind::ImmOrOwnedMoveObject(object_ref),
-                        ObjectReadResultKind::Object(object),
-                    ) => {
-                        if object.is_immutable() {
-                            None
-                        } else {
-                            Some((
-                                object_ref.0,
-                                ((object_ref.1, object_ref.2), object.owner.clone()),
-                            ))
-                        }
-                    }
-                    (
-                        InputObjectKind::ImmOrOwnedMoveObject(_),
-                        ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
-                    ) => {
-                        unreachable!()
-                    }
-                    (
-                        InputObjectKind::SharedMoveObject { .. },
-                        ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
-                    ) => None,
-                    (
-                        InputObjectKind::SharedMoveObject { mutable, .. },
-                        ObjectReadResultKind::Object(object),
-                    ) => {
-                        if *mutable {
-                            let oref = object.compute_object_reference();
-                            Some((oref.0, ((oref.1, oref.2), object.owner.clone())))
-                        } else {
-                            None
-                        }
-                    }
-                    (
-                        InputObjectKind::ImmOrOwnedMoveObject(_),
-                        ObjectReadResultKind::CancelledTransactionSharedObject(_),
-                    ) => {
-                        unreachable!()
-                    }
-                    (
-                        InputObjectKind::SharedMoveObject { .. },
-                        ObjectReadResultKind::CancelledTransactionSharedObject(_),
-                    ) => None,
-                },
-            )
+                        Some(object),
+                        InputObjectKind::SharedMoveObject {
+                            mutability: SharedObjectMutability::NonExclusiveWrite,
+                            ..
+                        },
+                    ) => Some((read_result.id(), object.clone())),
+                    _ => None,
+                }
+            })
             .collect()
+    }
+
+    /// All inputs that can be taken as &mut T, which includes both
+    /// SharedObjectMutability::Mutable and SharedObjectMutability::NonExclusiveWrite inputs.
+    pub fn all_mutable_inputs(&self) -> BTreeMap<ObjectID, (VersionDigest, Owner)> {
+        self.mutables_with_input_kinds()
+            .filter_map(|(id, (version, owner, kind))| match kind {
+                InputObjectKind::SharedMoveObject { mutability, .. } => match mutability {
+                    SharedObjectMutability::Mutable => Some((id, (version, owner))),
+                    SharedObjectMutability::Immutable => None,
+                    SharedObjectMutability::NonExclusiveWrite => Some((id, (version, owner))),
+                },
+                _ => Some((id, (version, owner))),
+            })
+            .collect()
+    }
+
+    fn mutables_with_input_kinds(
+        &self,
+    ) -> impl Iterator<Item = (ObjectID, (VersionDigest, Owner, InputObjectKind))> + '_ {
+        self.objects.iter().filter_map(
+            |ObjectReadResult {
+                 input_object_kind,
+                 object,
+             }| match (input_object_kind, object) {
+                (InputObjectKind::MovePackage(_), _) => None,
+                (
+                    InputObjectKind::ImmOrOwnedMoveObject(object_ref),
+                    ObjectReadResultKind::Object(object),
+                ) => {
+                    if object.is_immutable() {
+                        None
+                    } else {
+                        Some((
+                            object_ref.0,
+                            (
+                                (object_ref.1, object_ref.2),
+                                object.owner.clone(),
+                                *input_object_kind,
+                            ),
+                        ))
+                    }
+                }
+                (
+                    InputObjectKind::ImmOrOwnedMoveObject(_),
+                    ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
+                ) => {
+                    unreachable!()
+                }
+                (
+                    InputObjectKind::SharedMoveObject { .. },
+                    ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
+                ) => None,
+                (
+                    InputObjectKind::SharedMoveObject { mutability, .. },
+                    ObjectReadResultKind::Object(object),
+                ) => match *mutability {
+                    SharedObjectMutability::Mutable => {
+                        let oref = object.compute_object_reference();
+                        Some((
+                            oref.0,
+                            ((oref.1, oref.2), object.owner.clone(), *input_object_kind),
+                        ))
+                    }
+                    SharedObjectMutability::Immutable => None,
+                    SharedObjectMutability::NonExclusiveWrite => {
+                        let oref = object.compute_object_reference();
+                        Some((
+                            oref.0,
+                            ((oref.1, oref.2), object.owner.clone(), *input_object_kind),
+                        ))
+                    }
+                },
+                (
+                    InputObjectKind::ImmOrOwnedMoveObject(_),
+                    ObjectReadResultKind::CancelledTransactionSharedObject(_),
+                ) => {
+                    unreachable!()
+                }
+                (
+                    InputObjectKind::SharedMoveObject { .. },
+                    ObjectReadResultKind::CancelledTransactionSharedObject(_),
+                ) => None,
+            },
+        )
     }
 
     /// The version to set on objects created by the computation that `self` is input to.
@@ -3842,6 +4063,27 @@ impl InputObjects {
 
     pub fn iter_objects(&self) -> impl Iterator<Item = &Object> {
         self.objects.iter().filter_map(|o| o.as_object())
+    }
+
+    pub fn non_exclusive_mutable_inputs(
+        &self,
+    ) -> impl Iterator<Item = (ObjectID, SequenceNumber)> + '_ {
+        self.objects.iter().filter_map(
+            |ObjectReadResult {
+                 input_object_kind,
+                 object,
+             }| match input_object_kind {
+                // TODO: this is not exercised yet since settlement transactions cannot be
+                // cancelled, but if/when we expose non-exclusive writes to users,
+                // a cancelled transaction should not be considered to have done any writes.
+                InputObjectKind::SharedMoveObject {
+                    id,
+                    mutability: SharedObjectMutability::NonExclusiveWrite,
+                    ..
+                } if !object.is_cancelled() => Some((*id, object.version())),
+                _ => None,
+            },
+        )
     }
 }
 

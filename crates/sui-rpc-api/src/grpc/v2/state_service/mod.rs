@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::RpcService;
-use sui_rpc::proto::sui::rpc::v2::state_service_server::StateService;
 use sui_rpc::proto::sui::rpc::v2::GetBalanceRequest;
 use sui_rpc::proto::sui::rpc::v2::GetBalanceResponse;
 use sui_rpc::proto::sui::rpc::v2::GetCoinInfoRequest;
@@ -13,6 +12,7 @@ use sui_rpc::proto::sui::rpc::v2::ListDynamicFieldsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListDynamicFieldsResponse;
 use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsResponse;
+use sui_rpc::proto::sui::rpc::v2::state_service_server::StateService;
 
 mod get_balance;
 mod get_coin_info;

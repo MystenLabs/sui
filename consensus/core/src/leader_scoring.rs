@@ -145,10 +145,12 @@ impl ScoringSubdag {
                             block.reference(),
                             block.author()
                         );
-                        assert!(self
-                            .votes
-                            .insert(block.reference(), StakeAggregator::new())
-                            .is_none(), "Vote {block} already exists. Duplicate vote found for leader {ancestor}");
+                        assert!(
+                            self.votes
+                                .insert(block.reference(), StakeAggregator::new())
+                                .is_none(),
+                            "Vote {block} already exists. Duplicate vote found for leader {ancestor}"
+                        );
                     }
 
                     if let Some(stake) = self.votes.get_mut(ancestor) {

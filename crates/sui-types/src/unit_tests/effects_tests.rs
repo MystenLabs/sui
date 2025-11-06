@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{ObjectID, SequenceNumber, SuiAddress};
-use crate::crypto::{get_key_pair_from_rng, AccountKeyPair};
+use crate::crypto::{AccountKeyPair, get_key_pair_from_rng};
 use crate::digests::ObjectDigest;
 use crate::effects::{TestEffectsBuilder, TransactionEffectsAPI};
 use crate::object::Owner;
@@ -10,8 +10,8 @@ use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::transaction::{Transaction, TransactionData};
 use crate::utils::to_sender_signed_transaction;
 use fastcrypto::ed25519::Ed25519KeyPair;
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 fn make_test_transaction(
     sender: SuiAddress,
@@ -52,16 +52,22 @@ fn test_written_with_created_objects() {
     assert_eq!(written.len(), 3);
 
     // Check that created objects are included with their digests
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == obj1 && digest.is_alive() }));
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == obj2 && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == obj1 && digest.is_alive() })
+    );
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == obj2 && digest.is_alive() })
+    );
     // Check gas object is included
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() })
+    );
 }
 
 #[test]
@@ -89,16 +95,22 @@ fn test_written_with_mutated_objects() {
     assert_eq!(written.len(), 3);
 
     // Check that mutated objects are included with their new digests
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == obj1 && digest.is_alive() }));
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == obj2 && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == obj1 && digest.is_alive() })
+    );
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == obj2 && digest.is_alive() })
+    );
     // Check gas object is included
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() })
+    );
 }
 
 #[test]
@@ -123,16 +135,22 @@ fn test_written_with_deleted_objects() {
     assert_eq!(written.len(), 3);
 
     // Check that deleted objects are included with OBJECT_DIGEST_DELETED
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == obj1 && *digest == ObjectDigest::OBJECT_DIGEST_DELETED }));
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == obj2 && *digest == ObjectDigest::OBJECT_DIGEST_DELETED }));
+    assert!(
+        written.iter().any(|(id, _, digest)| {
+            *id == obj1 && *digest == ObjectDigest::OBJECT_DIGEST_DELETED
+        })
+    );
+    assert!(
+        written.iter().any(|(id, _, digest)| {
+            *id == obj2 && *digest == ObjectDigest::OBJECT_DIGEST_DELETED
+        })
+    );
     // Check gas object is included
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() })
+    );
 }
 
 #[test]
@@ -157,16 +175,22 @@ fn test_written_with_wrapped_objects() {
     assert_eq!(written.len(), 3);
 
     // Check that wrapped objects are included with OBJECT_DIGEST_WRAPPED
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == obj1 && *digest == ObjectDigest::OBJECT_DIGEST_WRAPPED }));
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == obj2 && *digest == ObjectDigest::OBJECT_DIGEST_WRAPPED }));
+    assert!(
+        written.iter().any(|(id, _, digest)| {
+            *id == obj1 && *digest == ObjectDigest::OBJECT_DIGEST_WRAPPED
+        })
+    );
+    assert!(
+        written.iter().any(|(id, _, digest)| {
+            *id == obj2 && *digest == ObjectDigest::OBJECT_DIGEST_WRAPPED
+        })
+    );
     // Check gas object is included
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() })
+    );
 }
 
 #[test]
@@ -192,16 +216,22 @@ fn test_written_with_unwrapped_objects() {
     assert_eq!(written.len(), 3);
 
     // Check that unwrapped objects are included with their new digests
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == obj1 && digest.is_alive() }));
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == obj2 && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == obj1 && digest.is_alive() })
+    );
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == obj2 && digest.is_alive() })
+    );
     // Check gas object is included
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() })
+    );
 }
 
 #[test]
@@ -259,20 +289,28 @@ fn test_written_with_combination_of_all_types() {
     assert_eq!(written.len(), 11);
 
     // Verify created objects have alive digests
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == created1 && digest.is_alive() }));
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == created2 && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == created1 && digest.is_alive() })
+    );
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == created2 && digest.is_alive() })
+    );
 
     // Verify mutated objects have alive digests
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == mutated1 && digest.is_alive() }));
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == mutated2 && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == mutated1 && digest.is_alive() })
+    );
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == mutated2 && digest.is_alive() })
+    );
 
     // Verify deleted objects have OBJECT_DIGEST_DELETED
     assert!(written.iter().any(|(id, _, digest)| {
@@ -291,17 +329,23 @@ fn test_written_with_combination_of_all_types() {
     }));
 
     // Verify unwrapped objects have alive digests
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == unwrapped1 && digest.is_alive() }));
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == unwrapped2 && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == unwrapped1 && digest.is_alive() })
+    );
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == unwrapped2 && digest.is_alive() })
+    );
 
     // Check gas object is included
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() })
+    );
 }
 
 #[test]
@@ -328,18 +372,22 @@ fn test_written_excludes_frozen_objects() {
     let written = effects.written();
     // Should include gas object (mutated) and the mutated object, but not frozen objects
     assert_eq!(written.len(), 2);
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == mutated && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == mutated && digest.is_alive() })
+    );
 
     // Verify frozen objects are not included
     assert!(!written.iter().any(|(id, _, _)| *id == frozen1));
     assert!(!written.iter().any(|(id, _, _)| *id == frozen2));
 
     // Check gas object is included
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() })
+    );
 }
 
 #[test]
@@ -355,9 +403,11 @@ fn test_written_empty_when_no_changes() {
     let written = effects.written();
     // Should only include the gas object (mutated)
     assert_eq!(written.len(), 1);
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() })
+    );
 }
 
 #[test]
@@ -428,7 +478,9 @@ fn test_written_with_wrapped_and_deleted_distinction() {
     assert!(!deleted_digest.is_wrapped());
 
     // Check gas object is included
-    assert!(written
-        .iter()
-        .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() }));
+    assert!(
+        written
+            .iter()
+            .any(|(id, _, digest)| { *id == gas_object_id && digest.is_alive() })
+    );
 }

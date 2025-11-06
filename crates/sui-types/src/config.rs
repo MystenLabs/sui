@@ -10,7 +10,7 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{id::UID, MoveTypeTagTrait, SUI_FRAMEWORK_ADDRESS};
+use crate::{MoveTypeTagTrait, SUI_FRAMEWORK_ADDRESS, id::UID};
 
 pub const CONFIG_MODULE_NAME: &IdentStr = ident_str!("config");
 pub const CONFIG_STRUCT_NAME: &IdentStr = ident_str!("Config");

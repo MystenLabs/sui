@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use async_graphql::{connection::Connection, Context, Object, SimpleObject};
+use async_graphql::{Context, Object, SimpleObject, connection::Connection};
 use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorV1;
 
 use crate::{
@@ -22,7 +22,7 @@ use crate::{
             validator_set::ValidatorSetContents,
         },
     },
-    error::{upcast, RpcError},
+    error::{RpcError, upcast},
     pagination::{Page, PaginationConfig},
 };
 

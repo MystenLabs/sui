@@ -138,15 +138,24 @@ Do use serial commas.
 
 ##### Numbers {#numbers}
 
-Do not write out numbers; always use the numerical value. 
+Do not write out numbers when referring to a number of items; always use the numerical value. 
 
 > The folder contains 24 files.
 > One folder contains 7 files, and the other contains 24 files.
 > At least 20 pieces of candy fell off the table.
 
+Do write out numbers when they are grammatically part of the sentence.
+
+> One can always include extra documentation to support the theory.
+> The client checks if the checkpoint is the last one of the epoch.
+
 ##### Quotation marks 
 
-Do not use quotation marks. 
+Do not use quotation marks, except for the single exception "Hello, World!".
+
+##### Ampersands
+
+Do not use ampersands (`&`) in content to replace `and` as the word is more accessible and less error-prone for some programmatic use cases. If you absolutely must include an ampersand in content, escape it using `&amp;`.
 
 ##### Exclamations
 
@@ -166,11 +175,17 @@ For consistency, the Sui documentation must use the following terms and phrases 
 
 |     **Category**       |             **Words and terms**               |    **Notes**   |
 | ---------------------- |---------------------------------------------- | -------------- |
-| **Always capitalized** | [Proper nouns](#proper-nouns), [product names](#product-names), names of example dApps (Coin Flip, Blackjack, etc), Archival Store and Service, Archival Store, Archival Service, Coin Registry, Currency Standard, DeepBook Indexer, DeepBookV3, Devnet, ID, Localnet, Kiosk (when referring to the standard), Mainnet, Mysticeti, One-Time Witness, Operation Cap, Sui, Sui CLI, Sui Client PTB CLI, Sui Closed-Loop Token / Closed-Loop Token, Sui dApp Kit, Sui Explorer, SuiJSON, Sui Keystore, Sui Keytool, SuiLink, Sui Object Display, SuiPlay0X1, SUI, SUI token, Testnet, Wallet Standard, Web2, Web3, zkSend SDK | Use capitalization consistently for branding and product-specific references |
+| **Always capitalized** | [Proper nouns](#proper-nouns), [product names](#product-names), names of example dApps (Coin Flip, Blackjack, etc), Archival Store and Service, Archival Store, Archival Service, Coin Registry, Currency Standard, DeepBook Indexer, DeepBookV3, Devnet, GraphQL RPC, General-purpose Indexer, ID, Localnet, Kiosk (when referring to the standard), Mainnet, Mysticeti, One-Time Witness, Operation Cap, Sui, Sui CLI, Sui Client PTB CLI, Sui Closed-Loop Token / Closed-Loop Token, Sui dApp Kit, Sui Explorer, SuiJSON, Sui Keystore, Sui Keytool, SuiLink, Sui Object Display, SuiPlay0X1, SUI, SUI token, Testnet, Wallet Standard, Web2, Web3, zkSend SDK | Use capitalization consistently for branding and product-specific references |
 | **Always lowercase**   | casual history, casual order, certificate, dApp, epoch, equivocation, eventual consistency, finality, gas, genesis, kiosk (when referring to an instance), object, oracle, recovery passphrase (mnemonic), smart contract, soulbound, Sui framework, Sui object, total order, transaction, transfer, validator, wallet | Use lowercase when referring to general concepts rather than branded terms   |
 | **Never hyphenated**   | key pair, layer 1, open source, use case                  | Keep these words separate, no hyphen                                         |
 | **Always hyphenated**  | burn-only (currency supplies), depth-first search, multi-writer objects, off-chain, off-device, on-chain, on-device, One-Time Witness, peer-to-peer, proof-of-stake, single-writer objects  | Maintain hyphen for clarity and correctness  |
 | **Word preference**    | Use "might" in place of "may"                 | The word may has a secondary definition that implies permission rather than possibility. |
+| **Word preference**    | Do not start sentences with "Please note" or "Note"              | It can be argued that any sentence could be prefaced with these words. |
+| **Word preference**    | Use "through" in place of "via"                 | Indicates a more direct action. | 
+| **Word preference**    | Use "because" in place of "since"                 | More direct. | 
+| **Word preference**   | Use "basic" in place of "simple"    | Frustrating for user if something is not simple but is described as such. |
+
+
 
 ### Nodes
 
@@ -288,6 +303,26 @@ Use bold for UI elements that appear on the screen, such as buttons, menu items,
 > Example: Click **Save** to store your changes.  
 
 Use bold sparingly for emphasis and only when necessary for clarity. Avoid overusing bold for general emphasis in body text.  
+
+#### Keyboard button text
+
+Use the `<kbd>` tags around text that corresponds to a physical button on the keyboard.
+
+<Tabs>
+<TabItem value="example" label="Example" default>
+
+Press <kbd>0</kbd>, <kbd>1</kbd>, or <kbd>2</kbd> to select a key scheme and then press <kbd>Enter</kbd>.
+
+</TabItem>
+
+<TabItem value="markdown" label="Markdown">
+
+```
+Press <kbd>0</kbd>, <kbd>1</kbd>, or <kbd>2</kbd> to select a key scheme and then press <kbd>Enter</kbd>.
+```
+
+</TabItem>
+</Tabs>
 
 #### Italic text 
 
@@ -943,7 +978,7 @@ While note alerts are a valid admonition, its visual styling is less impactful t
 
 :::note
 
-This section applies only if you're using the Devnet.
+This section applies only if you're using Devnet.
 
 :::
 
@@ -954,7 +989,7 @@ This section applies only if you're using the Devnet.
 
 :::note
 
-This section applies only if you're using the Devnet.
+This section applies only if you're using Devnet.
 
 :::
 
@@ -998,7 +1033,7 @@ Navigate into your home directory after installing the IDE.
 
 Only use images and screenshots to supplement and help explain text. Images do not replace text. Readers should be able to understand the documentation without the images. However, images can help readers understand the text more clearly.
 
-Use [Snagit](https://www.techsmith.com/screen-capture.html) or other tools to capture screenshots.
+Use [Snagit](https://www.techsmith.com/snagit/) or other tools to capture screenshots.
 
 #### Image format {#image-format}
 
@@ -1068,7 +1103,7 @@ An image is not a substitute for text; images should only supplement text. Do no
 - [Write the Docs Style Guide article](https://www.writethedocs.org/guide/writing/style-guides/)
 - [GitLab Style Guide](https://docs.gitlab.com/ee/development/documentation/styleguide/index.html) - managed as a community project
 - [Digital Ocean Style Guide](https://www.digitalocean.com/community/tutorials/digitalocean-s-technical-writing-guidelines)
-- [SUSE Style Guide](https://documentation.suse.com/en-us/style/current/single-html/docu_styleguide/#sec-techwriting)
+- [SUSE Style Guide](https://documentation.suse.com/style/current/#sec-techwriting)
 - [Microsoft Style Guide](https://docs.microsoft.com/en-us/style-guide/welcome/)
 - [Google Developer Style Guide](https://developers.google.com/style)
 - [CDN Language and Style Reference](http://cdn.static-economist.com/sites/default/files/pdfs/style_guide_12.pdf)

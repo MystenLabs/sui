@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Enum, Object};
+use async_graphql::{Context, Enum, Object, connection::Connection, dataloader::DataLoader};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
     kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
@@ -12,7 +12,7 @@ use sui_indexer_alt_reader::{
     tx_balance_changes::TxBalanceChangeKey,
 };
 use sui_indexer_alt_schema::transactions::BalanceChange as NativeBalanceChange;
-use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffectsAPI,
@@ -393,7 +393,7 @@ impl TransactionEffects {
     /// Create a new TransactionEffects from a gRPC ExecuteTransactionResponse.
     pub(crate) fn from_execution_response(
         scope: Scope,
-        response: sui_rpc::proto::sui::rpc::v2beta2::ExecuteTransactionResponse,
+        response: sui_rpc::proto::sui::rpc::v2::ExecuteTransactionResponse,
         transaction_data: TransactionData,
         signatures: Vec<GenericSignature>,
     ) -> Result<Self, RpcError> {
@@ -408,7 +408,7 @@ impl TransactionEffects {
     /// Create a new TransactionEffects from a gRPC SimulateTransactionResponse.
     pub(crate) fn from_simulation_response(
         scope: Scope,
-        response: sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionResponse,
+        response: sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse,
         transaction_data: TransactionData,
     ) -> Result<Self, RpcError> {
         let executed_transaction = response
@@ -504,17 +504,11 @@ impl From<Transaction> for TransactionEffects {
 fn extract_objects_from_executed_transaction(
     executed_transaction: &ExecutedTransaction,
 ) -> Vec<NativeObject> {
-    let input_objects = executed_transaction
-        .input_objects
+    executed_transaction
+        .objects()
+        .objects()
         .iter()
         .filter_map(|obj| obj.bcs.as_ref())
-        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
-
-    let output_objects = executed_transaction
-        .output_objects
-        .iter()
-        .filter_map(|obj| obj.bcs.as_ref())
-        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
-
-    input_objects.chain(output_objects).collect()
+        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"))
+        .collect()
 }

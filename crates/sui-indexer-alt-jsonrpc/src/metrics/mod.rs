@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use prometheus::{
-    register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, Histogram, HistogramVec, IntCounterVec, Registry,
+    Histogram, HistogramVec, IntCounterVec, Registry, register_histogram_vec_with_registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
 };
 
 pub(crate) mod middleware;

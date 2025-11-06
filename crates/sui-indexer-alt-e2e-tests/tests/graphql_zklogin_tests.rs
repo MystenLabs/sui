@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use anyhow::{bail, Context as _};
+use anyhow::{Context as _, bail};
 use fastcrypto::encoding::{Base64, Encoding};
 use insta::assert_debug_snapshot;
 use prometheus::Registry;

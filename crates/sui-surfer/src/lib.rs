@@ -78,14 +78,14 @@ pub async fn run_with_test_cluster_and_strategy(
     // processes that also need gas.
     skip_accounts: usize,
 ) -> SurfStatistics {
-    let seed = rand::thread_rng().gen::<u64>();
+    let seed = rand::thread_rng().r#gen::<u64>();
     info!("Initial Seed: {:?}", seed);
     let mut rng = StdRng::seed_from_u64(seed);
     let (exit_sender, exit_rcv) = watch::channel(());
 
     let mut tasks = SurferTask::create_surfer_tasks(
         cluster.clone(),
-        rng.gen::<u64>(),
+        rng.r#gen::<u64>(),
         exit_rcv,
         skip_accounts,
         surf_strategy,

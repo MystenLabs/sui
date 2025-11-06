@@ -4,7 +4,7 @@
 #[cfg(msim)]
 mod test {
     use mysten_common::register_debug_fatal_handler;
-    use rand::{distributions::uniform::SampleRange, seq::SliceRandom, thread_rng, Rng};
+    use rand::{Rng, distributions::uniform::SampleRange, seq::SliceRandom, thread_rng};
     use std::collections::BTreeMap;
     use std::collections::HashSet;
     use std::num::NonZeroUsize;
@@ -23,16 +23,16 @@ mod test {
         WorkloadConfig, WorkloadConfiguration, WorkloadWeights,
     };
     use sui_benchmark::{
-        drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
-        util::get_ed25519_keypair_from_keystore,
         FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
+        drivers::{Interval, bench_driver::BenchDriver, driver::Driver},
+        util::get_ed25519_keypair_from_keystore,
     };
-    use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
     use sui_config::ExecutionCacheConfig;
+    use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
+    use sui_core::authority::AuthorityState;
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
-    use sui_core::authority::AuthorityState;
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
     use sui_macros::{
@@ -44,7 +44,7 @@ mod test {
         ProtocolVersion,
     };
     use sui_simulator::tempfile::TempDir;
-    use sui_simulator::{configs::*, SimConfig};
+    use sui_simulator::{SimConfig, configs::*};
     use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
@@ -118,7 +118,8 @@ mod test {
 
     async fn chain_config_smoke_test(chain: Chain) {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = init_test_cluster_builder(2, 3000)
+        // 2 validators, 10 seconds per epoch.
+        let test_cluster = init_test_cluster_builder(2, 10_000)
             .with_authority_overload_config(AuthorityOverloadConfig {
                 // Disable system overload checks for the test - during tests with crashes,
                 // it is possible for overload protection to trigger due to validators
@@ -130,8 +131,6 @@ mod test {
             .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(1)
             .with_chain_override(chain)
-            // Disable TransactionDriver in chain configide override tests.
-            .transaction_driver_percentage(0)
             .build()
             .await
             .into();
@@ -529,6 +528,7 @@ mod test {
                         stored_observations_limit: rng.gen_range(1..=20),
                         stake_weighted_median_threshold: 0,
                         default_none_duration_for_new_keys: true,
+                        observations_chunk_size: None,
                     },
                 ),
             ]
@@ -570,37 +570,51 @@ mod test {
                 * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE;
             config.set_per_object_congestion_control_mode_for_testing(mode);
             match mode {
-                PerObjectCongestionControlMode::None => panic!("Congestion control mode cannot be None in test_simulated_load_shared_object_congestion_control"),
+                PerObjectCongestionControlMode::None => panic!(
+                    "Congestion control mode cannot be None in test_simulated_load_shared_object_congestion_control"
+                ),
                 PerObjectCongestionControlMode::TotalGasBudget => {
-                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
-                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
-                    config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
-                        allow_overage_factor * total_gas_limit,
-                    );
-                    config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
-                        burst_limit_factor * total_gas_limit,
-                    );
-                },
-                PerObjectCongestionControlMode::TotalTxCount => {
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(
-                        txn_count_limit
+                        total_gas_limit,
                     );
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
-                        txn_count_limit
+                        total_gas_limit,
                     );
-                },
-                PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
-                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
-                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
-                    config.set_gas_budget_based_txn_cost_cap_factor_for_testing(total_gas_limit/cap_factor_denominator);
-                    config.set_gas_budget_based_txn_cost_absolute_cap_commit_count_for_testing(absolute_cap_factor);
                     config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
                         allow_overage_factor * total_gas_limit,
                     );
                     config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
                         burst_limit_factor * total_gas_limit,
                     );
-                },
+                }
+                PerObjectCongestionControlMode::TotalTxCount => {
+                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(
+                        txn_count_limit,
+                    );
+                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
+                        txn_count_limit,
+                    );
+                }
+                PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
+                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(
+                        total_gas_limit,
+                    );
+                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
+                        total_gas_limit,
+                    );
+                    config.set_gas_budget_based_txn_cost_cap_factor_for_testing(
+                        total_gas_limit / cap_factor_denominator,
+                    );
+                    config.set_gas_budget_based_txn_cost_absolute_cap_commit_count_for_testing(
+                        absolute_cap_factor,
+                    );
+                    config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
+                        allow_overage_factor * total_gas_limit,
+                    );
+                    config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
+                        burst_limit_factor * total_gas_limit,
+                    );
+                }
                 // Ignore, params are in ExecutionTimeEstimateParams
                 PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => {}
             }
@@ -718,18 +732,6 @@ mod test {
             config.set_random_beacon_dkg_timeout_round_for_testing(0);
             config
         });
-
-        let test_cluster = build_test_cluster(4, 30_000, 1).await;
-        test_simulated_load(test_cluster, 120).await;
-    }
-
-    #[sim_test(config = "test_config()")]
-    async fn test_simulated_load_mysticeti_fastpath() {
-        if sui_simulator::has_mainnet_protocol_config_override() {
-            return;
-        }
-
-        std::env::set_var("TRANSACTION_DRIVER", "100");
 
         let test_cluster = build_test_cluster(4, 30_000, 1).await;
         test_simulated_load(test_cluster, 120).await;
@@ -881,8 +883,6 @@ mod test {
                 )
                 .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
                 .with_stake_subsidy_start_epoch(10)
-                // Disable TransactionDriver in upgrade compatibility tests.
-                .transaction_driver_percentage(0)
                 .build()
                 .await,
         );
@@ -1192,7 +1192,6 @@ mod test {
                     &genesis,
                     &registry,
                     &test_cluster.fullnode_handle.rpc_url,
-                    test_cluster.transaction_driver_percentage(),
                 )
                 .await,
             )
@@ -1202,7 +1201,9 @@ mod test {
         let system_state_observer = {
             let mut system_state_observer = SystemStateObserver::new(proxy.clone());
             if let Ok(_) = system_state_observer.state.changed().await {
-                info!("Got the new state (reference gas price and/or protocol config) from system state object");
+                info!(
+                    "Got the new state (reference gas price and/or protocol config) from system state object"
+                );
             }
             Arc::new(system_state_observer)
         };
@@ -1468,7 +1469,9 @@ mod test {
         let checkpoint_overrides_computed = checkpoint_overrides.lock().unwrap().clone();
 
         if checkpoint_overrides_computed.is_empty() {
-            panic!("Fork should have been triggered during the test and checkpoint overrides should be computed");
+            panic!(
+                "Fork should have been triggered during the test and checkpoint overrides should be computed"
+            );
         }
 
         let captured_effects = effects_overrides.lock().unwrap().clone();
@@ -1533,5 +1536,118 @@ mod test {
             .await;
 
         test_cluster.wait_for_epoch(None).await;
+    }
+
+    async fn validate_chunked_execution_time_storage(test_cluster: &TestCluster) {
+        use sui_core::authority::execution_time_estimator::{
+            EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY,
+            EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY,
+        };
+        use sui_types::dynamic_field::get_dynamic_field_from_store;
+        use sui_types::execution::ExecutionTimeObservationChunkKey;
+        use sui_types::sui_system_state;
+        use sui_types::transaction::StoredExecutionTimeObservations;
+
+        let validator_handles = test_cluster.all_validator_handles();
+        let validator_node = &validator_handles[0];
+        let validator_state = validator_node.state();
+        let object_store = validator_state.get_object_store();
+
+        let system_state = sui_system_state::get_sui_system_state(object_store.as_ref())
+            .expect("System state must exist");
+
+        let extra_fields_id = match &system_state {
+            sui_types::sui_system_state::SuiSystemState::V2(system_state) => {
+                system_state.extra_fields.id.id.bytes
+            }
+            sui_types::sui_system_state::SuiSystemState::SimTestDeepV2(system_state) => {
+                system_state.extra_fields.id.id.bytes
+            }
+            sui_types::sui_system_state::SuiSystemState::SimTestShallowV2(system_state) => {
+                system_state.extra_fields.id.id.bytes
+            }
+            sui_types::sui_system_state::SuiSystemState::V1(_)
+            | sui_types::sui_system_state::SuiSystemState::SimTestV1(_) => {
+                panic!("SuiSystemState V1 not supported for chunking validation");
+            }
+        };
+
+        let old_format_result: Result<Vec<u8>, _> = get_dynamic_field_from_store(
+            object_store.as_ref(),
+            extra_fields_id,
+            &EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY,
+        );
+
+        if old_format_result.is_ok() {
+            panic!(
+                "Old execution time estimates storage format found - should not exist with chunking enabled"
+            );
+        }
+
+        let chunk_count_result: Result<u64, _> = get_dynamic_field_from_store(
+            object_store.as_ref(),
+            extra_fields_id,
+            &EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY,
+        );
+
+        let chunk_count = match chunk_count_result {
+            Ok(count) => count,
+            Err(_) => return,
+        };
+
+        assert!(
+            chunk_count > 1,
+            "Expected more than 1 chunk to validate chunking, got {}",
+            chunk_count
+        );
+
+        for chunk_index in 0..chunk_count {
+            let chunk_key = ExecutionTimeObservationChunkKey { chunk_index };
+            let chunk_bytes_result: Result<Vec<u8>, _> =
+                get_dynamic_field_from_store(object_store.as_ref(), extra_fields_id, &chunk_key);
+
+            match chunk_bytes_result {
+                Ok(chunk_bytes) => {
+                    let _chunk: StoredExecutionTimeObservations = bcs::from_bytes(&chunk_bytes)
+                        .expect("Failed to deserialize stored execution time estimates chunk");
+                }
+                Err(_) => {
+                    panic!(
+                        "Could not find stored execution time observation chunk {}",
+                        chunk_index
+                    );
+                }
+            }
+        }
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_execution_time_observation_chunking() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+            cfg.set_per_object_congestion_control_mode_for_testing(
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    ExecutionTimeEstimateParams {
+                        target_utilization: 50,
+                        allowed_txn_cost_overage_burst_limit_us: 500_000,
+                        randomness_scalar: 20,
+                        max_estimate_us: 1_500_000,
+                        stored_observations_num_included_checkpoints: 200,
+                        stored_observations_limit: 200,
+                        stake_weighted_median_threshold: 0,
+                        default_none_duration_for_new_keys: true,
+                        observations_chunk_size: Some(2),
+                    },
+                ),
+            );
+            cfg
+        });
+
+        let test_cluster = build_test_cluster(4, 30_000, 1).await;
+
+        test_simulated_load(test_cluster.clone(), 25).await;
+        test_cluster.trigger_reconfiguration().await;
+        validate_chunked_execution_time_storage(&test_cluster).await;
     }
 }

@@ -18,7 +18,7 @@ fn main() -> Result<()> {
     };
 
     let codec_path = "mysten_network::codec::BcsCodec";
-    let prost_codec_path = "tonic::codec::ProstCodec";
+    let prost_codec_path = "tonic_prost::ProstCodec";
 
     let validator_service = Service::builder()
         .name("Validator")

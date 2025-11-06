@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sui_indexer_alt_e2e_tests::FullCluster;
 use sui_indexer_alt_graphql::extensions::logging::REQUEST_ID_HEADER;
 

@@ -207,7 +207,7 @@ mod checked {
             })
         }
 
-        pub fn object_runtime(&mut self) -> &ObjectRuntime {
+        pub fn object_runtime(&mut self) -> &ObjectRuntime<'_> {
             self.native_extensions.get()
         }
 
@@ -1236,14 +1236,14 @@ mod checked {
                 /* imm override */ false,
                 id,
             ),
-            ObjectArg::SharedObject { id, mutable, .. } => load_object(
+            ObjectArg::SharedObject { id, mutability, .. } => load_object(
                 protocol_config,
                 vm,
                 state_view,
                 linkage_view,
                 new_packages,
                 input_object_map,
-                /* imm override */ !mutable,
+                /* imm override */ !mutability.is_exclusive(),
                 id,
             ),
             ObjectArg::Receiving((id, version, _)) => {

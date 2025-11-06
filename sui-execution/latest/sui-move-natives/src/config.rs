@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    abstract_size, get_extension, get_extension_mut, object_runtime::ObjectRuntime,
-    NativesCostTable,
+    NativesCostTable, abstract_size, get_extension, get_extension_mut,
+    object_runtime::ObjectRuntime,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -20,7 +20,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::{base_types::MoveObjectType, TypeTag};
+use sui_types::{TypeTag, base_types::MoveObjectType};
 use tracing::{error, instrument};
 
 const E_BCS_SERIALIZATION_FAILURE: u64 = 2;
@@ -75,7 +75,7 @@ pub fn read_setting_impl(
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Sui verifier guarantees this is a struct".to_string()),
-            )
+            );
         }
     };
     let Some(field_setting_layout) = context.type_to_type_layout(&field_setting_ty)? else {

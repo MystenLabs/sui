@@ -18,8 +18,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+use serde_with::serde_as;
 
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
@@ -27,7 +27,8 @@ use sui_types::base_types::{
     TransactionDigest,
 };
 use sui_types::error::{
-    ExecutionError, SuiError, SuiObjectResponseError, SuiResult, UserInputError, UserInputResult,
+    ExecutionError, SuiErrorKind, SuiObjectResponseError, SuiResult, UserInputError,
+    UserInputResult,
 };
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -123,7 +124,9 @@ impl SuiObjectResponse {
                     digest: _,
                 }),
             ) => Ok(*object_id),
-            _ => Err(anyhow!("Could not get object_id, something went wrong with SuiObjectResponse construction.")),
+            _ => Err(anyhow!(
+                "Could not get object_id, something went wrong with SuiObjectResponse construction."
+            )),
         }
     }
 
@@ -351,12 +354,11 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
     fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
         match move_struct {
             SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
-                if let Some(SuiMoveValue::String(balance)) = fields.get("balance") {
-                    if let Ok(balance) = balance.parse::<u64>() {
-                        if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
-                            return Ok(GasCoin::new(*id, balance));
-                        }
-                    }
+                if let Some(SuiMoveValue::String(balance)) = fields.get("balance")
+                    && let Ok(balance) = balance.parse::<u64>()
+                    && let Some(SuiMoveValue::UID { id }) = fields.get("id")
+                {
+                    return Ok(GasCoin::new(*id, balance));
                 }
             }
             _ => {}
@@ -699,7 +701,7 @@ pub trait SuiData: Sized {
     type ObjectType;
     type PackageType;
     fn try_from_object(object: MoveObject, layout: MoveStructLayout)
-        -> Result<Self, anyhow::Error>;
+    -> Result<Self, anyhow::Error>;
     fn try_from_package(package: MovePackage) -> Result<Self, anyhow::Error>;
     fn try_as_move(&self) -> Option<&Self::ObjectType>;
     fn try_into_move(self) -> Option<Self::ObjectType>;
@@ -783,7 +785,7 @@ impl SuiData for SuiParsedData {
             // this function is only from JSON RPC - it is OK to deserialize with max Move binary
             // version
             let module = move_binary_format::CompiledModule::deserialize_with_defaults(bytecode)
-                .map_err(|error| SuiError::ModuleDeserializationFailure {
+                .map_err(|error| SuiErrorKind::ModuleDeserializationFailure {
                     error: error.to_string(),
                 })?;
             let d = move_disassembler::disassembler::Disassembler::from_module_with_max_size(
@@ -791,14 +793,14 @@ impl SuiData for SuiParsedData {
                 move_ir_types::location::Spanned::unsafe_no_loc(()).loc,
                 *sui_types::move_package::MAX_DISASSEMBLED_MODULE_SIZE,
             )
-            .map_err(|e| SuiError::ObjectSerializationError {
+            .map_err(|e| SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
             })?;
-            let bytecode_str = d
-                .disassemble()
-                .map_err(|e| SuiError::ObjectSerializationError {
-                    error: e.to_string(),
-                })?;
+            let bytecode_str =
+                d.disassemble()
+                    .map_err(|e| SuiErrorKind::ObjectSerializationError {
+                        error: e.to_string(),
+                    })?;
             disassembled.insert(module.name().to_string(), Value::String(bytecode_str));
         }
 
@@ -883,7 +885,7 @@ impl SuiParsedData {
 
 pub trait SuiMoveObject: Sized {
     fn try_from_layout(object: MoveObject, layout: MoveStructLayout)
-        -> Result<Self, anyhow::Error>;
+    -> Result<Self, anyhow::Error>;
 
     fn try_from(o: MoveObject, resolver: &impl GetModule) -> Result<Self, anyhow::Error> {
         let layout = o.get_layout(resolver)?;
@@ -952,9 +954,10 @@ pub fn type_and_fields_from_move_event_data(
             SuiMoveStruct::WithTypes { type_, .. } => {
                 Ok((type_.clone(), move_struct.clone().to_json_value()))
             }
-            _ => Err(SuiError::ObjectDeserializationError {
+            _ => Err(SuiErrorKind::ObjectDeserializationError {
                 error: "Found non-type SuiMoveStruct in MoveValue event".to_string(),
-            }),
+            }
+            .into()),
         },
         SuiMoveValue::Variant(v) => Ok((v.type_.clone(), v.clone().to_json_value())),
         SuiMoveValue::Vector(_)
@@ -963,9 +966,10 @@ pub fn type_and_fields_from_move_event_data(
         | SuiMoveValue::Address(_)
         | SuiMoveValue::String(_)
         | SuiMoveValue::UID { .. }
-        | SuiMoveValue::Option(_) => Err(SuiError::ObjectDeserializationError {
+        | SuiMoveValue::Option(_) => Err(SuiErrorKind::ObjectDeserializationError {
             error: "Invalid MoveValue event type -- this should not be possible".to_string(),
-        }),
+        }
+        .into()),
     }
 }
 
@@ -1062,6 +1066,7 @@ impl SuiRawMovePackage {
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(tag = "status", content = "details", rename = "ObjectRead")]
+#[allow(clippy::large_enum_variant)]
 pub enum SuiPastObjectResponse {
     /// The object exists and is found with this version
     VersionFound(SuiObjectData),

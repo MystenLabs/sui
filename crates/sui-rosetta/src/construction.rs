@@ -16,7 +16,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
 use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::signature_verification::{
-    verify_sender_signed_data_message_signatures, VerifiedDigestCache,
+    VerifiedDigestCache, verify_sender_signed_data_message_signatures,
 };
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 
@@ -100,11 +100,13 @@ pub async fn combine(
         .ok_or_else(|| Error::MissingInput("Signature".to_string()))?;
     let sig_bytes = sig.hex_bytes.to_vec()?;
     let pub_key = sig.public_key.hex_bytes.to_vec()?;
-    let flag = vec![match sig.signature_type {
-        SignatureType::Ed25519 => SignatureScheme::ED25519,
-        SignatureType::Ecdsa => SignatureScheme::Secp256k1,
-    }
-    .flag()];
+    let flag = vec![
+        match sig.signature_type {
+            SignatureType::Ed25519 => SignatureScheme::ED25519,
+            SignatureType::Ecdsa => SignatureScheme::Secp256k1,
+        }
+        .flag(),
+    ];
 
     let signed_tx = Transaction::from_generic_sig_data(
         intent_msg.value,

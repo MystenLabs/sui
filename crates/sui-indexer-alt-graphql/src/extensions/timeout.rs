@@ -3,16 +3,16 @@
 
 use std::{
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     time::Duration,
 };
 
 use async_graphql::{
+    Response, ServerError, ServerResult, Variables,
     extensions::{Extension, ExtensionContext, ExtensionFactory, NextExecute, NextParseQuery},
     parser::types::{ExecutableDocument, OperationType},
-    Response, ServerError, ServerResult, Variables,
 };
 use tokio::time::timeout;
 

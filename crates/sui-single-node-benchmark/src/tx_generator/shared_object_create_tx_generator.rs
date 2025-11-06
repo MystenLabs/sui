@@ -5,7 +5,7 @@ use crate::mock_account::Account;
 use crate::tx_generator::TxGenerator;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectID;
-use sui_types::transaction::{Transaction, DEFAULT_VALIDATOR_GAS_PRICE};
+use sui_types::transaction::{DEFAULT_VALIDATOR_GAS_PRICE, Transaction};
 
 pub struct SharedObjectCreateTxGenerator {
     move_package: ObjectID,

@@ -5,14 +5,14 @@ use std::{collections::HashMap, time::Duration};
 
 use anyhow::Context as _;
 use diesel::{
+    AppearsOnTable, Column, Expression, ExpressionMethods, QueryDsl, QuerySource,
     expression::{
-        is_aggregate::{Never, No},
         MixedAggregates, ValidGrouping,
+        is_aggregate::{Never, No},
     },
     pg::Pg,
     query_builder::{BoxedSelectStatement, FromClause, QueryFragment},
     sql_types::BigInt as SqlBigInt,
-    AppearsOnTable, Column, Expression, ExpressionMethods, QueryDsl, QuerySource,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,7 @@ use sui_types::{
 
 use crate::{
     context::Context,
-    error::{invalid_params, RpcError},
+    error::{RpcError, invalid_params},
     paginate::{Cursor as _, JsonCursor, Page},
 };
 

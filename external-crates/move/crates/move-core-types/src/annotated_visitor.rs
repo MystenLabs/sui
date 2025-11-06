@@ -456,6 +456,13 @@ impl<'c, 'b, 'l> VecDriver<'c, 'b, 'l> {
         self.inner.remaining_bytes()
     }
 
+    /// Type layout for the value being visited. May produce an error if a layout was not supplied
+    /// when the driver was created (which should only happen if the driver was created for
+    /// visiting a struct specifically).
+    pub fn layout(&self) -> Result<&'l MoveTypeLayout, Error> {
+        self.inner.layout()
+    }
+
     /// Type layout for the vector's inner type.
     pub fn element_layout(&self) -> &'l MoveTypeLayout {
         self.layout
@@ -530,6 +537,13 @@ impl<'c, 'b, 'l> StructDriver<'c, 'b, 'l> {
     /// The bytes that haven't been consumed by the visitor yet.
     pub fn remaining_bytes(&self) -> &'b [u8] {
         self.inner.remaining_bytes()
+    }
+
+    /// Type layout for the value being visited. May produce an error if a layout was not supplied
+    /// when the driver was created (which should only happen if the driver was created for
+    /// visiting a struct specifically).
+    pub fn layout(&self) -> Result<&'l MoveTypeLayout, Error> {
+        self.inner.layout()
     }
 
     /// The layout of the struct being visited.
@@ -612,6 +626,13 @@ impl<'c, 'b, 'l> VariantDriver<'c, 'b, 'l> {
     /// The bytes that haven't been consumed by the visitor yet.
     pub fn remaining_bytes(&self) -> &'b [u8] {
         self.inner.remaining_bytes()
+    }
+
+    /// Type layout for the value being visited. May produce an error if a layout was not supplied
+    /// when the driver was created (which should only happen if the driver was created for
+    /// visiting a struct specifically).
+    pub fn layout(&self) -> Result<&'l MoveTypeLayout, Error> {
+        self.inner.layout()
     }
 
     /// The layout of the enum being visited.

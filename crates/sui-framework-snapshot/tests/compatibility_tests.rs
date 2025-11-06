@@ -7,11 +7,10 @@ mod compatibility_tests {
     };
     use std::collections::BTreeMap;
     use std::path::Path;
-    use sui_framework::{compare_system_package, BuiltInFramework};
+    use sui_framework::{BuiltInFramework, compare_system_package};
     use sui_framework_snapshot::{load_bytecode_snapshot, load_bytecode_snapshot_manifest};
     use sui_move_build::published_at_property;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
-    use sui_types::execution_config_utils::to_binary_config;
 
     /// The number of bytecode snapshots to backtest against the current framework.
     /// This should be set to a reasonable number to ensure that we are testing against any
@@ -30,7 +29,7 @@ mod compatibility_tests {
         {
             let config =
                 ProtocolConfig::get_for_version(ProtocolVersion::new(*version), Chain::Unknown);
-            let binary_config = to_binary_config(&config);
+            let binary_config = config.binary_config(None);
             let framework = load_bytecode_snapshot(*version).unwrap();
             let old_framework_store: BTreeMap<_, _> = framework
                 .into_iter()
@@ -75,10 +74,9 @@ mod compatibility_tests {
             .map(|p| (&p.id, p))
             .collect();
         assert_eq!(
-                latest_snapshot_ref,
-                current_framework,
-                "The current framework differs the latest bytecode snapshot. Did you forget to upgrade protocol version?"
-            );
+            latest_snapshot_ref, current_framework,
+            "The current framework differs the latest bytecode snapshot. Did you forget to upgrade protocol version?"
+        );
     }
 
     /// This test checks that the `SinglePackage` entries in `manifest.json` match the metadata

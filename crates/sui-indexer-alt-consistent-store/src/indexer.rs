@@ -3,13 +3,12 @@
 
 use std::path::Path;
 
-use anyhow::{ensure, Context as _};
+use anyhow::{Context as _, ensure};
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
-    self as framework,
+    self as framework, IndexerArgs,
     ingestion::{ClientArgs, IngestionConfig},
     pipeline::sequential::{self, SequentialConfig},
-    IndexerArgs,
 };
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -17,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     config::ConsistencyConfig,
     db::config::DbConfig,
-    store::{synchronizer::Synchronizer, Schema, Store},
+    store::{Schema, Store, synchronizer::Synchronizer},
 };
 
 /// An indexer specialised for writing to a RocksDB store via a schema, `S`, composed of three main
@@ -155,11 +154,11 @@ mod tests {
 
     use sui_indexer_alt_framework::{
         pipeline::Processor,
-        types::{full_checkpoint_content::CheckpointData, object::Object},
+        types::{full_checkpoint_content::Checkpoint, object::Object},
     };
 
     use crate::{
-        db::{tests::wm, Db},
+        db::{Db, tests::wm},
         restore::Restore,
         store::Connection,
     };
@@ -175,7 +174,7 @@ mod tests {
         const NAME: &'static str = "test";
         type Value = ();
 
-        async fn process(&self, _: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(&self, _: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![])
         }
     }
@@ -191,9 +190,13 @@ mod tests {
         type Store = Store<TestSchema>;
         type Batch = ();
 
-        fn batch(_: &mut (), _: Vec<()>) {}
+        fn batch(&self, _: &mut (), _: std::vec::IntoIter<()>) {}
 
-        async fn commit<'a>(_: &(), _: &mut Connection<'a, TestSchema>) -> anyhow::Result<usize> {
+        async fn commit<'a>(
+            &self,
+            _: &(),
+            _: &mut Connection<'a, TestSchema>,
+        ) -> anyhow::Result<usize> {
             Ok(0)
         }
     }

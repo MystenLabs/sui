@@ -8,13 +8,13 @@ use crate::{
     account_universe::{
         account::{AccountCurrent, AccountData},
         default_num_accounts, default_num_transactions,
-        helpers::{pick_slice_idxs, Index},
+        helpers::{Index, pick_slice_idxs},
     },
     executor::Executor,
 };
 
 use proptest::{
-    collection::{vec, SizeRange},
+    collection::{SizeRange, vec},
     prelude::*,
 };
 use proptest_derive::Arbitrary;

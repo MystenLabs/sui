@@ -4,8 +4,8 @@
 use anyhow::{Context, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use serde_with::DurationSeconds;
+use serde_with::serde_as;
 use std::{net::SocketAddr, time::Duration};
 use tracing::error;
 use url::Url;

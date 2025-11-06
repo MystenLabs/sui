@@ -17,8 +17,8 @@ use url::Url;
 
 use crate::postgres::{Db, DbArgs};
 use crate::{
-    ingestion::{ClientArgs, IngestionConfig},
     Indexer, IndexerArgs, IndexerMetrics, Result,
+    ingestion::{ClientArgs, IngestionConfig},
 };
 
 /// Bundle of arguments for setting up an indexer cluster (an Indexer and its associated Metrics
@@ -248,15 +248,15 @@ mod tests {
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
 
-    use crate::ingestion::ClientArgs;
-    use crate::pipeline::concurrent::{self, ConcurrentConfig};
-    use crate::pipeline::Processor;
-    use crate::postgres::{
-        temp::{get_available_port, TempDb},
-        Connection, Db, DbArgs,
-    };
-    use crate::types::full_checkpoint_content::CheckpointData;
     use crate::FieldCount;
+    use crate::ingestion::ClientArgs;
+    use crate::pipeline::Processor;
+    use crate::pipeline::concurrent::ConcurrentConfig;
+    use crate::postgres::{
+        Connection, Db, DbArgs,
+        temp::{TempDb, get_available_port},
+    };
+    use crate::types::full_checkpoint_content::Checkpoint;
 
     use super::*;
 
@@ -283,21 +283,16 @@ mod tests {
         const NAME: &'static str = "tx_counts";
         type Value = StoredTxCount;
 
-        async fn process(
-            &self,
-            checkpoint: &Arc<CheckpointData>,
-        ) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![StoredTxCount {
-                cp_sequence_number: checkpoint.checkpoint_summary.sequence_number as i64,
+                cp_sequence_number: checkpoint.summary.sequence_number as i64,
                 count: checkpoint.transactions.len() as i64,
             }])
         }
     }
 
     #[async_trait]
-    impl concurrent::Handler for TxCounts {
-        type Store = Db;
-
+    impl crate::postgres::handler::Handler for TxCounts {
         async fn commit<'a>(
             values: &[Self::Value],
             conn: &mut Connection<'a>,

@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
-use futures::{ready, stream, task, Stream, StreamExt};
+use futures::{Stream, StreamExt, ready, stream, task};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
 use rand::seq::SliceRandom as _;
@@ -23,7 +23,8 @@ use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
 
 use crate::{
-    block::{BlockAPI as _, ExtendedBlock, SignedBlock, VerifiedBlock, GENESIS_ROUND},
+    CommitIndex,
+    block::{BlockAPI as _, ExtendedBlock, GENESIS_ROUND, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit::{CommitAPI as _, CommitRange, TrustedCommit},
     commit_vote_monitor::CommitVoteMonitor,
@@ -37,7 +38,6 @@ use crate::{
     storage::Store,
     synchronizer::SynchronizerHandle,
     transaction_certifier::TransactionCertifier,
-    CommitIndex,
 };
 
 pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
@@ -174,9 +174,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .inc();
             debug!(
                 "Block {:?} is rejected because last commit index is lagging quorum commit index too much ({} < {})",
-                block_ref,
-                last_commit_index,
-                quorum_commit_index,
+                block_ref, last_commit_index, quorum_commit_index,
             );
             return Err(ConsensusError::BlockRejected {
                 block_ref,
@@ -944,8 +942,12 @@ mod tests {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            block_verifier.clone(),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
@@ -1016,8 +1018,12 @@ mod tests {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            block_verifier.clone(),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
@@ -1179,8 +1185,12 @@ mod tests {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            block_verifier.clone(),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),

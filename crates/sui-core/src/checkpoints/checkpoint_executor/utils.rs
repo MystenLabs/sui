@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Instant};
 
 use crate::checkpoints::CheckpointStore;
 use crate::execution_cache::TransactionCacheRead;
-use futures::{future::Either, Stream};
+use futures::{Stream, future::Either};
 use mysten_common::fatal;
 use std::time::Duration;
 use strum::VariantNames;
@@ -198,7 +198,8 @@ pub(super) fn assert_checkpoint_not_forked(
 
     if locally_built_checkpoint.content_digest == verified_checkpoint_summary.content_digest {
         // fork is in the checkpoint header
-        fatal!("Checkpoint fork detected in header! Locally built checkpoint: {:?}, verified checkpoint: {:?}",
+        fatal!(
+            "Checkpoint fork detected in header! Locally built checkpoint: {:?}, verified checkpoint: {:?}",
             locally_built_checkpoint,
             verified_checkpoint
         );
@@ -225,11 +226,14 @@ pub(super) fn assert_checkpoint_not_forked(
             match (local_digests, verified_digests) {
                 (Some(local_digests), Some(verified_digests)) => {
                     if local_digests != verified_digests {
-                        fatal!("Checkpoint contents diverge at position {pos}! {local_digests:?} != {verified_digests:?}");
+                        fatal!(
+                            "Checkpoint contents diverge at position {pos}! {local_digests:?} != {verified_digests:?}"
+                        );
                     }
                 }
                 (None, Some(_)) | (Some(_), None) => {
-                    fatal!("Checkpoint contents have different lengths! Locally built checkpoint: {:?}, verified checkpoint: {:?}",
+                    fatal!(
+                        "Checkpoint contents have different lengths! Locally built checkpoint: {:?}, verified checkpoint: {:?}",
                         locally_built_checkpoint,
                         verified_checkpoint
                     );
@@ -241,7 +245,8 @@ pub(super) fn assert_checkpoint_not_forked(
             pos += 1;
         }
 
-        fatal!("Checkpoint fork detected in contents! Locally built checkpoint: {:?}, verified checkpoint: {:?}",
+        fatal!(
+            "Checkpoint fork detected in contents! Locally built checkpoint: {:?}, verified checkpoint: {:?}",
             locally_built_checkpoint,
             verified_checkpoint
         );
@@ -469,13 +474,13 @@ pub(super) struct TPSEstimator {
 
 impl TPSEstimator {
     pub fn update(&mut self, now: Instant, transaction_count: u64) -> f64 {
-        if let Some(last_update) = self.last_update {
-            if now > last_update {
-                let delta_t = now.duration_since(last_update);
-                let delta_c = transaction_count - self.transaction_count;
-                let tps = delta_c as f64 / delta_t.as_secs_f64();
-                self.tps = self.tps * 0.9 + tps * 0.1;
-            }
+        if let Some(last_update) = self.last_update
+            && now > last_update
+        {
+            let delta_t = now.duration_since(last_update);
+            let delta_c = transaction_count - self.transaction_count;
+            let tps = delta_c as f64 / delta_t.as_secs_f64();
+            self.tps = self.tps * 0.9 + tps * 0.1;
         }
 
         self.last_update = Some(now);
@@ -486,7 +491,7 @@ impl TPSEstimator {
 
 #[cfg(test)]
 mod test {
-    use rand::{thread_rng, Rng};
+    use rand::{Rng, thread_rng};
     use std::collections::HashMap;
     use sui_macros::sim_test;
 
@@ -585,6 +590,9 @@ mod test {
                 break;
             }
         }
-        assert!(found_out_of_order, "Expected to find evidence of concurrent execution in output sequence, but all elements were in order");
+        assert!(
+            found_out_of_order,
+            "Expected to find evidence of concurrent execution in output sequence, but all elements were in order"
+        );
     }
 }

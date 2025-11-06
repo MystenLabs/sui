@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::error::Result;
 use super::ObjectStore;
-use crate::balance_change::{derive_balance_changes, BalanceChange};
+use super::error::Result;
+use crate::balance_change::{BalanceChange, derive_balance_changes};
 use crate::base_types::{EpochId, ObjectID, ObjectType, SequenceNumber, SuiAddress};
 use crate::committee::Committee;
 use crate::digests::{
@@ -30,6 +30,7 @@ use typed_store_error::TypedStoreError;
 pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
 pub type PackageVersionsIterator<'a> =
     Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
+pub type AuthenticatedEventRecord = (u64, u32, u32, crate::event::Event);
 
 pub trait ReadStore: ObjectStore {
     //
@@ -652,7 +653,7 @@ pub trait RpcIndexes: Send + Sync {
     fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>>;
 
     fn get_balance(&self, owner: &SuiAddress, coin_type: &StructTag)
-        -> Result<Option<BalanceInfo>>;
+    -> Result<Option<BalanceInfo>>;
 
     fn balance_iter(
         &self,
@@ -665,6 +666,19 @@ pub trait RpcIndexes: Send + Sync {
         original_id: ObjectID,
         cursor: Option<u64>,
     ) -> Result<PackageVersionsIterator<'_>>;
+
+    fn get_highest_indexed_checkpoint_seq_number(&self)
+    -> Result<Option<CheckpointSequenceNumber>>;
+
+    fn authenticated_event_iter(
+        &self,
+        stream_id: SuiAddress,
+        start_checkpoint: u64,
+        start_transaction_idx: Option<u32>,
+        start_event_idx: Option<u32>,
+        end_checkpoint: u64,
+        limit: u32,
+    ) -> Result<Box<dyn Iterator<Item = Result<AuthenticatedEventRecord, TypedStoreError>> + '_>>;
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

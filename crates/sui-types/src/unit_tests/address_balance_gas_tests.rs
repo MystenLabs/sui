@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::{
-    base_types::{random_object_ref, SuiAddress},
+    base_types::{SuiAddress, random_object_ref},
     digests::{ChainIdentifier, CheckpointDigest},
     error::UserInputError,
     programmable_transaction_builder::ProgrammableTransactionBuilder,

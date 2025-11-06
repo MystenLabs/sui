@@ -19,8 +19,8 @@
 
 use std::time::Instant;
 
-use prometheus::{exponential_buckets, register_histogram_vec_with_registry, Registry};
-use tracing::{span, Subscriber};
+use prometheus::{Registry, exponential_buckets, register_histogram_vec_with_registry};
+use tracing::{Subscriber, span};
 
 /// A tokio_tracing Layer that records span latencies into Prometheus histograms
 pub struct PrometheusSpanLatencyLayer {

@@ -14,9 +14,9 @@ use tokio::sync::oneshot::Sender;
 use tracing::{debug, instrument};
 
 use crate::execution_scheduler::balance_withdraw_scheduler::{
+    BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
     balance_read::AccountBalanceRead,
     scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
-    BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
 };
 
 pub(crate) struct EagerBalanceWithdrawScheduler {
@@ -123,7 +123,8 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                             debug!(
                                 ?account_id,
                                 "Accumulator account object is already at version {:?}, but the withdraws are at version {:?}",
-                                version, withdraws.accumulator_version
+                                version,
+                                withdraws.accumulator_version
                             );
                             withdraws.notify_skip_schedule();
                             return;

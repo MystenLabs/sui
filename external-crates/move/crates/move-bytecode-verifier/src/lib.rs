@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![forbid(unsafe_code)]
+#![allow(clippy::doc_overindented_list_items)]
 
 //! Verifies bytecode sanity.
 

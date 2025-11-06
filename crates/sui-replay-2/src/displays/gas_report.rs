@@ -6,7 +6,7 @@ use std::fmt::{Display, Formatter};
 use sui_types::gas::GasUsageReport;
 use tabled::{
     builder::Builder as TableBuilder,
-    settings::{style::HorizontalLine, Style as TableStyle},
+    settings::{Style as TableStyle, style::HorizontalLine},
 };
 
 impl Display for Pretty<'_, GasUsageReport> {

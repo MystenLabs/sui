@@ -18,7 +18,7 @@ fn test_function_handle_type_instantiation() {
         name: IdentifierIndex::new(0),
         parameters: SignatureIndex(0),
         return_: SignatureIndex(0),
-        type_parameters: std::iter::repeat(AbilitySet::ALL).take(10).collect(),
+        type_parameters: std::iter::repeat_n(AbilitySet::ALL, 10).collect(),
     });
 
     assert_eq!(
@@ -42,11 +42,13 @@ fn test_struct_handle_type_instantiation() {
         module: ModuleHandleIndex::new(0),
         name: IdentifierIndex::new(0),
         abilities: AbilitySet::ALL,
-        type_parameters: std::iter::repeat(DatatypeTyParameter {
-            constraints: AbilitySet::ALL,
-            is_phantom: false,
-        })
-        .take(10)
+        type_parameters: std::iter::repeat_n(
+            DatatypeTyParameter {
+                constraints: AbilitySet::ALL,
+                is_phantom: false,
+            },
+            10,
+        )
         .collect(),
     });
 
@@ -68,7 +70,7 @@ fn test_struct_handle_type_instantiation() {
 fn test_function_handle_parameters() {
     let mut m = basic_test_module();
     m.signatures.push(Signature(
-        std::iter::repeat(SignatureToken::Bool).take(10).collect(),
+        std::iter::repeat_n(SignatureToken::Bool, 10).collect(),
     ));
     m.function_handles.push(FunctionHandle {
         module: ModuleHandleIndex::new(0),

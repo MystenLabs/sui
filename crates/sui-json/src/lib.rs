@@ -21,19 +21,19 @@ use move_core_types::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Number, Value as JsonValue};
+use serde_json::{Number, Value as JsonValue, json};
 
+use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::base_types::{
-    is_primitive_type_tag, move_ascii_str_layout, move_utf8_str_layout, ObjectID, SuiAddress,
-    TxContext, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR,
-    STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME,
-    STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME,
+    ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, STD_ASCII_MODULE_NAME,
+    STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME, STD_UTF8_MODULE_NAME,
+    STD_UTF8_STRUCT_NAME, SuiAddress, TxContext, TxContextKind, is_primitive_type_tag,
+    move_ascii_str_layout, move_utf8_str_layout,
 };
 use sui_types::id::{self, ID, RESOLVED_SUI_ID};
 use sui_types::move_package::MovePackage;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transfer::RESOLVED_RECEIVING_STRUCT;
-use sui_types::MOVE_STDLIB_ADDRESS;
 
 const HEX_PREFIX: &str = "0x";
 
@@ -141,17 +141,17 @@ impl SuiJsonValue {
         let json = if let Some(layout) = layout {
             // Try to convert Vec<u8> inputs into string
             fn try_parse_string(layout: &MoveTypeLayout, bytes: &[u8]) -> Option<String> {
-                if let MoveTypeLayout::Vector(t) = layout {
-                    if let MoveTypeLayout::U8 = **t {
-                        return bcs::from_bytes::<String>(bytes).ok();
-                    }
+                if let MoveTypeLayout::Vector(t) = layout
+                    && let MoveTypeLayout::U8 = **t
+                {
+                    return bcs::from_bytes::<String>(bytes).ok();
                 }
                 None
             }
             if let Some(s) = try_parse_string(layout, bytes) {
                 json!(s)
             } else {
-                let result = BoundedVisitor::deserialize_value(bytes, layout).map_or_else(
+                BoundedVisitor::deserialize_value(bytes, layout).map_or_else(
                     |_| {
                         // fallback to array[u8] if fail to convert to json.
                         JsonValue::Array(
@@ -172,8 +172,7 @@ impl SuiJsonValue {
                             )
                         })
                     },
-                );
-                result
+                )
             }
         } else {
             json!(bytes)
@@ -286,7 +285,8 @@ impl SuiJsonValue {
             {
                 if struct_layout.fields.len() != 1 {
                     bail!(
-                        "Cannot convert string arg {s} to {} which is expected to be a struct with one field", struct_layout.type_
+                        "Cannot convert string arg {s} to {} which is expected to be a struct with one field",
+                        struct_layout.type_
                     );
                 };
                 let addr = SuiAddress::from_str(s)?;
@@ -478,10 +478,11 @@ impl FromStr for SuiJsonValue {
     fn from_str(s: &str) -> Result<Self, anyhow::Error> {
         fn try_escape_array(s: &str) -> JsonValue {
             let s = s.trim();
-            if s.starts_with('[') && s.ends_with(']') {
-                if let Some(s) = s.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-                    return JsonValue::Array(s.split(',').map(try_escape_array).collect());
-                }
+            if s.starts_with('[')
+                && s.ends_with(']')
+                && let Some(s) = s.strip_prefix('[').and_then(|s| s.strip_suffix(']'))
+            {
+                return JsonValue::Array(s.split(',').map(try_escape_array).collect());
             }
             json!(s)
         }
@@ -536,7 +537,7 @@ fn check_valid_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> Result<(), 
                 return Err(SuiJsonValueError::new(
                     v,
                     SuiJsonValueErrorKind::ValueTypeNotAllowed,
-                ))
+                ));
             }
         };
 

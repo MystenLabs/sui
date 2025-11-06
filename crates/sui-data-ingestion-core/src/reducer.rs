@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{Reducer, Worker, MAX_CHECKPOINTS_IN_PROGRESS};
+use crate::{MAX_CHECKPOINTS_IN_PROGRESS, Reducer, Worker};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::StreamExt;

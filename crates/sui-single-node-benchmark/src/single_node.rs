@@ -32,8 +32,8 @@ use sui_types::messages_checkpoint::{VerifiedCheckpoint, VerifiedCheckpointConte
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::object::Object;
 use sui_types::transaction::{
-    CertifiedTransaction, Transaction, TransactionDataAPI, VerifiedCertificate,
-    VerifiedTransaction, DEFAULT_VALIDATOR_GAS_PRICE,
+    CertifiedTransaction, DEFAULT_VALIDATOR_GAS_PRICE, Transaction, TransactionDataAPI,
+    VerifiedCertificate, VerifiedTransaction,
 };
 
 #[derive(Clone)]

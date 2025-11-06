@@ -8,8 +8,8 @@ use crate::base_types::{AuthorityName, EpochId, SuiAddress};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, StakeUnit};
 use crate::crypto::{AuthorityPublicKey, NetworkPublicKey};
 use crate::multiaddr::Multiaddr;
-use anemo::types::{PeerAffinity, PeerInfo};
 use anemo::PeerId;
+use anemo::types::{PeerAffinity, PeerInfo};
 use consensus_config::{Authority, Committee as ConsensusCommittee};
 use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolVersion;
@@ -293,7 +293,7 @@ impl EpochStartValidatorInfoV1 {
 mod test {
     use crate::base_types::SuiAddress;
     use crate::committee::CommitteeTrait;
-    use crate::crypto::{get_key_pair, AuthorityKeyPair, NetworkKeyPair};
+    use crate::crypto::{AuthorityKeyPair, NetworkKeyPair, get_key_pair};
     use crate::sui_system_state::epoch_start_sui_system_state::{
         EpochStartSystemStateTrait, EpochStartSystemStateV1, EpochStartValidatorInfoV1,
     };

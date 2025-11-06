@@ -4,7 +4,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::Context as _;
-use async_graphql::{dataloader::DataLoader, Context, Object, SimpleObject};
+use async_graphql::{Context, Object, SimpleObject, dataloader::DataLoader};
 use diesel::{ExpressionMethods, QueryDsl as _};
 use sui_indexer_alt_reader::{epochs::CheckpointBoundedEpochStartKey, pg_reader::PgReader};
 use sui_indexer_alt_schema::{

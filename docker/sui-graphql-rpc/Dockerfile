@@ -2,7 +2,7 @@
 #
 # Copy in all crates, Cargo.toml and Cargo.lock unmodified,
 # and build the application.
-FROM rust:1.85-bullseye AS builder
+FROM rust:1.90-bullseye AS builder
 ARG PROFILE=release
 ENV PROFILE=$PROFILE
 ARG GIT_REVISION

@@ -22,6 +22,7 @@ import {
     CompoundType,
     IRuntimeRefValue,
     ExecutionResult,
+    ExecutionResultKind,
     IMoveCallStack,
 } from './runtime';
 import { EXT_SUMMARY_FRAME_ID, EXT_EVENT_FRAME_ID } from './trace_utils';
@@ -711,7 +712,7 @@ export class MoveDebugSession extends LoggingDebugSession {
         let terminate = false;
         try {
             const executionResult = this.runtime.step(/* next */ true, /* stopAtCloseFrame */ false);
-            terminate = executionResult === ExecutionResult.TraceEnd;
+            terminate = executionResult.kind === ExecutionResultKind.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -734,7 +735,7 @@ export class MoveDebugSession extends LoggingDebugSession {
         let terminate = false;
         try {
             const executionResult = this.runtime.step(/* next */ false, /* stopAtCloseFrame */ false);
-            terminate = executionResult === ExecutionResult.TraceEnd;
+            terminate = executionResult.kind === ExecutionResultKind.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -757,7 +758,7 @@ export class MoveDebugSession extends LoggingDebugSession {
         let terminate = false;
         try {
             const executionResult = this.runtime.stepOut(/* next */ false);
-            terminate = executionResult === ExecutionResult.TraceEnd;
+            terminate = executionResult.kind === ExecutionResultKind.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
@@ -780,7 +781,7 @@ export class MoveDebugSession extends LoggingDebugSession {
         let terminate = false;
         try {
             const executionResult = this.runtime.continue();
-            terminate = executionResult === ExecutionResult.TraceEnd;
+            terminate = executionResult.kind === ExecutionResultKind.TraceEnd;
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);

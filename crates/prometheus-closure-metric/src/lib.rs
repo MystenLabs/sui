@@ -10,8 +10,8 @@
 // TODO: add example usage once constructor macros are implemented.
 // (For now, look at tests for an example.)
 
-use anyhow::anyhow;
 use anyhow::Result;
+use anyhow::anyhow;
 use prometheus::core;
 use prometheus::proto;
 

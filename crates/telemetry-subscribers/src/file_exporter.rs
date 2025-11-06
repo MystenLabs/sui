@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::{future::BoxFuture, FutureExt};
+use futures::{FutureExt, future::BoxFuture};
 use opentelemetry::trace::TraceError;
 use opentelemetry_proto::{
     tonic::collector::trace::v1::ExportTraceServiceRequest,
@@ -50,10 +50,10 @@ impl CachedOpenFile {
         let mut inner = self.inner.lock().unwrap();
         let file_path = file_path.as_ref().to_owned();
 
-        if let Some((old_file_path, _)) = &*inner {
-            if old_file_path == &file_path {
-                return Ok(());
-            }
+        if let Some((old_file_path, _)) = &*inner
+            && old_file_path == &file_path
+        {
+            return Ok(());
         }
 
         let file = Self::open_file(file_path.as_path())?;
