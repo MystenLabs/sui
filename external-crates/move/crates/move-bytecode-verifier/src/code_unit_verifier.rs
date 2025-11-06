@@ -18,7 +18,7 @@ use move_binary_format::{
         CompiledModule, FunctionDefinition, FunctionDefinitionIndex, IdentifierIndex, TableIndex,
     },
 };
-use move_bytecode_verifier_meter::{Meter, Scope, dummy::DummyMeter};
+use move_bytecode_verifier_meter::{Meter, Scope, bound::BoundMeter};
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
 use std::collections::HashMap;
@@ -82,12 +82,11 @@ pub fn verify_function<'env>(
     name_def_map: &HashMap<IdentifierIndex, FunctionDefinitionIndex>,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<usize> {
-    meter.enter_scope(
-        module
-            .identifier_at(module.function_handle_at(function_definition.function).name)
-            .as_str(),
-        Scope::Function,
-    );
+    let module_name = module.identifier_at(module.self_handle().name).as_str();
+    let function_name = module
+        .identifier_at(module.function_handle_at(function_definition.function).name)
+        .as_str();
+    meter.enter_scope(function_name, Scope::Function);
     // nothing to verify for native function
     let code = match &function_definition.code {
         Some(code) => code,
@@ -123,7 +122,13 @@ pub fn verify_function<'env>(
         function_context,
         name_def_map,
     };
-    code_unit_verifier.verify_common(verifier_config, ability_cache, meter)?;
+    code_unit_verifier.verify_common(
+        module_name,
+        function_name,
+        verifier_config,
+        ability_cache,
+        meter,
+    )?;
     AcquiresVerifier::verify(module, index, function_definition, meter)?;
 
     meter.transfer(Scope::Function, Scope::Module, 1.0)?;
@@ -134,6 +139,8 @@ pub fn verify_function<'env>(
 impl<'env> CodeUnitVerifier<'env, '_> {
     fn verify_common(
         &self,
+        module_name: &str,
+        function_name: &str,
         verifier_config: &VerifierConfig,
         ability_cache: &mut AbilityCache<'env>,
         meter: &mut (impl Meter + ?Sized),
@@ -148,12 +155,33 @@ impl<'env> CodeUnitVerifier<'env, '_> {
             self.name_def_map,
             meter,
         );
-        if verifier_config.sanity_check_with_regex_reference_safety {
-            let regex_res = regex_reference_safety::verify(
-                self.module,
-                &self.function_context,
-                &mut DummyMeter,
-            );
+        if let Some(limit) = verifier_config.sanity_check_with_regex_reference_safety {
+            let meter = &mut BoundMeter::new(move_vm_config::verifier::MeterConfig {
+                max_per_fun_meter_units: Some(limit),
+                max_per_mod_meter_units: Some(limit),
+                max_per_pkg_meter_units: Some(limit),
+            });
+            meter.enter_scope(module_name, Scope::Module);
+            meter.enter_scope(function_name, Scope::Function);
+            let regex_res =
+                regex_reference_safety::verify(self.module, &self.function_context, meter);
+            if regex_res.as_ref().is_err_and(|e| {
+                e.major_status() == StatusCode::CONSTRAINT_NOT_SATISFIED
+                    || e.major_status() == StatusCode::PROGRAM_TOO_COMPLEX
+            }) {
+                // If the regex based checker fails due to complexity,
+                // we reject it for being too complex and skip the consistency check.
+                return Err(
+                    PartialVMError::new(StatusCode::PROGRAM_TOO_COMPLEX).with_message(
+                        regex_res
+                            .unwrap_err()
+                            .finish(Location::Undefined)
+                            .message()
+                            .cloned()
+                            .unwrap_or_default(),
+                    ),
+                );
+            }
             // The regular expression based reference safety check should be strictly more
             // permissive. So if it errors, the current one should also error.
             // As such, we assert: regex err ==> reference safety err

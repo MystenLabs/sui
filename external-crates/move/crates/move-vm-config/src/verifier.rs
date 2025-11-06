@@ -33,7 +33,7 @@ pub struct VerifierConfig {
     pub additional_borrow_checks: bool,
     pub better_loader_errors: bool,
     pub private_generics_verifier_v2: bool,
-    pub sanity_check_with_regex_reference_safety: bool,
+    pub sanity_check_with_regex_reference_safety: Option</* meter limit */ u128>,
 }
 
 #[derive(Debug, Clone)]
@@ -82,7 +82,7 @@ impl Default for VerifierConfig {
             additional_borrow_checks: true,
             better_loader_errors: true,
             private_generics_verifier_v2: false,
-            sanity_check_with_regex_reference_safety: true,
+            sanity_check_with_regex_reference_safety: Some(8_000_000),
         }
     }
 }
