@@ -372,7 +372,7 @@ Sender is not @0x0 the system address.
 
 
 
-<pre><code><b>const</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_MaxAliases">MaxAliases</a>: u64 = 20;
+<pre><code><b>const</b> <a href="../sui/authenticator_state.md#sui_authenticator_state_MaxAliases">MaxAliases</a>: u64 = 8;
 </code></pre>
 
 

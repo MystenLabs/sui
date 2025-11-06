@@ -3475,10 +3475,13 @@ pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStron
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WithAliases<T>(T, Vec<(SuiAddress, Option<SequenceNumber>)>);
+pub struct WithAliases<T>(
+    T,
+    #[serde(with = "nonempty_as_vec")] NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
+);
 
 impl<T> WithAliases<T> {
-    pub fn new(tx: T, aliases: Vec<(SuiAddress, Option<SequenceNumber>)>) -> Self {
+    pub fn new(tx: T, aliases: NonEmpty<(SuiAddress, Option<SequenceNumber>)>) -> Self {
         Self(tx, aliases)
     }
 
@@ -3486,7 +3489,7 @@ impl<T> WithAliases<T> {
         &self.0
     }
 
-    pub fn aliases(&self) -> &Vec<(SuiAddress, Option<SequenceNumber>)> {
+    pub fn aliases(&self) -> &NonEmpty<(SuiAddress, Option<SequenceNumber>)> {
         &self.1
     }
 
@@ -3494,11 +3497,11 @@ impl<T> WithAliases<T> {
         self.0
     }
 
-    pub fn into_aliases(self) -> Vec<(SuiAddress, Option<SequenceNumber>)> {
+    pub fn into_aliases(self) -> NonEmpty<(SuiAddress, Option<SequenceNumber>)> {
         self.1
     }
 
-    pub fn into_inner(self) -> (T, Vec<(SuiAddress, Option<SequenceNumber>)>) {
+    pub fn into_inner(self) -> (T, NonEmpty<(SuiAddress, Option<SequenceNumber>)>) {
         (self.0, self.1)
     }
 }
@@ -3516,9 +3519,7 @@ impl<S> WithAliases<Envelope<SenderSignedData, S>> {
             .intent_message()
             .value
             .required_signers()
-            .into_iter()
-            .map(|s| (s, None))
-            .collect();
+            .map(|s| (s, None));
         Self::new(tx, no_aliases)
     }
 }
@@ -3529,9 +3530,7 @@ impl<S> WithAliases<VerifiedEnvelope<SenderSignedData, S>> {
             .intent_message()
             .value
             .required_signers()
-            .into_iter()
-            .map(|s| (s, None))
-            .collect();
+            .map(|s| (s, None));
         Self::new(tx, no_aliases)
     }
 }
@@ -3551,6 +3550,61 @@ impl<T: Message, S> From<WithAliases<TrustedEnvelope<T, S>>>
 {
     fn from(value: WithAliases<TrustedEnvelope<T, S>>) -> Self {
         Self(value.0.into(), value.1)
+    }
+}
+
+mod nonempty_as_vec {
+    use super::*;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S, T>(value: &NonEmpty<T>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize,
+    {
+        let vec: Vec<&T> = value.iter().collect();
+        vec.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<NonEmpty<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de> + Clone,
+    {
+        use serde::de::{SeqAccess, Visitor};
+        use std::fmt;
+        use std::marker::PhantomData;
+
+        struct NonEmptyVisitor<T>(PhantomData<T>);
+
+        impl<'de, T> Visitor<'de> for NonEmptyVisitor<T>
+        where
+            T: Deserialize<'de> + Clone,
+        {
+            type Value = NonEmpty<T>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("a non-empty sequence")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let head = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::custom("empty vector"))?;
+
+                let mut tail = Vec::new();
+                while let Some(elem) = seq.next_element()? {
+                    tail.push(elem);
+                }
+
+                Ok(NonEmpty { head, tail })
+            }
+        }
+
+        deserializer.deserialize_seq(NonEmptyVisitor(PhantomData))
     }
 }
 

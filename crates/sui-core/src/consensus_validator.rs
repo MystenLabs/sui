@@ -177,9 +177,7 @@ impl SuiTxValidator {
                         .intent_message()
                         .value
                         .required_signers()
-                        .into_iter()
-                        .map(|s| (s, None))
-                        .collect();
+                        .map(|s| (s, None));
                     WithAliases::new(*tx, no_aliases_allowed)
                 }
                 ConsensusTransactionKind::UserTransactionV2(tx) => *tx,

@@ -124,7 +124,7 @@ pub fn verify_sender_signed_data_message_signatures(
     }
 
     // 2. One signature per signer is required.
-    let required_signers: NonEmpty<_> = txn.intent_message().value.required_signers();
+    let required_signers = txn.intent_message().value.required_signers();
     fp_ensure!(
         txn.inner().tx_signatures.len() == required_signers.len(),
         SuiErrorKind::SignerSignatureNumberMismatch {

@@ -419,7 +419,7 @@ impl SignatureVerifier {
     pub fn verify_tx_with_current_aliases(
         &self,
         signed_tx: &SenderSignedData,
-    ) -> SuiResult<Vec<(SuiAddress, Option<SequenceNumber>)>> {
+    ) -> SuiResult<NonEmpty<(SuiAddress, Option<SequenceNumber>)>> {
         let alias_key_type = TypeTag::Struct(Box::new(StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
             module: Identifier::new("authenticator_state").unwrap(),
@@ -477,14 +477,14 @@ impl SignatureVerifier {
         }
 
         self.verify_tx(signed_tx, aliases)?;
-        Ok(versions)
+        Ok(NonEmpty::from_vec(versions).expect("must have at least one required_signer"))
     }
 
     pub fn verify_tx_require_alias_versions(
         &self,
         signed_tx: &SenderSignedData,
         // Note: this must be in the same order as `required_signers` of the given tx.
-        versions: Vec<(SuiAddress, Option<SequenceNumber>)>,
+        versions: NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
     ) -> SuiResult {
         let current_aliases = self.verify_tx_with_current_aliases(signed_tx)?;
         if current_aliases != versions {
@@ -500,9 +500,7 @@ impl SignatureVerifier {
                 .intent_message()
                 .value
                 .required_signers()
-                .iter()
-                .map(|s| (*s, None))
-                .collect(),
+                .map(|s| (s, None)),
         )
     }
 
