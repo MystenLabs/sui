@@ -11,5 +11,5 @@ pub struct MergeCoinsCommand {
     /// The coin to merge into.
     pub coin: Option<TransactionArgument>,
     /// The coins to be merged.
-    pub coins: Vec<TransactionArgument>,
+    pub coins: Option<Vec<TransactionArgument>>,
 }

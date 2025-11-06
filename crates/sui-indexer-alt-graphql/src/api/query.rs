@@ -189,12 +189,13 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<UInt53>,
-    ) -> Result<Vec<Option<Checkpoint>>, RpcError> {
+    ) -> Result<Option<Vec<Option<Checkpoint>>>, RpcError> {
         let scope = self.scope(ctx)?;
-        Ok(keys
-            .into_iter()
-            .map(|k| Checkpoint::with_sequence_number(scope.clone(), Some(k.into())))
-            .collect())
+        Ok(Some(
+            keys.into_iter()
+                .map(|k| Checkpoint::with_sequence_number(scope.clone(), Some(k.into())))
+                .collect(),
+        ))
     }
 
     /// Fetch epochs by their IDs.
@@ -204,13 +205,13 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<UInt53>,
-    ) -> Result<Vec<Option<Epoch>>, RpcError> {
+    ) -> Result<Option<Vec<Option<Epoch>>>, RpcError> {
         let scope = self.scope(ctx)?;
         let epochs = keys
             .into_iter()
             .map(|k| Epoch::fetch(ctx, scope.clone(), Some(k)));
 
-        try_join_all(epochs).await
+        try_join_all(epochs).await.map(Some)
     }
 
     /// Fetch objects by their keys.
@@ -220,13 +221,13 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<ObjectKey>,
-    ) -> Result<Vec<Option<Object>>, RpcError<object::Error>> {
+    ) -> Result<Option<Vec<Option<Object>>>, RpcError<object::Error>> {
         let scope = self.scope(ctx)?;
         let objects = keys
             .into_iter()
             .map(|k| Object::by_key(ctx, scope.clone(), k));
 
-        try_join_all(objects).await
+        try_join_all(objects).await.map(Some)
     }
 
     /// Fetch packages by their keys.
@@ -236,13 +237,13 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<PackageKey>,
-    ) -> Result<Vec<Option<MovePackage>>, RpcError<move_package::Error>> {
+    ) -> Result<Option<Vec<Option<MovePackage>>>, RpcError<move_package::Error>> {
         let scope = self.scope(ctx)?;
         let packages = keys
             .into_iter()
             .map(|k| MovePackage::by_key(ctx, scope.clone(), k));
 
-        try_join_all(packages).await
+        try_join_all(packages).await.map(Some)
     }
 
     /// Fetch transactions by their digests.
@@ -252,13 +253,13 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<Digest>,
-    ) -> Result<Vec<Option<Transaction>>, RpcError> {
+    ) -> Result<Option<Vec<Option<Transaction>>>, RpcError> {
         let scope = self.scope(ctx)?;
         let transactions = keys
             .into_iter()
             .map(|d| Transaction::fetch(ctx, scope.clone(), d));
 
-        try_join_all(transactions).await
+        try_join_all(transactions).await.map(Some)
     }
 
     /// Fetch transaction effects by their transactions' digests.
@@ -268,13 +269,13 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<Digest>,
-    ) -> Result<Vec<Option<TransactionEffects>>, RpcError> {
+    ) -> Result<Option<Vec<Option<TransactionEffects>>>, RpcError> {
         let scope = self.scope(ctx)?;
         let effects = keys
             .into_iter()
             .map(|d| TransactionEffects::fetch(ctx, scope.clone(), d));
 
-        try_join_all(effects).await
+        try_join_all(effects).await.map(Some)
     }
 
     /// Fetch types by their string representations.
@@ -286,12 +287,12 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Vec<Option<MoveType>>, RpcError<move_type::Error>> {
+    ) -> Result<Option<Vec<Option<MoveType>>>, RpcError<move_type::Error>> {
         let types = keys
             .into_iter()
             .map(|t| async move { MoveType::canonicalize(t.into(), self.scope(ctx)?).await });
 
-        try_join_all(types).await
+        try_join_all(types).await.map(Some)
     }
 
     /// Fetch an object by its address.

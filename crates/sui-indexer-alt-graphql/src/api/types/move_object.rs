@@ -69,13 +69,13 @@ pub(crate) struct MoveObject {
     field(
         name = "multi_get_dynamic_fields",
         arg(name = "keys", ty = "Vec<DynamicFieldName>"),
-        ty = "Result<Vec<Option<DynamicField>>, RpcError<object::Error>>",
+        ty = "Result<Option<Vec<Option<DynamicField>>>, RpcError<object::Error>>",
         desc = "Access dynamic fields on an object using their types and BCS-encoded names.\n\nReturns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.",
     ),
     field(
         name = "multi_get_dynamic_object_fields",
         arg(name = "keys", ty = "Vec<DynamicFieldName>"),
-        ty = "Result<Vec<Option<DynamicField>>, RpcError<object::Error>>",
+        ty = "Result<Option<Vec<Option<DynamicField>>>, RpcError<object::Error>>",
         desc = "Access dynamic object fields on an object using their types and BCS-encoded names.\n\nReturns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.",
     ),
     field(
@@ -271,7 +271,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Option<Vec<Option<DynamicField>>>, RpcError> {
         let scope = &self.super_.super_.scope;
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
@@ -283,6 +283,7 @@ impl MoveObject {
             )
         }))
         .await
+        .map(Some)
     }
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
@@ -303,7 +304,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Option<Vec<Option<DynamicField>>>, RpcError> {
         let scope = &self.super_.super_.scope;
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
@@ -315,6 +316,7 @@ impl MoveObject {
             )
         }))
         .await
+        .map(Some)
     }
 
     /// The Base64-encoded BCS serialize of this object, as a `MoveObject`.

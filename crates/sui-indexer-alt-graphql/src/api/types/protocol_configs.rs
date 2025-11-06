@@ -75,12 +75,14 @@ impl ConfigContent {
     }
 
     /// List all available configurations and their values.
-    async fn configs(&self) -> Vec<ProtocolConfig> {
-        self.0
-            .clone()
-            .into_iter()
-            .map(|(key, value)| ProtocolConfig { key, value })
-            .collect()
+    async fn configs(&self) -> Option<Vec<ProtocolConfig>> {
+        Some(
+            self.0
+                .clone()
+                .into_iter()
+                .map(|(key, value)| ProtocolConfig { key, value })
+                .collect(),
+        )
     }
 }
 
@@ -95,12 +97,14 @@ impl FlagContent {
     }
 
     /// List all available feature flags and their values.
-    async fn feature_flags(&self) -> Vec<FeatureFlag> {
-        self.0
-            .clone()
-            .into_iter()
-            .map(|(key, value)| FeatureFlag { key, value })
-            .collect()
+    async fn feature_flags(&self) -> Option<Vec<FeatureFlag>> {
+        Some(
+            self.0
+                .clone()
+                .into_iter()
+                .map(|(key, value)| FeatureFlag { key, value })
+                .collect(),
+        )
     }
 }
 

@@ -203,7 +203,7 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Option<Vec<Option<DynamicField>>>, RpcError> {
         self.super_.multi_get_dynamic_fields(ctx, keys).await
     }
 
@@ -214,7 +214,7 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Option<Vec<Option<DynamicField>>>, RpcError> {
         self.super_.multi_get_dynamic_object_fields(ctx, keys).await
     }
 

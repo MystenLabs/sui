@@ -9,7 +9,7 @@ use super::TransactionArgument;
 #[derive(SimpleObject, Clone)]
 pub struct TransferObjectsCommand {
     /// The objects to transfer.
-    pub inputs: Vec<TransactionArgument>,
+    pub inputs: Option<Vec<TransactionArgument>>,
     /// The address to transfer to.
     pub address: Option<TransactionArgument>,
 }

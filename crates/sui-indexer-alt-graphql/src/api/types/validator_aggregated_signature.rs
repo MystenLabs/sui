@@ -31,8 +31,8 @@ impl ValidatorAggregatedSignature {
     }
 
     /// The indexes of validators that contributed to this signature.
-    async fn signers_map(&self) -> Vec<u32> {
-        self.authority_info.signers_map.iter().collect()
+    async fn signers_map(&self) -> Option<Vec<u32>> {
+        Some(self.authority_info.signers_map.iter().collect())
     }
 }
 

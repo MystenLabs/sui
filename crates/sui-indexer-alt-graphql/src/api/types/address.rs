@@ -229,7 +229,7 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Option<Vec<Option<DynamicField>>>, RpcError> {
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
                 ctx,
@@ -240,6 +240,7 @@ impl Address {
             )
         }))
         .await
+        .map(Some)
     }
 
     /// Access dynamic object fields on an object using their types and BCS-encoded names.
@@ -249,7 +250,7 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Option<Vec<Option<DynamicField>>>, RpcError> {
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
                 ctx,
@@ -260,6 +261,7 @@ impl Address {
             )
         }))
         .await
+        .map(Some)
     }
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.

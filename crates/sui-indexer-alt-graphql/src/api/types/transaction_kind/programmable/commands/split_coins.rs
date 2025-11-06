@@ -11,5 +11,5 @@ pub struct SplitCoinsCommand {
     /// The coin to split.
     pub coin: Option<TransactionArgument>,
     /// The denominations to split off from the coin.
-    pub amounts: Vec<TransactionArgument>,
+    pub amounts: Option<Vec<TransactionArgument>>,
 }

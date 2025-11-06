@@ -155,16 +155,18 @@ impl TransactionContents {
     }
 
     /// User signatures for this transaction.
-    async fn signatures(&self) -> Result<Vec<UserSignature>, RpcError> {
+    async fn signatures(&self) -> Result<Option<Vec<UserSignature>>, RpcError> {
         let Some(content) = &self.contents else {
-            return Ok(vec![]);
+            return Ok(None);
         };
 
         let signatures = content.signatures()?;
-        Ok(signatures
-            .into_iter()
-            .map(UserSignature::from_generic_signature)
-            .collect())
+        Ok(Some(
+            signatures
+                .into_iter()
+                .map(UserSignature::from_generic_signature)
+                .collect(),
+        ))
     }
 }
 

@@ -366,7 +366,7 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<Error>> {
+    ) -> Result<Option<Vec<Option<DynamicField>>>, RpcError<Error>> {
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
                 ctx,
@@ -377,6 +377,7 @@ impl Object {
             )
         }))
         .await
+        .map(Some)
         .map_err(upcast)
     }
 
@@ -387,7 +388,7 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<Error>> {
+    ) -> Result<Option<Vec<Option<DynamicField>>>, RpcError<Error>> {
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
                 ctx,
@@ -398,6 +399,7 @@ impl Object {
             )
         }))
         .await
+        .map(Some)
         .map_err(upcast)
     }
 

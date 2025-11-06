@@ -71,15 +71,15 @@ impl Command {
             }),
             NativeCommand::SplitCoins(coin, amounts) => Command::SplitCoins(SplitCoinsCommand {
                 coin: Some(TransactionArgument::from(coin)),
-                amounts: amounts.into_iter().map(TransactionArgument::from).collect(),
+                amounts: Some(amounts.into_iter().map(TransactionArgument::from).collect()),
             }),
             NativeCommand::MergeCoins(coin, coins) => Command::MergeCoins(MergeCoinsCommand {
                 coin: Some(TransactionArgument::from(coin)),
-                coins: coins.into_iter().map(TransactionArgument::from).collect(),
+                coins: Some(coins.into_iter().map(TransactionArgument::from).collect()),
             }),
             NativeCommand::TransferObjects(objects, address) => {
                 Command::TransferObjects(TransferObjectsCommand {
-                    inputs: objects.into_iter().map(TransactionArgument::from).collect(),
+                    inputs: Some(objects.into_iter().map(TransactionArgument::from).collect()),
                     address: Some(TransactionArgument::from(address)),
                 })
             }

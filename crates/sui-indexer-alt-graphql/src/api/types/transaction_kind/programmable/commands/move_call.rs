@@ -28,11 +28,13 @@ impl MoveCallCommand {
     }
 
     /// The actual function parameters passed in for this move call.
-    async fn arguments(&self) -> Vec<TransactionArgument> {
-        self.native
-            .arguments
-            .iter()
-            .map(|arg| TransactionArgument::from(*arg))
-            .collect()
+    async fn arguments(&self) -> Option<Vec<TransactionArgument>> {
+        Some(
+            self.native
+                .arguments
+                .iter()
+                .map(|arg| TransactionArgument::from(*arg))
+                .collect(),
+        )
     }
 }
