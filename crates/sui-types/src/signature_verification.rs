@@ -124,29 +124,26 @@ pub fn verify_sender_signed_data_message_signatures(
     }
 
     // 2. One signature per signer is required.
-    let signers: NonEmpty<_> = txn.intent_message().value.required_signers();
+    let required_signers: NonEmpty<_> = txn.intent_message().value.required_signers();
     fp_ensure!(
-        txn.inner().tx_signatures.len() == signers.len(),
+        txn.inner().tx_signatures.len() == required_signers.len(),
         SuiErrorKind::SignerSignatureNumberMismatch {
             actual: txn.inner().tx_signatures.len(),
-            expected: signers.len()
+            expected: required_signers.len()
         }
         .into()
     );
 
     // 3. Each signer must provide a signature from one of the set of allowed aliases.
     let present_sigs = txn.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?;
-    let signer_aliases: Vec<_> = signers
-        .into_iter()
-        .map(|s| {
-            aliased_addresses
-                .iter()
-                .find(|(addr, _)| *addr == s)
-                .map(|(_, aliases)| aliases.clone())
-                .unwrap_or(NonEmpty::new(s))
-        })
-        .collect();
-    for s in signer_aliases {
+    let required_signer_alias_sets = required_signers.map(|s| {
+        aliased_addresses
+            .iter()
+            .find(|(addr, _)| *addr == s)
+            .map(|(_, aliases)| aliases.clone())
+            .unwrap_or(NonEmpty::new(s))
+    });
+    for s in required_signer_alias_sets {
         if !s.iter().any(|s| present_sigs.contains_key(s)) {
             return Err(SuiErrorKind::SignerSignatureAbsent {
                 expected: s

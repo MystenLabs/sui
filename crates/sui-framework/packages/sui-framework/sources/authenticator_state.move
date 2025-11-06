@@ -26,7 +26,7 @@ const ETooManyAliases: u64 = 6;
 
 const CurrentVersion: u64 = 1;
 
-const MaxAliases: u64 = 20;
+const MaxAliases: u64 = 8;
 
 /// Singleton shared object which stores the global authenticator state.
 /// The actual state is stored in a dynamic field of type AuthenticatorStateInner to support
