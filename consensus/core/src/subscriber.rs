@@ -197,7 +197,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             // For observers, use a worker pool to decouple stream consumption from block processing.
             // For validators, use sequential processing to maintain ordering guarantees.
             if context.is_observer {
-                let num_workers = context.committee.size();
+                let num_workers = 2 * context.committee.size();
                 let channel_capacity = 10 * num_workers;
 
                 // Spawn worker pool - each worker processes blocks independently
