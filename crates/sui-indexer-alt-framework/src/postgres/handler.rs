@@ -13,6 +13,19 @@
 //!
 //! The `Handler` trait in this module extends the framework's concurrent Handler trait with
 //! Postgres-specific batching logic that automatically handles this limitation.
+//!
+//! # TODO: Consider moving FieldCount to sui-pg-db
+//!
+//! Currently, FieldCount lives in this framework crate but is Postgres-specific. Ideally it should
+//! live in sui-pg-db. However, this creates a circular dependency:
+//! - sui-indexer-alt-framework depends on sui-pg-db (for IndexerCluster and other utilities)
+//! - This blanket impl needs FieldCount to implement concurrent::Handler for postgres indexers
+//! - Moving FieldCount to sui-pg-db would require framework to depend on sui-pg-db (circular!)
+//!
+//! To fully decouple, we'd need to move all postgres-specific code (including IndexerCluster) to
+//! sui-pg-db, which would be a much larger breaking change. Consider this for a future refactor.
+//!
+//! See: https://github.com/MystenLabs/sui/pull/24055#issuecomment-3471278182
 
 use async_trait::async_trait;
 
