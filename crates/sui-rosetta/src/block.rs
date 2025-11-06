@@ -54,7 +54,6 @@ pub async fn transaction(
             "transaction.sender",
             "transaction.gas_payment",
             "transaction.kind",
-            "transaction.data",
             "effects.gas_object",
             "effects.gas_used",
             "effects.status",
