@@ -31,6 +31,12 @@ impl AccountBalanceRead for Arc<dyn ChildObjectResolver + Send + Sync> {
         account_id: &AccumulatorObjId,
         accumulator_version: SequenceNumber,
     ) -> u128 {
+        // TODO: The implementation currently relies on the fact that we could
+        // load older versions of child objects. This has two problems:
+        // 1. Aggressive pruning might prune old versions of child objects,
+        // 2. Tidehunter might not continue to support this kinds of reads.
+        // To fix this, we could also read the latest version of the accumulator root object,
+        // and see if the provided accumulator version is already settled.
         let value: U128 =
             AccumulatorValue::load_by_id(self.as_ref(), Some(accumulator_version), *account_id)
                 // Expect is safe because at this point we should know that we are dealing with a Balance<T>
