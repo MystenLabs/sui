@@ -18,7 +18,8 @@
 //! ObjectDigest contains three things:
 //!
 //! 1. The amount of the reservation [8 bytes]
-//! 2. The epoch(s) in which the tx is valid [4 bytes]
+//! 2. The epoch(s) in which the tx is valid [2 bytes]
+//! 3. The last two bytes of the chain identifier [2 bytes]
 //! 3. A magic number to identify this ObjectRef as a coin reservation [20 bytes]
 
 use crate::{
