@@ -162,6 +162,7 @@ validator_configs:
       max-per-pkg-meter-units: ~
       max-back-edges-per-function: ~
       max-back-edges-per-module: ~
+      sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
   - protocol-key-pair:
@@ -323,6 +324,7 @@ validator_configs:
       max-per-pkg-meter-units: ~
       max-back-edges-per-function: ~
       max-back-edges-per-module: ~
+      sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
   - protocol-key-pair:
@@ -484,6 +486,7 @@ validator_configs:
       max-per-pkg-meter-units: ~
       max-back-edges-per-function: ~
       max-back-edges-per-module: ~
+      sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
   - protocol-key-pair:
@@ -645,6 +648,7 @@ validator_configs:
       max-per-pkg-meter-units: ~
       max-back-edges-per-function: ~
       max-back-edges-per-module: ~
+      sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
   - protocol-key-pair:
@@ -806,6 +810,7 @@ validator_configs:
       max-per-pkg-meter-units: ~
       max-back-edges-per-function: ~
       max-back-edges-per-module: ~
+      sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
   - protocol-key-pair:
@@ -967,6 +972,7 @@ validator_configs:
       max-per-pkg-meter-units: ~
       max-back-edges-per-function: ~
       max-back-edges-per-module: ~
+      sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
   - protocol-key-pair:
@@ -1128,6 +1134,7 @@ validator_configs:
       max-per-pkg-meter-units: ~
       max-back-edges-per-function: ~
       max-back-edges-per-module: ~
+      sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
 account_keys:
