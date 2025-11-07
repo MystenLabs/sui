@@ -1,0 +1,15 @@
+[workspace]
+members = [
+    "solana-program",
+    "near-contract"
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Web3 Multi-Language Playground Contributors"]
+license = "MIT"
+repository = "https://github.com/yourusername/sui"
+
+[workspace.dependencies]
+# Common dependencies can be defined here
