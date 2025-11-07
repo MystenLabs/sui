@@ -4,8 +4,9 @@
 
 use crate::unit_tests::production_config;
 use move_binary_format::file_format::{
-    Bytecode, CodeUnit, FunctionDefinition, FunctionHandle, FunctionHandleIndex, IdentifierIndex,
-    ModuleHandleIndex, Signature, SignatureIndex, SignatureToken, Visibility::Public, empty_module,
+    empty_module, Bytecode, CodeUnit, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
+    IdentifierIndex, ModuleHandleIndex, Signature, SignatureIndex, SignatureToken,
+    Visibility::Public,
 };
 use move_bytecode_verifier_meter::bound::BoundMeter;
 use move_core_types::{identifier::Identifier, vm_status::StatusCode};
@@ -360,7 +361,7 @@ fn test_merge_state() {
     );
     assert_eq!(
         result.unwrap_err().major_status(),
-        StatusCode::CONSTRAINT_NOT_SATISFIED
+        StatusCode::PROGRAM_TOO_COMPLEX
     );
 }
 

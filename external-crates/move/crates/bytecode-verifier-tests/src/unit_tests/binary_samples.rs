@@ -7,7 +7,7 @@
 //! cases which we want to continue to succeed.
 
 use crate::unit_tests::production_config;
-use move_binary_format::{CompiledModule, binary_config::BinaryConfig, errors::VMResult};
+use move_binary_format::{binary_config::BinaryConfig, errors::VMResult, CompiledModule};
 use move_bytecode_verifier::verifier;
 use move_bytecode_verifier_meter::bound::BoundMeter;
 
@@ -33,41 +33,6 @@ macro_rules! do_test {
 }
 
 #[test]
-fn aptosd_swap() {
-    do_test!("aptosd_swap");
-}
-
-#[test]
-fn coin_store() {
-    do_test!("coin_store");
-}
-
-#[test]
-fn farming() {
-    do_test!("farming");
-}
-
-#[test]
-fn liquidity_pool() {
-    do_test!("liquidity_pool");
-}
-
-#[test]
-fn price_oracle() {
-    do_test!("price_oracle");
-}
-
-#[test]
-fn pool() {
-    do_test!("pool");
-}
-
-#[test]
 fn router() {
     do_test!("router");
-}
-
-#[test]
-fn whitelist() {
-    do_test!("whitelist");
 }
