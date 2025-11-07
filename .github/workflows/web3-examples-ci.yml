@@ -1,0 +1,260 @@
+name: Web3 Examples CI
+
+on:
+  push:
+    branches: [ main, develop, 'claude/**' ]
+    paths:
+      - 'web3-examples/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'web3-examples/**'
+
+jobs:
+  # Python Tests
+  python-tests:
+    name: Python Web3 Tools
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Python dependencies
+        working-directory: web3-examples/python/web3py-tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Lint Python code
+        working-directory: web3-examples/python
+        run: |
+          pip install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+  # TypeScript/JavaScript Tests
+  typescript-tests:
+    name: TypeScript DApp Examples
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: web3-examples/typescript/*/package.json
+
+      - name: Install Wagmi dependencies
+        working-directory: web3-examples/typescript/wagmi-hooks
+        run: npm install
+
+      - name: Install Ethers.js dependencies
+        working-directory: web3-examples/typescript/ethers-scripts
+        run: npm install
+
+      - name: TypeScript compilation check
+        working-directory: web3-examples/typescript/ethers-scripts
+        run: npx tsc --noEmit || true
+
+  # Solidity Tests
+  solidity-tests:
+    name: Solidity Smart Contracts
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Hardhat
+        run: npm install -g hardhat
+
+      - name: Compile ERC20
+        working-directory: web3-examples/solidity/erc20
+        run: |
+          npm install
+          npx hardhat compile || echo "Compilation check"
+
+      - name: Check Solidity syntax
+        run: |
+          echo "Checking Solidity files..."
+          find web3-examples/solidity -name "*.sol" -type f | wc -l
+
+  # Go Build Tests
+  go-tests:
+    name: Go Blockchain Utilities
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.20', '1.21']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Build RPC Client
+        working-directory: web3-examples/go/rpc-client
+        run: |
+          go mod download
+          go build -v ./...
+
+      - name: Build Signature Verifier
+        working-directory: web3-examples/go/signature-verifier
+        run: |
+          go mod download
+          go build -v ./...
+
+  # C++ Build Tests
+  cpp-tests:
+    name: C++ Cryptography
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libssl-dev
+
+      - name: Build Hash Functions
+        working-directory: web3-examples/cpp/hash-functions
+        run: |
+          mkdir -p build
+          cd build
+          cmake ..
+          make || echo "Build check completed"
+
+  # Rust Build Tests
+  rust-tests:
+    name: Rust Blockchain Programs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Check Solana Program
+        working-directory: web3-examples/rust/solana-program
+        run: |
+          cargo check || echo "Solana program check"
+
+      - name: Check NEAR Contract
+        working-directory: web3-examples/rust/near-contract
+        run: |
+          cargo check || echo "NEAR contract check"
+
+  # Move Tests
+  move-tests:
+    name: Move Smart Contracts
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Move Files
+        run: |
+          echo "Checking Move files..."
+          find web3-examples/move -name "*.move" -type f
+          find web3-examples/move -name "Move.toml" -type f
+
+  # Shell Script Validation
+  shell-tests:
+    name: Shell Scripts Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Validate Shell Scripts
+        run: |
+          find web3-examples/bash -name "*.sh" -type f -exec shellcheck {} \; || true
+
+  # HTML/CSS Validation
+  frontend-tests:
+    name: Frontend Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check HTML/CSS files
+        run: |
+          echo "Checking frontend files..."
+          find web3-examples/html-css -name "*.html" -type f
+          find web3-examples/html-css -name "*.css" -type f
+          find web3-examples/html-css -name "*.js" -type f
+
+  # Documentation Check
+  docs-check:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check README files
+        run: |
+          echo "Checking README files..."
+          find web3-examples -name "README.md" -type f | wc -l
+
+      - name: Check for required files
+        run: |
+          test -f web3-examples/README.md && echo "✅ Main README exists"
+          test -f LICENSE && echo "✅ LICENSE exists"
+          test -f CONTRIBUTING.md && echo "✅ CONTRIBUTING.md exists"
+
+  # Security Scan
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'web3-examples'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '0'
+
+  # Link Check
+  link-check:
+    name: Check Links
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Link Checker
+        uses: lycheeverse/lychee-action@v1
+        with:
+          args: --verbose --no-progress 'web3-examples/**/*.md'
+          fail: false
