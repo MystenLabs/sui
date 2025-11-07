@@ -35,8 +35,32 @@ pub fn verify_module<'env>(
     ability_cache: &mut AbilityCache<'env>,
     meter: &mut (impl Meter + ?Sized),
 ) -> VMResult<()> {
-    verify_module_impl(verifier_config, module, ability_cache, meter)
-        .map_err(|e| e.finish(Location::Module(module.self_id())))
+    let mut regex_reference_safety_meter =
+        if let Some(limit) = verifier_config.sanity_check_with_regex_reference_safety {
+            let module_name = module.identifier_at(module.self_handle().name).as_str();
+            let mut m = BoundMeter::new(move_vm_config::verifier::MeterConfig {
+                max_per_fun_meter_units: Some(limit),
+                max_per_mod_meter_units: Some(limit),
+                max_per_pkg_meter_units: Some(limit),
+            });
+            m.enter_scope(module_name, Scope::Module);
+            m
+        } else {
+            // unused
+            BoundMeter::new(move_vm_config::verifier::MeterConfig {
+                max_per_fun_meter_units: None,
+                max_per_mod_meter_units: None,
+                max_per_pkg_meter_units: None,
+            })
+        };
+    verify_module_impl(
+        verifier_config,
+        module,
+        ability_cache,
+        meter,
+        &mut regex_reference_safety_meter,
+    )
+    .map_err(|e| e.finish(Location::Module(module.self_id())))
 }
 
 fn verify_module_impl<'env>(
@@ -44,6 +68,7 @@ fn verify_module_impl<'env>(
     module: &'env CompiledModule,
     ability_cache: &mut AbilityCache<'env>,
     meter: &mut (impl Meter + ?Sized),
+    regex_reference_safety_meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     let mut name_def_map = HashMap::new();
     for (idx, func_def) in module.function_defs().iter().enumerate() {
@@ -61,6 +86,7 @@ fn verify_module_impl<'env>(
             ability_cache,
             &name_def_map,
             meter,
+            regex_reference_safety_meter,
         )
         .map_err(|err| err.at_index(IndexKind::FunctionDefinition, index.0))?;
         total_back_edges += num_back_edges;
@@ -81,12 +107,13 @@ pub fn verify_function<'env>(
     ability_cache: &mut AbilityCache<'env>,
     name_def_map: &HashMap<IdentifierIndex, FunctionDefinitionIndex>,
     meter: &mut (impl Meter + ?Sized),
+    regex_reference_safety_meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<usize> {
-    let module_name = module.identifier_at(module.self_handle().name).as_str();
     let function_name = module
         .identifier_at(module.function_handle_at(function_definition.function).name)
         .as_str();
     meter.enter_scope(function_name, Scope::Function);
+    regex_reference_safety_meter.enter_scope(function_name, Scope::Function);
     // nothing to verify for native function
     let code = match &function_definition.code {
         Some(code) => code,
@@ -123,11 +150,10 @@ pub fn verify_function<'env>(
         name_def_map,
     };
     code_unit_verifier.verify_common(
-        module_name,
-        function_name,
         verifier_config,
         ability_cache,
         meter,
+        regex_reference_safety_meter,
     )?;
     AcquiresVerifier::verify(module, index, function_definition, meter)?;
 
@@ -139,11 +165,10 @@ pub fn verify_function<'env>(
 impl<'env> CodeUnitVerifier<'env, '_> {
     fn verify_common(
         &self,
-        module_name: &str,
-        function_name: &str,
         verifier_config: &VerifierConfig,
         ability_cache: &mut AbilityCache<'env>,
         meter: &mut (impl Meter + ?Sized),
+        regex_reference_safety_meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         StackUsageVerifier::verify(verifier_config, self.module, &self.function_context, meter)?;
         type_safety::verify(self.module, &self.function_context, ability_cache, meter)?;
@@ -162,16 +187,15 @@ impl<'env> CodeUnitVerifier<'env, '_> {
             // skip consistency check on timeout/complexity errors
             return reference_safety_res;
         }
-        if let Some(limit) = verifier_config.sanity_check_with_regex_reference_safety {
-            let meter = &mut BoundMeter::new(move_vm_config::verifier::MeterConfig {
-                max_per_fun_meter_units: Some(limit),
-                max_per_mod_meter_units: Some(limit),
-                max_per_pkg_meter_units: Some(limit),
-            });
-            meter.enter_scope(module_name, Scope::Module);
-            meter.enter_scope(function_name, Scope::Function);
-            let regex_res =
-                regex_reference_safety::verify(self.module, &self.function_context, meter);
+        if verifier_config
+            .sanity_check_with_regex_reference_safety
+            .is_some()
+        {
+            let regex_res = regex_reference_safety::verify(
+                self.module,
+                &self.function_context,
+                regex_reference_safety_meter,
+            );
             if regex_res.as_ref().is_err_and(|e| {
                 e.major_status() == StatusCode::CONSTRAINT_NOT_SATISFIED
                     || e.major_status() == StatusCode::PROGRAM_TOO_COMPLEX
