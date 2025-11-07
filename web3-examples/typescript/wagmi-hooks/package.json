@@ -1,0 +1,26 @@
+{
+  "name": "wagmi-hooks-example",
+  "version": "1.0.0",
+  "description": "React Web3 integration using Wagmi hooks",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "wagmi": "^1.4.0",
+    "viem": "^1.19.0",
+    "@wagmi/core": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0",
+    "eslint": "^8.55.0"
+  }
+}
