@@ -1,0 +1,16 @@
+[package]
+name = "solana-counter-program"
+version = "0.1.0"
+edition = "2021"
+description = "A simple counter program for Solana"
+
+[dependencies]
+solana-program = "1.17"
+borsh = "0.10"
+
+[dev-dependencies]
+solana-program-test = "1.17"
+solana-sdk = "1.17"
+
+[lib]
+crate-type = ["cdylib", "lib"]

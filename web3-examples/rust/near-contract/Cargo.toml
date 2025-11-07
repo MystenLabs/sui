@@ -1,0 +1,19 @@
+[package]
+name = "near-guestbook"
+version = "0.1.0"
+edition = "2021"
+description = "A guestbook smart contract for NEAR Protocol"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "4.1.1"
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
