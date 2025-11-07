@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+target/
+dist/
+build/
+out/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# Blockchain
+deployments/*
+!deployments/.gitkeep
+artifacts/
+cache/
+.cache/
+blockchain-data/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Lock files (keep for reproducibility)
+# Uncomment if you want to ignore them
+# package-lock.json
+# yarn.lock
+# Cargo.lock
+# go.sum
