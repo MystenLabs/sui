@@ -1,20 +1,89 @@
-#
-# Dependabot configuration file
-#
+# Dependabot configuration for Web3 Examples
 
 version: 2
 updates:
-  - package-ecosystem: "cargo"
-    directory: "/"
+  # NPM dependencies for TypeScript/JavaScript
+  - package-ecosystem: "npm"
+    directory: "/web3-examples/typescript/wagmi-hooks"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
 
   - package-ecosystem: "npm"
-    directory: "/"
+    directory: "/web3-examples/typescript/ethers-scripts"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
 
+  - package-ecosystem: "npm"
+    directory: "/web3-examples/solidity/erc20"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/web3-examples/python/web3py-tools"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: "pip"
+    directory: "/web3-examples/python/blockchain-cli"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Go modules
+  - package-ecosystem: "gomod"
+    directory: "/web3-examples/go/rpc-client"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: "gomod"
+    directory: "/web3-examples/go/signature-verifier"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Cargo dependencies for Rust
+  - package-ecosystem: "cargo"
+    directory: "/web3-examples/rust/solana-program"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: "cargo"
+    directory: "/web3-examples/rust/near-contract"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
