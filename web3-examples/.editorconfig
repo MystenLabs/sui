@@ -1,0 +1,48 @@
+# EditorConfig for Web3 Multi-Language Playground
+# https://editorconfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{js,ts,tsx,json}]
+indent_style = space
+indent_size = 2
+
+[*.{py,pyw}]
+indent_style = space
+indent_size = 4
+
+[*.{go}]
+indent_style = tab
+indent_size = 4
+
+[*.{rs}]
+indent_style = space
+indent_size = 4
+
+[*.{sol,vy}]
+indent_style = space
+indent_size = 4
+
+[*.{move}]
+indent_style = space
+indent_size = 4
+
+[*.{sh}]
+indent_style = space
+indent_size = 2
+
+[*.{html,css}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab
