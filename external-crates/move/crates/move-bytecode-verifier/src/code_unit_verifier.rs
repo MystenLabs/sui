@@ -155,6 +155,13 @@ impl<'env> CodeUnitVerifier<'env, '_> {
             self.name_def_map,
             meter,
         );
+        if reference_safety_res.as_ref().is_err_and(|e| {
+            e.major_status() == StatusCode::CONSTRAINT_NOT_SATISFIED
+                || e.major_status() == StatusCode::PROGRAM_TOO_COMPLEX
+        }) {
+            // skip consistency check on timeout/complexity errors
+            return reference_safety_res;
+        }
         if let Some(limit) = verifier_config.sanity_check_with_regex_reference_safety {
             let meter = &mut BoundMeter::new(move_vm_config::verifier::MeterConfig {
                 max_per_fun_meter_units: Some(limit),
