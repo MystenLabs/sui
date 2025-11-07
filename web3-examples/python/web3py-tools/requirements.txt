@@ -1,0 +1,4 @@
+web3>=6.11.0
+eth-account>=0.10.0
+py-solc-x>=2.0.0
+python-dotenv>=1.0.0

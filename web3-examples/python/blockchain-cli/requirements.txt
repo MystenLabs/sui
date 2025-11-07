@@ -1,0 +1,3 @@
+web3>=6.11.0
+eth-account>=0.10.0
+colorama>=0.4.6
