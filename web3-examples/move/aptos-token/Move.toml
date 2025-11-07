@@ -1,0 +1,13 @@
+[package]
+name = "aptos_token"
+version = "1.0.0"
+upgrade_policy = "compatible"
+
+[addresses]
+aptos_token = "_"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework", rev = "mainnet" }
+
+[dev-addresses]
+aptos_token = "0x123"
