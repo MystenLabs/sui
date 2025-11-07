@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "ms-python.python",
+    "ms-python.black-formatter",
+    "JuanBlanco.solidity",
+    "golang.go",
+    "rust-lang.rust-analyzer",
+    "ms-vscode.cpptools",
+    "redhat.java"
+  ]
+}
