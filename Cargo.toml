@@ -114,7 +114,6 @@ members = [
   "crates/sui-default-config",
   "crates/sui-display",
   "crates/sui-e2e-tests",
-  "crates/sui-edge-proxy",
   "crates/sui-enum-compat-util",
   "crates/sui-faucet",
   "crates/sui-field-count",
