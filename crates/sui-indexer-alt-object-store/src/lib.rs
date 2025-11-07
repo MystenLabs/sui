@@ -146,19 +146,20 @@ impl Connection for ObjectStoreConnection {
             ObjectPath::from(format!("_metadata/watermarks/{}.json", pipeline))
         };
 
-        let (current_watermark, etag) = match self.object_store.get(&object_path).await {
+        let (current_watermark, e_tag, version) = match self.object_store.get(&object_path).await {
             Ok(result) => {
-                let etag = result.meta.e_tag.clone();
+                let e_tag = result.meta.e_tag.clone();
+                let version = result.meta.version.clone();
                 let bytes = result.bytes().await?;
                 let watermark: ComitterWatermark = serde_json::from_slice(&bytes)
                     .context("Failed to parse watermark from object store")?;
-                (Some(watermark), etag)
+                (Some(watermark), e_tag, version)
             }
-            Err(ObjectStoreError::NotFound { .. }) => (None, None),
+            Err(ObjectStoreError::NotFound { .. }) => (None, None, None),
             Err(e) => return Err(e.into()),
         };
 
-        if let Some(current) = current_watermark
+        if let Some(ref current) = current_watermark
             && current.checkpoint_hi_inclusive >= new_watermark.checkpoint_hi_inclusive
         {
             return Ok(false);
@@ -167,16 +168,12 @@ impl Connection for ObjectStoreConnection {
         let json_bytes = serde_json::to_vec(&new_watermark)?;
         let payload: PutPayload = Bytes::from(json_bytes).into();
 
-        if let Some(etag) = etag {
+        if current_watermark.is_some() {
             self.object_store
                 .put_opts(
                     &object_path,
                     payload,
-                    PutMode::Update(object_store::UpdateVersion {
-                        e_tag: Some(etag),
-                        version: None,
-                    })
-                    .into(),
+                    PutMode::Update(object_store::UpdateVersion { e_tag, version }).into(),
                 )
                 .await?;
         } else {
