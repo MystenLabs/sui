@@ -189,7 +189,7 @@ impl ConsensusCommitOutput {
         self.next_shared_object_versions = Some(next_versions);
     }
 
-    pub fn defer_transactions_v2(
+    pub fn defer_transactions(
         &mut self,
         key: DeferralKey,
         transactions: Vec<VerifiedExecutableTransaction>,
@@ -892,8 +892,7 @@ impl ConsensusOutputQuarantine {
             .next()
     }
 
-    // TODO: Remove the above version and rename this without _v2
-    pub(crate) fn load_initial_object_debts_v2(
+    pub(crate) fn load_initial_object_debts(
         &self,
         epoch_store: &AuthorityPerEpochStore,
         current_round: Round,

@@ -58,7 +58,6 @@ pub mod verify_indexes;
 #[cfg(test)]
 #[path = "unit_tests/congestion_control_tests.rs"]
 mod congestion_control_tests;
-#[cfg(test)]
 #[path = "unit_tests/consensus_test_utils.rs"]
 pub mod consensus_test_utils;
 #[cfg(test)]

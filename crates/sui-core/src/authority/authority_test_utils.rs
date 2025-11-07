@@ -10,9 +10,12 @@ use sui_types::base_types::FullObjectRef;
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair};
 use sui_types::utils::to_sender_signed_transaction;
 
-use super::shared_object_version_manager::{AssignedTxAndVersions, AssignedVersions, Schedulable};
+use super::shared_object_version_manager::AssignedVersions;
 use super::test_authority_builder::TestAuthorityBuilder;
 use super::*;
+
+#[cfg(test)]
+use super::shared_object_version_manager::{AssignedTxAndVersions, Schedulable};
 
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
@@ -423,7 +426,6 @@ pub async fn send_consensus(
     authority: &AuthorityState,
     cert: &VerifiedCertificate,
 ) -> AssignedVersions {
-    // Use the simpler assign_shared_object_versions_for_tests API
     let assigned_versions = authority
         .epoch_store_for_testing()
         .assign_shared_object_versions_for_tests(
@@ -472,160 +474,54 @@ pub async fn send_consensus_no_execution(
         .into_map()
         .get(&cert.key())
         .cloned()
-        .unwrap_or_else(|| AssignedVersions::non_withdraw(vec![]))
+        .unwrap_or_else(|| AssignedVersions::new(vec![], None))
 }
 
-pub async fn send_batch_consensus_no_execution(
+#[cfg(test)]
+pub async fn send_batch_consensus_no_execution<C>(
     authority: &AuthorityState,
     certificates: &[VerifiedCertificate],
-    skip_consensus_commit_prologue_in_test: bool,
-) -> (Vec<Schedulable>, AssignedTxAndVersions) {
-    use crate::authority::authority_per_epoch_store::consensus_quarantine::ConsensusCommitOutput;
-    use crate::authority::transaction_deferral::DeferralKey;
-    use std::collections::HashSet;
-    use sui_protocol_config::PerObjectCongestionControlMode;
+    consensus_handler: &mut crate::consensus_handler::ConsensusHandler<C>,
+    captured_transactions: &crate::consensus_test_utils::CapturedTransactions,
+) -> (Vec<Schedulable>, AssignedTxAndVersions)
+where
+    C: crate::checkpoints::CheckpointServiceNotify + Send + Sync + 'static,
+{
+    use crate::consensus_test_utils::TestConsensusCommit;
+    use sui_types::messages_consensus::ConsensusTransaction;
 
+    let consensus_transactions: Vec<ConsensusTransaction> = certificates
+        .iter()
+        .map(|cert| {
+            ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into())
+        })
+        .collect();
+
+    // Determine appropriate round and timestamp
     let epoch_store = authority.epoch_store_for_testing();
+    let round = epoch_store.get_highest_pending_checkpoint_height() + 1;
+    let timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
+    let sub_dag_index = 0;
 
-    // Track deferred transactions before processing
-    let deferred_before = epoch_store.get_all_deferred_transactions_for_test();
-    let deferred_digests_before: HashSet<_> = deferred_before
-        .iter()
-        .flat_map(|(_, txns)| txns.iter().map(|t| *t.digest()))
-        .collect();
+    let commit =
+        TestConsensusCommit::new(consensus_transactions, round, timestamp_ms, sub_dag_index);
 
-    // Use the simpler assign_shared_object_versions_for_tests API to avoid actually executing certs.
-    // This allows testing cert execution independently.
-    let mut executable_txs: Vec<_> = certificates
-        .iter()
-        .map(|cert| VerifiedExecutableTransaction::new_from_certificate(cert.clone()))
-        .collect();
+    consensus_handler
+        .handle_consensus_commit_for_test(commit)
+        .await;
 
-    // If requested, add a consensus commit prologue at the beginning
-    let prologue_tx = if !skip_consensus_commit_prologue_in_test {
-        let protocol_config = epoch_store.protocol_config();
+    // Wait for captured transactions to be available
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-        if protocol_config.include_consensus_digest_in_prologue() {
-            // Create a consensus commit prologue transaction
-            let commit_info = crate::consensus_handler::ConsensusCommitInfo::new_for_test(
-                epoch_store.get_highest_pending_checkpoint_height() + 1,
-                0,
-                Some(std::time::Duration::from_millis(80)),
-                false,
-            );
-
-            let prologue = commit_info.create_consensus_commit_prologue_transaction(
-                epoch_store.epoch(),
-                protocol_config,
-                vec![], // no cancelled transactions
-                &commit_info,
-                crate::consensus_handler::IndirectStateObserver::new(),
-            );
-
-            Some(prologue)
-        } else {
-            None
-        }
-    } else {
-        None
+    let (scheduled_txns, assigned_tx_and_versions) = {
+        let mut captured = captured_transactions.lock();
+        assert!(
+            !captured.is_empty(),
+            "Expected transactions to be scheduled"
+        );
+        let (scheduled_txns, assigned_tx_and_versions, _) = captured.remove(0);
+        (scheduled_txns, assigned_tx_and_versions)
     };
 
-    // Add prologue to the list of transactions to get versions for
-    if let Some(prologue) = &prologue_tx {
-        executable_txs.insert(0, prologue.clone());
-    }
-
-    // Check if congestion control should defer any transactions
-    // This simulates what the consensus handler v2 would do
-    let protocol_config = epoch_store.protocol_config();
-    let mut scheduled_txs = Vec::new();
-    let mut deferred_txs = Vec::new();
-
-    // Simple congestion control simulation - check if we should defer based on shared object usage
-    let congestion_mode = protocol_config.per_object_congestion_control_mode();
-    if !matches!(congestion_mode, PerObjectCongestionControlMode::None) {
-        // Get current round for deferral
-        let round = epoch_store.get_highest_pending_checkpoint_height() + 1;
-
-        // Track congestion per shared object
-        let mut shared_obj_cost: std::collections::HashMap<sui_types::base_types::ObjectID, u64> =
-            std::collections::HashMap::new();
-        let max_cost = protocol_config.max_accumulated_txn_cost_per_object_in_mysticeti_commit();
-
-        for tx in &executable_txs {
-            let tx_data = tx.data().transaction_data();
-            let shared_objs = tx_data.shared_input_objects();
-
-            if shared_objs.is_empty() {
-                // No shared objects, always schedule
-                scheduled_txs.push(tx.clone());
-                continue;
-            }
-
-            // Check if this would exceed congestion limit for any shared object
-            let mut should_defer = false;
-            let tx_cost = match congestion_mode {
-                PerObjectCongestionControlMode::TotalGasBudget
-                | PerObjectCongestionControlMode::TotalGasBudgetWithCap => tx_data.gas_budget(),
-                PerObjectCongestionControlMode::TotalTxCount => 1,
-                _ => 0, // For None or other modes
-            };
-
-            for shared_obj in &shared_objs {
-                let current_cost = shared_obj_cost.get(&shared_obj.id()).unwrap_or(&0);
-                if *current_cost + tx_cost > max_cost {
-                    // This transaction would exceed the limit, defer it
-                    should_defer = true;
-                    break;
-                }
-            }
-
-            if should_defer && !deferred_digests_before.contains(tx.digest()) {
-                // Defer this transaction
-                deferred_txs.push(tx.clone());
-            } else {
-                // Schedule this transaction and update costs
-                scheduled_txs.push(tx.clone());
-                for shared_obj in &shared_objs {
-                    *shared_obj_cost.entry(shared_obj.id()).or_insert(0) += tx_cost;
-                }
-            }
-        }
-
-        // Store deferred transactions if any
-        if !deferred_txs.is_empty() {
-            let deferral_key = DeferralKey::ConsensusRound {
-                future_round: round + 1,
-                deferred_from_round: round,
-            };
-
-            // Create an output to record the deferrals
-            let mut output = ConsensusCommitOutput::new(0);
-            output.defer_transactions_v2(deferral_key, deferred_txs);
-
-            // Note: We would ideally push the output to the epoch store here
-            // to properly record the deferrals, but push_consensus_output_for_tests
-            // is not accessible from this context. For now, the deferred transactions
-            // are just not scheduled, which achieves the main goal of the test.
-        }
-    } else {
-        // No congestion control, schedule all
-        scheduled_txs = executable_txs.clone();
-    }
-
-    let assigned_versions = authority
-        .epoch_store_for_testing()
-        .assign_shared_object_versions_for_tests(
-            authority.get_object_cache_reader().as_ref(),
-            &scheduled_txs,
-        )
-        .unwrap();
-
-    // Convert transactions to Schedulable
-    let schedulables: Vec<_> = scheduled_txs
-        .into_iter()
-        .map(Schedulable::Transaction)
-        .collect();
-
-    (schedulables, assigned_versions)
+    (scheduled_txns, assigned_tx_and_versions)
 }

@@ -17,8 +17,7 @@ use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use itertools::Itertools as _;
 use lru::LruCache;
 use mysten_common::{
-    assert_reachable, assert_sometimes, debug_fatal, in_test_configuration,
-    random_util::randomize_cache_capacity_in_tests,
+    assert_reachable, assert_sometimes, debug_fatal, random_util::randomize_cache_capacity_in_tests,
 };
 use mysten_metrics::{
     monitored_future,
@@ -119,7 +118,7 @@ impl ConsensusHandlerInitializer {
         state: Arc<AuthorityState>,
         checkpoint_service: Arc<CheckpointService>,
     ) -> Self {
-        use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
+        use crate::consensus_test_utils::make_consensus_adapter_for_test;
         use std::collections::HashSet;
 
         let backpressure_manager = BackpressureManager::new_for_tests();
@@ -603,7 +602,6 @@ impl<C> ConsensusHandler<C> {
         &self.execution_scheduler_sender
     }
 
-    #[cfg(test)]
     pub(crate) fn new_for_testing(
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<C>,
@@ -742,6 +740,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             epoch_start_time,
             &consensus_commit,
         );
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn handle_consensus_commit_for_test(
+        &mut self,
+        consensus_commit: impl ConsensusCommitAPI,
+    ) {
+        self.handle_consensus_commit(consensus_commit).await;
     }
 
     #[instrument(level = "debug", skip_all, fields(epoch = self.epoch_store.epoch(), round = consensus_commit.leader_round()))]
@@ -1153,7 +1159,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             for (key, txns) in deferred_txns.into_iter() {
                 total_deferred_txns += txns.len();
                 deferred_transactions.insert(key, txns.clone());
-                state.output.defer_transactions_v2(key, txns);
+                state.output.defer_transactions(key, txns);
             }
         }
 
@@ -1442,11 +1448,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        PostConsensusTxReorder::reorder_v2(
+        PostConsensusTxReorder::reorder(
             &mut txns,
             protocol_config.consensus_transaction_ordering(),
         );
-        PostConsensusTxReorder::reorder_v2(
+        PostConsensusTxReorder::reorder(
             &mut randomness_txns,
             protocol_config.consensus_transaction_ordering(),
         );
@@ -1523,7 +1529,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             self.epoch_store
                 .consensus_quarantine
                 .read()
-                .load_initial_object_debts_v2(
+                .load_initial_object_debts(
                     &self.epoch_store,
                     commit_info.round,
                     for_randomness,
@@ -2333,7 +2339,6 @@ impl ExecutionSchedulerSender {
         Self { sender }
     }
 
-    #[cfg(test)]
     pub(crate) fn new_for_testing(
         sender: monitored_mpsc::UnboundedSender<(
             Vec<Schedulable>,
@@ -2920,9 +2925,9 @@ mod tests {
         },
         checkpoints::CheckpointServiceNoop,
         consensus_adapter::consensus_tests::{
-            make_consensus_adapter_for_test, test_certificates_with_gas_objects,
-            test_user_transaction,
+            test_certificates_with_gas_objects, test_user_transaction,
         },
+        consensus_test_utils::make_consensus_adapter_for_test,
         post_consensus_tx_reorder::PostConsensusTxReorder,
     };
 
@@ -3306,7 +3311,7 @@ mod tests {
     #[test]
     fn test_order_by_gas_price() {
         let mut v = vec![user_txn(42), user_txn(100)];
-        PostConsensusTxReorder::reorder_v2(&mut v, ConsensusTransactionOrdering::ByGasPrice);
+        PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
         assert_eq!(
             to_short_strings(v),
             vec![
@@ -3323,7 +3328,7 @@ mod tests {
             user_txn(100),
             user_txn(1000),
         ];
-        PostConsensusTxReorder::reorder_v2(&mut v, ConsensusTransactionOrdering::ByGasPrice);
+        PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
         assert_eq!(
             to_short_strings(v),
             vec![

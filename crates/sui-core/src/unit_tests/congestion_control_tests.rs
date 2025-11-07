@@ -27,7 +27,7 @@ use sui_types::transaction::{CertifiedTransaction, VerifiedTransaction};
 use sui_types::transaction::{ObjectArg, SharedObjectMutability};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair},
+    crypto::{AccountKeyPair, get_key_pair},
     execution_status::{CongestedObjects, ExecutionFailureStatus},
     object::Object,
     programmable_transaction_builder::ProgrammableTransactionBuilder,

@@ -19,9 +19,9 @@ use futures::FutureExt;
 use futures::future::{Either, join_all, select};
 use itertools::{Itertools, izip};
 use move_bytecode_utils::module_cache::SyncModuleCache;
+use mysten_common::assert_reachable;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_common::{assert_reachable, assert_sometimes};
 use mysten_common::{debug_fatal, fatal};
 use mysten_metrics::monitored_scope;
 use nonempty::NonEmpty;
@@ -2385,7 +2385,7 @@ impl AuthorityPerEpochStore {
             && self.randomness_state_enabled()
             && cert.transaction_data().uses_randomness()
         {
-            // Propogate original deferred_from_round when re-deferring
+            // Propagate original deferred_from_round when re-deferring
             let deferred_from_round = previously_deferred_tx_digests
                 .get(cert.digest())
                 .map(|previous_key| previous_key.deferred_from_round())
@@ -3255,7 +3255,6 @@ impl AuthorityPerEpochStore {
         // Record consensus messages as processed for each transaction
         for tx in transactions.iter() {
             if let Schedulable::Transaction(exec_tx) = tx {
-                // Create a sequenced consensus transaction key
                 let key = SequencedConsensusTransactionKey::External(
                     ConsensusTransactionKey::Certificate(*exec_tx.digest()),
                 );
