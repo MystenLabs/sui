@@ -56,6 +56,7 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             additional_borrow_checks: false,
             better_loader_errors: false,
             private_generics_verifier_v2: false,
+            sanity_check_with_regex_reference_safety: None,
         },
         MeterConfig::old_default(),
     )
