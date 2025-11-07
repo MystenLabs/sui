@@ -7,7 +7,11 @@ use crate::{
     object::{Object, Owner},
 };
 use move_core_types::language_storage::TypeTag;
+use nonempty::NonEmpty;
 use serde::{Deserialize, Serialize};
+
+#[cfg(test)]
+use nonempty::nonempty;
 
 use super::IDOperation;
 
@@ -87,7 +91,7 @@ pub enum AccumulatorOperation {
 pub enum AccumulatorValue {
     Integer(u64),
     IntegerTuple(u64, u64),
-    EventDigest(Vec<(u64 /* event index in the transaction */, Digest)>),
+    EventDigest(NonEmpty<(u64 /* event index in the transaction */, Digest)>),
 }
 
 /// Accumulator objects are named by an address (can be an account address or a UID)
@@ -149,10 +153,9 @@ impl AccumulatorWriteV1 {
                                 AccumulatorOperation::Split => (merge, split + v as u128),
                             }
                         } else {
-                            mysten_common::debug_fatal!(
+                            mysten_common::fatal!(
                                 "mismatched accumulator value types for same object"
                             );
-                            (merge, split)
                         }
                     });
                 let (amount, operation) = if merge_amount >= split_amount {
@@ -160,23 +163,26 @@ impl AccumulatorWriteV1 {
                 } else {
                     (split_amount - merge_amount, AccumulatorOperation::Split)
                 };
-                let amount_u64 = amount
-                    .try_into()
-                    .expect("accumulator value overflow: merged amount exceeds u64::MAX");
-                (AccumulatorValue::Integer(amount_u64), operation)
+                match amount.try_into() {
+                    Ok(amount_u64) => (AccumulatorValue::Integer(amount_u64), operation),
+                    Err(_) => {
+                        mysten_common::fatal!(
+                            "accumulator value overflow: merged amount {} exceeds u64::MAX",
+                            amount
+                        );
+                    }
+                }
             }
             AccumulatorValue::IntegerTuple(_, _) => {
                 todo!("IntegerTuple netting-out logic not yet implemented")
             }
-            AccumulatorValue::EventDigest(_) => {
-                let mut event_digests = Vec::new();
-                for write in writes {
-                    if let AccumulatorValue::EventDigest(digests) = write.value {
-                        event_digests.extend(digests);
+            AccumulatorValue::EventDigest(first_digests) => {
+                let mut event_digests = first_digests.clone();
+                for write in &writes[1..] {
+                    if let AccumulatorValue::EventDigest(digests) = &write.value {
+                        event_digests.extend(digests.iter().copied());
                     } else {
-                        mysten_common::debug_fatal!(
-                            "mismatched accumulator value types for same object"
-                        );
+                        mysten_common::fatal!("mismatched accumulator value types for same object");
                     }
                 }
                 (
@@ -365,7 +371,7 @@ mod tests {
         let write = AccumulatorWriteV1 {
             address: addr.clone(),
             operation: AccumulatorOperation::Merge,
-            value: AccumulatorValue::EventDigest(vec![(0, digest1), (1, digest2)]),
+            value: AccumulatorValue::EventDigest(nonempty![(0, digest1), (1, digest2)]),
         };
 
         let result = AccumulatorWriteV1::merge(vec![write.clone()]);
@@ -384,17 +390,17 @@ mod tests {
             AccumulatorWriteV1 {
                 address: addr.clone(),
                 operation: AccumulatorOperation::Merge,
-                value: AccumulatorValue::EventDigest(vec![(0, digest1), (1, digest2)]),
+                value: AccumulatorValue::EventDigest(nonempty![(0, digest1), (1, digest2)]),
             },
             AccumulatorWriteV1 {
                 address: addr.clone(),
                 operation: AccumulatorOperation::Merge,
-                value: AccumulatorValue::EventDigest(vec![(2, digest3)]),
+                value: AccumulatorValue::EventDigest(nonempty![(2, digest3)]),
             },
             AccumulatorWriteV1 {
                 address: addr.clone(),
                 operation: AccumulatorOperation::Merge,
-                value: AccumulatorValue::EventDigest(vec![(3, digest4)]),
+                value: AccumulatorValue::EventDigest(nonempty![(3, digest4)]),
             },
         ];
 
@@ -406,31 +412,6 @@ mod tests {
             assert_eq!(digests[1], (1, digest2));
             assert_eq!(digests[2], (2, digest3));
             assert_eq!(digests[3], (3, digest4));
-        } else {
-            panic!("Expected EventDigest value");
-        }
-    }
-
-    #[test]
-    fn test_merge_event_digests_empty_list() {
-        let addr = test_accumulator_address();
-        let writes = vec![
-            AccumulatorWriteV1 {
-                address: addr.clone(),
-                operation: AccumulatorOperation::Merge,
-                value: AccumulatorValue::EventDigest(vec![]),
-            },
-            AccumulatorWriteV1 {
-                address: addr.clone(),
-                operation: AccumulatorOperation::Merge,
-                value: AccumulatorValue::EventDigest(vec![]),
-            },
-        ];
-
-        let result = AccumulatorWriteV1::merge(writes);
-        assert_eq!(result.operation, AccumulatorOperation::Merge);
-        if let AccumulatorValue::EventDigest(digests) = result.value {
-            assert_eq!(digests.len(), 0);
         } else {
             panic!("Expected EventDigest value");
         }

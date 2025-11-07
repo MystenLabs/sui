@@ -371,6 +371,46 @@ impl<'a> ObjectRuntime<'a> {
         target_ty: TypeTag,
         value: MoveAccumulatorValue,
     ) -> PartialVMResult<()> {
+        if let MoveAccumulatorValue::U64(amount) = value {
+            let mut merge_total = 0u128;
+            let mut split_total = 0u128;
+
+            for event in &self.state.accumulator_events {
+                if event.target_addr == target_addr
+                    && event.target_ty == target_ty
+                    && let MoveAccumulatorValue::U64(existing_amount) = event.value
+                {
+                    match event.action {
+                        MoveAccumulatorAction::Merge => merge_total += existing_amount as u128,
+                        MoveAccumulatorAction::Split => split_total += existing_amount as u128,
+                    }
+                }
+            }
+
+            match action {
+                MoveAccumulatorAction::Merge => merge_total += amount as u128,
+                MoveAccumulatorAction::Split => split_total += amount as u128,
+            }
+
+            if merge_total > u64::MAX as u128 {
+                return Err(
+                    PartialVMError::new(StatusCode::ARITHMETIC_ERROR).with_message(format!(
+                        "accumulator merge overflow: total merges {} exceed u64::MAX",
+                        merge_total
+                    )),
+                );
+            }
+
+            if split_total > u64::MAX as u128 {
+                return Err(
+                    PartialVMError::new(StatusCode::ARITHMETIC_ERROR).with_message(format!(
+                        "accumulator split overflow: total splits {} exceed u64::MAX",
+                        split_total
+                    )),
+                );
+            }
+        }
+
         let event = MoveAccumulatorEvent {
             accumulator_id,
             action,
