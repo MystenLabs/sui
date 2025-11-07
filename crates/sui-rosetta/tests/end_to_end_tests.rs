@@ -1456,3 +1456,68 @@ async fn create_party_objects_with_type(
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_network_status() -> Result<()> {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let mut client = GrpcClient::new(test_cluster.rpc_url())?;
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    // Execute a transaction to advance past genesis checkpoint
+    let sender = test_cluster.get_address_0();
+    let recipient = test_cluster.get_address_1();
+    let coins = get_all_coins(&mut client, sender).await?;
+    let gas_object = coins.first().unwrap().compute_object_reference();
+
+    let tx_data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        Some(1),
+        gas_object,
+        1_000_000,
+        test_cluster.get_reference_gas_price().await,
+    );
+    let tx = to_sender_signed_transaction(tx_data, keystore.export(&sender)?);
+    execute_transaction(&mut client, &tx).await?;
+
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = serde_json::json!({
+        "network_identifier": {
+            "blockchain": "sui",
+            "network": "localnet"
+        }
+    });
+
+    let response: serde_json::Value = rosetta_client
+        .call(RosettaEndpoint::Status, &request)
+        .await
+        .unwrap();
+
+    let current_block = &response["current_block_identifier"];
+    assert!(current_block["index"].as_i64().unwrap() >= 0);
+    assert!(response["current_block_timestamp"].as_u64().unwrap() > 0);
+
+    let genesis_block = &response["genesis_block_identifier"];
+    assert_eq!(genesis_block["index"].as_i64().unwrap(), 0);
+
+    assert!(response["oldest_block_identifier"].is_object());
+
+    if let Some(sync_status) = response["sync_status"].as_object() {
+        let current = sync_status["current_index"].as_i64().unwrap();
+        let target = sync_status["target_index"].as_i64().unwrap();
+        assert!(current <= target);
+        assert_eq!(sync_status["synced"].as_bool().unwrap(), current == target);
+    }
+
+    let peers = response["peers"].as_array().unwrap();
+    assert!(!peers.is_empty());
+
+    for peer in peers {
+        let metadata = peer["metadata"].as_object().unwrap();
+        assert!(metadata.contains_key("public_key"));
+        assert!(metadata.contains_key("stake_amount"));
+    }
+
+    Ok(())
+}

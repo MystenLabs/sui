@@ -202,7 +202,12 @@ impl CheckpointBlockProvider {
         let summary = checkpoint.summary();
         let index = summary.sequence_number();
         let hash = CheckpointDigest::from_str(checkpoint.digest())?;
-        let previous_hash = CheckpointDigest::from_str(summary.previous_digest())?;
+        // Genesis checkpoint (index 0) has no previous digest
+        let previous_hash = if index == 0 {
+            hash
+        } else {
+            CheckpointDigest::from_str(summary.previous_digest())?
+        };
         let timestamp_ms = summary
             .timestamp
             .ok_or_else(|| Error::DataError("Checkpoint timestamp is missing".to_string()))

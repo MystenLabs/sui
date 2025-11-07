@@ -804,10 +804,19 @@ impl Operations {
 
         let sender = SuiAddress::from_str(transaction.sender())?;
 
-        let gas_owner = {
+        let gas_owner = if effects.gas_object.is_some() {
             let gas_object = effects.gas_object();
             let owner = gas_object.output_owner();
             SuiAddress::from_str(owner.address())?
+        } else if sender == SuiAddress::ZERO {
+            // System transactions don't have a gas_object.
+            sender
+        } else {
+            return Err(Error::DataError(format!(
+                "Non-system transaction (sender={}) missing gas_object: {}",
+                sender,
+                transaction.digest()
+            )));
         };
 
         let gas_summary = effects.gas_used();
