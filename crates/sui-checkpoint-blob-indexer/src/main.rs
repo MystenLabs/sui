@@ -129,7 +129,7 @@ async fn main() -> anyhow::Result<()> {
 
     let cancel = tokio_util::sync::CancellationToken::new();
 
-    let registry = prometheus::Registry::new_custom(Some("checkpoint_blob_indexer".into()), None)?;
+    let registry = prometheus::Registry::new_custom(Some("checkpoint_blob".into()), None)?;
     let metrics_service = sui_indexer_alt_metrics::MetricsService::new(
         args.metrics_args,
         registry.clone(),
