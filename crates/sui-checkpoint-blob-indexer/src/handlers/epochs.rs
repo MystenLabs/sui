@@ -67,15 +67,16 @@ impl Handler for EpochsPipeline {
         let path = ObjectPath::from("epochs.json");
         let store = conn.object_store();
 
-        let (mut epochs, etag) = match store.get(&path).await {
+        let (mut epochs, e_tag, version, file_exists) = match store.get(&path).await {
             Ok(result) => {
-                let etag = result.meta.e_tag.clone();
+                let e_tag = result.meta.e_tag.clone();
+                let version = result.meta.version.clone();
                 let bytes = result.bytes().await?;
                 let epochs: Vec<u64> =
                     serde_json::from_slice(&bytes).context("Failed to parse epochs.json")?;
-                (epochs, etag)
+                (epochs, e_tag, version, true)
             }
-            Err(ObjectStoreError::NotFound { .. }) => (Vec::new(), None),
+            Err(ObjectStoreError::NotFound { .. }) => (Vec::new(), None, None, false),
             Err(e) => return Err(e.into()),
         };
 
@@ -87,16 +88,12 @@ impl Handler for EpochsPipeline {
         let json_bytes = serde_json::to_vec(&epochs)?;
         let payload: PutPayload = Bytes::from(json_bytes).into();
 
-        if let Some(etag) = etag {
+        if file_exists {
             store
                 .put_opts(
                     &path,
                     payload,
-                    PutMode::Update(object_store::UpdateVersion {
-                        e_tag: Some(etag),
-                        version: None,
-                    })
-                    .into(),
+                    PutMode::Update(object_store::UpdateVersion { e_tag, version }).into(),
                 )
                 .await?;
         } else {
