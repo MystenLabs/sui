@@ -211,8 +211,8 @@ async fn test_object_not_found_in_checkpoint() {
 
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert_eq!(err.code(), tonic::Code::NotFound);
-    assert!(err.message().contains("not found in checkpoint"));
+    assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+    assert!(err.message().contains("was not written at checkpoint"));
 }
 
 #[sim_test]
