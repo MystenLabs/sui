@@ -705,6 +705,13 @@ macro_rules! implement_storage_traits {
             ) -> Option<Object> {
                 ObjectCacheRead::get_object_by_key(self, object_id, version)
             }
+
+            fn get_latest_object_or_tombstone(
+                &self,
+                object_id: ObjectID,
+            ) -> Option<(ObjectKey, ObjectOrTombstone)> {
+                ObjectCacheRead::get_latest_object_or_tombstone(self, object_id)
+            }
         }
 
         impl ChildObjectResolver for $implementor {

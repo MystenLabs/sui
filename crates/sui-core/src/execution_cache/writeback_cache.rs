@@ -727,11 +727,10 @@ impl WritebackCache {
                 .get(object_id)
                 .and_then(|entry| entry.get_highest().map(|(_, o)| o.clone()))
                 .or_else(|| {
-                    let obj: Option<ObjectEntry> = self
-                        .store
-                        .get_latest_object_or_tombstone(*object_id)
-                        .unwrap()
-                        .map(|(_, o)| o.into());
+                    let obj: Option<ObjectEntry> =
+                        AuthorityStore::get_latest_object_or_tombstone(&self.store, *object_id)
+                            .unwrap()
+                            .map(|(_, o)| o.into());
                     obj
                 });
 
@@ -858,9 +857,7 @@ impl WritebackCache {
             },
             CacheResult::NegativeHit => None,
             CacheResult::Miss => {
-                let obj = self
-                    .store
-                    .get_latest_object_or_tombstone(*id)
+                let obj = AuthorityStore::get_latest_object_or_tombstone(&self.store, *id)
                     .expect("db error");
                 match obj {
                     Some((key, obj)) => {

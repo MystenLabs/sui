@@ -1184,9 +1184,11 @@ impl AuthorityStore {
         &self,
         object_id: ObjectID,
     ) -> Result<Option<(ObjectKey, ObjectOrTombstone)>, SuiError> {
-        let Some((object_key, store_object)) = self
-            .perpetual_tables
-            .get_latest_object_or_tombstone(object_id)?
+        let Some((object_key, store_object)) =
+            AuthorityPerpetualTables::get_latest_object_or_tombstone(
+                &self.perpetual_tables,
+                object_id,
+            )?
         else {
             return Ok(None);
         };

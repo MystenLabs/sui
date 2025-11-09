@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::ObjectKey;
+use super::{ObjectKey, ObjectOrTombstone};
 use crate::base_types::{ObjectID, ObjectRef, VersionNumber};
 use crate::object::Object;
 use crate::storage::WriteKind;
@@ -12,6 +12,14 @@ pub trait ObjectStore {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object>;
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object>;
+
+    fn get_latest_object_or_tombstone(
+        &self,
+        object_id: ObjectID,
+    ) -> Option<(ObjectKey, ObjectOrTombstone)> {
+        self.get_object(&object_id)
+            .map(|obj| (ObjectKey(object_id, obj.version()), obj.into()))
+    }
 
     fn multi_get_objects(&self, object_ids: &[ObjectID]) -> Vec<Option<Object>> {
         object_ids
@@ -37,6 +45,13 @@ impl<T: ObjectStore + ?Sized> ObjectStore for &T {
         (*self).get_object_by_key(object_id, version)
     }
 
+    fn get_latest_object_or_tombstone(
+        &self,
+        object_id: ObjectID,
+    ) -> Option<(ObjectKey, ObjectOrTombstone)> {
+        (*self).get_latest_object_or_tombstone(object_id)
+    }
+
     fn multi_get_objects(&self, object_ids: &[ObjectID]) -> Vec<Option<Object>> {
         (*self).multi_get_objects(object_ids)
     }
@@ -55,6 +70,13 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Box<T> {
         (**self).get_object_by_key(object_id, version)
     }
 
+    fn get_latest_object_or_tombstone(
+        &self,
+        object_id: ObjectID,
+    ) -> Option<(ObjectKey, ObjectOrTombstone)> {
+        (**self).get_latest_object_or_tombstone(object_id)
+    }
+
     fn multi_get_objects(&self, object_ids: &[ObjectID]) -> Vec<Option<Object>> {
         (**self).multi_get_objects(object_ids)
     }
@@ -71,6 +93,13 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Arc<T> {
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         (**self).get_object_by_key(object_id, version)
+    }
+
+    fn get_latest_object_or_tombstone(
+        &self,
+        object_id: ObjectID,
+    ) -> Option<(ObjectKey, ObjectOrTombstone)> {
+        (**self).get_latest_object_or_tombstone(object_id)
     }
 
     fn multi_get_objects(&self, object_ids: &[ObjectID]) -> Vec<Option<Object>> {
