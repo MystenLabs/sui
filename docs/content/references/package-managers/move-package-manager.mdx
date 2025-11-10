@@ -1,0 +1,370 @@
+---
+title: Package Management System
+description: Learn how to use the Move package manager system. 
+keywords: [ move, move reference, package management, package manager, move packages, move package management ]
+pagination_prev: null
+---
+
+As of November 2025, the Move package manager has changed. In this new design, the `Move.lock` file contains all information about published versions of packages. It is updated when you publish or upgrade packages and contains enough information to consistently rebuild a package.
+
+This document describes how the package manager works and how you can use it. 
+
+## System dependencies
+
+Unlike the previous package management system, explicitly including a system dependency is an error. You disable system dependencies by adding `system_dependencies = []` to the `[package]` section of your manifest. Each can specify its default system dependencies. For Sui, the defaults are `sui` and `std`. 
+
+You can specify non-default system dependencies like this: `system_dependencies = ["sui", "std", "sui_system"]`.
+
+Like externally resolved dependencies, system dependencies are pinned to different versions for each environment.
+
+## Environments
+
+To use a package manager, you must declare an environment in the project's manifest. The system provides default environments for Mainnet and Testnet, and the CLI supports publishing to Localnet, but in this case you must supply `--build-env` to indicate which manifest environment to use.
+
+When this document refers to "all dependencies," it means dependencies in the current environment.
+
+By default, the system uses the current chain ID from `sui client` to detect the correct environment from the manifest to use, which it keeps cached to support offline builds. By using the chain ID, the system decouples the client environment names, which are RPC specific.
+
+### Environment-specific dependency replacements
+
+In addition to the system dependencies, you can also override dependencies in specific environments using a `[dep-replacements]` section. For example, you can include the on-chain addresses for packages, although you should only use this in the case of a legacy package whose address isn't recorded in its lockfile. The system stores a dependency graph for each environment.
+
+## Pinned dependencies
+
+The purpose of the lockfile is to give stability by pinning consistent transitive dependency versions. These pinned versions are then used by other developers working on the same project, by CI, by source verifiers, and so forth.
+
+A pinned dependency is one that guarantees that future lookups of the same dependency yield the same source package. For example, a git dependency with a branch revision is not pinned, because the branch might be moved to a different commit, which might have different source code. To pin this kind of dependency, you must replace the branch name with a commit hash. Downloading the same commit should always produce the same source code.
+
+The system pins local dependencies of git dependencies as git dependencies with the paths corrected, but the system pins local dependencies of the root package as they are.
+
+Although pinned dependencies should not change, there are a few situations where they could. One possibility is local dependencies. If a single repository contains both a dependency and the depending project, you would want changes in the dependency to be reflected immediately in the depending project. Moreover, this doesn't cause inconsistencies in CI because presumably those changes would be committed together. 
+
+Another example would be if you want to temporarily change a cached dependency during debugging to rerun a test. To handle these situations, the system stores digests of all transitive dependency manifests and repins if any of them change.
+
+The system always pins dependencies as a group and only repins them in 2 situations:
+
+1. You explicitly ask for it by running `sui move update-deps`. This command repins all dependencies for the current environment.
+
+2. If the parts of the manifest that are relevant for the current environment have changed, then the system repins all dependencies.
+
+## Fetching dependencies
+
+Once you pin dependencies, the system fetches them to the local cache in `.move`. Since dependencies are pinned, the system doesn't need to keep around a git repository for the cache. The cache is simply a snapshot of the files.
+
+The system uses sparse shallow checkouts to make downloading fast. This requires care when multiple projects live in the same repository, but there is no fundamental problem.
+
+Since the cached files never change, it is safe to use them across projects. You don't need to have a copy of dependency sources within a project's build artifacts. However, the system might mark the files as read-only in this case, since the LSP might navigate to them during debugging and accidental changes could be problematic.
+
+You can choose to update the cache anyway, for example, if you want to locally test a change. You can only build with a dirty cache if you give a special command-line argument.
+
+Since the system always fetches after pinning, you never need to go to the network unless a dependency needs to be repinned because the manifest changed or you ran `update-deps`.
+
+## User operations
+
+This section details common operations that define how users interact with packages.
+
+### Update dependencies (repinning)
+
+Run `sui move update-deps` to execute resolution, pinning, fetching, and validation for all dependencies. 
+
+Run `sui move update-deps d1 d2` to execute steps only for the specified dependencies.
+
+### Build and test
+
+Once the system reestablishes the invariants, all the source packages for the pinned dependencies are available. The system always compiles against the source or bytecode it has.
+
+When running tests, the system computes the linkage first and then hands those packages to the VM for execution. This models what happens on-chain as closely as possible.
+
+When running tests, the system uses the test mode.
+
+### Normal publish and upgrade
+
+During normal publication, the system rechecks that the dependencies are published on the given network and that the relevant chain IDs are consistent. The system also ensures that the additional on-chain linkage requirements are satisfied. For example, on-chain packages can have extra dependencies in their linkage that they don't actually use, so the system needs to union in the on-chain linkages.
+
+The system updates the `Published.toml` file to include the updated `PublishedMetadata`.
+
+### Ephemeral publish
+
+The package manager supports ephemeral publication of a package and its dependencies for testing, for example, on Localnet. The ephemeral publish command works like a normal publish, except that the system reads the publication addresses for packages from and writes them to a separate file.
+
+The format of an ephemeral publication file is as follows:
+
+```toml
+# generated by move
+# this file contains metadata from ephemeral publications
+# this file should not be committed to source control
+
+build-env = "mainnet"
+chain-id = "localnet chain ID"
+
+[[published]]
+source = { root = true }
+published-at = "..."
+original-id = "..."
+upgrade-cap = "..."
+
+[[published]]
+source = { git = "...", rev = "...", path = "..." }
+published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
+original-id = "0x000000000000000000000000000000000000000000000000000000000000cc00"
+upgrade-cap = "0x000000000000000000000000000000000000000000000000000000000011cc00"
+
+[[published]]
+source = { local = "../foo" }
+published-at = "0x0000000000000000000000000000000000000000000000000000000000001234"
+original-id = "0x0000000000000000000000000000000000000000000000000000000000005678"
+upgrade-cap = "0x000000000000000000000000000000000000000000000000000000000022cc00"
+```
+
+The command `sui client test-publish <pubfile> --build-env <env>` builds the root package for one environment and then publishes it to a chain using the addresses from the ephemeral publication file.
+
+
+If `<pubfile>` is omitted, it defaults to `Pub.<env-name>.toml` where `<env-name>` is the name of the active environment, irrespective of the environments defined in the manifest. This file contains the addresses to use for publication.
+
+If `--build-env <env>` is omitted, it defaults to the `build-env` name of the file at `<file>`. If that is missing, the system errors. The build environment determines how the system resolves dependencies for the package.
+
+If `--build-env <env>` is present and different from the `build-env` in the file, the system fails.
+
+If `<file>` exists and `chain-id` doesn't match, the system doesn't explicitly fail, but the system marks the dependency addresses with `chain-id`, so you get an error from the pre-publication checks indicating that the chain ID of the dependency is different from the current chain ID.
+
+
+## Example manifest and lock files
+
+This section provides sample manifest and lock files for you to use as templates in your project.
+
+### `Move.toml`
+
+```toml
+[package]
+name = "example"
+edition = "2024" # the edition is not bumped just for package system changes
+...
+
+[environments]
+# the [environments] section contains entries mapping names to chain IDs
+#  mainnet = "35834a8a"
+#  testnet = "4c78adac"
+# but these two environments (mainnet and testnet) are added implicitly, so in
+# most cases the [environments] section is not needed
+#
+# one potential use for additional environments is if you want to maintain
+# multiple deployments on the same network; you could then use
+# [dep-replacements] to have different dependencies for the different deployments
+testnet_alpha = "4c78adac"
+testnet_beta  = "4c78adac"
+
+[dependencies]
+foo_1 = {
+	rename-from = "foo",                # needed for name consistency - see Validation section
+	override = true,                    # same as today - see Linking
+	git = "https://.../foo1.git",       # resolver specific fields
+	rev = "releases/v4",
+}
+
+foo_2 = {
+	rename-from = "foo",          # needed for name consistency - see Validation section
+	git = "https://.../foo2.git", # resolver specific fields
+	rev = "releases/v1",
+}
+
+bar = { r.mvr = "@protocol/bar" }
+
+# dependencies can contain a list of modes; if present then the dependencies are removed when
+# compiling for any mode not listed. For example, the following is a test-only dependency:
+baz = { ..., modes = ["test"] }
+
+[dep-replacements]
+# used to replace dependencies for specific environments
+mainnet.foo = {
+	git = "...",          # override the source of the dep
+	original-id = "....", # add an explicit address; see Backwards Compatibility
+	published-at = "...",
+	use-environment = "mainnet_alpha" # override/specify the dep's environment
+}
+```
+
+### `Move.lock`
+
+The `Move.lock` file contains information about pinned dependencies for each environment:
+
+```toml
+[move]
+version = 4
+
+# The `pinned` section contains a dependency graph for each environment. Each node in
+# the graph contains the pinned dependency location, a digest of the manifest of the dependency (to
+# detect local changes), and a set of outgoing edges. The edges are labeled by the name of the dependency.
+#
+# The identities of the nodes are arbitrary, but it seems nice to generate them from the package
+# names that dependencies declare for themselves (adding numbers to disambiguate if there are
+# collisions).
+#
+# There is also a node for the current package; the only thing that makes it special is that it has
+# the name of the current package as its identity (it will also always have `{ root = true }` as its
+# source)
+[pinned.mainnet.example]
+source = { root = true, use-environment = "mainnet" }
+manifest_digest = "..."
+
+deps.std = "MoveStdlib"
+deps.sui = "Sui"
+deps.foo = "Foo_0" # ensure rename-from is respected
+deps.non = "Foo_1" # ensure rename-from is respected
+deps.bar = "bar"
+
+[pinned.mainnet.MoveStdlib]
+source = { git = "...", path = "...", rev = "1234" }
+manifest_digest = "..."
+deps = {}
+
+[pinned.mainnet.Sui]
+source = { git = "...", path = "...", rev = "1234" }
+manifest_digest = "..."
+deps.std = "MoveStdlib"
+
+[pinned.mainnet.Foo_0]
+source = { git = "...", path = "...", rev = "bade", use-environment = "mainnet_alpha" }
+manifest_digest = "..."
+deps.std = "MoveStdlib"
+deps.sui = "Sui"
+
+[pinned.mainnet.Foo_1]
+source = { git = "...", path = "...", rev = "baaa" }
+manifest_digest = "..."
+deps.std = "MoveStdlib"
+deps.sui = "Sui"
+
+[pinned.mainnet.bar]
+source = { git = "...", path = "...", rev = "bara" }
+manifest_digest = "..."
+deps.baz = "baz"
+deps.std = "MoveStdlib"
+deps.sui = "Sui"
+
+[pinned.mainnet.baz]
+source = { git = "...", path = "...", rev = "baza", modes = ["test"] }
+manifest_digest = "..."
+deps.std = "MoveStdlib"
+deps.sui = "Sui"
+
+[pinned.mainnet.[...]] # other transitive dependencies from example
+
+# the same for testnet environment as above
+[pinned.testnet.MoveStdlib]
+source = { git = "...", path = "...", rev = "1234" }
+manifest_digest = "..."
+deps = {}
+
+[pinned.testnet.Sui]
+source = { git = "...", path = "...", rev = "1234" }
+manifest_digest = "..."
+deps.std = "MoveStdlib"
+
+# the same for other defined environments
+[pinned.env.Sui]
+source = { git = "...", path = "...", rev = "1234" }
+manifest_digest = "..."
+deps.std = "MoveStdlib"
+deps.sui = "Sui"
+```
+
+### `Published.toml`
+
+The `Published.toml` file contains information about historical publications in each environment:
+
+```toml
+# This file should be checked in
+
+[published.mainnet] # metadata from most recent publish to mainnet
+# generic move fields:
+chain-id = "35834a8a" # used to ensure the chain ID is consistent
+published-at = "..."
+original-id  = "..."
+version = "3"
+
+# other useful chain-specific stuff:
+upgrade-cap = "..."
+build-config = { ... }
+toolchain-version = "..."
+
+[published.testnet] # metadata from most recent publish to testnet
+chain-id = "4c78adac"
+published-at = "..."
+original-id = "..."
+version = "5"
+
+upgrade-cap = "..."
+toolchain-version = "..."
+build-config = "..."
+```
+
+## Schema for manifest and lock files
+
+```
+Move.toml
+    package
+        name : PackageName
+        edition : "2025"
+        version : Optional String
+        license : Optional String
+        authors : Optional Array of String
+        system_dependencies : Optional Array of String (default None)
+
+    environments : EnvironmentName → ChainID
+
+    dependencies : PackageName → DefaultDependency
+
+    dep-replacements : EnvironmentName → PackageName → ReplacementDependency
+
+DefaultDependency: # information used to locate a dependency
+    # dep-type specific fields ex. git = "...", rev = "..."
+    override: bool
+    rename-from: PackageName
+    modes: Optional Array of String
+
+ReplacementDependency:
+    optionally any DefaultDependency fields
+    optionally both AddressInfo fields      # see backwards compatibility
+    optionally
+    use-environment : Optional EnvironmentName
+
+Move.lock
+    move
+        version : 4
+
+    pinned : EnvironmentName -> PackageID →
+        source : PinnedDependency
+        manifest_digest : Digest
+        deps : PackageName → PackageID
+
+PinnedDependency:
+    ReplacementDependency with additional constraints - see Pinning
+
+Move.published
+    published : EnvironmentName →
+        chain-id: EnvironmentID
+        published-at: Object ID
+        original-id: Object ID
+        version: uint
+
+        # sui specific
+        upgrade-cap: Optional Object ID
+        toolchain-verison: String
+        build-config: table
+
+Published.toml
+    published : EnvironmentName →
+        chain-id: EnvironmentID
+        published-at: Object ID
+        original-id: Object ID
+        version: uint
+
+        # sui specific
+        upgrade-cap: Optional Object ID
+        toolchain-verison: String
+        build-config: table
+
+AddressInfo:
+    published-at : ObjectID
+    original-id  : ObjectID
+```
