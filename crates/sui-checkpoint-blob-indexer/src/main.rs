@@ -181,12 +181,7 @@ async fn main() -> anyhow::Result<()> {
         _ = tokio::signal::ctrl_c() => {
             tracing::info!("Received SIGINT, shutting down...");
         }
-        _ = async {
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .expect("Failed to install SIGTERM handler")
-                .recv()
-                .await
-        } => {
+        _ = install_sigterm_handler() => {
             tracing::info!("Received SIGTERM, shutting down...");
         }
     }
@@ -197,4 +192,17 @@ async fn main() -> anyhow::Result<()> {
     h_metrics.await?;
 
     Ok(())
+}
+
+#[cfg(unix)]
+async fn install_sigterm_handler() {
+    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .expect("Failed to install SIGTERM handler")
+        .recv()
+        .await;
+}
+
+#[cfg(not(unix))]
+async fn install_sigterm_handler() {
+    std::future::pending::<()>().await
 }
