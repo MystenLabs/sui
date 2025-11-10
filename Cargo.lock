@@ -8401,6 +8401,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "petgraph 0.8.1",
+ "proptest",
 ]
 
 [[package]]
