@@ -13,7 +13,7 @@ use tokio::{
     time,
 };
 
-use super::metrics::QuinnConnectionMetrics;
+use crate::quinn_metrics::QuinnConnectionMetrics;
 
 const CONNECTION_STAT_COLLECTION_INTERVAL: Duration = Duration::from_secs(60);
 

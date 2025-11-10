@@ -10,8 +10,6 @@ publish = false
 workspace = true
 
 [dependencies]
-anemo.workspace = true
-anemo-tower.workspace = true
 anyhow.workspace = true
 arc-swap.workspace = true
 async-trait.workspace = true
@@ -67,7 +65,6 @@ tempfile.workspace = true
 telemetry-subscribers.workspace = true
 
 [build-dependencies]
-anemo-build.workspace = true
 tonic-build.workspace = true
 
 [[bench]]
