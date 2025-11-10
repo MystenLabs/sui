@@ -676,18 +676,21 @@ pub fn find_environment(
 
     // we found the active env in the manifest's environments
     if let Some(ref active_env) = active_env {
-        if let Some(env_chain_id) = envs.get(active_env) {
-            if let Some(chain_id) = chain_id {
-                if env_chain_id != chain_id {
-                    bail!(
-                        "Error: Environment `{active_env}` has chain ID `{chain_id}` in your CLI \
+        if let Some(env_chain_id) = envs.get(active_env)
+            && let Some(chain_id) = chain_id
+        {
+            if env_chain_id != chain_id {
+                bail!(
+                    "Error: Environment `{active_env}` has chain ID `{chain_id}` in your CLI \
                 environment, but `Move.toml` expects `{active_env}` to have chain ID \
                 `{env_chain_id}`; this may indicate that `{active_env}` has been wiped or that you \
                 have a misconfigured CLI environment."
-                    );
-                }
-                return Ok(Environment::new(active_env.to_string(), chain_id.to_string()));
+                );
             }
+            return Ok(Environment::new(
+                active_env.to_string(),
+                chain_id.to_string(),
+            ));
         }
 
         if let Some(chain_id) = chain_id {
