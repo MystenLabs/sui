@@ -45,7 +45,7 @@ createBalanceManagerWithOwner(ownerAddress: string);
 
 ### `createBalanceManagerWithOwnerAndCaps`
 
-Use `createBalanceManagerWithOwnerAndCaps` to create a new balance manager with a custom owner and all three capabilities in one call. Returns an object with `manager`, `depositCap`, `withdrawCap`, and `tradeCap`. The call returns a function that takes a `Transaction` object.
+Use `createBalanceManagerWithOwnerAndCaps` to create a new balance manager with a custom owner and all three capabilities (deposit, withdraw, trade) in one call. Returns an object with `manager`, `depositCap`, `withdrawCap`, and `tradeCap`. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -55,7 +55,7 @@ Use `createBalanceManagerWithOwnerAndCaps` to create a new balance manager with 
 createBalanceManagerWithOwnerAndCaps(ownerAddress: string);
 ```
 
-### shareBalanceManager
+### `shareBalanceManager`
 
 Use `shareBalanceManager` to share a balance manager that was created but not yet shared. The call returns a function that takes a `Transaction` object.
 
@@ -69,7 +69,7 @@ shareBalanceManager(manager: TransactionArgument);
 
 ## Deposit and withdraw functions
 
-### depositIntoManager
+### `depositIntoManager`
 
 Use `depositIntoManager` to deposit funds into a balance manager. The call returns a function that takes a `Transaction` object.
 
@@ -83,7 +83,7 @@ Use `depositIntoManager` to deposit funds into a balance manager. The call retur
 depositIntoManager(managerKey: string, coinKey: string, amountToDeposit: number);
 ```
 
-### withdrawFromManager
+### `withdrawFromManager`
 
 Use `withdrawFromManager` to withdraw funds from a balance manager. The call returns a function that takes a `Transaction` object.
 
@@ -103,7 +103,7 @@ withdrawFromManager(
 );
 ```
 
-### withdrawAllFromManager
+### `withdrawAllFromManager`
 
 Use `withdrawAllFromManager` to withdraw all funds of a specific coin type from a balance manager. The call returns a function that takes a `Transaction` object.
 
@@ -117,7 +117,7 @@ Use `withdrawAllFromManager` to withdraw all funds of a specific coin type from 
 withdrawAllFromManager(managerKey: string, coinKey: string, recipient: string);
 ```
 
-### checkManagerBalance
+### `checkManagerBalance`
 
 Use `checkManagerBalance` to check the balance of a specific coin in a balance manager. The call returns a function that takes a `Transaction` object.
 
@@ -132,7 +132,7 @@ checkManagerBalance(managerKey: string, coinKey: string);
 
 ## Trade proof functions
 
-### generateProof
+### `generateProof`
 
 Use `generateProof` to generate a trade proof for the balance manager. Automatically calls the appropriate function based on whether a `tradeCap` is set. The call returns a function that takes a `Transaction` object.
 
@@ -144,7 +144,7 @@ Use `generateProof` to generate a trade proof for the balance manager. Automatic
 generateProof(managerKey: string);
 ```
 
-### generateProofAsOwner
+### `generateProofAsOwner`
 
 Use `generateProofAsOwner` to generate a trade proof as the owner of the balance manager. The call returns a function that takes a `Transaction` object.
 
@@ -156,9 +156,9 @@ Use `generateProofAsOwner` to generate a trade proof as the owner of the balance
 generateProofAsOwner(managerId: string);
 ```
 
-### generateProofAsTrader
+### `generateProofAsTrader`
 
-Use `generateProofAsTrader` to generate a trade proof using a `TradeCap`. The call returns a function that takes a `Transaction` object.
+Use `generateProofAsTrader` to generate a trade proof using a `tradeCap`. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -171,9 +171,9 @@ generateProofAsTrader(managerId: string, tradeCapId: string);
 
 ## Capability functions
 
-### mintTradeCap
+### `mintTradeCap`
 
-Use `mintTradeCap` to mint a `TradeCap` for the balance manager. The call returns a function that takes a `Transaction` object.
+Use `mintTradeCap` to mint a `tradeCap` for the balance manager. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -183,9 +183,9 @@ Use `mintTradeCap` to mint a `TradeCap` for the balance manager. The call return
 mintTradeCap(managerKey: string);
 ```
 
-### mintDepositCap
+### `mintDepositCap`
 
-Use `mintDepositCap` to mint a `DepositCap` for the balance manager. The call returns a function that takes a `Transaction` object.
+Use `mintDepositCap` to mint a `depositCap` for the balance manager. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -195,9 +195,9 @@ Use `mintDepositCap` to mint a `DepositCap` for the balance manager. The call re
 mintDepositCap(managerKey: string);
 ```
 
-### mintWithdrawalCap
+### `mintWithdrawalCap`
 
-Use `mintWithdrawalCap` to mint a `WithdrawCap` for the balance manager. The call returns a function that takes a `Transaction` object.
+Use `mintWithdrawalCap` to mint a `withdrawCap` for the balance manager. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -207,9 +207,9 @@ Use `mintWithdrawalCap` to mint a `WithdrawCap` for the balance manager. The cal
 mintWithdrawalCap(managerKey: string);
 ```
 
-### depositWithCap
+### `depositWithCap`
 
-Use `depositWithCap` to deposit funds into a balance manager using a `DepositCap`. The call returns a function that takes a `Transaction` object.
+Use `depositWithCap` to deposit funds into a balance manager using a `depositCap`. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -221,9 +221,9 @@ Use `depositWithCap` to deposit funds into a balance manager using a `DepositCap
 depositWithCap(managerKey: string, coinKey: string, amountToDeposit: number);
 ```
 
-### withdrawWithCap
+### `withdrawWithCap`
 
-Use `withdrawWithCap` to withdraw funds from a balance manager using a `WithdrawCap`. The call returns a function that takes a `Transaction` object.
+Use `withdrawWithCap` to withdraw funds from a balance manager using a `withdrawCap`. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -237,9 +237,9 @@ withdrawWithCap(managerKey: string, coinKey: string, amountToWithdraw: number);
 
 ## Referral functions
 
-### setReferral
+### `setReferral`
 
-Use `setReferral` to set a referral for the balance manager. Requires a `TradeCap` for permission checking. The call returns a function that takes a `Transaction` object.
+Use `setReferral` to set a referral for the balance manager. Requires a `tradeCap` for permission checking. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -251,9 +251,9 @@ Use `setReferral` to set a referral for the balance manager. Requires a `TradeCa
 setReferral(managerKey: string, referral: string, tradeCap: TransactionArgument);
 ```
 
-### unsetReferral
+### `unsetReferral`
 
-Use `unsetReferral` to remove a referral from the balance manager. Requires a `TradeCap` for permission checking. The call returns a function that takes a `Transaction` object.
+Use `unsetReferral` to remove a referral from the balance manager. Requires a `tradeCap` for permission checking. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -266,7 +266,7 @@ unsetReferral(managerKey: string, tradeCap: TransactionArgument);
 
 ## Registry functions
 
-### registerManager
+### `registerManager`
 
 Use `registerManager` to register a balance manager with the registry. The call returns a function that takes a `Transaction` object.
 
@@ -280,7 +280,7 @@ registerManager(managerKey: string);
 
 ## Read-only functions
 
-### owner
+### `owner`
 
 Use `owner` to get the owner address of a balance manager. The call returns a function that takes a `Transaction` object.
 
@@ -292,7 +292,7 @@ Use `owner` to get the owner address of a balance manager. The call returns a fu
 owner(managerKey: string);
 ```
 
-### id
+### `id`
 
 Use `id` to get the ID of a balance manager. The call returns a function that takes a `Transaction` object.
 
@@ -304,7 +304,7 @@ Use `id` to get the ID of a balance manager. The call returns a function that ta
 id(managerKey: string);
 ```
 
-### referralOwner
+### `referralOwner`
 
 Use `referralOwner` to get the owner address of a referral. The call returns a function that takes a `Transaction` object.
 
