@@ -6,11 +6,11 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use cached::proc_macro::cached;
 use cached::SizedCache;
+use cached::proc_macro::cached;
 use itertools::Itertools;
-use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+use jsonrpsee::core::RpcResult;
 use tracing::{info, instrument};
 
 use mysten_metrics::spawn_monitored_task;
@@ -22,19 +22,19 @@ use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::dynamic_field::get_dynamic_field_from_store;
-use sui_types::error::{SuiError, UserInputError};
+use sui_types::error::{SuiError, SuiErrorKind, UserInputError};
 use sui_types::governance::StakedSui;
 use sui_types::id::ID;
 use sui_types::object::ObjectRead;
 use sui_types::sui_serde::BigInt;
-use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::sui_system_state::PoolTokenExchangeRate;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
+use sui_types::sui_system_state::{SuiSystemState, get_validator_from_table};
 
 use crate::authority_state::StateRead;
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
-use crate::{with_tracing, ObjectProvider, SuiRpcModule};
+use crate::{ObjectProvider, SuiRpcModule, with_tracing};
 
 #[derive(Clone)]
 pub struct GovernanceReadApi {
@@ -389,10 +389,11 @@ async fn exchange_rates(
         None,
         system_state_summary.inactive_pools_size as usize,
     )? {
-        let pool_id: ID =
-            bcs::from_bytes(&df.1.bcs_name).map_err(|e| SuiError::ObjectDeserializationError {
+        let pool_id: ID = bcs::from_bytes(&df.1.bcs_name).map_err(|e| {
+            SuiErrorKind::ObjectDeserializationError {
                 error: e.to_string(),
-            })?;
+            }
+        })?;
         let validator = get_validator_from_table(
             state.get_object_store().as_ref(),
             system_state_summary.inactive_pools_id,
@@ -415,7 +416,7 @@ async fn exchange_rates(
             .into_iter()
             .map(|df| {
                 let epoch: EpochId = bcs::from_bytes(&df.1.bcs_name).map_err(|e| {
-                    SuiError::ObjectDeserializationError {
+                    SuiErrorKind::ObjectDeserializationError {
                         error: e.to_string(),
                     }
                 })?;

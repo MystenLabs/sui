@@ -4,17 +4,17 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{dataloader::DataLoader, indexmap::IndexMap, Context, Name, Object, Value};
+use async_graphql::{Context, Name, Object, Value, dataloader::DataLoader, indexmap::IndexMap};
 use prost_types::{self as proto, value::Kind};
 use serde_json::Number;
 use sui_indexer_alt_reader::{displays::DisplayKey, pg_reader::PgReader};
-use sui_types::{display::DisplayVersionUpdatedEvent, proto_value::ProtoVisitorBuilder, TypeTag};
+use sui_types::{TypeTag, display::DisplayVersionUpdatedEvent, proto_value::ProtoVisitorBuilder};
 use tokio::join;
 
 use crate::{
     api::scalars::{base64::Base64, json::Json},
     config::Limits,
-    error::{resource_exhausted, RpcError},
+    error::{RpcError, resource_exhausted},
 };
 
 use super::{display::Display, move_type::MoveType};

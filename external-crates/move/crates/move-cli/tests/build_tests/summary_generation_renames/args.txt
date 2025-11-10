@@ -1,5 +1,5 @@
 summary
-> ls -1 package_summaries/
+> LC_ALL=C ls -1 package_summaries/
 > cat package_summaries/A/A.json
 > cat package_summaries/CA/A.json
 > cat package_summaries/DA/A.json

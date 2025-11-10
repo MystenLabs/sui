@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_rpc::proto::sui::rpc::v2::move_package_service_client::MovePackageServiceClient;
 use sui_rpc::proto::sui::rpc::v2::GetDatatypeRequest;
+use sui_rpc::proto::sui::rpc::v2::move_package_service_client::MovePackageServiceClient;
 use test_cluster::TestClusterBuilder;
 
 use crate::v2::move_package_service::system_package_expectations::validate_validator_operation_cap_datatype;
@@ -44,9 +44,11 @@ async fn test_get_datatype_not_found() {
 
     let error = service.get_datatype(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::Internal);
-    assert!(error
-        .message()
-        .contains("Datatype 'NonExistentType' not found"));
+    assert!(
+        error
+            .message()
+            .contains("Datatype 'NonExistentType' not found")
+    );
 }
 
 #[sim_test]

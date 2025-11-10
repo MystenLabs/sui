@@ -8,9 +8,9 @@ use fastcrypto::encoding::{Base64, Encoding};
 
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
-use crate::tables::TransactionBCSEntry;
 use crate::FileType;
+use crate::handlers::{AnalyticsHandler, TransactionProcessor, process_transactions};
+use crate::tables::TransactionBCSEntry;
 
 #[derive(Clone)]
 pub struct TransactionBCSHandler {}
@@ -69,8 +69,8 @@ impl TransactionProcessor<TransactionBCSEntry> for TransactionBCSHandler {
 
 #[cfg(test)]
 mod tests {
-    use crate::handlers::transaction_bcs_handler::TransactionBCSHandler;
     use crate::handlers::AnalyticsHandler;
+    use crate::handlers::transaction_bcs_handler::TransactionBCSHandler;
     use fastcrypto::encoding::{Base64, Encoding};
     use simulacrum::Simulacrum;
     use std::sync::Arc;

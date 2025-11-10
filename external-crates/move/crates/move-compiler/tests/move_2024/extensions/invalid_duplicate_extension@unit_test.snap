@@ -11,9 +11,12 @@ error[E02001]: duplicate declaration, item, or annotation
  6 │   ╭ extend module a::m {
  7 │   │     public fun g(): u64 { 1 }
  8 │   │ }
-   │   ╰─' Previous declaration here
+   │   ╰─' Previous module extension is here
    ·   │
 11 │ ╭   extend module a::m {
 12 │ │       public fun g(): u64 { 1 }
 13 │ │   }
-   │ ╰───^ Duplicate module extension declaration
+   │ ╰───^ Duplicate module extension declaration with overlapping mode 'test'
+   │    
+   = Module extensions must be unique per address, module name, and mode
+   = Consider combining these module extensions

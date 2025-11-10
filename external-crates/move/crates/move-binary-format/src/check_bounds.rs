@@ -478,15 +478,13 @@ impl<'a> BoundsChecker<'a> {
                     // check type parameters in borrow are bound to the function type parameters
                     if let Some(field_inst) =
                         self.module.field_instantiations().get(idx.into_index())
-                    {
-                        if let Some(sig) = self
+                        && let Some(sig) = self
                             .module
                             .signatures()
                             .get(field_inst.type_parameters.into_index())
-                        {
-                            for ty in &sig.0 {
-                                self.check_type_parameter(ty, type_param_count)?
-                            }
+                    {
+                        for ty in &sig.0 {
+                            self.check_type_parameter(ty, type_param_count)?
                         }
                     }
                 }
@@ -504,15 +502,13 @@ impl<'a> BoundsChecker<'a> {
                     // check type parameters in call are bound to the function type parameters
                     if let Some(func_inst) =
                         self.module.function_instantiations().get(idx.into_index())
-                    {
-                        if let Some(sig) = self
+                        && let Some(sig) = self
                             .module
                             .signatures()
                             .get(func_inst.type_parameters.into_index())
-                        {
-                            for ty in &sig.0 {
-                                self.check_type_parameter(ty, type_param_count)?
-                            }
+                    {
+                        for ty in &sig.0 {
+                            self.check_type_parameter(ty, type_param_count)?
                         }
                     }
                 }
@@ -542,15 +538,13 @@ impl<'a> BoundsChecker<'a> {
                     // check type parameters in type operations are bound to the function type parameters
                     if let Some(struct_inst) =
                         self.module.struct_instantiations().get(idx.into_index())
-                    {
-                        if let Some(sig) = self
+                        && let Some(sig) = self
                             .module
                             .signatures()
                             .get(struct_inst.type_parameters.into_index())
-                        {
-                            for ty in &sig.0 {
-                                self.check_type_parameter(ty, type_param_count)?
-                            }
+                    {
+                        for ty in &sig.0 {
+                            self.check_type_parameter(ty, type_param_count)?
                         }
                     }
                 }
@@ -692,32 +686,32 @@ impl<'a> BoundsChecker<'a> {
                 | Reference(_) | MutableReference(_) | Vector(_) => (),
                 Datatype(idx) => {
                     check_bounds_impl(self.module.datatype_handles(), *idx)?;
-                    if let Some(sh) = self.module.datatype_handles().get(idx.into_index()) {
-                        if !sh.type_parameters.is_empty() {
-                            return Err(PartialVMError::new(
-                                StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
-                            )
-                            .with_message(format!(
-                                "expected {} type parameters got 0 (Struct)",
-                                sh.type_parameters.len(),
-                            )));
-                        }
+                    if let Some(sh) = self.module.datatype_handles().get(idx.into_index())
+                        && !sh.type_parameters.is_empty()
+                    {
+                        return Err(PartialVMError::new(
+                            StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+                        )
+                        .with_message(format!(
+                            "expected {} type parameters got 0 (Struct)",
+                            sh.type_parameters.len(),
+                        )));
                     }
                 }
                 DatatypeInstantiation(inst) => {
                     let (idx, type_params) = &**inst;
                     check_bounds_impl(self.module.datatype_handles(), *idx)?;
-                    if let Some(sh) = self.module.datatype_handles().get(idx.into_index()) {
-                        if sh.type_parameters.len() != type_params.len() {
-                            return Err(PartialVMError::new(
-                                StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
-                            )
-                            .with_message(format!(
-                                "expected {} type parameters got {}",
-                                sh.type_parameters.len(),
-                                type_params.len(),
-                            )));
-                        }
+                    if let Some(sh) = self.module.datatype_handles().get(idx.into_index())
+                        && sh.type_parameters.len() != type_params.len()
+                    {
+                        return Err(PartialVMError::new(
+                            StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+                        )
+                        .with_message(format!(
+                            "expected {} type parameters got {}",
+                            sh.type_parameters.len(),
+                            type_params.len(),
+                        )));
                     }
                 }
             }

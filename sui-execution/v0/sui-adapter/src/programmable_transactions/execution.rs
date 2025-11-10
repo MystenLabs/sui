@@ -106,7 +106,7 @@ mod checked {
         let finished = context.finish::<Mode>();
         // Save loaded objects for debug. We dont want to lose the info
         state_view.save_loaded_runtime_objects(loaded_child_objects);
-        state_view.record_execution_results(finished?);
+        state_view.record_execution_results(finished?)?;
         Ok(mode_results)
     }
 
@@ -703,7 +703,7 @@ mod checked {
             ));
         };
 
-        let binary_config = context.protocol_config.binary_config();
+        let binary_config = context.protocol_config.binary_config(None);
         let pool = &mut normalized::RcPool::new();
         let Ok(current_normalized) =
             existing_package.normalize(pool, &binary_config, /* include code */ true)
@@ -869,7 +869,7 @@ mod checked {
         context: &mut ExecutionContext<'_, '_, '_>,
         module_bytes: &[Vec<u8>],
     ) -> Result<Vec<CompiledModule>, ExecutionError> {
-        let binary_config = context.protocol_config.binary_config();
+        let binary_config = context.protocol_config.binary_config(None);
         let modules = module_bytes
             .iter()
             .map(|b| {

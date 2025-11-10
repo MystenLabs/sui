@@ -86,7 +86,7 @@ mod checked {
     ) {
         let input_objects = input_objects.into_inner();
         let mutable_inputs = if enable_expensive_checks {
-            input_objects.mutable_inputs().keys().copied().collect()
+            input_objects.all_mutable_inputs().keys().copied().collect()
         } else {
             HashSet::new()
         };
@@ -904,7 +904,7 @@ mod checked {
             }
         }
 
-        let binary_config = protocol_config.binary_config();
+        let binary_config = protocol_config.binary_config(None);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
                 .iter()

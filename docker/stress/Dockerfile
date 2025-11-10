@@ -1,4 +1,4 @@
-FROM rust:1.85-bullseye AS builder
+FROM rust:1.90-bullseye AS builder
 ARG PROFILE=release
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
@@ -13,13 +13,13 @@ COPY external-crates external-crates
 
 RUN cargo build --profile ${PROFILE} --bin stress
 
-FROM rust:1.85-bullseye
+FROM rust:1.90-bullseye
 ARG PROFILE=release
 ARG GIT_REVISION
 COPY --from=builder /sui/target/${PROFILE}/stress /usr/local/bin
 WORKDIR "$WORKDIR/sui"
 
-RUN apt-get update && apt-get -y --no-install-recommends install wget=1.21-1+deb11u1 \
+RUN apt-get update && apt-get -y --no-install-recommends install wget \
         iputils-ping netcat procps bind9-host bind9-dnsutils curl iproute2 git ca-certificates awscli
 
 RUN git clone https://github.com/MystenLabs/sui.git ; \

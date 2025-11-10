@@ -10,24 +10,24 @@ use move_core_types::language_storage::StructTag;
 use move_core_types::u256::U256;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use test_fuzz::runtime::num_traits::ToPrimitive;
 
 use sui_framework::BuiltInFramework;
 use sui_move_build::BuildConfig;
 use sui_types::base_types::{
-    ObjectID, SuiAddress, TransactionDigest, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME,
-    STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME,
+    ObjectID, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME,
+    STD_OPTION_STRUCT_NAME, SuiAddress, TransactionDigest,
 };
 use sui_types::dynamic_field::derive_dynamic_field_id;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Object;
-use sui_types::{parse_sui_type_tag, MOVE_STDLIB_ADDRESS};
+use sui_types::{MOVE_STDLIB_ADDRESS, parse_sui_type_tag};
 
 use crate::ResolvedCallArg;
 
-use super::{check_valid_homogeneous, HEX_PREFIX};
-use super::{resolve_move_function_args, SuiJsonValue};
+use super::{HEX_PREFIX, check_valid_homogeneous};
+use super::{SuiJsonValue, resolve_move_function_args};
 
 // Negative test cases
 #[test]
@@ -141,46 +141,53 @@ fn test_basic_args_linter_pure_args_bad() {
     let bad_hex_val = "0x1234AB  CD";
 
     let checks = vec![
-            // Although U256 value can be encoded as num, we enforce it must be a string
-            (
-                Value::from(123),
-                MoveTypeLayout::U256,
+        // Although U256 value can be encoded as num, we enforce it must be a string
+        (Value::from(123), MoveTypeLayout::U256),
+        // Space not allowed
+        (Value::from(" 9"), MoveTypeLayout::U8),
+        // Hex must start with 0x
+        (Value::from("AB"), MoveTypeLayout::U8),
+        // Too large
+        (Value::from("123456789"), MoveTypeLayout::U8),
+        // Too large
+        (
+            Value::from("123456789123456789123456789123456789"),
+            MoveTypeLayout::U64,
+        ),
+        // Too large
+        (
+            Value::from(
+                "123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789",
             ),
-             // Space not allowed
-             (Value::from(" 9"), MoveTypeLayout::U8),
-             // Hex must start with 0x
-             (Value::from("AB"), MoveTypeLayout::U8),
-             // Too large
-             (Value::from("123456789"), MoveTypeLayout::U8),
-             // Too large
-             (Value::from("123456789123456789123456789123456789"), MoveTypeLayout::U64),
-             // Too large
-             (Value::from("123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789"), MoveTypeLayout::U128),
-             // U64 value greater than 255 cannot be used as U8
-             (Value::from(900u64), MoveTypeLayout::U8),
-             // floats cannot be used as U8
-             (Value::from(0.4f32), MoveTypeLayout::U8),
-             // floats cannot be used as U64
-             (Value::from(3.4f32), MoveTypeLayout::U64),
-             // Negative cannot be used as U64
-             (Value::from(-19), MoveTypeLayout::U64),
-             // Negative cannot be used as Unsigned
-             (Value::from(-1), MoveTypeLayout::U8),
-              // u8 vector from bad hex repr
-            (
-                Value::from(bad_hex_val),
-                MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-            ),
-            // u8 vector from heterogeneous array
-            (
-                json!([1, 2, 3, true, 5, 6, 7]),
-                MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-            ),
-            // U64 deep nest, bad because heterogeneous array
-            (
-                json!([[[9, 53, 434], [0], [300]], [], [300, 4, 5, 6, 7]]),
-                MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64)))),
-            ),
+            MoveTypeLayout::U128,
+        ),
+        // U64 value greater than 255 cannot be used as U8
+        (Value::from(900u64), MoveTypeLayout::U8),
+        // floats cannot be used as U8
+        (Value::from(0.4f32), MoveTypeLayout::U8),
+        // floats cannot be used as U64
+        (Value::from(3.4f32), MoveTypeLayout::U64),
+        // Negative cannot be used as U64
+        (Value::from(-19), MoveTypeLayout::U64),
+        // Negative cannot be used as Unsigned
+        (Value::from(-1), MoveTypeLayout::U8),
+        // u8 vector from bad hex repr
+        (
+            Value::from(bad_hex_val),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+        ),
+        // u8 vector from heterogeneous array
+        (
+            json!([1, 2, 3, true, 5, 6, 7]),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+        ),
+        // U64 deep nest, bad because heterogeneous array
+        (
+            json!([[[9, 53, 434], [0], [300]], [], [300, 4, 5, 6, 7]]),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(
+                MoveTypeLayout::U64,
+            )))),
+        ),
     ];
 
     // Driver

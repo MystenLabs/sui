@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_data_ingestion_core::{create_remote_store_client, CheckpointReader};
+use sui_data_ingestion_core::{CheckpointReader, create_remote_store_client};
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_rpc::proto::sui::rpc::v2::{Checkpoint, GetCheckpointRequest, GetCheckpointResponse};
 use sui_rpc_api::{
-    proto::google::rpc::bad_request::FieldViolation, CheckpointNotFoundError, ErrorReason, RpcError,
+    CheckpointNotFoundError, ErrorReason, RpcError, proto::google::rpc::bad_request::FieldViolation,
 };
 use sui_types::digests::CheckpointDigest;
 
@@ -78,19 +78,18 @@ pub async fn get_checkpoint(
         );
     }
 
-    if read_mask.contains(Checkpoint::TRANSACTIONS_FIELD)
-        || read_mask.contains(Checkpoint::OBJECTS_FIELD)
+    if (read_mask.contains(Checkpoint::TRANSACTIONS_FIELD)
+        || read_mask.contains(Checkpoint::OBJECTS_FIELD))
+        && let Some(url) = checkpoint_bucket
     {
-        if let Some(url) = checkpoint_bucket {
-            let client = create_remote_store_client(url, vec![], 60)?;
-            let (checkpoint_data, _) =
-                CheckpointReader::fetch_from_object_store(&client, sequence_number).await?;
-            let checkpoint = sui_types::full_checkpoint_content::Checkpoint::from(
-                std::sync::Arc::into_inner(checkpoint_data).unwrap(),
-            );
+        let client = create_remote_store_client(url, vec![], 60)?;
+        let (checkpoint_data, _) =
+            CheckpointReader::fetch_from_object_store(&client, sequence_number).await?;
+        let checkpoint = sui_types::full_checkpoint_content::Checkpoint::from(
+            std::sync::Arc::into_inner(checkpoint_data).unwrap(),
+        );
 
-            message.merge(&checkpoint, &read_mask);
-        }
+        message.merge(&checkpoint, &read_mask);
     }
 
     Ok(GetCheckpointResponse::new(message))

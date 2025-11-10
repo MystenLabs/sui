@@ -15,6 +15,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions, TransactionBlockBytes,
 };
 use sui_macros::sim_test;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::gas_coin::GAS;
@@ -23,7 +24,6 @@ use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::Command;
 use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::TransactionData;
-use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_cluster::TestClusterBuilder;
 
 use sui_json_rpc_api::{IndexerApiClient, TransactionBuilderClient, WriteApiClient};

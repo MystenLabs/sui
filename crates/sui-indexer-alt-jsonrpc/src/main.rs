@@ -9,7 +9,7 @@ use sui_indexer_alt_jsonrpc::{
     config::RpcLayer,
     start_rpc,
 };
-use sui_indexer_alt_metrics::{uptime, MetricsService};
+use sui_indexer_alt_metrics::{MetricsService, uptime};
 use tokio::{fs, signal};
 use tokio_util::sync::CancellationToken;
 use tracing::info;

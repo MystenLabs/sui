@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use backon::{ExponentialBuilder, Retryable};
-use diesel_async::{scoped_futures::ScopedBoxFuture, AsyncPgConnection};
+use diesel_async::{AsyncPgConnection, scoped_futures::ScopedBoxFuture};
 pub(crate) use indexer_store::*;
 pub use pg_indexer_store::PgIndexerStore;
 

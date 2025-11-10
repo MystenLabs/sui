@@ -3,13 +3,13 @@
 
 use axum::extract::ConnectInfo;
 use futures::FutureExt;
+use jsonrpsee::MethodResponse;
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::types::{ErrorCode, ErrorObject, Id};
-use jsonrpsee::MethodResponse;
 use std::net::IpAddr;
 use std::time::SystemTime;
 use std::{net::SocketAddr, sync::Arc};
-use sui_core::traffic_controller::{parse_ip, policies::TrafficTally, TrafficController};
+use sui_core::traffic_controller::{TrafficController, parse_ip, policies::TrafficTally};
 use sui_json_rpc_api::TRANSACTION_EXECUTION_CLIENT_ERROR_CODE;
 use sui_types::traffic_control::ClientIdSource;
 use sui_types::traffic_control::Weight;
@@ -127,23 +127,23 @@ pub fn determine_client_ip<T>(
                     let header_contents = header_val.split(',').map(str::trim).collect::<Vec<_>>();
                     if num_hops == 0 {
                         error!(
-                                "x-forwarded-for: 0 specified. x-forwarded-for contents: {:?}. Please assign nonzero value for \
+                            "x-forwarded-for: 0 specified. x-forwarded-for contents: {:?}. Please assign nonzero value for \
                                 number of hops here, or use `socket-addr` client-id-source type if requests are not being proxied \
                                 to this node. Skipping traffic controller request handling.",
-                                header_contents,
-                            );
+                            header_contents,
+                        );
                         return None;
                     }
                     let contents_len = header_contents.len();
                     let Some(client_ip) = header_contents.get(contents_len - num_hops) else {
                         error!(
-                                "x-forwarded-for header value of {:?} contains {} values, but {} hops were specificed. \
+                            "x-forwarded-for header value of {:?} contains {} values, but {} hops were specificed. \
                                 Expected {} values. Skipping traffic controller request handling.",
-                                header_contents,
-                                contents_len,
-                                num_hops,
-                                num_hops + 1,
-                            );
+                            header_contents,
+                            contents_len,
+                            num_hops,
+                            num_hops + 1,
+                        );
                         return None;
                     };
                     parse_ip(client_ip)
@@ -158,7 +158,9 @@ pub fn determine_client_ip<T>(
             } else if let Some(header) = headers.get("X-Forwarded-For") {
                 do_header_parse(header)
             } else {
-                error!("x-forwarded-for header not present for request despite node configuring x-forwarded-for tracking type");
+                error!(
+                    "x-forwarded-for header not present for request despite node configuring x-forwarded-for tracking type"
+                );
                 None
             }
         }

@@ -26,8 +26,8 @@ use parking_lot::RwLock;
 use tokio::{task::JoinHandle, time::MissedTickBehavior};
 
 use crate::{
-    context::Context, core_thread::CoreThreadDispatcher, dag_state::DagState,
-    network::NetworkClient, round_tracker::PeerRoundTracker, BlockAPI as _,
+    BlockAPI as _, context::Context, core_thread::CoreThreadDispatcher, dag_state::DagState,
+    network::NetworkClient, round_tracker::PeerRoundTracker,
 };
 
 // Handle to control the RoundProber loop and read latest round gaps.
@@ -40,10 +40,10 @@ impl RoundProberHandle {
     pub(crate) async fn stop(self) {
         let _ = self.shutdown_notify.notify();
         // Do not abort prober task, which waits for requests to be cancelled.
-        if let Err(e) = self.prober_task.await {
-            if e.is_panic() {
-                std::panic::resume_unwind(e.into_panic());
-            }
+        if let Err(e) = self.prober_task.await
+            && e.is_panic()
+        {
+            std::panic::resume_unwind(e.into_panic());
         }
     }
 }
@@ -224,6 +224,7 @@ mod test {
     use parking_lot::RwLock;
 
     use crate::{
+        TestBlock, VerifiedBlock,
         commit::{CertifiedCommits, CommitRange},
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
@@ -233,7 +234,6 @@ mod test {
         round_prober::RoundProber,
         round_tracker::PeerRoundTracker,
         storage::mem_store::MemStore,
-        TestBlock, VerifiedBlock,
     };
 
     struct FakeThreadDispatcher {

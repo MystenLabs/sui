@@ -10,12 +10,12 @@ use sui_keys::key_derive::generate_new_key;
 use tempfile::TempDir;
 
 use sui_keys::keystore::{
-    AccountKeystore, Alias, FileBasedKeystore, GenerateOptions, GeneratedKey, InMemKeystore,
-    Keystore, ALIASES_FILE_EXTENSION,
+    ALIASES_FILE_EXTENSION, AccountKeystore, Alias, FileBasedKeystore, GenerateOptions,
+    GeneratedKey, InMemKeystore, Keystore,
 };
 use sui_types::crypto::{DefaultHash, SignatureScheme, SuiSignatureInner};
 use sui_types::{
-    base_types::{SuiAddress, SUI_ADDRESS_LENGTH},
+    base_types::{SUI_ADDRESS_LENGTH, SuiAddress},
     crypto::Ed25519SuiSignature,
 };
 
@@ -162,15 +162,19 @@ async fn update_alias_test() {
 
     // check that it errors on empty alias
     assert!(keystore.update_alias("new_alias", Some(" ")).await.is_err());
-    assert!(keystore
-        .update_alias("new_alias", Some("   "))
-        .await
-        .is_err());
+    assert!(
+        keystore
+            .update_alias("new_alias", Some("   "))
+            .await
+            .is_err()
+    );
     // check that alias is trimmed
-    assert!(keystore
-        .update_alias("new_alias", Some("  o "))
-        .await
-        .is_ok());
+    assert!(
+        keystore
+            .update_alias("new_alias", Some("  o "))
+            .await
+            .is_ok()
+    );
     assert_eq!(vec!["o"], alias_names(keystore.aliases()));
     // check the regex works and new alias can be only [A-Za-z][A-Za-z0-9-_]*
     assert!(keystore.update_alias("o", Some("_alias")).await.is_err());
@@ -190,10 +194,12 @@ async fn update_alias_test() {
         .await
         .unwrap();
 
-    assert!(keystore
-        .update_alias("my_alias_test", Some(&update))
-        .await
-        .is_err());
+    assert!(
+        keystore
+            .update_alias("my_alias_test", Some(&update))
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]

@@ -13,9 +13,8 @@ use anyhow::anyhow;
 use clap::Parser;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::EncodeDecodeBase64;
-use serde_json::{json, Value};
-use sui_config::{sui_config_dir, Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KEYSTORE_FILENAME};
-use sui_node::SuiNode;
+use serde_json::{Value, json};
+use sui_config::{SUI_KEYSTORE_FILENAME, sui_config_dir};
 use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -44,16 +43,6 @@ pub enum RosettaServerCommand {
         addr: SocketAddr,
         #[clap(long)]
         full_node_url: String,
-        #[clap(long, default_value = "/data")]
-        data_path: PathBuf,
-    },
-    StartOnlineServer {
-        #[clap(long, default_value = "localnet")]
-        env: SuiEnv,
-        #[clap(long, default_value = "0.0.0.0:9002")]
-        addr: SocketAddr,
-        #[clap(long)]
-        node_config: Option<PathBuf>,
         #[clap(long, default_value = "/data")]
         data_path: PathBuf,
     },
@@ -146,39 +135,6 @@ impl RosettaServerCommand {
                 let rosetta = RosettaOnlineServer::new(env, sui_client);
                 rosetta.serve(addr).await;
             }
-
-            RosettaServerCommand::StartOnlineServer {
-                env,
-                addr,
-                node_config,
-                data_path,
-            } => {
-                info!("Starting Rosetta Online Server with embedded Sui full node.");
-                info!("Data directory path: {data_path:?}");
-
-                let node_config = node_config.unwrap_or_else(|| {
-                    let path = sui_config_dir().unwrap().join(SUI_FULLNODE_CONFIG);
-                    info!("Using default node config from {path:?}");
-                    path
-                });
-
-                let mut config = NodeConfig::load(&node_config)?;
-                config.db_path = data_path.join("sui_db");
-                info!("Overriding Sui db path to : {:?}", config.db_path);
-
-                let registry_service =
-                    mysten_metrics::start_prometheus_server(config.metrics_address);
-                // Staring a full node for the rosetta server.
-                let rpc_address = format!("http://127.0.0.1:{}", config.json_rpc_address.port());
-                let _node = SuiNode::start(config, registry_service).await?;
-
-                let sui_client = wait_for_sui_client(rpc_address).await;
-
-                let rosetta_path = data_path.join("rosetta_db");
-                info!("Rosetta db path : {rosetta_path:?}");
-                let rosetta = RosettaOnlineServer::new(env, sui_client);
-                rosetta.serve(addr).await;
-            }
         };
         Ok(())
     }
@@ -189,7 +145,9 @@ async fn wait_for_sui_client(rpc_address: String) -> SuiClient {
         match SuiClientBuilder::default().build(&rpc_address).await {
             Ok(client) => return client,
             Err(e) => {
-                warn!("Error connecting to Sui RPC server [{rpc_address}]: {e}, retrying in 5 seconds.");
+                warn!(
+                    "Error connecting to Sui RPC server [{rpc_address}]: {e}, retrying in 5 seconds."
+                );
                 tokio::time::sleep(Duration::from_millis(5000)).await;
             }
         }

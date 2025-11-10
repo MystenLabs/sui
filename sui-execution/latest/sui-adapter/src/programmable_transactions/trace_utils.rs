@@ -345,10 +345,10 @@ pub fn add_move_value_info_from_value(
     type_: &Type,
     value: &Value,
 ) -> Result<(), ExecutionError> {
-    if trace_builder_opt.is_some() {
-        if let Some(move_value_info) = move_value_info_from_value(context, type_, value)? {
-            move_values.push(move_value_info);
-        }
+    if trace_builder_opt.is_some()
+        && let Some(move_value_info) = move_value_info_from_value(context, type_, value)?
+    {
+        move_values.push(move_value_info);
     }
     Ok(())
 }

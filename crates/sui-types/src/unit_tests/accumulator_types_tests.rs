@@ -211,7 +211,9 @@ fn test_accumulator_storage_savings() {
     );
 
     // Also verify the efficient object is using the right type
-    assert!(efficient_move_object
-        .type_()
-        .is_sui_balance_accumulator_field());
+    assert!(
+        efficient_move_object
+            .type_()
+            .is_sui_balance_accumulator_field()
+    );
 }

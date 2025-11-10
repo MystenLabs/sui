@@ -313,10 +313,11 @@ impl HintTest {
 
         writeln!(output, "-- test {test_idx} -------------------")?;
         let Some((hint, label_parts)) = inlay_hints.iter().find_map(|h| {
-            if h.position.line == lsp_line && h.position.character == lsp_col {
-                if let InlayHintLabel::LabelParts(parts) = &h.label {
-                    return Some((h, parts));
-                }
+            if h.position.line == lsp_line
+                && h.position.character == lsp_col
+                && let InlayHintLabel::LabelParts(parts) = &h.label
+            {
+                return Some((h, parts));
             }
             None
         }) else {

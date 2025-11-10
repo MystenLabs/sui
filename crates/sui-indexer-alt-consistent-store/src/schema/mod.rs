@@ -6,7 +6,7 @@ use std::sync::Arc;
 use sui_indexer_alt_framework::types::base_types::VersionDigest;
 
 use crate::{
-    db::{map::DbMap, Db},
+    db::{Db, map::DbMap},
     store,
 };
 

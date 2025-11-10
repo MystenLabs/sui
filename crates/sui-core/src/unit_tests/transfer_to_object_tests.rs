@@ -6,21 +6,22 @@ use std::{collections::HashSet, sync::Arc};
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair},
+    crypto::{AccountKeyPair, get_key_pair},
     digests::ObjectDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
-    error::{SuiError, UserInputError},
+    error::{SuiError, SuiErrorKind, UserInputError},
     execution_status::{ExecutionFailureStatus, ExecutionStatus},
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
-        CallArg, ObjectArg, ProgrammableTransaction, SharedObjectMutability, VerifiedCertificate,
-        TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        CallArg, ObjectArg, ProgrammableTransaction, SharedObjectMutability,
+        TEST_ONLY_GAS_UNIT_FOR_PUBLISH, VerifiedCertificate,
     },
 };
 
 use crate::{
     authority::{
+        AuthorityState,
         authority_test_utils::{certify_transaction, send_consensus},
         authority_tests::{
             build_programmable_transaction, execute_programmable_transaction,
@@ -28,7 +29,6 @@ use crate::{
         },
         move_integration_tests::build_and_publish_test_package_with_upgrade_cap,
         test_authority_builder::TestAuthorityBuilder,
-        AuthorityState,
     },
     move_call,
 };
@@ -359,7 +359,7 @@ async fn test_tto_intersection_input_and_receiving_objects() {
         let child_receiving_arg = CallArg::Object(ObjectArg::Receiving(child.0));
 
         // Duplicate object reference between receiving and input object arguments.
-        let SuiError::UserInputError { error } = runner
+        let SuiErrorKind::UserInputError { error } = runner
             .signing_error({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -372,13 +372,13 @@ async fn test_tto_intersection_input_and_receiving_objects() {
                 built.inputs.push(parent_receiving_arg);
                 built
             })
-            .await else {
+            .await.into_inner() else {
                 panic!("expected signing error");
             };
         assert!(matches!(error, UserInputError::DuplicateObjectRefInput));
 
         // Duplicate object reference in receiving object arguments.
-        let SuiError::UserInputError { error } = runner
+        let SuiErrorKind::UserInputError { error } = runner
             .signing_error({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -391,7 +391,7 @@ async fn test_tto_intersection_input_and_receiving_objects() {
                 built.inputs.push(child_receiving_arg);
                 built
             })
-            .await else {
+            .await.into_inner() else {
                 panic!("expected signing error");
             };
         assert!(matches!(error, UserInputError::DuplicateObjectRefInput));
@@ -488,7 +488,7 @@ async fn test_tto_invalid_receiving_arguments() {
         ];
 
         for (i, (mutate, expect)) in mutations.into_iter().enumerate() {
-            let SuiError::UserInputError { error } = runner.signing_error({
+            let SuiErrorKind::UserInputError { error } = runner.signing_error({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
                 let child = builder.obj(ObjectArg::Receiving(mutate(child.0))).unwrap();
@@ -498,7 +498,7 @@ async fn test_tto_invalid_receiving_arguments() {
                 };
                 builder.finish()
             })
-            .await else {
+            .await.into_inner() else {
                 panic!("failed on iteration {}", i);
             };
             assert!(
@@ -943,7 +943,7 @@ async fn verify_tto_not_locked(
     let fake_parent = effects
         .created()
         .iter()
-        .find(|(obj_ref, _)| obj_ref.0 != parent.0 .0 && obj_ref.0 != child.0 .0)
+        .find(|(obj_ref, _)| obj_ref.0 != parent.0.0 && obj_ref.0 != child.0.0)
         .cloned()
         .unwrap();
 

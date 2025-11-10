@@ -9,9 +9,9 @@ use move_core_types::parsing::{
 };
 use move_core_types::runtime_value::MoveValue;
 use sui_types::{
+    Identifier, TypeTag,
     base_types::{ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
     id::RESOLVED_SUI_ID,
-    Identifier, TypeTag,
 };
 
 use crate::{err, error, sp};

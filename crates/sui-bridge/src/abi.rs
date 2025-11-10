@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::encoding::{
-    BridgeMessageEncoding, ADD_TOKENS_ON_EVM_MESSAGE_VERSION, ASSET_PRICE_UPDATE_MESSAGE_VERSION,
+    ADD_TOKENS_ON_EVM_MESSAGE_VERSION, ASSET_PRICE_UPDATE_MESSAGE_VERSION, BridgeMessageEncoding,
     EVM_CONTRACT_UPGRADE_MESSAGE_VERSION, LIMIT_UPDATE_MESSAGE_VERSION,
 };
 use crate::encoding::{
@@ -19,7 +19,7 @@ use crate::types::{
 use ethers::types::Log;
 use ethers::{
     abi::RawLog,
-    contract::{abigen, EthLogDecode},
+    contract::{EthLogDecode, abigen},
     types::Address as EthAddress,
 };
 use serde::{Deserialize, Serialize};
@@ -119,7 +119,10 @@ impl EthBridgeEvent {
                             // We log error here.
                             // TODO: add metrics and alert
                             Err(e) => {
-                                return Err(BridgeError::Generic(format!("Manual intervention is required. Failed to convert TokensDepositedFilter log to EthToSuiTokenBridgeV1. This indicates incorrect parameters or a bug in the code: {:?}. Err: {:?}", event, e)));
+                                return Err(BridgeError::Generic(format!(
+                                    "Manual intervention is required. Failed to convert TokensDepositedFilter log to EthToSuiTokenBridgeV1. This indicates incorrect parameters or a bug in the code: {:?}. Err: {:?}",
+                                    event, e
+                                )));
                             }
                         };
 
@@ -569,10 +572,11 @@ mod tests {
                 ),
             },
         ));
-        assert!(e
-            .try_into_bridge_action(TxHash::random(), 0)
-            .unwrap()
-            .is_some());
+        assert!(
+            e.try_into_bridge_action(TxHash::random(), 0)
+                .unwrap()
+                .is_some()
+        );
 
         let e = EthBridgeEvent::EthSuiBridgeEvents(EthSuiBridgeEvents::TokensDepositedFilter(
             TokensDepositedFilter {

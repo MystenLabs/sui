@@ -6,31 +6,32 @@ use std::sync::Arc;
 
 use sui_types::{
     base_types::{FullObjectID, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair},
+    crypto::{AccountKeyPair, get_key_pair},
     effects::TransactionEffects,
+    error::SuiErrorKind,
     execution_status::{CommandArgumentError, ExecutionFailureStatus},
     object::Object,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::FullObjectKey,
     transaction::{
-        ProgrammableTransaction, SharedObjectMutability, Transaction,
-        TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        ProgrammableTransaction, SharedObjectMutability, TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        Transaction,
     },
 };
 
 use crate::authority::{
-    authority_test_utils::execute_sequenced_certificate_to_effects,
-    shared_object_version_manager::AssignedVersions, ExecutionEnv,
+    ExecutionEnv, authority_test_utils::execute_sequenced_certificate_to_effects,
+    shared_object_version_manager::AssignedVersions,
 };
 use crate::{
     authority::{
+        AuthorityState,
         authority_tests::{
             build_programmable_transaction, certify_shared_obj_transaction_no_execution,
             enqueue_all_and_execute_all, execute_programmable_transaction,
         },
         move_integration_tests::build_and_publish_test_package,
         test_authority_builder::TestAuthorityBuilder,
-        AuthorityState,
     },
     move_call,
 };
@@ -145,8 +146,7 @@ impl TestRunner {
 
             let _ = self
                 .execute_sequenced_certificate_to_effects(mutate_obj_cert, assigned_versions)
-                .await
-                .unwrap();
+                .await;
 
             n -= 1;
         }
@@ -565,7 +565,7 @@ impl TestRunner {
         &mut self,
         certificate: VerifiedCertificate,
         assigned_versions: AssignedVersions,
-    ) -> Result<(TransactionEffects, Option<ExecutionError>), SuiError> {
+    ) -> (TransactionEffects, Option<ExecutionError>) {
         execute_sequenced_certificate_to_effects(
             &self.authority_state,
             certificate,
@@ -606,8 +606,7 @@ async fn test_delete_shared_object() {
 
     let (effects, error) = user1
         .execute_sequenced_certificate_to_effects(cert, assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     assert!(error.is_none());
 
@@ -663,8 +662,7 @@ async fn test_delete_shared_object_immut() {
 
     let (effects, _) = user1
         .execute_sequenced_certificate_to_effects(cert, assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     assert!(effects.status().is_err());
 
@@ -717,8 +715,7 @@ async fn test_delete_shared_object_immut_mut_mut_interleave() {
     // Try and delete the shared object with the object passed as non-mutable
     let (effects, _) = user1
         .execute_sequenced_certificate_to_effects(cert_immut1, assigned_versions_immut1)
-        .await
-        .unwrap();
+        .await;
 
     assert!(effects.status().is_err());
 
@@ -733,8 +730,7 @@ async fn test_delete_shared_object_immut_mut_mut_interleave() {
     // Now do an actual deletion
     let (effects, error) = user1
         .execute_sequenced_certificate_to_effects(cert, assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     assert!(error.is_none());
     assert_eq!(effects.deleted().len(), 1);
@@ -770,8 +766,7 @@ async fn test_delete_shared_object_immut_mut_mut_interleave() {
     // Try to delete again with the object passed as mutable and make sure we get `InputObjectDeleted`.
     let (effects, _) = user1
         .execute_sequenced_certificate_to_effects(cert_immut2, assigned_versions_immut2)
-        .await
-        .unwrap();
+        .await;
 
     assert!(effects.status().is_err());
     assert_eq!(
@@ -809,8 +804,7 @@ async fn test_delete_shared_object_immut_mut_immut_interleave() {
 
     let (effects, _) = user1
         .execute_sequenced_certificate_to_effects(cert_immut1, assigned_versions_immut1)
-        .await
-        .unwrap();
+        .await;
 
     assert!(effects.status().is_err());
 
@@ -835,8 +829,7 @@ async fn test_delete_shared_object_immut_mut_immut_interleave() {
 
     let (effects, error) = user1
         .execute_sequenced_certificate_to_effects(cert, assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     assert!(error.is_none());
 
@@ -872,8 +865,7 @@ async fn test_delete_shared_object_immut_mut_immut_interleave() {
 
     let (effects, _) = user1
         .execute_sequenced_certificate_to_effects(cert_immut2, assigned_versions_immut2)
-        .await
-        .unwrap();
+        .await;
 
     assert!(effects.status().is_err());
 }
@@ -909,15 +901,13 @@ async fn test_mutate_after_delete() {
 
     let (orig_effects, _error) = user_1
         .execute_sequenced_certificate_to_effects(delete_cert, assigned_versions_delete)
-        .await
-        .unwrap();
+        .await;
 
     let digest = orig_effects.transaction_digest();
 
     let (effects, error) = user_1
         .execute_sequenced_certificate_to_effects(mutate_cert, assigned_versions_mutate)
-        .await
-        .unwrap();
+        .await;
 
     assert!(matches!(error.unwrap().kind(), InputObjectDeleted));
     assert!(effects.status().is_err());
@@ -964,15 +954,13 @@ async fn test_delete_after_delete() {
 
     let (orig_effects, _error) = user_1
         .execute_sequenced_certificate_to_effects(delete_cert0, assigned_versions_delete0)
-        .await
-        .unwrap();
+        .await;
 
     let digest = orig_effects.transaction_digest();
 
     let (effects, error) = user_1
         .execute_sequenced_certificate_to_effects(delete_cert1, assigned_versions_delete1)
-        .await
-        .unwrap();
+        .await;
 
     assert!(matches!(error.unwrap().kind(), InputObjectDeleted));
     assert!(effects.status().is_err());
@@ -1545,15 +1533,17 @@ async fn test_delete_with_shared_after_mutate_enqueued() {
     assert!(delete_effects.status().is_ok());
     let deleted_obj_ver = delete_effects.deleted()[0].1;
 
-    assert!(user_1
-        .object_exists_in_marker_table(
-            FullObjectKey::new(
-                FullObjectID::new(shared_obj_id, Some(initial_shared_version)),
-                deleted_obj_ver
-            ),
-            0
-        )
-        .is_some());
+    assert!(
+        user_1
+            .object_exists_in_marker_table(
+                FullObjectKey::new(
+                    FullObjectID::new(shared_obj_id, Some(initial_shared_version)),
+                    deleted_obj_ver
+                ),
+                0
+            )
+            .is_some()
+    );
 
     let mutate_effects = res.get(1).unwrap();
     assert!(mutate_effects.status().is_ok());
@@ -1587,8 +1577,7 @@ async fn test_wrap_not_allowed() {
 
     let (effects, error) = user_1
         .execute_sequenced_certificate_to_effects(wrap_cert, assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     assert!(matches!(
         error.unwrap().kind(),
@@ -1622,8 +1611,7 @@ async fn test_vec_delete() {
 
     let (_effects, error) = user_1
         .execute_sequenced_certificate_to_effects(cert, assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     assert!(error.is_none());
 }
@@ -1647,8 +1635,7 @@ async fn test_convert_to_owned_not_allowed() {
 
     let (effects, error) = user_1
         .execute_sequenced_certificate_to_effects(cert, assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     assert!(matches!(
         error.unwrap().kind(),
@@ -1679,8 +1666,7 @@ async fn test_freeze_not_allowed() {
 
     let (effects, error) = user_1
         .execute_sequenced_certificate_to_effects(cert, assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     assert!(matches!(
         error.unwrap().kind(),
@@ -1723,13 +1709,11 @@ async fn test_deletion_twice() {
 
     let (_effects, _error) = user_1
         .execute_sequenced_certificate_to_effects(delete_cert, delete_assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     let (effects, error) = user_1
         .execute_sequenced_certificate_to_effects(delete_cert_2, delete_assigned_versions_2)
-        .await
-        .unwrap();
+        .await;
 
     assert!(matches!(error.unwrap().kind(), InputObjectDeleted));
 
@@ -1760,8 +1744,7 @@ async fn test_certs_fail_after_delete() {
 
     let (_effects, _error) = user_1
         .execute_sequenced_certificate_to_effects(delete_cert, delete_assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     let mutate_obj_tx = user_1
         .mutate_shared_obj_tx(shared_obj_id, initial_shared_version)
@@ -1819,15 +1802,13 @@ async fn test_delete_before_two_mutations() {
 
     let (delete_effects, _error) = user_1
         .execute_sequenced_certificate_to_effects(delete_cert, delete_assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     let delete_digest = delete_effects.transaction_digest();
 
     let (effects, error) = user_1
         .execute_sequenced_certificate_to_effects(mutate_cert_1, mutate_assigned_versions_1)
-        .await
-        .unwrap();
+        .await;
 
     assert!(matches!(error.unwrap().kind(), InputObjectDeleted));
     assert!(effects.status().is_err());
@@ -1845,8 +1826,7 @@ async fn test_delete_before_two_mutations() {
 
     let (effects, error) = user_1
         .execute_sequenced_certificate_to_effects(mutate_cert_2, mutate_assigned_versions_2)
-        .await
-        .unwrap();
+        .await;
 
     assert!(matches!(error.unwrap().kind(), InputObjectDeleted));
     assert!(effects.status().is_err());
@@ -1893,8 +1873,8 @@ async fn test_object_lock_conflict() {
     let mutate_cert_res = user_1.certify_shared_obj_transaction(mutate_obj_tx).await;
 
     assert!(matches!(
-        mutate_cert_res.err(),
-        Some(SuiError::ObjectLockConflict { .. })
+        mutate_cert_res.err().map(|e| e.into_inner()),
+        Some(SuiErrorKind::ObjectLockConflict { .. })
     ));
 }
 
@@ -1934,16 +1914,14 @@ async fn test_owned_object_version_increments_on_cert_denied() {
 
     user_1
         .execute_sequenced_certificate_to_effects(delete_cert, delete_assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     let version = user_1.get_object_latest_version(owned_obj_id);
     assert_eq!(version, 4.into());
 
     user_1
         .execute_sequenced_certificate_to_effects(mutate_cert, mutate_assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     let next_version = user_1.get_object_latest_version(owned_obj_id);
     assert_eq!(next_version, 5.into());
@@ -1994,18 +1972,15 @@ async fn test_interspersed_mutations_with_delete() {
 
     let (_effects, _error) = user_1
         .execute_sequenced_certificate_to_effects(mutate_cert_1, mutate_assigned_versions_1)
-        .await
-        .unwrap();
+        .await;
 
     let (_effects, _error) = user_1
         .execute_sequenced_certificate_to_effects(delete_cert, delete_assigned_versions)
-        .await
-        .unwrap();
+        .await;
 
     let (effects, error) = user_1
         .execute_sequenced_certificate_to_effects(mutate_cert_2, mutate_assigned_versions_2)
-        .await
-        .unwrap();
+        .await;
 
     assert!(matches!(error.unwrap().kind(), InputObjectDeleted));
     assert!(effects.status().is_err());

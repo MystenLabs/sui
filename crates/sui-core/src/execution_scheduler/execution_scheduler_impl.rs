@@ -3,17 +3,16 @@
 
 use crate::{
     authority::{
-        authority_per_epoch_store::AuthorityPerEpochStore,
-        shared_object_version_manager::{Schedulable, WithdrawType},
-        AuthorityMetrics, ExecutionEnv,
+        AuthorityMetrics, ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
+        shared_object_version_manager::Schedulable,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{
-        balance_withdraw_scheduler::{
-            scheduler::BalanceWithdrawScheduler, BalanceSettlement, ScheduleStatus,
-            TxBalanceWithdraw,
-        },
         ExecutingGuard, PendingCertificateStats,
+        balance_withdraw_scheduler::{
+            BalanceSettlement, ScheduleStatus, TxBalanceWithdraw,
+            scheduler::BalanceWithdrawScheduler,
+        },
     },
 };
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -21,28 +20,73 @@ use mysten_common::debug_fatal;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::Mutex;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
-    base_types::{FullObjectID, SequenceNumber},
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    base_types::{FullObjectID, ObjectID},
+    digests::TransactionDigest,
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
-    storage::{InputKey, ObjectStore},
-    transaction::{SenderSignedData, TransactionDataAPI, TransactionKey},
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    storage::{ChildObjectResolver, InputKey},
+    transaction::{
+        SenderSignedData, SharedInputObject, SharedObjectMutability, TransactionData,
+        TransactionDataAPI, TransactionKey,
+    },
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
-use super::{overload_tracker::OverloadTracker, PendingCertificate};
+use super::{PendingCertificate, overload_tracker::OverloadTracker};
+
+/// Utility struct for collecting barrier dependencies
+pub(crate) struct BarrierDependencyBuilder {
+    dep_state: BTreeMap<ObjectID, BTreeSet<TransactionDigest>>,
+}
+
+impl BarrierDependencyBuilder {
+    pub fn new() -> Self {
+        Self {
+            dep_state: Default::default(),
+        }
+    }
+
+    /// process_tx must be called for each transaction in scheduling order. If the
+    /// transaction has a non-exclusive write to an object, the transaction digest is
+    /// stored to become a dependency of the eventual barrier transaction. If a
+    /// transaction has an exclusive write to an object, all pending non-exclusive write
+    /// transactions for that object are added to the barrier dependencies.
+    pub fn process_tx(
+        &mut self,
+        tx_digest: TransactionDigest,
+        tx: &TransactionData,
+    ) -> BTreeSet<TransactionDigest> {
+        let mut barrier_deps = BTreeSet::new();
+        for SharedInputObject { id, mutability, .. } in tx.kind().shared_input_objects() {
+            match mutability {
+                SharedObjectMutability::NonExclusiveWrite => {
+                    self.dep_state.entry(id).or_default().insert(tx_digest);
+                }
+                SharedObjectMutability::Mutable => {
+                    // If there were preceding non-exclusive writes to this object id, this
+                    // transaction is a barrier and must wait for them to finish.
+                    if let Some(deps) = self.dep_state.remove(&id) {
+                        barrier_deps.extend(deps);
+                    }
+                }
+                SharedObjectMutability::Immutable => (),
+            }
+        }
+        barrier_deps
+    }
+}
 
 #[derive(Clone)]
 pub struct ExecutionScheduler {
     object_cache_read: Arc<dyn ObjectCacheRead>,
-    object_store: Arc<dyn ObjectStore + Send + Sync>,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
@@ -83,19 +127,21 @@ impl Drop for PendingGuard<'_> {
 impl ExecutionScheduler {
     pub fn new(
         object_cache_read: Arc<dyn ObjectCacheRead>,
-        object_store: Arc<dyn ObjectStore + Send + Sync>,
+        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         tracing::info!("Creating new ExecutionScheduler");
-        let balance_withdraw_scheduler = Arc::new(Mutex::new(
-            Self::initialize_balance_withdraw_scheduler(epoch_store, &object_store),
-        ));
+        let balance_withdraw_scheduler =
+            Arc::new(Mutex::new(Self::initialize_balance_withdraw_scheduler(
+                epoch_store,
+                &object_cache_read,
+                child_object_resolver,
+            )));
         Self {
             object_cache_read,
-            object_store,
             transaction_cache_read,
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
@@ -106,25 +152,25 @@ impl ExecutionScheduler {
 
     fn initialize_balance_withdraw_scheduler(
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        object_store: &Arc<dyn ObjectStore + Send + Sync>,
+        object_cache_read: &Arc<dyn ObjectCacheRead>,
+        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
     ) -> Option<BalanceWithdrawScheduler> {
         let withdraw_scheduler_enabled =
             epoch_store.is_validator() && epoch_store.accumulators_enabled();
         if !withdraw_scheduler_enabled {
             return None;
         }
-        let starting_accumulator_version = object_store
+        let starting_accumulator_version = object_cache_read
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .expect("Accumulator root object must be present if balance accumulator is enabled")
             .version();
         Some(BalanceWithdrawScheduler::new(
-            Arc::new(object_store.clone()),
+            Arc::new(child_object_resolver),
             starting_accumulator_version,
-            // Use naive scheduler for now.
-            false,
         ))
     }
 
+    #[instrument(level = "debug", skip_all, fields(tx_digest = ?cert.digest()))]
     async fn schedule_transaction(
         self,
         cert: VerifiedExecutableTransaction,
@@ -147,6 +193,7 @@ impl ExecutionScheduler {
             )
             .into_iter()
             .collect();
+
         let receiving_object_keys: HashSet<_> = tx_data
             .receiving_objects()
             .into_iter()
@@ -196,6 +243,20 @@ impl ExecutionScheduler {
             .transaction_manager_num_enqueued_certificates
             .with_label_values(&["pending"])
             .inc();
+
+        if !execution_env.barrier_dependencies.is_empty() {
+            debug!(
+                "waiting for barrier dependencies to be executed: {:?}",
+                execution_env.barrier_dependencies
+            );
+            self.transaction_cache_read
+                .notify_read_executed_effects_digests(
+                    "wait_for_barrier_dependencies",
+                    &execution_env.barrier_dependencies,
+                )
+                .await;
+        }
+
         tokio::select! {
             _ = self.object_cache_read
                 .notify_read_input_objects(&missing_input_keys, &receiving_object_keys, epoch)
@@ -244,7 +305,7 @@ impl ExecutionScheduler {
 
     fn schedule_balance_withdraws(
         &self,
-        certs: Vec<(VerifiedExecutableTransaction, SequenceNumber, ExecutionEnv)>,
+        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         if certs.is_empty() {
@@ -252,20 +313,24 @@ impl ExecutionScheduler {
         }
         let mut withdraws = BTreeMap::new();
         let mut prev_version = None;
-        for (cert, version, _) in &certs {
+        for (cert, env) in &certs {
             let tx_withdraws = cert
                 .transaction_data()
                 .process_funds_withdrawals()
                 .expect("Balance withdraws should have already been checked");
             assert!(!tx_withdraws.is_empty());
+            let accumulator_version = env
+                .assigned_versions
+                .accumulator_version
+                .expect("accumulator_version must be set when there are withdraws");
             if let Some(prev_version) = prev_version {
                 // Transactions must be in order.
-                assert!(prev_version <= *version);
+                assert!(prev_version <= accumulator_version);
             }
-            prev_version = Some(*version);
+            prev_version = Some(accumulator_version);
             let tx_digest = *cert.digest();
             withdraws
-                .entry(*version)
+                .entry(accumulator_version)
                 .or_insert(Vec::new())
                 .push(TxBalanceWithdraw {
                     tx_digest,
@@ -287,7 +352,7 @@ impl ExecutionScheduler {
         let epoch_store = epoch_store.clone();
         spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
             let mut cert_map = HashMap::new();
-            for (cert, _, env) in certs {
+            for (cert, env) in certs {
                 cert_map.insert(*cert.digest(), (cert, env));
             }
             while let Some(result) = receivers.next().await {
@@ -345,10 +410,16 @@ impl ExecutionScheduler {
                             .collect();
 
                 while let Some((txns, env)) = futures.next().await {
+                    let mut barrier_deps = BarrierDependencyBuilder::new();
                     let txns = txns
                         .into_iter()
-                        .map(|tx| (tx, env.clone()))
+                        .map(|tx| {
+                            let deps = barrier_deps.process_tx(*tx.digest(), tx.transaction_data());
+                            let env = env.clone().with_barrier_dependencies(deps);
+                            (tx, env)
+                        })
                         .collect::<Vec<_>>();
+
                     scheduler.enqueue_transactions(txns, &epoch_store);
                 }
             }));
@@ -430,14 +501,10 @@ impl ExecutionScheduler {
         for (schedulable, env) in certs {
             match schedulable {
                 Schedulable::Transaction(tx) => {
-                    // Check if this transaction has withdraws based on the assigned versions
-                    match env.assigned_versions.withdraw_type {
-                        WithdrawType::Withdraw(accumulator_version) => {
-                            tx_with_withdraws.push((tx, accumulator_version, env));
-                        }
-                        WithdrawType::NonWithdraw => {
-                            ordinary_txns.push((tx, env));
-                        }
+                    if tx.transaction_data().has_funds_withdrawals() {
+                        tx_with_withdraws.push((tx, env));
+                    } else {
+                        ordinary_txns.push((tx, env));
                     }
                 }
                 s @ Schedulable::RandomnessStateUpdate(..) => {
@@ -525,9 +592,16 @@ impl ExecutionScheduler {
 
     /// Reconfigure internal state at epoch start. This resets the balance withdraw scheduler
     /// to the current accumulator root object version.
-    pub fn reconfigure(&self, new_epoch_store: &Arc<AuthorityPerEpochStore>) {
-        let scheduler =
-            Self::initialize_balance_withdraw_scheduler(new_epoch_store, &self.object_store);
+    pub fn reconfigure(
+        &self,
+        new_epoch_store: &Arc<AuthorityPerEpochStore>,
+        child_object_resolver: &Arc<dyn ChildObjectResolver + Send + Sync>,
+    ) {
+        let scheduler = Self::initialize_balance_withdraw_scheduler(
+            new_epoch_store,
+            &self.object_cache_read,
+            child_object_resolver.clone(),
+        );
         let mut guard = self.balance_withdraw_scheduler.lock();
         if let Some(old_scheduler) = guard.as_ref() {
             old_scheduler.close_epoch();
@@ -564,26 +638,31 @@ impl ExecutionScheduler {
 
 #[cfg(test)]
 mod test {
-    use super::{ExecutionScheduler, PendingCertificate};
-    use crate::authority::shared_object_version_manager::AssignedVersions;
+    use super::{BarrierDependencyBuilder, ExecutionScheduler, PendingCertificate};
     use crate::authority::ExecutionEnv;
-    use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
+    use crate::authority::shared_object_version_manager::AssignedVersions;
+    use crate::authority::{AuthorityState, authority_tests::init_state_with_objects};
     use crate::execution_scheduler::SchedulingSource;
+    use std::collections::BTreeSet;
     use std::{time::Duration, vec};
     use sui_test_transaction_builder::TestTransactionBuilder;
+    use sui_types::base_types::{SuiAddress, random_object_ref};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::object::Owner;
-    use sui_types::transaction::{SharedObjectMutability, VerifiedTransaction};
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::{
+        SharedObjectMutability, Transaction, TransactionData, TransactionKind, VerifiedTransaction,
+    };
     use sui_types::{
+        SUI_FRAMEWORK_PACKAGE_ID,
         base_types::{ObjectID, SequenceNumber},
         crypto::deterministic_random_account_key,
         object::Object,
         transaction::{CallArg, ObjectArg},
-        SUI_FRAMEWORK_PACKAGE_ID,
     };
     use tokio::time::Instant;
     use tokio::{
-        sync::mpsc::{error::TryRecvError, unbounded_channel, UnboundedReceiver},
+        sync::mpsc::{UnboundedReceiver, error::TryRecvError, unbounded_channel},
         time::sleep,
     };
 
@@ -596,7 +675,7 @@ mod test {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = ExecutionScheduler::new(
             state.get_object_cache_reader().clone(),
-            state.get_object_store().clone(),
+            state.get_child_object_resolver().clone(),
             state.get_transaction_cache_reader().clone(),
             tx_ready_certificates,
             &state.epoch_store_for_testing(),
@@ -637,18 +716,22 @@ mod test {
         // execution_scheduler output from rx_ready_certificates.
         let (execution_scheduler, mut rx_ready_certificates) = make_execution_scheduler(&state);
         // scheduler should output no transaction.
-        assert!(rx_ready_certificates
-            .try_recv()
-            .is_err_and(|err| err == TryRecvError::Empty));
+        assert!(
+            rx_ready_certificates
+                .try_recv()
+                .is_err_and(|err| err == TryRecvError::Empty)
+        );
         // scheduler should be empty at the beginning.
         assert_eq!(execution_scheduler.num_pending_certificates(), 0);
 
         // Enqueue empty vec should not crash.
         execution_scheduler.enqueue_transactions(vec![], &state.epoch_store_for_testing());
         // scheduler should output no transaction.
-        assert!(rx_ready_certificates
-            .try_recv()
-            .is_err_and(|err| err == TryRecvError::Empty));
+        assert!(
+            rx_ready_certificates
+                .try_recv()
+                .is_err_and(|err| err == TryRecvError::Empty)
+        );
 
         // Enqueue a transaction with existing gas object, empty input.
         let transaction = make_transaction(gas_objects[0].clone(), vec![]);
@@ -694,9 +777,11 @@ mod test {
         );
         // scheduler should output no transaction yet.
         sleep(Duration::from_secs(1)).await;
-        assert!(rx_ready_certificates
-            .try_recv()
-            .is_err_and(|err| err == TryRecvError::Empty));
+        assert!(
+            rx_ready_certificates
+                .try_recv()
+                .is_err_and(|err| err == TryRecvError::Empty)
+        );
 
         assert_eq!(execution_scheduler.num_pending_certificates(), 1);
 
@@ -709,9 +794,11 @@ mod test {
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
-        assert!(rx_ready_certificates
-            .try_recv()
-            .is_err_and(|err| err == TryRecvError::Empty));
+        assert!(
+            rx_ready_certificates
+                .try_recv()
+                .is_err_and(|err| err == TryRecvError::Empty)
+        );
 
         assert_eq!(execution_scheduler.num_pending_certificates(), 2);
 
@@ -866,26 +953,30 @@ mod test {
             vec![
                 (
                     transaction_read_0.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
                         tx_read_0_assigned_versions,
+                        None,
                     )),
                 ),
                 (
                     transaction_read_1.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
                         tx_read_1_assigned_versions,
+                        None,
                     )),
                 ),
                 (
                     transaction_default.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
                         tx_default_assigned_versions,
+                        None,
                     )),
                 ),
                 (
                     transaction_read_2.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
                         tx_read_2_assigned_versions,
+                        None,
                     )),
                 ),
             ],
@@ -1423,7 +1514,7 @@ mod test {
             vec![(
                 cancelled_transaction.clone(),
                 ExecutionEnv::new()
-                    .with_assigned_versions(AssignedVersions::non_withdraw(assigned_versions)),
+                    .with_assigned_versions(AssignedVersions::new(assigned_versions, None)),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -1453,5 +1544,122 @@ mod test {
         assert!(rx_ready_certificates.try_recv().is_err());
 
         execution_scheduler.check_empty_for_testing();
+    }
+
+    #[test]
+    fn test_barrier_dependency_builder() {
+        let make_transaction = |non_exclusive_writes: Vec<u32>, exclusive_writes: Vec<u32>| {
+            assert!(
+                non_exclusive_writes
+                    .iter()
+                    .all(|id| !exclusive_writes.contains(id))
+            );
+            assert!(
+                exclusive_writes
+                    .iter()
+                    .all(|id| !non_exclusive_writes.contains(id))
+            );
+
+            let non_exclusive_writes = non_exclusive_writes
+                .into_iter()
+                .map(|id| ObjectID::from_single_byte(id as u8));
+            let exclusive_writes = exclusive_writes
+                .into_iter()
+                .map(|id| ObjectID::from_single_byte(id as u8));
+            let mut builder = ProgrammableTransactionBuilder::new();
+            for non_exclusive_write in non_exclusive_writes {
+                builder
+                    .obj(ObjectArg::SharedObject {
+                        id: non_exclusive_write,
+                        initial_shared_version: SequenceNumber::new(),
+                        mutability: SharedObjectMutability::NonExclusiveWrite,
+                    })
+                    .unwrap();
+            }
+
+            for exclusive_write in exclusive_writes {
+                builder
+                    .obj(ObjectArg::SharedObject {
+                        id: exclusive_write,
+                        initial_shared_version: SequenceNumber::new(),
+                        mutability: SharedObjectMutability::Mutable,
+                    })
+                    .unwrap();
+            }
+
+            let tx = TransactionKind::ProgrammableTransaction(builder.finish());
+            let tx_data =
+                TransactionData::new(tx, SuiAddress::default(), random_object_ref(), 1, 1);
+            Transaction::from_data_and_signer(tx_data, vec![])
+        };
+
+        // One non-exclusive write, one exclusive write.
+        {
+            let mut barrier_dependency_builder = BarrierDependencyBuilder::new();
+            let tx1 = make_transaction(vec![1], vec![]);
+            let tx2 = make_transaction(vec![], vec![1]);
+
+            let tx1_deps =
+                barrier_dependency_builder.process_tx(*tx1.digest(), tx1.transaction_data());
+            let tx2_deps =
+                barrier_dependency_builder.process_tx(*tx2.digest(), tx2.transaction_data());
+            assert!(tx1_deps.is_empty());
+            assert_eq!(Vec::from_iter(tx2_deps), vec![*tx1.digest()]);
+        }
+
+        // One transaction has non-exclusive writes to two different objects, and then becomes
+        // a dependency of two barriers
+        {
+            let mut barrier_dependency_builder = BarrierDependencyBuilder::new();
+            let tx1 = make_transaction(vec![1, 2], vec![]);
+            let tx2 = make_transaction(vec![], vec![1]);
+            let tx3 = make_transaction(vec![], vec![2]);
+
+            let tx1_deps =
+                barrier_dependency_builder.process_tx(*tx1.digest(), tx1.transaction_data());
+            let tx2_deps =
+                barrier_dependency_builder.process_tx(*tx2.digest(), tx2.transaction_data());
+            let tx3_deps =
+                barrier_dependency_builder.process_tx(*tx3.digest(), tx3.transaction_data());
+            assert!(tx1_deps.is_empty());
+            assert_eq!(Vec::from_iter(tx2_deps), vec![*tx1.digest()]);
+            assert_eq!(Vec::from_iter(tx3_deps), vec![*tx1.digest()]);
+        }
+
+        // Ensure multiple-object dependences are merged
+        {
+            let mut barrier_dependency_builder = BarrierDependencyBuilder::new();
+            let tx1 = make_transaction(vec![1], vec![]);
+            let tx2 = make_transaction(vec![2], vec![]);
+            let tx3 = make_transaction(vec![], vec![1, 2]);
+
+            let tx1_deps =
+                barrier_dependency_builder.process_tx(*tx1.digest(), tx1.transaction_data());
+            let tx2_deps =
+                barrier_dependency_builder.process_tx(*tx2.digest(), tx2.transaction_data());
+            let tx3_deps =
+                barrier_dependency_builder.process_tx(*tx3.digest(), tx3.transaction_data());
+            assert!(tx1_deps.is_empty());
+            assert!(tx2_deps.is_empty());
+            assert_eq!(tx3_deps, BTreeSet::from([*tx1.digest(), *tx2.digest()]));
+        }
+
+        // Ensure dependency state is cleared
+        {
+            let mut barrier_dependency_builder = BarrierDependencyBuilder::new();
+            let tx1 = make_transaction(vec![1], vec![]);
+            let tx2 = make_transaction(vec![], vec![1]);
+            let tx3 = make_transaction(vec![], vec![1]);
+
+            let tx1_deps =
+                barrier_dependency_builder.process_tx(*tx1.digest(), tx1.transaction_data());
+            let tx2_deps =
+                barrier_dependency_builder.process_tx(*tx2.digest(), tx2.transaction_data());
+            let tx3_deps =
+                barrier_dependency_builder.process_tx(*tx3.digest(), tx3.transaction_data());
+            assert!(tx1_deps.is_empty());
+            assert_eq!(tx2_deps, BTreeSet::from([*tx1.digest()]));
+            assert!(tx3_deps.is_empty());
+        }
     }
 }

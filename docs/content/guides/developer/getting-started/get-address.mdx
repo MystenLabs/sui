@@ -60,7 +60,9 @@ This command specifies the key pair scheme to be of type `ed25519`.
 
 Every Sui address has a _recovery phrase_. Recovery phrases are a series of 12 randomly generated words that you use to recover the address if you lose access to the address's key pair. 
 
-:::caution
+:::danger
+
+Recovery phrases are only shown once. They are not stored anywhere automatically and cannot be retrieved if you do not save them yourself.
 
 Store recovery phrases securely and do not share them with anyone, as they provide access to any objects and tokens that an address owns.
 
@@ -69,7 +71,7 @@ Store recovery phrases securely and do not share them with anyone, as they provi
 To recover an address using the recovery phrase, use the command:
 
 ```
-sui client import-address
+$ sui client import-address
 ```
 
 Then, enter the 12-word recovery phrase. You must enter the words in the correct order. If successful, the CLI restores your address and prints it in the CLI output.
@@ -90,6 +92,12 @@ This file contains content similar to the following:
 ```
 
 When you create a new address on your system, a new line is added to this file that consists of the address's private key. Make sure you do not expose this to anyone, as they can use it to get access to your account.
+
+:::danger 
+
+The `sui.keystore` file is **not** the same as your machine's local keystore that contains passwords for websites, biometric data like fingerprints, or other authentication credentials. Your machine's local keystore cannot sign and submit transactions on Sui. Only addresses with their associated keys included in the `sui.keystore` file can sign and submit transactions.
+
+:::
 
 ## Address aliases 
 
@@ -197,13 +205,13 @@ If an address is not provided, this command returns all objects owned by the act
     <h3>Next steps</h3>
   </div>
   <div className="next-steps-grid">
-    <Card 
+    <Card className="plausible-event-name=address+faucet+button"
       title="Get SUI from Faucet" 
       href="/guides/developer/getting-started/get-coins"
     >
       Obtain SUI from a faucet to deploy packages on Testnet.
     </Card>
-        <Card 
+        <Card className="plausible-event-name=address+hello+button"
       title="Hello, World!" 
       href="/guides/developer/getting-started/hello-world"
     >

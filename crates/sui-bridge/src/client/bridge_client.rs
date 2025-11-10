@@ -3,7 +3,7 @@
 
 //! `BridgeClient` talks to BridgeNode.
 
-use crate::crypto::{verify_signed_bridge_action, BridgeAuthorityPublicKeyBytes};
+use crate::crypto::{BridgeAuthorityPublicKeyBytes, verify_signed_bridge_action};
 use crate::error::{BridgeError, BridgeResult};
 use crate::server::APPLICATION_JSON;
 use crate::types::{BridgeAction, BridgeCommittee, VerifiedSignedBridgeAction};
@@ -245,8 +245,8 @@ mod tests {
     use fastcrypto::hash::{HashFunction, Keccak256};
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
-    use sui_types::bridge::{BridgeChainId, TOKEN_ID_BTC, TOKEN_ID_USDT};
     use sui_types::TypeTag;
+    use sui_types::bridge::{BridgeChainId, TOKEN_ID_BTC, TOKEN_ID_USDT};
     use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
 
     #[tokio::test]

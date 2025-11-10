@@ -33,6 +33,7 @@ const guides = [
 			'guides/developer/getting-started/get-address',
 			'guides/developer/getting-started/get-coins',
 			'guides/developer/getting-started/hello-world',
+			'guides/developer/getting-started/app-frontends',
 			'guides/developer/getting-started/next-steps',
 		],
 	},
@@ -53,6 +54,8 @@ const guides = [
 			'guides/developer/sui-101/sign-and-send-txn',
 			'guides/developer/sui-101/sponsor-txn',
 			'guides/developer/sui-101/avoid-equivocation',
+			'guides/developer/sui-101/common-errors',
+
 			{
 				type: 'category',
 				label: 'Working with PTBs',
@@ -63,7 +66,7 @@ const guides = [
 				items: [
 					'guides/developer/sui-101/building-ptb',
 					'guides/developer/sui-101/coin-mgt',
-					'guides/developer/sui-101/simulating-refs'
+					'guides/developer/sui-101/simulating-refs',
 				],
 			},
 		],
@@ -201,6 +204,7 @@ const guides = [
 			'guides/operator/archives',
 			'guides/operator/exchange-integration',
 			'guides/operator/bridge-node-configuration',
+			'guides/operator/indexer-stack-setup',
 			{
 				type: 'category',
 				label: 'Sui Validator Nodes',

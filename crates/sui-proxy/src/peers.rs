@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use fastcrypto::ed25519::Ed25519PublicKey;
 use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::ToFromBytes;
 use futures::stream::{self, StreamExt};
 use once_cell::sync::Lazy;
-use prometheus::{register_counter_vec, register_histogram_vec};
 use prometheus::{CounterVec, HistogramVec};
+use prometheus::{register_counter_vec, register_histogram_vec};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::{
@@ -540,7 +540,7 @@ fn append_path_segment(mut url: Url, segment: &str) -> Option<Url> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::admin::{generate_self_cert, CertKeyPair};
+    use crate::admin::{CertKeyPair, generate_self_cert};
     use serde::Serialize;
     use sui_types::base_types::SuiAddress;
     use sui_types::bridge::{BridgeCommitteeSummary, BridgeSummary, MoveTypeCommitteeMember};

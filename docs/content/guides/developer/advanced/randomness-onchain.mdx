@@ -83,7 +83,7 @@ For many use cases, like when selecting a raffle winner or lottery numbers, this
 
 ### Option 1: Divide logic
 
-Split the logic into two functions that different transactions must call.
+Split the logic into 2 functions that different transactions must call.
 
 1. The first transaction, `tx1`, calls the first function, which fetches a random value and stores it in an object that is unreadable by other commands in `tx1`. For example, the function might transfer the object to the caller or store the transaction digest and check that it's different on read.
 
@@ -163,7 +163,7 @@ public fun attack(guess: u8, r: &Random, ctx: &mut TxContext): Ticket {
 }
 ```
 
-The attacker can now call `attack` with a guess, and always revert the fee transfer if the guess is incorrect.
+The attacker can now call `attack` with a guess and always revert the fee transfer if the guess is incorrect.
 
 To protect against composition attacks, define your function as a private `entry` function so functions from other modules cannot call it.
 
@@ -175,7 +175,7 @@ The Move compiler enforces this behavior by rejecting `public` functions with `R
 
 ## Programmable transaction block (PTB) restrictions
 
-A similar attack to the one previously described involves PTBs _even_ when `play_dice` is defined as a private `entry` function.
+A similar attack to the one previously described involves PTBs even when `play_dice` is defined as a private `entry` function.
 For example, consider the `entry play_dice(guess: u8, fee: Coin<SUI>, r: &Random, ctx: &mut TxContext): Ticket { … }` function defined earlier, the attacker can publish the function
 
 ```move

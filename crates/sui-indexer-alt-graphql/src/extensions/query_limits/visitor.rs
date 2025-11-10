@@ -5,12 +5,12 @@ use std::{collections::HashMap, convert::Infallible, rc::Rc, sync::LazyLock};
 
 use anyhow::anyhow;
 use async_graphql::{
+    Name, Pos, Positioned, Variables,
     parser::types::{
         ExecutableDocument, Field, FragmentDefinition, OperationDefinition, OperationType,
         Selection, SelectionSet,
     },
     registry::{MetaField, MetaType, Registry},
-    Name, Pos, Positioned, Variables,
 };
 use async_graphql_value::{ConstValue, Value};
 

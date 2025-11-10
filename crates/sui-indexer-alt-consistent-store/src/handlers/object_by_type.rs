@@ -5,13 +5,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sui_indexer_alt_framework::{
-    pipeline::{sequential, Processor},
-    types::{base_types::VersionDigest, full_checkpoint_content::CheckpointData, object::Object},
+    pipeline::{Processor, sequential},
+    types::{base_types::VersionDigest, full_checkpoint_content::Checkpoint, object::Object},
 };
 
 use crate::{
     restore::Restore,
-    schema::{object_by_type::Key, Schema},
+    schema::{Schema, object_by_type::Key},
     store::{Connection, Store},
 };
 
@@ -29,7 +29,7 @@ impl Processor for ObjectByType {
     const NAME: &'static str = "object_by_type";
     type Value = Value;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Value>> {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Value>> {
         let input_objects = checkpoint_input_objects(checkpoint)?;
         let output_objects = checkpoint_output_objects(checkpoint)?;
         let mut values = vec![];
@@ -55,10 +55,9 @@ impl Processor for ObjectByType {
             if let Some(key_in) = input_objects
                 .get(&id)
                 .and_then(|(input, _)| Key::from_object(input))
+                && key_in != key_out
             {
-                if key_in != key_out {
-                    values.push(Value::Del(key_in));
-                }
+                values.push(Value::Del(key_in));
             }
 
             // The object is always put at its output location.
@@ -93,11 +92,12 @@ impl sequential::Handler for ObjectByType {
     const MAX_BATCH_CHECKPOINTS: usize = 1;
 
     /// No batching actually happens, because `MAX_BATCH_CHECKPOINTS` is 1.
-    fn batch(batch: &mut Self::Batch, values: Vec<Value>) {
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Value>) {
         batch.extend(values);
     }
 
     async fn commit<'a>(
+        &self,
         batch: &Self::Batch,
         conn: &mut Connection<'a, Schema>,
     ) -> anyhow::Result<usize> {

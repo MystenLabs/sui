@@ -1,12 +1,12 @@
 ---
 title: SUI Bridging
-description: Moving tokens from one blockchain to another is called bridging. To bridge tokens from another blockchain to Sui, you can use the Sui Bridge, Wormhole Connect, or Wormhole Portal Bridge. 
-keywords: [ bridge, sui bridge, wormhole connect, wormhole portal bridge, bridging tokens to sui, how to bridge tokens, can you bridge tokens, how to bring token to sui, move token to sui, move tokens between blockchains, move tokens between chains ]
+description: Moving tokens from one blockchain to another is called bridging. To bridge tokens from another blockchain to Sui, you can use the Sui Bridge, Wormhole Connect, Wormhole Portal Bridge, or ZetaChain.
+keywords: [ bridge, sui bridge, wormhole connect, wormhole portal bridge, zetachain, bridging tokens to sui, how to bridge tokens, can you bridge tokens, how to bring token to sui, move token to sui, move tokens between blockchains, move tokens between chains, omnichain, cross-chain messaging ]
 ---
 
 Bridging is the process of moving tokens from one blockchain to another. When you use a bridge to move tokens between blockchains that are incompatible, the tokens are wrapped and converted to a derivative token for the target blockchain. You can transfer tokens from other blockchains to Sui, or transfer SUI tokens to other blockchains.
 
-Sui supports bridging through [Sui Bridge](#sui-bridge), [Wormhole Connect](#wormhole-connect), and [Wormhole Portal Bridge](#wormhole-portal-bridge).
+Sui supports bridging through [Sui Bridge](#sui-bridge), [Wormhole Connect](#wormhole-connect), [Wormhole Portal Bridge](#wormhole-portal-bridge), and [ZetaChain](#zetachain).
 
 ## Sui Bridge
 
@@ -111,6 +111,77 @@ See the [Wormhole FAQ](https://wormhole.com/docs/products/connect/overview/) for
 ## Wormhole Portal Bridge
 
 The [Portal Bridge](https://www.portalbridge.com/sui), powered by Wormhole, supports bridging assets from any of the [22 supported Wormhole chains](https://www.wormhole.com/network).
+
+## ZetaChain {#zetachain}
+
+[ZetaChain](https://www.zetachain.com/) enables omnichain smart contracts and cross-chain messaging between Sui and other blockchains. The ZetaChain protocol supports bridging digital assets and sending arbitrary messages across Bitcoin, Ethereum, Polygon, BSC, Avalanche, and other major chains.
+
+### Supported assets
+
+ZetaChain supports native cross-chain transfers tokens such as:
+
+- **Bitcoin (BTC)**: Native Bitcoin transfers via HTLC
+- **Ethereum (ETH)**: Native ETH and ERC-20 tokens including USDC, USDT, WBTC
+- **Polygon (MATIC)**: Native MATIC and Polygon tokens
+- **BSC (BNB)**: Native BNB and BEP-20 tokens
+- **Avalanche (AVAX)**: Native AVAX and Avalanche C-Chain tokens
+- **Layer 2 chains**: Arbitrum, Optimism, Base
+
+Assets bridged through ZetaChain are represented as ZRC-20 tokens on the ZetaChain network and can be transferred to any connected chain.
+
+See the [ZetaChain supported networks](https://www.zetachain.com/docs/developers/chains/list) for the complete list.
+
+### Omnichain messaging
+
+Beyond asset transfers, ZetaChain's Universal App framework enables smart contracts to communicate across all connected chains. Developers can build applications that call functions on contracts across multiple blockchains, read and write state across chains through ZetaChain's validators, and execute complex multi-chain workflows in a single transaction.
+
+### How it works
+
+ZetaChain uses a proof-of-stake validator network to observe transactions on external chains and relay messages between them. When you initiate a cross-chain transaction:
+
+1. You interact with a gateway contract on the source chain (Sui or any supported chain).
+2. ZetaChain validators observe and verify the transaction.
+3. The validators execute any omnichain contract logic on ZetaChain.
+4. The validators trigger the corresponding action on the destination chain.
+
+All cross-chain operations are handled automatically without manual intervention.
+
+### Gas handling
+
+ZetaChain provides flexible gas payment options:
+
+- **Pay on source chain**: Pay all fees upfront on the source chain in ZETA, USDC, or USDT.
+- **Automatic gas drop**: Receive native tokens on the destination chain for transaction fees.
+- **Custom gas logic**: Implement application-specific gas payment models.
+
+### Gateway contracts
+
+Interact with ZetaChain through gateway contracts deployed on each supported chain:
+
+**Athens Testnet**
+- Sepolia (Ethereum): `0x0c487a766110c85d301d96e33579c5b317fa4995`
+- Base Sepolia: `0x0c487a766110c85d301d96e33579c5b317fa4995`
+- Amoy (Polygon): `0x0c487a766110c85d301d96e33579c5b317fa4995`
+- BSC Testnet: `0x0c487a766110c85d301d96e33579c5b317fa4995`
+
+Always verify gateway addresses from the [official ZetaChain documentation](https://www.zetachain.com/docs/reference/network/contracts) before integrating.
+
+### Getting started
+
+Install the ZetaChain CLI:
+
+```bash
+npm install -g zetachain
+```
+
+Explore example contracts and tutorials:
+- [Universal Apps Tutorial](https://www.zetachain.com/docs/developers/tutorials/intro)
+- [Cross-Chain Messaging Guide](https://www.zetachain.com/docs/developers/tutorials/messaging)
+- [Example Contracts](https://github.com/zeta-chain/example-contracts)
+
+View transactions on the ZetaChain explorers:
+- [Testnet Explorer](https://testnet.zetascan.com/)
+- [Mainnet Explorer](https://zetascan.com/)
 
 ## Token address list {#token-address-list}
 

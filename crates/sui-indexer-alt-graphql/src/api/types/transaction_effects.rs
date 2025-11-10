@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Enum, Object};
+use async_graphql::{Context, Enum, Object, connection::Connection, dataloader::DataLoader};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
     kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},

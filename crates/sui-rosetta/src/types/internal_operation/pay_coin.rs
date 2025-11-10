@@ -7,15 +7,15 @@ use serde::{Deserialize, Serialize};
 
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectRef, SuiAddress};
-use sui_types::error::{SuiError, UserInputError};
+use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{Argument, Command, ObjectArg, ProgrammableTransaction};
 
 use crate::types::internal_operation::MAX_GAS_COINS;
-use crate::{errors::Error, Currency};
+use crate::{Currency, errors::Error};
 
 use super::{
-    budget_from_dry_run, TransactionObjectData, TryConstructTransaction, MAX_COMMAND_ARGS,
+    MAX_COMMAND_ARGS, TransactionObjectData, TryConstructTransaction, budget_from_dry_run,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -68,7 +68,7 @@ impl TryConstructTransaction for PayCoin {
             .select_coins(sender, None, budget as u128, vec![])
             .await?;
         if gas_coins.len() > MAX_GAS_COINS {
-            return Err(SuiError::UserInputError {
+            return Err(SuiErrorKind::UserInputError {
                 error: UserInputError::SizeLimitExceeded {
                     limit: "maximum number of gas payment objects".to_string(),
                     value: MAX_GAS_COINS.to_string(),

@@ -14,14 +14,14 @@ use proptest::test_runner::TestRunner;
 use std::fmt::Debug;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::crypto::get_key_pair;
 use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::get_key_pair;
 use sui_types::digests::TransactionDigest;
-use sui_types::object::{MoveObject, Object, Owner, OBJECT_START_VERSION};
+use sui_types::object::{MoveObject, OBJECT_START_VERSION, Object, Owner};
 use sui_types::{gas_coin::TOTAL_SUPPLY_MIST, transaction::GasData};
 
 use proptest::prelude::*;
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng};
 
 fn new_gas_coin_with_balance_and_owner(balance: u64, owner: Owner) -> Object {
     Object::new_move(

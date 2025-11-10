@@ -19,8 +19,8 @@ use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::{
-    InputObjectKind, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
-    TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+    InputObjectKind, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE, Transaction,
+    TransactionData, TransactionDataAPI, TransactionKind,
 };
 use test_cluster::TestClusterBuilder;
 

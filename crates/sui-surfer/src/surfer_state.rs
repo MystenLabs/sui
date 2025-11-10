@@ -17,7 +17,7 @@ use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::base_types::{ConsensusObjectSequenceKey, ObjectID, ObjectRef, SuiAddress};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
-use sui_types::transaction::{CallArg, ObjectArg, TransactionData, TEST_ONLY_GAS_UNIT_FOR_PUBLISH};
+use sui_types::transaction::{CallArg, ObjectArg, TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TransactionData};
 use sui_types::{Identifier, SUI_FRAMEWORK_ADDRESS};
 use test_cluster::TestCluster;
 use tokio::sync::RwLock;
@@ -174,6 +174,7 @@ impl SurferState {
         .unwrap();
         let tx = self.cluster.wallet.sign_transaction(&tx_data).await;
         let response = loop {
+            debug!("Executing transaction {:?}", tx.digest());
             match self
                 .cluster
                 .wallet
@@ -278,7 +279,7 @@ impl SurferState {
         let move_package = package.into_inner().data.try_into_package().unwrap();
         let proto_version = self.cluster.highest_protocol_version();
         let config = ProtocolConfig::get_for_version(proto_version, Chain::Unknown);
-        let binary_config = config.binary_config();
+        let binary_config = config.binary_config(None);
         let pool: &mut normalized::ArcPool = &mut *self.pool.write().await;
         let entry_functions: Vec<_> = move_package
             .normalize(pool, &binary_config, /* include code */ false)
@@ -302,10 +303,10 @@ impl SurferState {
                             return None;
                         }
                         let mut parameters = (*func.parameters).clone();
-                        if let Some(last_param) = parameters.last().as_ref() {
-                            if is_type_tx_context(last_param) {
-                                parameters.pop();
-                            }
+                        if let Some(last_param) = parameters.last().as_ref()
+                            && is_type_tx_context(last_param)
+                        {
+                            parameters.pop();
                         }
                         Some(EntryFunction {
                             package: package_id,

@@ -9,7 +9,7 @@ use x509_parser::public_key::PublicKey;
 use x509_parser::time::ASN1Time;
 use x509_parser::x509::SubjectPublicKeyInfo;
 
-use crate::error::{SuiError, SuiResult};
+use crate::error::{SuiError, SuiErrorKind, SuiResult};
 
 use ciborium::value::{Integer, Value};
 use once_cell::sync::Lazy;
@@ -89,7 +89,7 @@ impl fmt::Display for NitroAttestationVerifyError {
 
 impl From<NitroAttestationVerifyError> for SuiError {
     fn from(err: NitroAttestationVerifyError) -> Self {
-        SuiError::NitroAttestationFailedToVerify(err.to_string())
+        SuiErrorKind::NitroAttestationFailedToVerify(err.to_string()).into()
     }
 }
 
@@ -291,7 +291,7 @@ impl CoseSign1 {
             Some(_) => {
                 return Err(NitroAttestationVerifyError::InvalidCoseSign1(
                     "invalid tag".to_string(),
-                ))
+                ));
             }
         }
 
@@ -363,7 +363,7 @@ impl CoseSign1 {
         // 17 for extra metadata bytes
         let mut bytes = Vec::with_capacity(self.protected.len() + self.payload.len() + 17);
         ciborium::ser::into_writer(&value, &mut bytes).map_err(|_| {
-            SuiError::NitroAttestationFailedToVerify("cannot parse message".to_string())
+            SuiErrorKind::NitroAttestationFailedToVerify("cannot parse message".to_string())
         })?;
         Ok(bytes)
     }
@@ -435,7 +435,7 @@ impl AttestationDocument {
                 return Err(NitroAttestationVerifyError::InvalidAttestationDoc(format!(
                     "expected map, got {:?}",
                     document_data
-                )))
+                )));
             }
         };
         Ok(document_map)
@@ -527,12 +527,12 @@ impl AttestationDocument {
             .and_then(|v| v.as_bytes())
             .map(|bytes| bytes.to_vec());
 
-        if let Some(data) = &user_data {
-            if data.len() > MAX_USER_DATA_LENGTH {
-                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
-                    "invalid user data".to_string(),
-                ));
-            }
+        if let Some(data) = &user_data
+            && data.len() > MAX_USER_DATA_LENGTH
+        {
+            return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "invalid user data".to_string(),
+            ));
         }
 
         let nonce = document_map
@@ -540,12 +540,12 @@ impl AttestationDocument {
             .and_then(|v| v.as_bytes())
             .map(|bytes| bytes.to_vec());
 
-        if let Some(data) = &nonce {
-            if data.len() > MAX_USER_DATA_LENGTH {
-                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
-                    "invalid nonce".to_string(),
-                ));
-            }
+        if let Some(data) = &nonce
+            && data.len() > MAX_USER_DATA_LENGTH
+        {
+            return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "invalid nonce".to_string(),
+            ));
         }
 
         let (pcr_vec, pcr_map) = document_map

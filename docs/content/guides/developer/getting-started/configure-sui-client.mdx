@@ -30,6 +30,12 @@ Run the Sui CLI with the command:
 $ sui client
 ```
 
+:::info 
+
+If the Sui client is already configured, running this command returns the `sui client --help` output rather than interactive prompts. If this happens, skip to [learning about the `client.yaml`](#client-yaml) file.
+
+:::
+
 The first prompt confirms if you want to create the `client.yaml` file, select `Y`:
 
 ```
@@ -106,19 +112,19 @@ active_address: "0x7df01d3935b7ab3cd1da6828eed763ee2cc556670528a47baa6af8c251866
     <h3>Next steps</h3>
   </div>
   <div className="next-steps-grid">
-    <Card 
+    <Card className="plausible-event-name=client+address+button"
       title="Learn More About Sui Addresses" 
       href="/guides/developer/getting-started/get-address"
     >
       Now that you have created a Sui address, learn about address management, key pairs, and recovery phrase best practices. 
     </Card>
-    <Card 
+    <Card className="plausible-event-name=client+faucet+button"
       title="Get SUI from Faucet" 
       href="/guides/developer/getting-started/get-coins"
     >
       Obtain SUI from a faucet to deploy packages on Testnet.
     </Card>
-        <Card 
+        <Card className="plausible-event-name=client+hello+button"
       title="Hello, World!" 
       href="/guides/developer/getting-started/hello-world"
     >

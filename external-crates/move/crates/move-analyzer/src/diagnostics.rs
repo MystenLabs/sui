@@ -24,54 +24,53 @@ pub fn lsp_diagnostics(
     let mut lsp_diagnostics = BTreeMap::new();
     for (s, _, (loc, msg), labels, notes) in diagnostics {
         let fpath = files.file_path(&loc.file_hash());
-        if let Some(start) = loc_start_to_lsp_position_opt(files, loc) {
-            if let Some(end) = loc_end_to_lsp_position_opt(files, loc) {
-                let range = Range::new(start, end);
-                let related_info_opt = if labels.is_empty() && notes.is_empty() {
-                    None
-                } else {
-                    Some(
-                        labels
-                            .iter()
-                            .filter_map(|(lloc, lmsg)| {
-                                let lstart = loc_start_to_lsp_position_opt(files, lloc)?;
-                                let lend = loc_end_to_lsp_position_opt(files, lloc)?;
-                                let lpath = files.file_path(&lloc.file_hash());
-                                let lpos = Location::new(
-                                    Url::from_file_path(lpath).unwrap(),
-                                    Range::new(lstart, lend),
-                                );
-                                Some(DiagnosticRelatedInformation {
-                                    location: lpos,
-                                    message: lmsg.to_string(),
-                                })
+        if let Some(start) = loc_start_to_lsp_position_opt(files, loc)
+            && let Some(end) = loc_end_to_lsp_position_opt(files, loc)
+        {
+            let range = Range::new(start, end);
+            let related_info_opt = if labels.is_empty() && notes.is_empty() {
+                None
+            } else {
+                Some(
+                    labels
+                        .iter()
+                        .filter_map(|(lloc, lmsg)| {
+                            let lstart = loc_start_to_lsp_position_opt(files, lloc)?;
+                            let lend = loc_end_to_lsp_position_opt(files, lloc)?;
+                            let lpath = files.file_path(&lloc.file_hash());
+                            let lpos = Location::new(
+                                Url::from_file_path(lpath).unwrap(),
+                                Range::new(lstart, lend),
+                            );
+                            Some(DiagnosticRelatedInformation {
+                                location: lpos,
+                                message: lmsg.to_string(),
                             })
-                            .chain(notes.iter().map(|note| {
-                                // for notes use the same location as for the main message
-                                let fpath = files.file_path(&loc.file_hash());
-                                let fpos =
-                                    Location::new(Url::from_file_path(fpath).unwrap(), range);
-                                DiagnosticRelatedInformation {
-                                    location: fpos,
-                                    message: format!("Note: {note}"),
-                                }
-                            }))
-                            .collect(),
-                    )
-                };
-                lsp_diagnostics
-                    .entry(fpath.to_path_buf())
-                    .or_insert_with(Vec::new)
-                    .push(Diagnostic::new(
-                        range,
-                        Some(severity(*s)),
-                        None,
-                        None,
-                        msg.to_string(),
-                        related_info_opt,
-                        None,
-                    ));
-            }
+                        })
+                        .chain(notes.iter().map(|note| {
+                            // for notes use the same location as for the main message
+                            let fpath = files.file_path(&loc.file_hash());
+                            let fpos = Location::new(Url::from_file_path(fpath).unwrap(), range);
+                            DiagnosticRelatedInformation {
+                                location: fpos,
+                                message: format!("Note: {note}"),
+                            }
+                        }))
+                        .collect(),
+                )
+            };
+            lsp_diagnostics
+                .entry(fpath.to_path_buf())
+                .or_insert_with(Vec::new)
+                .push(Diagnostic::new(
+                    range,
+                    Some(severity(*s)),
+                    None,
+                    None,
+                    msg.to_string(),
+                    related_info_opt,
+                    None,
+                ));
         }
     }
     lsp_diagnostics

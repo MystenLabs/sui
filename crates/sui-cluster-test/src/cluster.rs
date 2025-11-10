@@ -5,8 +5,8 @@ use super::config::{ClusterTestOpt, Env};
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::path::Path;
-use sui_config::local_ip_utils::get_available_port;
 use sui_config::Config;
+use sui_config::local_ip_utils::get_available_port;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
 use sui_graphql_rpc::config::{ConnectionConfig, ServiceConfig};
 use sui_graphql_rpc::test_infra::cluster::start_graphql_server_with_fn_rpc;
@@ -23,7 +23,7 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::crypto::{get_key_pair, AccountKeyPair};
+use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use tempfile::tempdir;
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tracing::info;
@@ -377,6 +377,7 @@ pub async fn new_wallet_context_from_cluster(
             rpc: fullnode_url.into(),
             ws: None,
             basic_auth: None,
+            chain_id: None,
         }],
         active_address: Some(address),
         active_env: Some("localnet".to_string()),

@@ -25,7 +25,7 @@ use sui_types::{
 
 use crate::load_test::LoadTestConfig;
 pub use rpc_command_processor::{
-    load_addresses_from_file, load_digests_from_file, load_objects_from_file, RpcCommandProcessor,
+    RpcCommandProcessor, load_addresses_from_file, load_digests_from_file, load_objects_from_file,
 };
 use sui_types::base_types::ObjectID;
 

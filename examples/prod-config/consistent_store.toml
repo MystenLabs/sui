@@ -1,0 +1,8 @@
+[ingestion]
+ingest-concurrency = 20
+
+[pipeline.balances]
+
+[pipeline.object-by-owner]
+
+[pipeline.object-by-type]

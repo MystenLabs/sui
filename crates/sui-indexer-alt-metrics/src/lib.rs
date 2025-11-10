@@ -4,8 +4,8 @@
 use std::{net::SocketAddr, time::Instant};
 
 use anyhow::Context;
-use axum::{http::StatusCode, routing::get, Extension, Router};
-use prometheus::{core::Collector, Registry, TextEncoder};
+use axum::{Extension, Router, http::StatusCode, routing::get};
+use prometheus::{Registry, TextEncoder, core::Collector};
 use prometheus_closure_metric::{ClosureMetric, ValueType};
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;

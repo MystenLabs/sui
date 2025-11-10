@@ -7,12 +7,12 @@ use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
 use itertools::Itertools as _;
 use prometheus::Registry;
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use std::sync::Arc;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
+use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, get_key_pair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSummary, SignedCheckpointSummary,

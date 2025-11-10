@@ -29,7 +29,7 @@ fn bootstrap() {
 
     let out_dir = root_dir.join("src").join("proto").join("generated");
 
-    let mut fds = protox::Compiler::new(&[proto_dir.clone()])
+    let mut fds = protox::Compiler::new(std::slice::from_ref(&proto_dir))
         .unwrap()
         .include_source_info(true)
         .include_imports(true)
@@ -40,10 +40,10 @@ fn bootstrap() {
     // Sort files by name to have deterministic codegen output
     fds.file.sort_by(|a, b| a.name.cmp(&b.name));
 
-    if let Err(error) = tonic_build::configure()
+    if let Err(error) = tonic_prost_build::configure()
         .build_client(true)
         .build_server(true)
-        .bytes(["."])
+        .bytes(".")
         .out_dir(&out_dir)
         .compile_fds(fds.clone())
     {

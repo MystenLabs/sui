@@ -26,7 +26,9 @@ pub enum Error {
     FailToConfirmTransactionStatus(TransactionDigest, u64),
     #[error("Data error: {0}")]
     DataError(String),
-    #[error("Client/Server api version mismatch, client api version : {client_version}, server api version : {server_version}")]
+    #[error(
+        "Client/Server api version mismatch, client api version : {client_version}, server api version : {server_version}"
+    )]
     ServerVersionMismatch {
         client_version: String,
         server_version: String,

@@ -12,9 +12,9 @@ use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, Round, TransactionIndex};
 use sui_macros::fail_point;
 use typed_store::{
-    metrics::SamplingInterval,
-    rocks::{default_db_options, DBMap, DBMapTableConfigMap, MetricConf},
     DBMapUtils, Map as _,
+    metrics::SamplingInterval,
+    rocks::{DBMap, DBMapTableConfigMap, MetricConf, default_db_options},
 };
 
 use super::{CommitInfo, Store, WriteBatch};
@@ -91,14 +91,14 @@ impl RocksDBStore {
     pub fn new(path: &str) -> Self {
         tracing::warn!("Consensus store using tidehunter");
         use typed_store::tidehunter_util::{
-            default_mutex_count, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+            KeyIndexing, KeySpaceConfig, KeyType, ThConfig, default_mutex_count,
         };
         let mutexes = default_mutex_count();
         let index_digest_key = KeyIndexing::key_reduction(36, 0..12);
         let index_index_digest_key = KeyIndexing::key_reduction(40, 0..24);
         let commit_vote_key = KeyIndexing::key_reduction(76, 0..60);
-        let u32_prefix = KeyType::prefix_uniform(3, 0);
-        let u64_prefix = KeyType::prefix_uniform(6, 0);
+        let u32_prefix = KeyType::from_prefix_bits(3 * 8);
+        let u64_prefix = KeyType::from_prefix_bits(6 * 8);
         let override_dirty_keys_config = KeySpaceConfig::new().with_max_dirty_keys(4_000);
         let configs = vec![
             (
@@ -371,19 +371,13 @@ impl Store for RocksDBStore {
         Ok(Some(CommitRef::new(index, digest)))
     }
 
-    fn scan_finalized_commits(
+    fn read_rejected_transactions(
         &self,
-        range: CommitRange,
-    ) -> ConsensusResult<Vec<(CommitRef, BTreeMap<BlockRef, Vec<TransactionIndex>>)>> {
-        let mut finalized_commits = vec![];
-        for result in self.finalized_commits.safe_range_iter((
-            Included((range.start(), CommitDigest::MIN)),
-            Included((range.end(), CommitDigest::MAX)),
-        )) {
-            let ((index, digest), rejected_transactions) =
-                result.map_err(ConsensusError::RocksDBFailure)?;
-            finalized_commits.push((CommitRef::new(index, digest), rejected_transactions));
-        }
-        Ok(finalized_commits)
+        commit_ref: CommitRef,
+    ) -> ConsensusResult<Option<BTreeMap<BlockRef, Vec<TransactionIndex>>>> {
+        let result = self
+            .finalized_commits
+            .get(&(commit_ref.index, commit_ref.digest))?;
+        Ok(result)
     }
 }

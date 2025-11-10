@@ -6,7 +6,7 @@ use shared_crypto::intent::Intent;
 
 use crate::committee::EpochId;
 use crate::digests::ZKLoginInputsDigest;
-use crate::error::{SuiError, SuiResult};
+use crate::error::{SuiErrorKind, SuiResult};
 use crate::signature::VerifyParams;
 use crate::transaction::{SenderSignedData, TransactionDataAPI};
 use lru::LruCache;
@@ -57,20 +57,20 @@ impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
 
     pub fn cache_digest(&self, digest: D) {
         let mut inner = self.inner.write();
-        if let Some(old) = inner.push(digest, ()) {
-            if old.0 != digest {
-                self.cache_evictions_counter.inc();
-            }
+        if let Some(old) = inner.push(digest, ())
+            && old.0 != digest
+        {
+            self.cache_evictions_counter.inc();
         }
     }
 
     pub fn cache_digests(&self, digests: Vec<D>) {
         let mut inner = self.inner.write();
         digests.into_iter().for_each(|d| {
-            if let Some(old) = inner.push(d, ()) {
-                if old.0 != d {
-                    self.cache_evictions_counter.inc();
-                }
+            if let Some(old) = inner.push(d, ())
+                && old.0 != d
+            {
+                self.cache_evictions_counter.inc();
             }
         });
     }
@@ -125,20 +125,22 @@ pub fn verify_sender_signed_data_message_signatures(
     let signers: NonEmpty<_> = txn.intent_message().value.signers();
     fp_ensure!(
         txn.inner().tx_signatures.len() == signers.len(),
-        SuiError::SignerSignatureNumberMismatch {
+        SuiErrorKind::SignerSignatureNumberMismatch {
             actual: txn.inner().tx_signatures.len(),
             expected: signers.len()
         }
+        .into()
     );
 
     // 3. Each signer must provide a signature.
     let present_sigs = txn.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?;
     for s in signers {
         if !present_sigs.contains_key(&s) {
-            return Err(SuiError::SignerSignatureAbsent {
+            return Err(SuiErrorKind::SignerSignatureAbsent {
                 expected: s.to_string(),
                 actual: present_sigs.keys().map(|s| s.to_string()).collect(),
-            });
+            }
+            .into());
         }
     }
 

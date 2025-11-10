@@ -3,14 +3,14 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use anyhow::{ensure, Context};
+use anyhow::{Context, ensure};
 use futures::future;
-use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
+use ingestion::{ClientArgs, IngestionConfig, IngestionService, client::IngestionClient};
 use metrics::IndexerMetrics;
 use pipeline::{
+    Processor,
     concurrent::{self, ConcurrentConfig},
     sequential::{self, Handler, SequentialConfig},
-    Processor,
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework_store_traits::{
@@ -292,7 +292,7 @@ impl<S: Store> Indexer<S> {
 
         info!(first_checkpoint, last_checkpoint = ?self.last_checkpoint, "Ingestion range");
 
-        let (regulator_handle, broadcaster_handle) = self
+        let broadcaster_handle = self
             .ingestion_service
             .run(
                 first_checkpoint..=last_checkpoint,
@@ -301,7 +301,6 @@ impl<S: Store> Indexer<S> {
             .await
             .context("Failed to start ingestion service")?;
 
-        self.handles.push(regulator_handle);
         self.handles.push(broadcaster_handle);
 
         Ok(tokio::spawn(async move {
@@ -327,11 +326,11 @@ impl<S: Store> Indexer<S> {
             P::NAME,
         );
 
-        if let Some(enabled_pipelines) = &mut self.enabled_pipelines {
-            if !enabled_pipelines.remove(P::NAME) {
-                info!(pipeline = P::NAME, "Skipping");
-                return Ok(None);
-            }
+        if let Some(enabled_pipelines) = &mut self.enabled_pipelines
+            && !enabled_pipelines.remove(P::NAME)
+        {
+            info!(pipeline = P::NAME, "Skipping");
+            return Ok(None);
         }
 
         let mut conn = self
@@ -445,10 +444,10 @@ impl<T: TransactionalStore> Indexer<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mocks::store::MockStore;
-    use crate::pipeline::{concurrent::ConcurrentConfig, Processor};
-    use crate::store::CommitterWatermark;
     use crate::FieldCount;
+    use crate::mocks::store::MockStore;
+    use crate::pipeline::{Processor, concurrent::ConcurrentConfig};
+    use crate::store::CommitterWatermark;
     use async_trait::async_trait;
     use std::sync::Arc;
     use sui_synthetic_ingestion::synthetic_ingestion;
@@ -460,7 +459,7 @@ mod tests {
         type Value = MockValue;
         async fn process(
             &self,
-            _checkpoint: &Arc<sui_types::full_checkpoint_content::CheckpointData>,
+            _checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
         ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![MockValue(1)])
         }
@@ -475,9 +474,20 @@ mod tests {
     #[async_trait]
     impl crate::pipeline::concurrent::Handler for MockHandler {
         type Store = MockStore;
+        type Batch = Vec<MockValue>;
+
+        fn batch(
+            &self,
+            batch: &mut Self::Batch,
+            values: &mut std::vec::IntoIter<Self::Value>,
+        ) -> crate::pipeline::concurrent::BatchStatus {
+            batch.extend(values);
+            crate::pipeline::concurrent::BatchStatus::Pending
+        }
 
         async fn commit<'a>(
-            _values: &[Self::Value],
+            &self,
+            _batch: &Self::Batch,
             _conn: &mut <Self::Store as Store>::Connection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(1)
@@ -489,11 +499,12 @@ mod tests {
         type Store = MockStore;
         type Batch = Vec<Self::Value>;
 
-        fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+        fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
             batch.extend(values);
         }
 
         async fn commit<'a>(
+            &self,
             _batch: &Self::Batch,
             _conn: &mut <Self::Store as Store>::Connection<'a>,
         ) -> anyhow::Result<usize> {
@@ -510,7 +521,7 @@ mod tests {
         type Value = MockValue;
         async fn process(
             &self,
-            _checkpoint: &Arc<sui_types::full_checkpoint_content::CheckpointData>,
+            _checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
         ) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![MockValue(1)])
         }
@@ -521,11 +532,12 @@ mod tests {
         type Store = MockStore;
         type Batch = Vec<MockValue>;
 
-        fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+        fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
             batch.extend(values);
         }
 
         async fn commit<'a>(
+            &self,
             _batch: &Self::Batch,
             _conn: &mut <Self::Store as Store>::Connection<'a>,
         ) -> anyhow::Result<usize> {
@@ -639,8 +651,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_indexer_concurrent_pipeline_allow_inconsistent_first_checkpoint_with_skip_watermark(
-    ) {
+    async fn test_indexer_concurrent_pipeline_allow_inconsistent_first_checkpoint_with_skip_watermark()
+     {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
 
@@ -744,8 +756,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_indexer_sequential_pipeline_disallow_inconsistent_first_checkpoint_with_skip_watermark(
-    ) {
+    async fn test_indexer_sequential_pipeline_disallow_inconsistent_first_checkpoint_with_skip_watermark()
+     {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
 

@@ -5,7 +5,7 @@ use std::{env, sync::Arc};
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
-use rand::{prelude::SliceRandom, rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, prelude::SliceRandom, rngs::StdRng};
 
 use crate::{
     block::{BlockAPI, Slot},
@@ -17,7 +17,7 @@ use crate::{
     storage::mem_store::MemStore,
     test_dag::create_random_dag,
     universal_committer::{
-        universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
+        UniversalCommitter, universal_committer_builder::UniversalCommitterBuilder,
     },
 };
 
@@ -60,7 +60,7 @@ async fn test_randomized_dag_all_direct_commit() {
         for (i, leader_block) in sequence.iter().enumerate() {
             // First sequenced leader should be in round 1.
             let leader_round = i as u32 + 1;
-            if let DecidedLeader::Commit(ref block, _direct) = leader_block {
+            if let DecidedLeader::Commit(block, _direct) = leader_block {
                 assert_eq!(block.round(), leader_round);
                 assert_eq!(
                     block.author(),
@@ -104,7 +104,7 @@ async fn test_randomized_dag_and_decision_sequence() {
         );
 
         tracing::info!(
-        "Running test with committee size {num_authorities} & {NUM_ROUNDS} rounds in the DAG..."
+            "Running test with committee size {num_authorities} & {NUM_ROUNDS} rounds in the DAG..."
         );
 
         let mut all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();

@@ -7,7 +7,7 @@ use move_core_types::annotated_value as A;
 use move_core_types::language_storage::StructTag;
 use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::ObjectID;
-use sui_types::error::SuiResult;
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::execution::TypeLayoutStore;
 use sui_types::storage::{BackingPackageStore, PackageObject};
 use sui_types::{error::SuiError, layout_resolver::LayoutResolver};
@@ -37,15 +37,17 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
         struct_tag: &StructTag,
     ) -> Result<A::MoveDatatypeLayout, SuiError> {
         let Ok(ty) = load_type_from_struct(self.vm, &mut self.linkage_view, &[], struct_tag) else {
-            return Err(SuiError::FailObjectLayout {
+            return Err(SuiErrorKind::FailObjectLayout {
                 st: format!("{}", struct_tag),
-            });
+            }
+            .into());
         };
         let layout = self.vm.get_runtime().type_to_fully_annotated_layout(&ty);
         let Ok(A::MoveTypeLayout::Struct(layout)) = layout else {
-            return Err(SuiError::FailObjectLayout {
+            return Err(SuiErrorKind::FailObjectLayout {
                 st: format!("{}", struct_tag),
-            });
+            }
+            .into());
         };
         Ok(A::MoveDatatypeLayout::Struct(layout))
     }

@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::package_store::PackageCache;
-use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
 use crate::FileType;
 use crate::TRANSACTION_CONCURRENCY_LIMIT;
-use anyhow::{anyhow, Result};
+use crate::package_store::PackageCache;
+use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
@@ -317,15 +317,15 @@ fn parse_struct_field(
                 }
             } else if "0x1::option::Option" == struct_name {
                 // Option in sui move is implemented as vector of size 1
-                if let Some(MoveValue::Vector(vec_values)) = values.get("vec").cloned() {
-                    if let Some(first_value) = vec_values.first() {
-                        parse_struct_field(
-                            &format!("{}[0]", path),
-                            first_value.clone(),
-                            curr_struct,
-                            all_structs,
-                        );
-                    }
+                if let Some(MoveValue::Vector(vec_values)) = values.get("vec").cloned()
+                    && let Some(first_value) = vec_values.first()
+                {
+                    parse_struct_field(
+                        &format!("{}[0]", path),
+                        first_value.clone(),
+                        curr_struct,
+                        all_structs,
+                    );
                 }
             } else if !WRAPPED_INDEXING_DISALLOW_LIST.contains(&&*struct_name) {
                 // Do not index most common struct types i.e. string, url, etc

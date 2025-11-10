@@ -34,8 +34,7 @@ fn generate_system_packages_version_table() -> anyhow::Result<()> {
             writeln!(
                 &mut file,
                 "          SystemPackage {{ package_name: \"{}\".into(), repo_path: \"{}\".into() }},",
-                package.name,
-                package.path,
+                package.name, package.path,
             )?;
         }
         writeln!(&mut file, "        ].into(),")?;

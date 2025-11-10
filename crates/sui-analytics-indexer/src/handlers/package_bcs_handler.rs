@@ -8,9 +8,9 @@ use fastcrypto::encoding::{Base64, Encoding};
 
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
-use crate::tables::PackageBCSEntry;
 use crate::FileType;
+use crate::handlers::{AnalyticsHandler, TransactionProcessor, process_transactions};
+use crate::tables::PackageBCSEntry;
 
 #[derive(Clone)]
 pub struct PackageBCSHandler {}

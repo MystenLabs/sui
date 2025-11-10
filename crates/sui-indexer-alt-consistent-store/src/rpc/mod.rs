@@ -6,11 +6,11 @@ use std::path::PathBuf;
 use std::{convert::Infallible, sync::Arc};
 
 use anyhow::Context;
+use axum::Router;
 use axum::extract::Request;
 use axum::response::IntoResponse;
-use axum::Router;
-use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
+use axum_server::tls_rustls::RustlsConfig;
 use futures::future::OptionFuture;
 use metrics::RpcMetrics;
 use middleware::metrics::MakeMetricsHandler;

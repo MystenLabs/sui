@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use async_trait::async_trait;
 use diesel::dsl::now;
 use diesel::{ExpressionMethods, TextExpressionMethods};
 use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
-use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
+use diesel_async::scoped_futures::ScopedFutureExt;
 use sui_indexer_builder::progress::ProgressSavingPolicy;
 use sui_types::base_types::ObjectID;
 use sui_types::transaction::{Command, TransactionDataAPI};
@@ -16,7 +16,7 @@ use tracing::info;
 
 use sui_indexer_builder::indexer_builder::{DataMapper, IndexerProgressStore, Persistent};
 use sui_indexer_builder::sui_datasource::CheckpointTxnData;
-use sui_indexer_builder::{Task, Tasks, LIVE_TASK_TARGET_CHECKPOINT};
+use sui_indexer_builder::{LIVE_TASK_TARGET_CHECKPOINT, Task, Tasks};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::ExecutionStatus;
@@ -804,13 +804,12 @@ fn process_sui_event(
                 let shared_objects = &tx.input_objects;
                 let mut pool_id = "0x0".to_string();
                 for obj in shared_objects.iter() {
-                    if let Some(obj_type) = obj.data.type_() {
-                        if obj_type.module().to_string().eq("pool")
-                            && obj_type.address() == *package_id
-                        {
-                            pool_id = obj_type.address().to_string();
-                            break;
-                        }
+                    if let Some(obj_type) = obj.data.type_()
+                        && obj_type.module().to_string().eq("pool")
+                        && obj_type.address() == *package_id
+                    {
+                        pool_id = obj_type.address().to_string();
+                        break;
                     }
                 }
                 let txn_data = Some(ProcessedTxnData::TradeParamsUpdate(TradeParamsUpdate {

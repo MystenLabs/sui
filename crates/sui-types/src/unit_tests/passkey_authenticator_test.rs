@@ -5,15 +5,16 @@ use std::sync::Arc;
 
 use super::to_signing_message;
 use crate::crypto::DefaultHash;
+use crate::error::SuiErrorKind;
 use crate::passkey_authenticator::{PasskeyAuthenticator, RawPasskeyAuthenticator};
 use crate::{
-    base_types::{dbg_addr, ObjectID, SuiAddress},
+    base_types::{ObjectID, SuiAddress, dbg_addr},
     crypto::{PublicKey, Signature, SignatureScheme},
     error::SuiError,
     object::Object,
     signature::GenericSignature,
     signature_verification::VerifiedDigestCache,
-    transaction::{TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER},
+    transaction::{TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TransactionData},
 };
 use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
@@ -24,6 +25,7 @@ use p256::pkcs8::DecodePublicKey;
 use passkey_authenticator::{Authenticator, UserCheck, UserValidationMethod};
 use passkey_client::Client;
 use passkey_types::{
+    Bytes, Passkey,
     ctap2::{Aaguid, Ctap2Error},
     rand::random_vec,
     webauthn::{
@@ -32,7 +34,6 @@ use passkey_types::{
         PublicKeyCredentialRequestOptions, PublicKeyCredentialRpEntity, PublicKeyCredentialType,
         PublicKeyCredentialUserEntity, UserVerificationRequirement,
     },
-    Bytes, Passkey,
 };
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::str::FromStr;
@@ -265,7 +266,7 @@ async fn test_passkey_fails_invalid_json() {
     let err = res.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InvalidSignature {
+        SuiErrorKind::InvalidSignature {
             error: "Invalid client data json".to_string()
         }
     );
@@ -322,7 +323,7 @@ async fn test_passkey_fails_invalid_challenge() {
     let err = res.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InvalidSignature {
+        SuiErrorKind::InvalidSignature {
             error: "Invalid encoded challenge".to_string()
         }
     );
@@ -343,7 +344,7 @@ async fn test_passkey_fails_wrong_client_data_type() {
     let err = res.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InvalidSignature {
+        SuiErrorKind::InvalidSignature {
             error: "Invalid client data type".to_string()
         }
     );

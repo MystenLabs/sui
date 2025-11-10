@@ -3,7 +3,7 @@
 
 use std::str::FromStr;
 
-use bincode::{enc::Encoder, error::EncodeError, serde::BorrowCompat, Encode};
+use bincode::{Encode, enc::Encoder, error::EncodeError, serde::BorrowCompat};
 use move_core_types::language_storage::StructTag;
 use sui_indexer_alt_framework::types::{
     base_types::SuiAddress, parse_sui_address, parse_sui_module_id, parse_sui_struct_tag,

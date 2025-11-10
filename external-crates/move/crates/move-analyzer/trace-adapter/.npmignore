@@ -1,0 +1,20 @@
+# Source files
+src/
+
+# Tests
+tests/
+.mocharc.yaml
+
+# Build configuration
+tsconfig.json
+.eslintrc.json
+
+# Development files
+node_modules/
+*.tgz
+
+# Documentation
+README.md
+
+# Git
+.gitignore

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use axum::routing::get;
 use axum::Router;
+use axum::routing::get;
 use clap::Parser;
 use mysten_network::callback::CallbackLayer;
 use prometheus::Registry;
@@ -43,7 +43,9 @@ async fn health_check() -> &'static str {
 async fn main() -> Result<()> {
     let _guard = TelemetryConfig::new().with_env().init();
     let app = App::parse();
-    std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", app.credentials.clone());
+    unsafe {
+        std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", app.credentials.clone());
+    };
     let server_version = Some(ServerVersion::new("sui-kv-rpc", VERSION));
     let registry_service = mysten_metrics::start_prometheus_server(
         format!("{}:{}", app.metrics_host, app.metrics_port).parse()?,

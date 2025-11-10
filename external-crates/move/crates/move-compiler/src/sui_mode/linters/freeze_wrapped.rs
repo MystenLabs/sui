@@ -128,24 +128,24 @@ impl TypingVisitorContext for Context<'_> {
 
     fn visit_exp_custom(&mut self, exp: &T::Exp) -> bool {
         use T::UnannotatedExp_ as E;
-        if let E::ModuleCall(fun) = &exp.exp.value {
-            if FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {
+        if let E::ModuleCall(fun) = &exp.exp.value
+            && FREEZE_FUNCTIONS.iter().any(|(addr, module, fname)| {
                 fun.module.value.is(addr, *module) && &fun.name.value().as_str() == fname
-            }) {
-                let Some(sp!(_, N::TypeName_::ModuleType(mident, sname))) =
-                    fun.type_arguments[0].value.type_name()
-                else {
-                    // struct with a given name not found
-                    return false;
-                };
-                if let Some(wrapping_field_info) = self.find_wrapping_field_loc(mident, sname) {
-                    add_diag(
-                        self,
-                        fun.arguments.exp.loc,
-                        sname.value(),
-                        wrapping_field_info,
-                    );
-                }
+            })
+        {
+            let Some(sp!(_, N::TypeName_::ModuleType(mident, sname))) =
+                fun.type_arguments[0].value.type_name()
+            else {
+                // struct with a given name not found
+                return false;
+            };
+            if let Some(wrapping_field_info) = self.find_wrapping_field_loc(mident, sname) {
+                add_diag(
+                    self,
+                    fun.arguments.exp.loc,
+                    sname.value(),
+                    wrapping_field_info,
+                );
             }
         }
         // always return false to process arguments of the call

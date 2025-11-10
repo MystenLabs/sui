@@ -3,10 +3,11 @@
 
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2::{
-    ledger_service_server::LedgerService, BatchGetObjectsRequest, BatchGetObjectsResponse,
-    BatchGetTransactionsRequest, BatchGetTransactionsResponse, GetCheckpointRequest,
-    GetCheckpointResponse, GetEpochRequest, GetEpochResponse, GetObjectRequest, GetObjectResponse,
-    GetServiceInfoRequest, GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse,
+    BatchGetObjectsRequest, BatchGetObjectsResponse, BatchGetTransactionsRequest,
+    BatchGetTransactionsResponse, GetCheckpointRequest, GetCheckpointResponse, GetEpochRequest,
+    GetEpochResponse, GetObjectRequest, GetObjectResponse, GetServiceInfoRequest,
+    GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse,
+    ledger_service_server::LedgerService,
 };
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};

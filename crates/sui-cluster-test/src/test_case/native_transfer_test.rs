@@ -8,13 +8,13 @@ use tracing::info;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair},
+    crypto::{AccountKeyPair, get_key_pair},
     object::Owner,
 };
 
 use crate::{
-    helper::{BalanceChangeChecker, ObjectChecker},
     TestCaseImpl, TestContext,
+    helper::{BalanceChangeChecker, ObjectChecker},
 };
 
 pub struct NativeTransferTest;

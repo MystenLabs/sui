@@ -95,7 +95,7 @@ impl<T: FootprintDomain> TrieNode<T> {
         &self.children
     }
 
-    pub fn entry(&mut self, o: Offset) -> Entry<Offset, TrieNode<T>> {
+    pub fn entry(&mut self, o: Offset) -> Entry<'_, Offset, TrieNode<T>> {
         self.children.entry(o)
     }
 

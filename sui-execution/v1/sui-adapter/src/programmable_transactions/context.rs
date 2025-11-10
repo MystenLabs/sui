@@ -207,7 +207,7 @@ mod checked {
             })
         }
 
-        pub fn object_runtime(&mut self) -> &ObjectRuntime {
+        pub fn object_runtime(&mut self) -> &ObjectRuntime<'_> {
             self.native_extensions.get()
         }
 
@@ -1243,7 +1243,7 @@ mod checked {
                 linkage_view,
                 new_packages,
                 input_object_map,
-                /* imm override */ !mutability.is_mutable(),
+                /* imm override */ !mutability.is_exclusive(),
                 id,
             ),
             ObjectArg::Receiving((id, version, _)) => {

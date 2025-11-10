@@ -10,7 +10,7 @@ use tracing::warn;
 
 use crate::{
     block::{BlockAPI, Slot, VerifiedBlock},
-    commit::{LeaderStatus, WaveNumber, DEFAULT_WAVE_LENGTH},
+    commit::{DEFAULT_WAVE_LENGTH, LeaderStatus, WaveNumber},
     context::Context,
     dag_state::DagState,
     leader_schedule::LeaderSchedule,
@@ -247,7 +247,11 @@ impl BaseCommitter {
                     if let Some(potential_vote) = potential_vote {
                         self.is_vote(&potential_vote, leader_block)
                     } else {
-                        assert!(reference.round <= gc_round, "Block not found in storage: {:?} , and is not below gc_round: {gc_round}", reference);
+                        assert!(
+                            reference.round <= gc_round,
+                            "Block not found in storage: {:?} , and is not below gc_round: {gc_round}",
+                            reference
+                        );
                         false
                     }
                 };
@@ -316,7 +320,9 @@ impl BaseCommitter {
 
         // There can be at most one certified leader, otherwise it means the BFT assumption is broken.
         if certified_leader_blocks.len() > 1 {
-            panic!("More than one certified leader at wave {wave} in {leader_slot}: {certified_leader_blocks:?}");
+            panic!(
+                "More than one certified leader at wave {wave} in {leader_slot}: {certified_leader_blocks:?}"
+            );
         }
 
         // We commit the target leader if it has a certificate that is an ancestor of the anchor.

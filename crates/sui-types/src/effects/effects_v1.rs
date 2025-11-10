@@ -3,7 +3,7 @@
 
 use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{
-    random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+    EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest, random_object_ref,
 };
 use crate::digests::{ObjectDigest, TransactionEventsDigest};
 use crate::effects::{InputConsensusObject, TransactionEffectsAPI, UnchangedConsensusKind};

@@ -42,7 +42,8 @@ fn development_mode_not_allowed() {
     let err = BuildConfig::new_for_testing()
         .build(&path)
         .expect_err("Should have failed due to unsupported edition");
-    assert!(err
-        .to_string()
-        .contains(&Edition::DEVELOPMENT.unknown_edition_error().to_string()));
+    assert!(
+        err.to_string()
+            .contains(&Edition::DEVELOPMENT.unknown_edition_error().to_string())
+    );
 }

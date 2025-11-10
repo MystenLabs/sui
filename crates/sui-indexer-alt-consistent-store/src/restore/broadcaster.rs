@@ -4,8 +4,8 @@
 use std::{
     collections::BTreeMap,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -13,7 +13,7 @@ use std::{
 use anyhow::Context as _;
 use backoff::{Error as BE, ExponentialBackoff};
 use futures::{future::try_join_all, stream};
-use sui_indexer_alt_framework::task::{with_slow_future_monitor, TrySpawnStreamExt};
+use sui_indexer_alt_framework::task::{TrySpawnStreamExt, with_slow_future_monitor};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
@@ -21,8 +21,8 @@ use tracing::{error, info, warn};
 use crate::db::Db;
 
 use super::{
-    format::{EpochManifest, FileMetadata, FileType},
     Break, FormalSnapshot, LiveObjects, RestorerMetrics,
+    format::{EpochManifest, FileMetadata, FileType},
 };
 
 /// Wait at most this long between retries while fetching files from the snapshot.

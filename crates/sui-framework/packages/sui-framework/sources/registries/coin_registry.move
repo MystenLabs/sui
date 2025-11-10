@@ -9,7 +9,7 @@ module sui::coin_registry;
 
 use std::ascii;
 use std::string::String;
-use std::type_name::TypeName;
+use std::type_name::{Self, TypeName};
 use sui::bag::{Self, Bag};
 use sui::balance::{Supply, Balance};
 use sui::coin::{Self, TreasuryCap, DenyCapV2, CoinMetadata, RegulatedCoinMetadata, Coin};
@@ -30,9 +30,6 @@ const ECurrencyAlreadyExists: vector<u8> = b"Currency for this coin type already
 #[error(code = 3)]
 const EDenyListStateAlreadySet: vector<u8> =
     b"Cannot set the deny list state as it has already been set.";
-#[error(code = 4)]
-const EMetadataCapNotClaimed: vector<u8> =
-    b"Cannot delete legacy metadata before claiming the `MetadataCap`.";
 /// Attempt to update `Currency` with legacy metadata after the `MetadataCap` has
 /// been claimed. Updates are only allowed if the `MetadataCap` has not yet been
 /// claimed or deleted.
@@ -53,10 +50,15 @@ const EEmptySupply: vector<u8> = b"Supply cannot be empty.";
 const ESupplyNotBurnOnly: vector<u8> = b"Cannot burn on a non burn-only supply.";
 #[error(code = 11)]
 const EInvariantViolation: vector<u8> = b"Code invariant violation.";
+#[error(code = 12)]
+const EDeletionNotSupported: vector<u8> = b"Deleting legacy metadata is not supported.";
 
 /// Incremental identifier for regulated coin versions in the deny list.
 /// We start from `0` in the new system, which aligns with the state of `DenyCapV2`.
 const REGULATED_COIN_VERSION: u8 = 0;
+
+/// Marker used in metadata to indicate that the currency is not migrated.
+const NEW_CURRENCY_MARKER: vector<u8> = b"is_new_currency";
 
 /// System object found at address `0xc` that stores coin data for all
 /// registered coin types. This is a shared object that acts as a central
@@ -312,6 +314,15 @@ public fun finalize<T>(builder: CurrencyInitializer<T>, ctx: &mut TxContext): Me
     let id = object::new(ctx);
     currency.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
 
+    // Mark the currency as new, so in the future we can support borrowing of the
+    // legacy metadata.
+    currency
+        .extra_fields
+        .insert(
+            NEW_CURRENCY_MARKER.to_string(),
+            ExtraField(type_name::with_original_ids<bool>(), NEW_CURRENCY_MARKER),
+        );
+
     if (is_otw) transfer::transfer(currency, object::sui_coin_registry_address())
     else transfer::share_object(currency);
 
@@ -457,14 +468,9 @@ public fun update_from_legacy_metadata<T>(currency: &mut Currency<T>, legacy: &C
         legacy.get_icon_url().map!(|url| url.inner_url().to_string()).destroy_or!(b"".to_string());
 }
 
-/// Delete the legacy `CoinMetadata` object if the metadata cap for the new registry
-/// has already been claimed.
-///
-/// This function is only callable after there's "proof" that the author of the coin
-/// can manage the metadata using the registry system (so having a metadata cap claimed).
-public fun delete_migrated_legacy_metadata<T>(currency: &mut Currency<T>, legacy: CoinMetadata<T>) {
-    assert!(currency.is_metadata_cap_claimed(), EMetadataCapNotClaimed);
-    legacy.destroy_metadata();
+#[deprecated(note = b"Method disabled")]
+public fun delete_migrated_legacy_metadata<T>(_: &mut Currency<T>, _: CoinMetadata<T>) {
+    abort EDeletionNotSupported
 }
 
 /// Allow migrating the regulated state by access to `RegulatedCoinMetadata` frozen object.

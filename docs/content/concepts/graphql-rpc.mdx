@@ -38,12 +38,14 @@ Switch any apps that still use the GraphQL Alpha endpoints (`https://sui-mainnet
 
 ## Headers
 
-The service accepts the following optional headers:
+The service accepts the following optional HTTP request headers:
 
 - `x-sui-rpc-version` to specify which RPC version to use (currently only one version is supported),
 - `x-sui-rpc-show-usage` returns the response with extra query complexity information.
 
-By default, each request returns the service's version in the response header: `x-sui-rpc-version`.
+By default, each response contains the following HTTP response headers:
+- `x-sui-rpc-request-id` a unique identifier for the request; appears in application logs for debugging.
+- `x-sui-rpc-version` the version of the service that handled the request.
 
 ```sh
 $ curl -i -X POST https://graphql.testnet.sui.io/graphql\
@@ -60,6 +62,7 @@ The response for the previous request looks similar to the following:
 HTTP/2 200 
 content-type: application/json
 content-length: 179
+x-sui-rpc-request-id: f5442058-47ab-4360-8295-61c009f38516
 x-sui-rpc-version: 1.56.1-
 vary: origin, access-control-request-method, access-control-request-headers
 access-control-allow-origin: *

@@ -2,17 +2,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
 use crate::authority::ExecutionEnv;
+use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
 use crate::{
     authority::{
+        AuthorityState,
         authority_tests::{
             build_programmable_transaction, certify_shared_obj_transaction_no_execution,
             execute_programmable_transaction, send_and_confirm_transaction_,
         },
         move_integration_tests::build_and_publish_test_package,
         test_authority_builder::TestAuthorityBuilder,
-        AuthorityState,
     },
     move_call,
 };
@@ -27,7 +27,7 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::transaction::{ObjectArg, SharedObjectMutability, Transaction};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair},
+    crypto::{AccountKeyPair, get_key_pair},
     effects::TransactionEffects,
     execution_status::{CongestedObjects, ExecutionFailureStatus, ExecutionStatus},
     object::Object,
@@ -355,14 +355,14 @@ async fn test_congestion_control_execution_cancellation() {
         .acquire_shared_version_assignments_from_effects(
             &VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
             &effects,
+            None,
             authority_state_2.get_object_cache_reader().as_ref(),
         )
         .unwrap();
     let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
     let (effects_2, execution_error) = authority_state_2
         .try_execute_for_test(&cert, execution_env)
-        .await
-        .unwrap();
+        .await;
 
     // Should result in the same cancellation.
     assert_eq!(

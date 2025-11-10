@@ -9,7 +9,7 @@ This guide demonstrates how to make an app that performs atomic swaps on Sui. At
 
 There are three main sections to this guide:
 
-1. [Smart Contracts](#smart-contracts): The Move code that holds the state and perform the swaps.
+1. [Smart Contracts](#smart-contracts): The Move code that holds the state and performs the swaps.
 1. [Backend](#backend): A service that indexes chain state to discover trades, and an API service to read this data.
 1. [Frontend](#frontend): A UI that enables users to list objects for sale and to accept trades.
 
@@ -25,25 +25,25 @@ There are three main sections to this guide:
 The guide also shows how to build an app that:
 
 - **Is trustless:** Users do not have to trust (or pay) any third parties; the chain manages the swap.
-- **Avoids rug-pulls:** Guarantees that the object a user wants to trade for isn't tampered with after initiating the trade.
+- **Avoids rug-pulls:** Guarantees that the object a user wants to trade for is not tampered with after initiating the trade.
 - **Preserves liveness:** Users are able to pull out of the trade and reclaim their object at any time, in case the other party stops responding.
 
 ## Directory structure
 
-To begin, create a new folder on your system titled `trading` that holds all your files. Inside that folder, create three more folders: `api`, `contracts`, and `frontend`. It's important to keep this directory structure as some helper scripts in this example target these directories by name. Different projects have their own directory structure, but it's common to split code into functional groups to help with maintenance.
+To begin, create a new folder on your system titled `trading` that holds all your files. Inside that folder, create three more folders: `api`, `contracts`, and `frontend`. Keep this directory structure as some helper scripts in this example target these directories by name. Different projects have their own directory structure, but it's common to split code into functional groups to help with maintenance.
 
 :::checkpoint
 
 - You have the latest version of Sui installed. If you run `sui --version` in your terminal or console, it responds with the currently installed version.
 - Your active environment is pointing to the expected network. Run `sui client active-env` to make sure. If you receive a warning about a client and server API version mismatch, update Sui using the version in the relevant branch (`mainnet`, `testnet`, `devent`) of the Sui repo.
-- Your active address has SUI. Run `sui client balance` in your terminal or console. If there is no balance, [acquire SUI](../getting-started/get-coins.mdx) from the faucet (not available in Mainnet).
+- Your active address has SUI. Run `sui client balance` in your terminal or console. If there is no balance, [acquire SUI](/guides/developer/getting-started/get-coins.mdx) from the faucet (not available in Mainnet).
 - You have a directory to place the files you create in. The suggested names of the directories are important if you use the available helper functions later in the guide.
 
 :::
 
 ## Smart contracts {#smart-contracts}
 
-In this part of the guide, you write the Move contracts that perform the trustless swaps. The guide describes how to create the package from scratch, but you can use a fork or copy of the example code in the Sui repo to follow along instead. See ["Hello, World!"](/guides/developer/getting-started/hello-world.mdx) to learn more about package structure and how to use the Sui CLI to scaffold a new project.
+In this part of the guide, you write the Move contracts that perform the trustless swaps. The guide describes how to create the package from scratch, but you can use a fork or copy of the example code in the Sui repo to follow along instead. See [Hello, World!](/guides/developer/getting-started/hello-world.mdx) to learn more about package structure and how to use the Sui CLI to scaffold a new project.
 
 ### `Move.toml`
 
@@ -59,7 +59,7 @@ If you are targeting a network other than Testnet, be sure to update the `rev` v
 
 ### `Locked` and `Key`
 
-With your manifest file in place, it's time to start creating the Move assets for this project. In your `escrow` folder, at the same level as your `Move.toml` file, create a `sources` folder. This is the common file structure of a package in Move. Create a new file inside `sources` titled `lock.move`. This file contains the logic that locks the object involved in a trade. The complete source code for this file follows and the sections that come after detail its components.
+With your manifest file in place, start creating the Move assets for this project. In your `escrow` folder, at the same level as your `Move.toml` file, create a `sources` folder. This is the common file structure of a package in Move. Create a new file inside `sources` titled `lock.move`. This file contains the logic that locks the object involved in a trade. The complete source code for this file follows and the sections that come after detail its components.
 
 :::tip
 
@@ -79,19 +79,19 @@ Click the titles at the top of codeblocks to open the relevant source file in Gi
 
 </details>
 
-After a trade is initiated, you don't want the trading party to modify the object they agreed to trade. Imagine you're trading in-game items and you agree to trade a weapon with all its attachments, and its owner strips all its attachments just before the trade.
+After a trade is initiated, you do not want the trading party to modify the object they agreed to trade. Imagine you are trading in-game items and you agree to trade a weapon with all its attachments, and its owner strips all its attachments just before the trade.
 
-In a traditional trade, a third party typically holds the items in escrow to make sure they are not tampered with before the trade completes. This requires either trusting that the third party won't tamper with it themselves, paying the third party to ensure that doesn't happen, or both.
+In a traditional trade, a third party typically holds the items in escrow to make sure they are not tampered with before the trade completes. This requires either trusting that the third party does not tamper with it themselves, paying the third party to ensure that does not happen, or both.
 
 In a trustless swap, however, you can use the safety properties of Move to force an item's owner to prove that they have not tampered with the version of the object that you agreed to trade, without involving anyone else.
 
-This is done by requiring that an object that is available for trading is **locked** with a **single-use key**, and asking the owner to supply the key when finalizing the trade.
+You do this by requiring that an object that is available for trading is **locked** with a **single-use key**, and asking the owner to supply the key when finalizing the trade.
 
 To tamper with the object would require unlocking it, which consumes the key. Consequently, there would no longer be a key to finish the trade.
 
 <ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code" struct="Locked,Key" noComments />
 
-- The `Locked<T>` type stores the `ID` of the key that unlocks it, and its own `id`. The object being locked is added as a dynamic object field, so that it is still readable at its own ID off-chain.
+- The `Locked<T>` type stores the `ID` of the key that unlocks it, and its own `id`. The object being locked is added as a [dynamic object field](/concepts/dynamic-fields.mdx), so that it is still readable at its own ID off-chain.
 - The corresponding `Key` type only stores its own `id`.
 
 The lock and key are made single-use by the signatures of the `lock` and `unlock` functions. `lock` accepts any object of type `T: store` (the `store` ability is necessary for storing it inside a `Locked<T>`), and creates both the `Locked<T>` and its corresponding `Key`:
@@ -126,7 +126,7 @@ The `unlock` function accepts the `Locked<T>` and `Key` by value (which consumes
 </details>
 
 
-Together, they ensure that a lock and key cannot have existed before the lock operation, and will not exist after a successful unlock – it is single use.
+Together, they ensure that a lock and key cannot have existed before the lock operation, and do not exist after a successful unlock. It is single use.
 
 :::tip Additional resources
 
@@ -142,12 +142,12 @@ Move's type system guarantees that a given `Key` cannot be re-used (because `unl
 - A locked object can be unlocked with its key.
 - Trying to unlock an object with the wrong key fails.
 
-The test starts with a helper function for creating an object, it doesn't matter what kind of object it is, as long as it has the `store` ability. The test uses `Coin<SUI>`, because it comes with a `#[test_only]` function for minting:
+The test starts with a helper function for creating an object. The object type does not matter, as long as it has the `store` ability. The test uses `Coin<SUI>`, because it comes with a `#[test_only]` function for minting:
 
 <ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code" fun="test_coin" noComments />
 
-- All test-related functions and imports are annotated with `#[test_only]` to make sure they don't show up in the published package. This can also be done by separating tests into their own module – e.g. `lock_tests.move` – and marking that module as `#[test_only]`.
-- The `test_scenario` module is used to provide access to a `&mut TxContext` in the test (necessary for creating new objects). Tests that don't need to simulate multiple transactions but still need access to a `TxContext` can use `sui::tx_context::dummy` to create a test context instead.
+- All test-related functions and imports are annotated with `#[test_only]` to make sure they do not show up in the published package. You can also do this by separating tests into their own module (for example, `lock_tests.move`) and marking that module as `#[test_only]`.
+- The `test_scenario` module is used to provide access to a `&mut TxContext` in the test (necessary for creating new objects). Tests that do not need to simulate multiple transactions but still need access to a `TxContext` can use `sui::tx_context::dummy` to create a test context instead.
 
 The first test works by creating an object to test, locking it and unlocking it – this should finish executing without aborting.
 The last two lines exist to keep the Move compiler happy by cleaning up the test coin and test scenario objects, because values in Move are not implicitly cleaned up unless they have the `drop` ability.
@@ -186,7 +186,7 @@ Running Move unit tests
 Test result: OK. Total tests: 2; passed: 2; failed: 0
 ```
 
-You might notice that the Move compiler creates a `build` subfolder inside `escrow` upon a successful build. This folder contains your package's compiled bytecode, code from your package's dependencies, and various other files necessary for the build. At this point, it's enough to just be aware of these files. You don't need to fully understand the contents in `build`.
+You might notice that the Move compiler creates a `build` subfolder inside `escrow` upon a successful build. This folder contains your package's compiled bytecode, code from your package's dependencies, and various other files necessary for the build. At this point, be aware of these files. You do not need to fully understand the contents in `build`.
 
 :::
 
@@ -209,10 +209,10 @@ Create a new file in your `escrow` folder titled `shared.move`. The code in this
 Trading proceeds in three steps:
 
 1. The first party locks the object they want to trade – this is already handled by the `lock` module you wrote earlier.
-1. The second party puts their object up for escrow and registers their interest in the first party's object. This is handled by a new module – `escrow`.
+1. The second party puts their object up for escrow and registers their interest in the first party's object. This is handled by a new module called `escrow`.
 1. The first party completes the trade by providing their locked object and the key to unlock it. Assuming all checks pass, this transfers their object to the second party and makes the second party's object available to them.
 
-You can start by implementing steps two and three, by defining a new type to hold the escrowed object. It holds the `escrowed` object and an `id: UID` (because it's an object in its own right), but it also records the `sender` and intended `recipient` (to confirm they match when the trade happens), and it registers interest in the first party's object by recording the `ID` of the key that unlocks the `Locked<U>` that contains the object.
+You can start by implementing steps two and three, by defining a new type to hold the escrowed object. It holds the `escrowed` object and an `id: UID` (because it is an object in its own right), but it also records the `sender` and intended `recipient` (to confirm they match when the trade happens), and it registers interest in the first party's object by recording the `ID` of the key that unlocks the `Locked<U>` that contains the object.
 
 <ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" struct="Escrow" noComments singleSpace />
 
@@ -288,17 +288,17 @@ As with the lock test, start by creating a function to mint a test coin. You als
 
 <ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" fun="test_coin" noComments />
 
-The test body starts with a call to `test_scenario::begin` and ends with a call to `test_scenario::end`. It doesn't matter which address you pass to `begin`, because you pick one of `ALICE` or `BOB` at the start of each new transaction you write, so set it to `@0x0`:
+The test body starts with a call to `test_scenario::begin` and ends with a call to `test_scenario::end`. It does not matter which address you pass to `begin`, because you pick one of `ALICE` or `BOB` at the start of each new transaction you write, so set it to `@0x0`:
 
 <ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" tag="test"  />
 
-The first transaction is from `BOB` who creates a coin and locks it. You must remember the ID of the coin and the ID of the key, which you will need later, and then you transfer the locked object and the key itself to `BOB`, because this is what would happen in a real transaction: When simulating transactions in a test, you should only keep around primitive values, not whole objects, which would need to be written to chain between transactions.
+The first transaction is from `BOB` who creates a coin and locks it. You must remember the ID of the coin and the ID of the key, which you need later. Then, you transfer the locked object and the key itself to `BOB`, because this is what would happen in a real transaction. When simulating transactions in a test, you should only keep around primitive values, not whole objects, which would need to be written to chain between transactions.
 
 Write these transactions inside the `test_successful_swap` function, between the call to `begin` and `end`.
 
 <ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" variable="i2" noComments />
 
-Next, `ALICE` comes along and sets up the `Escrow`, which locks their coin. They register their interest for `BOB'`s coin by referencing `BOB`'s key's ID (`ik2`):
+Next, `ALICE` comes along and sets up the `Escrow`, which locks their coin. They register their interest for `BOB`'s coin by referencing `BOB`'s key's ID (`ik2`):
 
 <ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" variable="i1" noComments />
 
@@ -318,7 +318,7 @@ The rest of the test is designed to check that `ALICE` has `BOB`'s coin and vice
 
 ### Observability
 
-The `escrow` Move package is now functional: You could publish it on chain and perform trustless swaps by creating transactions. Creating those transactions requires knowing the IDs of `Locked`, `Key`, and `Escrow` objects.
+The `escrow` Move package is now functional. You could publish it on chain and perform trustless swaps by creating transactions. Creating those transactions requires knowing the IDs of `Locked`, `Key`, and `Escrow` objects.
 
 `Locked` and `Key` objects are typically owned by the transaction sender, and so can be queried through the Sui RPC, but `Escrow` objects are shared, and it is useful to be able to query them by their sender and recipient (so that users can see the trades they have offered and received).
 
@@ -373,7 +373,7 @@ Test result: OK. Total tests: 8; passed: 8; failed: 0
 
 ### Next steps
 
-Well done. You have written the Move package. 🎉 
+You have written the Move package. 🎉 
 
 To turn this into a complete dApp, you need to create a frontend. However, for the frontend to be updated, it has to listen to the blockchain as escrows are made and swaps are fulfilled.
 
@@ -403,7 +403,7 @@ The core of the indexer is an event loop, initialized in a function called `setu
 
 The indexer queries events related to the `escrow` module, using a `queryEvent` filter, and keeps track of a cursor representing the latest event it has processed so it can resume indexing from the right place even if it is restarted. The filter is looking for any events whose type is from the `escrow` module of the Move package (see the `event-indexer.ts` code that follows).
 
-The core event job works by polling: It queries RPC for events following its latest cursor and sends them to a callback for processing. If it detects more than one page of new events, it immediately requests the next page. Otherwise, the job waits for the next polling interval before checking again.
+The core event job works by polling. It queries RPC for events following its latest cursor and sends them to a callback for processing. If it detects more than one page of new events, it immediately requests the next page. Otherwise, the job waits for the next polling interval before checking again.
 
 <details>
 
@@ -466,7 +466,7 @@ You want your API to accept the query string in the URL as the parameters for da
 
 #### Query pagination
 
-Pagination is another crucial part to ensure your API returns sufficient and/or ordered chunk of information instead of all the data that might be the vector for a DDOS attack. Similar to **WHERE parameters**, define a set of keys in the URL query string to be accepted as valid pagination parameters. The `parsePaginationForQuery()` utility function helps to achieve this by filtering the pre-determined keys `sort`, `limit`, `cursor` and parsing corresponding key-value pairs into `ApiPagination` that Prisma can consume.
+Pagination is another crucial part to ensure your API returns sufficient and ordered chunks of information instead of all the data that might be the vector for a DDOS attack. Similar to `WHERE` parameters, define a set of keys in the URL query string to be accepted as valid pagination parameters. The `parsePaginationForQuery()` utility function helps to achieve this by filtering the pre-determined keys `sort`, `limit`, `cursor` and parsing corresponding key-value pairs into `ApiPagination` that Prisma can consume.
 
 In this example, the `id` field of the model in the database as the cursor that allows clients to continue subsequent queries with the next page.
 
@@ -486,12 +486,23 @@ In this example, the `id` field of the model in the database as the cursor that 
 
 #### API endpoints
 
-All the endpoints are defined in `server.ts`, particularly, there are two endpoints:
+All the endpoints are defined in `server.ts`. There are two endpoints:
 
 - `/locked` to query `Locked` objects.
+    Valid query keys:
+        - `deleted`: Boolean
+        - `creator`: String
+        - `keyId`: String
+        - `objectId`: String
+        
 - `/escrows` to query `Escrow` objects.
+    Valid query keys:
+        - `cancelled`: Boolean
+        - `swapped`: Boolean
+        - `recipient`: String
+        - `sender`: String
 
-You define a list of valid query keys, such as `deleted`, `creator`, `keyId`, and `objectId` for `Locked` data and `cancelled`, `swapped`, `recipient`, and `sender` for `Escrow` data. Pass the URL query string into the pre-defined utilities to output the correct parameters that Prisma can use.
+Pass the URL query string into the pre-defined utilities to output the correct parameters that Prisma can use.
 
 <details>
 
@@ -533,7 +544,7 @@ Use the following command to list your available environments:
 $ sui client envs
 ```
 
-If you haven't already set up a `testnet` environment, do so by running the following command in a terminal or console:
+If you have not already set up a `testnet` environment, do so by running the following command in a terminal or console:
 
 ```sh
 $ sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
@@ -694,7 +705,7 @@ Replace the content of `vite.config.ts` with the following:
 
 </details>
 
-Vite also needs to be aware of the aliasing to resolve imports correctly during the build process. In the `resolve.alias` configuration of `vite.config.ts`, we map the alias `@` to the `/src` directory.
+Vite also needs to be aware of the aliasing to resolve imports correctly during the build process. In the `resolve.alias` configuration of `vite.config.ts`, map the alias `@` to the `/src` directory.
 
 ### Adding Tailwind CSS
 
@@ -749,7 +760,7 @@ Add the `src/styles/` directory and add `base.css`:
 
 ### Connecting your deployed package
 
-First, deploy your package via the [scripts in the api directory](#deployment).
+First, deploy your package through the [scripts in the api directory](#deployment).
 
 <details>
 
@@ -954,7 +965,7 @@ Update `src/main.tsx` by replacing the `App` component with the `RouterProvider`
 
 </details>
 
-Note that `dApp Kit` provides a set of hooks for making query and mutation calls to the Sui blockchain. These hooks are thin wrappers around query and mutation hooks from `@tanstack/react-query`.
+The dApp Kit provides a set of hooks for making query and mutation calls to the Sui blockchain. These hooks are thin wrappers around query and mutation hooks from `@tanstack/react-query`.
 
 :::tip Additional resources
 
@@ -1036,7 +1047,7 @@ export function Header() {
 
 </details>
 
-The dApp Kit comes with a pre-built React.js component called `ConnectButton` displaying a button to connect and disconnect a wallet. The connecting and disconnecting wallet logic is handled seamlessly so you don't need to worry about repeating yourself doing the same logic all over again.
+The dApp Kit comes with a pre-built React.js component called `ConnectButton` displaying a button to connect and disconnect a wallet. The connecting and disconnecting wallet logic is handled seamlessly so you do not need to worry about repeating yourself doing the same logic all over again.
 
 :::checkpoint
 
@@ -1045,7 +1056,7 @@ At this point, you have a basic routing setup. Run your app and ensure you can:
 - Navigate between the `Manage Objects` and `Escrows` pages.
 - Connect and disconnect your wallet.
 
-Note, the styles should be applied. The `Header` component should look like this: 
+The styles should be applied. The `Header` component should look like this: 
 
 ![Header component](./images/styles.png)
 
@@ -1133,7 +1144,7 @@ export function LockOwnedObjects() {
 
 </details>
 
-Fetch the owned objects directly from Sui blockchain using the `useSuiClientInfiniteQuery()` hook from `dApp Kit`. This hook is a thin wrapper around Sui blockchain RPC calls, reference the documentation to learn more about these [RPC hooks](https://sdk.mystenlabs.com/dapp-kit/rpc-hooks). Basically, supply the RPC endpoint you want to execute, in this case it's the [`getOwnedObjects` endpoint](https://docs.sui.io/sui-api-ref#suix_getownedobjects). Supply the connected wallet account as the `owner`. The returned data is stored inside the cache at query key `getOwnedObjects`. In a future step you invalidate this cache after a mutation succeeds, so the data will be re-fetched automatically.
+Fetch the owned objects directly from Sui blockchain using the `useSuiClientInfiniteQuery()` hook from dApp Kit. This hook is a thin wrapper around Sui blockchain RPC calls. Reference the documentation to learn more about these [RPC hooks](https://sdk.mystenlabs.com/dapp-kit/rpc-hooks). Supply the RPC endpoint you want to execute, in this case the [`getOwnedObjects` endpoint](https://docs.sui.io/sui-api-ref#suix_getownedobjects). Supply the connected wallet account as the `owner`. The returned data is stored inside the cache at query key `getOwnedObjects`. In a future step you invalidate this cache after a mutation succeeds, so the data is re-fetched automatically.
 
 
 <details>
@@ -1194,7 +1205,7 @@ Run your app and ensure you can:
 
 - View the owned objects of the connected wallet account.
 
-If you don't see any objects, you might need to create some demo data or connect your wallet. You can mint objects after completing the next steps.
+If you do not see any objects, you might need to create some demo data or connect your wallet. You can mint objects after completing the next steps.
 
 ![Owned objects](./images/trustless-objects.png)
 
@@ -1202,7 +1213,7 @@ If you don't see any objects, you might need to create some demo data or connect
 
 ### Execute transaction hook {#execute-transaction-hook}
 
-In the frontend, you might need to execute a transaction block in multiple places, hence it's better to extract the transaction execution logic and reuse it everywhere. Let's create and examine the execute transaction hook.
+In the frontend, you might need to execute a transaction block in multiple places. Extract the transaction execution logic and reuse it everywhere. Create and examine the execute transaction hook.
 
 
 <details>
@@ -1217,9 +1228,9 @@ Create `src/hooks/useTransactionExecution.ts`:
 
 </details>
 
-A `Transaction` is the input, sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
+A `Transaction` is the input. Sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
 
-Use the `useSuiClient()` hook from `dApp Kit` to retrieve the Sui client instance configured in `src/main.tsx`. The `useSignTransaction()` function is another hook from `dApp kit` that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, use the `executeTransaction()` on the Sui client instance of the Sui TypeScript SDK.
+Use the `useSuiClient()` hook from dApp Kit to retrieve the Sui client instance configured in `src/main.tsx`. The `useSignTransaction()` function is another hook from dApp kit that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, use the `executeTransaction()` on the Sui client instance of the Sui TypeScript SDK.
 
 ### Generate demo data
 
@@ -1245,7 +1256,7 @@ Create `src/mutations/demo.ts`:
 
 As previously mentioned, this example uses `@tanstack/react-query` to query, cache, and mutate server state. Server state is data only available on remote servers, and the only way to retrieve or update this data is by interacting with these remote servers. In this case, it could be from an API or directly from Sui blockchain RPC.
 
-When you execute a transaction call to mutate data on the Sui blockchain, use the `useMutation()` hook. The `useMutation()` hook accepts several inputs, however, you only need two of them for this example. The first parameter, `mutationFn`, accepts the function to execute the main mutating logic, while the second parameter, `onSuccess`, is a callback that runs when the mutating logic succeeds.
+When you execute a transaction call to mutate data on the Sui blockchain, use the `useMutation()` hook. The `useMutation()` hook accepts several inputs. However, you only need 2 of them for this example. The first parameter, `mutationFn`, accepts the function to execute the main mutating logic, while the second parameter, `onSuccess`, is a callback that runs when the mutating logic succeeds.
 
 The main mutating logic includes executing a Move call of a package named `demo_bear::new` to create a dummy bear object and transferring it to the connected wallet account, all within the same `Transaction`. This example reuses the `executeTransaction()` hook from the [Execute Transaction Hook](#execute-transaction-hook) step to execute the transaction.
 
@@ -1277,9 +1288,9 @@ Run your app and ensure you can:
 
 ### Locking owned objects
 
-To lock the object, execute the `lock` Move function identified by `{PACKAGE_ID}::lock::lock`. The implementation is similar to what's in previous mutation functions, use `useMutation()` from `@tanstack/react-query` to wrap the main logic inside it. The lock function requires an object to be locked and its type because our smart contract `lock` function is generic and requires type parameters. After creating a `Locked` object and its `Key` object, transfer them to the connected wallet account within the same transaction block.
+To lock the object, execute the `lock` Move function identified by `{PACKAGE_ID}::lock::lock`. The implementation is similar to what's in previous mutation functions. Use `useMutation()` from `@tanstack/react-query` to wrap the main logic inside it. The lock function requires an object to be locked and its type because the smart contract `lock` function is generic and requires type parameters. After creating a `Locked` object and its `Key` object, transfer them to the connected wallet account within the same transaction block.
 
-It's beneficial to extract logic of locking owned objects into a separated mutating function to enhance discoverability and encapsulation.
+Extract logic of locking owned objects into a separated mutating function to enhance discoverability and encapsulation.
 
 <details>
 
@@ -1353,7 +1364,7 @@ The object should disappear from the list of owned objects. You view and unlock 
 
 ### Display owned locked objects
 
-Let's take a look at the **My Locked Objects** tab by examining `src/components/locked/OwnedLockedList.tsx`. Focus on the logic on how to retrieve this list.
+Take a look at the **My Locked Objects** tab by examining `src/components/locked/OwnedLockedList.tsx`. Focus on the logic on how to retrieve this list.
 
 <details>
 
@@ -1371,7 +1382,7 @@ This instance of `useSuiClientInfiniteQuery()` is similar to the one in the `Loc
 
 ##### `LockedObject` and `Locked` component
 
-The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is mainly responsible for mapping an on-chain `SuiObjectData` `Locked` object to its corresponding `ApiLockedObject`, which is finally delegated to the `<Locked />` component for rendering. The `<LockedObject />` fetches the locked item object ID if the prop `itemId` is not supplied by using `dApp Kit` `useSuiClientQuery()` hook to call the `getDynamicFieldObject` RPC endpoint. Recalling that in this smart contract, the locked item is put into a dynamic object field.
+The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is mainly responsible for mapping an on-chain `SuiObjectData` `Locked` object to its corresponding `ApiLockedObject`, which is finally delegated to the `<Locked />` component for rendering. The `<LockedObject />` fetches the locked item object ID if the prop `itemId` is not supplied by using dApp Kit `useSuiClientQuery()` hook to call the `getDynamicFieldObject` RPC endpoint. Recall that in this smart contract, the locked item is put into a [dynamic object field](/concepts/dynamic-fields.mdx).
 
 <details>
 
@@ -1385,7 +1396,7 @@ The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is m
 
 </details>
 
-The `<Locked />` (`src/components/locked/partials/Locked.tsx`) component is mainly responsible for rendering the `ApiLockedObject`. Later on, it will also consist of several on-chain interactions: unlock the locked objects and create an escrow out of the locked object.
+The `<Locked />` (`src/components/locked/partials/Locked.tsx`) component is mainly responsible for rendering the `ApiLockedObject`. Later on, it also consists of several on-chain interactions: unlock the locked objects and create an escrow out of the locked object.
 
 <details>
 
@@ -1500,7 +1511,7 @@ Run your app and ensure you can:
 
 To unlock the object, execute the `unlock` Move function identified by `{PACKAGE_ID}::lock::unlock`. Call the `unlock` function supplying the `Locked` object, its corresponding `Key`, the struct type of the original object, and transfer the unlocked object to the current connected wallet account. Also, implement the `onSuccess` callback to invalidate the cache data at query key `locked` after one second to force `react-query` to re-fetch the data at corresponding query key automatically.
 
-Unlocking owned objects is another crucial and complex on-chain action in this application. Hence, it's beneficial to extract its logic into separated mutating functions to enhance discoverability and encapsulation.
+Unlocking owned objects is another crucial and complex on-chain action in this application. Extract its logic into separated mutating functions to enhance discoverability and encapsulation.
 
 <details>
 
@@ -2081,7 +2092,7 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
                 <div>
                   <p className="text-red-500 text-sm py-2 flex items-center gap-3">
                     <Cross1Icon />
-                    The locked object has been deleted so you can't accept this
+                    The locked object has been deleted so you cannot accept this
                     anymore.
                   </p>
                 </div>

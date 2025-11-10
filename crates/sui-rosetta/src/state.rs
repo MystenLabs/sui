@@ -5,8 +5,8 @@ use async_trait::async_trait;
 use futures::future::try_join_all;
 use std::sync::Arc;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
-use sui_sdk::rpc_types::Checkpoint;
 use sui_sdk::SuiClient;
+use sui_sdk::rpc_types::Checkpoint;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::operations::Operations;

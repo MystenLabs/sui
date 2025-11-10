@@ -9,10 +9,10 @@
 use crate::verification_failure;
 use move_binary_format::file_format::{CompiledModule, SignatureToken};
 use sui_types::{
+    SUI_FRAMEWORK_ADDRESS,
     error::ExecutionError,
     fp_ensure,
     id::{OBJECT_MODULE_NAME, UID_STRUCT_NAME},
-    SUI_FRAMEWORK_ADDRESS,
 };
 
 pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
@@ -36,7 +36,7 @@ fn verify_key_structs(module: &CompiledModule) -> Result<(), ExecutionError> {
                 return Err(verification_failure(format!(
                     "First field of struct {} must be 'id', no field found",
                     name
-                )))
+                )));
             }
         };
         let first_field_name = module.identifier_at(first_field.name).as_str();
@@ -55,7 +55,7 @@ fn verify_key_structs(module: &CompiledModule) -> Result<(), ExecutionError> {
                     "First field of struct {} must be of type {}::object::UID, \
                     {:?} type found",
                     name, SUI_FRAMEWORK_ADDRESS, uid_field_type
-                )))
+                )));
             }
         };
         // check that the struct type for "id" field must be SUI_FRAMEWORK_ADDRESS::object::UID.

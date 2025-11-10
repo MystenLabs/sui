@@ -256,11 +256,17 @@ impl ExecutionError {
                         identifier,
                         constant,
                     } => {
-                        write!(msg, " (line {source_line_number}), abort{error_code_str} '{identifier}': {constant}")?;
+                        write!(
+                            msg,
+                            " (line {source_line_number}), abort{error_code_str} '{identifier}': {constant}"
+                        )?;
                     }
                     ErrorConstants::Raw { identifier, bytes } => {
                         let const_str = Base64::encode(bytes);
-                        write!(msg, " (line {source_line_number}), abort{error_code_str} '{identifier}': {const_str}")?;
+                        write!(
+                            msg,
+                            " (line {source_line_number}), abort{error_code_str} '{identifier}': {const_str}"
+                        )?;
                     }
                     ErrorConstants::None => {
                         write!(

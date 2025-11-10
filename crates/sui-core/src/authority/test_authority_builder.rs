@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::ExecutionEnv;
 use super::backpressure::BackpressureManager;
 use super::epoch_start_configuration::EpochFlag;
-use super::ExecutionEnv;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_pruner::{ObjectsCompactionFilter, PrunerWatermarks};
 use crate::authority::authority_store_tables::{
@@ -27,6 +27,7 @@ use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use std::path::PathBuf;
 use std::sync::Arc;
+use sui_config::ExecutionCacheConfig;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
 use sui_config::node::AuthorityOverloadConfig;
@@ -34,7 +35,6 @@ use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
 use sui_config::transaction_deny_config::TransactionDenyConfig;
-use sui_config::ExecutionCacheConfig;
 use sui_macros::nondeterministic;
 use sui_network::randomness;
 use sui_protocol_config::{Chain, ProtocolConfig};
@@ -108,10 +108,11 @@ impl<'a> TestAuthorityBuilder<'a> {
     pub fn with_reference_gas_price(mut self, reference_gas_price: u64) -> Self {
         // If genesis is already set then setting rgp is meaningless since it will be overwritten.
         assert!(self.genesis.is_none());
-        assert!(self
-            .reference_gas_price
-            .replace(reference_gas_price)
-            .is_none());
+        assert!(
+            self.reference_gas_price
+                .replace(reference_gas_price)
+                .is_none()
+        );
         self
     }
 

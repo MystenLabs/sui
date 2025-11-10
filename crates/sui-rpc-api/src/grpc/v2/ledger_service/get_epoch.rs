@@ -17,8 +17,7 @@ use sui_rpc::proto::sui::rpc::v2::ProtocolConfig;
 use sui_rpc::proto::timestamp_ms_to_proto;
 use sui_sdk_types::EpochId;
 
-pub const READ_MASK_DEFAULT: &str =
-        "epoch,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
+pub const READ_MASK_DEFAULT: &str = "epoch,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
 
 #[tracing::instrument(skip(service))]
 pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEpochResponse> {
@@ -94,10 +93,10 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEp
         }
     }
 
-    if let Some(system_state) = system_state {
-        if read_mask.contains(Epoch::SYSTEM_STATE_FIELD.name) {
-            message.system_state = Some(Box::new(system_state.into()));
-        }
+    if let Some(system_state) = system_state
+        && read_mask.contains(Epoch::SYSTEM_STATE_FIELD.name)
+    {
+        message.system_state = Some(Box::new(system_state.into()));
     }
 
     if read_mask.contains(Epoch::COMMITTEE_FIELD.name) {

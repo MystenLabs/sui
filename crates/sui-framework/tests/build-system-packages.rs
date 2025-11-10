@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use move_binary_format::{file_format::Visibility, CompiledModule};
+use move_binary_format::{CompiledModule, file_format::Visibility};
 use move_compiler::editions::Edition;
 use move_package::{BuildConfig as MoveBuildConfig, LintFlag};
 use std::{
@@ -63,8 +63,7 @@ fn check_diff(checked_in: &Path, built: &Path) {
             .output()
             .unwrap();
         if !output.status.success() {
-            let header =
-                "Generated and checked-in sui-framework packages and/or docs do not match.\n\
+            let header = "Generated and checked-in sui-framework packages and/or docs do not match.\n\
                  Re-run with `UPDATE=1` to update checked-in packages and docs. e.g.\n\n\
                  UPDATE=1 cargo test -p sui-framework --test build-system-packages";
 

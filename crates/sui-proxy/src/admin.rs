@@ -10,7 +10,7 @@ use crate::peers::{AllowedPeer, SuiNodeProvider};
 use crate::var;
 use anyhow::Error;
 use anyhow::Result;
-use axum::{extract::DefaultBodyLimit, middleware, routing::post, Extension, Router};
+use axum::{Extension, Router, extract::DefaultBodyLimit, middleware, routing::post};
 use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PublicKey};
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use std::fs;
@@ -20,16 +20,16 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_tls::SUI_VALIDATOR_SERVER_NAME;
 use sui_tls::{
-    rustls::ServerConfig, AllowAll, ClientCertVerifier, SelfSignedCertificate, TlsAcceptor,
+    AllowAll, ClientCertVerifier, SelfSignedCertificate, TlsAcceptor, rustls::ServerConfig,
 };
 use tokio::signal;
 use tower::ServiceBuilder;
 use tower_http::{
+    LatencyUnit,
     timeout::TimeoutLayer,
     trace::{DefaultOnFailure, DefaultOnResponse, TraceLayer},
-    LatencyUnit,
 };
-use tracing::{info, Level};
+use tracing::{Level, info};
 
 /// Configure our graceful shutdown scenarios
 pub async fn shutdown_signal(h: axum_server::Handle) {

@@ -6,13 +6,13 @@ use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 use crate::key_identity::KeyIdentity;
 use crate::random_names::{random_name, random_names};
 
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{Context, anyhow, bail, ensure};
 use async_trait::async_trait;
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
 #[cfg(unix)]
 use colored::Colorize as _;
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng};
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use shared_crypto::intent::{Intent, IntentMessage};
@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::{
-    enum_dispatch, EncodeDecodeBase64, PublicKey, Signature, SignatureScheme, SuiKeyPair,
+    EncodeDecodeBase64, PublicKey, Signature, SignatureScheme, SuiKeyPair, enum_dispatch,
 };
 
 pub const ALIASES_FILE_EXTENSION: &str = "aliases";

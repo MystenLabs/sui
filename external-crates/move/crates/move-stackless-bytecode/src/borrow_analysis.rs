@@ -231,12 +231,12 @@ impl BorrowInfo {
         ret_values: &[TempIndex],
     ) {
         for (src, outgoing) in ret_info.borrows_from.iter() {
-            if let BorrowNode::Reference(idx) = src {
-                if let Some(pos) = ret_values.iter().position(|i| i == idx) {
-                    // Construct hyper edges for this return value.
-                    let leaf = BorrowNode::ReturnPlaceholder(pos);
-                    self.construct_hyper_edges(&leaf, ret_info, vec![], outgoing)
-                }
+            if let BorrowNode::Reference(idx) = src
+                && let Some(pos) = ret_values.iter().position(|i| i == idx)
+            {
+                // Construct hyper edges for this return value.
+                let leaf = BorrowNode::ReturnPlaceholder(pos);
+                self.construct_hyper_edges(&leaf, ret_info, vec![], outgoing)
             }
         }
         for (ret_idx, ret_val) in ret_values.iter().enumerate() {
@@ -441,16 +441,16 @@ impl FunctionTargetProcessor for BorrowAnalysisProcessor {
         for ref module in env.get_modules() {
             for ref fun in module.get_functions() {
                 for (_, ref target) in targets.get_targets(fun) {
-                    if let Some(an) = target.get_annotations().get::<BorrowAnnotation>() {
-                        if !an.summary.is_empty() {
-                            writeln!(
-                                f,
-                                "fun {}[{}]",
-                                fun.get_full_name_str(),
-                                target.data.variant
-                            )?;
-                            writeln!(f, "{}\n", an.summary.borrow_info_str(target))?;
-                        }
+                    if let Some(an) = target.get_annotations().get::<BorrowAnnotation>()
+                        && !an.summary.is_empty()
+                    {
+                        writeln!(
+                            f,
+                            "fun {}[{}]",
+                            fun.get_full_name_str(),
+                            target.data.variant
+                        )?;
+                        writeln!(f, "{}\n", an.summary.borrow_info_str(target))?;
                     }
                 }
             }
@@ -570,10 +570,10 @@ impl<'a> BorrowAnalysis<'a> {
         });
         let mut summary = BorrowInfo::default();
         for (offs, code) in instrs.iter().enumerate() {
-            if let Bytecode::Ret(_, temps) = code {
-                if let Some(info) = code_map.get(&(offs as u16)) {
-                    summary.summarize(self.func_target, &info.before, temps);
-                }
+            if let Bytecode::Ret(_, temps) = code
+                && let Some(info) = code_map.get(&(offs as u16))
+            {
+                summary.summarize(self.func_target, &info.before, temps);
             }
         }
         summary.consolidate();
@@ -752,12 +752,10 @@ pub fn format_borrow_annotation(
 ) -> Option<String> {
     if let Some(BorrowAnnotation { code_map, .. }) =
         func_target.get_annotations().get::<BorrowAnnotation>()
+        && let Some(map_at) = code_map.get(&code_offset)
+        && !map_at.before.is_empty()
     {
-        if let Some(map_at) = code_map.get(&code_offset) {
-            if !map_at.before.is_empty() {
-                return Some(map_at.before.borrow_info_str(func_target));
-            }
-        }
+        return Some(map_at.before.borrow_info_str(func_target));
     }
     None
 }

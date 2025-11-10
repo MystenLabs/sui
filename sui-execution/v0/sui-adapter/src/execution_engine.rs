@@ -699,7 +699,7 @@ mod checked {
             }
         }
 
-        let binary_config = protocol_config.binary_config();
+        let binary_config = protocol_config.binary_config(None);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
                 .iter()

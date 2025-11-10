@@ -13,8 +13,8 @@ const npm2yarn = require("@docusaurus/remark-plugin-npm2yarn");
 const effortRemarkPlugin = require("./src/plugins/effort");
 const betaRemarkPlugin = require("./src/plugins/betatag");
 
-const lightCodeTheme = require("prism-react-renderer/themes/github");
-const darkCodeTheme = require("prism-react-renderer/themes/nightOwl");
+const lightCodeTheme = require("prism-react-renderer").themes.github;
+const darkCodeTheme = require("prism-react-renderer").themes.nightOwl;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,11 +58,13 @@ const config = {
   plugins: [
     //require.resolve('./src/plugins/framework'),
     [
-      "posthog-docusaurus",
+      require.resolve("./src/plugins/plausible"),
       {
-        apiKey: process.env.POSTHOG_API_KEY || "dev", // required
-        appUrl: "https://us.i.posthog.com", // optional, defaults to "https://us.i.posthog.com"
-        enableInDevelopment: false, // optional
+        domain: "docs.sui.io",
+        enableInDev: false,
+        trackOutboundLinks: true,
+        hashMode: false,
+        trackLocalhost: false,
       },
     ],
     [
@@ -167,8 +169,7 @@ const config = {
             keywords: ["checkpoint"],
             extendDefaults: true,
           },
-          beforeDefaultRemarkPlugins: [
-          ],
+          beforeDefaultRemarkPlugins: [],
           remarkPlugins: [
             math,
             [npm2yarn, { sync: true, converters: ["yarn", "pnpm"] }],

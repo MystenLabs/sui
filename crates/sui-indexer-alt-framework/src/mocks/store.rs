@@ -3,8 +3,8 @@
 
 use std::{
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
     },
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -502,10 +502,10 @@ impl MockStore {
         let start = std::time::Instant::now();
         while start.elapsed() < timeout_duration {
             {
-                if let Some(pipeline_data) = self.data.get(watermark_key) {
-                    if let Some(values) = pipeline_data.get(&checkpoint) {
-                        return values.clone();
-                    }
+                if let Some(pipeline_data) = self.data.get(watermark_key)
+                    && let Some(values) = pipeline_data.get(&checkpoint)
+                {
+                    return values.clone();
                 }
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
@@ -522,10 +522,10 @@ impl MockStore {
     ) -> MockWatermark {
         let start = std::time::Instant::now();
         while start.elapsed() < timeout_duration {
-            if let Some(watermark) = self.watermark(watermark_key) {
-                if watermark.checkpoint_hi_inclusive >= checkpoint {
-                    return watermark;
-                }
+            if let Some(watermark) = self.watermark(watermark_key)
+                && watermark.checkpoint_hi_inclusive >= checkpoint
+            {
+                return watermark;
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
         }

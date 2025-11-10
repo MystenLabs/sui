@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::abi::EthBridgeEvent;
 use crate::error::{BridgeError, BridgeResult};
-use crate::metered_eth_provider::{new_metered_eth_provider, MeteredEthHttpProvier};
+use crate::metered_eth_provider::{MeteredEthHttpProvier, new_metered_eth_provider};
 use crate::metrics::BridgeMetrics;
 use crate::types::{BridgeAction, EthLog, RawEthLog};
 use ethers::providers::{JsonRpcClient, Middleware, Provider};
@@ -255,7 +255,10 @@ where
             "Provider returns log without block_number".into(),
         ))?;
         if receipt_block_num.as_u64() != block_number {
-            return Err(BridgeError::ProviderError(format!("Provider returns receipt with different block number from log. Receipt: {:?}, Log: {:?}", receipt, log)));
+            return Err(BridgeError::ProviderError(format!(
+                "Provider returns receipt with different block number from log. Receipt: {:?}, Log: {:?}",
+                receipt, log
+            )));
         }
 
         // Find the log index in the transaction
@@ -265,7 +268,10 @@ where
             if receipt_log.log_index == Some(log_index) {
                 // make sure the topics and data match
                 if receipt_log.topics != log.topics || receipt_log.data != log.data {
-                    return Err(BridgeError::ProviderError(format!("Provider returns receipt with different log from log. Receipt: {:?}, Log: {:?}", receipt, log)));
+                    return Err(BridgeError::ProviderError(format!(
+                        "Provider returns receipt with different log from log. Receipt: {:?}, Log: {:?}",
+                        receipt, log
+                    )));
                 }
                 log_index_in_tx = Some(idx);
             }

@@ -5,8 +5,8 @@ use crate::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::AuthorityAPI,
     transaction_driver::{
-        effects_certifier::EffectsCertifier, error::TransactionDriverError,
-        metrics::TransactionDriverMetrics, SubmitTransactionOptions,
+        SubmitTransactionOptions, effects_certifier::EffectsCertifier,
+        error::TransactionDriverError, metrics::TransactionDriverMetrics,
     },
     validator_client_monitor::ValidatorClientMonitor,
 };
@@ -18,28 +18,28 @@ use std::{
     sync::{Arc, Mutex as StdMutex},
 };
 use sui_types::{
-    base_types::{random_object_ref, AuthorityName},
+    base_types::{AuthorityName, random_object_ref},
     committee::Committee,
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::TransactionEffects,
-    error::{SuiError, UserInputError},
+    error::{SuiError, SuiErrorKind, UserInputError},
     messages_checkpoint::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
     messages_consensus::ConsensusPosition,
-    messages_grpc::{ExecutedData, SubmitTxRequest, SubmitTxResponse, SubmitTxResult, TxType},
     messages_grpc::{
-        HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-        HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
-        TransactionInfoRequest, TransactionInfoResponse, ValidatorHealthRequest,
+        ExecutedData, HandleCertificateRequestV3, HandleCertificateResponseV2,
+        HandleCertificateResponseV3, HandleSoftBundleCertificatesRequestV3,
+        HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
+        ObjectInfoResponse, SubmitTxRequest, SubmitTxResponse, SubmitTxResult, SystemStateRequest,
+        TransactionInfoRequest, TransactionInfoResponse, TxType, ValidatorHealthRequest,
         ValidatorHealthResponse, WaitForEffectsRequest, WaitForEffectsResponse,
     },
     quorum_driver_types::EffectsFinalityInfo,
     sui_system_state::SuiSystemState,
     transaction::{CertifiedTransaction, Transaction},
 };
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 // Mock AuthorityAPI for testing
 #[derive(Clone)]
@@ -118,9 +118,10 @@ impl AuthorityAPI for MockAuthority {
             // Since the actual timeout in effects_certifier is 10 seconds, we sleep longer
             // to ensure the timeout is triggered.
             sleep(Duration::from_secs(30)).await;
-            Err(SuiError::TransactionNotFound {
+            Err(SuiErrorKind::TransactionNotFound {
                 digest: request.transaction_digest.unwrap(),
-            })
+            }
+            .into())
         }
     }
 
@@ -356,12 +357,15 @@ async fn test_transaction_rejected_non_retriable() {
 
     // Set up rejected responses from all authorities
     let non_retriable_rejected_response = WaitForEffectsResponse::Rejected {
-        error: Some(SuiError::UserInputError {
-            error: UserInputError::ObjectVersionUnavailableForConsumption {
-                provided_obj_ref: random_object_ref(),
-                current_version: 1.into(),
-            },
-        }),
+        error: Some(
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectVersionUnavailableForConsumption {
+                    provided_obj_ref: random_object_ref(),
+                    current_version: 1.into(),
+                },
+            }
+            .into(),
+        ),
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -429,12 +433,15 @@ async fn test_transaction_rejected_retriable() {
     let options = SubmitTransactionOptions::default();
 
     let retriable_rejected_response = WaitForEffectsResponse::Rejected {
-        error: Some(SuiError::UserInputError {
-            error: UserInputError::ObjectNotFound {
-                object_id: random_object_ref().0,
-                version: None,
-            },
-        }),
+        error: Some(
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectNotFound {
+                    object_id: random_object_ref().0,
+                    version: None,
+                },
+            }
+            .into(),
+        ),
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -496,10 +503,13 @@ async fn test_transaction_rejected_with_conflicts() {
     let options = SubmitTransactionOptions::default();
 
     let lock_conflict_rejected_response = WaitForEffectsResponse::Rejected {
-        error: Some(SuiError::ObjectLockConflict {
-            obj_ref: random_object_ref(),
-            pending_transaction: TransactionDigest::new([0; 32]),
-        }),
+        error: Some(
+            SuiErrorKind::ObjectLockConflict {
+                obj_ref: random_object_ref(),
+                pending_transaction: TransactionDigest::new([0; 32]),
+            }
+            .into(),
+        ),
     };
     let consensus_rejected_response = WaitForEffectsResponse::Rejected { error: None };
 
@@ -633,12 +643,15 @@ async fn test_mixed_rejected_and_expired() {
     };
 
     let non_retriable_rejected_response = WaitForEffectsResponse::Rejected {
-        error: Some(SuiError::UserInputError {
-            error: UserInputError::ObjectVersionUnavailableForConsumption {
-                provided_obj_ref: random_object_ref(),
-                current_version: 1.into(),
-            },
-        }),
+        error: Some(
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectVersionUnavailableForConsumption {
+                    provided_obj_ref: random_object_ref(),
+                    current_version: 1.into(),
+                },
+            }
+            .into(),
+        ),
     };
 
     tracing::debug!("Case #1: Test mixed rejected and expired responses - non-retriable");
@@ -752,20 +765,26 @@ async fn test_mixed_rejected_reasons() {
     let options = SubmitTransactionOptions::default();
 
     let retriable_rejected_response = WaitForEffectsResponse::Rejected {
-        error: Some(SuiError::UserInputError {
-            error: UserInputError::ObjectNotFound {
-                object_id: random_object_ref().0,
-                version: None,
-            },
-        }),
+        error: Some(
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectNotFound {
+                    object_id: random_object_ref().0,
+                    version: None,
+                },
+            }
+            .into(),
+        ),
     };
     let non_retriable_rejected_response = WaitForEffectsResponse::Rejected {
-        error: Some(SuiError::UserInputError {
-            error: UserInputError::ObjectVersionUnavailableForConsumption {
-                provided_obj_ref: random_object_ref(),
-                current_version: 1.into(),
-            },
-        }),
+        error: Some(
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectVersionUnavailableForConsumption {
+                    provided_obj_ref: random_object_ref(),
+                    current_version: 1.into(),
+                },
+            }
+            .into(),
+        ),
     };
     let reason_not_found_response = WaitForEffectsResponse::Rejected { error: None };
 
@@ -865,7 +884,9 @@ async fn test_mixed_rejected_reasons() {
     }
 
     {
-        tracing::debug!("Case #3: Test 2 retriable, 1 not found, and 1 non-retriable reason that arrives earlier");
+        tracing::debug!(
+            "Case #3: Test 2 retriable, 1 not found, and 1 non-retriable reason that arrives earlier"
+        );
         let authority_aggregator = Arc::new(create_test_authority_aggregator());
         let authorities: Vec<_> = authority_aggregator.authority_clients.keys().collect();
         for (i, authority_name) in authorities.iter().enumerate() {
@@ -916,7 +937,9 @@ async fn test_mixed_rejected_reasons() {
     }
 
     {
-        tracing::debug!("Case #4: Test 1 retriable, 2 not found, and 1 non-retriable reason that arrives earlier");
+        tracing::debug!(
+            "Case #4: Test 1 retriable, 2 not found, and 1 non-retriable reason that arrives earlier"
+        );
         let authority_aggregator = Arc::new(create_test_authority_aggregator());
         let authorities: Vec<_> = authority_aggregator.authority_clients.keys().collect();
         for (i, authority_name) in authorities.iter().enumerate() {
@@ -1149,9 +1172,12 @@ async fn test_aborted_with_multiple_effects() {
                 fast_path: false,
             },
             2 => WaitForEffectsResponse::Rejected {
-                error: Some(SuiError::ValidatorOverloadedRetryAfter {
-                    retry_after_secs: 5,
-                }),
+                error: Some(
+                    SuiErrorKind::ValidatorOverloadedRetryAfter {
+                        retry_after_secs: 5,
+                    }
+                    .into(),
+                ),
             },
             3 => WaitForEffectsResponse::Rejected {
                 error: None, // rejected by consensus
@@ -1228,12 +1254,15 @@ async fn test_full_effects_retry_loop() {
         if i == 0 {
             // First authority fails to get full effects
             let failed_response = WaitForEffectsResponse::Rejected {
-                error: Some(SuiError::UserInputError {
-                    error: UserInputError::ObjectNotFound {
-                        object_id: random_object_ref().0,
-                        version: None,
-                    },
-                }),
+                error: Some(
+                    SuiErrorKind::UserInputError {
+                        error: UserInputError::ObjectNotFound {
+                            object_id: random_object_ref().0,
+                            version: None,
+                        },
+                    }
+                    .into(),
+                ),
             };
             client.set_full_response(tx_digest, failed_response);
         } else {
@@ -1395,12 +1424,15 @@ async fn test_request_retrier_exhaustion() {
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
         let client = safe_client.authority_client();
         let failed_response = WaitForEffectsResponse::Rejected {
-            error: Some(SuiError::UserInputError {
-                error: UserInputError::ObjectNotFound {
-                    object_id: random_object_ref().0,
-                    version: None,
-                },
-            }),
+            error: Some(
+                SuiErrorKind::UserInputError {
+                    error: UserInputError::ObjectNotFound {
+                        object_id: random_object_ref().0,
+                        version: None,
+                    },
+                }
+                .into(),
+            ),
         };
         client.set_full_response(tx_digest, failed_response);
     }

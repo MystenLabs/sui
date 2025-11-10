@@ -4,8 +4,8 @@
 use std::{convert::Infallible, fmt::Display};
 
 use jsonrpsee::types::{
-    error::{INTERNAL_ERROR_CODE, INVALID_PARAMS_CODE},
     ErrorObject,
+    error::{INTERNAL_ERROR_CODE, INVALID_PARAMS_CODE},
 };
 
 /// Request timed out.

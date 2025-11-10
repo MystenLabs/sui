@@ -52,7 +52,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// tree while maintaining a current set of overrides along the path; dependencies are first
     /// replaced with their overrides, and then recursively traversed. Once the linkage tables for
     /// the dependencies are constructed, they are merged and returned.
-    pub fn linkage(&self) -> LinkageResult<LinkageTable<F>> {
+    pub fn linkage(&self) -> LinkageResult<LinkageTable<'_, F>> {
         self.root_package_info().check_cycles(
             self.root_package_info().name().clone(),
             &mut Vec::new(),

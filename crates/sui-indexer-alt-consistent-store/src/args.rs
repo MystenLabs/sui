@@ -4,11 +4,11 @@
 use std::path::PathBuf;
 
 use clap::ArgAction;
-use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
+use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs};
 use sui_indexer_alt_metrics::MetricsArgs;
 
 use crate::restore::{
-    formal_snapshot::FormalSnapshotArgs, storage::StorageConnectionArgs, RestoreArgs,
+    RestoreArgs, formal_snapshot::FormalSnapshotArgs, storage::StorageConnectionArgs,
 };
 pub use crate::rpc::{RpcArgs, TlsArgs};
 

@@ -89,6 +89,9 @@ impl VMRuntime {
                         self.loader
                             .vm_config()
                             .check_no_extraneous_bytes_during_deserialization,
+                        self.loader
+                            .vm_config()
+                            .deprecate_global_storage_ops_during_deserialization,
                     ),
                 )
             })

@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{ensure, Context as _};
+use anyhow::{Context as _, ensure};
 use futures::future;
 use prometheus::Registry;
 use sui_indexer_alt_framework::{pipeline::Processor, types::object::Object};
@@ -16,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 use crate::{
-    db::{config::DbConfig, Db},
+    db::{Db, config::DbConfig},
     handlers::balances::Balances,
     handlers::object_by_owner::ObjectByOwner,
     handlers::object_by_type::ObjectByType,

@@ -16,7 +16,7 @@ use crate::execution_status::{ExecutionFailureStatus, ExecutionStatus, MoveLocat
 use crate::gas::GasCostSummary;
 #[cfg(debug_assertions)]
 use crate::is_system_package;
-use crate::object::{Owner, OBJECT_START_VERSION};
+use crate::object::{OBJECT_START_VERSION, Owner};
 use crate::transaction::SharedObjectMutability;
 use serde::{Deserialize, Serialize};
 #[cfg(debug_assertions)]
@@ -593,6 +593,12 @@ impl TransactionEffectsV2 {
                         SharedObjectMutability::Immutable => Some((
                             id,
                             UnchangedConsensusKind::ReadConsensusStreamEnded(version),
+                        )),
+                        // This is current unreachable, because non exclusive writes are not exposed to
+                        // user transactions yet, and so there is no way for their inputs to be deleted.
+                        SharedObjectMutability::NonExclusiveWrite => Some((
+                            id,
+                            UnchangedConsensusKind::MutateConsensusStreamEnded(version),
                         )),
                     }
                 }

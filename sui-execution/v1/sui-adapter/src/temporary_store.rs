@@ -67,7 +67,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &ProtocolConfig,
     ) -> Self {
-        let mutable_input_refs = input_objects.mutable_inputs();
+        let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
         let deleted_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
@@ -121,7 +121,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_runtime_objects: self.loaded_runtime_objects,
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,
-            binary_config: self.protocol_config.binary_config(),
+            binary_config: self.protocol_config.binary_config(None),
         }
     }
 
@@ -1000,8 +1000,8 @@ impl TemporaryStore<'_> {
     /// by `check_sui_conserved` above:
     ///
     /// * all SUI in input objects (including coins etc in the Move part of an object) should flow
-    ///    either to an output object, or be burned as part of computation fees or non-refundable
-    ///    storage rebate
+    ///   either to an output object, or be burned as part of computation fees or non-refundable
+    ///   storage rebate
     ///
     /// This function is intended to be called *after* we have charged for gas + applied the
     /// storage rebate to the gas object, but *before* we have updated object versions. The
@@ -1103,13 +1103,17 @@ impl Storage for TemporaryStore<'_> {
     }
 
     /// Take execution results v2, and translate it back to be compatible with effects v1.
-    fn record_execution_results(&mut self, results: ExecutionResults) {
+    fn record_execution_results(
+        &mut self,
+        results: ExecutionResults,
+    ) -> Result<(), ExecutionError> {
         let ExecutionResults::V2(results) = results else {
             panic!("ExecutionResults::V2 expected in sui-execution v1 and above");
         };
         // It's important to merge instead of override results because it's
         // possible to execute PT more than once during tx execution.
         self.execution_results.merge_results(results);
+        Ok(())
     }
 
     fn save_loaded_runtime_objects(
