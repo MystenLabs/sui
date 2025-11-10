@@ -54,6 +54,7 @@ use crate::metrics::BridgeMetrics;
 use crate::retry_with_max_elapsed_time;
 use crate::types::BridgeActionStatus;
 use crate::types::ParsedTokenTransferMessage;
+use crate::types::SuiEvents;
 use crate::types::{BridgeAction, BridgeAuthority, BridgeCommittee};
 
 pub struct SuiClient<P> {
@@ -158,6 +159,7 @@ where
     ) -> BridgeResult<BridgeAction> {
         let events = self.inner.get_events_by_tx_digest(*tx_digest).await?;
         let event = events
+            .events
             .get(event_idx as usize)
             .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
         if event.type_.address.as_ref() != BRIDGE_PACKAGE_ID.as_ref() {
@@ -397,7 +399,7 @@ pub trait SuiClientInner: Send + Sync {
     async fn get_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,
-    ) -> Result<Vec<SuiEvent>, Self::Error>;
+    ) -> Result<SuiEvents, Self::Error>;
 
     async fn get_chain_identifier(&self) -> Result<String, Self::Error>;
 
@@ -458,8 +460,23 @@ impl SuiClientInner for SuiSdkClient {
     async fn get_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,
-    ) -> Result<Vec<SuiEvent>, Self::Error> {
-        self.event_api().get_events(tx_digest).await
+    ) -> Result<SuiEvents, Self::Error> {
+        let resp = self
+            .read_api()
+            .get_transaction_with_options(
+                tx_digest,
+                SuiTransactionBlockResponseOptions::new().with_events(),
+            )
+            .await?;
+        Ok(SuiEvents {
+            transaction_digest: resp.digest,
+            checkpoint: resp.checkpoint,
+            timestamp_ms: resp.timestamp_ms,
+            events: resp
+                .events
+                .ok_or_else(|| sui_sdk::error::Error::DataError("missing events".into()))?
+                .data,
+        })
     }
 
     async fn get_chain_identifier(&self) -> Result<String, Self::Error> {
