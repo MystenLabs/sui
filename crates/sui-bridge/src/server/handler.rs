@@ -17,9 +17,9 @@ use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 use sui_types::digests::TransactionDigest;
 use tap::TapFallible;
-use tokio::sync::{Mutex, oneshot};
 use tracing::info;
 
 use super::governance_verifier::GovernanceVerifier;
@@ -104,8 +104,8 @@ where
 struct SignerWithCache<K> {
     signer: Arc<BridgeAuthorityKeyPair>,
     verifier: Arc<dyn ActionVerifier<K>>,
-    mutex: Arc<Mutex<()>>,
-    cache: LruCache<K, Arc<Mutex<Option<BridgeResult<SignedBridgeAction>>>>>,
+    cache:
+        Arc<Mutex<LruCache<K, Arc<tokio::sync::Mutex<Option<BridgeResult<SignedBridgeAction>>>>>>>,
     metrics: Arc<BridgeMetrics>,
 }
 
@@ -121,49 +121,27 @@ where
         Self {
             signer,
             verifier: Arc::new(verifier),
-            mutex: Arc::new(Mutex::new(())),
-            cache: LruCache::new(NonZeroUsize::new(1000).unwrap()),
+            cache: Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap()))),
             metrics,
         }
     }
 
-    fn spawn(
-        mut self,
-        mut rx: mysten_metrics::metered_channel::Receiver<(
-            K,
-            oneshot::Sender<BridgeResult<SignedBridgeAction>>,
-        )>,
-    ) -> tokio::task::JoinHandle<()> {
-        tokio::spawn(async move {
-            loop {
-                let (key, tx) = rx
-                    .recv()
-                    .await
-                    .unwrap_or_else(|| panic!("Server signer's channel is closed"));
-                let result = self.sign(key).await;
-                // The receiver may be dropped before the sender (client connection was dropped for example),
-                // we ignore the error in that case.
-                let _ = tx.send(result);
-            }
-        })
-    }
-
-    async fn get_cache_entry(
-        &mut self,
+    fn get_cache_entry(
+        &self,
         key: K,
-    ) -> Arc<Mutex<Option<BridgeResult<SignedBridgeAction>>>> {
-        // This mutex exists to make sure everyone gets the same entry, namely no double insert
-        let _ = self.mutex.lock().await;
+    ) -> Arc<tokio::sync::Mutex<Option<BridgeResult<SignedBridgeAction>>>> {
         self.cache
-            .get_or_insert(key, || Arc::new(Mutex::new(None)))
+            .lock()
+            .unwrap()
+            .get_or_insert(key, || Arc::new(tokio::sync::Mutex::new(None)))
             .clone()
     }
 
-    async fn sign(&mut self, key: K) -> BridgeResult<SignedBridgeAction> {
+    async fn sign(&self, key: K) -> BridgeResult<SignedBridgeAction> {
         let signer = self.signer.clone();
         let verifier = self.verifier.clone();
         let verifier_name = verifier.name();
-        let entry = self.get_cache_entry(key.clone()).await;
+        let entry = self.get_cache_entry(key.clone());
         let mut guard = entry.lock().await;
         if let Some(result) = &*guard {
             self.metrics
@@ -203,28 +181,18 @@ where
     }
 
     #[cfg(test)]
-    async fn get_testing_only(
-        &mut self,
+    fn get_testing_only(
+        &self,
         key: K,
-    ) -> Option<&Arc<Mutex<Option<BridgeResult<SignedBridgeAction>>>>> {
-        let _ = self.mutex.lock().await;
-        self.cache.get(&key)
+    ) -> Option<Arc<tokio::sync::Mutex<Option<BridgeResult<SignedBridgeAction>>>>> {
+        self.cache.lock().unwrap().get(&key).cloned()
     }
 }
 
 pub struct BridgeRequestHandler {
-    sui_signer_tx: mysten_metrics::metered_channel::Sender<(
-        (TransactionDigest, u16),
-        oneshot::Sender<BridgeResult<SignedBridgeAction>>,
-    )>,
-    eth_signer_tx: mysten_metrics::metered_channel::Sender<(
-        (TxHash, u16),
-        oneshot::Sender<BridgeResult<SignedBridgeAction>>,
-    )>,
-    governance_signer_tx: mysten_metrics::metered_channel::Sender<(
-        BridgeAction,
-        oneshot::Sender<BridgeResult<SignedBridgeAction>>,
-    )>,
+    sui_signer: SignerWithCache<(TransactionDigest, u16)>,
+    eth_signer: SignerWithCache<(TxHash, u16)>,
+    governance_signer: SignerWithCache<BridgeAction>,
 }
 
 impl BridgeRequestHandler {
@@ -238,52 +206,28 @@ impl BridgeRequestHandler {
         approved_governance_actions: Vec<BridgeAction>,
         metrics: Arc<BridgeMetrics>,
     ) -> Self {
-        let (sui_signer_tx, sui_rx) = mysten_metrics::metered_channel::channel(
-            1000,
-            &mysten_metrics::get_metrics()
-                .unwrap()
-                .channel_inflight
-                .with_label_values(&["server_sui_action_signing_queue"]),
-        );
-        let (eth_signer_tx, eth_rx) = mysten_metrics::metered_channel::channel(
-            1000,
-            &mysten_metrics::get_metrics()
-                .unwrap()
-                .channel_inflight
-                .with_label_values(&["server_eth_action_signing_queue"]),
-        );
-        let (governance_signer_tx, governance_rx) = mysten_metrics::metered_channel::channel(
-            1000,
-            &mysten_metrics::get_metrics()
-                .unwrap()
-                .channel_inflight
-                .with_label_values(&["server_governance_action_signing_queue"]),
-        );
         let signer = Arc::new(signer);
 
-        SignerWithCache::new(
+        let sui_signer = SignerWithCache::new(
             signer.clone(),
             SuiActionVerifier { sui_client },
             metrics.clone(),
-        )
-        .spawn(sui_rx);
-        SignerWithCache::new(
+        );
+        let eth_signer = SignerWithCache::new(
             signer.clone(),
             EthActionVerifier { eth_client },
             metrics.clone(),
-        )
-        .spawn(eth_rx);
-        SignerWithCache::new(
+        );
+        let governance_signer = SignerWithCache::new(
             signer.clone(),
             GovernanceVerifier::new(approved_governance_actions).unwrap(),
             metrics.clone(),
-        )
-        .spawn(governance_rx);
+        );
 
         Self {
-            sui_signer_tx,
-            eth_signer_tx,
-            governance_signer_tx,
+            sui_signer,
+            eth_signer,
+            governance_signer,
         }
     }
 }
@@ -297,14 +241,7 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
     ) -> Result<Json<SignedBridgeAction>, BridgeError> {
         let tx_hash = TxHash::from_str(&tx_hash_hex).map_err(|_| BridgeError::InvalidTxHash)?;
 
-        let (tx, rx) = oneshot::channel();
-        self.eth_signer_tx
-            .send(((tx_hash, event_idx), tx))
-            .await
-            .unwrap_or_else(|_| panic!("Server eth signing channel is closed"));
-        let signed_action = rx
-            .await
-            .unwrap_or_else(|_| panic!("Server signing task's oneshot channel is dropped"))?;
+        let signed_action = self.eth_signer.sign((tx_hash, event_idx)).await?;
         Ok(Json(signed_action))
     }
 
@@ -315,14 +252,7 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
     ) -> Result<Json<SignedBridgeAction>, BridgeError> {
         let tx_digest = TransactionDigest::from_str(&tx_digest_base58)
             .map_err(|_e| BridgeError::InvalidTxHash)?;
-        let (tx, rx) = oneshot::channel();
-        self.sui_signer_tx
-            .send(((tx_digest, event_idx), tx))
-            .await
-            .unwrap_or_else(|_| panic!("Server sui signing channel is closed"));
-        let signed_action = rx
-            .await
-            .unwrap_or_else(|_| panic!("Server signing task's oneshot channel is dropped"))?;
+        let signed_action = self.sui_signer.sign((tx_digest, event_idx)).await?;
         Ok(Json(signed_action))
     }
 
@@ -333,14 +263,7 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
         if !action.is_governace_action() {
             return Err(BridgeError::ActionIsNotGovernanceAction(action));
         }
-        let (tx, rx) = oneshot::channel();
-        self.governance_signer_tx
-            .send((action, tx))
-            .await
-            .unwrap_or_else(|_| panic!("Server governance action signing channel is closed"));
-        let signed_action = rx.await.unwrap_or_else(|_| {
-            panic!("Server governance action task's oneshot channel is dropped")
-        })?;
+        let signed_action = self.governance_signer.sign(action).await?;
         Ok(Json(signed_action))
     }
 }
@@ -373,7 +296,7 @@ mod tests {
             sui_client: Arc::new(SuiClient::new_for_testing(sui_client_mock.clone())),
         };
         let metrics = Arc::new(BridgeMetrics::new_for_testing());
-        let mut sui_signer_with_cache = SignerWithCache::new(signer.clone(), sui_verifier, metrics);
+        let sui_signer_with_cache = SignerWithCache::new(signer.clone(), sui_verifier, metrics);
 
         // Test `get_cache_entry` creates a new entry if not exist
         let sui_tx_digest = TransactionDigest::random();
@@ -381,15 +304,10 @@ mod tests {
         assert!(
             sui_signer_with_cache
                 .get_testing_only((sui_tx_digest, sui_event_idx))
-                .await
                 .is_none()
         );
-        let entry = sui_signer_with_cache
-            .get_cache_entry((sui_tx_digest, sui_event_idx))
-            .await;
-        let entry_ = sui_signer_with_cache
-            .get_testing_only((sui_tx_digest, sui_event_idx))
-            .await;
+        let entry = sui_signer_with_cache.get_cache_entry((sui_tx_digest, sui_event_idx));
+        let entry_ = sui_signer_with_cache.get_testing_only((sui_tx_digest, sui_event_idx));
         assert!(entry_.unwrap().lock().await.is_none());
 
         let action = get_test_sui_to_eth_bridge_action(
@@ -404,9 +322,7 @@ mod tests {
         let sig = BridgeAuthoritySignInfo::new(&action, &signer);
         let signed_action = SignedBridgeAction::new_from_data_and_sig(action.clone(), sig);
         entry.lock().await.replace(Ok(signed_action));
-        let entry_ = sui_signer_with_cache
-            .get_testing_only((sui_tx_digest, sui_event_idx))
-            .await;
+        let entry_ = sui_signer_with_cache.get_testing_only((sui_tx_digest, sui_event_idx));
         assert!(entry_.unwrap().lock().await.is_some());
 
         // Test `sign` caches Err result
@@ -419,9 +335,7 @@ mod tests {
             .sign((sui_tx_digest, sui_event_idx))
             .await
             .unwrap_err();
-        let entry_ = sui_signer_with_cache
-            .get_testing_only((sui_tx_digest, sui_event_idx))
-            .await;
+        let entry_ = sui_signer_with_cache.get_testing_only((sui_tx_digest, sui_event_idx));
         assert!(entry_.unwrap().lock().await.is_none());
 
         // Mock a cacheable error such as no bridge events in tx position (empty event list)
@@ -432,9 +346,7 @@ mod tests {
                 .await,
             Err(BridgeError::NoBridgeEventsInTxPosition)
         ));
-        let entry_ = sui_signer_with_cache
-            .get_testing_only((sui_tx_digest, sui_event_idx))
-            .await;
+        let entry_ = sui_signer_with_cache.get_testing_only((sui_tx_digest, sui_event_idx));
         assert_eq!(
             entry_.unwrap().lock().await.clone().unwrap().unwrap_err(),
             BridgeError::NoBridgeEventsInTxPosition,
@@ -513,7 +425,7 @@ mod tests {
             eth_client: Arc::new(eth_client),
         };
         let metrics = Arc::new(BridgeMetrics::new_for_testing());
-        let mut eth_signer_with_cache =
+        let eth_signer_with_cache =
             SignerWithCache::new(signer.clone(), eth_verifier, metrics.clone());
 
         // Test `get_cache_entry` creates a new entry if not exist
@@ -522,15 +434,10 @@ mod tests {
         assert!(
             eth_signer_with_cache
                 .get_testing_only((eth_tx_hash, eth_event_idx))
-                .await
                 .is_none()
         );
-        let entry = eth_signer_with_cache
-            .get_cache_entry((eth_tx_hash, eth_event_idx))
-            .await;
-        let entry_ = eth_signer_with_cache
-            .get_testing_only((eth_tx_hash, eth_event_idx))
-            .await;
+        let entry = eth_signer_with_cache.get_cache_entry((eth_tx_hash, eth_event_idx));
+        let entry_ = eth_signer_with_cache.get_testing_only((eth_tx_hash, eth_event_idx));
         // first unwrap should not pacic because the entry should have been inserted by `get_cache_entry`
         assert!(entry_.unwrap().lock().await.is_none());
 
@@ -538,9 +445,7 @@ mod tests {
         let sig = BridgeAuthoritySignInfo::new(&action, &signer);
         let signed_action = SignedBridgeAction::new_from_data_and_sig(action.clone(), sig);
         entry.lock().await.replace(Ok(signed_action.clone()));
-        let entry_ = eth_signer_with_cache
-            .get_testing_only((eth_tx_hash, eth_event_idx))
-            .await;
+        let entry_ = eth_signer_with_cache.get_testing_only((eth_tx_hash, eth_event_idx));
         assert_eq!(
             entry_.unwrap().lock().await.clone().unwrap().unwrap(),
             signed_action
@@ -567,9 +472,7 @@ mod tests {
             .sign((eth_tx_hash, eth_event_idx))
             .await
             .unwrap();
-        let entry_ = eth_signer_with_cache
-            .get_testing_only((eth_tx_hash, eth_event_idx))
-            .await;
+        let entry_ = eth_signer_with_cache.get_testing_only((eth_tx_hash, eth_event_idx));
         entry_.unwrap().lock().await.clone().unwrap().unwrap();
     }
 
@@ -600,12 +503,12 @@ mod tests {
         let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
         let signer = Arc::new(kp);
         let metrics = Arc::new(BridgeMetrics::new_for_testing());
-        let mut signer_with_cache = SignerWithCache::new(signer.clone(), verifier, metrics.clone());
+        let signer_with_cache = SignerWithCache::new(signer.clone(), verifier, metrics.clone());
 
         // action_1 is signable
         signer_with_cache.sign(action_1.clone()).await.unwrap();
         // signed action is cached
-        let entry_ = signer_with_cache.get_testing_only(action_1.clone()).await;
+        let entry_ = signer_with_cache.get_testing_only(action_1.clone());
         assert_eq!(
             entry_
                 .unwrap()
@@ -630,7 +533,7 @@ mod tests {
             BridgeError::GovernanceActionIsNotApproved
         ));
         // error is cached
-        let entry_ = signer_with_cache.get_testing_only(action_3.clone()).await;
+        let entry_ = signer_with_cache.get_testing_only(action_3.clone());
         assert!(matches!(
             entry_.unwrap().lock().await.clone().unwrap().unwrap_err(),
             BridgeError::GovernanceActionIsNotApproved
@@ -643,7 +546,7 @@ mod tests {
             BridgeError::ActionIsNotGovernanceAction(..)
         ));
         // error is cached
-        let entry_ = signer_with_cache.get_testing_only(action_4.clone()).await;
+        let entry_ = signer_with_cache.get_testing_only(action_4.clone());
         assert!(matches!(
             entry_.unwrap().lock().await.clone().unwrap().unwrap_err(),
             BridgeError::ActionIsNotGovernanceAction { .. }
