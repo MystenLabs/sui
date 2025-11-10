@@ -198,7 +198,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             // For validators, use sequential processing to maintain ordering guarantees.
             if context.is_observer {
                 let num_workers = 2 * context.committee.size();
-                let channel_capacity = 10 * num_workers;
+                let channel_capacity = 100;
 
                 // Spawn worker pool - each worker processes blocks independently
                 // Each worker gets its own channel to eliminate mutex contention
@@ -208,34 +208,44 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                 for worker_id in 0..num_workers {
                     let (block_tx, mut block_rx) = monitored_mpsc::channel(
                         &format!("subscriber_blocks_peer_{}_worker_{}", peer_hostname, worker_id),
-                        channel_capacity / num_workers,
+                        channel_capacity,
                     );
                     senders.push(block_tx);
 
-                    let authority_service = authority_service.clone();
+                    let _authority_service = authority_service.clone();
                     let peer_hostname_clone = peer_hostname.to_string();
+                    let context_clone = context.clone();
 
                     workers.spawn(async move {
-                        while let Some(block) = block_rx.recv().await {
+                        while let Some(_block) = block_rx.recv().await {
                             let _scope = monitored_scope("SubscriberWorker::handle_block");
 
-                            let result = authority_service.handle_send_block(peer, block).await;
-                            if let Err(e) = result {
-                                match e {
-                                    ConsensusError::BlockRejected { block_ref, reason } => {
-                                        debug!(
-                                            "Worker {} failed to process block from peer {} for block {:?}: {}",
-                                            worker_id, peer_hostname_clone, block_ref, reason
-                                        );
-                                    }
-                                    _ => {
-                                        info!(
-                                            "Worker {} received invalid block from peer {}: {}",
-                                            worker_id, peer_hostname_clone, e
-                                        );
-                                    }
-                                }
-                            }
+                            // TODO: Temporarily disabled block processing to isolate bottleneck
+                            // Just count blocks received to measure pure streaming throughput
+                            context_clone
+                                .metrics
+                                .node_metrics
+                                .subscribed_blocks
+                                .with_label_values(&[&format!("{}_worker_{}", peer_hostname_clone, worker_id)])
+                                .inc();
+
+                            // let result = authority_service.handle_send_block(peer, block).await;
+                            // if let Err(e) = result {
+                            //     match e {
+                            //         ConsensusError::BlockRejected { block_ref, reason } => {
+                            //             debug!(
+                            //                 "Worker {} failed to process block from peer {} for block {:?}: {}",
+                            //                 worker_id, peer_hostname_clone, block_ref, reason
+                            //             );
+                            //         }
+                            //         _ => {
+                            //             info!(
+                            //                 "Worker {} received invalid block from peer {}: {}",
+                            //                 worker_id, peer_hostname_clone, e
+                            //             );
+                            //         }
+                            //     }
+                            // }
                         }
                         debug!("Worker {} for peer {} shutting down", worker_id, peer_hostname_clone);
                     });
