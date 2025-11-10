@@ -89,11 +89,7 @@ pub(crate) async fn tests(path: &Path) -> datatest_stable::Result<()> {
 /// dependencies.
 fn should_exclude_dir(path: &Path) -> bool {
     for exclude_dir in DIRS_TO_EXCLUDE {
-        if path
-            .to_str()
-            .unwrap()
-            .ends_with(format!("/{}", exclude_dir).as_str())
-        {
+        if path.ends_with(format!("/{}", exclude_dir).as_str()) {
             return true;
         }
     }

@@ -75,7 +75,7 @@ jobs:
   test:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    timeout-minutes: 150
+    timeout-minutes: 45
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the

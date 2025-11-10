@@ -22,20 +22,13 @@ impl Migrate {
     ) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
         let env = find_env::<F>(&rerooted_path, &config.clone())?;
-        // Instead of passing stdin().lock() directly
-        let input = {
-            use std::io::{Read, stdin};
-            let mut buffer = String::new();
-            stdin().lock().read_to_string(&mut buffer)?;
-            buffer
-        };
 
         config
             .migrate_package::<F, _, _>(
                 &rerooted_path,
                 env,
                 &mut std::io::stdout(),
-                &mut std::io::Cursor::new(input.as_bytes()), // Use Cursor as a BufRead
+                &mut std::io::stdin().lock(),
             )
             .await?;
         Ok(())
