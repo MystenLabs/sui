@@ -503,7 +503,7 @@ fn localpubs_to_publications<F: MoveFlavor>(
             metadata: local_pub.metadata.clone(),
         };
 
-        let old = result.insert(local_pub.source.clone().into(), new);
+        let old = result.insert(local_pub.source.clone(), new);
         if old.is_some() {
             let mut dep = local_pub.source.render_as_toml();
             // take off trailing newline
