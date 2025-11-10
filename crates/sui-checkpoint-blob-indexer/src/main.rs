@@ -189,12 +189,7 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("Received SIGINT, shutting down...");
             ExitReason::UserInterrupt
         }
-        _ = async {
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .expect("Failed to install SIGTERM handler")
-                .recv()
-                .await
-        } => {
+        _ = wait_for_sigterm() => {
             tracing::info!("Received SIGTERM, shutting down...");
             ExitReason::Terminated
         }
@@ -224,4 +219,18 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
     }
+}
+
+#[cfg(unix)]
+async fn wait_for_sigterm() {
+    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .expect("Failed to install SIGTERM handler")
+        .recv()
+        .await;
+}
+
+#[cfg(not(unix))]
+async fn wait_for_sigterm() {
+    // SIGTERM doesn't exist on Windows, so wait forever
+    std::future::pending::<()>().await
 }
