@@ -19,7 +19,7 @@ The DeepBook referral system allows users to earn fees by referring traders to t
 
 ## How referrals work
 
-1. **Mint a referral**: Pool creators or authorized users can mint a `DeepBookReferral` with a specific multiplier
+1. **Mint a referral**: Anyone can mint a `DeepBookReferral` with a specific multiplier
 2. **Set referral**: Traders associate their `BalanceManager` with a referral using a `TradeCap`
 3. **Earn fees**: When trades are executed, referral fees are automatically allocated based on the multiplier
 4. **Claim rewards**: Referrers can claim their accumulated fees in base, quote, and DEEP tokens
@@ -30,7 +30,7 @@ Following are the referral-related functions that DeepBook exposes.
 
 ### Mint a referral
 
-Mint a new `DeepBookReferral` object with a specified multiplier. The multiplier determines what percentage of trading fees are allocated to the referrer. The multiplier must be a multiple of the base referral multiplier and cannot exceed the maximum allowed multiplier.
+Mint a new `DeepBookReferral` object with a specified multiplier. The multiplier determines the additional trading fees allocated to the referrer. The multiplier must be a multiple of the base referral multiplier and cannot exceed the maximum allowed multiplier.
 
 <ImportContent
 	source="packages/deepbook/sources/pool.move"
