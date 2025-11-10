@@ -59,6 +59,19 @@ The `new_with_custom_owner()` function creates a `BalanceManager` with a custom 
 	noComments
 />
 
+### Create a BalanceManager with custom owner and capabilities
+
+The `new_with_custom_owner_and_caps()` function creates a `BalanceManager` with a custom owner and returns all three capabilities (`DepositCap`, `WithdrawCap`, and `TradeCap`) in a single call. Combine the balance manager with `share`, or else the transaction fails. This is a convenient way to set up a complete balance manager with all necessary capabilities in one transaction.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="new_with_custom_owner_and_caps"
+	noComments
+/>
+
 ### Mint a TradeCap
 
 The owner of a `BalanceManager` can mint a `TradeCap` and send it to another address. Upon receipt, that address will have the capability to place orders with this `BalanceManager`. The address owner cannot deposit or withdraw funds, however. The maximum total number of `TradeCap`, `WithdrawCap`, and `DepositCap` that can be assigned for a `BalanceManager` is `1000`. If this limit is reached, one or more existing caps must be revoked before minting new ones. You can also use `revoke_trade_cap` to revoke `DepositCap` and `WithdrawCap`.
@@ -143,6 +156,30 @@ Only holders of a `WithdrawCap` for the `BalanceManager` can call this function 
 	fun="withdraw_with_cap"
 />
 
+### Set and unset referral
+
+The owner of a `TradeCap` can set or unset a referral for the balance manager. Setting a referral allows the balance manager to be associated with a specific `DeepBookReferral`, which can track and earn referral fees.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="set_referral,unset_referral"
+/>
+
+### Register balance manager
+
+Register a balance manager with the registry. This adds the balance manager to the owner's list of managers in the registry.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="register_manager"
+/>
+
 ### Read endpoints
 
 <ImportContent
@@ -150,7 +187,7 @@ Only holders of a `WithdrawCap` for the `BalanceManager` can call this function 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	fun="validate_proof,balance,owner,id"
+	fun="validate_proof,balance,owner,id,get_referral_id,referral_owner"
 />
 
 ## Related links
