@@ -2,15 +2,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::ExecutionEnv;
+use crate::authority::authority_test_utils::certify_shared_obj_transaction_no_execution;
 use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
+use crate::authority::{AuthorityState, ExecutionEnv};
+use crate::consensus_test_utils;
+use crate::consensus_test_utils::TestConsensusCommit;
 use crate::{
     authority::{
-        AuthorityState,
-        authority_tests::{
-            build_programmable_transaction, certify_shared_obj_transaction_no_execution,
-            execute_programmable_transaction, send_and_confirm_transaction_,
-        },
+        authority_tests::{build_programmable_transaction, execute_programmable_transaction},
         move_integration_tests::build_and_publish_test_package,
         test_authority_builder::TestAuthorityBuilder,
     },
@@ -20,16 +19,16 @@ use move_core_types::ident_str;
 use std::sync::Arc;
 use sui_macros::{register_fail_point_arg, sim_test};
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
-use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{InputConsensusObject, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::transaction::{ObjectArg, SharedObjectMutability, Transaction};
+use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::transaction::{CertifiedTransaction, VerifiedTransaction};
+use sui_types::transaction::{ObjectArg, SharedObjectMutability};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
-    effects::TransactionEffects,
-    execution_status::{CongestedObjects, ExecutionFailureStatus, ExecutionStatus},
+    execution_status::{CongestedObjects, ExecutionFailureStatus},
     object::Object,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
@@ -194,61 +193,6 @@ impl TestSetup {
     }
 }
 
-// Creates a transaction that touchs the shared objects `shared_object_1` and `shared_object_2`, and `owned_object`,
-// and executes the transaction in `authority_state`. Returns the transaction and the effects of the execution.
-async fn update_objects(
-    authority_state: &AuthorityState,
-    package: &ObjectRef,
-    sender: &SuiAddress,
-    sender_key: &AccountKeyPair,
-    gas_object_id: &ObjectID,
-    shared_object_1: &ConsensusObjectSequenceKey,
-    shared_object_2: &ConsensusObjectSequenceKey,
-    owned_object: &ObjectRef,
-) -> (Transaction, TransactionEffects) {
-    let mut txn_builder = ProgrammableTransactionBuilder::new();
-    let arg1 = txn_builder
-        .obj(ObjectArg::SharedObject {
-            id: shared_object_1.0,
-            initial_shared_version: shared_object_1.1,
-            mutability: SharedObjectMutability::Mutable,
-        })
-        .unwrap();
-    let arg2 = txn_builder
-        .obj(ObjectArg::SharedObject {
-            id: shared_object_2.0,
-            initial_shared_version: shared_object_2.1,
-            mutability: SharedObjectMutability::Mutable,
-        })
-        .unwrap();
-    let arg3 = txn_builder
-        .obj(ObjectArg::ImmOrOwnedObject(*owned_object))
-        .unwrap();
-    move_call! {
-        txn_builder,
-        (package.0)::congestion_control::increment(arg1, arg2, arg3)
-    };
-    let pt = txn_builder.finish();
-    let transaction = build_programmable_transaction(
-        authority_state,
-        gas_object_id,
-        sender,
-        sender_key,
-        pt,
-        TEST_ONLY_GAS_UNIT,
-    )
-    .await
-    .unwrap();
-
-    let execution_effects =
-        send_and_confirm_transaction_(authority_state, None, transaction.clone(), true)
-            .await
-            .unwrap()
-            .1
-            .into_data();
-    (transaction, execution_effects)
-}
-
 // Tests execution aspect of cancelled transaction due to shared object congestion. Mainly tests that
 //   1. Cancelled transaction should return correct error status.
 //   2. Executing cancelled transaction with effects should result in the same transaction cancellation.
@@ -309,33 +253,120 @@ async fn test_congestion_control_execution_cancellation() {
         ))
     });
 
-    // Runs a transaction that touches shared_object_1, shared_object_2 and an owned object.
-    let (congested_tx, effects) = update_objects(
+    // Set up ConsensusHandler for the authority_state
+    let consensus_setup =
+        consensus_test_utils::setup_consensus_handler_for_testing(&authority_state).await;
+    let mut consensus_handler = consensus_setup.consensus_handler;
+    let captured_transactions = consensus_setup.captured_transactions;
+
+    // Create a transaction that touches shared_object_1, shared_object_2 and an owned object.
+    let mut txn_builder = ProgrammableTransactionBuilder::new();
+    let arg1 = txn_builder
+        .obj(ObjectArg::SharedObject {
+            id: shared_object_1.0,
+            initial_shared_version: shared_object_1.1,
+            mutability: SharedObjectMutability::Mutable,
+        })
+        .unwrap();
+    let arg2 = txn_builder
+        .obj(ObjectArg::SharedObject {
+            id: shared_object_2.0,
+            initial_shared_version: shared_object_2.1,
+            mutability: SharedObjectMutability::Mutable,
+        })
+        .unwrap();
+    let owned_object_ref = authority_state
+        .get_object(&owned_object.0)
+        .await
+        .unwrap()
+        .compute_object_reference();
+    let arg3 = txn_builder
+        .obj(ObjectArg::ImmOrOwnedObject(owned_object_ref))
+        .unwrap();
+    move_call! {
+        txn_builder,
+        (test_setup.package.0)::congestion_control::increment(arg1, arg2, arg3)
+    };
+    let pt = txn_builder.finish();
+    let congested_tx = build_programmable_transaction(
         &authority_state,
-        &test_setup.package,
+        &test_setup.gas_object_id,
         &test_setup.sender,
         &test_setup.sender_key,
-        &test_setup.gas_object_id,
-        &(shared_object_1.0, shared_object_1.1),
-        &(shared_object_2.0, shared_object_2.1),
-        &authority_state
-            .get_object(&owned_object.0)
-            .await
-            .unwrap()
-            .compute_object_reference(),
+        pt,
+        TEST_ONLY_GAS_UNIT,
     )
-    .await;
+    .await
+    .unwrap();
+
+    let verified_tx_2 = VerifiedTransaction::new_unchecked(congested_tx.clone());
+
+    let epoch_store_2 = authority_state_2.load_epoch_store_one_call_per_task();
+    let response = authority_state_2
+        .handle_transaction(&epoch_store_2, verified_tx_2.clone())
+        .await
+        .unwrap();
+    let vote = response.status.into_signed_for_testing();
+
+    let committee = authority_state.clone_committee_for_testing();
+    let cert = CertifiedTransaction::new(verified_tx_2.into_message(), vec![vote], &committee)
+        .unwrap()
+        .try_into_verified_for_testing(&committee, &Default::default())
+        .unwrap();
+
+    let consensus_transactions = vec![ConsensusTransaction::new_certificate_message(
+        &authority_state.name,
+        cert.clone().into(),
+    )];
+    let commit = TestConsensusCommit::new(consensus_transactions, 1, 0, 0);
+
+    consensus_handler.handle_consensus_commit(commit).await;
+
+    // Wait for captured transactions to be available
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    // Get the captured transactions
+    let (scheduled_txns, assigned_tx_and_versions) = {
+        let mut captured = captured_transactions.lock();
+        assert!(
+            !captured.is_empty(),
+            "Expected transactions to be scheduled"
+        );
+        let (scheduled_txns, assigned_tx_and_versions, _) = captured.remove(0);
+        (scheduled_txns, assigned_tx_and_versions)
+    };
+
+    // Both prologue and the cancelled transaction should be scheduled
+    // The cancelled transaction will abort during execution
+    assert_eq!(
+        scheduled_txns.len(),
+        2,
+        "Expected prologue + cancelled transaction"
+    );
+
+    // Now execute the cancelled transaction to get the effects
+    // Find the assigned versions for our specific transaction
+    let cert_key = cert.key();
+    let assigned_versions = assigned_tx_and_versions
+        .into_map()
+        .get(&cert_key)
+        .expect("Transaction should have assigned versions")
+        .clone();
+
+    let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
+    let (effects, execution_error) = authority_state
+        .try_execute_for_test(&cert, execution_env)
+        .await;
 
     // Transaction should be cancelled with `shared_object_1` as the congested object.
+    assert!(execution_error.is_some());
     assert_eq!(
-        effects.status(),
-        &ExecutionStatus::Failure {
-            error: ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion {
-                congested_objects: CongestedObjects(vec![shared_object_1.0]),
-            },
-            command: None
+        execution_error.unwrap().to_execution_status().0,
+        ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion {
+            congested_objects: CongestedObjects(vec![shared_object_1.0]),
         }
     );
+    let effects = effects.data();
 
     // Tests consensus object versions in effects are set correctly.
     assert_eq!(
@@ -354,7 +385,7 @@ async fn test_congestion_control_execution_cancellation() {
         .epoch_store_for_testing()
         .acquire_shared_version_assignments_from_effects(
             &VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
-            &effects,
+            effects,
             None,
             authority_state_2.get_object_cache_reader().as_ref(),
         )
@@ -371,5 +402,5 @@ async fn test_congestion_control_execution_cancellation() {
             congested_objects: CongestedObjects(vec![shared_object_1.0]),
         }
     );
-    assert_eq!(&effects, effects_2.data())
+    assert_eq!(effects, effects_2.data());
 }

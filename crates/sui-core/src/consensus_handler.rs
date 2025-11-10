@@ -17,8 +17,7 @@ use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use itertools::Itertools as _;
 use lru::LruCache;
 use mysten_common::{
-    assert_reachable, assert_sometimes, debug_fatal, in_test_configuration,
-    random_util::randomize_cache_capacity_in_tests,
+    assert_reachable, assert_sometimes, debug_fatal, random_util::randomize_cache_capacity_in_tests,
 };
 use mysten_metrics::{
     monitored_future,
@@ -119,7 +118,7 @@ impl ConsensusHandlerInitializer {
         state: Arc<AuthorityState>,
         checkpoint_service: Arc<CheckpointService>,
     ) -> Self {
-        use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
+        use crate::consensus_test_utils::make_consensus_adapter_for_test;
         use std::collections::HashSet;
 
         let backpressure_manager = BackpressureManager::new_for_tests();
@@ -221,16 +220,6 @@ mod additional_consensus_state {
                 consensus_commit,
                 Some(estimated_commit_period),
             )
-        }
-
-        pub(crate) fn stateless_commit_info(
-            &self,
-            epoch_store: &AuthorityPerEpochStore,
-            consensus_commit: &impl ConsensusCommitAPI,
-        ) -> ConsensusCommitInfo {
-            let protocol_config = epoch_store.protocol_config();
-            let epoch_start_time = epoch_store.epoch_start_config().epoch_start_timestamp_ms();
-            self.commit_info_impl(epoch_start_time, protocol_config, consensus_commit, None)
         }
 
         fn commit_info_impl(
@@ -483,64 +472,14 @@ mod additional_consensus_state {
 
     #[test]
     fn test_additional_consensus_state() {
-        use crate::consensus_types::consensus_output_api::ParsedTransaction;
-
-        #[derive(Debug)]
-        struct TestConsensusCommit {
-            round: u64,
-            timestamp: u64,
-        }
-
-        impl std::fmt::Display for TestConsensusCommit {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(
-                    f,
-                    "TestConsensusCommitAPI(round={}, timestamp={})",
-                    self.round, self.timestamp
-                )
-            }
-        }
-
-        impl ConsensusCommitAPI for TestConsensusCommit {
-            fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
-                None
-            }
-            fn leader_round(&self) -> u64 {
-                self.round
-            }
-            fn leader_author_index(&self) -> AuthorityIndex {
-                0
-            }
-
-            /// Returns epoch UNIX timestamp in milliseconds
-            fn commit_timestamp_ms(&self) -> u64 {
-                self.timestamp
-            }
-
-            /// Returns a unique global index for each committed sub-dag.
-            fn commit_sub_dag_index(&self) -> u64 {
-                self.round
-            }
-
-            /// Returns all accepted and rejected transactions per block in the commit in deterministic order.
-            fn transactions(
-                &self,
-            ) -> Vec<(consensus_types::block::BlockRef, Vec<ParsedTransaction>)> {
-                vec![]
-            }
-
-            /// Returns the digest of consensus output.
-            fn consensus_digest(&self, _: &ProtocolConfig) -> ConsensusCommitDigest {
-                ConsensusCommitDigest::ZERO
-            }
-        }
+        use crate::consensus_test_utils::TestConsensusCommit;
 
         fn observe(state: &mut AdditionalConsensusState, round: u64, timestamp: u64) {
             let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
             state.observe_commit(
                 &protocol_config,
                 100,
-                &TestConsensusCommit { round, timestamp },
+                &TestConsensusCommit::empty(round, timestamp, 0),
             );
         }
 
@@ -662,6 +601,45 @@ impl<C> ConsensusHandler<C> {
     pub(crate) fn execution_scheduler_sender(&self) -> &ExecutionSchedulerSender {
         &self.execution_scheduler_sender
     }
+
+    pub(crate) fn new_for_testing(
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        checkpoint_service: Arc<C>,
+        execution_scheduler_sender: ExecutionSchedulerSender,
+        consensus_adapter: Arc<ConsensusAdapter>,
+        cache_reader: Arc<dyn ObjectCacheRead>,
+        low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
+        committee: ConsensusCommittee,
+        metrics: Arc<AuthorityMetrics>,
+        throughput_calculator: Arc<ConsensusThroughputCalculator>,
+        backpressure_subscriber: BackpressureSubscriber,
+        traffic_controller: Option<Arc<TrafficController>>,
+        last_consensus_stats: ExecutionIndicesWithStats,
+    ) -> Self {
+        let commit_rate_estimate_window_size = epoch_store
+            .protocol_config()
+            .get_consensus_commit_rate_estimation_window_size();
+        Self {
+            epoch_store,
+            last_consensus_stats,
+            checkpoint_service,
+            cache_reader,
+            low_scoring_authorities,
+            committee,
+            metrics,
+            processed_cache: LruCache::new(
+                NonZeroUsize::new(randomize_cache_capacity_in_tests(PROCESSED_CACHE_CAP)).unwrap(),
+            ),
+            execution_scheduler_sender,
+            consensus_adapter,
+            throughput_calculator,
+            additional_consensus_state: AdditionalConsensusState::new(
+                commit_rate_estimate_window_size,
+            ),
+            backpressure_subscriber,
+            traffic_controller,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -697,7 +675,6 @@ impl CommitHandlerState {
         epoch_store: &'epoch AuthorityPerEpochStore,
         commit_info: &'a ConsensusCommitInfo,
     ) -> Option<tokio::sync::MutexGuard<'epoch, RandomnessManager>> {
-        // DONE(commit-handler-rewrite): load randomness manager, get random round
         let mut randomness_manager = epoch_store.randomness_manager.get().map(|rm| {
             rm.try_lock()
                 .expect("should only ever be called from the commit handler thread")
@@ -715,7 +692,6 @@ impl CommitHandlerState {
                     None
                 }
                 DkgStatus::Successful => {
-                    // DONE(commit-handler-rewrite): do not reserve randomness if !should_accept_tx()
                     // Generate randomness for this commit if DKG is successful and we are still
                     // accepting certs.
                     if self.initial_reconfig_state.should_accept_tx() {
@@ -766,8 +742,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         );
     }
 
+    #[cfg(test)]
+    pub(crate) async fn handle_consensus_commit_for_test(
+        &mut self,
+        consensus_commit: impl ConsensusCommitAPI,
+    ) {
+        self.handle_consensus_commit(consensus_commit).await;
+    }
+
     #[instrument(level = "debug", skip_all, fields(epoch = self.epoch_store.epoch(), round = consensus_commit.leader_round()))]
-    async fn handle_consensus_commit_v2(&mut self, consensus_commit: impl ConsensusCommitAPI) {
+    pub(crate) async fn handle_consensus_commit(
+        &mut self,
+        consensus_commit: impl ConsensusCommitAPI,
+    ) {
         let protocol_config = self.epoch_store.protocol_config();
 
         // Assert all protocol config settings for which we don't support old behavior.
@@ -790,7 +777,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
 
-        // DONE(commit-handler-rewrite): Update last_committed_round stats
         if let Some(consensus_tx_status_cache) = self.epoch_store.consensus_tx_status_cache.as_ref()
         {
             consensus_tx_status_cache
@@ -801,7 +787,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             tx_reject_reason_cache.set_last_committed_leader_round(last_committed_round as u32);
         }
 
-        // DONE(commit-handler-rewrite): this will be unconditionally enabled in the rewrite
         let commit_info = self.additional_consensus_state.observe_commit(
             protocol_config,
             self.epoch_store
@@ -811,9 +796,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         );
         assert!(commit_info.round > last_committed_round);
 
-        // DONE(commit-handler-rewrite): already not needed
-
-        // DONE(commit-handler-rewrite): gather commit metadata
         let (timestamp, leader_author, commit_sub_dag_index) =
             self.gather_commit_metadata(&consensus_commit);
 
@@ -822,14 +804,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             "Received consensus output"
         );
 
-        // DONE(commit-handler-rewrite): update stats & ExecutionIndices
         self.last_consensus_stats.index = ExecutionIndices {
             last_committed_round: commit_info.round,
             sub_dag_index: commit_sub_dag_index,
             transaction_index: 0_u64,
         };
 
-        // DONE(commit-handler-rewrite): update low scoring authorities
         update_low_scoring_authorities(
             self.low_scoring_authorities.clone(),
             self.epoch_store.committee(),
@@ -839,7 +819,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             protocol_config.consensus_bad_nodes_stake_threshold(),
         );
 
-        // DONE(commit-handler-rewrite): update metrics
         self.metrics
             .consensus_committed_subdags
             .with_label_values(&[&leader_author.to_string()])
@@ -856,18 +835,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .clone(),
         };
 
-        // DONE(commit-handler-rewrite): update transaction status (rejected/finalized) and update metrics
         let transactions = self.filter_consensus_txns(
             state.initial_reconfig_state.clone(),
             &commit_info,
             &consensus_commit,
         );
-        // DONE(commit-handler-rewrite): de-duplicate transactions
         let transactions = self.deduplicate_consensus_txns(&mut state, &commit_info, transactions);
 
         let mut randomness_manager = state.init_randomness(&self.epoch_store, &commit_info);
 
-        // DONE(commit-handler-rewrite): Split transactions into different types for processing.
         let CommitHandlerInput {
             user_transactions,
             capability_notifications,
@@ -899,7 +875,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .try_lock()
             .expect("should only ever be called from the commit handler thread");
 
-        // DONE(commit-handler-rewrite): load and activate previous round's jwks
         let authenticator_state_update_transaction =
             self.create_authenticator_state_update(last_committed_round, &commit_info);
 
@@ -917,12 +892,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let make_checkpoint = should_accept_tx || final_round;
         if !make_checkpoint {
             // No need for any further processing
-            // DONE(commit-handler-rewrite): do not insert commit prologue if !should_accept_tx()
-            // DONE(commit-handler-rewrite): commit prologue should not be added to roots after tx processing is closed
             return;
         }
 
-        // DONE(commit-handler-rewrite): record execution time observations for next epoch
         // If this is the final round, record execution time observations for storage in the
         // end-of-epoch tx.
         if final_round {
@@ -939,22 +911,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let notifications = state.get_notifications();
 
-        // DONE(commit-handler-rewrite): record consensus_stats
         state
             .output
             .record_consensus_commit_stats(self.last_consensus_stats.clone());
 
-        // DONE(commit-handler-rewrite): propogate deferral deletion to consensus output cache
         self.record_deferral_deletion(&mut state);
 
-        // DONE(commit-handler-rewrite): send consensus output to quarantine
         self.epoch_store
             .consensus_quarantine
             .write()
             .push_consensus_output(state.output, &self.epoch_store)
             .expect("push_consensus_output should not fail");
 
-        // DONE(commit-handler-rewrite): notify checkpoint service
         // Only after batch is written, notify checkpoint service to start building any new
         // pending checkpoints.
         debug!(
@@ -965,7 +933,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .notify_checkpoint()
             .expect("failed to notify checkpoint service");
 
-        // DONE(commit-handler-rewrite): Once commit processing is recorded, kick off randomness generation.
         if let Some(randomness_round) = state.randomness_round {
             randomness_manager
                 .as_ref()
@@ -973,19 +940,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .generate_randomness(epoch, randomness_round);
         }
 
-        // DONE(commit-handler-rewrite): notify waiters that consensus transactions have been processed
         self.epoch_store.process_notifications(notifications.iter());
 
-        // DONE(commit-handler-rewrite): log end of epoch
         // pass lock by value to ensure that it is held until this point
         self.log_final_round(lock, final_round);
 
-        // DONE(commit-handler-rewrite): update throughput calculator
         // update the calculated throughput
         self.throughput_calculator
             .add_transactions(timestamp, schedulables.len() as u64);
 
-        // DONE(commit-handler-rewrite): fail points
         fail_point_if!("correlated-crash-after-consensus-commit-boundary", || {
             let key = [commit_sub_dag_index, epoch];
             if sui_simulator::random::deterministic_probability_once(&key, 0.01) {
@@ -995,7 +958,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         fail_point!("crash"); // for tests that produce random crashes
 
-        // DONE(commit-handler-rewrite): enqueue transactions
         let mut schedulables = schedulables;
         schedulables.extend(randomness_schedulables);
         self.execution_scheduler_sender.send(
@@ -1004,7 +966,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             SchedulingSource::NonFastPath,
         );
 
-        // DONE(commit-handler-rewrite): Check if we should send EndOfPublish after processing consensus commit
         self.send_end_of_publish_if_needed().await;
     }
 
@@ -1016,10 +977,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let collected_eop =
             self.process_end_of_publish_transactions(state, end_of_publish_transactions);
         if collected_eop {
-            // DONE(commit-handler-rewrite): [ssm] after 2f+1 EOPs, transition to RejectAllCerts
-            // DONE(commit-handler-rewrite): [ssm] check if epoch is over
             let (lock, final_round) = self.advance_eop_state_machine(state);
-            // DONE(commit-handler-rewrite): check tx acceptance state
             (lock.should_accept_tx(), Some(lock), final_round)
         } else {
             (true, None, false)
@@ -1072,12 +1030,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         randomness_schedulables: &[Schedulable],
         final_round: bool,
     ) {
-        // DONE(commit-handler-rewrite): Create pending checkpoints if we are still accepting tx.
         let checkpoint_height = self
             .epoch_store
             .calculate_pending_checkpoint_height(commit_info.round);
-
-        // DONE(commit-handler-rewrite): [ssm] write pending randomness checkpoint if we have a new randomness round, OR dkg failed while there are pending randomness txns
 
         // Determine whether to write pending checkpoint for user tx with randomness.
         // - If randomness is not generated for this commit, we will skip the
@@ -1089,7 +1044,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             || (state.dkg_failed && !randomness_schedulables.is_empty());
 
         let pending_checkpoint = PendingCheckpoint {
-            // DONE(commit-handler-rewrite): compute checkpoint roots (this should be done at the end)
             roots: schedulables.iter().map(|s| s.key()).collect(),
             details: PendingCheckpointInfo {
                 timestamp_ms: commit_info.timestamp,
@@ -1132,13 +1086,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let (ordered_txns, ordered_randomness_txns, previously_deferred_tx_digests) =
             self.merge_and_reorder_transactions(state, commit_info, user_transactions);
 
-        // DONE(commit-handler-rewrite): initialize congestion trackers
         let mut shared_object_congestion_tracker =
             self.init_congestion_tracker(commit_info, false, &ordered_txns);
         let mut shared_object_using_randomness_congestion_tracker =
             self.init_congestion_tracker(commit_info, true, &ordered_randomness_txns);
 
-        // DONE(commit-handler-rewrite): add randomness state update transaction
         let randomness_state_update_transaction = state
             .randomness_round
             .map(|round| Schedulable::RandomnessStateUpdate(epoch, round));
@@ -1171,7 +1123,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         for transaction in ordered_randomness_txns {
-            // DONE(commit-handler-rewrite): cancel randomness-using txns if DKG failed
             if state.dkg_failed {
                 debug!(
                     "Canceling randomness-using transaction {:?} because DKG failed",
@@ -1181,7 +1132,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     *transaction.digest(),
                     CancelConsensusCertificateReason::DkgFailed,
                 );
-                // DONE(commit-handler-rewrite): cancelled txns must be scheduled for execution
                 randomness_transactions_to_schedule.push(transaction);
                 continue;
             }
@@ -1193,14 +1143,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 protocol_config,
                 commit_info,
                 transaction,
-                // DONE(commit-handler-rewrite): use correct congestion tracker for randomness vs non-randomness
                 &mut shared_object_using_randomness_congestion_tracker,
                 &previously_deferred_tx_digests,
                 execution_time_estimator.as_deref(),
             );
         }
 
-        // DONE(commit-handler-rewrite): add deferred transactions to consensus output
         let mut total_deferred_txns = 0;
         {
             let mut deferred_transactions = self
@@ -1211,11 +1159,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             for (key, txns) in deferred_txns.into_iter() {
                 total_deferred_txns += txns.len();
                 deferred_transactions.insert(key, txns.clone());
-                state.output.defer_transactions_v2(key, txns);
+                state.output.defer_transactions(key, txns);
             }
         }
 
-        // DONE(commit-handler-rewrite): update metrics
         self.metrics
             .consensus_handler_deferred_transactions
             .inc_by(total_deferred_txns as u64);
@@ -1231,7 +1178,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .with_label_values(&["randomness_commit"])
             .set(shared_object_using_randomness_congestion_tracker.max_cost() as i64);
 
-        // DONE(commit-handler-rewrite): gather object debts, send them to ExecutionTimeObserver
         let object_debts = shared_object_congestion_tracker.accumulated_debts(commit_info);
         let randomness_object_debts =
             shared_object_using_randomness_congestion_tracker.accumulated_debts(commit_info);
@@ -1247,7 +1193,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             info!("failed to send updated object debts to ExecutionTimeObserver: {e:?}");
         }
 
-        // DONE(commit-handler-rewrite): commit object debts to output
         state
             .output
             .set_congestion_control_object_debts(object_debts);
@@ -1255,7 +1200,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .output
             .set_congestion_control_randomness_object_debts(randomness_object_debts);
 
-        // DONE(commit-handler-rewrite): create accumulator settlement transactions
         let mut settlement = None;
         let mut randomness_settlement = None;
         if self.epoch_store.accumulators_enabled() {
@@ -1273,7 +1217,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        // DONE(commit-handler-rewrite): add the consensus commit prologue transaction and root
         let consensus_commit_prologue = self.add_consensus_commit_prologue_transaction(
             state,
             commit_info,
@@ -1302,7 +1245,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .chain(randomness_settlement)
             .collect();
 
-        // DONE(commit-handler-rewrite): assign shared object versions
         let assigned_versions = self
             .epoch_store
             .process_consensus_transaction_shared_object_versions(
@@ -1314,7 +1256,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             )
             .expect("failed to assign shared object versions");
 
-        // DONE(commit-handler-rewrite): store all user signatures for use by checkpoint builder
         self.epoch_store
             .process_user_signatures(schedulables.iter().chain(randomness_schedulables.iter()));
 
@@ -1393,7 +1334,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         execution_time_estimator: Option<&ExecutionTimeEstimator>,
     ) {
-        // DONE(commit-handler-rewrite): check if transaction should be deferred
         let tx_cost = shared_object_congestion_tracker.get_tx_cost(
             execution_time_estimator,
             &transaction,
@@ -1418,7 +1358,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             );
 
             match deferral_reason {
-                // DONE(commit-handler-rewrite): Always defer transaction due to randomness not ready.
                 DeferralReason::RandomnessNotReady => {
                     deferred_txns
                         .entry(deferral_key)
@@ -1427,7 +1366,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 }
                 DeferralReason::SharedObjectCongestion(congested_objects) => {
                     self.metrics.consensus_handler_congested_transactions.inc();
-                    // DONE(commit-handler-rewrite): when deferral limit is exceeded, cancel the transaction
                     if transaction_deferral_within_limit(
                         &deferral_key,
                         protocol_config.max_deferral_rounds_for_congestion_control(),
@@ -1459,14 +1397,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 congested_objects,
                             ),
                         );
-                        // DONE(commit-handler-rewrite): cancelled txns must be scheduled for execution
                         scheduled_txns.push(transaction);
                     }
                 }
             }
         } else {
-            // DONE(commit-handler-rewrite): update object execution cost for all scheduled transactions
-            // This certificate will be scheduled. Update object execution cost.
+            // Update object execution cost for all scheduled transactions
             shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, &transaction);
             scheduled_txns.push(transaction);
         }
@@ -1484,7 +1420,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     ) {
         let protocol_config = self.epoch_store.protocol_config();
 
-        // DONE(commit-handler-rewrite): deferred transactions have higher priority than new txns (if gas price is equal)
         let (mut txns, mut randomness_txns, previously_deferred_tx_digests) =
             self.load_deferred_transactions(state, commit_info);
 
@@ -1513,12 +1448,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        // DONE(commit-handler-rewrite): reorder transactions by gas price
-        PostConsensusTxReorder::reorder_v2(
+        PostConsensusTxReorder::reorder(
             &mut txns,
             protocol_config.consensus_transaction_ordering(),
         );
-        PostConsensusTxReorder::reorder_v2(
+        PostConsensusTxReorder::reorder(
             &mut randomness_txns,
             protocol_config.consensus_transaction_ordering(),
         );
@@ -1537,7 +1471,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     ) {
         let mut previously_deferred_tx_digests = HashMap::new();
 
-        // DONE(commit-handler-rewrite): Load transactions deferred from previous commits, compute the digest set of all such transactions.
         let deferred_txs: Vec<_> = self
             .epoch_store
             .load_deferred_transactions_for_up_to_consensus_round_v2(
@@ -1557,7 +1490,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             deferred_txs.iter().map(|tx| tx.digest())
         );
 
-        // DONE(commit-handler-rewrite): load all deferred randomness-using txns
         let deferred_randomness_txs = if state.dkg_failed || state.randomness_round.is_some() {
             let txns: Vec<_> = self
                 .epoch_store
@@ -1592,11 +1524,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         for_randomness: bool,
         txns: &[VerifiedExecutableTransaction],
     ) -> SharedObjectCongestionTracker {
-        SharedObjectCongestionTracker::from_protocol_config(
+        #[allow(unused_mut)]
+        let mut ret = SharedObjectCongestionTracker::from_protocol_config(
             self.epoch_store
                 .consensus_quarantine
                 .read()
-                .load_initial_object_debts_v2(
+                .load_initial_object_debts(
                     &self.epoch_store,
                     commit_info.round,
                     for_randomness,
@@ -1605,7 +1538,20 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .expect("db error"),
             self.epoch_store.protocol_config(),
             for_randomness,
-        )
+        );
+
+        fail_point_arg!(
+            "initial_congestion_tracker",
+            |tracker: SharedObjectCongestionTracker| {
+                info!(
+                    "Initialize shared_object_congestion_tracker to  {:?}",
+                    tracker
+                );
+                ret = tracker;
+            }
+        );
+
+        ret
     }
 
     fn process_jwks(
@@ -1614,7 +1560,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         commit_info: &ConsensusCommitInfo,
         new_jwks: Vec<(AuthorityName, JwkId, JWK)>,
     ) {
-        // DONE(commit-handler-rewrite): [ssm] record jwk votes
         for (authority_name, jwk_id, jwk) in new_jwks {
             self.epoch_store.record_jwk_vote(
                 &mut state.output,
@@ -1630,7 +1575,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &self,
         capability_notifications: Vec<AuthorityCapabilitiesV2>,
     ) {
-        // DONE(commit-handler-rewrite): [ssm] record authority capabilities
         for capabilities in capability_notifications {
             self.epoch_store
                 .record_capabilities_v2(&capabilities)
@@ -1643,7 +1587,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         state: &mut CommitHandlerState,
         execution_time_observations: Vec<ExecutionTimeObservation>,
     ) {
-        // DONE(commit-handler-rewrite): [ssm] Process new execution time observations for use by congestion control.
         let mut execution_time_estimator = self
             .epoch_store
             .execution_time_estimator
@@ -1682,7 +1625,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &self,
         checkpoint_signature_messages: Vec<CheckpointSignatureMessage>,
     ) {
-        // DONE(commit-handler-rewrite): [ssm] notify checkpoint signatures
         for checkpoint_signature_message in checkpoint_signature_messages {
             self.checkpoint_service
                 .notify_checkpoint_signature(&self.epoch_store, &checkpoint_signature_message)
@@ -1723,7 +1665,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             randomness_dkg_confirmations,
         );
 
-        // DONE(commit-handler-rewrite): [ssm] advance randomness state if needed
         if randomness_dkg_updates || randomness_dkg_confirmation_updates {
             randomness_manager
                 .advance_dkg(&mut state.output, commit_info.round)
@@ -1741,7 +1682,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             return false;
         }
 
-        // DONE(commit-handler-rewrite): [ssm] process dkg message
         let mut randomness_state_updated = false;
         for (authority, bytes) in randomness_dkg_messages {
             match bcs::from_bytes(&bytes) {
@@ -1775,7 +1715,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             return false;
         }
 
-        // DONE(commit-handler-rewrite): [ssm] process dkg confirmation
         let mut randomness_state_updated = false;
         for (authority, bytes) in randomness_dkg_confirmations {
             match bcs::from_bytes(&bytes) {
@@ -1855,7 +1794,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let previous_commits_have_deferred_txns =
             !self.epoch_store.deferred_transactions_empty_v2();
 
-        // DONE(commit-handler-rewrite): [ssm] if we are rejecting all certs, AND there are no deferred transactions to process, transition to RejectAllTx
         if !commit_has_deferred_txns && !previous_commits_have_deferred_txns {
             if !start_state_is_reject_all_tx {
                 info!("Transitioning to RejectAllTx");
@@ -1870,7 +1808,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         state.output.store_reconfig_state(reconfig_state.clone());
 
-        // DONE(commit-handler-rewrite): [ssm] only return final_round=true on the first round where we transition to RejectAllTx
         if !start_state_is_reject_all_tx && reconfig_state.is_reject_all_tx() {
             (reconfig_state, true)
         } else {
@@ -1911,425 +1848,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         };
 
         (timestamp, leader_author, commit_sub_dag_index)
-    }
-
-    #[instrument(level = "debug", skip_all, fields(round = consensus_commit.leader_round()))]
-    async fn handle_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
-        // Migration for commit handler v2:
-        // - In test configurations, some validators use v1, some use v2. This exposes fork
-        //   bugs in tests.
-        // - In production, if the protocol flag is set, all validators must switch to v2 atomically.
-        //   This is likely not necessary, since v2 has been extensively tested for compatibility
-        //   with v1. But we do it anyway as a safety measure, in case there are undiscovered forking
-        //   bugs in v2.
-        // - If the protocol flag is not set, a validator can still use the new commit handler by
-        //   setting `SUI_USE_NEW_COMMIT_HANDLER` in the environment. This is so that we can test the
-        //   new commit handler in prod before it is fully deployed.
-        let use_new_commit_handler = if in_test_configuration() {
-            let name = self.epoch_store.name;
-            let authority_index = self.epoch_store.committee().authority_index(&name).unwrap();
-            authority_index < 2
-                && self
-                    .epoch_store
-                    .epoch_start_config()
-                    .use_commit_handler_v2()
-        } else if self.epoch_store.protocol_config().use_new_commit_handler() {
-            true
-        } else {
-            self.epoch_store
-                .epoch_start_config()
-                .use_commit_handler_v2()
-        };
-
-        if use_new_commit_handler {
-            self.handle_consensus_commit_v2(consensus_commit).await;
-            return;
-        }
-
-        // This may block until one of two conditions happens:
-        // - Number of uncommitted transactions in the writeback cache goes below the
-        //   backpressure threshold.
-        // - The highest executed checkpoint catches up to the highest certified checkpoint.
-        self.backpressure_subscriber.await_no_backpressure().await;
-
-        let _scope = monitored_scope("ConsensusCommitHandler::handle_consensus_commit");
-
-        let last_committed_round = self.last_consensus_stats.index.last_committed_round;
-
-        // TODO(commit-handler-rewrite): Update last_committed_round stats
-        if let Some(consensus_tx_status_cache) = self.epoch_store.consensus_tx_status_cache.as_ref()
-        {
-            consensus_tx_status_cache
-                .update_last_committed_leader_round(last_committed_round as u32)
-                .await;
-        }
-        if let Some(tx_reject_reason_cache) = self.epoch_store.tx_reject_reason_cache.as_ref() {
-            tx_reject_reason_cache.set_last_committed_leader_round(last_committed_round as u32);
-        }
-
-        // TODO(commit-handler-rewrite): this will be unconditionally enabled in the rewrite
-        let commit_info = if self
-            .epoch_store
-            .protocol_config()
-            .record_additional_state_digest_in_prologue()
-        {
-            self.additional_consensus_state.observe_commit(
-                self.epoch_store.protocol_config(),
-                self.epoch_store
-                    .epoch_start_config()
-                    .epoch_start_timestamp_ms(),
-                &consensus_commit,
-            )
-        } else {
-            self.additional_consensus_state
-                .stateless_commit_info(&self.epoch_store, &consensus_commit)
-        };
-
-        // TODO(commit-handler-rewrite): already not needed
-        // TODO: Remove this once narwhal is deprecated. For now mysticeti will not return
-        // more than one leader per round so we are not in danger of ignoring any commits.
-        assert!(commit_info.round >= last_committed_round);
-        if last_committed_round == commit_info.round {
-            // we can receive the same commit twice after restart
-            // It is critical that the writes done by this function are atomic - otherwise we can
-            // lose the later parts of a commit if we restart midway through processing it.
-            warn!(
-                "Ignoring consensus output for round {} as it is already committed. NOTE: This is only expected if consensus is running.",
-                commit_info.round
-            );
-            return;
-        }
-
-        // TODO(commit-handler-rewrite): gather commit metadata
-
-        /* (transaction, serialized length) */
-        let mut transactions = vec![];
-        let timestamp = consensus_commit.commit_timestamp_ms();
-        let leader_author = consensus_commit.leader_author_index();
-        let commit_sub_dag_index = consensus_commit.commit_sub_dag_index();
-
-        let system_time_ms = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
-
-        let consensus_timestamp_bias_ms = system_time_ms - (timestamp as i64);
-        let consensus_timestamp_bias_seconds = consensus_timestamp_bias_ms as f64 / 1000.0;
-        self.metrics
-            .consensus_timestamp_bias
-            .observe(consensus_timestamp_bias_seconds);
-
-        let epoch_start = self
-            .epoch_store
-            .epoch_start_config()
-            .epoch_start_timestamp_ms();
-        let timestamp = if timestamp < epoch_start {
-            error!(
-                "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}, author {leader_author}, round {}",
-                commit_info.round
-            );
-            epoch_start
-        } else {
-            timestamp
-        };
-
-        info!(
-            %consensus_commit,
-            epoch = ?self.epoch_store.epoch(),
-            "Received consensus output"
-        );
-
-        // TODO(commit-handler-rewrite): update stats & ExecutionIndices
-        let execution_index = ExecutionIndices {
-            last_committed_round: commit_info.round,
-            sub_dag_index: commit_sub_dag_index,
-            transaction_index: 0_u64,
-        };
-        // This function has filtered out any already processed consensus output.
-        // So we can safely assume that the index is always increasing.
-        assert!(self.last_consensus_stats.index < execution_index);
-
-        // TODO: test empty commit explicitly.
-        // Note that consensus commit batch may contain no transactions, but we still need to record the current
-        // round and subdag index in the last_consensus_stats, so that it won't be re-executed in the future.
-        self.last_consensus_stats.index = execution_index;
-
-        // TODO(commit-handler-rewrite): load and activate previous round's jwks
-
-        // Load all jwks that became active in the previous round, and commit them in this round.
-        // We want to delay one round because none of the transactions in the previous round could
-        // have been authenticated with the jwks that became active in that round.
-        //
-        // Because of this delay, jwks that become active in the last round of the epoch will
-        // never be committed. That is ok, because in the new epoch, the validators should
-        // immediately re-submit these jwks, and they can become active then.
-        let new_jwks = self
-            .epoch_store
-            .get_new_jwks(last_committed_round)
-            .expect("Unrecoverable error in consensus handler");
-
-        if !new_jwks.is_empty() {
-            let authenticator_state_update_transaction = authenticator_state_update_transaction(
-                &self.epoch_store,
-                commit_info.round,
-                new_jwks,
-            );
-            debug!(
-                "adding AuthenticatorStateUpdate({:?}) tx: {:?}",
-                authenticator_state_update_transaction.digest(),
-                authenticator_state_update_transaction,
-            );
-
-            transactions.push((
-                SequencedConsensusTransactionKind::System(authenticator_state_update_transaction),
-                leader_author,
-            ));
-        }
-
-        // TODO(commit-handler-rewrite): update low scoring authorities
-        update_low_scoring_authorities(
-            self.low_scoring_authorities.clone(),
-            self.epoch_store.committee(),
-            &self.committee,
-            consensus_commit.reputation_score_sorted_desc(),
-            &self.metrics,
-            self.epoch_store
-                .protocol_config()
-                .consensus_bad_nodes_stake_threshold(),
-        );
-
-        // TODO(commit-handler-rewrite): update metrics
-        self.metrics
-            .consensus_committed_subdags
-            .with_label_values(&[&leader_author.to_string()])
-            .inc();
-
-        let epoch = self.epoch_store.epoch();
-
-        // TODO(commit-handler-rewrite): update transaction status (rejected/finalized) and update metrics
-        let mut num_finalized_user_transactions = vec![0; self.committee.size()];
-        let mut num_rejected_user_transactions = vec![0; self.committee.size()];
-        {
-            let span =
-                tracing::trace_span!("ConsensusHandler::HandleCommit::process_consensus_txns");
-            let _guard = span.enter();
-            for (block, parsed_transactions) in consensus_commit.transactions() {
-                let author = block.author.value();
-                // TODO: consider only messages within 1~3 rounds of the leader?
-                self.last_consensus_stats.stats.inc_num_messages(author);
-
-                // Set the "ping" transaction status for this block. This is necessary as there might be some ping requests waiting for the ping transaction to be finalized.
-                self.epoch_store.set_consensus_tx_status(
-                    ConsensusPosition::ping(epoch, block),
-                    ConsensusTxStatus::Finalized,
-                );
-
-                for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
-                    let position = ConsensusPosition {
-                        epoch,
-                        block,
-                        index: tx_index as TransactionIndex,
-                    };
-
-                    // Transaction has appeared in consensus output, we can increment the submission count
-                    // for this tx for DoS protection.
-                    if self.epoch_store.protocol_config().mysticeti_fastpath()
-                        && let ConsensusTransactionKind::UserTransaction(tx) =
-                            &parsed.transaction.kind
-                    {
-                        let digest = tx.digest();
-                        if let Some((spam_weight, submitter_client_addrs)) = self
-                            .epoch_store
-                            .submitted_transaction_cache
-                            .increment_submission_count(digest)
-                        {
-                            if let Some(ref traffic_controller) = self.traffic_controller {
-                                debug!(
-                                    "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} applied to {} client addresses",
-                                    submitter_client_addrs.len()
-                                );
-
-                                // Apply spam weight to all client addresses that submitted this transaction
-                                for addr in submitter_client_addrs {
-                                    traffic_controller.tally(TrafficTally::new(
-                                        Some(addr),
-                                        None,
-                                        None,
-                                        spam_weight.clone(),
-                                    ));
-                                }
-                            } else {
-                                warn!(
-                                    "Transaction {digest} exceeded submission limits, spam_weight: {spam_weight:?} for {} client addresses (traffic controller not configured)",
-                                    submitter_client_addrs.len()
-                                );
-                            }
-                        }
-                    }
-
-                    if parsed.rejected {
-                        if parsed.transaction.is_mfp_transaction() {
-                            self.epoch_store
-                                .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
-                            num_rejected_user_transactions[author] += 1;
-                        }
-                        // Skip processing rejected transactions.
-                        continue;
-                    }
-                    if parsed.transaction.is_mfp_transaction() {
-                        self.epoch_store
-                            .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
-                        num_finalized_user_transactions[author] += 1;
-                    }
-                    let kind = classify(&parsed.transaction);
-                    self.metrics
-                        .consensus_handler_processed
-                        .with_label_values(&[kind])
-                        .inc();
-                    self.metrics
-                        .consensus_handler_transaction_sizes
-                        .with_label_values(&[kind])
-                        .observe(parsed.serialized_len as f64);
-                    // UserTransaction exists only when mysticeti_fastpath is enabled in protocol config.
-                    if matches!(
-                        &parsed.transaction.kind,
-                        ConsensusTransactionKind::CertifiedTransaction(_)
-                            | ConsensusTransactionKind::UserTransaction(_)
-                    ) {
-                        self.last_consensus_stats
-                            .stats
-                            .inc_num_user_transactions(author);
-                    }
-                    if let ConsensusTransactionKind::RandomnessStateUpdate(randomness_round, _) =
-                        &parsed.transaction.kind
-                    {
-                        // These are deprecated and we should never see them. Log an error and eat the tx if one appears.
-                        debug_fatal!(
-                            "BUG: saw deprecated RandomnessStateUpdate tx for commit round {}, randomness round {}",
-                            commit_info.round,
-                            randomness_round
-                        );
-                    } else {
-                        let transaction =
-                            SequencedConsensusTransactionKind::External(parsed.transaction);
-                        transactions.push((transaction, author as u32));
-                    }
-                }
-            }
-        }
-
-        for (i, authority) in self.committee.authorities() {
-            let hostname = &authority.hostname;
-            self.metrics
-                .consensus_committed_messages
-                .with_label_values(&[hostname])
-                .set(self.last_consensus_stats.stats.get_num_messages(i.value()) as i64);
-            self.metrics
-                .consensus_committed_user_transactions
-                .with_label_values(&[hostname])
-                .set(
-                    self.last_consensus_stats
-                        .stats
-                        .get_num_user_transactions(i.value()) as i64,
-                );
-            self.metrics
-                .consensus_finalized_user_transactions
-                .with_label_values(&[hostname])
-                .add(num_finalized_user_transactions[i.value()] as i64);
-            self.metrics
-                .consensus_rejected_user_transactions
-                .with_label_values(&[hostname])
-                .add(num_rejected_user_transactions[i.value()] as i64);
-        }
-
-        // TODO(commit-handler-rewrite): de-duplicate transactions
-        let mut all_transactions = Vec::new();
-        {
-            // We need a set here as well, since the processed_cache is a LRU cache and can drop
-            // entries while we're iterating over the sequenced transactions.
-            let mut processed_set = HashSet::new();
-
-            for (seq, (transaction, cert_origin)) in transactions.into_iter().enumerate() {
-                // In process_consensus_transactions_and_commit_boundary(), we will add a system consensus commit
-                // prologue transaction, which will be the first transaction in this consensus commit batch.
-                // Therefore, the transaction sequence number starts from 1 here.
-                let current_tx_index = ExecutionIndices {
-                    last_committed_round: commit_info.round,
-                    sub_dag_index: commit_sub_dag_index,
-                    transaction_index: (seq + 1) as u64,
-                };
-
-                self.last_consensus_stats.index = current_tx_index;
-
-                let certificate_author = *self
-                    .epoch_store
-                    .committee()
-                    .authority_by_index(cert_origin)
-                    .unwrap();
-
-                let sequenced_transaction = SequencedConsensusTransaction {
-                    certificate_author_index: cert_origin,
-                    certificate_author,
-                    consensus_index: current_tx_index,
-                    transaction,
-                };
-
-                let key = sequenced_transaction.key();
-                let in_set = !processed_set.insert(key);
-                let in_cache = self
-                    .processed_cache
-                    .put(sequenced_transaction.key(), ())
-                    .is_some();
-
-                if in_set || in_cache {
-                    self.metrics.skipped_consensus_txns_cache_hit.inc();
-                    continue;
-                }
-
-                all_transactions.push(sequenced_transaction);
-            }
-        }
-
-        let indirect_state_observer = IndirectStateObserver::new();
-
-        let (executable_transactions, assigned_versions) = self
-            .epoch_store
-            .process_consensus_transactions_and_commit_boundary(
-                all_transactions,
-                &self.last_consensus_stats,
-                &self.checkpoint_service,
-                self.cache_reader.as_ref(),
-                &commit_info,
-                indirect_state_observer,
-                &self.metrics,
-            )
-            .await
-            .expect("Unrecoverable error in consensus handler");
-
-        // TODO(commit-handler-rewrite): update throughput calculator
-        // update the calculated throughput
-        self.throughput_calculator
-            .add_transactions(timestamp, executable_transactions.len() as u64);
-
-        // TODO(commit-handler-rewrite): fail points
-        fail_point_if!("correlated-crash-after-consensus-commit-boundary", || {
-            let key = [commit_sub_dag_index, self.epoch_store.epoch()];
-            if sui_simulator::random::deterministic_probability_once(&key, 0.01) {
-                sui_simulator::task::kill_current_node(None);
-            }
-        });
-
-        fail_point!("crash"); // for tests that produce random crashes
-
-        // TODO(commit-handler-rewrite): enqueue transactions
-        self.execution_scheduler_sender.send(
-            executable_transactions,
-            assigned_versions,
-            SchedulingSource::NonFastPath,
-        );
-
-        // TODO(commit-handler-rewrite): Check if we should send EndOfPublish after processing consensus commit
-        self.send_end_of_publish_if_needed().await;
     }
 
     fn create_authenticator_state_update(
@@ -2474,9 +1992,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         .inc_num_user_transactions(author);
                 }
 
-                // DONE(commit-handler-rewrite): ignored external transactions must not be recorded as processed.
                 if !initial_reconfig_state.should_accept_consensus_certs() {
-                    // DONE(commit-handler-rewrite): ignore txns due to !should_accept_consensus_certs(), unless they were previously deferred
                     // (Note: we no longer need to worry about the previously deferred condition, since we are only
                     // processing newly-received transactions at this time).
                     match &parsed.transaction.kind {
@@ -2484,14 +2000,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         | ConsensusTransactionKind::CertifiedTransaction(_)
                         // deprecated and ignore later, but added for exhaustive match
                         | ConsensusTransactionKind::CapabilityNotification(_)
-                        // DONE(commit-handler-rewrite): [ssm] ignore capability notifications if !should_accept_consensus_certs()
                         | ConsensusTransactionKind::CapabilityNotificationV2(_)
-                        // DONE(commit-handler-rewrite): [ssm] ignore end of publish messages if !should_accept_consensus_certs()
                         | ConsensusTransactionKind::EndOfPublish(_)
-                        // DONE(commit-handler-rewrite): [ssm] ignore execution time observations if !should_accept_consensus_certs()
                         // Note: we no longer have to check protocol_config.ignore_execution_time_observations_after_certs_closed()
                         | ConsensusTransactionKind::ExecutionTimeObservation(_)
-                        // DONE(commit-handler-rewrite): [ssm] ignore jwk votes if !should_accept_consensus_certs()
                         | ConsensusTransactionKind::NewJWKFetched(_, _, _) => {
                             debug!(
                                 "Ignoring consensus transaction {:?} because of end of epoch",
@@ -2511,15 +2023,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                 if !initial_reconfig_state.should_accept_tx() {
                     match &parsed.transaction.kind {
-                        // DONE(commit-handler-rewrite): [ssm] ignore dkg confirmation if !should_accept_tx()
                         ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
-                        // DONE(commit-handler-rewrite): [ssm] ignore dkg message if !should_accept_tx()
                         | ConsensusTransactionKind::RandomnessDkgMessage(_, _) => continue,
-                        _ => {},
+                        _ => {}
                     }
                 }
 
-                // DONE(commit-handler-rewrite): ignore mfp user transaction if mfp is disabled
                 if parsed.transaction.is_mfp_transaction()
                     && !self.epoch_store.protocol_config().mysticeti_fastpath()
                 {
@@ -2530,7 +2039,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     continue;
                 }
 
-                // DONE(commit-handler-rewrite): ignore certs from wrong epoch
                 if let ConsensusTransactionKind::CertifiedTransaction(certificate) =
                     &parsed.transaction.kind
                     && certificate.epoch() != epoch
@@ -2545,7 +2053,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                 // Handle deprecated messages
                 match &parsed.transaction.kind {
-                    // DONE(commit-handler-rewrite): [ssm] can ignore capabilities v1 in rewrite
                     ConsensusTransactionKind::CapabilityNotification(_)
                     | ConsensusTransactionKind::RandomnessStateUpdate(_, _)
                     | ConsensusTransactionKind::CheckpointSignature(_) => {
@@ -2559,7 +2066,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     _ => {}
                 }
 
-                // DONE(commit-handler-rewrite): ignore transactions sent by validators that have already sent EOP
                 if matches!(
                     &parsed.transaction.kind,
                     ConsensusTransactionKind::UserTransaction(_)
@@ -2591,9 +2097,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        // TODO(commit-handler-rewrite): update per validator metrics
-        // DONE(commit-handler-rewrite): update per validator metrics
-        // TODO and DONE are in same place because this code is shared between old and new commit handler
         for (i, authority) in self.committee.authorities() {
             let hostname = &authority.hostname;
             self.metrics
@@ -2637,12 +2140,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // each handled separately. The key thing to see is that all messages are marked as processed
         // here, except for ones that are filtered out earlier (e.g. due to !should_accept_consensus_certs()).
 
-        // DONE(commit-handler-rewrite): record_consensus_message_processed() must be called for deferred txns
-        // DONE(commit-handler-rewrite): cancelled txns must be recorded as processed
-        // DONE(commit-handler-rewrite): consensus messages must be recorded as processed
-        // DONE(commit-handler-rewrite): randomness messages must be recorded as processed
         for (seq, (transaction, cert_origin)) in transactions.into_iter().enumerate() {
-            // TODO(consensus-handler-rewrite): the seq + 1 is probably not necessary, because we do not create a
             // SequencedConsensusTransaction for commit prologue any more.
             // In process_consensus_transactions_and_commit_boundary(), we will add a system consensus commit
             // prologue transaction, which will be the first transaction in this consensus commit batch.
@@ -2838,6 +2336,16 @@ impl ExecutionSchedulerSender {
     ) -> Self {
         let (sender, recv) = monitored_mpsc::unbounded_channel("execution_scheduler_sender");
         spawn_monitored_task!(Self::run(recv, execution_scheduler, epoch_store));
+        Self { sender }
+    }
+
+    pub(crate) fn new_for_testing(
+        sender: monitored_mpsc::UnboundedSender<(
+            Vec<Schedulable>,
+            AssignedTxAndVersions,
+            SchedulingSource,
+        )>,
+    ) -> Self {
         Self { sender }
     }
 
@@ -3402,11 +2910,8 @@ mod tests {
             CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
             SignedCheckpointSummary,
         },
-        messages_consensus::{
-            AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKind,
-        },
+        messages_consensus::ConsensusTransaction,
         object::Object,
-        supported_protocol_versions::SupportedProtocolVersions,
         transaction::{
             CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
         },
@@ -3420,9 +2925,9 @@ mod tests {
         },
         checkpoints::CheckpointServiceNoop,
         consensus_adapter::consensus_tests::{
-            make_consensus_adapter_for_test, test_certificates_with_gas_objects,
-            test_user_transaction,
+            test_certificates_with_gas_objects, test_user_transaction,
         },
+        consensus_test_utils::make_consensus_adapter_for_test,
         post_consensus_tx_reorder::PostConsensusTxReorder,
     };
 
@@ -3805,60 +3310,34 @@ mod tests {
 
     #[test]
     fn test_order_by_gas_price() {
-        let mut v = vec![cap_txn(10), user_txn(42), user_txn(100), cap_txn(1)];
+        let mut v = vec![user_txn(42), user_txn(100)];
         PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
         assert_eq!(
-            extract(v),
+            to_short_strings(v),
             vec![
-                "cap(10)".to_string(),
-                "cap(1)".to_string(),
-                "certified(100)".to_string(),
-                "certified(42)".to_string(),
+                "transaction(100)".to_string(),
+                "transaction(42)".to_string(),
             ]
         );
 
         let mut v = vec![
             user_txn(1200),
-            cap_txn(10),
             user_txn(12),
             user_txn(1000),
             user_txn(42),
             user_txn(100),
-            cap_txn(1),
             user_txn(1000),
         ];
         PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
         assert_eq!(
-            extract(v),
+            to_short_strings(v),
             vec![
-                "cap(10)".to_string(),
-                "cap(1)".to_string(),
-                "certified(1200)".to_string(),
-                "certified(1000)".to_string(),
-                "certified(1000)".to_string(),
-                "certified(100)".to_string(),
-                "certified(42)".to_string(),
-                "certified(12)".to_string(),
-            ]
-        );
-
-        // If there are no user transactions, the order should be preserved.
-        let mut v = vec![
-            cap_txn(10),
-            eop_txn(12),
-            eop_txn(10),
-            cap_txn(1),
-            eop_txn(11),
-        ];
-        PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
-        assert_eq!(
-            extract(v),
-            vec![
-                "cap(10)".to_string(),
-                "eop(12)".to_string(),
-                "eop(10)".to_string(),
-                "cap(1)".to_string(),
-                "eop(11)".to_string(),
+                "transaction(1200)".to_string(),
+                "transaction(1000)".to_string(),
+                "transaction(1000)".to_string(),
+                "transaction(100)".to_string(),
+                "transaction(42)".to_string(),
+                "transaction(12)".to_string(),
             ]
         );
     }
@@ -4122,49 +3601,13 @@ mod tests {
         );
     }
 
-    fn extract(v: Vec<VerifiedSequencedConsensusTransaction>) -> Vec<String> {
-        v.into_iter().map(extract_one).collect()
+    fn to_short_strings(v: Vec<VerifiedExecutableTransaction>) -> Vec<String> {
+        v.into_iter()
+            .map(|t| format!("transaction({})", t.transaction_data().gas_price()))
+            .collect()
     }
 
-    fn extract_one(t: VerifiedSequencedConsensusTransaction) -> String {
-        match t.0.transaction {
-            SequencedConsensusTransactionKind::External(ext) => match ext.kind {
-                ConsensusTransactionKind::EndOfPublish(authority) => {
-                    format!("eop({})", authority.0[0])
-                }
-                ConsensusTransactionKind::CapabilityNotification(cap) => {
-                    format!("cap({})", cap.generation)
-                }
-                ConsensusTransactionKind::CertifiedTransaction(txn) => {
-                    format!("certified({})", txn.transaction_data().gas_price())
-                }
-                ConsensusTransactionKind::UserTransaction(txn) => {
-                    format!("user({})", txn.transaction_data().gas_price())
-                }
-                _ => unreachable!(),
-            },
-            SequencedConsensusTransactionKind::System(_) => unreachable!(),
-        }
-    }
-
-    fn eop_txn(a: u8) -> VerifiedSequencedConsensusTransaction {
-        let mut authority = AuthorityName::default();
-        authority.0[0] = a;
-        txn(ConsensusTransactionKind::EndOfPublish(authority))
-    }
-
-    fn cap_txn(generation: u64) -> VerifiedSequencedConsensusTransaction {
-        txn(ConsensusTransactionKind::CapabilityNotification(
-            AuthorityCapabilitiesV1 {
-                authority: Default::default(),
-                generation,
-                supported_protocol_versions: SupportedProtocolVersions::SYSTEM_DEFAULT,
-                available_system_packages: vec![],
-            },
-        ))
-    }
-
-    fn user_txn(gas_price: u64) -> VerifiedSequencedConsensusTransaction {
+    fn user_txn(gas_price: u64) -> VerifiedExecutableTransaction {
         let (committee, keypairs) = Committee::new_simple_test_committee();
         let data = SenderSignedData::new(
             TransactionData::new_transfer(
@@ -4177,15 +3620,8 @@ mod tests {
             ),
             vec![],
         );
-        txn(ConsensusTransactionKind::CertifiedTransaction(Box::new(
+        VerifiedExecutableTransaction::new_from_certificate(VerifiedCertificate::new_unchecked(
             CertifiedTransaction::new_from_keypairs_for_testing(data, &keypairs, &committee),
-        )))
-    }
-
-    fn txn(kind: ConsensusTransactionKind) -> VerifiedSequencedConsensusTransaction {
-        VerifiedSequencedConsensusTransaction::new_test(ConsensusTransaction {
-            kind,
-            tracking_id: Default::default(),
-        })
+        ))
     }
 }
