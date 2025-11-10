@@ -55,7 +55,7 @@ async fn setup_test_cluster_with_chunking() -> TestCluster {
     #[allow(unused_mut)]
     let mut builder = TestClusterBuilder::new()
         .with_num_validators(1)
-        .with_epoch_duration_ms(30_000)
+        .with_epoch_duration_ms(120_000)
         .with_execution_time_observer_config(observer_config);
 
     #[cfg(msim)]
@@ -115,12 +115,6 @@ async fn validate_chunked_execution_time_storage(test_cluster: &TestCluster) {
     )
     .expect("Chunk count must exist - ensure enough observations were collected before reconfig");
 
-    assert!(
-        chunk_count > 1,
-        "Expected more than 1 chunk to validate chunking, got {}",
-        chunk_count
-    );
-
     for chunk_index in 0..chunk_count {
         let chunk_key = ExecutionTimeObservationChunkKey { chunk_index };
         let chunk_bytes_result: Result<Vec<u8>, _> =
@@ -139,6 +133,12 @@ async fn validate_chunked_execution_time_storage(test_cluster: &TestCluster) {
             }
         }
     }
+
+    assert!(
+        chunk_count > 1,
+        "Expected more than 1 chunk to validate chunking, got {}",
+        chunk_count
+    );
 }
 
 #[sim_test]
@@ -231,7 +231,7 @@ async fn send_transactions(
 ) {
     let rgp = test_cluster.get_reference_gas_price().await;
 
-    for i in 0..3 {
+    for i in 0..6 {
         let gas = test_cluster
             .wallet
             .gas_objects(sender)
@@ -275,6 +275,12 @@ async fn send_transactions(
         );
 
         let signed_tx = test_cluster.wallet.sign_transaction(&tx_data).await;
-        test_cluster.execute_transaction(signed_tx).await;
+
+        let res = test_cluster.execute_transaction(signed_tx).await;
+        assert_eq!(
+            res.effects.unwrap().executed_epoch(),
+            0,
+            "all txns to execute in epoch 0"
+        );
     }
 }
