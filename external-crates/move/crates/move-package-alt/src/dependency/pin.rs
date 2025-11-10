@@ -181,8 +181,8 @@ impl Pinned {
                 let rev = fmt_truncated(git.inner.sha(), 6, 2);
                 format!(r#"git = "{repo}", path = "{path}", rev = "{rev}""#)
             }
-            Pinned::OnChain(_on_chain) => format!("on-chain = true"),
-            Pinned::Root(_) => format!("local = \".\""),
+            Pinned::OnChain(_on_chain) => "on-chain = true".to_string(),
+            Pinned::Root(_) => "local = \".\"".to_string(),
         }
     }
 }
@@ -263,7 +263,7 @@ impl From<Pinned> for LockfileDependencyInfo {
 impl fmt::Display for Pinned {
     // TODO: this is maybe misguided; we should perhaps only display manifest dependencies?
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{{ {}, ... }}", self.abbreviated())
+        write!(f, "{{ {} }}", self.abbreviated())
     }
 }
 
@@ -441,7 +441,7 @@ mod tests {
     #[test]
     fn display_local() {
         let dep = new_pinned_local_from("", "foo/bar");
-        assert_snapshot!(format!("{dep}"), @r###"{ local = "foo/bar", ... }"###);
+        assert_snapshot!(format!("{dep}"), @r###"{ local = "foo/bar" }"###);
     }
 
     #[test]
@@ -451,13 +451,13 @@ mod tests {
             "ac4911261dd71cac55cf5bf2dd3288f3a12f2563",
             "foo/bar/baz",
         );
-        assert_snapshot!(format!("{dep}"), @r###"{ git = "https://...org/repo.git", path = "foo/bar/baz", rev = "ac4911...63", ... }"###);
+        assert_snapshot!(format!("{dep}"), @r###"{ git = "https://...org/repo.git", path = "foo/bar/baz", rev = "ac4911...63" }"###);
     }
 
     #[test]
     fn display_root() {
         let (_, dep) = new_pinned_root("");
-        assert_snapshot!(format!("{dep}"), @r###"{ local = ".", ... }"###);
+        assert_snapshot!(format!("{dep}"), @r###"{ local = "." }"###);
     }
 
     // Test infrastructure /////////////////////////////////////////////////////////////////////////

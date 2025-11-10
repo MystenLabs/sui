@@ -92,14 +92,12 @@ impl<F: MoveFlavor> PackageGraph<F> {
                         actual_dep_name,
                     });
                 }
-            } else {
-                if local_dep_name != actual_dep_name {
-                    return Err(RenameError::MismatchedNames {
-                        local_dep_name,
-                        dep_location: dep.as_ref().abbreviated(),
-                        actual_dep_name,
-                    });
-                }
+            } else if local_dep_name != actual_dep_name {
+                return Err(RenameError::MismatchedNames {
+                    local_dep_name,
+                    dep_location: dep.as_ref().abbreviated(),
+                    actual_dep_name,
+                });
             }
         }
 
