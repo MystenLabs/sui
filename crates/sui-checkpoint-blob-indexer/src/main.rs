@@ -87,6 +87,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Starting checkpoint object store indexer");
     info!("Args: {:#?}", args);
 
+    let is_bounded_job = args.indexer_args.last_checkpoint.is_some();
     let client_options = ClientOptions::default().with_timeout(args.request_timeout);
 
     let object_store: Arc<dyn object_store::ObjectStore> = if let Some(bucket) = args.s3 {
@@ -214,7 +215,7 @@ async fn main() -> anyhow::Result<()> {
             // User manually stopped it - treat as success
             Ok(())
         }
-        ExitReason::Terminated if args.indexer_args.last_checkpoint.is_some() => {
+        ExitReason::Terminated if is_bounded_job => {
             // Bounded job interrupted by K8s - work incomplete, trigger restart
             std::process::exit(1);
         }
