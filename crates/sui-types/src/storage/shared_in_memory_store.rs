@@ -104,7 +104,7 @@ impl ReadStore for SharedInMemoryStore {
 
     fn get_transaction_checkpoint(
         &self,
-        digest: &TransactionDigest,
+        _digest: &TransactionDigest,
     ) -> Option<CheckpointSequenceNumber> {
         None
     }
@@ -538,6 +538,13 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
         _digest: &TransactionDigest,
     ) -> Option<Vec<crate::storage::ObjectKey>> {
         todo!()
+    }
+
+    fn get_transaction_checkpoint(
+        &self,
+        _digest: &TransactionDigest,
+    ) -> Option<CheckpointSequenceNumber> {
+        None
     }
 
     fn get_latest_checkpoint(&self) -> Result<VerifiedCheckpoint> {
