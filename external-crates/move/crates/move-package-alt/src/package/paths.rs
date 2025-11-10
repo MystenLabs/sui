@@ -14,6 +14,17 @@ use serde::{Deserialize, de::DeserializeOwned};
 use thiserror::Error;
 use tracing::debug;
 
+/// Lock file version written by this version of the compiler.  Backwards compatibility is
+/// guaranteed (the compiler can read lock files with older versions), forward compatibility is not
+/// (the compiler will fail to read lock files at newer versions).
+///
+/// V0: Base version.
+/// V1: Adds toolchain versioning support.
+/// V2: Adds support for managing addresses on package publish and upgrades.
+/// V3: Renames dependency `name` field to `id` and adds a `name` field to store the name from the manifest.
+/// V4: Package rewrite
+const LOCKFILE_VERSION: usize = 4;
+
 use crate::{
     compatibility::{
         legacy::LegacyEnvironment, legacy_lockfile::load_legacy_lockfile,
@@ -160,15 +171,15 @@ impl PackagePath {
             return Ok(None);
         }
         let version = lockfile_version(&self.lockfile_path())?;
-        if version < 4 {
+        if version < LOCKFILE_VERSION {
             Ok(None)
-        } else if version == 4 {
+        } else if version == LOCKFILE_VERSION {
             parse_file(&self.lockfile_path())
         } else {
             Err(FileError::VersionError {
                 file: self.lockfile_path(),
                 version,
-                max: 4,
+                max: LOCKFILE_VERSION,
             })
         }
     }
