@@ -14361,30 +14361,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-edge-proxy"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum 0.8.3",
- "axum-server",
- "bytes",
- "clap",
- "futures",
- "mysten-metrics",
- "prometheus",
- "rand 0.8.5",
- "reqwest 0.12.9",
- "serde",
- "serde_json",
- "serde_with",
- "serde_yaml 0.8.26",
- "telemetry-subscribers",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "sui-enum-compat-util"
 version = "0.1.0"
 dependencies = [
