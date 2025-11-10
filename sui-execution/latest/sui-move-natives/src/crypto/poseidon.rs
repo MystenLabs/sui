@@ -103,7 +103,7 @@ pub fn poseidon_bn254_internal(
             let value = reference.value_as::<VectorRef>()?.as_bytes_ref().clone();
             Ok(value)
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<PartialVMResult<Vec<_>>>()?;
 
     match poseidon_bytes(&field_elements) {
         Ok(result) => Ok(NativeResult::ok(
