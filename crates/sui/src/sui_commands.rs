@@ -1665,7 +1665,6 @@ async fn prompt_if_no_config(
             }
             .persisted(wallet_conf_path)
             .save()?;
-
         }
     }
     Ok(())
