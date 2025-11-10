@@ -87,6 +87,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Starting checkpoint object store indexer");
     info!("Args: {:#?}", args);
 
+    let is_bounded_job = args.indexer_args.last_checkpoint.is_some();
     let client_options = ClientOptions::default().with_timeout(args.request_timeout);
 
     let object_store: Arc<dyn object_store::ObjectStore> = if let Some(bucket) = args.s3 {
@@ -172,29 +173,64 @@ async fn main() -> anyhow::Result<()> {
     let h_metrics = metrics_service.run().await?;
     let mut h_indexer = indexer.run().await?;
 
-    tokio::select! {
+    enum ExitReason {
+        Completed,
+        UserInterrupt, // SIGINT / Ctrl-C
+        Terminated,    // SIGTERM (i.e. from K8s)
+    }
+
+    let exit_reason = tokio::select! {
         res = &mut h_indexer => {
             tracing::info!("Indexer completed successfully");
             res?;
-            return Ok(());
+            ExitReason::Completed
         }
         _ = tokio::signal::ctrl_c() => {
             tracing::info!("Received SIGINT, shutting down...");
+            ExitReason::UserInterrupt
         }
-        _ = async {
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .expect("Failed to install SIGTERM handler")
-                .recv()
-                .await
-        } => {
+        _ = wait_for_sigterm() => {
             tracing::info!("Received SIGTERM, shutting down...");
+            ExitReason::Terminated
         }
-    }
+    };
 
     cancel.cancel();
-    tracing::info!("Waiting for indexer to shut down gracefully...");
-    h_indexer.await?;
-    h_metrics.await?;
+    tracing::info!("Waiting for graceful shutdown...");
+    let _ = h_indexer.await;
+    let _ = h_metrics.await;
 
-    Ok(())
+    // Determine exit code based on exit reason and job type
+    match exit_reason {
+        ExitReason::Completed => {
+            // Job finished all work successfully
+            Ok(())
+        }
+        ExitReason::UserInterrupt => {
+            // User manually stopped it - treat as success
+            Ok(())
+        }
+        ExitReason::Terminated if is_bounded_job => {
+            // Bounded job interrupted by K8s - work incomplete, trigger restart
+            std::process::exit(1);
+        }
+        ExitReason::Terminated => {
+            // Continuous indexer - normal shutdown
+            Ok(())
+        }
+    }
+}
+
+#[cfg(unix)]
+async fn wait_for_sigterm() {
+    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .expect("Failed to install SIGTERM handler")
+        .recv()
+        .await;
+}
+
+#[cfg(not(unix))]
+async fn wait_for_sigterm() {
+    // SIGTERM doesn't exist on Windows, so wait forever
+    std::future::pending::<()>().await
 }
