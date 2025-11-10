@@ -4,21 +4,23 @@
 
 use crate::{
     package::EnvironmentName,
-    schema::{OriginalID, PublishAddresses, PublishedID},
+    schema::{MoveHeader, OriginalID, ParsedLockfile, PublishAddresses, PublishedID, RenderToml},
 };
 use anyhow::{Result, anyhow};
+use colored::Colorize;
 use std::{collections::BTreeMap, path::Path};
 use toml::Value as TV;
+use tracing::warn;
 
 use super::{legacy::LegacyEnvironment, parse_address_literal};
 
-/// Check whether the lockfile in `path` is a legacy format (i.e. version 3 or less); if so,
-/// extract and return any publication information it contains
+/// Parse the legacy lockfile in `path` (i.e. version 3 or less) and return the extracted
+/// information.
 ///
-/// If the file doesn't exist or isn't in a legacy format, returns `Ok(None)`
-/// If the file exists and is marked as legacy but can't be parsed, returns an error
-/// If the file can be parsed as a legacy lockfile, returns `pubs` for any publications that
-///   can be extracted from the lockfile
+/// If the file doesn't exist or isn't a legacy lockfile, returns `Ok(None)`
+/// If the file exists but can't be parsed as a legacy lockfile, returns an error
+/// If the file exists and is a weird mishmash of a legacy and modern lockfile, we replace it with
+///    a modern lockfile (after emitting a loud warning); in this case we also return `Ok(None)`
 pub fn load_legacy_lockfile(
     lockfile_path: &Path,
 ) -> anyhow::Result<Option<BTreeMap<EnvironmentName, LegacyEnvironment>>> {
@@ -49,15 +51,35 @@ pub fn load_legacy_lockfile(
         return Ok(None);
     }
 
+    // The old package system didn't fail if the lockfile version field was too high, instead it
+    // just mushed the lockfile fields in with the new lockfile fields. We detect this case and
+    // complain loudly (and preserve the modern pins)
+    if let Some(pinned) = lockfile.get("pinned") {
+        warn!(
+            "{}: Detected a modern lockfile at {lockfile_path:?} that was modified by an older CLI; some information may be lost. Be sure that all contributors are using the latest CLI.",
+            "WARNING".bold().yellow()
+        );
+
+        let lockfile = ParsedLockfile {
+            header: MoveHeader::default(),
+            pinned: pinned.clone().try_into()?,
+        };
+
+        // TODO: this really should be handled by the output path, but that requires effort
+        std::fs::write(lockfile_path, lockfile.render_as_toml())?;
+
+        return Ok(None);
+    };
+
     // Extract legacy addresses and write them into the pub file
-    let published: BTreeMap<EnvironmentName, LegacyEnvironment> =
+    let publications: BTreeMap<EnvironmentName, LegacyEnvironment> =
         parse_legacy_lockfile_addresses(lockfile)?;
 
-    Ok(Some(published))
+    Ok(Some(publications))
 }
 
 fn parse_legacy_lockfile_addresses(
-    lockfile: &toml::value::Map<String, toml::Value>,
+    lockfile: &toml::map::Map<String, toml::Value>,
 ) -> Result<BTreeMap<EnvironmentName, LegacyEnvironment>> {
     let mut published = BTreeMap::new();
 
@@ -257,5 +279,73 @@ mod tests {
 
         let pubs = load_legacy_lockfile(&lockfile).unwrap();
         assert!(pubs.unwrap().is_empty());
+    }
+
+    /// Loading a mooshed lockfile replaces it with a modern one and returns `None`
+    #[tokio::test]
+    async fn convert_mooshed_lockfile() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let lockfile = tempdir.path().join("Move.lock");
+        std::fs::write(
+            &lockfile,
+            indoc!(
+                r###"
+                [move]
+                manifest_digest = "46963749C976A052F2770EA6625F4DF4366F72291DC73139750BC416CF77A247"
+                deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
+                dependencies = [
+                  { name = "P" },
+                  { name = "Sui" },
+                ]
+
+                [[move.package]]
+                name = "P"
+                source = { git = "foo.git", rev = "main", subdir = "" }
+                dependencies = []
+
+                [move.toolchain-version]
+                compiler-version = "1.30.1"
+                edition = "2024.beta"
+                flavor = "sui"
+
+                [pinned.testnet.Sui]
+                source = { git = "...", subdir = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
+                use_environment = "testnet"
+                manifest_digest = "ED5DEFBBF556EE89312E639A53F21DE24320F9B13C2087D3BFE2989D5B2B5DAF"
+                deps = {}
+
+                [pinned.testnet.foo]
+                source = { git = "...", subdir = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
+                use_environment = "testnet"
+                manifest_digest = "ED5DEFBBF556EE89312E639A53F21DE24320F9B13C2087D3BFE2989D5B2B5DAF"
+                deps = { sui = "Sui" }
+                "###
+            ),
+        )
+        .unwrap();
+
+        let pubs = load_legacy_lockfile(&lockfile).unwrap();
+        assert!(pubs.is_none());
+
+        let new_lockfile = std::fs::read_to_string(&lockfile).unwrap();
+        assert_snapshot!(new_lockfile, @r###"
+        # Generated by move; do not edit
+        # This file should be checked in.
+
+        [move]
+        version = 4
+
+        [pinned.testnet.Sui]
+        source = { git = "...", subdir = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
+        use_environment = "testnet"
+        manifest_digest = "ED5DEFBBF556EE89312E639A53F21DE24320F9B13C2087D3BFE2989D5B2B5DAF"
+        deps = {}
+
+        [pinned.testnet.foo]
+        source = { git = "...", subdir = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
+        use_environment = "testnet"
+        manifest_digest = "ED5DEFBBF556EE89312E639A53F21DE24320F9B13C2087D3BFE2989D5B2B5DAF"
+        deps = { sui = "Sui" }
+        "###);
     }
 }
