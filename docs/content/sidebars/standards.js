@@ -39,6 +39,8 @@ const standards = [
 			'standards/deepbookv3/flash-loans',
 			'standards/deepbookv3/staking-governance',
 			'standards/deepbookv3-indexer',
+			'standards/deepbookv3/referral',
+			'standards/deepbookv3/ewma',
 			{
 				type: 'category',
 				label: 'SDK',
