@@ -1666,8 +1666,6 @@ async fn prompt_if_no_config(
             .persisted(wallet_conf_path)
             .save()?;
 
-            let context = WalletContext::new(wallet_conf_path)?;
-            let _ = context.cache_chain_id(&context.get_client().await?).await?;
         }
     }
     Ok(())
