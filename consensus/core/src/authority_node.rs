@@ -107,12 +107,6 @@ impl ConsensusAuthority {
         }
     }
 
-    #[cfg(test)]
-    fn sync_last_known_own_block_enabled(&self) -> bool {
-        match self {
-            Self::WithTonic(authority) => authority.sync_last_known_own_block,
-        }
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -139,7 +133,6 @@ where
     broadcaster: Option<Broadcaster>,
     subscriber: Option<Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>>,
     network_manager: N,
-    sync_last_known_own_block: bool,
 }
 
 impl<N> AuthorityNode<N>
@@ -390,7 +383,6 @@ where
             broadcaster,
             subscriber,
             network_manager,
-            sync_last_known_own_block,
         }
     }
 
@@ -746,10 +738,6 @@ mod tests {
                 protocol_config.clone(),
             )
             .await;
-            assert!(
-                authority.sync_last_known_own_block_enabled(),
-                "Expected syncing of last known own block to be enabled as all authorities are of empty db and boot for first time."
-            );
             boot_counters[index] += 1;
             commit_receivers.push(commit_receiver);
             block_receivers.push(block_receiver);
@@ -799,10 +787,6 @@ mod tests {
             protocol_config.clone(),
         )
         .await;
-        assert!(
-            authority.sync_last_known_own_block_enabled(),
-            "Authority should have the sync of last own block enabled"
-        );
         boot_counters[index_1] += 1;
         authorities.insert(index_1, authority);
         temp_dirs.insert(index_1, dir);
@@ -820,10 +804,6 @@ mod tests {
             protocol_config.clone(),
         )
         .await;
-        assert!(
-            !authority.sync_last_known_own_block_enabled(),
-            "Authority should not have attempted to sync the last own block"
-        );
         boot_counters[index_2] += 1;
         authorities.insert(index_2, authority);
         sleep(Duration::from_secs(5)).await;
