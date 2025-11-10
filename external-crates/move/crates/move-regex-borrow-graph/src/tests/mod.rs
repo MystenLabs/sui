@@ -2,3 +2,4 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod regex_tests;
+pub mod regex_prop_tests;
