@@ -94,10 +94,7 @@ pub async fn run_move_unit_tests(
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
 
-    let result = move_cli::base::test::run_move_unit_tests::<
-        sui_package_alt::SuiFlavor,
-        _
-    >(
+    let result = move_cli::base::test::run_move_unit_tests::<sui_package_alt::SuiFlavor, _>(
         path,
         build_config,
         UnitTestingConfig {

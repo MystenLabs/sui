@@ -110,7 +110,7 @@ impl ValidationMode {
         match self {
             Self::Root { at: Some(addr), .. } => Ok(Some(*addr)),
             Self::Root { at: None, .. } => {
-                Ok(package.published_at.map(|addr| AccountAddress::from(addr)))
+                Ok(package.published_at.map(AccountAddress::from(addr))
             }
             Self::Deps => Ok(None),
         }
