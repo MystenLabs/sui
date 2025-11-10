@@ -386,7 +386,8 @@ mod tests {
           |
         7 |             foo = { r = 0 }
           |                   ^^^^^^^^^
-        invalid type: integer `0`, expected a map for key `r`
+        invalid type: integer `0`, expected a map
+        in `r`
         "###);
     }
 
@@ -948,7 +949,8 @@ mod tests {
           |
         7 |             a = { local = 1 }
           |                 ^^^^^^^^^^^^^
-        invalid type: integer `1`, expected path string for key `local`
+        invalid type: integer `1`, expected path string
+        in `local`
         "###);
     }
 
