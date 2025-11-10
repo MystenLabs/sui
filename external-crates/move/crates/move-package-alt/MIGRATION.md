@@ -4,15 +4,6 @@ New Move package management system
 This guide describes the changes from the old package management system to the
 new package management system.
 
-The new system is currently in a prototype stage; some features are not yet
-fully implemented (and these are noted in the documentation below). We've also
-focused primarily on the cases where we have a valid setup, so that some of our
-error messages may need some polish, and there may be cases where a
-consistency check is not yet performed. Nevertheless, we hope that the
-implementation is complete enough that you can successfully do an experimental
-migration of real packages (and hopefully provide us concrete feedback to guide
-our next steps).
-
 Advantages of the new system
 ============================
 
@@ -20,7 +11,7 @@ Some of the benefits of the new system:
 
 **Designed for multiple environments**
   - care has been taken to ensure that you can write a single manifest that
-    works correctly for multiple environments (E.g. mainnet and testnet)
+    works correctly for multiple environments (e.g. mainnet and testnet)
 
   - you can override dependencies for specific environments, so that you have
     more flexibility in your testing deployment process
@@ -43,6 +34,10 @@ Some of the benefits of the new system:
  - you can rename dependencies, so that you can now depend on multiple packages
    with the same name
 
+ - you can no longer "smoosh together" packages, which prevents a lot of
+   confusing and error-prone situations, and lets you have modules with the
+   same name in different packages.
+
  - the [addresses] section is gone - dependency names and package names are
    unified
 
@@ -50,38 +45,79 @@ Some of the benefits of the new system:
    what package a name refers to only requires looking at your Move.toml and
    not your dependencies' Move.toml files
 
+**Other improvements**
+ - sparse and shallow git downloads mean you no longer have to download the
+   entire repositories of your dependencies
+
+ - upgrade capability is automatically stored in the publication file for
+   convenience
+
+ - test-publish command gives more flexible control for localnet and devnet
+   deployments
 
 **Baseline for new features**
  - the new implementation also sets us up to implement new features (or to
-   properly implement old features that don't work well), such as a stored
-   upgrade cap, efficient git downloads, source verification, republishing
-   dependencies on local networks, and on-chain dependencies.
+   properly implement old features that don't work well), such as more accurate
+   source verification, automatic dependency publication on local networks,
+   stored build configuration, and on-chain dependencies.
 
-Installing and running the prototype
-====================================
 
-To install the prototype, run
-```sh
-suiup install sui --nightly=sui-pkg-alt -y
-```
+What you'll notice right away
+=============================
 
-This will compile `sui` from the prototype branch, so it will need the rust
-toolchain installed and it will take a while to finish.
+Although some of the features of the new package system will require you to
+update your manifest to the new format, some changes will take effect as soon
+as you install the new CLI:
 
-If you want to use `mvr` dependencies, you will need a patched version of `mvr`
-as well. You can install it using
+**Lockfile format change**
+ - when you run the new CLI, it will convert your lockfile to a new format.
 
-```sh
-suiup install mvr --nightly=ml/cli-pkg-alt -y
-```
+ - it will also move the published addresses to the `Published.toml` file; this
+   file stores all of the addresses and metadata for publications in each
+   environment.
+
+ - there will be some friction if you are using an old CLI and a new CLI on the
+   same project, but things will mostly work out OK
+
+**Pinning**
+ - When you build your package, the dependencies will only be updated if
+   your `Move.toml` file changes or if you run `sui move update-deps`.
+
+ - If your dependencies are not updated, the CLI will not run `mvr` or refetch
+   `git` dependencies, so you can build offline.
+
+**Environments**
+ - Because the set of dependencies is environment-specific, the CLI needs to
+   know which environment you are building for. For shared environments like
+   `mainnet` and `testnet`, the CLI can determine the correct environment
+   automatically based on its active environment. If your local environment is
+   set to another network, you will have to specify with `-e <envname>`
+
+**Test publication**
+ - On ephemeral networks like `localnet`, the dependency addresses from the
+   build environment don't make sense.
+
+ - The new `test-publish` command lets you supply a file containing
+   dependencies' ephemeral addresses.
+
+ - We plan a fast-follow for automatically publishing dependencies and building
+   up an ephemeral publication file; right now the process is somewhat manual
+
+**Ancillary benefits**
+ - Efficient git operations
+
+ - If your `Published.toml` file contains the upgrade capability, you no longer
+   need to pass it on the command line (you still can if you want to)
 
 Changes to the `Move.toml` file
 ===============================
 
-As in the old system, packages in the new system are configured by the user
-using a `Move.toml`, and the system also manages its own information in
-`Move.lock` files. However, the format of these files has changed somewhat in
-the new system.
+Although you can continue to use the new package system without changing your
+`Move.toml` file, to get the full benefits of the new system you will need to
+update your `Move.toml` file to the new format. Currently this is a manual
+process but we have a migration tool planned as a fast-follow.
+
+This section describes the changes in more detail.
 
 ### No `[addresses]` section
 
@@ -141,7 +177,7 @@ section is how you refer to your own address in Move).
 
 There are two small changes to the `[package]` section of the manifest. The
 first is that you should change the `name` used in your manifest to match the
-name used in your code.
+name used in your code (since it is no longer in the `addresses` table).
 
 The second is the new `implicit-dependencies = false` field. In the old system,
 adding an explicit system dependency disabled implicit dependencies. In the new
@@ -188,8 +224,8 @@ This allows you to easily mix dependencies that happen to have the same name:
 
 ```toml
 [dependencies]
-alices_mathlib = { git = "https://github.com/alice.git", rename-from = "mathlib" }
-bobs_mathlib = { git = "https://github.com/bob.git", rename-from = "mathlib" }
+alice_mathlib = { git = "https://github.com/alice.git", rename-from = "mathlib" }
+bob_mathlib = { git = "https://github.com/bob.git", rename-from = "mathlib" }
 ```
 
 #### Note on git dependencies with short shas
@@ -271,27 +307,3 @@ that you can add to dependencies in the `[dep-replacements]` section:
    field in the `[dep-replacements]`, you must also give the `git` field.
    Moreover, if you do give a `git` field, the `subdir` and `rev` fields are
    not copied over. We are considering changing this behavior
-
-
-CLI changes
-===========
-
-Our prototype is integrated into the `sui` binary, so most of the commands you
-are familiar with work the same way. There are a few changes though:
-
-### Compiling for specific environments
-
-Because of `dep-replacements` (and also some details about how package
-conflicts are determined), all operations must be done in a specific
-environment. By default, the `sui` binary tries to choose the right environment
-based on the sui client environment (as determined by `sui client active-env`).
-
-If there is not an obvious choice of environment (either because the manifest
-declares multiple environments with the same chain ID or because it doesn't
-declare one at all[^1]), you will have to choose a specific environment by
-passing `-e <environment>`.
-
-[^1]: In the current prototype, that means that to publish to devnet or
-    localnet you will need to have environments defined for them. We have a
-    `[dev-environments]` feature for this purpose, but the implementation of
-    that feature is not currently complete.
