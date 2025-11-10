@@ -65,6 +65,6 @@ pub async fn execute_move_command(
 
             Ok(())
         }
-        Command::UpdateDeps(c) => c.execute(package_path).await,
+        Command::UpdateDeps(c) => c.execute(package_path, build_config).await,
     }
 }
