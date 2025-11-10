@@ -660,7 +660,7 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
 
     fn get_transaction_checkpoint(
         &self,
-        digest: &TransactionDigest,
+        _digest: &TransactionDigest,
     ) -> Option<CheckpointSequenceNumber> {
         None
     }

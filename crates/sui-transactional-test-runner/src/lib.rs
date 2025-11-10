@@ -421,8 +421,8 @@ impl ReadStore for ValidatorWithFullnode {
 
     fn get_transaction_checkpoint(
         &self,
-        digest: &TransactionDigest,
-    ) -> Option<CheckpointSequenceNumber> {
+        _digest: &TransactionDigest,
+    ) -> Option<sui_types::messages_checkpoint::CheckpointSequenceNumber> {
         None
     }
 }
