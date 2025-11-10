@@ -12,7 +12,7 @@ fn arb_label() -> impl Strategy<Value = char> {
 
 /// Strategy for generating arbitrary Regex<Lbl>
 fn arb_regex() -> impl Strategy<Value = Regex<char>> {
-    (prop::collection::vec(arb_label(), 0..5), any::<bool>()).prop_map(
+    (prop::collection::vec(arb_label(), 0..7), any::<bool>()).prop_map(
         |(labels, ends_in_dot_star)| Regex {
             labels,
             ends_in_dot_star,
@@ -87,10 +87,10 @@ proptest! {
     }
 
     // -------------------------------------------------------------------------
-    // Dot-Star is an absorbing element under extension
+    // Dot-star is an absorbing element under extension
     // -------------------------------------------------------------------------
     #[test]
-    fn dotstar_extend_absords_right(r in arb_regex(), ext in arb_extension()) {
+    fn dotstar_extend_absorbs_right(r in arb_regex(), ext in arb_extension()) {
         let r1 = r.clone().extend(&Extension::DotStar);
         let r2 = r1.clone().extend(&ext);
         prop_assert!(r1.ends_in_dot_star);
@@ -98,7 +98,7 @@ proptest! {
     }
 
     // -------------------------------------------------------------------------
-    // 3. Dot-Start extension is idempotent
+    // Dot-star extension is idempotent
     // -------------------------------------------------------------------------
     #[test]
     fn dotstar_idempotent(r in arb_regex()) {
@@ -119,9 +119,6 @@ proptest! {
     // -----------------------------------------------------------------------------
     // Dot-star absorption under prefix removal
     // -----------------------------------------------------------------------------
-    //
-    // For any regex r, removing any label from a dot-star still yields [".*"].
-    //
     #[test]
     fn dotstar_remove_prefix_absorb_left(e in arb_extension()) {
         let ds = Regex::dot_star();
@@ -131,6 +128,7 @@ proptest! {
 
     // -----------------------------------------------------------------------------
     // Dot-star prefix removal preserves dot-star termination
+    // -----------------------------------------------------------------------------
     #[test]
     fn dotstar_prefix_preserves_flag(l in arb_label()) {
         let r = Regex { labels: vec![l], ends_in_dot_star: true };
@@ -142,17 +140,39 @@ proptest! {
     }
 
     // -------------------------------------------------------------------------
+    // Dot-star is stable under arbitrary sequences of extensions and removals
+    // -------------------------------------------------------------------------
+    #[test]
+    fn dotstar_stability(
+        exts in prop::collection::vec(arb_extension(), 0..5),
+    ) {
+        let mut r = Regex::dot_star();
+        for ext in &exts {
+            r = r.extend(ext);
+            let removed = r.remove_prefix(ext); // Remove randomly
+            for rr in removed {
+                prop_assert!(rr.ends_in_dot_star);
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Abstract size is monotonic under extension
     // -------------------------------------------------------------------------
     #[test]
     fn abstract_size_monotone(r in arb_regex(), ext in arb_extension()) {
         let before = r.abstract_size();
         let after = r.clone().extend(&ext).abstract_size();
-        prop_assert!(after >= before);
+        match ext {
+            Extension::Epsilon => prop_assert_eq!(after, before),
+            Extension::DotStar => prop_assert!(after == before || after == before + 1),
+            Extension::Label(_) if r.ends_in_dot_star => prop_assert!(after == before),
+            Extension::Label(_) => prop_assert!(after == before + 1),
+        };
     }
 
     // -------------------------------------------------------------------------
-    // Label extension increases size unless Dot-Star was set
+    // Label extension increases size unless Dot-star was set
     // -------------------------------------------------------------------------
     #[test]
     fn label_extension_increases_length(r in arb_regex(), lbl in arb_label()) {
@@ -191,13 +211,12 @@ proptest! {
     // Removing a prefix produces distinct elements
     // -------------------------------------------------------------------------
     #[test]
-    fn remove_prefix_duplicates(r in arb_regex(), ext in arb_extension()) {
+    fn remove_prefix_unique(r in arb_regex(), ext in arb_extension()) {
         let result = r.remove_prefix(&ext);
         let mut unique = result.clone();
         unique.dedup();
         prop_assert_eq!(unique.len(), result.len());
     }
-
 
     // -------------------------------------------------------------------------
     /// Label extension then removing prefixes preserves extension
@@ -228,6 +247,81 @@ proptest! {
         prop_assert_eq!(rem_labels, suffix_labels);
     }
 
+    // -----------------------------------------------------------------------------
+    // Dot-star prefix removal reproduces all possible entries
+    // -----------------------------------------------------------------------------
+    #[test]
+    fn dotstar_remove_prefix_produces_all_entries(r in arb_regex()) {
+        let removed = r.remove_prefix(&Extension::DotStar);
+
+        // If the regex ends in dot-star, the only result is dot-star itself
+        if r.ends_in_dot_star {
+            prop_assert!(removed.contains(&Regex::dot_star()));
+            prop_assert!(removed.len() == 1);
+            return Ok(());
+        }
+
+        prop_assert!(removed.contains(&Regex::epsilon()));
+        prop_assert_eq!(removed.len(), r.labels.len() + 1);
+        for i in 0..r.labels.len() {
+            let expected = Regex {
+                labels: r.labels[i + 1..].to_vec(),
+                ends_in_dot_star: r.ends_in_dot_star,
+            };
+            prop_assert!(removed.contains(&expected),
+                "Expected to find {:?} in removed set {:?}", expected, removed);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Removing any prefix of R from (R + S) yields the corresponding suffix + S
+    // -------------------------------------------------------------------------
+    #[test]
+    fn remove_partial_prefix_from_extended(
+        base_labels in prop::collection::vec(arb_label(), 0..4),
+        suffix_labels in prop::collection::vec(arb_label(), 0..3),
+    ) {
+        let base = Regex { labels: base_labels.clone(), ends_in_dot_star: false };
+        let mut extended = base.clone();
+        for lbl in &suffix_labels {
+            extended = extended.extend(&Extension::Label(*lbl));
+        }
+
+        // For each possible prefix length k, remove that prefix
+        for k in 0..=base_labels.len() {
+            let prefix = &base_labels[..k];
+            let mut current = extended.clone();
+            for lbl in prefix {
+                let subresults = current.remove_prefix(&Extension::Label(*lbl));
+                if subresults.is_empty() {
+                    return Ok(());
+                }
+                current = subresults[0].clone();
+            }
+
+            // Expect result to have labels = base[k..] + suffix
+            let (rem_labels, _) = current.query_api_path();
+            let expected = base_labels[k..].iter().chain(suffix_labels.iter()).cloned().collect::<Vec<_>>();
+            prop_assert_eq!(rem_labels, expected);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Removing a prefix produces only suffixes (closure under path factoring)
+    // -------------------------------------------------------------------------
+    #[test]
+    fn remove_prefix_closure(r in arb_regex(), ext in arb_extension()) {
+        let res = r.remove_prefix(&ext);
+        for q in res {
+            // q.labels should be subset (suffix) of r.labels
+            if !r.ends_in_dot_star {
+                let is_suffix = r.labels.ends_with(&q.labels);
+                prop_assert!(is_suffix || q.is_epsilon() || q.ends_in_dot_star,
+                    "remove_prefix produced non-suffix {:?} from {:?}", q, r);
+            }
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Extending by label then removing epsilon keeps the result unchanged
     // -------------------------------------------------------------------------
@@ -238,6 +332,41 @@ proptest! {
         let eps = Extension::Epsilon;
         let removed = extended.remove_prefix(&eps);
         prop_assert_eq!(removed, vec![extended]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Abstract size should not decrease through remove+extend sequence
+    // -------------------------------------------------------------------------
+    #[test]
+    fn size_preserved_under_remove_then_extend(
+        mut r in arb_regex(),
+        lbl in arb_label(),
+    ) {
+        r.ends_in_dot_star = false; // Ensure size changes are observable
+        let before = r.abstract_size();
+        let removed = r.remove_prefix(&Extension::Label(lbl));
+        for rr in &removed {
+            let reextended = rr.clone().extend(&Extension::Label(lbl));
+            prop_assert!(reextended.abstract_size() >= before);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Random walk over extend/remove ops never panics or invalidates regex
+    // -------------------------------------------------------------------------
+    #[test]
+    fn random_walk_over_operations(
+        ops in prop::collection::vec(arb_extension(), 1..50)
+    ) {
+        let mut r = Regex::epsilon();
+        for op in &ops {
+            r = r.extend(op);
+            let removed = r.remove_prefix(op);
+            for rr in removed {
+                // Ensure valid regex (well-formedness)
+                prop_assert!(rr.abstract_size() >= 1);
+            }
+        }
     }
 }
 
