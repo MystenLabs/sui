@@ -1323,7 +1323,7 @@ impl CoreSignals {
         let (tx_accepted_blocks_broadcast, rx_accepted_blocks_broadcast) = broadcast::channel::<
             VerifiedBlock,
         >(
-            100 * context.committee.size() * context.parameters.dag_state_cached_rounds as usize,
+            context.committee.size() * context.parameters.dag_state_cached_rounds as usize,
         );
         let (new_round_sender, new_round_receiver) = watch::channel(0);
 
