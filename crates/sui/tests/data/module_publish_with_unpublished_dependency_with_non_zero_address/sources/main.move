@@ -3,6 +3,6 @@
 
 module examples::main {
   public entry fun main() {
-    non_zero::non_zero::test();
+    non_zero::non_zero::main();
   }
 }

@@ -927,7 +927,6 @@ pub(crate) fn make_deps_for_compiler_internal(
                 .collect::<BTreeSet<_>>()
                 .into_iter()
                 .collect::<Vec<_>>();
-            println!("Dependency {} paths: {:?}", dep.name, paths);
             let named_address_map = named_address_mapping_for_compiler(dep.address_mapping);
             Ok((
                 PackagePaths {

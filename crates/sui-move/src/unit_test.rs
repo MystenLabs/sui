@@ -10,7 +10,7 @@ use move_package_alt_compilation::build_config::BuildConfig;
 use move_unit_test::{UnitTestingConfig, extensions::set_extension_hook};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
-use std::{cell::RefCell, collections::BTreeMap, io::Write, path::Path, rc::Rc, sync::Arc};
+use std::{cell::RefCell, collections::BTreeMap, path::Path, rc::Rc, sync::Arc};
 use sui_move_build::decorate_warnings;
 use sui_move_natives::{
     NativesCostTable, object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
@@ -94,11 +94,9 @@ pub async fn run_move_unit_tests(
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
 
-    let mut writer: Box<dyn Write + Send> = Box::new(std::io::stdout());
-
     let result = move_cli::base::test::run_move_unit_tests::<
         sui_package_alt::SuiFlavor,
-        Box<dyn Write + Send>,
+        _
     >(
         path,
         build_config,
@@ -113,7 +111,7 @@ pub async fn run_move_unit_tests(
         Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
         save_disassembly,
-        &mut writer,
+        &mut std::io::stdout(),
     )
     .await;
 

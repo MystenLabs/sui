@@ -21,14 +21,13 @@ use serde::{Deserialize, Serialize};
 use sui_package_management::system_package_versions::{
     SYSTEM_GIT_REPO, SystemPackagesVersion, latest_system_packages, system_packages_for_protocol,
 };
-use sui_sdk::types::base_types::ObjectID;
+use sui_sdk::types::{
+    base_types::ObjectID,
+    digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
+};
 
 const EDITION: &str = "2024";
 const FLAVOR: &str = "sui";
-const TESTNET_ENV: &str = "testnet";
-const MAINNET_ENV: &str = "mainnet";
-const TESTNET_CHAIN_ID: &str = "4c78adac";
-const MAINNET_CHAIN_ID: &str = "35834a8a";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SuiFlavor;
@@ -98,9 +97,11 @@ impl MoveFlavor for SuiFlavor {
     type PackageMetadata = (); // TODO
 
     fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID> {
+        let mainnet = get_mainnet_chain_identifier();
+        let testnet = get_testnet_chain_identifier();
         IndexMap::from([
-            (TESTNET_ENV.to_string(), TESTNET_CHAIN_ID.to_string()),
-            (MAINNET_ENV.to_string(), MAINNET_CHAIN_ID.to_string()),
+            (testnet.chain().as_str().to_string(), format!("{}", testnet)),
+            (mainnet.chain().as_str().to_string(), format!("{}", mainnet)),
         ])
     }
 

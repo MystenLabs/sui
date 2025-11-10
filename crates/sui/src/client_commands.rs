@@ -1012,7 +1012,7 @@ impl SuiClientCommands {
                 let response = if let SuiClientCommandResult::TransactionBlock(ref tx) = result {
                     tx
                 } else {
-                    bail!("Error")
+                    bail!("Failed to get the transaction response from the upgrade result.");
                 };
 
                 let publish_data = update_publication(

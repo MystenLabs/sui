@@ -110,18 +110,7 @@ impl ValidationMode {
         match self {
             Self::Root { at: Some(addr), .. } => Ok(Some(*addr)),
             Self::Root { at: None, .. } => {
-                let addr = package.published_at;
-
-                let address = if let Some(a) = addr {
-                    Some(AccountAddress::from_hex(a.to_hex()).map_err(|e| {
-                        Error::PublishedAt(sui_package_management::PublishedAtError::Invalid(
-                            format!("{e}"),
-                        ))
-                    })?)
-                } else {
-                    None
-                };
-                Ok(address)
+                Ok(package.published_at.map(|addr| AccountAddress::from(addr)))
             }
             Self::Deps => Ok(None),
         }
