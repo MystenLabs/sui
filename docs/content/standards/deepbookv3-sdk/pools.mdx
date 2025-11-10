@@ -2,7 +2,25 @@
 title: Pools SDK
 sidebar_label: Pools
 description: Learn how to use the DeepBookV3 SDK to read the state of a pool.
-keywords: [ deepbook design, deepbookv3, deep book, pool, poolregistry, balancemanager, pool shared object, poolregister shared object, balancemanager shared object, book, state, vault, governance, history, account, bigvector ]
+keywords:
+  [
+    deepbook design,
+    deepbookv3,
+    deep book,
+    pool,
+    poolregistry,
+    balancemanager,
+    pool shared object,
+    poolregister shared object,
+    balancemanager shared object,
+    book,
+    state,
+    vault,
+    governance,
+    history,
+    account,
+    bigvector,
+  ]
 ---
 
 Pools are shared objects that represent a market. See [Query the Pool](../deepbookv3/query-the-pool.mdx) for more information on pools.
@@ -14,7 +32,6 @@ The DeepBookV3 SDK exposes functions that you can call to read the state of a po
 :::tip SDK Unit Handling
 Input amounts, quantities, and prices should be provided in standard decimal format (e.g., `10.5` SUI, `0.00001` nBTC). The SDK handles conversion to base units internally. Returned amounts are also in standard decimal format.
 :::
-
 
 ### account
 
@@ -44,7 +61,7 @@ Use `account` to retrieve the account information for a `BalanceManager` in a po
 
 **Parameters**
 
-- `poolKey`: String that identifies the pool to query. 
+- `poolKey`: String that identifies the pool to query.
 - `balanceManagerKey`: key of the balance manager defined in the SDK.
 
 ```tsx
@@ -69,9 +86,9 @@ async accountOpenOrders(poolKey: string, managerKey: string) {}
 Use `checkManagerBalance` to check the balance manager for a specific coin. The call returns a `Promise` in the form:
 
 ```
-{ 
+{
   coinType: string,
-  balance: number 
+  balance: number
 }
 ```
 
@@ -117,14 +134,16 @@ async getOrder(poolKey: string, orderId: string) {}
 ### getQuoteQuantityOut
 
 Use `getQuoteQuantityOut` to retrieve the quote quantity out for the base quantity you provide. The call returns a `Promise` in the form:
+
 ```
-{ 
+{
   baseQuantity: number,
   baseOut: number,
   quoteOut: number,
-  deepRequired: number 
+  deepRequired: number
 }
 ```
+
 where `deepRequired` is the amount of DEEP required for the dry run.
 
 **Parameters**
@@ -132,13 +151,14 @@ where `deepRequired` is the amount of DEEP required for the dry run.
 - `poolKey`: String that identifies the pool to query.
 - `baseQuantity`: Number that defines the base quantity you want to convert.
 
- ```tsx
+```tsx
 async getQuoteQuantityOut(poolKey: string, baseQuantity: number) {}
 ```
 
 ### getBaseQuantityOut
 
 Use `getBaseQuantityOut` to retrieve the base quantity out for the quote quantity that you provide. The call returns a `Promise` in the form:
+
 ```
 {
   quoteQuantity: number,
@@ -147,6 +167,7 @@ Use `getBaseQuantityOut` to retrieve the base quantity out for the quote quantit
   deepRequired: number
 }
 ```
+
 where `deepRequired` is the amount of DEEP required for the dry run.
 
 **Parameters**
@@ -161,6 +182,7 @@ async getBaseQuantityOut(poolKey: string, quoteQuantity: number) {}
 ### getQuantityOut
 
 Use `getQuantityOut` to retrieve the output quantities for the base or quote quantity you provide. You provide values for both quantities, but only one of them can be non-zero. The call returns a `Promise` with the form:
+
 ```
 {
   baseQuantity: number,
@@ -170,6 +192,7 @@ Use `getQuantityOut` to retrieve the output quantities for the base or quote qua
   deepRequired: number
 }
 ```
+
 where `deepRequired` is the amount of DEEP required for the dry run.
 
 **Parameters**
@@ -185,6 +208,7 @@ async getQuantityOut(poolKey: string, baseQuantity: number, quoteQuantity: numbe
 ### getLevel2Range
 
 Use `getLevel2Range` to retrieve level 2 order book within the boundary price range you provide. The call returns a `Promise` in the form:
+
 ```
 {
   prices: Array<number>,
@@ -199,13 +223,14 @@ Use `getLevel2Range` to retrieve level 2 order book within the boundary price ra
 - `priceHigh`: Number for upper bound of price range.
 - `isBid`: Boolean when set to `true` gets bid orders, else retrieve ask orders.
 
- ```tsx
+```tsx
 async getLevel2Range(poolKey: string, priceLow: number, priceHigh: number, isBid: boolean) {}
 ```
 
 ### getLevel2TicksFromMid
 
 Use `getLevel2TicksFromMid` to retrieve level 2 order book ticks from mid-price for a pool with the ID you provide. The call returns a `Promise` in the form:
+
 ```
 {
   bid_prices: Array<number>,
@@ -220,7 +245,7 @@ Use `getLevel2TicksFromMid` to retrieve level 2 order book ticks from mid-price 
 - `poolKey`: String that identifies the pool to query.
 - `ticks`: Number of ticks from mid-price.
 
- ```tsx
+```tsx
 async getLevel2TicksFromMid(poolKey: string, ticks: number) {}
 ```
 
@@ -270,10 +295,10 @@ Use `vaultBalances` to get the vault balances for a pool with the ID you provide
 
 ```tsx
 {
-  base: number, 
-  quote: number, 
+  base: number,
+  quote: number,
   deep: number
-} 
+}
 ```
 
 **Parameters**
@@ -321,8 +346,185 @@ Use `whitelisted` to check if the pool with the ID you provide is whitelisted. T
 async whitelisted(poolKey: string) {}
 ```
 
+### poolBookParams
+
+Use `poolBookParams` to retrieve the book parameters for a pool, including tick size, lot size, and min size. The call returns a `Promise` with the book parameters.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+
+```tsx
+async poolBookParams(poolKey: string) {}
+```
+
+### getOrders
+
+Use `getOrders` to retrieve multiple orders from a pool. The call returns a `Promise` with an array of order information.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+- `orderIds`: Array of strings representing the order IDs to retrieve.
+
+```tsx
+async getOrders(poolKey: string, orderIds: string[]) {}
+```
+
+### getPoolDeepPrice
+
+Use `getPoolDeepPrice` to get the DEEP price conversion for a pool. The call returns a `Promise` with the DEEP price information.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+
+```tsx
+async getPoolDeepPrice(poolKey: string) {}
+```
+
+## Administrative functions
+
+The SDK provides administrative functions for pool management.
+
+### addDeepPricePoint
+
+Use `addDeepPricePoint` to add a DEEP price point for a target pool using a reference pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `targetPoolKey`: String that identifies the target pool.
+- `referencePoolKey`: String that identifies the reference pool.
+
+```tsx
+addDeepPricePoint(targetPoolKey: string, referencePoolKey: string);
+```
+
+### updatePoolAllowedVersions
+
+Use `updatePoolAllowedVersions` to update the allowed package versions for a pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+
+```tsx
+updatePoolAllowedVersions(poolKey: string);
+```
+
+### burnDeep
+
+Use `burnDeep` to burn DEEP tokens from a pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+
+```tsx
+burnDeep(poolKey: string);
+```
+
+### createPermissionlessPool
+
+Use `createPermissionlessPool` to create a new permissionless pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `params`: `CreatePermissionlessPoolParams` object containing:
+  - `baseCoinKey`: String that identifies the base coin.
+  - `quoteCoinKey`: String that identifies the quote coin.
+  - `tickSize`: Number representing the tick size.
+  - `lotSize`: Number representing the lot size.
+  - `minSize`: Number representing the minimum order size.
+  - `deepCoin`: Optional `TransactionArgument` for DEEP token payment.
+
+```tsx
+createPermissionlessPool(params: CreatePermissionlessPoolParams);
+```
+
+### getBalanceManagerIds
+
+Use `getBalanceManagerIds` to get all balance manager IDs for a specific owner. The call returns a `Promise` with an array of balance manager IDs.
+
+**Parameters**
+
+- `owner`: String representing the owner address.
+
+```tsx
+async getBalanceManagerIds(owner: string) {}
+```
+
+## Referral functions
+
+The SDK provides functions to manage referrals and earn referral fees from trading activity.
+
+### mintReferral
+
+Use `mintReferral` to create a new referral for a pool with a specified multiplier. The multiplier determines what percentage of trading fees are allocated to the referrer. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `multiplier`: Number representing the referral multiplier (e.g., 0.1 for 10%).
+
+```tsx
+mintReferral(poolKey: string, multiplier: number);
+```
+
+### updateReferralMultiplier
+
+Use `updateReferralMultiplier` to update the multiplier for an existing referral. Only the referral owner can update the multiplier. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `referral`: String representing the referral ID.
+- `multiplier`: Number representing the new referral multiplier.
+
+```tsx
+updateReferralMultiplier(poolKey: string, referral: string, multiplier: number);
+```
+
+### claimReferralRewards
+
+Use `claimReferralRewards` to claim accumulated referral fees. Returns an object with `baseRewards`, `quoteRewards`, and `deepRewards`. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `referral`: String representing the referral ID.
+
+```tsx
+claimReferralRewards(poolKey: string, referral: string);
+```
+
+### getReferralBalances
+
+Use `getReferralBalances` to view the current accumulated balances for a referral without claiming them. The call returns a `Promise` with the balances in base, quote, and DEEP tokens.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `referral`: String representing the referral ID.
+
+```tsx
+async getReferralBalances(poolKey: string, referral: string) {}
+```
+
 ## Related links
 
-<RelatedLink href="https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3" label="DeepBookV3 Indexer repository" desc="The DeepBookV3 SDK repository on GitHub." />
-<RelatedLink href="https://www.npmjs.com/package/@mysten/deepbook-v3" label="DeepBookV3 SDK node package" desc="The DeepBookV3 SDK node package on NPM." />
-<RelatedLink href="https://github.com/MystenLabs/deepbookv3" label="DeepBookV3 repository" desc="The DeepBookV3 repository on GitHub." />
+<RelatedLink
+	href="https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3"
+	label="DeepBookV3 Indexer repository"
+	desc="The DeepBookV3 SDK repository on GitHub."
+/>
+<RelatedLink
+	href="https://www.npmjs.com/package/@mysten/deepbook-v3"
+	label="DeepBookV3 SDK node package"
+	desc="The DeepBookV3 SDK node package on NPM."
+/>
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3"
+	label="DeepBookV3 repository"
+	desc="The DeepBookV3 repository on GitHub."
+/>
