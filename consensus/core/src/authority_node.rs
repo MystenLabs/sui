@@ -8,7 +8,7 @@ use itertools::Itertools;
 use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
 use prometheus::Registry;
-use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
+use sui_protocol_config::ProtocolConfig;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
@@ -28,10 +28,7 @@ use crate::{
     leader_schedule::LeaderSchedule,
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{
-        NetworkClient as _, NetworkManager, anemo_network::AnemoManager,
-        tonic_network::TonicManager,
-    },
+    network::{NetworkClient as _, NetworkManager, tonic_network::TonicManager},
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::PeerRoundTracker,
@@ -46,13 +43,12 @@ use crate::{
 /// It hides the details of the implementation from the caller, MysticetiManager.
 #[allow(private_interfaces)]
 pub enum ConsensusAuthority {
-    WithAnemo(AuthorityNode<AnemoManager>),
     WithTonic(AuthorityNode<TonicManager>),
 }
 
 impl ConsensusAuthority {
     pub async fn start(
-        network_type: ConsensusNetwork,
+        network_type: NetworkType,
         epoch_start_timestamp_ms: u64,
         own_index: AuthorityIndex,
         committee: Committee,
@@ -71,25 +67,7 @@ impl ConsensusAuthority {
         boot_counter: u64,
     ) -> Self {
         match network_type {
-            ConsensusNetwork::Anemo => {
-                let authority = AuthorityNode::start(
-                    epoch_start_timestamp_ms,
-                    own_index,
-                    committee,
-                    parameters,
-                    protocol_config,
-                    protocol_keypair,
-                    network_keypair,
-                    clock,
-                    transaction_verifier,
-                    commit_consumer,
-                    registry,
-                    boot_counter,
-                )
-                .await;
-                Self::WithAnemo(authority)
-            }
-            ConsensusNetwork::Tonic => {
+            NetworkType::Tonic => {
                 let authority = AuthorityNode::start(
                     epoch_start_timestamp_ms,
                     own_index,
@@ -112,14 +90,12 @@ impl ConsensusAuthority {
 
     pub async fn stop(self) {
         match self {
-            Self::WithAnemo(authority) => authority.stop().await,
             Self::WithTonic(authority) => authority.stop().await,
         }
     }
 
     pub fn transaction_client(&self) -> Arc<TransactionClient> {
         match self {
-            Self::WithAnemo(authority) => authority.transaction_client(),
             Self::WithTonic(authority) => authority.transaction_client(),
         }
     }
@@ -127,18 +103,21 @@ impl ConsensusAuthority {
     #[cfg(test)]
     fn context(&self) -> &Arc<Context> {
         match self {
-            Self::WithAnemo(authority) => &authority.context,
             Self::WithTonic(authority) => &authority.context,
         }
     }
 
-    #[allow(unused)]
+    #[cfg(test)]
     fn sync_last_known_own_block_enabled(&self) -> bool {
         match self {
-            Self::WithAnemo(authority) => authority.sync_last_known_own_block,
             Self::WithTonic(authority) => authority.sync_last_known_own_block,
         }
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum NetworkType {
+    Tonic,
 }
 
 pub(crate) struct AuthorityNode<N>
@@ -489,7 +468,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_authority_start_and_stop(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(NetworkType::Tonic)] network_type: NetworkType,
     ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
         let registry = Registry::new();
@@ -535,7 +514,7 @@ mod tests {
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
     async fn test_authority_committee(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(NetworkType::Tonic)] network_type: NetworkType,
         #[values(5, 10)] gc_depth: u32,
     ) {
         telemetry_subscribers::init_for_testing();
@@ -640,7 +619,7 @@ mod tests {
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
     async fn test_small_committee(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(NetworkType::Tonic)] network_type: NetworkType,
         #[values(1, 2, 3)] num_authorities: usize,
     ) {
         telemetry_subscribers::init_for_testing();
@@ -762,7 +741,7 @@ mod tests {
                 &dir,
                 committee.clone(),
                 keypairs.clone(),
-                ConsensusNetwork::Tonic,
+                NetworkType::Tonic,
                 boot_counters[index],
                 protocol_config.clone(),
             )
@@ -815,7 +794,7 @@ mod tests {
             &dir,
             committee.clone(),
             keypairs.clone(),
-            ConsensusNetwork::Tonic,
+            NetworkType::Tonic,
             boot_counters[index_1],
             protocol_config.clone(),
         )
@@ -836,7 +815,7 @@ mod tests {
             &temp_dirs[&index_2],
             committee.clone(),
             keypairs,
-            ConsensusNetwork::Tonic,
+            NetworkType::Tonic,
             boot_counters[index_2],
             protocol_config.clone(),
         )
@@ -870,7 +849,7 @@ mod tests {
         db_dir: &TempDir,
         committee: Committee,
         keypairs: Vec<(NetworkKeyPair, ProtocolKeyPair)>,
-        network_type: ConsensusNetwork,
+        network_type: NetworkType,
         boot_counter: u64,
         protocol_config: ProtocolConfig,
     ) -> (

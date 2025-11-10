@@ -267,7 +267,7 @@ pub(crate) async fn make_authority(
         db_dir,
         committee,
         keypairs,
-        network_type,
+        _network_type,
         boot_counter,
         protocol_config,
         clock_drift,
@@ -293,7 +293,7 @@ pub(crate) async fn make_authority(
     let commit_consumer_monitor = commit_consumer.monitor();
 
     let authority = ConsensusAuthority::start(
-        network_type,
+        NetworkType::Tonic,
         0,
         authority_index,
         committee,

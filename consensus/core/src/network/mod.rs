@@ -5,7 +5,7 @@
 //! consensus protocol.
 //!
 //! Having an abstract network interface allows
-//! - simplying the semantics of sending data and serving requests over the network
+//! - simplifying the semantics of sending data and serving requests over the network
 //! - hiding implementation specific types and semantics from the consensus protocol
 //! - allowing easy swapping of network implementations, for better performance or testing
 //!
@@ -31,11 +31,6 @@ use crate::{
     error::ConsensusResult,
 };
 
-// Anemo generated RPC stubs.
-mod anemo_gen {
-    include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusRpc.rs"));
-}
-
 // Tonic generated RPC stubs.
 mod tonic_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusService.rs"));
@@ -43,8 +38,6 @@ mod tonic_gen {
 
 pub mod connection_monitor;
 
-pub(crate) mod anemo_network;
-pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
 mod metrics_layer;
 #[cfg(all(test, not(msim)))]
