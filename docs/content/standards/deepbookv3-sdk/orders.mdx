@@ -87,7 +87,7 @@ Use `cancelAllOrders` to cancel every order for the balance manager whose key yo
 cancelAllOrders(poolKey: string, balanceManagerKey: string);
 ```
 
-### modifyOrder
+### `modifyOrder`
 
 Use `modifyOrder` to modify an existing order by changing its quantity. The new quantity must be less than the original quantity and more than the filled quantity. The call returns a function that takes a `Transaction` object.
 
@@ -102,7 +102,7 @@ Use `modifyOrder` to modify an existing order by changing its quantity. The new 
 modifyOrder(poolKey: string, balanceManagerKey: string, orderId: string, newQuantity: number);
 ```
 
-### withdrawSettledAmounts
+### `withdrawSettledAmounts`
 
 Use `withdrawSettledAmounts` to withdraw all settled amounts for a balance manager in a specific pool. The call returns a function that takes a `Transaction` object.
 

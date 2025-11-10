@@ -346,7 +346,7 @@ Use `whitelisted` to check if the pool with the ID you provide is whitelisted. T
 async whitelisted(poolKey: string) {}
 ```
 
-### poolBookParams
+### `poolBookParams`
 
 Use `poolBookParams` to retrieve the book parameters for a pool, including tick size, lot size, and min size. The call returns a `Promise` with the book parameters.
 
@@ -358,7 +358,7 @@ Use `poolBookParams` to retrieve the book parameters for a pool, including tick 
 async poolBookParams(poolKey: string) {}
 ```
 
-### getOrders
+### `getOrders`
 
 Use `getOrders` to retrieve multiple orders from a pool. The call returns a `Promise` with an array of order information.
 
@@ -371,7 +371,7 @@ Use `getOrders` to retrieve multiple orders from a pool. The call returns a `Pro
 async getOrders(poolKey: string, orderIds: string[]) {}
 ```
 
-### getPoolDeepPrice
+### `getPoolDeepPrice`
 
 Use `getPoolDeepPrice` to get the DEEP price conversion for a pool. The call returns a `Promise` with the DEEP price information.
 
@@ -387,7 +387,7 @@ async getPoolDeepPrice(poolKey: string) {}
 
 The SDK provides administrative functions for pool management.
 
-### addDeepPricePoint
+### `addDeepPricePoint`
 
 Use `addDeepPricePoint` to add a DEEP price point for a target pool using a reference pool. The call returns a function that takes a `Transaction` object.
 
@@ -400,7 +400,7 @@ Use `addDeepPricePoint` to add a DEEP price point for a target pool using a refe
 addDeepPricePoint(targetPoolKey: string, referencePoolKey: string);
 ```
 
-### updatePoolAllowedVersions
+### `updatePoolAllowedVersions`
 
 Use `updatePoolAllowedVersions` to update the allowed package versions for a pool. The call returns a function that takes a `Transaction` object.
 
@@ -412,7 +412,7 @@ Use `updatePoolAllowedVersions` to update the allowed package versions for a poo
 updatePoolAllowedVersions(poolKey: string);
 ```
 
-### burnDeep
+### `burnDeep`
 
 Use `burnDeep` to burn DEEP tokens from a pool. The call returns a function that takes a `Transaction` object.
 
@@ -424,7 +424,7 @@ Use `burnDeep` to burn DEEP tokens from a pool. The call returns a function that
 burnDeep(poolKey: string);
 ```
 
-### createPermissionlessPool
+### `createPermissionlessPool`
 
 Use `createPermissionlessPool` to create a new permissionless pool. The call returns a function that takes a `Transaction` object.
 
@@ -442,7 +442,7 @@ Use `createPermissionlessPool` to create a new permissionless pool. The call ret
 createPermissionlessPool(params: CreatePermissionlessPoolParams);
 ```
 
-### getBalanceManagerIds
+### `getBalanceManagerIds`
 
 Use `getBalanceManagerIds` to get all balance manager IDs for a specific owner. The call returns a `Promise` with an array of balance manager IDs.
 
@@ -458,7 +458,7 @@ async getBalanceManagerIds(owner: string) {}
 
 The SDK provides functions to manage referrals and earn referral fees from trading activity.
 
-### mintReferral
+### `mintReferral`
 
 Use `mintReferral` to create a new referral for a pool with a specified multiplier. The multiplier determines what percentage of trading fees are allocated to the referrer. The call returns a function that takes a `Transaction` object.
 
@@ -471,7 +471,7 @@ Use `mintReferral` to create a new referral for a pool with a specified multipli
 mintReferral(poolKey: string, multiplier: number);
 ```
 
-### updateReferralMultiplier
+### `updateReferralMultiplier`
 
 Use `updateReferralMultiplier` to update the multiplier for an existing referral. Only the referral owner can update the multiplier. The call returns a function that takes a `Transaction` object.
 
@@ -485,7 +485,7 @@ Use `updateReferralMultiplier` to update the multiplier for an existing referral
 updateReferralMultiplier(poolKey: string, referral: string, multiplier: number);
 ```
 
-### claimReferralRewards
+### `claimReferralRewards`
 
 Use `claimReferralRewards` to claim accumulated referral fees. Returns an object with `baseRewards`, `quoteRewards`, and `deepRewards`. The call returns a function that takes a `Transaction` object.
 
@@ -498,7 +498,7 @@ Use `claimReferralRewards` to claim accumulated referral fees. Returns an object
 claimReferralRewards(poolKey: string, referral: string);
 ```
 
-### getReferralBalances
+### `getReferralBalances`
 
 Use `getReferralBalances` to view the current accumulated balances for a referral without claiming them. The call returns a `Promise` with the balances in base, quote, and DEEP tokens.
 
