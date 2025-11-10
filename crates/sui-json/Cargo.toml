@@ -23,7 +23,6 @@ move-core-types = { git = "https://github.com/move-language/move", rev = "790715
 [dev-dependencies]
 test-fuzz = "3.0.2"
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-workspace-hack = { path = "../workspace-hack"}
 
 sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../sui-framework" }

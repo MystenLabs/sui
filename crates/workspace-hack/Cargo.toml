@@ -73,7 +73,7 @@ bytes = { version = "1", features = ["std"] }
 bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
 camino = { version = "1", default-features = false, features = ["serde", "serde1"] }
 cargo-platform = { version = "0.1", default-features = false }
-cargo_metadata = { version = "0.14" }
+cargo_metadata = { version = "0.15" }
 cassowary = { version = "0.3", default-features = false }
 cast-6f8ce4dd05d13bba = { package = "cast", version = "0.2", features = ["std"] }
 cast-468e82937335b1c9 = { package = "cast", version = "0.3", default-features = false }
@@ -145,7 +145,7 @@ dirs-sys-next = { version = "0.1", default-features = false }
 dissimilar = { version = "1", default-features = false }
 downcast = { version = "0.11", features = ["std"] }
 dyn-clone = { version = "1", default-features = false }
-ecdsa = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "der", "digest", "hazmat", "pkcs8", "rfc6979", "sign", "std", "verify"] }
+ecdsa = { version = "0.15", default-features = false, features = ["alloc", "arithmetic", "der", "digest", "hazmat", "pkcs8", "rfc6979", "sign", "std", "verify"] }
 ed25519 = { version = "1", default-features = false, features = ["serde", "std"] }
 ed25519-dalek = { version = "1", features = ["batch", "merlin", "rand", "serde", "serde_bytes", "serde_crate", "std", "u64_backend"] }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "rand", "serde", "serde_bytes", "serde_crate", "std"] }
@@ -181,7 +181,7 @@ futures-sink = { version = "0.3", features = ["alloc", "std"] }
 futures-task = { version = "0.3", default-features = false, features = ["alloc", "std", "unstable"] }
 futures-timer = { version = "3", default-features = false, features = ["gloo-timers", "send_wrapper", "wasm-bindgen"] }
 futures-util = { version = "0.3", default-features = false, features = ["alloc", "async-await", "async-await-macro", "bilock", "channel", "futures-channel", "futures-io", "futures-macro", "futures-sink", "io", "memchr", "sink", "slab", "std", "unstable"] }
-generic-array = { version = "0.14", default-features = false, features = ["more_lengths"] }
+generic-array = { version = "0.15", default-features = false, features = ["more_lengths"] }
 gethostname = { version = "0.2", default-features = false }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
@@ -193,7 +193,7 @@ gloo-net = { version = "0.2", default-features = false, features = ["futures-cha
 gloo-timers = { version = "0.2", features = ["futures", "futures-channel", "futures-core"] }
 gloo-utils = { version = "0.1", default-features = false }
 group = { version = "0.12", default-features = false }
-guppy = { version = "0.14", default-features = false, features = ["guppy-summaries", "rayon", "rayon1", "summaries", "toml"] }
+guppy = { version = "0.15", default-features = false, features = ["guppy-summaries", "rayon", "rayon1", "summaries", "toml"] }
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
@@ -215,7 +215,7 @@ httparse = { version = "1", features = ["std"] }
 httpdate = { version = "1", default-features = false }
 humansize = { version = "1", default-features = false }
 humantime = { version = "2", default-features = false }
-hyper = { version = "0.14", features = ["client", "full", "h2", "http1", "http2", "runtime", "server", "socket2", "stream", "tcp"] }
+hyper = { version = "0.15", features = ["client", "full", "h2", "http1", "http2", "runtime", "server", "socket2", "stream", "tcp"] }
 hyper-rustls = { version = "0.23", features = ["http1", "log", "logging", "native-tokio", "rustls-native-certs", "tls12", "tokio-runtime", "webpki-roots", "webpki-tokio"] }
 hyper-timeout = { version = "0.4", default-features = false }
 idna = { version = "0.2", default-features = false }
@@ -233,15 +233,15 @@ itoa-9fbad63c4bcf4a8f = { package = "itoa", version = "0.4", features = ["std"] 
 itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
 json = { version = "0.12", default-features = false }
-jsonrpsee = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false, features = ["async-client", "client", "client-ws-transport", "full", "http-client", "http-server", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-http-server", "jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "jsonrpsee-ws-server", "macros", "server", "tracing", "wasm-client", "ws-client", "ws-server"] }
-jsonrpsee-client-transport = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
-jsonrpsee-core = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "globset", "http", "http-helpers", "hyper", "lazy_static", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing-futures", "unicase", "wasm-bindgen-futures"] }
-jsonrpsee-http-client = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", features = ["hyper-rustls", "tls"] }
-jsonrpsee-http-server = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-types = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-wasm-client = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-ws-client = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", features = ["tls"] }
-jsonrpsee-ws-server = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
+jsonrpsee = { version = "0.15", default-features = false, features = ["async-client", "client", "client-ws-transport", "full", "http-client", "http-server", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-http-server", "jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "jsonrpsee-ws-server", "macros", "server", "tracing", "wasm-client", "ws-client", "ws-server"] }
+jsonrpsee-client-transport = { version = "0.15", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
+jsonrpsee-core = { version = "0.15", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "globset", "http", "http-helpers", "hyper", "lazy_static", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing-futures", "unicase", "wasm-bindgen-futures"] }
+jsonrpsee-http-client = { version = "0.15", features = ["hyper-rustls", "tls"] }
+jsonrpsee-http-server = { version = "0.15", default-features = false }
+jsonrpsee-types = { version = "0.15", default-features = false }
+jsonrpsee-wasm-client = { version = "0.15", default-features = false }
+jsonrpsee-ws-client = { version = "0.15", features = ["tls"] }
+jsonrpsee-ws-server = { version = "0.15", default-features = false }
 k256 = { version = "0.11", features = ["arithmetic", "digest", "ecdsa", "ecdsa-core", "keccak256", "pkcs8", "schnorr", "sha2", "sha256", "sha3", "std"] }
 keccak = { version = "0.1", default-features = false }
 kstring = { version = "1", features = ["max_inline", "serde"] }
@@ -305,7 +305,7 @@ move-unit-test = { git = "https://github.com/move-language/move", rev = "7907152
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["debugging", "testing"] }
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-multiaddr = { version = "0.14", features = ["url"] }
+multiaddr = { version = "0.15", features = ["url"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 multimap = { version = "0.8", default-features = false }
 mysten-network-68692745110bd6f4 = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", default-features = false }
@@ -571,7 +571,6 @@ webpki-3c51e837cfc5589a = { package = "webpki", version = "0.22", default-featur
 webpki-roots-647d43efb71741da = { package = "webpki-roots", version = "0.21", default-features = false }
 webpki-roots-3c51e837cfc5589a = { package = "webpki-roots", version = "0.22", default-features = false }
 worker = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", default-features = false, features = ["benchmark"] }
-workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", default-features = false }
 yaml-rust = { version = "0.4", default-features = false }
 zeroize = { version = "1", features = ["alloc", "zeroize_derive"] }
 zstd-sys = { version = "1", default-features = false }
@@ -646,7 +645,7 @@ bytes = { version = "1", features = ["std"] }
 bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
 camino = { version = "1", default-features = false, features = ["serde", "serde1"] }
 cargo-platform = { version = "0.1", default-features = false }
-cargo_metadata = { version = "0.14" }
+cargo_metadata = { version = "0.15" }
 cassowary = { version = "0.3", default-features = false }
 cast-6f8ce4dd05d13bba = { package = "cast", version = "0.2", features = ["std"] }
 cast-468e82937335b1c9 = { package = "cast", version = "0.3", default-features = false }
@@ -701,11 +700,11 @@ curve25519-dalek = { version = "3", default-features = false, features = ["alloc
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["alloc", "fiat-crypto", "fiat_u64_backend", "std"] }
 dag = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", default-features = false }
 darling-594e8ee84c453af0 = { package = "darling", version = "0.13", features = ["suggestions"] }
-darling-582f2526e08bb6a0 = { package = "darling", version = "0.14", features = ["suggestions"] }
+darling-582f2526e08bb6a0 = { package = "darling", version = "0.15", features = ["suggestions"] }
 darling_core-594e8ee84c453af0 = { package = "darling_core", version = "0.13", default-features = false, features = ["strsim", "suggestions"] }
-darling_core-582f2526e08bb6a0 = { package = "darling_core", version = "0.14", default-features = false, features = ["strsim", "suggestions"] }
+darling_core-582f2526e08bb6a0 = { package = "darling_core", version = "0.15", default-features = false, features = ["strsim", "suggestions"] }
 darling_macro-594e8ee84c453af0 = { package = "darling_macro", version = "0.13", default-features = false }
-darling_macro-582f2526e08bb6a0 = { package = "darling_macro", version = "0.14", default-features = false }
+darling_macro-582f2526e08bb6a0 = { package = "darling_macro", version = "0.15", default-features = false }
 dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2", features = ["alloc", "std"] }
 datatest-stable = { version = "0.1", default-features = false }
@@ -735,7 +734,7 @@ dissimilar = { version = "1", default-features = false }
 dotenv = { version = "0.15", default-features = false }
 downcast = { version = "0.11", features = ["std"] }
 dyn-clone = { version = "1", default-features = false }
-ecdsa = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "der", "digest", "hazmat", "pkcs8", "rfc6979", "sign", "std", "verify"] }
+ecdsa = { version = "0.15", default-features = false, features = ["alloc", "arithmetic", "der", "digest", "hazmat", "pkcs8", "rfc6979", "sign", "std", "verify"] }
 ed25519 = { version = "1", default-features = false, features = ["serde", "std"] }
 ed25519-dalek = { version = "1", features = ["batch", "merlin", "rand", "serde", "serde_bytes", "serde_crate", "std", "u64_backend"] }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "rand", "serde", "serde_bytes", "serde_crate", "std"] }
@@ -773,7 +772,7 @@ futures-sink = { version = "0.3", features = ["alloc", "std"] }
 futures-task = { version = "0.3", default-features = false, features = ["alloc", "std", "unstable"] }
 futures-timer = { version = "3", default-features = false, features = ["gloo-timers", "send_wrapper", "wasm-bindgen"] }
 futures-util = { version = "0.3", default-features = false, features = ["alloc", "async-await", "async-await-macro", "bilock", "channel", "futures-channel", "futures-io", "futures-macro", "futures-sink", "io", "memchr", "sink", "slab", "std", "unstable"] }
-generic-array = { version = "0.14", default-features = false, features = ["more_lengths"] }
+generic-array = { version = "0.15", default-features = false, features = ["more_lengths"] }
 gethostname = { version = "0.2", default-features = false }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
@@ -785,7 +784,7 @@ gloo-net = { version = "0.2", default-features = false, features = ["futures-cha
 gloo-timers = { version = "0.2", features = ["futures", "futures-channel", "futures-core"] }
 gloo-utils = { version = "0.1", default-features = false }
 group = { version = "0.12", default-features = false }
-guppy = { version = "0.14", default-features = false, features = ["guppy-summaries", "rayon", "rayon1", "summaries", "toml"] }
+guppy = { version = "0.15", default-features = false, features = ["guppy-summaries", "rayon", "rayon1", "summaries", "toml"] }
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
@@ -809,7 +808,7 @@ httparse = { version = "1", features = ["std"] }
 httpdate = { version = "1", default-features = false }
 humansize = { version = "1", default-features = false }
 humantime = { version = "2", default-features = false }
-hyper = { version = "0.14", features = ["client", "full", "h2", "http1", "http2", "runtime", "server", "socket2", "stream", "tcp"] }
+hyper = { version = "0.15", features = ["client", "full", "h2", "http1", "http2", "runtime", "server", "socket2", "stream", "tcp"] }
 hyper-rustls = { version = "0.23", features = ["http1", "log", "logging", "native-tokio", "rustls-native-certs", "tls12", "tokio-runtime", "webpki-roots", "webpki-tokio"] }
 hyper-timeout = { version = "0.4", default-features = false }
 ident_case = { version = "1", default-features = false }
@@ -831,16 +830,16 @@ itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = fa
 jobserver = { version = "0.1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
 json = { version = "0.12", default-features = false }
-jsonrpsee = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false, features = ["async-client", "client", "client-ws-transport", "full", "http-client", "http-server", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-http-server", "jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "jsonrpsee-ws-server", "macros", "server", "tracing", "wasm-client", "ws-client", "ws-server"] }
-jsonrpsee-client-transport = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
-jsonrpsee-core = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "globset", "http", "http-helpers", "hyper", "lazy_static", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing-futures", "unicase", "wasm-bindgen-futures"] }
-jsonrpsee-http-client = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", features = ["hyper-rustls", "tls"] }
-jsonrpsee-http-server = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-proc-macros = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-types = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-wasm-client = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-ws-client = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", features = ["tls"] }
-jsonrpsee-ws-server = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
+jsonrpsee = { version = "0.15", default-features = false, features = ["async-client", "client", "client-ws-transport", "full", "http-client", "http-server", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-http-server", "jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "jsonrpsee-ws-server", "macros", "server", "tracing", "wasm-client", "ws-client", "ws-server"] }
+jsonrpsee-client-transport = { version = "0.15", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
+jsonrpsee-core = { version = "0.15", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "globset", "http", "http-helpers", "hyper", "lazy_static", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing-futures", "unicase", "wasm-bindgen-futures"] }
+jsonrpsee-http-client = { version = "0.15", features = ["hyper-rustls", "tls"] }
+jsonrpsee-http-server = { version = "0.15", default-features = false }
+jsonrpsee-proc-macros = { version = "0.15", default-features = false }
+jsonrpsee-types = { version = "0.15", default-features = false }
+jsonrpsee-wasm-client = { version = "0.15", default-features = false }
+jsonrpsee-ws-client = { version = "0.15", features = ["tls"] }
+jsonrpsee-ws-server = { version = "0.15", default-features = false }
 k256 = { version = "0.11", features = ["arithmetic", "digest", "ecdsa", "ecdsa-core", "keccak256", "pkcs8", "schnorr", "sha2", "sha256", "sha3", "std"] }
 keccak = { version = "0.1", default-features = false }
 kstring = { version = "1", features = ["max_inline", "serde"] }
@@ -908,7 +907,7 @@ move-unit-test = { git = "https://github.com/move-language/move", rev = "7907152
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["debugging", "testing"] }
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-multiaddr = { version = "0.14", features = ["url"] }
+multiaddr = { version = "0.15", features = ["url"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
 multimap = { version = "0.8", default-features = false }
@@ -1234,7 +1233,6 @@ webpki-roots-647d43efb71741da = { package = "webpki-roots", version = "0.21", de
 webpki-roots-3c51e837cfc5589a = { package = "webpki-roots", version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
 worker = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", default-features = false, features = ["benchmark"] }
-workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", default-features = false }
 yaml-rust = { version = "0.4", default-features = false }
 zeroize = { version = "1", features = ["alloc", "zeroize_derive"] }
 zeroize_derive = { version = "1", default-features = false }

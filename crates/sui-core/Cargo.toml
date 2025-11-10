@@ -55,7 +55,6 @@ narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", package = "executor" }
 narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", package = "types" }
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", package = "node" }
-workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 clap = { version = "3.1.17", features = ["derive"] }

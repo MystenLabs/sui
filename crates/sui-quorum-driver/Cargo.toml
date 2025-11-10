@@ -13,4 +13,3 @@ tracing = "0.1.35"
 
 sui-core = { path = "../sui-core" }
 sui-types = { path = "../sui-types" }
-workspace-hack = { path = "../workspace-hack"}

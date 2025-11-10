@@ -41,7 +41,6 @@ move-core-types = { git = "https://github.com/move-language/move", rev = "790715
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", package = "node" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
 sui-node = { path = "../sui-node" }
-workspace-hack = { path = "../workspace-hack"}
 test-utils = { path = "../test-utils" }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]

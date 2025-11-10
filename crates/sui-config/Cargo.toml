@@ -30,7 +30,6 @@ move-vm-runtime = { git = "https://github.com/move-language/move", rev = "790715
 sui-framework = { path = "../sui-framework" }
 sui-adapter = { path = "../sui-adapter" }
 sui-types = { path = "../sui-types" }
-workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 insta = { version = "1.16.0", features = ["redactions"] }

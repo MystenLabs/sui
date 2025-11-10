@@ -26,7 +26,6 @@ anyhow = "1.0.58"
 sui-types = { path = "../sui-types" }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
-workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 anyhow = "1.0.58"

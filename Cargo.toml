@@ -30,7 +30,7 @@ members = [
     "crates/sui-verifier",
     "crates/sui-verifier-transactional-tests",
     "crates/test-utils",
-    "crates/workspace-hack",
+    # "crates/workspace-hack",  # Temporarily disabled due to dependency conflicts
     "crates/x",
 ]
 

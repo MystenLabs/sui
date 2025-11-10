@@ -48,7 +48,6 @@ move-unit-test = { git = "https://github.com/move-language/move", rev = "7907152
 move-cli = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 
-workspace-hack = { path = "../workspace-hack"}
 multiaddr = "0.14.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
@@ -58,7 +57,7 @@ jemalloc-ctl = "^0.5"
 [dev-dependencies]
 tempfile = "3.3.0"
 futures = "0.3.21"
-jsonrpsee = { git = "https://github.com/patrickkuo/jsonrpsee", features = ["full"] , rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa"}
+jsonrpsee = { version = "0.15", features = ["full"] }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}
 test-utils = { path = "../test-utils" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }

@@ -52,7 +52,6 @@ move-vm-types = { git = "https://github.com/move-language/move", rev = "79071528
 
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", package = "executor" }
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", package = "crypto" }
-workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 bincode = "1.3.3"

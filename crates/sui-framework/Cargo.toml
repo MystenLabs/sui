@@ -26,7 +26,6 @@ move-stdlib = { git = "https://github.com/move-language/move", rev = "7907152852
 move-unit-test = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-workspace-hack = { path = "../workspace-hack"}
 
 [build-dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }

@@ -13,7 +13,7 @@ rand = "0.7.3"
 tempfile = "3.3.0"
 tracing = "0.1.35"
 bcs = "0.1.3"
-jsonrpsee-http-client = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa"}
+jsonrpsee-http-client = { version = "0.15" }
 prometheus = "0.13.1"
 tokio = { version = "1.20.1", features = ["full", "tracing", "test-util"] }
 serde_json = "1.0.80"
@@ -35,4 +35,3 @@ once_cell = "1.13.0"
 
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
-workspace-hack = { path = "../workspace-hack"}

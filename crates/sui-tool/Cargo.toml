@@ -28,4 +28,3 @@ sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 
 colored = "2.0.0"
-workspace-hack = { path = "../workspace-hack"}

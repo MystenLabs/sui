@@ -1,13 +1,13 @@
-#!/bin/zsh
+#!/bin/bash
 # Copyright (c) 2022, Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
 # generate TS type guards for project
 npx ts-auto-guard --export-all src/rpc/client.ts src/**.ts
 
-# this only works on macos due to sed differences, perhaps a node script should do this?
+# Fixed for Linux - removed empty string after -i
 # fix import of BN.js types on line 6
-sed -i '' '6s/"..\/node_modules\/@types\/bn";/"bn.js";/g' src/index.guard.ts
+sed -i '6s/"..\/node_modules\/@types\/bn";/"bn.js";/g' src/index.guard.ts
 
 LICENSE="// Copyright (c) 2022, Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n";
 index="src/index.guard.ts"

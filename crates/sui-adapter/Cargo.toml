@@ -19,7 +19,6 @@ move-vm-runtime = { git = "https://github.com/move-language/move", rev = "790715
 sui-framework = { path = "../sui-framework" }
 sui-verifier = { path = "../sui-verifier" }
 sui-types = { path = "../sui-types" }
-workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
