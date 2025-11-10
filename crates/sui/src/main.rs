@@ -22,6 +22,10 @@ bin_version::bin_version!();
 struct Args {
     #[clap(subcommand)]
     command: SuiCommand,
+
+    /// Display less output
+    #[arg(short, long, global = true)]
+    quiet: bool,
 }
 
 #[tokio::main]
@@ -30,19 +34,15 @@ async fn main() {
     colored::control::set_virtual_terminal(true).unwrap();
 
     let args = Args::parse();
-    let _guard = match args.command {
-        SuiCommand::KeyTool { .. } | SuiCommand::Move { .. } => {
-            telemetry_subscribers::TelemetryConfig::new()
-                .with_log_level("error")
-                .with_env()
-                .init()
-        }
+    let mut builder = telemetry_subscribers::TelemetryConfig::new()
+        .with_log_level("error")
+        .with_env();
 
-        _ => telemetry_subscribers::TelemetryConfig::new()
-            .with_log_level("error")
-            .with_env()
-            .init(),
-    };
+    if !args.quiet {
+        builder = builder.with_user_info_target("move_package_alt");
+    }
+
+    let _guard = builder.init();
     debug!("Sui CLI version: {VERSION}");
     exit_main!(args.command.execute().await);
 }
