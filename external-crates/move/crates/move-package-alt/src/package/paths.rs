@@ -14,6 +14,17 @@ use serde::{Deserialize, de::DeserializeOwned};
 use thiserror::Error;
 use tracing::debug;
 
+/// Lock file version written by this version of the compiler.  Backwards compatibility is
+/// guaranteed (the compiler can read lock files with older versions), forward compatibility is not
+/// (the compiler will fail to read lock files at newer versions).
+///
+/// V0: Base version.
+/// V1: Adds toolchain versioning support.
+/// V2: Adds support for managing addresses on package publish and upgrades.
+/// V3: Renames dependency `name` field to `id` and adds a `name` field to store the name from the manifest.
+/// V4: Package rewrite
+const LOCKFILE_VERSION: usize = 4;
+
 use crate::{
     compatibility::{
         legacy::LegacyEnvironment, legacy_lockfile::load_legacy_lockfile,
@@ -83,6 +94,15 @@ pub enum FileError {
 
     #[error(transparent)]
     LockError(#[from] LockError),
+
+    #[error(
+        "File {file:?} has version {version}, but this CLI only supports versions up to {max}; please upgrade your CLI"
+    )]
+    VersionError {
+        file: PathBuf,
+        version: usize,
+        max: usize,
+    },
 }
 
 pub type PackagePathResult<T> = Result<T, PackagePathError>;
@@ -145,14 +165,23 @@ impl PackagePath {
     /// isn't correctly formatted
     pub(crate) fn read_lockfile(
         &self,
-        mtx: &PackageSystemLock,
+        _mtx: &PackageSystemLock,
     ) -> FileResult<Option<(FileHandle, ParsedLockfile)>> {
-        // TODO: this could maybe a little cleaner - don't really need to do a full parse just to
-        // see if it's a legacy file...
-        if self.read_legacy_lockfile(mtx)?.is_some() {
+        if !self.lockfile_path().exists() {
             return Ok(None);
         }
-        parse_file(&self.lockfile_path())
+        let version = lockfile_version(&self.lockfile_path())?;
+        if version < LOCKFILE_VERSION {
+            Ok(None)
+        } else if version == LOCKFILE_VERSION {
+            parse_file(&self.lockfile_path())
+        } else {
+            Err(FileError::VersionError {
+                file: self.lockfile_path(),
+                version,
+                max: LOCKFILE_VERSION,
+            })
+        }
     }
 
     /// Returns any publications that can be extracted from a legacy lockfile. Returns None
@@ -353,6 +382,29 @@ fn render_file<T: RenderToml>(path: &Path, value: &T) -> FileResult<()> {
     })
 }
 
+/// Extract the version field from the lockfile (compatible with all formats)
+fn lockfile_version(path: &Path) -> FileResult<usize> {
+    #[derive(Deserialize)]
+    struct Header {
+        #[serde(default)]
+        version: usize,
+    }
+
+    #[derive(Deserialize)]
+    struct Lockfile {
+        #[serde(rename = "move")]
+        header: Header,
+    }
+
+    let f: Lockfile = parse_file(path)?
+        .ok_or(FileError::InvalidFile {
+            path: path.to_path_buf(),
+        })?
+        .1;
+
+    Ok(f.header.version)
+}
+
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
@@ -424,6 +476,32 @@ mod tests {
           |  ^^^^^^^^^^^
         unknown field `not-package`, expected one of `package`, `environments`, `dependencies`, `dep-replacements`
         "###
+        );
+    }
+
+    /// Parsing a lockfile from the future should fail with a message telling the user to upgrade
+    #[test(tokio::test)]
+    async fn test_future_lockfile() {
+        let tempdir = tempfile::tempdir().unwrap();
+        fs::write(tempdir.path().join("Move.toml"), "manifest file").unwrap();
+        fs::write(
+            tempdir.path().join("Move.lock"),
+            indoc!(
+                r###"
+                [move]
+                version = 5
+
+                flying-cars = "yep"
+                "###
+            ),
+        )
+        .unwrap();
+
+        let path = PackagePath::new(tempdir.path().to_path_buf()).unwrap();
+        let mtx = path.lock().unwrap();
+        let error = path.read_lockfile(&mtx).unwrap_err().to_string();
+        assert_snapshot!(error.replace(tempdir.path().to_string_lossy().as_ref(), "<TEMPDIR>"),
+            @r###"File "<TEMPDIR>/Move.lock" has version 5, but this CLI only supports versions up to 4; please upgrade your CLI"###
         );
     }
 }
