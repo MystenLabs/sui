@@ -168,6 +168,23 @@ impl Pinned {
             )?)),
         }
     }
+
+    /// Return an abbreviated string (without braces) showing the dependency (e.g. `local = "foo/bar"`)
+    pub fn abbreviated(&self) -> String {
+        match &self {
+            Pinned::Local(local) => {
+                format!(r#"local = {:?}"#, local.relative_path_from_root_package)
+            }
+            Pinned::Git(git) => {
+                let repo = fmt_truncated(git.inner.repo_url(), 8, 12);
+                let path = git.inner.path_in_repo().to_string_lossy();
+                let rev = fmt_truncated(git.inner.sha(), 6, 2);
+                format!(r#"git = "{repo}", path = "{path}", rev = "{rev}""#)
+            }
+            Pinned::OnChain(_on_chain) => "on-chain = true".to_string(),
+            Pinned::Root(_) => "local = \".\"".to_string(),
+        }
+    }
 }
 
 impl ManifestGitDependency {
@@ -246,21 +263,7 @@ impl From<Pinned> for LockfileDependencyInfo {
 impl fmt::Display for Pinned {
     // TODO: this is maybe misguided; we should perhaps only display manifest dependencies?
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self {
-            Pinned::Local(local) => write!(
-                f,
-                r#"{{ local = {:?} }}"#,
-                local.relative_path_from_root_package
-            ),
-            Pinned::Git(git) => {
-                let repo = fmt_truncated(git.inner.repo_url(), 8, 12);
-                let path = git.inner.path_in_repo().to_string_lossy();
-                let rev = fmt_truncated(git.inner.sha(), 6, 2);
-                write!(f, r#"{{ git = "{repo}", path = "{path}", rev = "{rev}" }}"#)
-            }
-            Pinned::OnChain(_on_chain) => write!(f, "{{ on-chain = true }}"),
-            Pinned::Root(_) => write!(f, "{{ local = \".\" }}"),
-        }
+        write!(f, "{{ {} }}", self.abbreviated())
     }
 }
 
