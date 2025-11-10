@@ -11,7 +11,7 @@ use move_core_types::vm_status::StatusCode;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
-use std::{collections::BTreeSet, fmt};
+use std::{collections::BTreeSet, fmt, u64};
 
 use super::unique_set::UniqueSet;
 
@@ -178,6 +178,12 @@ pub enum AttributePosition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoopInvariantInfo {
+    pub target: ModuleAccess,
+    pub label: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerificationAttribute {
     // Denotes a function is a spec
     Spec {
@@ -193,6 +199,7 @@ pub enum VerificationAttribute {
     // Denotes a function is only used by specs, only included in compilation in verify mode
     SpecOnly {
         inv_target: Option<ModuleAccess>,
+        loop_inv: Option<LoopInvariantInfo>,
     },
 }
 
@@ -297,6 +304,9 @@ impl VerificationAttribute {
 
     // Spec only arguments
     pub const INV_TARGET_NAME: &'static str = "inv_target";
+    pub const LOOP_INV_NAME: &'static str = "loop_inv";
+    pub const LOOP_INV_TARGET_NAME: &'static str = "target";
+    pub const LOOP_INV_LABEL_NAME: &'static str = "label";
 
     pub const fn name(&self) -> &str {
         match self {
@@ -980,11 +990,17 @@ impl AstDebug for VerificationAttribute {
                 }
                 w.write(")");
             }
-            VerificationAttribute::SpecOnly { inv_target } => {
-              if inv_target.is_some() {
-                    w.write(format!("spec_only(inv_target={})", inv_target.clone().unwrap()));
+            VerificationAttribute::SpecOnly { inv_target, loop_inv } => {
+                let li = if let Some(loop_inv) = loop_inv {
+                    format!("loop_inv(target={}, label={})", loop_inv.target.to_string(), loop_inv.label)
                 } else {
-                    w.write("spec_only()");
+                    "".to_string()
+                };
+
+                if inv_target.is_some() {
+                    w.write(format!("spec_only({li} inv_target={})", inv_target.clone().unwrap()));
+                } else {
+                    w.write(format!("spec_only({li})"));
                 } 
             }
         }
