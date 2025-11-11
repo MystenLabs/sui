@@ -1531,7 +1531,9 @@ impl TransactionKind {
         Some((e.computation_charge + e.storage_charge, e.storage_rebate))
     }
 
-    pub fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> + '_ {
+    // You almost certainly don't want to call this directly - instead call
+    // `TranscationDataAPI::coin_reservation_obj_refs`.
+    fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> + '_ {
         match self {
             Self::ProgrammableTransaction(pt) => Either::Left(pt.coin_reservation_obj_refs()),
             _ => Either::Right(iter::empty()),
@@ -2549,14 +2551,11 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self,
         coin_reservation_resolver: impl CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
-        // TODO(address-balances): Once we support paying gas using address balances,
-        // we add gas reservations here.
-
         // TODO(address-balances): Use a protocol config parameter for max_withdraws.
         let max_withdraws = 10;
         let mut withdraws = self.kind.funds_withdrawals();
 
-        for obj in self.kind.coin_reservation_obj_refs() {
+        for obj in self.coin_reservation_obj_refs() {
             withdraws.push(coin_reservation_resolver.resolve_funds_withdrawal(self.sender(), obj)?);
         }
 
@@ -2568,20 +2567,7 @@ impl TransactionDataAPI for TransactionDataV1 {
             }
         }
 
-        if self.is_gas_paid_from_address_balance() {
-            let gas_withdraw = if self.sender() != self.gas_owner() {
-                FundsWithdrawalArg::balance_from_sponsor(
-                    self.gas_data().budget,
-                    TypeInput::from(GAS::type_tag()),
-                )
-            } else {
-                FundsWithdrawalArg::balance_from_sender(
-                    self.gas_data().budget,
-                    TypeInput::from(GAS::type_tag()),
-                )
-            };
-            withdraws.push(gas_withdraw);
-        }
+        withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
 
         fp_ensure!(
             withdraws.len() <= max_withdraws,
@@ -2635,7 +2621,8 @@ impl TransactionDataAPI for TransactionDataV1 {
         // TODO(address-balances): Once we support paying gas using address balances,
         // we add gas reservations here.
 
-        let withdraws = self.kind.funds_withdrawals();
+        let mut withdraws = self.kind.funds_withdrawals();
+        withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
 
         // Accumulate all withdraws per account.
         let mut withdraw_map: BTreeMap<AccumulatorObjId, u64> = BTreeMap::new();
@@ -2664,11 +2651,13 @@ impl TransactionDataAPI for TransactionDataV1 {
             *value = value.checked_add(reserved_amount).unwrap();
         }
 
-        for obj in self.kind.coin_reservation_obj_refs() {
+        for obj in self.coin_reservation_obj_refs() {
             let parsed = coin_reservation::parse_object_ref(&obj).unwrap();
             let value = withdraw_map
                 // new_unchecked is safe because we verify that this is a valid accumulator object id
                 // at signing time
+                // The underlying object may have been deleted by now - this is okay. We don't need type information
+                // here, we only need the accumulator object id.
                 .entry(AccumulatorObjId::new_unchecked(parsed.unmasked_object_id))
                 .or_default();
             // overflow checked at signing time
@@ -2871,7 +2860,25 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 }
 
-impl TransactionDataV1 {}
+impl TransactionDataV1 {
+    fn get_funds_withdrawal_for_gas_payment(&self) -> Option<FundsWithdrawalArg> {
+        if self.is_gas_paid_from_address_balance() {
+            Some(if self.sender() != self.gas_owner() {
+                FundsWithdrawalArg::balance_from_sponsor(
+                    self.gas_data().budget,
+                    TypeInput::from(GAS::type_tag()),
+                )
+            } else {
+                FundsWithdrawalArg::balance_from_sender(
+                    self.gas_data().budget,
+                    TypeInput::from(GAS::type_tag()),
+                )
+            })
+        } else {
+            None
+        }
+    }
+}
 
 pub struct TxValidityCheckContext<'a> {
     pub config: &'a ProtocolConfig,
