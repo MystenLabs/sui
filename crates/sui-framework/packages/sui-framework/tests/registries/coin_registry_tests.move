@@ -85,29 +85,16 @@ fun update_metadata() {
 
     // Perform updates on metadata.
     currency.set_name(&metadata_cap, b"new_name".to_string());
-    currency.set_symbol(&metadata_cap, b"new_symbol".to_string());
     currency.set_description(&metadata_cap, b"new_description".to_string());
     currency.set_icon_url(&metadata_cap, b"new_icon_url".to_string());
 
     assert_eq!(currency.name(), b"new_name".to_string());
-    assert_eq!(currency.symbol(), b"new_symbol".to_string());
     assert_eq!(currency.description(), b"new_description".to_string());
     assert_eq!(currency.icon_url(), b"new_icon_url".to_string());
 
     destroy(metadata_cap);
     destroy(currency);
     destroy(t_cap);
-}
-
-#[test, expected_failure(abort_code = coin_registry::EInvalidSymbol)]
-fun update_symbol_non_ascii() {
-    let ctx = &mut tx_context::dummy();
-    let (builder, _t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
-    let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
-
-    currency.set_symbol(&metadata_cap, b"\x00".to_string());
-
-    abort
 }
 
 #[test, expected_failure(abort_code = coin_registry::EInvalidSymbol)]
