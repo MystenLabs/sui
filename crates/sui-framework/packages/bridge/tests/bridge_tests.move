@@ -122,11 +122,11 @@ fun test_register_foreign_token() {
     let addr = @0x0;
     let mut env = create_env(chain_ids::sui_testnet());
     env.create_bridge_default();
-    let (upgrade_cap, treasury_cap, metadata) = create_test_token(env.scenario().ctx());
+    let (upgrade_cap, treasury_cap, currency) = create_test_token(env.scenario().ctx());
     env.register_foreign_token<TEST_TOKEN>(
         treasury_cap,
         upgrade_cap,
-        metadata,
+        currency,
         addr,
     );
     env.destroy_env();
@@ -137,12 +137,12 @@ fun test_register_foreign_token_non_zero_supply() {
     let addr = @0x0;
     let mut env = create_env(chain_ids::sui_testnet());
     env.create_bridge_default();
-    let (upgrade_cap, mut treasury_cap, metadata) = create_test_token(env.scenario().ctx());
+    let (upgrade_cap, mut treasury_cap, currency) = create_test_token(env.scenario().ctx());
     let _coin = treasury_cap.mint(1, env.scenario().ctx());
     env.register_foreign_token<TEST_TOKEN>(
         treasury_cap,
         upgrade_cap,
-        metadata,
+        currency,
         addr,
     );
 
@@ -237,12 +237,12 @@ fun test_register_foreign_token_bad_upgrade_cap() {
     let addr = @0x0;
     let mut env = create_env(chain_ids::sui_testnet());
     env.create_bridge_default();
-    let (_upgrade_cap, treasury_cap, metadata) = create_test_token(env.scenario().ctx());
+    let (_upgrade_cap, treasury_cap, currency) = create_test_token(env.scenario().ctx());
     let upgrade_cap = test_publish(@0x42.to_id(), env.scenario().ctx());
     env.register_foreign_token<TEST_TOKEN>(
         treasury_cap,
         upgrade_cap,
-        metadata,
+        currency,
         addr,
     );
 

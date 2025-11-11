@@ -43,7 +43,8 @@ module bridge::bridge_env {
     use std::unit_test::destroy;
     use sui::address;
     use sui::clock::Clock;
-    use sui::coin::{Self, Coin, CoinMetadata, TreasuryCap};
+    use sui::coin::{Self, Coin, TreasuryCap};
+    use sui::coin_registry::Currency;
     use sui::ecdsa_k1::{KeyPair, secp256k1_keypair_from_seed, secp256k1_sign};
     use sui::event;
     use sui::package::UpgradeCap;
@@ -359,37 +360,37 @@ module bridge::bridge_env {
         let mut bridge = env.scenario.take_shared<Bridge>();
 
         // BTC
-        let (upgrade_cap, treasury_cap, metadata) = btc::create_bridge_token(env.scenario.ctx());
-        bridge.register_foreign_token<BTC>(
+        let (upgrade_cap, treasury_cap, currency) = btc::create_bridge_token(env.scenario.ctx());
+        bridge.register_foreign_token_v2<BTC>(
             treasury_cap,
             upgrade_cap,
-            &metadata,
+            &currency,
         );
-        destroy(metadata);
+        destroy(currency);
         // ETH
-        let (upgrade_cap, treasury_cap, metadata) = eth::create_bridge_token(env.scenario.ctx());
-        bridge.register_foreign_token<ETH>(
+        let (upgrade_cap, treasury_cap, currency) = eth::create_bridge_token(env.scenario.ctx());
+        bridge.register_foreign_token_v2<ETH>(
             treasury_cap,
             upgrade_cap,
-            &metadata,
+            &currency,
         );
-        destroy(metadata);
+        destroy(currency);
         // USDC
-        let (upgrade_cap, treasury_cap, metadata) = usdc::create_bridge_token(env.scenario.ctx());
-        bridge.register_foreign_token<USDC>(
+        let (upgrade_cap, treasury_cap, currency) = usdc::create_bridge_token(env.scenario.ctx());
+        bridge.register_foreign_token_v2<USDC>(
             treasury_cap,
             upgrade_cap,
-            &metadata,
+            &currency,
         );
-        destroy(metadata);
+        destroy(currency);
         // USDT
-        let (upgrade_cap, treasury_cap, metadata) = usdt::create_bridge_token(env.scenario.ctx());
-        bridge.register_foreign_token<USDT>(
+        let (upgrade_cap, treasury_cap, currency) = usdt::create_bridge_token(env.scenario.ctx());
+        bridge.register_foreign_token_v2<USDT>(
             treasury_cap,
             upgrade_cap,
-            &metadata,
+            &currency,
         );
-        destroy(metadata);
+        destroy(currency);
 
         test_scenario::return_shared(bridge);
     }
@@ -859,12 +860,12 @@ module bridge::bridge_env {
         let mut bridge = scenario.take_shared<Bridge>();
 
         // "create" the `Coin`
-        let (upgrade_cap, treasury_cap, metadata) = test_token::create_bridge_token(scenario.ctx());
+        let (upgrade_cap, treasury_cap, currency) = test_token::create_bridge_token(scenario.ctx());
         // register the coin/token with the bridge
-        bridge.register_foreign_token<TEST_TOKEN>(
+        bridge.register_foreign_token_v2<TEST_TOKEN>(
             treasury_cap,
             upgrade_cap,
-            &metadata,
+            &currency,
         );
 
         // verify registration events
@@ -876,7 +877,7 @@ module bridge::bridge_env {
         assert!(nat == false);
 
         // tear down
-        destroy(metadata);
+        destroy(currency);
         test_scenario::return_shared(bridge);
     }
 
@@ -954,7 +955,7 @@ module bridge::bridge_env {
         env: &mut BridgeEnv,
         treasury_cap: TreasuryCap<T>,
         upgrade_cap: UpgradeCap,
-        metadata: CoinMetadata<T>,
+        currency: Currency<T>,
         sender: address,
     ) {
         // set up
@@ -963,7 +964,11 @@ module bridge::bridge_env {
         let mut bridge = scenario.take_shared<Bridge>();
 
         // run registration
-        bridge.register_foreign_token<T>(treasury_cap, upgrade_cap, &metadata);
+        bridge.register_foreign_token_v2<T>(
+            treasury_cap,
+            upgrade_cap,
+            &currency,
+        );
 
         // verify registration events
         let register_events = event::events_by_type<TokenRegistrationEvent>();
@@ -980,7 +985,7 @@ module bridge::bridge_env {
 
         // tear down
         test_scenario::return_shared(bridge);
-        destroy(metadata);
+        destroy(currency);
     }
 
     // Freeze the bridge
@@ -1171,16 +1176,17 @@ module bridge::test_token {
     use std::ascii;
     use std::type_name;
     use sui::address;
-    use sui::coin::{CoinMetadata, TreasuryCap, create_currency};
+    use sui::coin::{TreasuryCap, create_currency};
+    use sui::coin_registry::{Self, Currency};
     use sui::hex;
     use sui::package::{UpgradeCap, test_publish};
-    use sui::test_utils::create_one_time_witness;
+    use sui::test_utils::{create_one_time_witness, destroy};
 
     public struct TEST_TOKEN has drop {}
 
     public fun create_bridge_token(
         ctx: &mut TxContext,
-    ): (UpgradeCap, TreasuryCap<TEST_TOKEN>, CoinMetadata<TEST_TOKEN>) {
+    ): (UpgradeCap, TreasuryCap<TEST_TOKEN>, Currency<TEST_TOKEN>) {
         let otw = create_one_time_witness<TEST_TOKEN>();
         let (treasury_cap, metadata) = create_currency(
             otw,
@@ -1198,8 +1204,20 @@ module bridge::test_token {
         );
         let coin_id = address::from_bytes(address_bytes).to_id();
         let upgrade_cap = test_publish(coin_id, ctx);
+        let mut registry = coin_registry::create_coin_data_registry_for_testing(
+            ctx,
+        );
 
-        (upgrade_cap, treasury_cap, metadata)
+        let currency = coin_registry::migrate_legacy_metadata_for_testing(
+            &mut registry,
+            &metadata,
+            ctx,
+        );
+
+        destroy(metadata);
+        destroy(registry);
+
+        (upgrade_cap, treasury_cap, currency)
     }
 }
 
@@ -1208,16 +1226,17 @@ module bridge::btc {
     use std::ascii;
     use std::type_name;
     use sui::address;
-    use sui::coin::{CoinMetadata, TreasuryCap, create_currency};
+    use sui::coin::{TreasuryCap, create_currency};
+    use sui::coin_registry::{Self, Currency};
     use sui::hex;
     use sui::package::{UpgradeCap, test_publish};
-    use sui::test_utils::create_one_time_witness;
+    use sui::test_utils::{destroy, create_one_time_witness};
 
     public struct BTC has drop {}
 
     public fun create_bridge_token(
         ctx: &mut TxContext,
-    ): (UpgradeCap, TreasuryCap<BTC>, CoinMetadata<BTC>) {
+    ): (UpgradeCap, TreasuryCap<BTC>, Currency<BTC>) {
         let otw = create_one_time_witness<BTC>();
         let (treasury_cap, metadata) = create_currency(
             otw,
@@ -1235,8 +1254,20 @@ module bridge::btc {
         );
         let coin_id = address::from_bytes(address_bytes).to_id();
         let upgrade_cap = test_publish(coin_id, ctx);
+        let mut registry = coin_registry::create_coin_data_registry_for_testing(
+            ctx,
+        );
 
-        (upgrade_cap, treasury_cap, metadata)
+        let currency = coin_registry::migrate_legacy_metadata_for_testing(
+            &mut registry,
+            &metadata,
+            ctx,
+        );
+
+        destroy(metadata);
+        destroy(registry);
+
+        (upgrade_cap, treasury_cap, currency)
     }
 }
 
@@ -1245,16 +1276,17 @@ module bridge::eth {
     use std::ascii;
     use std::type_name;
     use sui::address;
-    use sui::coin::{CoinMetadata, TreasuryCap, create_currency};
+    use sui::coin::{TreasuryCap, create_currency};
+    use sui::coin_registry::{Self, Currency};
     use sui::hex;
     use sui::package::{UpgradeCap, test_publish};
-    use sui::test_utils::create_one_time_witness;
+    use sui::test_utils::{create_one_time_witness, destroy};
 
     public struct ETH has drop {}
 
     public fun create_bridge_token(
         ctx: &mut TxContext,
-    ): (UpgradeCap, TreasuryCap<ETH>, CoinMetadata<ETH>) {
+    ): (UpgradeCap, TreasuryCap<ETH>, Currency<ETH>) {
         let otw = create_one_time_witness<ETH>();
         let (treasury_cap, metadata) = create_currency(
             otw,
@@ -1273,7 +1305,20 @@ module bridge::eth {
         let coin_id = address::from_bytes(address_bytes).to_id();
         let upgrade_cap = test_publish(coin_id, ctx);
 
-        (upgrade_cap, treasury_cap, metadata)
+        let mut registry = coin_registry::create_coin_data_registry_for_testing(
+            ctx,
+        );
+
+        let currency = coin_registry::migrate_legacy_metadata_for_testing(
+            &mut registry,
+            &metadata,
+            ctx,
+        );
+
+        destroy(metadata);
+        destroy(registry);
+
+        (upgrade_cap, treasury_cap, currency)
     }
 }
 
@@ -1282,16 +1327,17 @@ module bridge::usdc {
     use std::ascii;
     use std::type_name;
     use sui::address;
-    use sui::coin::{CoinMetadata, TreasuryCap, create_currency};
+    use sui::coin::{TreasuryCap, create_currency};
+    use sui::coin_registry::{Self, Currency};
     use sui::hex;
     use sui::package::{UpgradeCap, test_publish};
-    use sui::test_utils::create_one_time_witness;
+    use sui::test_utils::{create_one_time_witness, destroy};
 
     public struct USDC has drop {}
 
     public fun create_bridge_token(
         ctx: &mut TxContext,
-    ): (UpgradeCap, TreasuryCap<USDC>, CoinMetadata<USDC>) {
+    ): (UpgradeCap, TreasuryCap<USDC>, Currency<USDC>) {
         let otw = create_one_time_witness<USDC>();
         let (treasury_cap, metadata) = create_currency(
             otw,
@@ -1310,7 +1356,20 @@ module bridge::usdc {
         let coin_id = address::from_bytes(address_bytes).to_id();
         let upgrade_cap = test_publish(coin_id, ctx);
 
-        (upgrade_cap, treasury_cap, metadata)
+        let mut registry = coin_registry::create_coin_data_registry_for_testing(
+            ctx,
+        );
+
+        let currency = coin_registry::migrate_legacy_metadata_for_testing(
+            &mut registry,
+            &metadata,
+            ctx,
+        );
+
+        destroy(metadata);
+        destroy(registry);
+
+        (upgrade_cap, treasury_cap, currency)
     }
 }
 
@@ -1319,16 +1378,17 @@ module bridge::usdt {
     use std::ascii;
     use std::type_name;
     use sui::address;
-    use sui::coin::{CoinMetadata, TreasuryCap, create_currency};
+    use sui::coin::{TreasuryCap, create_currency};
+    use sui::coin_registry::{Self, Currency};
     use sui::hex;
     use sui::package::{UpgradeCap, test_publish};
-    use sui::test_utils::create_one_time_witness;
+    use sui::test_utils::{create_one_time_witness, destroy};
 
     public struct USDT has drop {}
 
     public fun create_bridge_token(
         ctx: &mut TxContext,
-    ): (UpgradeCap, TreasuryCap<USDT>, CoinMetadata<USDT>) {
+    ): (UpgradeCap, TreasuryCap<USDT>, Currency<USDT>) {
         let otw = create_one_time_witness<USDT>();
         let (treasury_cap, metadata) = create_currency(
             otw,
@@ -1347,6 +1407,19 @@ module bridge::usdt {
         let coin_id = address::from_bytes(address_bytes).to_id();
         let upgrade_cap = test_publish(coin_id, ctx);
 
-        (upgrade_cap, treasury_cap, metadata)
+        let mut registry = coin_registry::create_coin_data_registry_for_testing(
+            ctx,
+        );
+
+        let currency = coin_registry::migrate_legacy_metadata_for_testing(
+            &mut registry,
+            &metadata,
+            ctx,
+        );
+
+        destroy(metadata);
+        destroy(registry);
+
+        (upgrade_cap, treasury_cap, currency)
     }
 }
