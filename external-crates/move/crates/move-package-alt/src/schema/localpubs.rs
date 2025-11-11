@@ -1,13 +1,12 @@
-use std::collections::BTreeMap;
-
 use derive_where::derive_where;
 use indoc::indoc;
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
-use crate::flavor::MoveFlavor;
+use crate::{flavor::MoveFlavor, schema::LockfileDependencyInfo};
 
 use super::{
-    EnvironmentID, EnvironmentName, PackageID, Publication, PublishAddresses, RenderToml,
+    EnvironmentID, EnvironmentName, PublishAddresses, RenderToml,
     toml_format::{expand_toml, flatten_toml},
 };
 
@@ -22,13 +21,15 @@ pub struct ParsedEphemeralPubs<F: MoveFlavor> {
     pub chain_id: EnvironmentID,
 
     #[serde(default)]
-    pub published: BTreeMap<PackageID, LocalPub<F>>,
+    pub published: Vec<LocalPub<F>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(bound = "", rename_all = "kebab-case")]
 #[derive_where(Clone)]
 pub struct LocalPub<F: MoveFlavor> {
+    pub source: LockfileDependencyInfo,
+
     #[serde(flatten)]
     pub addresses: PublishAddresses,
 
@@ -38,24 +39,21 @@ pub struct LocalPub<F: MoveFlavor> {
     pub metadata: F::PublishedMetadata,
 }
 
-impl<F: MoveFlavor> From<Publication<F>> for LocalPub<F> {
-    fn from(value: Publication<F>) -> Self {
-        Self {
-            addresses: value.addresses,
-            metadata: value.metadata,
-            version: value.version,
-        }
-    }
-}
-
 impl<F: MoveFlavor> RenderToml for ParsedEphemeralPubs<F> {
     /// Pretty-print `self` as TOML
     fn render_as_toml(&self) -> String {
         let mut toml = toml_edit::ser::to_document(self).expect("toml serialization succeeds");
         expand_toml(&mut toml);
 
-        for (_, dep) in toml["published"].as_table_like_mut().unwrap().iter_mut() {
-            flatten_toml(dep);
+        debug!("formatting\n{toml}");
+
+        for entry in toml["published"]
+            .as_array_of_tables_mut()
+            .unwrap()
+            .iter_mut()
+        {
+            debug!("entry: {entry:#?}");
+            flatten_toml(&mut entry["source"]);
         }
 
         toml.decor_mut().set_prefix(indoc!(
@@ -93,19 +91,22 @@ mod tests {
             build-env = "mainnet"
             chain-id = "localnet chain ID"
 
-            [published.Foo_0]
+            [[published]]
+            source = { local = "../foo0" }
             published-at = "0x0000000000000000000000000000000000000000000000000000000000001234"
             original-id = "0x0000000000000000000000000000000000000000000000000000000000005678"
             version = 0
             build-config = { edition = "2024", flavor = "vanilla" }
 
-            [published.Foo_1]
+            [[published]]
+            source = { local = "../foo1" }
             published-at = "0x0000000000000000000000000000000000000000000000000000000000101234"
             original-id = "0x0000000000000000000000000000000000000000000000000000000000105678"
             version = 1
             build-config = { edition = "2024", flavor = "vanilla" }
 
-            [published.example]
+            [[published]]
+            source = { root = true }
             published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
             original-id = "0x000000000000000000000000000000000000000000000000000000000000cc00"
             version = 2

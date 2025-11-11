@@ -80,6 +80,8 @@ struct TreeShakingTest {
 }
 
 impl TreeShakingTest {
+    /// Creates a new TreeShakingTest by copying `tests/data/tree_shaking` into a temporary
+    /// directory. and setting up a test cluster
     async fn new() -> Result<Self, anyhow::Error> {
         let mut test_cluster = TestClusterBuilder::new().build().await;
         let rgp = test_cluster.get_reference_gas_price().await;
@@ -122,6 +124,8 @@ impl TreeShakingTest {
         })
     }
 
+    /// Produce a published file in `{package_path}/Move.toml` containing `published_at` and
+    /// `upgrade_cap` and additional metadata from `self`.
     async fn create_published_file(
         &self,
         package_path: &Path,
@@ -155,29 +159,42 @@ upgrade-capability = "{}""#,
     }
 
     fn package_path(&self, name: &str) -> PathBuf {
-        self.temp_dir
-            .path()
-            .to_path_buf()
-            .join("tree_shaking")
-            .join(name)
+        self.temp_dir.path().join("tree_shaking").join(name)
     }
 
-    /// Publishes the package in ephemeral mode
+    fn ephemeral_path(&self) -> PathBuf {
+        self.temp_dir.path().join("Pub.localnet.toml")
+    }
+
+    /// Publishes the package named `package_name` in ephemeral mode, and adds the package to the
+    /// ephemeral publication file.
     async fn test_publish_package(
         &mut self,
         package_name: &str,
         with_unpublished_dependencies: bool,
-        pubfile: Option<PathBuf>,
     ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
-        test_publish_package(
+        let pubfile = self.ephemeral_path();
+
+        let result = test_publish_package(
             self.package_path(package_name),
             self.test_cluster.wallet_mut(),
             self.rgp,
             self.gas_obj_id,
             with_unpublished_dependencies,
-            pubfile,
+            Some(pubfile.clone()),
         )
-        .await
+        .await?;
+
+        // TODO: this is a little nasty
+        // replace `{root = true}` with `{local = "../{package_name}"}` in the ephemeral file
+        let file_contents = std::fs::read_to_string(&pubfile)?;
+        let file_contents = file_contents.replace(
+            "{ root = true }",
+            &format!(r#"{{ local = "../{package_name}" }}"#),
+        );
+        std::fs::write(&pubfile, file_contents)?;
+
+        Ok(result)
     }
 
     /// Publishes the package in normal mode. It needs a `localnet = "<chain_id>"` in the Move.toml
@@ -4948,7 +4965,7 @@ async fn test_tree_shaking_package_with_unpublished_deps() -> Result<(), anyhow:
     assert!(linkage_table_h.is_empty());
 
     // try publish package H but `with_unpublished_dependencies` is false. Should error
-    let resp = test.test_publish_package("H", false, None).await;
+    let resp = test.test_publish_package("H", false).await;
     assert!(resp.is_err());
 
     Ok(())
@@ -4959,7 +4976,7 @@ async fn test_tree_shaking_package_without_dependencies() -> Result<(), anyhow::
     let mut test = TreeShakingTest::new().await?;
 
     // Publish package A and verify empty linkage table
-    let (package_a_id, _) = test.test_publish_package("A", false, None).await?;
+    let (package_a_id, _) = test.test_publish_package("A", false).await?;
     let move_pkg_a = fetch_move_packages(&test.client, vec![package_a_id]).await;
     let linkage_table_a = move_pkg_a.first().unwrap().linkage_table();
     assert!(
@@ -4975,16 +4992,10 @@ async fn test_tree_shaking_package_with_direct_dependency() -> Result<(), anyhow
     let mut test = TreeShakingTest::new().await?;
 
     // First publish package A
-    let (package_a_id, _) = test.test_publish_package("A", false, None).await?;
+    let (package_a_id, _) = test.test_publish_package("A", false).await?;
 
     // Then publish B which depends on A
-    let (package_b_id, _) = test
-        .test_publish_package(
-            "B_A",
-            false,
-            Some(test.package_path("A").join("localnet.toml")),
-        )
-        .await?;
+    let (package_b_id, _) = test.test_publish_package("B_A", false).await?;
     let linkage_table_b = test.fetch_linkage_table(package_b_id).await;
     assert!(
         linkage_table_b.contains_key(&package_a_id),
@@ -4999,16 +5010,10 @@ async fn test_tree_shaking_package_with_unused_dependency() -> Result<(), anyhow
     let mut test = TreeShakingTest::new().await?;
 
     // First publish package A
-    let (_, _) = test.test_publish_package("A", false, None).await?;
+    let (_, _) = test.test_publish_package("A", false).await?;
 
     // Then publish B which declares but doesn't use A
-    let (package_b_id, _) = test
-        .test_publish_package(
-            "B_A1",
-            false,
-            Some(test.package_path("A").join("localnet.toml")),
-        )
-        .await?;
+    let (package_b_id, _) = test.test_publish_package("B_A1", false).await?;
     let linkage_table_b = test.fetch_linkage_table(package_b_id).await;
     assert!(
         linkage_table_b.is_empty(),
@@ -5023,27 +5028,18 @@ async fn test_tree_shaking_package_with_transitive_dependencies1() -> Result<(),
     let mut test = TreeShakingTest::new().await?;
 
     // Publish packages A and B
-    let (package_a_id, _) = test.test_publish_package("A", false, None).await?;
+    let (package_a_id, _) = test.test_publish_package("A", false).await?;
     let (package_b_id, _) = test
         .test_publish_package(
             "B_A",
             false,
             // we need to use pkg A path here because that's where the published information will
             // be written to.
-            Some(test.package_path("A").join("localnet.toml")),
         )
         .await?;
 
     // Publish C which depends on B (which depends on A)
-    let (package_c_id, _) = test
-        .test_publish_package(
-            "C_B_A",
-            false,
-            // we need to use pkg A path here because that's where the published information will
-            // be written to in the previous publish call.
-            Some(test.package_path("A").join("localnet.toml")),
-        )
-        .await?;
+    let (package_c_id, _) = test.test_publish_package("C_B_A", false).await?;
     let linkage_table_c = test.fetch_linkage_table(package_c_id).await;
 
     assert!(
@@ -5070,23 +5066,11 @@ async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_refe
     let mut test = TreeShakingTest::new().await?;
 
     // Publish packages A and B
-    let (_, _) = test.test_publish_package("A", false, None).await?;
-    let (_, _) = test
-        .test_publish_package(
-            "B_A1",
-            false,
-            Some(test.package_path("A").join("localnet.toml")),
-        )
-        .await?;
+    let (_, _) = test.test_publish_package("A", false).await?;
+    let (_, _) = test.test_publish_package("B_A1", false).await?;
 
     // Publish C which depends on B_A1
-    let (package_c_id, _) = test
-        .test_publish_package(
-            "C_B",
-            false,
-            Some(test.package_path("A").join("localnet.toml")),
-        )
-        .await?;
+    let (package_c_id, _) = test.test_publish_package("C_B", false).await?;
     let linkage_table_c = test.fetch_linkage_table(package_c_id).await;
 
     assert!(
@@ -5326,7 +5310,7 @@ async fn test_tree_shaking_package_system_deps() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await?;
 
     // Publish package J and verify empty linkage table
-    let (package_j_id, _) = test.test_publish_package("J", false, None).await?;
+    let (package_j_id, _) = test.test_publish_package("J", false).await?;
     let move_pkg_j = fetch_move_packages(&test.client, vec![package_j_id]).await;
     let linkage_table_j = move_pkg_j.first().unwrap().linkage_table();
     assert!(
