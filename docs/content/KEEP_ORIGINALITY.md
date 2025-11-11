@@ -1,0 +1,225 @@
+# Keep the original text as is (do not translate it); if it appears at the beginning of a sentence, capitalize the first letter
+
+- validator → validator
+- transaction →transaction
+- epoch →epoch
+- checkpoints →checkpoints
+- pruning →pruning
+- capability/ability→ capability/ability
+- wrapped → wrapped
+- stake/staking → stake/staking
+- object → object
+- address-owned → address-owned
+- dynamic NFT → dynamic NFT
+- dynamic fields → dynamic fields
+- dynamic display → dynamic display
+- composable / composability → composable / composability
+- wrap/wrapped/wrapping/unwrap/wrapper → wrap/wrapped/wrapping/unwrap/wrapper
+- enclave → enclave
+- global limiter → global limiter
+- Blob → Blob
+- Metadata → Metadata
+- Mermaid → Mermaid
+- Move 2024 → Move 2024
+- Move.lock → Move.lock
+- Move.toml → Move.toml
+- Sui Bridge → Sui Bridge
+- Wormhole Connect → Wormhole Connect
+- Wormhole Portal Bridge → Wormhole Portal Bridge
+- Walrus → Walrus
+- Wallet Standard → Wallet Standard
+- SuiPlay0X1 → SuiPlay0X1
+- ProtocolConfig → ProtocolConfig
+- GraphQL → GraphQL
+- GraphiQL → GraphiQL
+- JSON-RPC → JSON-RPC
+- gRPC → gRPC
+- Docusaurus → Docusaurus
+- Discord → Discord
+- DEEP → DEEP
+- DeepBook → DeepBook
+- DeepBookV3 → DeepBookV3
+- DeepBookV3 SDK → DeepBookV3 SDK
+- DepositCap → DepositCap
+- Devnet → Devnet
+- Testnet → Testnet
+- Mainnet → Mainnet
+- Localnet → Localnet
+- Closed-Loop Token → Closed-Loop Token
+- One-Time Witness → One-Time Witness
+- OTW → OTW
+- one-per-key uniqueness → one-per-key uniqueness
+- Enoki Gas Pool → Enoki Gas Pool
+- Transfer-to-Object → Transfer-to-Object
+- Sui Object Display → Sui Object Display
+- ECVRF → ECVRF
+- Bullshark → Bullshark
+- Carousel → Carousel
+- FastPay → FastPay
+- HammerHead → HammerHead
+- Mysticeti → Mysticeti
+- Mysticeti-C → Mysticeti-C
+- Mysticeti-FPC → Mysticeti-FPC
+- Narwhal → Narwhal
+- Sui Lutris → Sui Lutris
+- SybilQuorum → SybilQuorum
+- Tusk → Tusk
+- Twins → Twins
+- Zef → Zef
+- zkLogin → zkLogin
+- Groth16 → Groth16
+- WithdrawCap → WithdrawCap
+- ClipLoader → ClipLoader
+- CLOB → CLOB
+- Crowdin → Crowdin
+- Counter NFT → Counter NFT
+- NextJS → NextJS
+- NextJS App Router → NextJS App Router
+- Satoshi Coin Flip → Satoshi Coin Flip
+- Shinami → Shinami
+- reCAPTCHA → reCAPTCHA
+- CFRG → CFRG
+- JWT → JWT
+- JSX → JSX
+- OAuth → OAuth
+- TxContext → TxContext
+- pnpm → pnpm
+- yarn → yarn
+- React → React
+- ReactDOM → ReactDOM
+- Vite → Vite
+- Vercel → Vercel
+- Sui TypeScript SDK → Sui TypeScript SDK
+- dApp Kit → dApp Kit
+- zkLogin → zkLogin
+- Client ID → Client ID
+- redirect URI → redirect URI
+- OpenID → OpenID
+- ZK proof → ZK proof
+- OAuth → OAuth
+- WASM → WASM
+- WebAssembly → WebAssembly
+- ERC-1155 → ERC-1155
+- AssetCap → AssetCap
+- AssetMetadata → AssetMetadata
+- PlatformCap → PlatformCap
+- Treasury → Treasury
+- AdminCap → AdminCap
+- BurnTicket → BurnTicket
+- RentalPolicy → RentalPolicy
+- TradeCap → TradeCap
+- TradeProof → TradeProof
+- TransferPolicy → TransferPolicy
+- TransferPolicyCap → TransferPolicyCap
+- TransferRequest → TransferRequest
+- LockRule → LockRule
+- VecMap → VecMap
+- Publisher → Publisher
+- PurchaseCap → PurchaseCap
+- Url → Url
+- timestamp_ms → timestamp_ms
+- epoch_timestamp_ms → epoch_timestamp_ms
+- SerialTransactionExecutor → SerialTransactionExecutor
+- ParallelTransactionExecutor → ParallelTransactionExecutor
+- sui-tool → sui-tool
+- GitHub → GitHub
+- Visual Studio Code → Visual Studio Code
+- IntelliJ IDEA → IntelliJ IDEA
+- Emacs → Emacs
+- Move Analyzer → Move Analyzer
+- Move Trace Debugger → Move Trace Debugger
+- Move extension → Move extension
+- Move syntax → Move syntax
+- Move Language Plugin → Move Language Plugin
+- move-mode → move-mode
+- move-analyzer → move-analyzer
+- Mozilla → Mozilla
+- Github Codespaces → Github Codespaces
+- Circle → Circle
+- Tether → Tether
+- Agora Finance → Agora Finance
+- Ondo Finance → Ondo Finance
+- AssetManager → AssetManager
+- Blake2b → Blake2b
+- TransactionData → TransactionData
+- TransactionDataV1 → TransactionDataV1
+- TransactionKind → TransactionKind
+- GasData → GasData
+- TransactionExpiration → TransactionExpiration
+- IntentMessage → IntentMessage
+- Coin Registry → Coin Registry
+- CurrencyInitializer → CurrencyInitializer
+- Currency Standard → Currency Standard
+- DenyList → DenyList
+- DenyCapV2 → DenyCapV2
+- TreasuryCap → TreasuryCap
+- CoinMetadata → CoinMetadata
+- Coin Flip → Coin Flip
+- CoinRegistry → CoinRegistry
+- Reviews Rating → Reviews Rating
+- Blackjack → Blackjack
+- Plinko → Plinko
+- Weather Oracle → Weather Oracle
+- VecSet → VecSet
+- PriorityQueue → PriorityQueue
+- Table → Table
+- Bag → Bag
+- BalanceManager → BalanceManager
+- BigVector → BigVector
+- ObjectBag → ObjectBag
+- ObjectTable → ObjectTable
+- LinkedTable → LinkedTable
+- Prettier → Prettier
+- Prometheus → Prometheus
+- Alertmanager → Alertmanager
+- BridgeValidator → BridgeValidator
+- AWS → AWS
+- Cloudflare → Cloudflare
+- Operation Cap → Operation Cap
+- UnverifiedValidatorOperationCap → UnverifiedValidatorOperationCap
+- StakedSUI → StakedSUI
+- validator.info → validator.info
+- validator.yaml → validator.yaml
+- validator_tool → validator_tool
+- download_private.sh → download_private.sh
+- download_and_verify_private_binary.sh → download_and_verify_private_binary.sh
+- HAProxy → HAProxy
+- GCP Cloud Armor → GCP Cloud Armor
+- RocksDB → RocksDB
+- RPC → RPC
+- Beamable → Beamable
+- Playtron → Playtron
+- Playtron GameOS → Playtron GameOS
+- Playtron GameOS SDK → Playtron GameOS SDK
+- PoolRegistry → PoolRegistry
+- ReadonlyWalletAccount → ReadonlyWalletAccount
+- remote PACT attestation → remote PACT attestation
+- SuiLink → SuiLink
+- SIP → SIP
+- SUILINK_PACKAGE_ID_ETH_SOL → SUILINK_PACKAGE_ID_ETH_SOL
+- SUILINK_PACKAGE_ID_SUI → SUILINK_PACKAGE_ID_SUI
+- Snagit → Snagit
+- Grafana → Grafana
+- Grafana Agent → Grafana Agent
+- Grafana Alloy → Grafana Alloy
+- Tokio → Tokio
+- Jaeger → Jaeger
+- Vector → Vector
+- jemalloc → jemalloc
+- jeprof → jeprof
+- Kiosk → Kiosk
+- Kiosk Apps → Kiosk Apps
+- Kiosk Apps API → Kiosk Apps API
+- KioskOwnerCap → KioskOwnerCap
+- SuiJSON → SuiJSON
+- suiup → suiup
+- ActionRequest → ActionRequest
+- TokenPolicy → TokenPolicy
+- TokenPolicyCap → TokenPolicyCap
+- TreasuryCap → TreasuryCap
+- YTCarousel → YTCarousel
+- DeepBookV3 → DeepBookV3
+- DEEP → DEEP
+- DBUSDC → DBUSDC
+- DBUSDT → DBUSDT
+- BalanceManagerKey → BalanceManagerKey
