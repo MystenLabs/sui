@@ -452,7 +452,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(manifest.package.implicit_dependencies == false);
+        assert!(!manifest.package.implicit_dependencies);
     }
 
     /// You need the `git` field to have a git dependency

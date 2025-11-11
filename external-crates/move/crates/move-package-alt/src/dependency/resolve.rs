@@ -95,17 +95,14 @@ impl ResolvedDependency {
             BTreeMap::new();
 
         for dep in deps.iter() {
-            match &dep.0.dep_info {
-                Combined::External(ext) => {
-                    requests.entry(ext.resolver.clone()).or_default().insert(
-                        dep.0.name.clone(),
-                        ResolveRequest {
-                            env: environment_id.clone(),
-                            data: ext.data.clone(),
-                        },
-                    );
-                }
-                _ => (),
+            if let Combined::External(ext) = &dep.0.dep_info {
+                requests.entry(ext.resolver.clone()).or_default().insert(
+                    dep.0.name.clone(),
+                    ResolveRequest {
+                        env: environment_id.clone(),
+                        data: ext.data.clone(),
+                    },
+                );
             }
         }
 

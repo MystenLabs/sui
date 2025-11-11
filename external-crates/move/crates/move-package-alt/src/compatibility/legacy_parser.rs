@@ -16,6 +16,8 @@ use crate::{
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
+
+use colored::Colorize as _;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use oxford_join::OxfordJoin;
 use serde_spanned::Spanned;
@@ -274,7 +276,7 @@ fn check_implicits(
         "[{}] Dependencies on {} are automatically added, but this feature is \
             disabled for your package because you have explicitly included dependencies on {}. Consider \
             removing these dependencies from `Move.toml`.",
-        "NOTE",
+        "NOTE".yellow().bold(),
         LEGACY_SYSTEM_DEPS_NAMES.oxford_and(),
         explicit_implicits.oxford_and(),
     );
