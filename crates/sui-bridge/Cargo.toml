@@ -42,7 +42,6 @@ reqwest.workspace = true
 fastcrypto.workspace = true
 tap.workspace = true
 rand.workspace = true
-lru.workspace = true
 shared-crypto.workspace = true
 backoff.workspace = true
 mysten-common.workspace = true

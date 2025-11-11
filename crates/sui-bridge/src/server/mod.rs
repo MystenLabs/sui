@@ -7,7 +7,7 @@ use crate::{
     crypto::BridgeAuthorityPublicKeyBytes,
     error::BridgeError,
     metrics::BridgeMetrics,
-    server::handler::{BridgeRequestHandler, BridgeRequestHandlerTrait},
+    server::handler::BridgeRequestHandlerTrait,
     types::{
         AddTokensOnEvmAction, AddTokensOnSuiAction, AssetPriceUpdateAction,
         BlocklistCommitteeAction, BlocklistType, BridgeAction, EmergencyAction,
@@ -88,7 +88,7 @@ impl BridgeNodePublicMetadata {
 
 pub fn run_server(
     socket_address: &SocketAddr,
-    handler: BridgeRequestHandler,
+    handler: impl BridgeRequestHandlerTrait + Sync + Send + 'static,
     metrics: Arc<BridgeMetrics>,
     metadata: Arc<BridgeNodePublicMetadata>,
 ) -> tokio::task::JoinHandle<()> {
