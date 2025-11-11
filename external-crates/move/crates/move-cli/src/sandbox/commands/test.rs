@@ -380,7 +380,6 @@ pub fn run_all(
     let mut test_passed: u64 = 0;
     let mut cov_info = ExecCoverageMapWithModules::empty();
 
-    debug!("Find iflenames {:?}", args_path);
     debug!("Current directory: {:?}", std::env::current_dir()?);
 
     // find `args.txt` and iterate over them

@@ -47,7 +47,8 @@ impl New {
                 // uncomment this line to import the module
                 // use {name}::{name};
 
-                const ENotImplemented: u64 = 0;
+                #[error(code = 0)]
+                const ENotImplemented: vector<u8> = b"Not Implemented";
 
                 #[test]
                 fun test_{name}() {{

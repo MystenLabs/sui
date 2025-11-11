@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::*;
-use std::path::Path;
+use std::{
+    io::{self, BufRead, BufReader},
+    path::Path,
+};
 
 use move_package_alt::flavor::MoveFlavor;
 use move_package_alt_compilation::{build_config::BuildConfig, find_env};
@@ -22,21 +25,9 @@ impl Migrate {
     ) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
         let env = find_env::<F>(&rerooted_path, &config.clone())?;
-        // Instead of passing stdin().lock() directly
-        let input = {
-            use std::io::{Read, stdin};
-            let mut buffer = String::new();
-            stdin().lock().read_to_string(&mut buffer)?;
-            buffer
-        };
-
+        let mut reader: Box<dyn BufRead + Send> = Box::new(BufReader::new(io::stdin()));
         config
-            .migrate_package::<F, _, _>(
-                &rerooted_path,
-                env,
-                &mut std::io::stdout(),
-                &mut std::io::Cursor::new(input.as_bytes()), // Use Cursor as a BufRead
-            )
+            .migrate_package::<F, _, _>(&rerooted_path, env, &mut io::stdout(), &mut reader)
             .await?;
         Ok(())
     }

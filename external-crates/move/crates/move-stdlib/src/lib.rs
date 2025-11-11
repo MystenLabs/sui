@@ -103,11 +103,5 @@ pub async fn build_doc(output_directory: String) -> anyhow::Result<()> {
 }
 
 pub(crate) fn build_config() -> BuildConfig {
-    BuildConfig {
-        // additional_named_addresses: named_addresses()
-        //     .into_iter()
-        //     .map(|(k, v)| (k, v.into_inner()))
-        //     .collect(),
-        ..BuildConfig::default()
-    }
+    BuildConfig::default()
 }

@@ -9,7 +9,6 @@ use std::path::Path;
 pub mod build;
 pub mod coverage;
 pub mod disassemble;
-// pub mod manage_package;
 pub mod migrate;
 pub mod new;
 pub mod summary;
@@ -20,7 +19,6 @@ pub enum Command {
     Build(build::Build),
     Coverage(coverage::Coverage),
     Disassemble(disassemble::Disassemble),
-    // ManagePackage(manage_package::ManagePackage),
     Migrate(migrate::Migrate),
     New(new::New),
     Test(unit_test::Test),
@@ -43,7 +41,6 @@ pub async fn execute_move_command(
         Command::Build(c) => c.execute(package_path, build_config),
         Command::Coverage(c) => c.execute(package_path, build_config).await,
         Command::Disassemble(c) => c.execute(package_path, build_config).await,
-        // Command::ManagePackage(c) => c.execute(package_path, build_config),
         Command::Migrate(c) => c.execute(package_path, build_config).await,
         Command::New(c) => c.execute(package_path),
         Command::Summary(s) => {
