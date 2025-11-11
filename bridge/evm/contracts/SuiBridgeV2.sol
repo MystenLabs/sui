@@ -96,7 +96,7 @@ contract SuiBridgeV2 is SuiBridge {
     /* ========== MODIFIERS ========== */
 
     /// @dev Requires the amount being transferred does not exceed the bridge limit in
-    /// the last 24 hours.
+    /// the last 48 hours.
     /// @param tokenID The ID of the token being transferred.
     /// @param amount The amount of tokens being transferred.
     modifier limitNotExceededV2(

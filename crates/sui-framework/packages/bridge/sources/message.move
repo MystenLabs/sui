@@ -9,6 +9,7 @@ use std::ascii::{Self, String};
 use sui::bcs::{Self, BCS};
 
 const CURRENT_MESSAGE_VERSION: u8 = 1;
+const TOKEN_TRANSFER_MESSAGE_VERSION_V2: u8 = 2;
 const ECDSA_ADDRESS_LENGTH: u64 = 20;
 
 const ETrailingBytes: u64 = 0;
@@ -127,9 +128,7 @@ public fun extract_token_bridge_payload(message: &BridgeMessage): TokenTransferP
 // `sender_address` and `target_address` are no longer than 255 bytes.
 // Therefore their length can be represented by a single byte.
 // See `create_token_bridge_message` for the actual encoding rule.
-public fun extract_token_bridge_payload_v2_timestamp(
-    message: &BridgeMessage,
-): u64 {
+public fun extract_token_bridge_payload_v2_timestamp(message: &BridgeMessage): u64 {
     let mut bcs = bcs::new(message.payload);
     let _sender_address = bcs.peel_vec_u8();
     let _target_chain = bcs.peel_u8();
@@ -215,7 +214,9 @@ public fun extract_add_tokens_on_sui(message: &BridgeMessage): AddTokenOnSui {
     let mut n = 0;
     let mut token_type_names = vector[];
     while (n < token_type_names_bytes.length()) {
-        token_type_names.push_back(ascii::string(*token_type_names_bytes.borrow(n)));
+        token_type_names.push_back(
+            ascii::string(*token_type_names_bytes.borrow(n)),
+        );
         n = n + 1;
     };
     assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
@@ -287,6 +288,57 @@ public fun create_token_bridge_message(
     BridgeMessage {
         message_type: message_types::token(),
         message_version: CURRENT_MESSAGE_VERSION,
+        seq_num,
+        source_chain,
+        payload,
+    }
+}
+
+/// Token Transfer Message Format:
+/// [message_type: u8]
+/// [version:u8]
+/// [nonce:u64]
+/// [source_chain: u8]
+/// [sender_address_length:u8]
+/// [sender_address: byte[]]
+/// [target_chain:u8]
+/// [target_address_length:u8]
+/// [target_address: byte[]]
+/// [token_type:u8]
+/// [amount:u64]
+/// [timestamp:u64]
+public fun create_token_bridge_message_v2(
+    source_chain: u8,
+    seq_num: u64,
+    sender_address: vector<u8>,
+    target_chain: u8,
+    target_address: vector<u8>,
+    token_type: u8,
+    amount: u64,
+    timestamp: u64,
+): BridgeMessage {
+    chain_ids::assert_valid_chain_id(source_chain);
+    chain_ids::assert_valid_chain_id(target_chain);
+
+    let mut payload = vector[];
+
+    // sender address should be less than 255 bytes so can fit into u8
+    payload.push_back((vector::length(&sender_address) as u8));
+    payload.append(sender_address);
+    payload.push_back(target_chain);
+    // target address should be less than 255 bytes so can fit into u8
+    payload.push_back((vector::length(&target_address) as u8));
+    payload.append(target_address);
+    payload.push_back(token_type);
+    // bcs serialzies u64 as 8 bytes
+    payload.append(reverse_bytes(bcs::to_bytes(&amount)));
+    payload.append(reverse_bytes(bcs::to_bytes(&timestamp)));
+
+    assert!(vector::length(&payload) == 72, EInvalidPayloadLength);
+
+    BridgeMessage {
+        message_type: message_types::token(),
+        message_version: TOKEN_TRANSFER_MESSAGE_VERSION_V2,
         seq_num,
         source_chain,
         payload,

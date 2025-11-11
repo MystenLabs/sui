@@ -31,8 +31,8 @@ library BridgeUtilsV2 {
         returns (bool)
     {
         // The message is considered mature if the timestamp is greater than or equal to the current block timestamp
-        // minus 24 hours (24 * 3600 seconds).
-        return currentTimestamp > messageTimestamp + 24 * 3600;
+        // minus 48 hours (48 * 3600 seconds).
+        return currentTimestamp > messageTimestamp + 48 * 3600;
     }
 
     /// @notice Decodes a token transfer payload from bytes to a TokenTransferPayload struct.
