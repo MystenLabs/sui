@@ -3520,6 +3520,10 @@ type Query {
 	"""
 	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
+	The transactions that exist in the network, with support for multiple filters (AND).
+	"""
+	transactionsScan(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
 	Fetch a structured representation of a concrete type, including its layout information.
 	
 	Types are canonicalized: In the input they can be at any package address at or after the package that first defines them, and in the output they will be relocated to the package that first defines them.
@@ -3712,6 +3716,10 @@ type ServiceConfig {
 	Maximum number of paginated fields that can return results in a single request. Queries on paginated fields that exceed this limit will return an error.
 	"""
 	maxRichQueries: Int
+	"""
+	Maximum number of checkpoints that can be scanned in a single `transactionsScan` query.
+	"""
+	maxScanLimit: Int
 	"""
 	Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
 	
