@@ -16,5 +16,7 @@ pub mod mmr;
 
 pub mod verifier;
 
+pub mod authenticated_events;
+
 #[doc(inline)]
 pub use proof::*;
