@@ -16,7 +16,7 @@ use move_binary_format::errors::*;
 use move_vm_config::runtime::VMConfig;
 use std::sync::Arc;
 
-mod eval;
+pub(crate) mod eval;
 pub(crate) mod helpers;
 pub mod locals;
 pub(crate) mod state;

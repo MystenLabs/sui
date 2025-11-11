@@ -260,7 +260,7 @@ fn step(
 }
 
 #[inline]
-fn control_flow_instruction(instruction: &Bytecode) -> bool {
+pub(crate) fn control_flow_instruction(instruction: &Bytecode) -> bool {
     match instruction {
         Bytecode::Ret
         | Bytecode::BrTrue(_)
