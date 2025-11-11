@@ -8,6 +8,32 @@ use crate::{error::RpcError, scope::Scope, task::watermark::Watermarks};
 
 use super::checkpoint::Checkpoint;
 
+#[derive(thiserror::Error, Debug, Clone)]
+pub(crate) enum Error {
+    #[error("{feature}")]
+    PipelineUnavailable { feature: &'static str },
+}
+
+impl Error {
+    pub(crate) fn pipeline_unavailable(pipeline: &str) -> Self {
+        let feature = match pipeline {
+            "tx_affected_addresses" => "filtering transactions by affected address",
+            "tx_calls" => "filtering transactions by function calls",
+            "tx_affected_objects" => "filtering transactions by affected object",
+            "tx_kinds" => "filtering transactions by kind",
+            "tx_balance_changes" => "querying transaction balance changes",
+            "tx_digests" => "querying transactions",
+            "ev_struct_inst" => "querying events by type",
+            "ev_emit_mod" => "querying events by emitting module",
+            "obj_versions" => "querying object versions",
+            "cp_sequence_numbers" => "querying checkpoints",
+            "consistent" => "consistent queries across objects and balances",
+            _ => "unknown feature",
+        };
+        Self::PipelineUnavailable { feature }
+    }
+}
+
 /// Identifies a GraphQL query component that is used to determine the range of checkpoints for which data is available (for data that can be tied to a particular checkpoint).
 ///
 /// Provides retention information for the type and optional field and filters. If field or filters are not provided we fall back to the available range for the type.
@@ -57,7 +83,7 @@ impl AvailableRange {
         available_range_key: AvailableRangeKey,
     ) -> Result<Self, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
-        let first = available_range_key.reader_lo(watermarks);
+        let first = available_range_key.reader_lo(watermarks)?;
 
         Ok(Self {
             scope: scope.clone(),
@@ -68,7 +94,7 @@ impl AvailableRange {
 
 impl AvailableRangeKey {
     /// The max reader_lo for the pipelines that match the available range key.
-    pub(crate) fn reader_lo(self, watermarks: &Watermarks) -> u64 {
+    pub(crate) fn reader_lo(self, watermarks: &Watermarks) -> Result<u64, RpcError> {
         let mut pipelines = BTreeSet::new();
         let filters = self.filters.clone().unwrap_or_default();
         collect_pipelines(
@@ -77,20 +103,17 @@ impl AvailableRangeKey {
             BTreeSet::from_iter(filters),
             &mut pipelines,
         );
-        pipelines.iter().fold(0, |acc, pipeline| {
+
+        let mut first_checkpoint = 0u64;
+        for pipeline in pipelines.iter() {
             if let Some(wm) = watermarks.pipeline_lo_watermark(pipeline) {
-                acc.max(wm.checkpoint())
+                first_checkpoint = first_checkpoint.max(wm.checkpoint());
             } else {
-                tracing::warn!(
-                    pipeline = %pipeline,
-                    type_ = %self.type_,
-                    field = ?self.field,
-                    filters = ?self.filters.as_ref().map(|f| f.join(", ")),
-                    "Pipeline is not being tracked in watermarks, add this pipeline to the configuration to get an accurate available range."
-                );
-                acc
+                return Err(Error::pipeline_unavailable(pipeline).into());
             }
-        })
+        }
+
+        Ok(first_checkpoint)
     }
 }
 

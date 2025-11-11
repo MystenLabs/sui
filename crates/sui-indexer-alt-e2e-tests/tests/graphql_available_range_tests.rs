@@ -149,6 +149,47 @@ async fn test_available_range_with_pipelines() {
     cluster.stopped().await;
 }
 
+/// Test that querying available range for a pipeline that is not enabled returns an error
+#[tokio::test]
+async fn test_available_range_pipeline_unavailable() {
+    // Create a cluster without the consistent pipeline enabled
+    let cluster = cluster_with_pipelines(PipelineLayer {
+        cp_sequence_numbers: Some(ConcurrentLayer::default()),
+        ..Default::default()
+    })
+    .await;
+
+    // Query for objects, which requires the consistent pipeline
+    let response = execute_graphql_query(
+        &cluster,
+        AVAILABLE_RANGE_QUERY,
+        Some(json!({
+            "type": "Query",
+            "field": "objects",
+        })),
+    )
+    .await;
+
+    // Should get an error about the feature not being available
+    let errors = response["errors"].as_array().expect("Expected errors array");
+    assert!(!errors.is_empty(), "Expected an error but got none");
+
+    let error = &errors[0];
+    let message = error["message"].as_str().expect("Expected error message");
+    let code = error["extensions"]["code"]
+        .as_str()
+        .expect("Expected error code");
+
+    assert_eq!(code, "FEATURE_UNAVAILABLE");
+    assert!(
+        message.contains("consistent queries across objects and balances not available"),
+        "Expected human-readable error, got: {}",
+        message
+    );
+
+    cluster.stopped().await;
+}
+
 /// Set-up a cluster with a custom configuration for pipelines.
 async fn cluster_with_pipelines(pipeline: PipelineLayer) -> FullCluster {
     FullCluster::new_with_configs(

@@ -217,7 +217,7 @@ impl Transaction {
             field: Some("transactions".to_string()),
             filters: Some(filter.active_filters()),
         };
-        let reader_lo = available_range_key.reader_lo(watermarks);
+        let reader_lo = available_range_key.reader_lo(watermarks)?;
 
         let Some(query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
             return Ok(Connection::new(false, false));
