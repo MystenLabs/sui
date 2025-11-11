@@ -374,7 +374,7 @@ collect_pipelines! {
     Query.[objectVersions] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());
     };
-    Query.[transactions] |pipelines, filters| {
+    Query.[transactions, transactionsScan] |pipelines, filters| {
         pipelines.insert("cp_sequence_numbers".to_string());
         pipelines.insert("tx_digests".to_string());
         if filters.contains("affectedAddress") {

@@ -68,12 +68,12 @@ impl Iterator for DoubleHasher {
     }
 }
 
-pub fn set_bit(bits: &mut [u8], pos: usize) {
-    bits[pos / 8] |= 1 << (pos % 8);
+pub fn set_bit(bytes: &mut [u8], bit_idx: usize) {
+    bytes[bit_idx / 8] |= 1 << (bit_idx % 8);
 }
 
-pub fn check_bit(bits: &[u8], pos: usize) -> bool {
-    bits[pos / 8] & (1 << (pos % 8)) != 0
+pub fn check_bit(bytes: &[u8], bit_idx: usize) -> bool {
+    bytes[bit_idx / 8] & (1 << (bit_idx % 8)) != 0
 }
 
 #[cfg(test)]
