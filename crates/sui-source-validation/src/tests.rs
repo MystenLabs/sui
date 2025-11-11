@@ -1,7 +1,6 @@
 // // Copyright (c) Mysten Labs, Inc.
 // // SPDX-License-Identifier: Apache-2.0
 
-// TODO: pkg-alt FAILING TEST
 use expect_test::expect;
 use move_core_types::account_address::AccountAddress;
 use std::collections::HashMap;
@@ -79,8 +78,6 @@ async fn successful_verification() -> anyhow::Result<()> {
     Ok(())
 }
 
-// TODO: pkg-alt not working. Probably due to the unpublished deps not being properly included in
-// the publication
 #[tokio::test]
 async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
@@ -385,7 +382,6 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
     Ok(())
 }
 
-// TODO: pkg-alt FAILING TEST
 #[tokio::test]
 async fn module_not_found_on_chain() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
