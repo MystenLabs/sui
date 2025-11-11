@@ -109,9 +109,7 @@ impl ValidationMode {
     fn root_address(&self, package: &CompiledPackage) -> Result<Option<AccountAddress>, Error> {
         match self {
             Self::Root { at: Some(addr), .. } => Ok(Some(*addr)),
-            Self::Root { at: None, .. } => {
-                Ok(package.published_at.map(AccountAddress::from))
-            }
+            Self::Root { at: None, .. } => Ok(package.published_at.map(AccountAddress::from)),
             Self::Deps => Ok(None),
         }
     }
