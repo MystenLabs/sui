@@ -15,7 +15,7 @@ use sui_types::Identifier;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::bridge::{
-    BridgeCommitteeSummary, BridgeSummary, MoveTypeParsedTokenTransferMessage,
+    BridgeCommitteeSummary, BridgeSummary, MoveTypeBridgeRecord, MoveTypeParsedTokenTransferMessage,
 };
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
@@ -270,6 +270,14 @@ impl SuiClientInner for SuiMockClient {
         _seq_number: u64,
     ) -> Result<Option<MoveTypeParsedTokenTransferMessage>, BridgeError> {
         unimplemented!()
+    }
+
+    async fn get_bridge_record(
+        &self,
+        _source_chain_id: u8,
+        _seq_number: u64,
+    ) -> Result<MoveTypeBridgeRecord, BridgeError> {
+        todo!()
     }
 
     async fn execute_transaction_block_with_effects(

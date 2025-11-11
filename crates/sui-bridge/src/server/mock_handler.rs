@@ -125,6 +125,15 @@ impl BridgeRequestHandlerTrait for BridgeRequestMockHandler {
         Ok(Json(signed_action))
     }
 
+    async fn handle_sui_token_transfer(
+        &self,
+        _source_chain: u8,
+        _message_type: u8,
+        _bridge_seq_num: u64,
+    ) -> Result<Json<SignedBridgeAction>, BridgeError> {
+        unimplemented!()
+    }
+
     async fn handle_governance_action(
         &self,
         action: crate::types::BridgeAction,
