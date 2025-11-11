@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     ffi::OsStr,
     fs::File,
-    io::{self, Read, Seek},
+    io::{self, Read},
     path::{Path, PathBuf},
     process::Command,
 };
@@ -13,7 +13,7 @@ use std::{
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
-use tar::{Archive, Header as TarHeader};
+use tar::Archive;
 use tempfile::TempDir;
 use tracing::{debug, info};
 
@@ -31,7 +31,7 @@ use move_compiler::{
     editions::{Edition, Flavor},
     shared::{NumericalAddress, files::FileName},
 };
-use move_package_alt::{package::layout::SourcePackageLayout, schema::PackageName};
+use move_package_alt::package::layout::SourcePackageLayout;
 use move_package_alt_compilation::compiled_package::CompiledUnitWithSource;
 use move_package_alt_compilation::layout::CompiledPackageLayout;
 use move_symbol_pool::Symbol;
@@ -53,16 +53,8 @@ const CANONICAL_WIN_BINARY_NAME: &str = "sui.exe";
 pub const VERSION: u16 = 3;
 
 #[derive(Serialize, Deserialize)]
-pub struct Header {
+pub struct LockfileHeader {
     pub version: u16,
-    /// A hash of the manifest file content this lock file was generated from computed using SHA-256
-    /// hashing algorithm.
-    pub manifest_digest: String,
-    /// A hash of all the dependencies (their lock file content) this lock file depends on, computed
-    /// by first hashing all lock files using SHA-256 hashing algorithm and then combining them into
-    /// a single digest using SHA-256 hasher (similarly to the package digest is computed). If there
-    /// are no dependencies, it's an empty string.
-    pub deps_digest: String,
 }
 
 // TODO: pkg-alt this needs to work with both old style and new style formats. Particularly, for
@@ -83,10 +75,10 @@ struct Schema<T> {
     move_: T,
 }
 
-impl Header {
+impl LockfileHeader {
     /// Read lock file header after verifying that the version of the lock is not newer than the version
     /// supported by this library.
-    pub fn read(lock: &mut impl Read) -> Result<Header> {
+    pub fn read(lock: &mut impl Read) -> Result<Self> {
         let contents = {
             let mut buf = String::new();
             lock.read_to_string(&mut buf).context("Reading lock file")?;
@@ -95,9 +87,9 @@ impl Header {
         Self::from_str(&contents)
     }
 
-    fn from_str(contents: &str) -> Result<Header> {
+    fn from_str(contents: &str) -> Result<Self> {
         let Schema { move_: header } =
-            toml::de::from_str::<Schema<Header>>(contents).context("Deserializing lock header")?;
+            toml::de::from_str::<Schema<Self>>(contents).context("Deserializing lock header")?;
 
         if header.version != VERSION {
             bail!(
@@ -150,28 +142,28 @@ impl ToolchainVersion {
             let parsed: PublishedFile =
                 toml::de::from_str(&contents).context("Deserializing Published.toml")?;
 
-            if let Some((_, publication)) = parsed.published.into_iter().next() {
-                if let (Some(compiler_version), Some(build_config)) = (
+            if let Some((_, publication)) = parsed.published.into_iter().next() &&
+                let (Some(compiler_version), Some(build_config)) = (
                     publication.metadata.toolchain_version,
                     publication.metadata.build_config,
                 ) {
-                    println!("Found toolchain version in Published.toml file");
+                    debug!("Found toolchain version in Published.toml file");
                     return Ok(Some(ToolchainVersion {
                         compiler_version,
                         edition: build_config.edition,
                         flavor: build_config.flavor,
                     }));
-                }
             }
 
-            println!("Did not find toolchain version in Published.toml file");
+            debug!("Did not find toolchain version in Published.toml file");
 
             return Ok(None);
         }
 
         if lock_path.exists() {
-            println!("Found Move.lock file, reading toolchain version from it");
+            debug!("Found Move.lock file, reading toolchain version from it");
             let contents = std::fs::read_to_string(&lock_path).context("Reading Move.lock file")?;
+            let _ = LockfileHeader::from_str(&contents)?;
 
             #[derive(serde::Deserialize)]
             struct TV {
@@ -182,14 +174,14 @@ impl ToolchainVersion {
             let Schema { move_: value } = toml::de::from_str::<Schema<TV>>(&contents)
                 .context("Deserializing toolchain version from Move.lock")?;
 
-            println!(
+            debug!(
                 "Toolchain version read from Move.lock file {:?}",
                 value.toolchain_version
             );
             return Ok(value.toolchain_version);
         }
 
-        println!("Did not find Move.lock nor Published.toml file");
+        debug!("Did not find Move.lock nor Published.toml file");
 
         Ok(None)
     }
@@ -242,9 +234,23 @@ pub(crate) fn units_for_toolchain(
         }
 
         let package_root = SourcePackageLayout::try_find_root(&local_unit.source_path)?;
+        let lock_file = package_root.join(SourcePackageLayout::Lock.path());
+        if !lock_file.exists() {
+            // No lock file implies current compiler for this package.
+            package_version_map.insert(*package, (current_toolchain(), vec![local_unit.clone()]));
+            continue;
+        }
+
+        let mut lock_file = File::open(lock_file)?;
+        let lock_version = LockfileHeader::read(&mut lock_file)?.version;
+        if lock_version == PRE_TOOLCHAIN_MOVE_LOCK_VERSION {
+            // No need to attempt reading lock file toolchain
+            debug!("{package} on legacy compiler",);
+            package_version_map.insert(*package, (legacy_toolchain(), vec![local_unit.clone()]));
+            continue;
+        }
 
         let toolchain_version = ToolchainVersion::read(&package_root)?;
-
         match toolchain_version {
             // No ToolchainVersion and new Move.lock version implies current compiler.
             None => {
