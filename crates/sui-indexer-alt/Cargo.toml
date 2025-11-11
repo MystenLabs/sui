@@ -44,6 +44,8 @@ sui-indexer-alt-schema.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 sui-synthetic-ingestion = { workspace = true, optional = true }
+fastbloom = { version = "0.14.0", features = ["serde"] }
+bincode.workspace = true
 
 [dev-dependencies]
 rand.workspace = true
