@@ -1319,6 +1319,9 @@ Query.transactions (filter: affectedObject)
 Query.transactions (filter: sentAddress)
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
+Query.transactionsScan
+  => {}
+
 Query.type
   => {}
 

@@ -1,0 +1,722 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 817
+---
+processed 24 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 6-27:
+//# publish
+created: object(1,0)
+mutated: object(0,3)
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 28:
+//# run Test::M1::create --sender A --args 0 @A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 30-32:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 33:
+//# run Test::M1::create --sender A --args 1 @B
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 35-37:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, line 38:
+//# run Test::M1::create --sender B --args 2 @A
+created: object(6,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 7, lines 40-42:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 8, line 43:
+//# run Test::M1::create --sender C --args 3 @A
+created: object(8,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 9, line 45:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 10, lines 47-50:
+//# advance-epoch
+Epoch advanced: 1
+
+task 11, lines 51-53:
+//# create-checkpoint 10501
+Checkpoint created: 10506
+
+task 12, line 54:
+//# run Test::M1::create --sender A --args 100 @C
+created: object(12,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, line 56:
+//# create-checkpoint
+Checkpoint created: 10507
+
+task 14, lines 58-84:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionsA": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJjIjowfQ==",
+        "endCursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJjIjowfQ==",
+          "node": {
+            "digest": "8qp8ApXWxQd51P9Gpm3TUVJ34AZDez92XCbYEiP3APnG",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjoxLCJjIjoxfQ==",
+          "node": {
+            "digest": "4HNKX56jo22koiR5KGwVKTS4wuwzKrxroHCeeGaYpuMU",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjoyfQ==",
+          "node": {
+            "digest": "CtigDrgTbuzNajrrdqiEQ7XQ3AXvXVW43Vu7Q1HnxKpV",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjozfQ==",
+          "node": {
+            "digest": "4BLRrmsdqnXw41wmk3nU5Sk8rXBkENkbeJuhdV7kDTHA",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjo0fQ==",
+          "node": {
+            "digest": "4hoC2zW2b3KivTZtVnCdctr8V2kUhp9DJ5tDRGJQyS8K",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+          "node": {
+            "digest": "E393fU9TxpfUP4NPkVz7u4JWBLRDDEdYuHorHmuwZVoC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 10507
+              }
+            }
+          }
+        }
+      ]
+    },
+    "transactionsB": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJjIjowfQ==",
+        "endCursor": "eyJ0IjowLCJjIjozfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJjIjowfQ==",
+          "node": {
+            "digest": "8qp8ApXWxQd51P9Gpm3TUVJ34AZDez92XCbYEiP3APnG",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjoyfQ==",
+          "node": {
+            "digest": "CtigDrgTbuzNajrrdqiEQ7XQ3AXvXVW43Vu7Q1HnxKpV",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjozfQ==",
+          "node": {
+            "digest": "4BLRrmsdqnXw41wmk3nU5Sk8rXBkENkbeJuhdV7kDTHA",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        }
+      ]
+    },
+    "transactionsC": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJjIjowfQ==",
+        "endCursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJjIjowfQ==",
+          "node": {
+            "digest": "8qp8ApXWxQd51P9Gpm3TUVJ34AZDez92XCbYEiP3APnG",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjo0fQ==",
+          "node": {
+            "digest": "4hoC2zW2b3KivTZtVnCdctr8V2kUhp9DJ5tDRGJQyS8K",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+          "node": {
+            "digest": "E393fU9TxpfUP4NPkVz7u4JWBLRDDEdYuHorHmuwZVoC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 10507
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 15, lines 86-126:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionsA_withObj": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJjIjoyfQ==",
+        "endCursor": "eyJ0IjowLCJjIjoyfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJjIjoyfQ==",
+          "node": {
+            "digest": "CtigDrgTbuzNajrrdqiEQ7XQ3AXvXVW43Vu7Q1HnxKpV",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "transactionsB_sentToA": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJjIjozfQ==",
+        "endCursor": "eyJ0IjowLCJjIjozfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJjIjozfQ==",
+          "node": {
+            "digest": "4BLRrmsdqnXw41wmk3nU5Sk8rXBkENkbeJuhdV7kDTHA",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        }
+      ]
+    },
+    "transactionsC_sentToA": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJjIjo0fQ==",
+        "endCursor": "eyJ0IjowLCJjIjo0fQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJjIjo0fQ==",
+          "node": {
+            "digest": "4hoC2zW2b3KivTZtVnCdctr8V2kUhp9DJ5tDRGJQyS8K",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 16, lines 128-161:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionsWithPackage": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoxLCJjIjoxfQ==",
+        "endCursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjoxLCJjIjoxfQ==",
+          "node": {
+            "digest": "4HNKX56jo22koiR5KGwVKTS4wuwzKrxroHCeeGaYpuMU",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjoyfQ==",
+          "node": {
+            "digest": "CtigDrgTbuzNajrrdqiEQ7XQ3AXvXVW43Vu7Q1HnxKpV",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjozfQ==",
+          "node": {
+            "digest": "4BLRrmsdqnXw41wmk3nU5Sk8rXBkENkbeJuhdV7kDTHA",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjo0fQ==",
+          "node": {
+            "digest": "4hoC2zW2b3KivTZtVnCdctr8V2kUhp9DJ5tDRGJQyS8K",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+          "node": {
+            "digest": "E393fU9TxpfUP4NPkVz7u4JWBLRDDEdYuHorHmuwZVoC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 10507
+              }
+            }
+          }
+        }
+      ]
+    },
+    "transactionsA_withPackage": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoxLCJjIjoxfQ==",
+        "endCursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjoxLCJjIjoxfQ==",
+          "node": {
+            "digest": "4HNKX56jo22koiR5KGwVKTS4wuwzKrxroHCeeGaYpuMU",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjoyfQ==",
+          "node": {
+            "digest": "CtigDrgTbuzNajrrdqiEQ7XQ3AXvXVW43Vu7Q1HnxKpV",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjozfQ==",
+          "node": {
+            "digest": "4BLRrmsdqnXw41wmk3nU5Sk8rXBkENkbeJuhdV7kDTHA",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjo0fQ==",
+          "node": {
+            "digest": "4hoC2zW2b3KivTZtVnCdctr8V2kUhp9DJ5tDRGJQyS8K",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+          "node": {
+            "digest": "E393fU9TxpfUP4NPkVz7u4JWBLRDDEdYuHorHmuwZVoC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 10507
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 17, lines 163-203:
+//# run-graphql
+Response: {
+  "data": {
+    "emptyNonExistent": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    },
+    "emptyConflicting": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    },
+    "emptyBeyondData": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    }
+  }
+}
+
+task 18, lines 205-230:
+//# run-graphql
+Response: {
+  "data": {
+    "scanFirst2": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJjIjowfQ==",
+        "endCursor": "eyJ0IjoxLCJjIjoxfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJjIjowfQ==",
+          "node": {
+            "digest": "8qp8ApXWxQd51P9Gpm3TUVJ34AZDez92XCbYEiP3APnG",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjoxLCJjIjoxfQ==",
+          "node": {
+            "digest": "4HNKX56jo22koiR5KGwVKTS4wuwzKrxroHCeeGaYpuMU",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scanFirst1": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJjIjowfQ==",
+        "endCursor": "eyJ0IjowLCJjIjowfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJjIjowfQ==",
+          "node": {
+            "digest": "8qp8ApXWxQd51P9Gpm3TUVJ34AZDez92XCbYEiP3APnG",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 19, lines 232-257:
+//# run-graphql
+Response: {
+  "data": {
+    "scanLast2": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJjIjo0fQ==",
+        "endCursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJjIjo0fQ==",
+          "node": {
+            "digest": "4hoC2zW2b3KivTZtVnCdctr8V2kUhp9DJ5tDRGJQyS8K",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+          "node": {
+            "digest": "E393fU9TxpfUP4NPkVz7u4JWBLRDDEdYuHorHmuwZVoC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 10507
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scanLast1": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+        "endCursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+          "node": {
+            "digest": "E393fU9TxpfUP4NPkVz7u4JWBLRDDEdYuHorHmuwZVoC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 10507
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 20, lines 259-283:
+//# run-graphql --cursors {"t":0,"c":1}
+Response: {
+  "data": {
+    "scanAfterCp1": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    }
+  }
+}
+
+task 21, lines 285-309:
+//# run-graphql --cursors {"t":0,"c":4}
+Response: {
+  "data": {
+    "scanBeforeCp4": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    }
+  }
+}
+
+task 22, lines 311-335:
+//# run-graphql --cursors {"t":0,"c":1} {"t":0,"c":4}
+Response: {
+  "data": {
+    "scanBetweenCursors": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    }
+  }
+}
+
+task 23, lines 337-366:
+//# run-graphql
+Response: {
+  "data": {
+    "scanAcrossBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoxLCJjIjoxfQ==",
+        "endCursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjoxLCJjIjoxfQ==",
+          "node": {
+            "digest": "4HNKX56jo22koiR5KGwVKTS4wuwzKrxroHCeeGaYpuMU",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjoyfQ==",
+          "node": {
+            "digest": "CtigDrgTbuzNajrrdqiEQ7XQ3AXvXVW43Vu7Q1HnxKpV",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjozfQ==",
+          "node": {
+            "digest": "4BLRrmsdqnXw41wmk3nU5Sk8rXBkENkbeJuhdV7kDTHA",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjo0fQ==",
+          "node": {
+            "digest": "4hoC2zW2b3KivTZtVnCdctr8V2kUhp9DJ5tDRGJQyS8K",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 4
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJjIjoxMDUwN30=",
+          "node": {
+            "digest": "E393fU9TxpfUP4NPkVz7u4JWBLRDDEdYuHorHmuwZVoC",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 10507
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

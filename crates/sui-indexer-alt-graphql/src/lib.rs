@@ -350,7 +350,7 @@ pub async fn start_rpc(
         .extension(Timeout::new(config.limits.timeouts()))
         .extension(QueryLimitsChecker::new(
             config.limits.query_limits(),
-            metrics,
+            metrics.clone(),
         ))
         .data(config.limits.pagination())
         .data(config.limits)
@@ -362,7 +362,8 @@ pub async fn start_rpc(
         .data(pg_loader)
         .data(kv_loader)
         .data(package_store)
-        .data(fullnode_client);
+        .data(fullnode_client)
+        .data(metrics);
 
     let s_rpc = rpc.run().await?;
     let s_system_package_task = system_package_task.run();

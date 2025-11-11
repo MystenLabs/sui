@@ -3308,6 +3308,10 @@ type Query {
 	"""
 	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
+	The transactions that exist in the network, optionally filtered by transaction filters.
+	"""
+	transactionsScan(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
 	Fetch a structured representation of a concrete type, including its layout information.
 	
 	Types are canonicalized: In the input they can be at any package address at or after the package that first defines them, and in the output they will be relocated to the package that first defines them.

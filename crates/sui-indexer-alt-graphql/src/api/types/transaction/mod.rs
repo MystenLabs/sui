@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use std::{ops::Deref, sync::Arc};
 
 use anyhow::Context as _;
@@ -8,11 +7,15 @@ use async_graphql::{Context, Object, connection::Connection, dataloader::DataLoa
 use diesel::{QueryableByName, sql_types::BigInt};
 use fastcrypto::encoding::{Base58, Encoding};
 use futures::future::try_join_all;
+use serde::{Deserialize, Serialize};
+
 use sui_indexer_alt_reader::{
+    checkpoints::CheckpointKey,
     kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
     pg_reader::PgReader,
     tx_digests::TxDigestKey,
 };
+
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 use sui_types::{
@@ -29,7 +32,9 @@ use crate::{
         },
         types::{
             available_range::AvailableRangeKey,
+            checkpoint::filter::checkpoint_bounds,
             lookups::{CheckpointBounds, TxBoundsCursor},
+            scan,
             transaction::filter::TransactionKindInput,
         },
     },
@@ -51,6 +56,9 @@ use super::{
 
 pub(crate) mod filter;
 
+type DigestsByCheckpoint = std::collections::HashMap<CheckpointKey, Vec<TransactionDigest>>;
+type TransactionsByDigest = std::collections::HashMap<TransactionDigest, NativeTransactionContents>;
+
 #[derive(Clone)]
 pub(crate) struct Transaction {
     pub(crate) digest: TransactionDigest,
@@ -62,6 +70,32 @@ pub(crate) struct TransactionContents {
     pub(crate) scope: Scope,
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, Copy)]
+pub(crate) struct TransactionCursor {
+    #[serde(rename = "t")]
+    pub tx_sequence_number: u64,
+    #[serde(rename = "c")]
+    pub cp_sequence_number: u64,
+}
+
+impl PartialOrd for TransactionCursor {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TransactionCursor {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Order by checkpoint first, then by transaction index within checkpoint
+        match self.cp_sequence_number.cmp(&other.cp_sequence_number) {
+            std::cmp::Ordering::Equal => self.tx_sequence_number.cmp(&other.tx_sequence_number),
+            other => other,
+        }
+    }
+}
+
+pub(crate) type SCTransaction = JsonCursor<TransactionCursor>;
 
 pub(crate) type CTransaction = JsonCursor<u64>;
 
@@ -273,6 +307,78 @@ impl Transaction {
             |(s, _)| JsonCursor::new(*s),
             |(_, d)| Ok(Self::with_id(scope.clone(), d)),
         )
+    }
+
+    /// Scan through checkpoints using two-stage bloom filtering to find transactions that match the filters.
+    ///
+    /// 1. **Checkpoint bounds calculation**: Determines the range to scan based on filter
+    /// 2. **Stage 1 (Blocked blooms)**: Filters millions of checkpoints to ~hundreds of candidates
+    /// 3. **Stage 2 (Per-checkpoint blooms)**: Refines candidates to eliminate false positives
+    /// 4. **Transaction loading**: Loads only transactions from candidate checkpoints
+    /// 5. **Final filtering**: Applies exact filter match to eliminate bloom FPs
+    pub(crate) async fn scan(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: Page<SCTransaction>,
+        filter: TransactionFilter,
+    ) -> Result<Connection<String, Transaction>, RpcError> {
+        let watermarks: &Arc<Watermarks> = ctx.data()?;
+        let available_range_key = AvailableRangeKey {
+            type_: "Query".to_string(),
+            field: Some("transactions".to_string()),
+            filters: Some(filter.active_filters()),
+        };
+        let reader_lo = available_range_key.reader_lo(watermarks)?;
+
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
+
+        let Some(cp_bounds) = checkpoint_bounds(
+            filter.after_checkpoint().map(u64::from),
+            filter.at_checkpoint().map(u64::from),
+            filter.before_checkpoint().map(u64::from),
+            reader_lo,
+            checkpoint_viewed_at,
+        ) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        let cp_lo = page.after().map_or(*cp_bounds.start(), |a| {
+            (*cp_bounds.start()).max(a.cp_sequence_number)
+        });
+        let cp_hi = page.before().map_or(*cp_bounds.end(), |b| {
+            (*cp_bounds.end()).min(b.cp_sequence_number)
+        });
+
+        // Check if the range is still valid after applying cursor bounds
+        if cp_lo > cp_hi {
+            return Ok(Connection::new(false, false));
+        }
+
+        let filter_keys = filter.filter_keys();
+
+        let blocked_candidates =
+            scan::query_blocked_blooms(ctx, &filter_keys, cp_lo, cp_hi, &page).await?;
+
+        let candidate_cps =
+            scan::candidate_cp_blooms(ctx, &filter_keys, &blocked_candidates, &page).await?;
+
+        // Load transaction data
+        let (digests, native_transactions) = load_transaction_data(ctx, &candidate_cps).await?;
+
+        // Apply final filter and build results
+        let results = filter_and_build_results(
+            candidate_cps,
+            &digests,
+            &native_transactions,
+            &filter,
+            &scope,
+            &page,
+        )
+        .await?;
+
+        page.paginate_results(results, |(s, _)| JsonCursor::new(*s), |(_, tx)| Ok(tx))
     }
 }
 
@@ -584,4 +690,103 @@ async fn tx_unfiltered(
 
     let tx_sequence_numbers = (tx_lo..tx_hi).collect();
     Ok(tx_sequence_numbers)
+}
+
+/// Loads transaction digests and full transaction data for candidate checkpoints.
+async fn load_transaction_data(
+    ctx: &Context<'_>,
+    candidate_cps: &[u64],
+) -> Result<(DigestsByCheckpoint, TransactionsByDigest), RpcError> {
+    let kv_loader: &KvLoader = ctx.data()?;
+
+    let digests = kv_loader
+        .load_many_checkpoints_transactions(candidate_cps.to_vec())
+        .await
+        .context("Failed to load checkpoint transactions")?;
+
+    let tx_digests_to_load: Vec<_> = digests.values().flatten().copied().collect();
+    let native_transactions = kv_loader
+        .load_many_transactions(tx_digests_to_load)
+        .await
+        .context("Failed to load transactions")?;
+
+    Ok((digests, native_transactions))
+}
+
+/// Applies final filter and builds result list with cursors.
+async fn filter_and_build_results(
+    candidate_cps: Vec<u64>,
+    digests: &DigestsByCheckpoint,
+    native_transactions: &TransactionsByDigest,
+    filter: &TransactionFilter,
+    scope: &Scope,
+    page: &Page<SCTransaction>,
+) -> Result<Vec<(TransactionCursor, Transaction)>, RpcError> {
+    let mut results: Vec<(TransactionCursor, Transaction)> = Vec::new();
+
+    let after_cursor = page.after().map(|c| *c.deref());
+    let before_cursor = page.before().map(|c| *c.deref());
+
+    for cp_sequence_number in candidate_cps {
+        let checkpoint_digests = digests
+            .get(&CheckpointKey(cp_sequence_number))
+            .context("Failed to load checkpoint transaction digests")?;
+
+        // Create enumerated iterator with appropriate direction
+        let tx_indices: Vec<usize> = if page.is_from_front() {
+            (0..checkpoint_digests.len()).collect()
+        } else {
+            (0..checkpoint_digests.len()).rev().collect()
+        };
+
+        for idx in tx_indices {
+            let digest = &checkpoint_digests[idx];
+
+            let cursor = TransactionCursor {
+                tx_sequence_number: idx as u64,
+                cp_sequence_number,
+            };
+
+            // Apply cursor bounds - skip transactions outside the cursor window
+            if after_cursor.is_some_and(|after| cursor <= after) {
+                continue;
+            }
+            if before_cursor.is_some_and(|before| cursor >= before) {
+                continue;
+            }
+
+            let native_transaction = native_transactions
+                .get(digest)
+                .context("Failed to load transaction")?;
+
+            if filter.matches(native_transaction) {
+                results.push((
+                    cursor,
+                    Transaction {
+                        digest: *digest,
+                        contents: TransactionContents {
+                            scope: scope.clone(),
+                            contents: Some(Arc::new(native_transaction.clone())),
+                        },
+                    },
+                ));
+            }
+
+            if results.len() >= page.limit_with_overhead() {
+                break;
+            }
+        }
+
+        if results.len() >= page.limit_with_overhead() {
+            break;
+        }
+    }
+
+    // For backward pagination, reverse results to maintain ascending order
+    // (paginate_results expects results in ascending cursor order)
+    if !page.is_from_front() {
+        results.reverse();
+    }
+
+    Ok(results)
 }

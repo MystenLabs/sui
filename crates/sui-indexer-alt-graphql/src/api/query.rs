@@ -41,7 +41,7 @@ use super::{
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
         transaction::{
-            CTransaction, Transaction,
+            CTransaction, SCTransaction, Transaction,
             filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
         },
         zklogin::{self, ZkLoginIntentScope, ZkLoginVerifyResult},
@@ -542,9 +542,29 @@ impl Query {
 
         // Use the filter if provided, otherwise use default (unfiltered)
         let filter = filter.unwrap_or_default();
-        Transaction::paginate(ctx, scope, page, filter)
+        return Transaction::paginate(ctx, scope, page, filter)
             .await
-            .map(Some)
+            .map(Some);
+    }
+
+    /// The transactions that exist in the network, optionally filtered by transaction filters.
+    async fn transactions_scan(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<SCTransaction>,
+        last: Option<u64>,
+        before: Option<SCTransaction>,
+        #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        let scope = self.scope(ctx)?;
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "transactions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        // Use the filter if provided, otherwise use default (unfiltered)
+        let filter = filter.unwrap_or_default();
+        return Transaction::scan(ctx, scope, page, filter).await.map(Some);
     }
 
     /// Fetch a structured representation of a concrete type, including its layout information.
