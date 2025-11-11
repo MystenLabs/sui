@@ -769,6 +769,7 @@ impl SuiClientCommands {
                 with_coins,
             } => {
                 let address = context.get_identity_address(address)?;
+                let _ = context.get_client().await?;
                 let client = context.get_client().await?;
 
                 let mut objects: Vec<Coin> = Vec::new();
