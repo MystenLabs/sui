@@ -21,6 +21,33 @@ diesel::table! {
 }
 
 diesel::table! {
+    cp_bloom_blocks (cp_block_id, bloom_block_index) {
+        cp_block_id -> Int8,
+        bloom_block_index -> Int2,
+        cp_sequence_number_lo -> Int8,
+        cp_sequence_number_hi -> Int8,
+        bloom_filter -> Bytea,
+        num_items -> Nullable<Int8>,
+    }
+}
+
+diesel::table! {
+    cp_bloom_items_wal (cp_block_id, cp_sequence_number) {
+        cp_block_id -> Int8,
+        cp_sequence_number -> Int8,
+        items -> Array<Nullable<Bytea>>,
+    }
+}
+
+diesel::table! {
+    cp_blooms (cp_sequence_number) {
+        cp_sequence_number -> Int8,
+        bloom_filter -> Bytea,
+        num_items -> Nullable<Int8>,
+    }
+}
+
+diesel::table! {
     cp_sequence_numbers (cp_sequence_number) {
         cp_sequence_number -> Int8,
         tx_lo -> Int8,
@@ -243,6 +270,9 @@ diesel::table! {
 diesel::allow_tables_to_appear_in_same_query!(
     coin_balance_buckets,
     coin_balance_buckets_deletion_reference,
+    cp_bloom_blocks,
+    cp_bloom_items_wal,
+    cp_blooms,
     cp_sequence_numbers,
     ev_emit_mod,
     ev_struct_inst,
