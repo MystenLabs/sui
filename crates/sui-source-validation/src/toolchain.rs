@@ -142,17 +142,18 @@ impl ToolchainVersion {
             let parsed: PublishedFile =
                 toml::de::from_str(&contents).context("Deserializing Published.toml")?;
 
-            if let Some((_, publication)) = parsed.published.into_iter().next() &&
-                let (Some(compiler_version), Some(build_config)) = (
+            if let Some((_, publication)) = parsed.published.into_iter().next()
+                && let (Some(compiler_version), Some(build_config)) = (
                     publication.metadata.toolchain_version,
                     publication.metadata.build_config,
-                ) {
-                    debug!("Found toolchain version in Published.toml file");
-                    return Ok(Some(ToolchainVersion {
-                        compiler_version,
-                        edition: build_config.edition,
-                        flavor: build_config.flavor,
-                    }));
+                )
+            {
+                debug!("Found toolchain version in Published.toml file");
+                return Ok(Some(ToolchainVersion {
+                    compiler_version,
+                    edition: build_config.edition,
+                    flavor: build_config.flavor,
+                }));
             }
 
             debug!("Did not find toolchain version in Published.toml file");
