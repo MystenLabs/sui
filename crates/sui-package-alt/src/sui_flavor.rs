@@ -23,7 +23,8 @@ use sui_package_management::system_package_versions::{
 };
 use sui_sdk::types::{
     base_types::ObjectID,
-    digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier}, supported_protocol_versions::Chain,
+    digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
+    supported_protocol_versions::Chain,
 };
 
 const EDITION: &str = "2024";
@@ -87,7 +88,7 @@ pub struct PublishedMetadata {
 
 impl MoveFlavor for SuiFlavor {
     fn name() -> String {
-       FLAVOR.to_string() 
+        FLAVOR.to_string()
     }
 
     type PublishedMetadata = PublishedMetadata;
@@ -98,8 +99,14 @@ impl MoveFlavor for SuiFlavor {
 
     fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID> {
         IndexMap::from([
-            (Chain::Testnet.as_str().to_string(), get_testnet_chain_identifier().to_string()),
-            (Chain::Mainnet.as_str().to_string(), get_mainnet_chain_identifier().to_string()),
+            (
+                Chain::Testnet.as_str().to_string(),
+                get_testnet_chain_identifier().to_string(),
+            ),
+            (
+                Chain::Mainnet.as_str().to_string(),
+                get_mainnet_chain_identifier().to_string(),
+            ),
         ])
     }
 
