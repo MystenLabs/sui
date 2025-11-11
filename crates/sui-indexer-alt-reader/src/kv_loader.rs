@@ -172,6 +172,50 @@ impl KvLoader {
         }
     }
 
+    pub async fn load_many_checkpoints_transactions(
+        &self,
+        sequence_numbers: Vec<u64>,
+    ) -> Result<HashMap<CheckpointKey, Vec<TransactionDigest>>, Error> {
+        let keys: Vec<CheckpointKey> = sequence_numbers.iter().map(|s| CheckpointKey(*s)).collect();
+        match self {
+            Self::Bigtable(loader) => loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, (_, contents, _))| {
+                    let digests: Vec<TransactionDigest> =
+                        contents.iter().map(|d| d.transaction).collect();
+
+                    Ok((key, digests))
+                })
+                .collect(),
+            Self::Pg(loader) => loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, stored)| {
+                    let contents: CheckpointContents = bcs::from_bytes(&stored.checkpoint_contents)
+                        .context("Failed to deserialize checkpoint contents")?;
+                    let digests: Vec<TransactionDigest> =
+                        contents.iter().map(|d| d.transaction).collect();
+
+                    Ok((key, digests))
+                })
+                .collect(),
+            Self::LedgerGrpc(loader) => loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, (_, contents, _))| {
+                    let digests: Vec<TransactionDigest> =
+                        contents.iter().map(|d| d.transaction).collect();
+
+                    Ok((key, digests))
+                })
+                .collect(),
+        }
+    }
+
     pub async fn load_one_transaction(
         &self,
         digest: TransactionDigest,

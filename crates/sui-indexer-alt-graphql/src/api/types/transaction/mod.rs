@@ -14,6 +14,8 @@ use diesel::sql_types::BigInt;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 use sui_indexer_alt_reader::pg_reader::PgReader;
@@ -34,23 +36,33 @@ use crate::api::scalars::json::Json;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::types::address::Address;
 use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::gas_input::GasInput;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::api::types::lookups::TxBoundsCursor;
+use crate::api::types::scan;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionKindInput;
 use crate::api::types::transaction_effects::EffectsContents;
 use crate::api::types::transaction_effects::TransactionEffects;
 use crate::api::types::transaction_kind::TransactionKind;
 use crate::api::types::user_signature::UserSignature;
+use crate::config::Limits;
 use crate::error::RpcError;
+use crate::error::upcast;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
+
+/// Cursor for transaction pagination
+pub(crate) type CTransaction = JsonCursor<u64>;
+
+/// Cursor for transaction scanning
+pub(crate) type SCTransaction = JsonCursor<TransactionCursor>;
 
 #[derive(Clone)]
 pub(crate) struct Transaction {
@@ -64,7 +76,13 @@ pub(crate) struct TransactionContents {
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
 
-pub(crate) type CTransaction = JsonCursor<u64>;
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, Copy)]
+pub(crate) struct TransactionCursor {
+    #[serde(rename = "t")]
+    pub tx_sequence_number: u64,
+    #[serde(rename = "c")]
+    pub cp_sequence_number: u64,
+}
 
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
@@ -297,6 +315,38 @@ impl Transaction {
             |(s, _)| JsonCursor::new(*s),
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
+    }
+
+    pub(crate) async fn scan(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: Page<SCTransaction>,
+        filter: TransactionFilter,
+    ) -> Result<Connection<String, Transaction>, RpcError<scan::ScanError>> {
+        let limits: &Limits = ctx.data()?;
+        let watermarks: &Arc<Watermarks> = ctx.data()?;
+        let available_range_key = AvailableRangeKey {
+            type_: "Query".to_string(),
+            field: Some("transactions".to_string()),
+            filters: Some(filter.active_filters()),
+        };
+        let reader_lo = available_range_key.reader_lo(watermarks).map_err(upcast)?;
+
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(Connection::new(false, false));
+        };
+
+        let Some(cp_bounds) = checkpoint_bounds(
+            filter.after_checkpoint().map(u64::from),
+            filter.at_checkpoint().map(u64::from),
+            filter.before_checkpoint().map(u64::from),
+            reader_lo,
+            checkpoint_viewed_at,
+        ) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        scan::transactions(ctx, scope, &filter, &page, cp_bounds, limits).await
     }
 }
 

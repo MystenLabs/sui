@@ -52,12 +52,15 @@ use crate::api::types::object::VersionFilter;
 use crate::api::types::object_filter::ObjectFilter;
 use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
 use crate::api::types::protocol_configs::ProtocolConfigs;
+use crate::api::types::scan::ScanError;
 use crate::api::types::service_config::ServiceConfig;
 use crate::api::types::simulation_result::SimulationResult;
 use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::SCTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
+use crate::api::types::transaction::filter::TransactionScanFilterValidator as TSFValidator;
 use crate::api::types::transaction_effects::TransactionEffects;
 use crate::api::types::zklogin;
 use crate::api::types::zklogin::ZkLoginIntentScope;
@@ -709,12 +712,29 @@ impl Query {
                 let limits = pagination.limits("Query", "transactions");
                 let page = Page::from_params(limits, first, after, last, before)?;
 
-                // Use the filter if provided, otherwise use default (unfiltered)
-                let filter = filter.unwrap_or_default();
-                Transaction::paginate(ctx, scope, page, filter).await
-            }
-            .await,
-        )
+        let filter = filter.unwrap_or_default();
+        Transaction::paginate(ctx, scope, page, filter)
+            .await
+            .map(Some)
+    }
+
+    /// The transactions that exist in the network, with support for multiple filters (AND).
+    async fn transactions_scan(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<SCTransaction>,
+        last: Option<u64>,
+        before: Option<SCTransaction>,
+        #[graphql(validator(custom = "TSFValidator"))] filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError<ScanError>> {
+        let scope = self.scope(ctx)?;
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "transactions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let filter = filter.unwrap_or_default();
+        Transaction::scan(ctx, scope, page, filter).await.map(Some)
     }
 
     /// Fetch a structured representation of a concrete type, including its layout information.
