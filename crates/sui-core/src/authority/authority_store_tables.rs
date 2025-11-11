@@ -248,8 +248,9 @@ impl AuthorityPerpetualTables {
         digest_prefix[7] = 32;
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
         let epoch_prefix_key = KeyType::from_prefix_bits(9 * 8 + 4);
-        // (EpochId + TransactionDigest prefix) * 8 + 12
-        let epoch_tx_digest_prefix_key = KeyType::from_prefix_bits((8 + 8) * 8 + 12);
+        // TransactionDigest is serialized with an 8-byte prefix, so we include it in the key calculation
+        let epoch_tx_digest_prefix_key =
+            KeyType::from_prefix_bits((8/*EpochId*/ + 8/*TransactionDigest prefix*/) * 8 + 12);
         let object_indexing = KeyIndexing::key_reduction(32 + 8, 16..(32 + 8));
         // todo can figure way to scramble off 8 bytes in the middle
         let obj_ref_size = 32 + 8 + 32 + 8;

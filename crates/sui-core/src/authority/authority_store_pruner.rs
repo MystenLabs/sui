@@ -575,20 +575,17 @@ impl AuthorityStorePruner {
     async fn prune_executed_tx_digests(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
-        config: &AuthorityStorePruningConfig,
     ) -> anyhow::Result<()> {
-        let num_epochs_to_retain = max(config.num_epochs_to_retain, 1);
-
         let current_epoch = checkpoint_store
             .get_highest_executed_checkpoint()?
             .map(|c| c.epoch)
             .unwrap_or_default();
 
-        if current_epoch < num_epochs_to_retain {
+        if current_epoch < 2 {
             return Ok(());
         }
 
-        let target_epoch = current_epoch - num_epochs_to_retain;
+        let target_epoch = current_epoch - 1;
 
         use sui_types::base_types::TransactionDigest;
         let start_key = (0u64, TransactionDigest::ZERO);
@@ -873,7 +870,7 @@ impl AuthorityStorePruner {
                             if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
                                 error!("Failed to prune objects: {:?}", err);
                             }
-                            if let Err(err) = Self::prune_executed_tx_digests(&perpetual_db, &checkpoint_store, &config).await {
+                            if let Err(err) = Self::prune_executed_tx_digests(&perpetual_db, &checkpoint_store).await {
                                 error!("Failed to prune executed_tx_digests: {:?}", err);
                             }
                         },
