@@ -51,6 +51,7 @@ sui-test-transaction-builder.workspace = true
 sui-metrics-push-client.workspace = true
 hex-literal = { version = "0.3.4", optional = true }
 test-cluster = { workspace = true, optional = true }
+sui-sdk-types.workspace = true
 
 [dev-dependencies]
 sui-config.workspace = true

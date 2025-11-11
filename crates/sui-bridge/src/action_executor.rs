@@ -343,7 +343,9 @@ where
 
         // Only token transfer action should reach here
         match &action {
-            BridgeAction::SuiToEthBridgeAction(_) | BridgeAction::EthToSuiBridgeAction(_) => (),
+            BridgeAction::SuiToEthBridgeAction(_)
+            | BridgeAction::SuiToEthTokenTransfer(_)
+            | BridgeAction::EthToSuiBridgeAction(_) => (),
             _ => unreachable!("Non token transfer action should not reach here"),
         };
 

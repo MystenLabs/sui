@@ -13805,6 +13805,7 @@ dependencies = [
  "sui-keys",
  "sui-metrics-push-client",
  "sui-sdk",
+ "sui-sdk-types",
  "sui-test-transaction-builder",
  "sui-types",
  "tap",

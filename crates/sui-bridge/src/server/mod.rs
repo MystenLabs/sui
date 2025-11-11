@@ -48,6 +48,8 @@ pub const METRICS_KEY_PATH: &str = "/metrics_pub_key";
 // Important: for BridgeActions, the paths need to match the ones in bridge_client.rs
 pub const ETH_TO_SUI_TX_PATH: &str = "/sign/bridge_tx/eth/sui/{tx_hash}/{event_index}";
 pub const SUI_TO_ETH_TX_PATH: &str = "/sign/bridge_tx/sui/eth/{tx_digest}/{event_index}";
+pub const SUI_TO_ETH_TRANSFER_PATH: &str =
+    "/sign/bridge_action/sui/eth/{source_chain}/{message_type}/{bridge_seq_num}";
 pub const COMMITTEE_BLOCKLIST_UPDATE_PATH: &str =
     "/sign/update_committee_blocklist/{chain_id}/{nonce}/{type}/{keys}";
 pub const EMERGENCY_BUTTON_PATH: &str = "/sign/emergency_button/{chain_id}/{nonce}/{type}";
@@ -115,6 +117,7 @@ pub(crate) fn make_router(
         .route(METRICS_KEY_PATH, get(metrics_key_fetch))
         .route(ETH_TO_SUI_TX_PATH, get(handle_eth_tx_hash))
         .route(SUI_TO_ETH_TX_PATH, get(handle_sui_tx_digest))
+        .route(SUI_TO_ETH_TRANSFER_PATH, get(handle_sui_token_transfer))
         .route(
             COMMITTEE_BLOCKLIST_UPDATE_PATH,
             get(handle_update_committee_blocklist_action),
@@ -224,6 +227,24 @@ async fn handle_sui_tx_digest(
         Ok(sig)
     };
     with_metrics!(metrics.clone(), "handle_sui_tx_digest", future).await
+}
+
+#[instrument(level = "error", skip_all, fields(source_chain=source_chain, message_type=message_type, bridge_seq_num=bridge_seq_num))]
+async fn handle_sui_token_transfer(
+    Path((source_chain, message_type, bridge_seq_num)): Path<(u8, u8, u64)>,
+    State((handler, metrics, _metadata)): State<(
+        Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
+        Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
+    )>,
+) -> Result<Json<SignedBridgeAction>, BridgeError> {
+    let future = async {
+        let sig: Json<SignedBridgeAction> = handler
+            .handle_sui_token_transfer(source_chain, message_type, bridge_seq_num)
+            .await?;
+        Ok(sig)
+    };
+    with_metrics!(metrics.clone(), "handle_sui_token_transfer", future).await
 }
 
 #[instrument(level = "error", skip_all, fields(chain_id=chain_id, nonce=nonce, blocklist_type=blocklist_type, keys=keys))]

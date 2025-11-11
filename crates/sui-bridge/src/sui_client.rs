@@ -18,15 +18,17 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
+use sui_sdk_types::Address;
 use sui_types::BRIDGE_PACKAGE_ID;
 use sui_types::SUI_BRIDGE_OBJECT_ID;
 use sui_types::TypeTag;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
-use sui_types::bridge::BridgeSummary;
 use sui_types::bridge::BridgeTreasurySummary;
 use sui_types::bridge::MoveTypeCommitteeMember;
 use sui_types::bridge::MoveTypeParsedTokenTransferMessage;
+use sui_types::bridge::{BridgeSummary, MoveTypeBridgeMessageKey, MoveTypeBridgeRecord};
+use sui_types::collection_types::LinkedTableNode;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
@@ -376,6 +378,16 @@ where
         })
     }
 
+    pub async fn get_bridge_record(
+        &self,
+        source_chain_id: u8,
+        seq_number: u64,
+    ) -> Result<MoveTypeBridgeRecord, BridgeError> {
+        self.inner
+            .get_bridge_record(source_chain_id, seq_number)
+            .await
+    }
+
     pub async fn get_gas_data_panic_if_not_gas(
         &self,
         gas_object_id: ObjectID,
@@ -436,6 +448,12 @@ pub trait SuiClientInner: Send + Sync {
         source_chain_id: u8,
         seq_number: u64,
     ) -> Result<Option<MoveTypeParsedTokenTransferMessage>, BridgeError>;
+
+    async fn get_bridge_record(
+        &self,
+        source_chain_id: u8,
+        seq_number: u64,
+    ) -> Result<MoveTypeBridgeRecord, BridgeError>;
 
     async fn get_gas_data_panic_if_not_gas(
         &self,
@@ -570,6 +588,48 @@ impl SuiClientInner for SuiSdkClient {
             "get_parsed_token_transfer_message",
         )
         .await
+    }
+
+    async fn get_bridge_record(
+        &self,
+        source_chain_id: u8,
+        seq_number: u64,
+    ) -> Result<MoveTypeBridgeRecord, BridgeError> {
+        let key = MoveTypeBridgeMessageKey {
+            source_chain: source_chain_id,
+            message_type: crate::types::BridgeActionType::TokenTransfer as u8,
+            bridge_seq_num: seq_number,
+        };
+        let key_bytes = bcs::to_bytes(&key)?;
+        let key_type = sui_sdk_types::StructTag {
+            address: Address::from(BRIDGE_PACKAGE_ID),
+            module: sui_sdk_types::Identifier::from_static("message"),
+            name: sui_sdk_types::Identifier::from_static("BridgeMessageKey"),
+            type_params: vec![],
+        };
+        let bridge_summary = self.get_bridge_summary().await?;
+        let records_id = bridge_summary.bridge_records_id;
+        let record_id = sui_sdk_types::Address::from(records_id)
+            .derive_dynamic_child_id(&(key_type.into()), &key_bytes);
+
+        let move_contents = self
+            .read_api()
+            .get_object_with_options(record_id.into(), SuiObjectDataOptions::default().with_bcs())
+            .await?
+            .data
+            .and_then(|data| data.bcs)
+            .and_then(|bcs| match bcs {
+                sui_json_rpc_types::SuiRawData::MoveObject(bcs) => Some(bcs.bcs_bytes),
+                sui_json_rpc_types::SuiRawData::Package(_) => None,
+            })
+            .ok_or_else(|| BridgeError::Generic("unable to fetch bridge record".into()))?;
+
+        let field: sui_types::dynamic_field::Field<
+            MoveTypeBridgeMessageKey,
+            LinkedTableNode<MoveTypeBridgeMessageKey, MoveTypeBridgeRecord>,
+        > = bcs::from_bytes(&move_contents)?;
+
+        Ok(field.value.value)
     }
 
     async fn get_gas_data_panic_if_not_gas(
