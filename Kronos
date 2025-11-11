@@ -1,0 +1,283 @@
+# kronos_monte_carlo.py
+"""
+Kronos Monte Carlo module (TensorFlow-heavy).
+Author: ChatGPT for RMita
+Purpose: High-throughput Monte Carlo simulations using TensorFlow for
+         option pricing and risk metrics (VaR/CVaR). Designed for use as Kronos' "brain".
+Requirements:
+    - tensorflow >= 2.10 (recommended)
+Usage:
+    from kronos_monte_carlo import KronosMonteCarlo
+    kmc = KronosMonteCarlo(seed=42)
+    price, stderr = kmc.price_european_call_gbm(S0=100., K=100., T=1., r=0.01, sigma=0.2,
+                                               n_sims=2_000_000, n_steps=252,
+                                               antithetic=True, use_control_variate=True)
+"""
+
+from __future__ import annotations
+import typing as t
+import math
+import numpy as np
+import tensorflow as tf
+
+# Type aliases
+Float = float
+ArrayLike = t.Union[tf.Tensor, np.ndarray, float]
+
+# Ensure eager disabled may help performance with tf.function
+# but we'll provide a jitted function where beneficial.
+
+class KronosMonteCarlo:
+    def __init__(self, seed: int | None = None, device: str | None = None):
+        """
+        Initialize the Kronos Monte Carlo engine.
+
+        Args:
+            seed: Optional seed for reproducibility.
+            device: Optional TensorFlow device string (e.g., "/GPU:0" or "/CPU:0").
+                    If None, TensorFlow's default device placement will be used.
+        """
+        self.seed = seed
+        self.device = device
+        # Use TF Generator for reproducible random streams
+        if seed is None:
+            # nondeterministic generator
+            self._rng = tf.random.Generator.from_non_deterministic_state()
+        else:
+            self._rng = tf.random.Generator.from_seed(seed, alg='philox')
+        # store last simulation metadata
+        self.last_sim = {}
+
+    def _get_device(self):
+        return self.device if self.device is not None else ""
+
+    def simulate_gbm_paths(
+        self,
+        S0: Float,
+        mu: Float,
+        sigma: Float,
+        T: Float,
+        n_sims: int,
+        n_steps: int,
+        antithetic: bool = False,
+    ) -> tf.Tensor:
+        """
+        Simulate Geometric Brownian Motion price paths:
+            dS = mu*S dt + sigma*S dW
+
+        Returns:
+            Tensor of shape (n_sims, n_steps + 1) with dtype tf.float32
+        """
+        dt = T / n_steps
+        sqrt_dt = math.sqrt(dt)
+        sims = n_sims
+
+        # If using antithetic variates, we generate n_sims/2 normals and mirror them.
+        if antithetic:
+            if sims % 2 != 0:
+                raise ValueError("n_sims must be even when using antithetic sampling.")
+            half = sims // 2
+            normals = self._rng.normal(shape=(half, n_steps), dtype=tf.float32)
+            normals = tf.concat([normals, -normals], axis=0)
+        else:
+            normals = self._rng.normal(shape=(sims, n_steps), dtype=tf.float32)
+
+        # vectorized path increments
+        with tf.device(self._get_device()):
+            # increments: exp((mu - 0.5 sigma^2) dt + sigma * sqrt(dt) * Z)
+            drift = (mu - 0.5 * sigma * sigma) * dt
+            diffusion = sigma * sqrt_dt * normals  # shape (sims, n_steps)
+            increments = tf.exp(drift + diffusion)  # multiplicative increments
+
+            # prepend 1.0 for S0 at t0 and cumprod over axis=1
+            increments = tf.cast(increments, tf.float32)
+            S0_tensor = tf.cast(S0, tf.float32)
+            cumprod = tf.math.cumprod(increments, axis=1)
+            # add S0 column
+            S_paths = tf.concat([tf.ones((sims, 1), dtype=tf.float32), cumprod], axis=1)
+            S_paths = S0_tensor * S_paths  # shape (sims, n_steps+1)
+
+        # store last simulation metadata
+        self.last_sim = {
+            'type': 'gbm',
+            'S_paths_shape': S_paths.shape,
+            'S0': S0,
+            'mu': mu,
+            'sigma': sigma,
+            'T': T,
+            'n_sims': n_sims,
+            'n_steps': n_steps,
+            'antithetic': antithetic
+        }
+        return S_paths
+
+    @tf.function
+    def _payoff_european_call(self, ST: tf.Tensor, K: tf.Tensor) -> tf.Tensor:
+        # payoff = max(ST - K, 0)
+        return tf.maximum(ST - K, 0.0)
+
+    def price_european_call_gbm(
+        self,
+        S0: Float,
+        K: Float,
+        T: Float,
+        r: Float,
+        sigma: Float,
+        n_sims: int = 200_000,
+        n_steps: int = 252,
+        antithetic: bool = False,
+        use_control_variate: bool = True,
+    ) -> t.Tuple[float, float]:
+        """
+        Monte Carlo price of a European call option under GBM (risk-neutral drift r).
+
+        Args:
+            S0, K, T, r, sigma: model & option parameters.
+            n_sims: number of Monte Carlo samples (higher -> better accuracy).
+            n_steps: time discretization steps (>=1).
+            antithetic: use antithetic variates to reduce variance.
+            use_control_variate: uses analytic Black-Scholes control variate for variance reduction.
+
+        Returns:
+            (price_estimate, standard_error)
+        """
+        if n_steps < 1:
+            raise ValueError("n_steps must be >= 1")
+
+        # simulate under risk-neutral drift mu = r
+        S_paths = self.simulate_gbm_paths(S0=S0, mu=r, sigma=sigma, T=T,
+                                          n_sims=n_sims, n_steps=n_steps, antithetic=antithetic)
+        ST = S_paths[:, -1]  # terminal prices
+        K_tf = tf.cast(K, tf.float32)
+
+        # payoff
+        payoff = self._payoff_european_call(ST, K_tf)  # shape (n_sims,)
+
+        # discount
+        discount = math.exp(-r * T)
+        discounted = discount * payoff
+
+        # control variate (analytic expected payoff under Black-Scholes)
+        if use_control_variate:
+            # Black-Scholes closed-form expected discounted payoff
+            bs_price = self._black_scholes_call_price(S0, K, r, sigma, T)
+            # Use S_T as control variate because E[S_T] = S0 * exp(rT)
+            # We'll use Y = discounted payoff, X = discounted(S_T - E[S_T])
+            E_ST = S0 * math.exp(r * T)
+            control_var = discount * (ST - E_ST)
+            # linear regression coefficient beta = cov(Y,X)/var(X)
+            cov = tf.reduce_mean((discounted - tf.reduce_mean(discounted)) * (control_var - tf.reduce_mean(control_var)))
+            var_x = tf.math.reduce_variance(control_var)
+            beta = cov / (var_x + 1e-12)
+            # adjustment
+            adjusted = discounted - beta * control_var
+            est = tf.reduce_mean(adjusted).numpy()
+            stderr = tf.math.reduce_std(adjusted) / tf.sqrt(tf.cast(tf.shape(adjusted)[0], tf.float32))
+            return float(est), float(stderr.numpy())
+        else:
+            est = tf.reduce_mean(discounted).numpy()
+            stderr = tf.math.reduce_std(discounted) / tf.sqrt(tf.cast(tf.shape(discounted)[0], tf.float32))
+            return float(est), float(stderr.numpy())
+
+    @staticmethod
+    def _black_scholes_call_price(S0: float, K: float, r: float, sigma: float, T: float) -> float:
+        """
+        Analytic Black–Scholes European call price (used as control variate reference).
+        """
+        if T <= 0:
+            return max(0.0, S0 - K)
+        d1 = (math.log(S0 / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * math.sqrt(T))
+        d2 = d1 - sigma * math.sqrt(T)
+        # standard normal cdf
+        def N(x): return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+        return S0 * N(d1) - K * math.exp(-r * T) * N(d2)
+
+    def compute_var_cvar(
+        self,
+        portfolio_values: ArrayLike,
+        alpha: float = 0.95,
+        method: str = "historical"
+    ) -> t.Tuple[float, float]:
+        """
+        Compute VaR and CVaR (a.k.a. Expected Shortfall).
+
+        Args:
+            portfolio_values: 1D array-like of portfolio P&L or portfolio end values (losses expected).
+                              The function expects returns or P&L values where *loss* is positive.
+            alpha: confidence level (e.g., 0.95).
+            method: 'historical' supported. (Future: parametric)
+        Returns:
+            (VaR, CVaR) both floats (VaR = loss threshold, CVaR = average loss beyond VaR)
+        """
+        arr = tf.convert_to_tensor(tf.cast(tf.convert_to_tensor(portfolio_values), tf.float32))
+        # interpret arr as losses. If these are end portfolio values and you want losses, transform externally.
+        if method != 'historical':
+            raise NotImplementedError("Only 'historical' method currently implemented.")
+        n = tf.shape(arr)[0]
+        k = tf.cast(tf.math.ceil((1.0 - alpha) * tf.cast(n, tf.float32)), tf.int32)
+        sorted_losses = tf.sort(arr, direction='DESCENDING')  # largest losses first
+        VaR = sorted_losses[k - 1] if k >= 1 else sorted_losses[0]
+        tail = sorted_losses[:k]
+        CVaR = tf.reduce_mean(tail) if k >= 1 else VaR
+        return float(VaR.numpy()), float(CVaR.numpy())
+
+    def simulate_portfolio_pnl_from_paths(
+        self,
+        S_paths: tf.Tensor,
+        payoff_fn: t.Callable[[tf.Tensor], tf.Tensor],
+        discount_factor: float = 1.0
+    ) -> tf.Tensor:
+        """
+        Given simulated price paths and a payoff function (vectorized),
+        compute the discounted payoff per simulation (P&L).
+
+        Args:
+            S_paths: tf.Tensor of shape (n_sims, n_steps+1).
+            payoff_fn: callable accepting terminal prices ST (tf.Tensor shape (n_sims,)) and returning payoff tensor.
+            discount_factor: multiplicative factor to discount payoffs (e.g., exp(-rT)).
+
+        Returns:
+            1D tf.Tensor of discounted payoffs shape (n_sims,)
+        """
+        ST = S_paths[:, -1]
+        payoff = payoff_fn(ST)
+        discounted = tf.cast(discount_factor, tf.float32) * tf.cast(payoff, tf.float32)
+        return discounted
+
+    # Utility helpers
+    def sample_standard_normals(self, shape: t.Tuple[int, ...]) -> tf.Tensor:
+        """Sample standard normals with current RNG"""
+        return self._rng.normal(shape=shape, dtype=tf.float32)
+
+    def set_seed(self, seed: int):
+        """Reset RNG with a new seed"""
+        self.seed = seed
+        self._rng = tf.random.Generator.from_seed(seed, alg='philox')
+
+# Example usage script when run as main
+if __name__ == "__main__":
+    # Small demo: price a European call with a large Monte Carlo and compute VaR of payout
+    kmc = KronosMonteCarlo(seed=1337, device=None)  # set device="/GPU:0" if you want to force GPU
+    S0 = 100.0
+    K = 100.0
+    T = 1.0
+    r = 0.01
+    sigma = 0.2
+    n_sims = 200_000  # increase for production runs (GPU recommended)
+    n_steps = 252
+
+    print("Simulating GBM paths and pricing a European call (this may take ~seconds depending on hardware)...")
+    price, stderr = kmc.price_european_call_gbm(S0=S0, K=K, T=T, r=r, sigma=sigma,
+                                               n_sims=n_sims, n_steps=n_steps,
+                                               antithetic=True, use_control_variate=True)
+    print(f"Monte Carlo price estimate: {price:.6f} ± {stderr:.6f}")
+
+    # compute loss distribution (here use payoff as loss for demo)
+    S_paths = kmc.simulate_gbm_paths(S0=S0, mu=r, sigma=sigma, T=T, n_sims=50_000, n_steps=n_steps, antithetic=True)
+    discounted_payoffs = kmc.simulate_portfolio_pnl_from_paths(S_paths,
+                                                               payoff_fn=lambda ST: tf.maximum(ST - K, 0.0),
+                                                               discount_factor=math.exp(-r * T))
+    # Convert to losses (positive losses) for VaR demonstration: here treat payoff as a loss number
+    losses = tf.identity(discounted_payoffs)  # if you have P&L sign conventions change accordingly
+    VaR, CVaR = kmc.compute_var_cvar(losses, alpha=0.95)
+    print(f"Demo VaR (95%): {VaR:.6f}, CVaR(95%): {CVaR:.6f}")
