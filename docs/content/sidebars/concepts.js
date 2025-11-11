@@ -3,6 +3,7 @@
 
 const concepts = [
 	'concepts',
+	'concepts/sui-for-ethereum',
 	'concepts/components',
 	{
 		type: 'category',
@@ -102,7 +103,7 @@ const concepts = [
 	},
 	{
 		type: 'category',
-		label: 'Data access',
+		label: 'Data Access',
 		items: [
 			'concepts/grpc-overview',
 			{ 

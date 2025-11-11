@@ -27,28 +27,23 @@ To create objects, submit transactions, and start building an application on Sui
 
 ## Quick install 
 
-The most effective way to install the Sui CLI is to use [`suiup`](https://github.com/MystenLabs/suiup), as it allows you to easily install and switch between different versions of not only the Sui CLI but also other Sui stack components like [`walrus`](https://docs.wal.app/usage/setup.html) and [`mvr`](https://github.com/MystenLabs/mvr). 
+The Sui CLI is used to interact with the Sui network, deploy packages, and manage assets. To install the Sui CLI, you can use [`suiup`](https://github.com/MystenLabs/suiup).
+
+[`suiup`](https://github.com/MystenLabs/suiup) is the most effective installation method, as it allows you to easily install and switch between different versions of not only the Sui CLI but also other Sui stack components like [`walrus`](https://docs.wal.app/usage/setup.html) and [`mvr`](https://github.com/MystenLabs/mvr). 
 
 Alternative quick install instructions for [Homebrew](https://brew.sh/) or [Chocolately](https://chocolatey.org/) do not support installing other Sui stack components. Other components will need to be installed through their individual binaries if you'd like to use them in the future. 
 
-<ImportContent source="quick-install.mdx" mode="snippet" />
+:::caution 
 
-:::info
-
-The quick install is suitable for most use cases. For those wanting more control over the installation process, you can [install from source](/guides/developer/getting-started/install-source.mdx) or [install binaries](/guides/developer/getting-started/install-binaries.mdx). 
+Installations using Homebrew or Chocolatey might take several minutes if you do not have any of the [Sui prerequisites](/guides/developer/getting-started/install-source) installed. Using `suiup` is often much faster and highly recommended.
 
 :::
 
+<ImportContent source="quick-install.mdx" mode="snippet" />
+
+The quick install is suitable for most use cases. For those wanting more control over the installation process, you can [install from source](/guides/developer/getting-started/install-source.mdx) or [install binaries](/guides/developer/getting-started/install-binaries.mdx). 
+
 If Sui is already installed from a previous development environment, be sure to upgrade to the [latest version](/guides/developer/getting-started/install-binaries.mdx).
-
-### Confirm the installation {#confirm-the-installation}
-
-To confirm that Sui installed correctly:
-
-1. Open a terminal or console
-2. Type `sui --version` and press Enter
-
-If you receive a "command not found" error, verify the Sui binaries directory is in your `PATH` environment variable.
 
 :::info Looking for a project to clone?
 

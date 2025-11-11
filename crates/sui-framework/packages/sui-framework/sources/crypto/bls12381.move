@@ -78,23 +78,21 @@ const UNCOMPRESSED_G1_TYPE: u8 = 4;
 ////// Scalar operations //////
 
 public fun scalar_from_bytes(bytes: &vector<u8>): Element<Scalar> {
-    group_ops::from_bytes(SCALAR_TYPE, bytes, false)
+    group_ops::from_bytes(SCALAR_TYPE, *bytes, false)
 }
 
 public fun scalar_from_u64(x: u64): Element<Scalar> {
     let mut bytes = SCALAR_ZERO_BYTES;
     group_ops::set_as_prefix(x, true, &mut bytes);
-    group_ops::from_bytes(SCALAR_TYPE, &bytes, true)
+    group_ops::from_bytes(SCALAR_TYPE, bytes, true)
 }
 
 public fun scalar_zero(): Element<Scalar> {
-    let zero = SCALAR_ZERO_BYTES;
-    group_ops::from_bytes(SCALAR_TYPE, &zero, true)
+    group_ops::from_bytes(SCALAR_TYPE, SCALAR_ZERO_BYTES, true)
 }
 
 public fun scalar_one(): Element<Scalar> {
-    let one = SCALAR_ONE_BYTES;
-    group_ops::from_bytes(SCALAR_TYPE, &one, true)
+    group_ops::from_bytes(SCALAR_TYPE, SCALAR_ONE_BYTES, true)
 }
 
 public fun scalar_add(e1: &Element<Scalar>, e2: &Element<Scalar>): Element<Scalar> {
@@ -127,17 +125,15 @@ public fun scalar_inv(e: &Element<Scalar>): Element<Scalar> {
 ////// G1 group operations //////
 
 public fun g1_from_bytes(bytes: &vector<u8>): Element<G1> {
-    group_ops::from_bytes(G1_TYPE, bytes, false)
+    group_ops::from_bytes(G1_TYPE, *bytes, false)
 }
 
 public fun g1_identity(): Element<G1> {
-    let identity = G1_IDENTITY_BYTES;
-    group_ops::from_bytes(G1_TYPE, &identity, true)
+    group_ops::from_bytes(G1_TYPE, G1_IDENTITY_BYTES, true)
 }
 
 public fun g1_generator(): Element<G1> {
-    let generator = G1_GENERATOR_BYTES;
-    group_ops::from_bytes(G1_TYPE, &generator, true)
+    group_ops::from_bytes(G1_TYPE, G1_GENERATOR_BYTES, true)
 }
 
 public fun g1_add(e1: &Element<G1>, e2: &Element<G1>): Element<G1> {
@@ -185,17 +181,15 @@ public fun g1_to_uncompressed_g1(e: &Element<G1>): Element<UncompressedG1> {
 ////// G2 group operations //////
 
 public fun g2_from_bytes(bytes: &vector<u8>): Element<G2> {
-    group_ops::from_bytes(G2_TYPE, bytes, false)
+    group_ops::from_bytes(G2_TYPE, *bytes, false)
 }
 
 public fun g2_identity(): Element<G2> {
-    let identity = G2_IDENTITY_BYTES;
-    group_ops::from_bytes(G2_TYPE, &identity, true)
+    group_ops::from_bytes(G2_TYPE, G2_IDENTITY_BYTES, true)
 }
 
 public fun g2_generator(): Element<G2> {
-    let generator = G2_GENERATOR_BYTES;
-    group_ops::from_bytes(G2_TYPE, &generator, true)
+    group_ops::from_bytes(G2_TYPE, G2_GENERATOR_BYTES, true)
 }
 
 public fun g2_add(e1: &Element<G2>, e2: &Element<G2>): Element<G2> {
@@ -238,13 +232,11 @@ public fun g2_multi_scalar_multiplication(
 ////// Gt group operations //////
 
 public fun gt_identity(): Element<GT> {
-    let identity = GT_IDENTITY_BYTES;
-    group_ops::from_bytes(GT_TYPE, &identity, true)
+    group_ops::from_bytes(GT_TYPE, GT_IDENTITY_BYTES, true)
 }
 
 public fun gt_generator(): Element<GT> {
-    let generator = GT_GENERATOR_BYTES;
-    group_ops::from_bytes(GT_TYPE, &generator, true)
+    group_ops::from_bytes(GT_TYPE, GT_GENERATOR_BYTES, true)
 }
 
 public fun gt_add(e1: &Element<GT>, e2: &Element<GT>): Element<GT> {

@@ -1,0 +1,324 @@
+---
+title: GraphQL and General-Purpose Indexer
+description: Setup instructions for running the indexer, consistent store, and GraphQL in production.
+keywords: [indexer, consistent store, graphql, setup, dex]
+---
+
+<ImportContent source="indexer-graphql.mdx" mode="snippet" />
+
+See [GraphQL and General-Purpose Indexer](/concepts/graphql-indexer.mdx) for more information on the stack.
+
+## Indexer setup
+
+The indexer consists of multiple pipelines that each read, transform, and write checkpoint data to a table. Multiple instances of the indexer can run in parallel, each configured by its own TOML file.
+
+#### Hardware requirements
+
+- **CPU:** 8 cores
+- **Memory:** 16GB
+
+### Run command
+
+Run an indexer instance using this command for each of the configuration files that follow:
+
+```sh
+$ sui-indexer-alt indexer \
+    --config <CONFIG_FILE> \
+    --database-url <DATABASE_URL> \
+    --remote-store-url <REMOTE_STORE_URL>
+```
+
+| CLI param            | Description                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `<CONFIG_FILE>`      | Path to indexer configuration file.                                                                                                  |
+| `<DATABASE_URL>`     | Postgres database connection string.                                                                                                 |
+| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/concepts/custom-indexing-framework#data-sources). |
+
+Example:
+
+```sh
+$ sui-indexer-alt indexer \
+    --config misc.toml \
+    --database-url postgres://username:password@localhost:5432/database \
+    --remote-store-url https://checkpoints.mainnet.sui.io
+```
+
+### Run config recommendations {#indexer-run-config}
+
+We recommend using the TOML files below which are grouped by pipeline speed. All pipelines in an instance are limited by the slowest pipeline in that instance so these files each contain pipelines that run at approximately the same speed.
+
+<table>
+	<thead>
+		<tr>
+			<th>Config TOML</th>
+			<th>Description</th>
+			<th>Pipelines</th>
+			<th>Backfill time</th>
+			<th>Data retention</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td>`events.toml`</td>
+			<td>Lightweight event tables.</td>
+			<td>
+				<ul className="pl-4">
+					<li>`ev_emit_mod`</li>
+					<li>`ev_struct_inst`</li>
+				</ul>
+			</td>
+			<td>1-2 days</td>
+			<td>90 days</td>
+		</tr>
+		<tr>
+			<td colspan={5}>
+				<details>
+					<summary>`events.toml`</summary>
+					<ImportContent source="examples/prod-config/events.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+		<tr>
+			<td>`misc.toml`</td>
+			<td>Lightweight miscellaneous tables.</td>
+			<td>
+				<ul className="pl-4">
+					<li>`cp_sequence_numbers`</li>
+					<li>`tx_balance_changes`</li>
+					<li>`tx_digests`</li>
+					<li>`kv_epoch_ends`</li>
+					<li>`kv_epoch_starts`</li>
+					<li>`kv_feature_flags`</li>
+					<li>`kv_packages`</li>
+					<li>`kv_protocol_configs`</li>
+					<li>`sum_displays`</li>
+				</ul>
+			</td>
+			<td>2-4 days</td>
+			<td>90 days</td>
+		</tr>
+		<tr>
+			<td colspan={5}>
+				<details>
+					<summary>`misc.toml`</summary>
+					<ImportContent source="examples/prod-config/misc.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+		<tr>
+			<td>`obj_versions.toml`</td>
+			<td>Heavyweight object versions table containing data since genesis.</td>
+			<td>`obj_versions`</td>
+			<td>10-14 days</td>
+			<td>unpruned</td>
+		</tr>
+		<tr>
+			<td colspan={5}>
+				<details>
+					<summary>`obj_versions.toml`</summary>
+					<ImportContent source="examples/prod-config/obj_versions.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+		<tr>
+			<td>`tx_affected_addresses.toml`</td>
+			<td>Midweight transaction table.</td>
+			<td>`tx_affected_addresses`</td>
+			<td>1-2 days</td>
+			<td>90 days</td>
+		</tr>
+		<tr>
+			<td colspan={5}>
+				<details>
+					<summary>`tx_affected_addresses.toml`</summary>
+					<ImportContent source="examples/prod-config/tx_affected_addresses.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+		<tr>
+			<td>`tx_affected_objects.toml`</td>
+			<td>Midweight transaction table.</td>
+			<td>`tx_affected_objects`</td>
+			<td>1-2 days</td>
+			<td>90 days</td>
+		</tr>
+		<tr>
+			<td colspan={5}>
+				<details>
+					<summary>`tx_affected_objects.toml`</summary>
+					<ImportContent source="examples/prod-config/tx_affected_objects.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+		<tr>
+			<td>`tx_calls.toml`</td>
+			<td>Midweight transaction table.</td>
+			<td>`tx_calls`</td>
+			<td>1-2 days</td>
+			<td>90 days</td>
+		</tr>
+		<tr>
+			<td colspan={5}>
+				<details>
+					<summary>`tx_calls.toml`</summary>
+					<ImportContent source="examples/prod-config/tx_calls.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+		<tr>
+			<td>`tx_kinds.toml`</td>
+			<td>Midweight transaction table.</td>
+			<td>`tx_kinds`</td>
+			<td>1-2 days</td>
+			<td>90 days</td>
+		</tr>
+		<tr>
+			<td colspan={5}>
+				<details>
+					<summary>`tx_kinds.toml`</summary>
+					<ImportContent source="examples/prod-config/tx_kinds.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+	</tbody>
+</table>
+
+## Consistent store setup
+
+All consistent store pipelines run in the same instance based on a single configuration file. Like the indexer, the pipelines run in parallel and throughput is limited by the slowest pipeline.
+
+#### Hardware requirements
+
+- **CPU:** 8 cores
+- **Memory:** 32GB
+
+### Restore command
+
+Restores one or more pipelines from checkpoint data in a GCS bucket.
+
+```sh
+$ sui-indexer-alt-consistent-store restore \
+    --azure <AZURE_BUCKET> \
+    --database-path <DATABASE_PATH> \
+    --gcs <GCS_BUCKET> \
+    --http <HTTP_ENDPOINT> \
+    --object-file-concurrency <OBJECT_FILE_CONCURRENCY> \
+    --pipeline <PIPELINE_NAME> \
+    --remote-store-url <REMOTE_STORE_URL> \
+    --s3 <S3_BUCKET>
+```
+
+| CLI parameter               | Description                                                                                                                               |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `<AZURE_BUCKET>` \*         | Name or URL of Azure bucket containing [managed snapshots](https://docs.sui.io/guides/operator/snapshots#mysten-labs-managed-snapshots).  |
+| `<DATABASE_PATH>`           | Path to RocksDB database.                                                                                                                 |
+| `<GCS_ACCOUNT>` \*          | Name or URL of GCS bucket containing [managed snapshots](https://docs.sui.io/guides/operator/snapshots#mysten-labs-managed-snapshots).    |
+| `<HTTP_ENDPOINT>` \*        | URL of formal snapshot API.                                                                                                               |
+| `<OBJECT_FILE_CONCURRENCY>` | Path to indexer configuration file.                                                                                                       |
+| `<PIPELINE_NAME>`           | Name of pipeline to restore. Can be set multiple times; once per pipeline.                                                                |
+| `<REMOTE_STORE_URL>`        | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/concepts/custom-indexing-framework#data-sources).      |
+| `<S3_BUCKET>` \*            | Name or URL of AWS S3 bucket containing [managed snapshots](https://docs.sui.io/guides/operator/snapshots#mysten-labs-managed-snapshots). |
+
+\* Must specify one of `<AZURE_BUCKET>`, `<GCS_ACCOUNT>`, `<HTTP_ENDPOINT>`, or `<S3_BUCKET>`.
+
+Example:
+
+```sh
+$ sui-indexer-alt-consistent-store restore \
+    --database-path /path/to/rocksdb \
+    --http https://formal-snapshot.mainnet.sui.io \
+    --object-file-concurrency 5 \
+    --pipeline balances \
+    --pipeline object_by_owner \
+    --pipeline object_by_type \
+    --remote-store-url https://checkpoints.mainnet.sui.io
+```
+
+### Run command
+
+Run a consistent store instance using this command for the configuration file that follows:
+
+```sh
+$ sui-indexer-alt-consistent-store run \
+    --config <CONFIG_FILE> \
+    --database-path <DATABASE_PATH> \
+    --remote-store-url <REMOTE_STORE_URL>
+```
+
+| CLI param            | Description                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `<CONFIG_FILE>`      | Path to consistent store configuration file.                                                                                         |
+| `<DATABASE_PATH>`    | Path to RocksDB database.                                                                                                            |
+| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/concepts/custom-indexing-framework#data-sources). |
+
+Example:
+
+```sh
+$ sui-indexer-alt-consistent-store run \
+    --config consistent-store.toml \
+    --database-path /path/to/rocksdb \
+    --remote-store-url https://checkpoints.mainnet.sui.io
+```
+
+### Run config recommendations
+
+<table>
+	<thead>
+		<tr>
+			<th>Config TOML</th>
+			<th>Description</th>
+			<th>Pipelines</th>
+			<th>Backfill time</th>
+			<th>Data retention</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td>`consistent-store.toml`</td>
+			<td>Consistent store API configuration and event tables.</td>
+			<td>
+				<ul className="pl-4">
+					<li>`balances`</li>
+					<li>`object-by-owner`</li>
+					<li>`object-by-type`</li>
+				</ul>
+			</td>
+			<td>1-2 hours</td>
+			<td>Unpruned</td>
+		</tr>
+	</tbody>
+</table>
+
+<details>
+	<summary>`consistent-store.toml`</summary>
+	<ImportContent source="examples/prod-config/consistent-store.toml" mode="code" />
+</details>
+
+## Related links
+
+<RelatedLink to="/concepts/graphql-indexer" />
+<RelatedLink to="/concepts/graphql-rpc" />
+<RelatedLink to="/concepts/custom-indexing-framework" />
+<RelatedLink to="/concepts/custom-indexer/pipeline-architecture" />
+<RelatedLink to="/concepts/archival-store" />
+<RelatedLink to="/guides/developer/advanced/custom-indexer" />
+<RelatedLink
+	href="https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt"
+	label="Sui Indexer Alt"
+	desc="The `sui-indexer-alt` crate in the Sui repo."
+/>
+<RelatedLink
+	href="https://github.com/MystenLabs/mvr/tree/main/crates/mvr-indexer"
+	label="Move Registry"
+	desc="The indexer that the Move Registry (MVR) implements."
+/>
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3/tree/main/crates/indexer"
+	label="DeepBook Indexer"
+	desc="The indexer that DeepBook implements."
+/>
+<RelatedLink
+	href="/references/sui-api/sui-graphql/beta/reference"
+	label="GraphQL Beta schema"
+	desc="Schema documentation for GraphQL Beta"
+/>

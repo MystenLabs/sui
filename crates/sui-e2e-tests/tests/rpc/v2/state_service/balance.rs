@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 use sui_macros::sim_test;
-use sui_rpc::client::v2::Client;
+use sui_rpc::Client;
 use sui_rpc::proto::sui::rpc::v2::{ExecutedTransaction, GasCostSummary};
 use sui_rpc::proto::sui::rpc::v2::{GetBalanceRequest, ListBalancesRequest};
 use sui_test_transaction_builder::TestTransactionBuilder;

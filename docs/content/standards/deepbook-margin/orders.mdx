@@ -1,0 +1,126 @@
+---
+title: Orders
+description: Learn how to place and manage orders using margin managers.
+keywords:
+  [
+    orders,
+    limit order,
+    market order,
+    reduce only,
+    cancel order,
+    modify order,
+    margin trading,
+    deepbook margin,
+  ]
+---
+
+The `pool_proxy` module provides wrapper functions for trading with margin managers. These functions enable placing orders, modifying and canceling them, and managing staking and governance participation through a margin manager. All trading operations require the margin manager to be associated with the correct DeepBook pool.
+
+## API
+
+Following are the different public functions for managing orders with margin managers.
+
+### Place orders
+
+Place limit and market orders through a margin manager. Orders can only be placed if margin trading is enabled for the pool.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/pool_proxy.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="place_limit_order,place_market_order"
+/>
+
+### Place reduce-only orders
+
+Place reduce-only orders that can only decrease your debt position. These orders are useful when margin trading is disabled and you need to close existing positions.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/pool_proxy.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="place_reduce_only_limit_order,place_reduce_only_market_order"
+/>
+
+### Modify order
+
+Modify an existing order by changing its quantity.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/pool_proxy.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="modify_order"
+/>
+
+### Cancel orders
+
+Cancel one, multiple, or all orders for the margin manager.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/pool_proxy.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="cancel_order,cancel_orders,cancel_all_orders"
+/>
+
+### Withdraw settled amounts
+
+Withdraw settled amounts from completed trades back to the margin manager's balance manager.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/pool_proxy.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="withdraw_settled_amounts"
+/>
+
+### Staking
+
+Stake and unstake DEEP tokens through the margin manager. Note that margin managers for pools with DEEP as base or quote asset cannot stake.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/pool_proxy.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="stake,unstake"
+/>
+
+### Governance
+
+Submit proposals and vote on governance decisions through the margin manager.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/pool_proxy.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="submit_proposal,vote"
+/>
+
+### Claim rebates
+
+Claim trading rebates earned through the margin manager.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/pool_proxy.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="claim_rebates"
+/>
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3/tree/main/packages/deepbook_margin"
+	label="DeepBook Margin package"
+	desc="The DeepBook Margin package on GitHub."
+/>
+

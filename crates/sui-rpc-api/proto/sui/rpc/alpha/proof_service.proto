@@ -1,0 +1,46 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+package sui.rpc.alpha;
+
+import "sui/rpc/v2/object_reference.proto";
+
+// ProofService provides cryptographic proofs for blockchain objects.
+service ProofService {
+  // Returns an inclusion proof if a specified object id was written in a specified checkpoint.
+  rpc GetObjectInclusionProof(GetObjectInclusionProofRequest) returns (GetObjectInclusionProofResponse);
+}
+
+// Object Checkpoint State inclusion proof.
+message OCSInclusionProof {
+  // BCS-encoded merkle proof nodes.
+  optional bytes merkle_proof = 1;
+
+  // Leaf index in the merkle tree.
+  optional uint64 leaf_index = 2;
+
+  // Tree root digest (32 bytes).
+  optional bytes tree_root = 3;
+}
+
+// Request for object inclusion proof at a checkpoint.
+message GetObjectInclusionProofRequest {
+  // Required. Object ID to get inclusion proof for.
+  optional string object_id = 1;
+
+  // Required. Checkpoint sequence number.
+  optional uint64 checkpoint = 2;
+}
+
+// Response containing object inclusion proof and object data.
+message GetObjectInclusionProofResponse {
+  // Object reference being proven (object_id, version, digest).
+  optional sui.rpc.v2.ObjectReference object_ref = 1;
+
+  // Object inclusion proof.
+  optional OCSInclusionProof inclusion_proof = 2;
+
+  // BCS-encoded object data.
+  optional bytes object_data = 3;
+}

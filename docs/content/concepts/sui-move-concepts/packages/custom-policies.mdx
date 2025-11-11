@@ -1,7 +1,7 @@
 ---
 title: Custom Upgrade Policies
 description: Custom upgrade policies are used to upgrade live packages while addressing the security risks of single-key ownership upgrades.
-keywords: [ upgrade policies, custom upgrade policies, immutable policy, dependency policy, additive policy, compatible policy, create an upgrade policy, isolate a policy ] 
+keywords: [ upgrade policies, custom upgrade policies, immutable policy, dependency policy, additive policy, compatible policy, create an upgrade policy, isolate a policy ]
 ---
 
 Protecting the ability to upgrade a package on-chain using a single key can pose a security risk for several reasons:
@@ -18,7 +18,7 @@ Sui comes with a set of built-in package compatibility policies, listed here fro
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Immutable       | No one can upgrade the package.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Dependency-only | You can modify the dependencies of the package only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Additive        | You can add new functionality to the package (e.g., new public functions or structs) but you can't change any of the existing functionality (e.g., the code in existing public functions cannot change).                                                                                                                                                                                                                                                                                                                                                                        |
+| Additive        | You can add new functionality to the package (for example, new public functions or structs) but you can't change any of the existing functionality (for example, the code in existing public functions cannot change).                                                                                                                                                                                                                                                                                                                                                                        |
 | Compatible      | The most relaxed policy. In addition to what the more restrictive policies allow, in an upgraded version of the package: <ul><li>You can change all function implementations.</li><li>You can remove the ability constraints on generic type parameters in function signatures.</li><li>You can change, remove, or make `public` any `private`, `public(friend)`, and `entry` function signatures.</li><li>You cannot change `public` function signatures (except in the case of ability constraints mentioned previously).</li><li>You cannot change existing types.</li></ul> |
 
 Each of these policies, in the order listed, is a superset of the previous one in the type of changes allowed in the upgraded package.
@@ -54,7 +54,7 @@ Any pair of functions that produces an `UpgradeTicket` from an `UpgradeCap` and 
 ## UpgradeCap {#upgradecap}
 
 The `UpgradeCap` is the central type responsible for coordinating package upgrades.
- 
+
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/package.move" mode="code" struct="UpgradeCap" noComments />
 
 Publishing a package creates the `UpgradeCap` object and upgrading the package updates that object. The owner of this object has permission to:

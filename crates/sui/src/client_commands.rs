@@ -1156,7 +1156,8 @@ impl SuiClientCommands {
                     }
                 };
 
-                let signing_limits = Some(VerifierSigningConfig::default().limits_for_signing());
+                let limits = VerifierSigningConfig::default();
+                let signing_limits = Some(limits.limits_for_signing());
                 let mut verifier = sui_execution::verifier(
                     &protocol_config,
                     signing_limits,
@@ -1595,13 +1596,9 @@ impl SuiClientCommands {
                 SuiClientCommandResult::NoOutput
             }
             SuiClientCommands::ChainIdentifier => {
-                let ci = context
-                    .get_client()
-                    .await?
-                    .read_api()
-                    .get_chain_identifier()
-                    .await?;
-                SuiClientCommandResult::ChainIdentifier(ci)
+                let client = context.get_client().await?;
+                let chain_id = client.read_api().get_chain_identifier().await?;
+                SuiClientCommandResult::ChainIdentifier(chain_id)
             }
             SuiClientCommands::SplitCoin {
                 coin_id,
@@ -1816,6 +1813,7 @@ impl SuiClientCommands {
                     rpc,
                     ws,
                     basic_auth,
+                    chain_id: None,
                 };
 
                 // Check urls are valid and server is reachable
@@ -1852,12 +1850,8 @@ impl SuiClientCommands {
 
                 build_config.implicit_dependencies = implicit_deps(latest_system_packages());
                 let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
-                let chain_id = context
-                    .get_client()
-                    .await?
-                    .read_api()
-                    .get_chain_identifier()
-                    .await?;
+                let client = context.get_client().await?;
+                let chain_id = client.read_api().get_chain_identifier().await?;
                 let compiled_package = BuildConfig {
                     config: build_config,
                     run_bytecode_verifier: true,

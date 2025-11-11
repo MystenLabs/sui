@@ -6,7 +6,7 @@
 // `balance::send_funds` is callable from PTBs, then confirm the receiver transitions through
 // allowed, denied-after-epoch, and re-enabled states.
 
-//# init --accounts A B --addresses test=0x0 --enable-accumulators --protocol-version 101
+//# init --accounts A B --addresses test=0x0 --enable-accumulators
 
 //# publish --sender A
 module test::regulated_coin;

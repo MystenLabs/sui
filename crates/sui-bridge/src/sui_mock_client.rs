@@ -25,7 +25,7 @@ use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
 
 use crate::sui_client::SuiClientInner;
-use crate::types::{BridgeAction, BridgeActionStatus, IsBridgePaused};
+use crate::types::{BridgeAction, BridgeActionStatus, IsBridgePaused, SuiEvents};
 
 /// Mock client used in test environments.
 #[allow(clippy::type_complexity)]
@@ -184,14 +184,19 @@ impl SuiClientInner for SuiMockClient {
     async fn get_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,
-    ) -> Result<Vec<SuiEvent>, Self::Error> {
+    ) -> Result<SuiEvents, Self::Error> {
         let events = self.events_by_tx_digest.lock().unwrap();
 
         match events
             .get(&tx_digest)
             .unwrap_or_else(|| panic!("No preset events found for tx_digest: {:?}", tx_digest))
         {
-            Ok(events) => Ok(events.clone()),
+            Ok(events) => Ok(SuiEvents {
+                transaction_digest: tx_digest,
+                checkpoint: None,
+                timestamp_ms: None,
+                events: events.clone(),
+            }),
             // sui_sdk::error::Error is not Clone
             Err(_) => Err(sui_sdk::error::Error::DataError("".to_string())),
         }

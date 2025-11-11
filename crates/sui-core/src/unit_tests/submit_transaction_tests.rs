@@ -27,7 +27,7 @@ use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
-use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
+use crate::consensus_test_utils::make_consensus_adapter_for_test;
 use crate::execution_scheduler::SchedulingSource;
 use crate::mock_consensus::with_block_status;
 

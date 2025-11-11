@@ -10,7 +10,8 @@ use clap::{Args, Parser};
 use move_compiler::editions::Flavor;
 use move_core_types::parsing::{
     parser::Parser as MoveCLParser,
-    parser::{parse_u64, parse_u256},
+    parser::{Token, parse_u64, parse_u256},
+    types::{ParsedType, TypeToken},
     values::ValueToken,
     values::{ParsableValue, ParsedValue},
 };
@@ -19,11 +20,15 @@ use move_core_types::u256::U256;
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::tasks::{RunCommand, SyntaxChoice};
 use sui_graphql_rpc::test_infra::cluster::SnapshotLagConfig;
+use sui_types::balance::Balance;
 use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::move_package::UpgradePolicy;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{Argument, CallArg, ObjectArg, SharedObjectMutability};
+use sui_types::transaction::{
+    Argument, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability,
+};
+use sui_types::type_input::TypeInput;
 
 pub const SUI_ARGS_LONG: &str = "sui-args";
 
@@ -93,12 +98,17 @@ pub struct SuiInitArgs {
     /// Enable references in PTBs
     #[clap(long = "allow-references-in-ptbs")]
     pub allow_references_in_ptbs: bool,
+    /// Enable non-exclusive write objects for testing
+    #[clap(long = "enable-non-exclusive-write-objects")]
+    pub enable_non_exclusive_writes: bool,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct ViewObjectCommand {
     #[clap(value_parser = parse_fake_id)]
     pub id: FakeID,
+    #[clap(long = "hide-contents")]
+    pub hide_contents: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -407,6 +417,8 @@ pub enum SuiExtraValueArgs {
     Digest(String),
     Receiving(FakeID, Option<SequenceNumber>),
     ImmShared(FakeID, Option<SequenceNumber>),
+    NonExclusiveWrite(FakeID, Option<SequenceNumber>),
+    Withdraw(u64, ParsedType),
 }
 
 #[derive(Clone)]
@@ -417,6 +429,8 @@ pub enum SuiValue {
     Digest(String),
     Receiving(FakeID, Option<SequenceNumber>),
     ImmShared(FakeID, Option<SequenceNumber>),
+    NonExclusiveWrite(FakeID, Option<SequenceNumber>),
+    Withdraw(u64, move_core_types::language_storage::TypeTag),
 }
 
 impl SuiExtraValueArgs {
@@ -441,6 +455,13 @@ impl SuiExtraValueArgs {
         Ok(SuiExtraValueArgs::ImmShared(fake_id, version))
     }
 
+    fn parse_non_exlucsive_write_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
+    ) -> anyhow::Result<Self> {
+        let (fake_id, version) = Self::parse_receiving_or_object_value(parser, "nonexclusive")?;
+        Ok(SuiExtraValueArgs::NonExclusiveWrite(fake_id, version))
+    }
+
     fn parse_digest_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
         parser: &mut MoveCLParser<'a, ValueToken, I>,
     ) -> anyhow::Result<Self> {
@@ -450,6 +471,75 @@ impl SuiExtraValueArgs {
         let package = parser.advance(ValueToken::Ident)?;
         parser.advance(ValueToken::RParen)?;
         Ok(SuiExtraValueArgs::Digest(package.to_owned()))
+    }
+
+    fn parse_withdraw_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
+    ) -> anyhow::Result<Self> {
+        let contents = parser.advance(ValueToken::Ident)?;
+        ensure!(contents == "withdraw");
+
+        // Format: withdraw<Type>(amount)
+        parser.advance(ValueToken::LAngle)?;
+
+        // Parse type - collect all tokens until we hit the matching RAngle
+        // Need to track nesting level for types like Balance<Coin<SUI>>
+        let mut type_parts = Vec::new();
+        let mut angle_bracket_depth = 1; // We already consumed the opening <
+        loop {
+            let (tok, s) = match parser.peek() {
+                Some(v) => v,
+                None => bail!("Unexpected end of input while parsing withdraw type"),
+            };
+            match tok {
+                ValueToken::Whitespace => {
+                    parser.advance(ValueToken::Whitespace)?;
+                    // Skip whitespace
+                }
+                ValueToken::Ident => {
+                    parser.advance(ValueToken::Ident)?;
+                    type_parts.push(s.to_string());
+                }
+                ValueToken::ColonColon => {
+                    parser.advance(ValueToken::ColonColon)?;
+                    type_parts.push("::".to_string());
+                }
+                ValueToken::LAngle => {
+                    parser.advance(ValueToken::LAngle)?;
+                    type_parts.push("<".to_string());
+                    angle_bracket_depth += 1;
+                }
+                ValueToken::RAngle => {
+                    parser.advance(ValueToken::RAngle)?;
+                    angle_bracket_depth -= 1;
+                    if angle_bracket_depth == 0 {
+                        // This is the closing > for withdraw<Type>
+                        break;
+                    }
+                    type_parts.push(">".to_string());
+                }
+                ValueToken::Comma => {
+                    parser.advance(ValueToken::Comma)?;
+                    type_parts.push(",".to_string());
+                }
+                _ => bail!("Unexpected token {:?} while parsing withdraw type", tok),
+            }
+        }
+
+        let type_str = type_parts.join("");
+
+        // Parse the type from the type string
+        let type_tokens: Vec<_> = TypeToken::tokenize(&type_str)?.into_iter().collect();
+        let mut type_parser = move_core_types::parsing::parser::Parser::new(type_tokens);
+        let parsed_type = type_parser.parse_type()?;
+
+        // Now parse (amount)
+        parser.advance(ValueToken::LParen)?;
+        let amount_str = parser.advance(ValueToken::Number)?;
+        let (amount, _) = parse_u64(amount_str)?;
+        parser.advance(ValueToken::RParen)?;
+
+        Ok(SuiExtraValueArgs::Withdraw(amount, parsed_type))
     }
 
     fn parse_receiving_or_object_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
@@ -497,6 +587,12 @@ impl SuiValue {
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
             SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
             SuiValue::ImmShared(_, _) => panic!("unexpected nested Sui shared object in args"),
+            SuiValue::NonExclusiveWrite(_, _) => {
+                panic!("unexpected nested Sui non-exclusive write object in args")
+            }
+            SuiValue::Withdraw(_, _) => {
+                panic!("unexpected nested Sui withdraw reservation in args")
+            }
         }
     }
 
@@ -508,6 +604,12 @@ impl SuiValue {
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
             SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
             SuiValue::ImmShared(_, _) => panic!("unexpected nested Sui shared object in args"),
+            SuiValue::NonExclusiveWrite(_, _) => {
+                panic!("unexpected nested Sui non-exclusive write object in args")
+            }
+            SuiValue::Withdraw(_, _) => {
+                panic!("unexpected nested Sui withdraw reservation in args")
+            }
         }
     }
 
@@ -546,6 +648,33 @@ impl SuiValue {
         version: Option<SequenceNumber>,
         test_adapter: &SuiTestAdapter,
     ) -> anyhow::Result<ObjectArg> {
+        Self::shared_arg_impl(
+            fake_id,
+            version,
+            test_adapter,
+            SharedObjectMutability::Immutable,
+        )
+    }
+
+    fn non_exclusive_write_arg(
+        fake_id: FakeID,
+        version: Option<SequenceNumber>,
+        test_adapter: &SuiTestAdapter,
+    ) -> anyhow::Result<ObjectArg> {
+        Self::shared_arg_impl(
+            fake_id,
+            version,
+            test_adapter,
+            SharedObjectMutability::NonExclusiveWrite,
+        )
+    }
+
+    fn shared_arg_impl(
+        fake_id: FakeID,
+        version: Option<SequenceNumber>,
+        test_adapter: &SuiTestAdapter,
+        mutability: SharedObjectMutability,
+    ) -> anyhow::Result<ObjectArg> {
         let obj = Self::resolve_object(fake_id, version, test_adapter)?;
         let id = obj.id();
         if let Owner::Shared {
@@ -555,7 +684,7 @@ impl SuiValue {
             Ok(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutability: SharedObjectMutability::Immutable,
+                mutability,
             })
         } else {
             bail!("{fake_id} is not a shared object.")
@@ -600,6 +729,9 @@ impl SuiValue {
             SuiValue::ImmShared(fake_id, version) => {
                 CallArg::Object(Self::read_shared_arg(fake_id, version, test_adapter)?)
             }
+            SuiValue::NonExclusiveWrite(fake_id, version) => CallArg::Object(
+                Self::non_exclusive_write_arg(fake_id, version, test_adapter)?,
+            ),
             SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
             SuiValue::Digest(pkg) => {
                 let pkg = Symbol::from(pkg);
@@ -607,6 +739,22 @@ impl SuiValue {
                     bail!("Unbound staged package '{pkg}'")
                 };
                 CallArg::Pure(bcs::to_bytes(&staged.digest).unwrap())
+            }
+            SuiValue::Withdraw(amount, type_tag) => {
+                // Check if the type is Balance<T> and extract the inner type T
+                // For now, we only support Balance type for withdraw
+                let inner_type =
+                    Balance::maybe_get_balance_type_param(&type_tag).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Withdraw only supports Balance<T> types, got: {}",
+                            type_tag
+                        )
+                    })?;
+                let inner_type_input = TypeInput::from(inner_type);
+                CallArg::FundsWithdrawal(FundsWithdrawalArg::balance_from_sender(
+                    amount,
+                    inner_type_input,
+                ))
             }
         })
     }
@@ -641,6 +789,10 @@ impl ParsableValue for SuiExtraValueArgs {
             (ValueToken::Ident, "digest") => Some(Self::parse_digest_value(parser)),
             (ValueToken::Ident, "receiving") => Some(Self::parse_receiving_value(parser)),
             (ValueToken::Ident, "immshared") => Some(Self::parse_read_shared_value(parser)),
+            (ValueToken::Ident, "nonexclusive") => {
+                Some(Self::parse_non_exlucsive_write_value(parser))
+            }
+            (ValueToken::Ident, "withdraw") => Some(Self::parse_withdraw_value(parser)),
             _ => None,
         }
     }
@@ -669,13 +821,20 @@ impl ParsableValue for SuiExtraValueArgs {
 
     fn into_concrete_value(
         self,
-        _mapping: &impl Fn(&str) -> Option<move_core_types::account_address::AccountAddress>,
+        mapping: &impl Fn(&str) -> Option<move_core_types::account_address::AccountAddress>,
     ) -> anyhow::Result<Self::ConcreteValue> {
         match self {
             SuiExtraValueArgs::Object(id, version) => Ok(SuiValue::Object(id, version)),
             SuiExtraValueArgs::Digest(pkg) => Ok(SuiValue::Digest(pkg)),
             SuiExtraValueArgs::Receiving(id, version) => Ok(SuiValue::Receiving(id, version)),
             SuiExtraValueArgs::ImmShared(id, version) => Ok(SuiValue::ImmShared(id, version)),
+            SuiExtraValueArgs::NonExclusiveWrite(id, version) => {
+                Ok(SuiValue::NonExclusiveWrite(id, version))
+            }
+            SuiExtraValueArgs::Withdraw(amount, parsed_type) => {
+                let type_tag = parsed_type.into_type_tag(mapping)?;
+                Ok(SuiValue::Withdraw(amount, type_tag))
+            }
         }
     }
 }

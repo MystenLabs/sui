@@ -158,7 +158,8 @@ impl StateReader {
                     Some(info.object_types),
                 )
             } else {
-                (None, None, None)
+                let checkpoint = self.inner().get_transaction_checkpoint(&(digest.into()));
+                (checkpoint, None, None)
             };
         let timestamp_ms = if let Some(checkpoint) = checkpoint {
             self.inner()

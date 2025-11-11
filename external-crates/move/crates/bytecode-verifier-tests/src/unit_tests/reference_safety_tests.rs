@@ -360,7 +360,7 @@ fn test_merge_state() {
     );
     assert_eq!(
         result.unwrap_err().major_status(),
-        StatusCode::CONSTRAINT_NOT_SATISFIED
+        StatusCode::PROGRAM_TOO_COMPLEX
     );
 }
 

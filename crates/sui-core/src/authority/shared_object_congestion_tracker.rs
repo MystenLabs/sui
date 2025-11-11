@@ -327,7 +327,7 @@ impl SharedObjectCongestionTracker {
         let end_cost = start_cost.saturating_add(tx_cost);
 
         for obj in shared_input_objects {
-            if obj.mutability.is_mutable() {
+            if obj.is_accessed_exclusively() {
                 let old_end_cost = self.object_execution_cost.insert(obj.id, end_cost);
                 assert!(old_end_cost.is_none() || old_end_cost.unwrap() <= end_cost);
             }
@@ -765,6 +765,7 @@ mod object_cost_tests {
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
                 default_none_duration_for_new_keys: false,
+                observations_chunk_size: None,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -909,6 +910,7 @@ mod object_cost_tests {
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
                 default_none_duration_for_new_keys: false,
+                observations_chunk_size: None,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -1097,6 +1099,7 @@ mod object_cost_tests {
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
                 default_none_duration_for_new_keys: false,
+                observations_chunk_size: None,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -1307,6 +1310,7 @@ mod object_cost_tests {
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
                 default_none_duration_for_new_keys: false,
+                observations_chunk_size: None,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -1504,6 +1508,7 @@ mod object_cost_tests {
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
                 default_none_duration_for_new_keys: false,
+                observations_chunk_size: None,
             }),
         )]
         mode: PerObjectCongestionControlMode,
