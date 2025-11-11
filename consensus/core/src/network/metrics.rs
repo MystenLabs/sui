@@ -18,7 +18,6 @@ pub(crate) struct NetworkMetrics {
     pub(crate) outbound: Arc<NetworkRouteMetrics>,
     #[cfg_attr(msim, allow(dead_code))]
     pub(crate) tcp_connection_metrics: Arc<TcpConnectionMetrics>,
-    pub(crate) quinn_connection_metrics: Arc<QuinnConnectionMetrics>,
 }
 
 impl NetworkMetrics {
@@ -34,7 +33,6 @@ impl NetworkMetrics {
             inbound: Arc::new(NetworkRouteMetrics::new("", "inbound", registry)),
             outbound: Arc::new(NetworkRouteMetrics::new("", "outbound", registry)),
             tcp_connection_metrics: Arc::new(TcpConnectionMetrics::new(registry)),
-            quinn_connection_metrics: Arc::new(QuinnConnectionMetrics::new("", registry)),
         }
     }
 }

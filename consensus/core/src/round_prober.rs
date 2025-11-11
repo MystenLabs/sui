@@ -279,10 +279,6 @@ mod test {
             unimplemented!()
         }
 
-        fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
-            unimplemented!()
-        }
-
         fn set_propagation_delay(&self, _propagation_delay: Round) -> Result<(), CoreError> {
             Ok(())
         }
