@@ -1925,7 +1925,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // - If the protocol flag is not set, a validator can still use the new commit handler by
         //   setting `SUI_USE_NEW_COMMIT_HANDLER` in the environment. This is so that we can test the
         //   new commit handler in prod before it is fully deployed.
-        let use_new_commit_handler = if in_test_configuration() {
+        let use_new_commit_handler = if self.epoch_store.protocol_config().use_new_commit_handler()
+        {
+            true
+        } else if in_test_configuration() {
             let name = self.epoch_store.name;
             let authority_index = self.epoch_store.committee().authority_index(&name).unwrap();
             authority_index < 2
@@ -1933,8 +1936,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .epoch_store
                     .epoch_start_config()
                     .use_commit_handler_v2()
-        } else if self.epoch_store.protocol_config().use_new_commit_handler() {
-            true
         } else {
             self.epoch_store
                 .epoch_start_config()
