@@ -52,7 +52,7 @@ mod test_dag_parser;
 mod randomized_tests;
 
 /// Exported Consensus API.
-pub use authority_node::ConsensusAuthority;
+pub use authority_node::{ConsensusAuthority, NetworkType};
 pub use block::{BlockAPI, CertifiedBlock, CertifiedBlocksOutput};
 
 /// Exported API for testing and tools.
