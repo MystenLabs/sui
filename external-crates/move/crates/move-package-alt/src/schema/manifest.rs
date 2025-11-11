@@ -683,7 +683,7 @@ mod tests {
         assert_snapshot!(error, @r###"
         TOML parse error at line 1, column 1
           |
-        1 |
+        1 | 
           | ^
         missing field `package`
         "###);

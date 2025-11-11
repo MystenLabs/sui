@@ -760,6 +760,7 @@ mod tests {
         name = "a"
         edition = "2024"
 
+
         [environments]
         _test_env = "_test_env_id"
 
@@ -800,6 +801,7 @@ mod tests {
         [package]
         name = "a"
         edition = "2024"
+
 
         [environments]
         _test_env = "_test_env_id"
@@ -873,7 +875,7 @@ mod tests {
         [package]
         name = "B"
         edition = "2024"
-        implicit-dependencies = false
+
 
 
         [dependencies]
@@ -917,6 +919,7 @@ mod tests {
         [package]
         name = "root"
         edition = "2024"
+
 
         [environments]
         _test_env = "_test_env_id"
