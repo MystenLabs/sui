@@ -29,11 +29,6 @@ pub(crate) struct AvailableRange {
     pub(crate) first: u64,
 }
 
-/// Collected pipelines for computing available range
-pub(crate) struct Pipelines {
-    pub(crate) pipelines: BTreeSet<String>,
-}
-
 /// Checkpoint range for which data is available.
 #[Object]
 impl AvailableRange {
@@ -62,8 +57,7 @@ impl AvailableRange {
         available_range_key: AvailableRangeKey,
     ) -> Result<Self, RpcError> {
         let watermarks: &Arc<Watermarks> = ctx.data()?;
-        let pipelines = Pipelines::from_available_range_key(available_range_key);
-        let first = pipelines.reader_lo(watermarks)?;
+        let first = available_range_key.reader_lo(watermarks);
 
         Ok(Self {
             scope: scope.clone(),
@@ -72,31 +66,32 @@ impl AvailableRange {
     }
 }
 
-impl Pipelines {
-    /// The checkpoint reader_lo across across all pipelines
-    pub(crate) fn reader_lo(&self, watermarks: &Watermarks) -> Result<u64, RpcError> {
-        self.pipelines.iter().try_fold(0, |acc, pipeline| {
-            watermarks
-                .pipeline_lo_watermark(pipeline)
-                .map(|wm| acc.max(wm.checkpoint()))
-        })
-    }
-
-    pub fn from_available_range_key(available_range_key: AvailableRangeKey) -> Self {
+impl AvailableRangeKey {
+    /// The max reader_lo for the pipelines that match the available range key.
+    pub(crate) fn reader_lo(self, watermarks: &Watermarks) -> u64 {
         let mut pipelines = BTreeSet::new();
+        let filters = self.filters.clone().unwrap_or_default();
         collect_pipelines(
-            &available_range_key.type_,
-            available_range_key.field.as_deref(),
-            BTreeSet::from_iter(available_range_key.filters.unwrap_or_default()),
+            &self.type_,
+            self.field.as_deref(),
+            BTreeSet::from_iter(filters),
             &mut pipelines,
         );
-        Self { pipelines }
+        pipelines.iter().fold(0, |acc, pipeline| {
+            if let Some(wm) = watermarks.pipeline_lo_watermark(pipeline) {
+                acc.max(wm.checkpoint())
+            } else {
+                tracing::warn!(
+                    pipeline = %pipeline,
+                    type_ = %self.type_,
+                    field = ?self.field,
+                    filters = ?self.filters.as_ref().map(|f| f.join(", ")),
+                    "Pipeline is not being tracked in watermarks, add this pipeline to the configuration to get an accurate available range."
+                );
+                acc
+            }
+        })
     }
-}
-
-/// Trait to convert filter types to Pipelines. Filter types contain information about the type, field, and filters to convert to Pipelines.
-pub(crate) trait ToPipelines {
-    fn to_pipelines(&self, type_: impl Into<String>, field: impl Into<String>) -> Pipelines;
 }
 
 /// Expands a series of type/field/filter patterns to generate the collect_pipelines function and collects macro invocation data into

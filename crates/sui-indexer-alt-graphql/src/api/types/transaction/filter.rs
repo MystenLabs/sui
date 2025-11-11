@@ -6,10 +6,7 @@ use async_graphql::{CustomValidator, Enum, InputObject, InputValueError};
 use crate::{
     api::{
         scalars::{fq_name_filter::FqNameFilter, sui_address::SuiAddress, uint53::UInt53},
-        types::{
-            available_range::{AvailableRangeKey, Pipelines, ToPipelines},
-            lookups::CheckpointBounds,
-        },
+        types::lookups::CheckpointBounds,
     },
     intersect,
 };
@@ -101,25 +98,9 @@ impl TransactionFilter {
             sent_address: intersect!(sent_address, intersect::by_eq)?,
         })
     }
-}
 
-impl CheckpointBounds for TransactionFilter {
-    fn after_checkpoint(&self) -> Option<UInt53> {
-        self.after_checkpoint
-    }
-
-    fn at_checkpoint(&self) -> Option<UInt53> {
-        self.at_checkpoint
-    }
-
-    fn before_checkpoint(&self) -> Option<UInt53> {
-        self.before_checkpoint
-    }
-}
-
-impl ToPipelines for TransactionFilter {
-    fn to_pipelines(&self, type_: impl Into<String>, field: impl Into<String>) -> Pipelines {
-        let mut filters = Vec::new();
+    pub(crate) fn active_filters(&self) -> Vec<String> {
+        let mut filters = vec![];
 
         if self.affected_address.is_some() {
             filters.push("affectedAddress".to_string());
@@ -146,11 +127,20 @@ impl ToPipelines for TransactionFilter {
             filters.push("beforeCheckpoint".to_string());
         }
 
-        let key = AvailableRangeKey {
-            type_: type_.into(),
-            field: Some(field.into()),
-            filters: Some(filters),
-        };
-        Pipelines::from_available_range_key(key)
+        filters
+    }
+}
+
+impl CheckpointBounds for TransactionFilter {
+    fn after_checkpoint(&self) -> Option<UInt53> {
+        self.after_checkpoint
+    }
+
+    fn at_checkpoint(&self) -> Option<UInt53> {
+        self.at_checkpoint
+    }
+
+    fn before_checkpoint(&self) -> Option<UInt53> {
+        self.before_checkpoint
     }
 }
