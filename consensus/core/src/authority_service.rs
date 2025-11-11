@@ -70,10 +70,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
-        let subscription_counter = Arc::new(SubscriptionCounter::new(
-            context.clone(),
-            core_dispatcher.clone(),
-        ));
+        let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
         Self {
             context,
             block_verifier,
@@ -599,16 +596,14 @@ struct Counter {
     subscriptions_by_authority: Vec<usize>,
 }
 
-/// Atomically counts the number of active subscriptions to the block broadcast stream,
-/// and dispatch commands to core based on the changes.
+/// Atomically counts the number of active subscriptions to the block broadcast stream.
 struct SubscriptionCounter {
     context: Arc<Context>,
     counter: parking_lot::Mutex<Counter>,
-    dispatcher: Arc<dyn CoreThreadDispatcher>,
 }
 
 impl SubscriptionCounter {
-    fn new(context: Arc<Context>, dispatcher: Arc<dyn CoreThreadDispatcher>) -> Self {
+    fn new(context: Arc<Context>) -> Self {
         // Set the subscribed peers by default to 0
         for (_, authority) in context.committee.authorities() {
             context
@@ -624,7 +619,6 @@ impl SubscriptionCounter {
                 count: 0,
                 subscriptions_by_authority: vec![0; context.committee.size()],
             }),
-            dispatcher,
             context,
         }
     }
@@ -642,11 +636,6 @@ impl SubscriptionCounter {
             .with_label_values(&[peer_hostname])
             .set(1);
 
-        if counter.count == 1 {
-            self.dispatcher
-                .set_subscriber_exists(true)
-                .map_err(|_| ConsensusError::Shutdown)?;
-        }
         Ok(())
     }
 
@@ -665,11 +654,6 @@ impl SubscriptionCounter {
                 .set(0);
         }
 
-        if counter.count == 0 {
-            self.dispatcher
-                .set_subscriber_exists(false)
-                .map_err(|_| ConsensusError::Shutdown)?;
-        }
         Ok(())
     }
 }
@@ -850,10 +834,6 @@ mod tests {
         }
 
         fn set_propagation_delay(&self, _propagation_delay: Round) -> Result<(), CoreError> {
-            todo!()
-        }
-
-        fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
             todo!()
         }
 

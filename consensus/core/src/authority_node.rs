@@ -106,7 +106,6 @@ impl ConsensusAuthority {
             Self::WithTonic(authority) => &authority.context,
         }
     }
-
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -281,10 +280,6 @@ where
             tx_consumer,
             transaction_certifier.clone(),
             block_manager,
-            // For streaming RPC, Core will be notified when consumer is available.
-            // For non-streaming RPC, there is no way to know so default to true.
-            // When there is only one (this) authority, assume subscriber exists.
-            !N::Client::SUPPORT_STREAMING || context.committee.size() == 1,
             commit_observer,
             core_signals,
             protocol_keypair,
