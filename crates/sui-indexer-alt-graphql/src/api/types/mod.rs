@@ -35,6 +35,7 @@ pub(crate) mod open_move_type;
 pub(crate) mod owner;
 pub(crate) mod protocol_configs;
 pub(crate) mod safe_mode;
+pub(crate) mod scan;
 pub(crate) mod service_config;
 pub(crate) mod simulation_result;
 mod stake_subsidy;
