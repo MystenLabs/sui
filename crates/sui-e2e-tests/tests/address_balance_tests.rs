@@ -14,6 +14,7 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::effects::TransactionEffects;
 use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
     accumulator_metadata::AccumulatorOwner,
     accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
@@ -31,7 +32,6 @@ use sui_types::{
         Argument, Command, FundsWithdrawalArg, GasData, ObjectArg, Transaction, TransactionData,
         TransactionDataV1, TransactionExpiration, TransactionKind,
     },
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tonic::IntoRequest;
@@ -145,9 +145,11 @@ async fn test_accumulators_root_created() {
     // accumulator root is not created yet.
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        assert!(!state
-            .load_epoch_store_one_call_per_task()
-            .accumulator_root_exists());
+        assert!(
+            !state
+                .load_epoch_store_one_call_per_task()
+                .accumulator_root_exists()
+        );
     });
 
     test_cluster.trigger_reconfiguration().await;
@@ -156,9 +158,11 @@ async fn test_accumulators_root_created() {
     // but we didn't upgrade to the next protocol version yet.
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        assert!(state
-            .load_epoch_store_one_call_per_task()
-            .accumulator_root_exists());
+        assert!(
+            state
+                .load_epoch_store_one_call_per_task()
+                .accumulator_root_exists()
+        );
         assert_eq!(
             state
                 .load_epoch_store_one_call_per_task()
@@ -438,12 +442,14 @@ fn verify_accumulator_exists(
             .expect("read cannot fail")
             .expect("accumulator should exist");
 
-    assert!(accumulator_object
-        .data
-        .try_as_move()
-        .unwrap()
-        .type_()
-        .is_efficient_representation());
+    assert!(
+        accumulator_object
+            .data
+            .try_as_move()
+            .unwrap()
+            .type_()
+            .is_efficient_representation()
+    );
 
     let accumulator_value =
         AccumulatorValue::load(child_object_resolver, None, owner, &sui_coin_type)
@@ -2405,13 +2411,15 @@ async fn test_coin_reservation() {
     assert_eq!(last.coin_type, "0x2::sui::SUI");
     assert_eq!(last.balance, 1000);
 
-    dbg!(test_cluster
-        .fullnode_handle
-        .sui_client
-        .coin_read_api()
-        .get_coins(sender, Some("0x2::sui::SUI".to_string()), None, None)
-        .await
-        .unwrap());
+    dbg!(
+        test_cluster
+            .fullnode_handle
+            .sui_client
+            .coin_read_api()
+            .get_coins(sender, Some("0x2::sui::SUI".to_string()), None, None)
+            .await
+            .unwrap()
+    );
 
     // compute the sender's SUI accumulator object id
     let accumulator_obj_id = AccumulatorValue::get_field_id(
@@ -2445,9 +2453,10 @@ async fn test_coin_reservation() {
         let err = try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender, sender, gas)
             .await
             .unwrap_err();
-        assert!(err
-            .to_string()
-            .contains(format!("object id {} not found", random_id).as_str()));
+        assert!(
+            err.to_string()
+                .contains(format!("object id {} not found", random_id).as_str())
+        );
     }
 
     // Verify transaction is rejected if it is not valid in the current epoch.
@@ -2463,9 +2472,10 @@ async fn test_coin_reservation() {
         let err = try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender, sender, gas)
             .await
             .unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("Transaction not valid during this epoch"));
+        assert!(
+            err.to_string()
+                .contains("Transaction not valid during this epoch")
+        );
     }
 
     // Verify the transaction is rejected if the accumulator object is not owned by the sender.
@@ -2488,9 +2498,10 @@ async fn test_coin_reservation() {
         )
         .await
         .unwrap_err();
-        assert!(err
-            .to_string()
-            .contains(format!("is owned by {}, not sender {}", sender, sender2).as_str()));
+        assert!(
+            err.to_string()
+                .contains(format!("is owned by {}, not sender {}", sender, sender2).as_str())
+        );
     }
 
     // Finally, test a valid transfer

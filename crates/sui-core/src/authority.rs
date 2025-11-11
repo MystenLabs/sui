@@ -1035,7 +1035,7 @@ impl AuthorityState {
             tx_data.process_funds_withdrawals_for_signing(&self.coin_reservation_resolver)?;
 
         balance_checks::check_balances_available(
-            &self.execution_cache_trait_pointers.object_store,
+            &self.execution_cache_trait_pointers.child_object_resolver,
             &withdraws,
         )?;
 
@@ -4379,13 +4379,10 @@ impl AuthorityState {
         };
 
         let balance = self
-            .get_object_store()
-            .get_latest_account_balance(&accumulator_id)
-            .map(|b| b.0 as u64);
+            .get_child_object_resolver()
+            .get_latest_account_balance(&accumulator_id) as u64;
 
-        // We do two different loads above for simplicity, so it is possible that the accumulator exists
-        // during one but not both of the reads.
-        let Some(balance) = balance else {
+        if balance == 0 {
             return Ok(None);
         };
 

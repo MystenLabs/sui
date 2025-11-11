@@ -10,8 +10,7 @@ use crate::{
     digests::{Digest, TransactionDigest},
     dynamic_field::{
         BoundedDynamicFieldID, DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
-        DynamicFieldKey, DynamicFieldObject, Field, UnboundedDynamicFieldID,
-        serialize_dynamic_field,
+        DynamicFieldKey, DynamicFieldObject, Field, serialize_dynamic_field,
     },
     error::{SuiError, SuiErrorKind, SuiResult},
     object::{MoveObject, Object, Owner},

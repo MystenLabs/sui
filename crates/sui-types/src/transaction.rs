@@ -212,6 +212,13 @@ impl FundsWithdrawalArg {
             withdraw_from: WithdrawFrom::Sponsor,
         }
     }
+
+    fn owner_for_withdrawal(&self, tx: &impl TransactionDataAPI) -> SuiAddress {
+        match self.withdraw_from {
+            WithdrawFrom::Sender => tx.sender(),
+            WithdrawFrom::Sponsor => tx.gas_owner(),
+        }
+    }
 }
 
 fn type_input_validity_check(
@@ -2643,10 +2650,11 @@ impl TransactionDataAPI for TransactionDataV1 {
             // checked at signing time
             assert!(reserved_amount > 0);
 
-            let WithdrawFrom::Sender = withdraw.withdraw_from;
+            let withdrawal_owner = withdraw.owner_for_withdrawal(self);
+
             // unwrap checked at signing time
             let account_id = AccumulatorValue::get_field_id(
-                self.sender(),
+                withdrawal_owner,
                 &withdraw.type_arg.to_type_tag().unwrap(),
             )
             .unwrap();

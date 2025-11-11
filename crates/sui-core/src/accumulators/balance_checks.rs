@@ -18,14 +18,7 @@ pub(crate) fn check_balances_available(
     requested_balances: &BTreeMap<AccumulatorObjId, u64>,
 ) -> SuiResult<()> {
     for (object_id, requested_balance) in requested_balances {
-        let actual_balance = balance_read
-            .get_latest_account_balance(object_id)
-            .map(|(balance, _)| balance)
-            .ok_or_else(|| SuiErrorKind::UserInputError {
-                error: UserInputError::InvalidWithdrawReservation {
-                    error: format!("balance for object id {} is not found", object_id),
-                },
-            })?;
+        let actual_balance = balance_read.get_latest_account_balance(object_id);
 
         if actual_balance < *requested_balance as u128 {
             return Err(SuiErrorKind::UserInputError {
