@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::*;
-use std::{io::{self, BufRead, BufReader}, path::Path};
+use std::{
+    io::{self, BufRead, BufReader},
+    path::Path,
+};
 
 use move_package_alt::flavor::MoveFlavor;
 use move_package_alt_compilation::{build_config::BuildConfig, find_env};
