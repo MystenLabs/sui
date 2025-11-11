@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration, thread};
 
 use consensus_config::AuthorityIndex;
 use consensus_types::block::Round;
 use futures::StreamExt;
 use mysten_metrics::{monitored_mpsc, monitored_scope, spawn_monitored_task};
 use parking_lot::{Mutex, RwLock};
-use tokio::{task::{JoinHandle, JoinSet}, time::sleep};
+use tokio::{task::JoinHandle, time::sleep};
 use tracing::{debug, error, info, warn};
 
 use crate::{
@@ -200,46 +200,78 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                 let num_workers = context.committee.size();
                 let channel_capacity = 100;
 
-                // Spawn worker pool - each worker processes blocks independently
-                // Each worker gets its own channel to eliminate mutex contention
-                let mut workers = JoinSet::new();
+                // Create channels for each worker
                 let mut senders = Vec::new();
+                let mut receivers = Vec::new();
 
                 for worker_id in 0..num_workers {
-                    let (block_tx, mut block_rx) = monitored_mpsc::channel(
+                    let (block_tx, block_rx) = monitored_mpsc::channel(
                         &format!("subscriber_blocks_peer_{}_worker_{}", peer_hostname, worker_id),
                         channel_capacity,
                     );
                     senders.push(block_tx);
-
-                    let authority_service = authority_service.clone();
-                    let peer_hostname_clone = peer_hostname.to_string();
-
-                    workers.spawn(async move {
-                        while let Some(block) = block_rx.recv().await {
-                            let _scope = monitored_scope("SubscriberWorker::handle_block");
-
-                            let result = authority_service.handle_send_block(peer, block).await;
-                            if let Err(e) = result {
-                                match e {
-                                    ConsensusError::BlockRejected { block_ref, reason } => {
-                                        debug!(
-                                            "Worker {} failed to process block from peer {} for block {:?}: {}",
-                                            worker_id, peer_hostname_clone, block_ref, reason
-                                        );
-                                    }
-                                    _ => {
-                                        info!(
-                                            "Worker {} received invalid block from peer {}: {}",
-                                            worker_id, peer_hostname_clone, e
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                        debug!("Worker {} for peer {} shutting down", worker_id, peer_hostname_clone);
-                    });
+                    receivers.push(block_rx);
                 }
+
+                let authority_service_clone = authority_service.clone();
+                let peer_hostname_clone = peer_hostname.to_string();
+                let peer_hostname_for_thread = peer_hostname_clone.clone();
+
+                // Spawn a dedicated OS thread with its own tokio runtime for all workers
+                let worker_thread = thread::Builder::new()
+                    .name(format!("subscriber-worker-{}", peer_hostname))
+                    .spawn(move || {
+                        // Create a multi-threaded tokio runtime for this dedicated thread
+                        let rt = tokio::runtime::Builder::new_multi_thread()
+                            .worker_threads(num_workers)
+                            .thread_name_fn(move || {
+                                static ATOMIC_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+                                let id = ATOMIC_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                                format!("subscriber-worker-{}-{}", peer_hostname_for_thread, id)
+                            })
+                            .enable_all()
+                            .build()
+                            .expect("Failed to create worker runtime");
+
+                        rt.block_on(async move {
+                            let mut workers = tokio::task::JoinSet::new();
+
+                            // Spawn workers within the dedicated runtime, each with its own channel
+                            for (worker_id, mut block_rx) in receivers.into_iter().enumerate() {
+                                let authority_service = authority_service_clone.clone();
+                                let peer_hostname = peer_hostname_clone.clone();
+
+                                workers.spawn(async move {
+                                    while let Some(block) = block_rx.recv().await {
+                                        let _scope = monitored_scope("SubscriberWorker::handle_block");
+
+                                        let result = authority_service.handle_send_block(peer, block).await;
+                                        if let Err(e) = result {
+                                            match e {
+                                                ConsensusError::BlockRejected { block_ref, reason } => {
+                                                    debug!(
+                                                        "Worker {} failed to process block from peer {} for block {:?}: {}",
+                                                        worker_id, peer_hostname, block_ref, reason
+                                                    );
+                                                }
+                                                _ => {
+                                                    info!(
+                                                        "Worker {} received invalid block from peer {}: {}",
+                                                        worker_id, peer_hostname, e
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                    debug!("Worker {} for peer {} shutting down", worker_id, peer_hostname);
+                                });
+                            }
+
+                            // Wait for all workers to complete
+                            while workers.join_next().await.is_some() {}
+                        })
+                    })
+                    .expect("Failed to spawn worker thread");
 
                 let mut next_worker = 0;
 
@@ -306,8 +338,10 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                 // Signal workers to exit by dropping all senders
                 drop(senders);
 
-                // Wait for all workers to complete processing
-                while workers.join_next().await.is_some() {}
+                // Wait for worker thread to complete processing
+                if let Err(e) = worker_thread.join() {
+                    warn!("Worker thread panicked: {:?}", e);
+                }
             } else {
                 // Sequential processing for validators to maintain ordering
                 'stream: loop {
