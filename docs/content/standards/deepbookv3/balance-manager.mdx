@@ -63,6 +63,10 @@ The `new_with_custom_owner()` function creates a `BalanceManager` with a custom 
 
 The `new_with_custom_owner_and_caps()` function creates a `BalanceManager` with a custom owner and returns all three capabilities (`DepositCap`, `WithdrawCap`, and `TradeCap`) in a single call. Combine the balance manager with `share`, or else the transaction fails. This is a convenient way to set up a complete balance manager with all necessary capabilities in one transaction.
 
+:::caution
+Move code using DeepBookV3  uses `DepositCap`, `WithdrawCap`, and `TradeCap`, while the DeepBookV3 SDK uses `depositCap`, `withdrawCap`, and `tradeCap`.
+:::
+
 <ImportContent
 	source="packages/deepbook/sources/balance_manager.move"
 	mode="code"
