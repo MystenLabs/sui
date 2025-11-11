@@ -4244,12 +4244,6 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_poseidon = true;
                     }
-
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.enable_accumulators = true;
-                        cfg.feature_flags.create_root_accumulator_object = true;
-                        cfg.feature_flags.enable_coin_reservation = true;
-                    }
                 }
                 102 => {
                     // Enable execution time observation chunking and increase limit to 180.

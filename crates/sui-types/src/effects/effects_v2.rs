@@ -475,7 +475,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             ..
         } = &mut self.status
         {
-            *command += command_offset;
+            *command = command.saturating_sub(command_offset);
         }
     }
 

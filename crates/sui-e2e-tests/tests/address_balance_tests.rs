@@ -116,77 +116,6 @@ fn create_transaction_with_expiration(
     })
 }
 
-// Test protocol gating of accumulator root creation. This test can be deleted after the feature
-// is released.
-#[cfg_attr(not(msim), ignore)]
-#[sim_test]
-async fn test_accumulators_root_created() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut cfg| {
-        if version >= ProtocolVersion::MAX {
-            cfg.create_root_accumulator_object_for_testing();
-            // for some reason all 4 nodes are not reliably submitting capability messages
-            cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
-        }
-        if version == ProtocolVersion::MAX_ALLOWED {
-            cfg.enable_accumulators_for_testing();
-        }
-        cfg
-    });
-
-    let test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
-            ProtocolVersion::MAX.as_u64(),
-            ProtocolVersion::MAX_ALLOWED.as_u64(),
-        ))
-        .build()
-        .await;
-
-    // accumulator root is not created yet.
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        assert!(
-            !state
-                .load_epoch_store_one_call_per_task()
-                .accumulator_root_exists()
-        );
-    });
-
-    test_cluster.trigger_reconfiguration().await;
-
-    // accumulator root was created at the end of previous epoch,
-    // but we didn't upgrade to the next protocol version yet.
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        assert!(
-            state
-                .load_epoch_store_one_call_per_task()
-                .accumulator_root_exists()
-        );
-        assert_eq!(
-            state
-                .load_epoch_store_one_call_per_task()
-                .protocol_config()
-                .version,
-            ProtocolVersion::MAX
-        );
-    });
-
-    // now we can upgrade to the next protocol version.
-    test_cluster.trigger_reconfiguration().await;
-
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        assert_eq!(
-            state
-                .load_epoch_store_one_call_per_task()
-                .protocol_config()
-                .version,
-            ProtocolVersion::MAX_ALLOWED
-        );
-    });
-}
-
 // Test protocol gating of address balances. This test can be deleted after the feature
 // is released.
 #[cfg_attr(not(msim), ignore)]
@@ -2411,15 +2340,13 @@ async fn test_coin_reservation() {
     assert_eq!(last.coin_type, "0x2::sui::SUI");
     assert_eq!(last.balance, 1000);
 
-    dbg!(
-        test_cluster
-            .fullnode_handle
-            .sui_client
-            .coin_read_api()
-            .get_coins(sender, Some("0x2::sui::SUI".to_string()), None, None)
-            .await
-            .unwrap()
-    );
+    //test_cluster
+    //    .fullnode_handle
+    //    .sui_client
+    //    .coin_read_api()
+    //    .get_coins(sender, Some("0x2::sui::SUI".to_string()), None, None)
+    //    .await
+    //    .unwrap();
 
     // compute the sender's SUI accumulator object id
     let accumulator_obj_id = AccumulatorValue::get_field_id(
