@@ -3,7 +3,11 @@
 
 use diesel_migrations::{EmbeddedMigrations, embed_migrations};
 
+pub mod blooms;
 pub mod checkpoints;
+pub mod cp_bloom_blocks;
+pub mod cp_bloom_items_wal;
+pub mod cp_blooms;
 pub mod cp_sequence_numbers;
 pub mod displays;
 pub mod epochs;

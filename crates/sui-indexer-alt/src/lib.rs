@@ -6,12 +6,12 @@ use anyhow::Context;
 use bootstrap::bootstrap;
 use config::{IndexerConfig, PipelineLayer};
 use handlers::{
-    coin_balance_buckets::CoinBalanceBuckets, cp_sequence_numbers::CpSequenceNumbers,
-    ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
-    kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
-    kv_objects::KvObjects, kv_packages::KvPackages, kv_protocol_configs::KvProtocolConfigs,
-    kv_transactions::KvTransactions, obj_info::ObjInfo, obj_versions::ObjVersions,
-    sum_displays::SumDisplays, tx_affected_addresses::TxAffectedAddresses,
+    coin_balance_buckets::CoinBalanceBuckets, cp_blooms::CpBlooms, cp_bloom_blocks::CpBloomBlocks, cp_sequence_numbers::CpSequenceNumbers,
+    ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst,
+    kv_checkpoints::KvCheckpoints, kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts,
+    kv_feature_flags::KvFeatureFlags, kv_objects::KvObjects, kv_packages::KvPackages,
+    kv_protocol_configs::KvProtocolConfigs, kv_transactions::KvTransactions, obj_info::ObjInfo,
+    obj_versions::ObjVersions, sum_displays::SumDisplays, tx_affected_addresses::TxAffectedAddresses,
     tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
     tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
 };
@@ -56,6 +56,8 @@ pub async fn setup_indexer(
     let PipelineLayer {
         sum_displays,
         coin_balance_buckets,
+        cp_blooms,
+        cp_bloom_blocks,
         cp_sequence_numbers,
         ev_emit_mod,
         ev_struct_inst,
@@ -168,7 +170,11 @@ pub async fn setup_indexer(
     add_concurrent!(ObjInfo, obj_info);
 
     // Unpruned concurrent pipelines
+    add_concurrent!(CpBlooms, cp_blooms);
     add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
+
+    // Sequential pipeline to prevent concurrent overlapping batches
+    add_sequential!(CpBloomBlocks, cp_bloom_blocks);
     add_concurrent!(EvEmitMod, ev_emit_mod);
     add_concurrent!(EvStructInst, ev_struct_inst);
     add_concurrent!(KvCheckpoints, kv_checkpoints);
