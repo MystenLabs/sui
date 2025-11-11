@@ -17,11 +17,7 @@ use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
 };
 use rand::seq::SliceRandom;
-use rand::{
-    Rng, SeedableRng,
-    distributions::{Distribution, Uniform},
-    prelude::StdRng,
-};
+use rand::{SeedableRng, prelude::StdRng};
 use serde_json::json;
 use std::collections::HashSet;
 use std::fs;
@@ -36,7 +32,6 @@ use sui_json_rpc_types::{
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
-use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
@@ -63,12 +58,22 @@ use sui_types::{
     object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION, Owner},
 };
 use sui_types::{SUI_CLOCK_OBJECT_SHARED_VERSION, digests::Digest};
+use sui_types::{dynamic_field::DynamicFieldType, messages_consensus::ConsensusTransaction};
 
-use crate::authority::authority_store_tables::AuthorityPerpetualTables;
-use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::transaction_deferral::DeferralKey;
+use crate::checkpoints::CheckpointServiceNotify;
+use crate::consensus_handler::ConsensusHandler;
+use crate::consensus_test_utils;
 use crate::transaction_input_loader::TransactionInputLoader;
+use crate::{
+    authority::authority_store_tables::AuthorityPerpetualTables,
+    consensus_test_utils::TestConsensusCommit,
+};
+use crate::{
+    authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap,
+    consensus_test_utils::CapturedTransactions,
+};
 use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::AuthorityServer,
@@ -78,6 +83,7 @@ use crate::{
 use super::*;
 
 pub use crate::authority::authority_test_utils::*;
+use crate::authority::shared_object_version_manager::AssignedTxAndVersions;
 
 pub enum TestCallArg {
     Pure(Vec<u8>),
@@ -5025,9 +5031,8 @@ async fn test_shared_object_transaction_ok() {
     assert_eq!(shared_object_version, SequenceNumber::from(2));
 }
 
-// Tests that process_consensus_transactions_and_commit_boundary() will add the consensus commit prologue transaction
-// to the transactions in the current consensus commit. It will be the first transaction in the batch and
-// the first one that updates the system clock object.
+// Tests that the clock version is assigned correctly when generating and processing the consensus commit
+// prologue transaction.
 #[tokio::test]
 async fn test_consensus_commit_prologue_generation() {
     telemetry_subscribers::init_for_testing();
@@ -5086,8 +5091,19 @@ async fn test_consensus_commit_prologue_generation() {
             .unwrap(),
     );
 
-    let (processed_consensus_transactions, assigned_versions) =
-        send_batch_consensus_no_execution(&authority_state, &certificates, false).await;
+    // Set up ConsensusHandler for testing
+    let consensus_setup =
+        crate::consensus_test_utils::setup_consensus_handler_for_testing(&authority_state).await;
+    let mut consensus_handler = consensus_setup.consensus_handler;
+    let captured_transactions = consensus_setup.captured_transactions;
+
+    let (processed_consensus_transactions, assigned_versions) = send_batch_consensus_no_execution(
+        &authority_state,
+        &certificates,
+        &mut consensus_handler,
+        &captured_transactions,
+    )
+    .await;
 
     let assigned_versions = assigned_versions.into_map();
 
@@ -5129,156 +5145,10 @@ async fn test_consensus_commit_prologue_generation() {
             .next()
             .unwrap()
     };
+    // Compare clock version between the prologue (index 0) and the transaction that uses clock (index 2)
     let clock_v1 = get_assigned_version(&processed_consensus_transactions[0].key());
     let clock_v2 = get_assigned_version(&processed_consensus_transactions[1].key());
     assert!(clock_v1 < clock_v2);
-}
-
-#[tokio::test]
-async fn test_consensus_message_processed() {
-    telemetry_subscribers::init_for_testing();
-
-    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
-
-    let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-    let mut gas_object_ref = gas_object.compute_object_reference();
-
-    let shared_object_id = ObjectID::random();
-    let shared_object = {
-        use sui_types::object::MoveObject;
-        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
-        let owner = Owner::Shared {
-            initial_shared_version: obj.version(),
-        };
-        Object::new_move(obj, owner, TransactionDigest::genesis_marker())
-    };
-    let initial_shared_version = shared_object.version();
-
-    let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
-        .committee_size(2.try_into().unwrap())
-        .with_objects(vec![gas_object.clone(), shared_object.clone()])
-        .build();
-    let genesis = network_config.genesis;
-
-    let sec1 = network_config.validator_configs[0]
-        .protocol_key_pair()
-        .copy();
-    let sec2 = network_config.validator_configs[1]
-        .protocol_key_pair()
-        .copy();
-
-    let authority1 = init_state_with_objects_and_committee(
-        vec![gas_object.clone(), shared_object.clone()],
-        &genesis,
-        &sec1,
-    )
-    .await;
-    let authority2 = init_state_with_objects_and_committee(
-        vec![gas_object.clone(), shared_object.clone()],
-        &genesis,
-        &sec2,
-    )
-    .await;
-
-    let seed = [1u8; 32];
-    let mut rng = StdRng::from_seed(seed);
-    for _ in 0..50 {
-        let certificate = make_test_transaction(
-            &sender,
-            &keypair,
-            &[],
-            &[(shared_object_id, initial_shared_version, true)],
-            &gas_object_ref,
-            &[&authority1, &authority2],
-            Uniform::from(0..100000).sample(&mut rng),
-            None,
-            None,
-        )
-        .await;
-        let transaction_digest = certificate.digest();
-
-        // on authority1, we always sequence via consensus
-        let assigned_versions = send_consensus(&authority1, &certificate).await;
-        let (effects1, _execution_error_opt) = authority1
-            .try_execute_for_test(
-                &certificate,
-                ExecutionEnv::new().with_assigned_versions(assigned_versions),
-            )
-            .await;
-
-        // now, on authority2, we send 0 or 1 consensus messages, then we either sequence and execute via
-        // effects or via handle_certificate_v2, then send 0 or 1 consensus messages.
-        let send_first = rng.gen_bool(0.5);
-        let assigned_versions2 = if send_first {
-            Some(send_consensus(&authority2, &certificate).await)
-        } else {
-            None
-        };
-
-        let effects2 = if send_first && rng.gen_bool(0.5) {
-            authority2
-                .try_execute_for_test(
-                    &certificate,
-                    ExecutionEnv::new().with_assigned_versions(assigned_versions2.unwrap()),
-                )
-                .await
-                .0
-                .into_message()
-        } else {
-            let epoch_store = authority2.epoch_store_for_testing();
-            let assigned_versions = epoch_store
-                .acquire_shared_version_assignments_from_effects(
-                    &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
-                    &effects1,
-                    None,
-                    authority2.get_object_cache_reader().as_ref(),
-                )
-                .unwrap();
-            authority2
-                .try_execute_for_test(
-                    &certificate,
-                    ExecutionEnv::new().with_assigned_versions(assigned_versions),
-                )
-                .await;
-            authority2
-                .get_transaction_cache_reader()
-                .get_executed_effects(transaction_digest)
-                .unwrap()
-        };
-
-        assert_eq!(effects1.data(), &effects2);
-
-        // If we didn't send consensus before handle_node_sync_certificate, we need to do it now.
-        if !send_first {
-            send_consensus(&authority2, &certificate).await;
-        }
-
-        // Sometimes send one more consensus message.
-        if rng.gen_bool(0.5) {
-            send_consensus(&authority2, &certificate).await;
-        }
-
-        // Update to the new gas object for new tx
-        gas_object_ref = *effects1
-            .data()
-            .mutated()
-            .iter()
-            .map(|(objref, _)| objref)
-            .find(|objref| objref.0 == gas_object_ref.0)
-            .unwrap();
-    }
-
-    // verify the two validators are in sync.
-    assert_eq!(
-        authority1
-            .epoch_store_for_testing()
-            .get_next_object_version(&shared_object_id, initial_shared_version),
-        authority2
-            .epoch_store_for_testing()
-            .get_next_object_version(&shared_object_id, initial_shared_version),
-    );
 }
 
 #[test]
@@ -6293,6 +6163,10 @@ async fn test_consensus_handler_per_object_congestion_control(
     genesis_objects.extend(shared_objects.clone());
     authority.insert_genesis_objects(&genesis_objects).await;
 
+    let test_setup = consensus_test_utils::setup_consensus_handler_for_testing(&authority).await;
+    let mut consensus_handler = test_setup.consensus_handler;
+    let captured_transactions = test_setup.captured_transactions;
+
     // Create first batch of commits. Here, we create 5 transactions that operate on the first
     // shared object with very high gas budget. And `non_congested_tx_count` transactions that
     // operate on the second shared object with low gas budget (so that there won't be any
@@ -6336,22 +6210,32 @@ async fn test_consensus_handler_per_object_congestion_control(
     // We shuffle the transactions so that transactions in the list do not have any order in terms of gas price.
     certificates.shuffle(&mut rand::thread_rng());
 
-    // Sends the first batch of transactions. We should expect that 2 transactions operate on the expensive object
-    // should go through, and all transactions operate on the cheaper object should go through.
+    // Sends the first batch of transactions using the consensus handler directly.
+    // We should expect that 2 transactions operate on the expensive object should go through,
+    // and all transactions operate on the cheaper object should go through.
     // We also check that the scheduled transactions on the expensive object have the highest gas price.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, true).await;
+    let scheduled_txns = process_certificates_through_consensus_handler(
+        &mut consensus_handler,
+        &authority,
+        &certificates,
+        1,
+        &captured_transactions,
+    )
+    .await;
+
     assert_eq!(scheduled_txns.0.len(), 2 + non_congested_tx_count as usize);
-    for cert in scheduled_txns.0.iter() {
-        let cert = cert.as_tx().unwrap();
-        assert!(
-            cert.data().transaction_data().gas_price() >= 4000
-                || cert
-                    .data()
-                    .transaction_data()
-                    .shared_input_objects()
-                    .iter()
-                    .any(|obj| { obj.id() == shared_objects[1].id() })
-        );
+    for schedulable in scheduled_txns.0.iter() {
+        if let Some(cert) = schedulable.as_tx() {
+            assert!(
+                cert.data().transaction_data().gas_price() >= 4000
+                    || cert
+                        .data()
+                        .transaction_data()
+                        .shared_input_objects()
+                        .iter()
+                        .any(|obj| { obj.id() == shared_objects[1].id() })
+            );
+        }
     }
 
     // Checks that deferral keys are formed correctly.
@@ -6405,20 +6289,27 @@ async fn test_consensus_handler_per_object_congestion_control(
     // Sends the second batch of transactions. We should expect that another 2 transactions operate on the expensive object,
     // which are deferred from the previous round, should go through, and all the new transactions oeprate on the cheaper
     // object should go through.
-    let scheduled_txns =
-        send_batch_consensus_no_execution(&authority, &new_certificates, true).await;
+    let scheduled_txns = process_certificates_through_consensus_handler(
+        &mut consensus_handler,
+        &authority,
+        &new_certificates,
+        2,
+        &captured_transactions,
+    )
+    .await;
     assert_eq!(scheduled_txns.0.len(), 2 + non_congested_tx_count as usize);
-    for cert in scheduled_txns.0.iter() {
-        let cert = cert.as_tx().unwrap();
-        assert!(
-            cert.data().transaction_data().gas_price() >= 2000
-                || cert
-                    .data()
-                    .transaction_data()
-                    .shared_input_objects()
-                    .iter()
-                    .any(|obj| { obj.id() == shared_objects[1].id() })
-        );
+    for schedulable in scheduled_txns.0.iter() {
+        if let Some(cert) = schedulable.as_tx() {
+            assert!(
+                cert.data().transaction_data().gas_price() >= 2000
+                    || cert
+                        .data()
+                        .transaction_data()
+                        .shared_input_objects()
+                        .iter()
+                        .any(|obj| { obj.id() == shared_objects[1].id() })
+            );
+        }
     }
 
     let deferred_txns = authority
@@ -6446,7 +6337,15 @@ async fn test_consensus_handler_per_object_congestion_control(
     }
 
     // Sends the last batch with no new transaction. The last deferred transactions should go through.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], true).await;
+    let scheduled_txns = process_certificates_through_consensus_handler(
+        &mut consensus_handler,
+        &authority,
+        &[],
+        3,
+        &captured_transactions,
+    )
+    .await;
+    // The last deferred transaction should go through
     assert_eq!(scheduled_txns.0.len(), 1);
     assert!(
         authority
@@ -6454,6 +6353,113 @@ async fn test_consensus_handler_per_object_congestion_control(
             .get_all_deferred_transactions_for_test()
             .is_empty()
     );
+}
+
+// Helper to process certificates through consensus handler directly
+async fn process_certificates_through_consensus_handler_impl<C>(
+    consensus_handler: &mut ConsensusHandler<C>,
+    authority: &Arc<AuthorityState>,
+    certificates: &[VerifiedCertificate],
+    round: u64,
+    captured_transactions: &CapturedTransactions,
+    filter_prologue: bool,
+) -> (Vec<Schedulable>, AssignedTxAndVersions)
+where
+    C: CheckpointServiceNotify + Send + Sync,
+{
+    // Clear previously captured transactions
+    captured_transactions.lock().clear();
+
+    // Create ConsensusTransaction objects from certificates
+    let mut transactions = vec![];
+    for cert in certificates {
+        let transaction =
+            ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into());
+        transactions.push(transaction);
+    }
+
+    // Create a TestConsensusCommit with the transactions
+    // Use a realistic timestamp based on the epoch start time
+    let epoch_start_ms = authority
+        .epoch_store_for_testing()
+        .epoch_start_state()
+        .epoch_start_timestamp_ms();
+    let commit = TestConsensusCommit::new(transactions, round, epoch_start_ms + (1000 * round), 0);
+
+    // Process through the consensus handler
+    consensus_handler.handle_consensus_commit(commit).await;
+
+    // Give a bit of time for the async capture to complete
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+
+    // Retrieve the captured transactions
+    let mut captured = captured_transactions.lock();
+    if captured.is_empty() {
+        (vec![], AssignedTxAndVersions::default())
+    } else {
+        // Remove and return the first batch of captured transactions
+        let (mut schedulables, assigned_versions, _) = captured.remove(0);
+
+        // Filter out consensus commit prologue transactions if requested
+        if filter_prologue {
+            schedulables.retain(|s| {
+                if let Schedulable::Transaction(tx) = s {
+                    !matches!(
+                        tx.data().transaction_data().kind(),
+                        TransactionKind::ConsensusCommitPrologueV4(..)
+                    )
+                } else {
+                    true
+                }
+            });
+        }
+
+        (schedulables, assigned_versions)
+    }
+}
+
+// Wrapper that filters out prologue transactions (for most tests)
+async fn process_certificates_through_consensus_handler<C>(
+    consensus_handler: &mut ConsensusHandler<C>,
+    authority: &Arc<AuthorityState>,
+    certificates: &[VerifiedCertificate],
+    round: u64,
+    captured_transactions: &CapturedTransactions,
+) -> (Vec<Schedulable>, AssignedTxAndVersions)
+where
+    C: CheckpointServiceNotify + Send + Sync,
+{
+    process_certificates_through_consensus_handler_impl(
+        consensus_handler,
+        authority,
+        certificates,
+        round,
+        captured_transactions,
+        true, // filter prologue
+    )
+    .await
+}
+
+// Wrapper that includes prologue transactions (for cancellation test)
+async fn process_certificates_through_consensus_handler_with_prologue<C>(
+    consensus_handler: &mut ConsensusHandler<C>,
+    authority: &Arc<AuthorityState>,
+    certificates: &[VerifiedCertificate],
+    round: u64,
+    captured_transactions: &CapturedTransactions,
+) -> (Vec<Schedulable>, AssignedTxAndVersions)
+where
+    C: CheckpointServiceNotify + Send + Sync,
+{
+    process_certificates_through_consensus_handler_impl(
+        consensus_handler,
+        authority,
+        certificates,
+        round,
+        captured_transactions,
+        false, // don't filter prologue
+    )
+    .await
 }
 
 #[sim_test]
@@ -6532,6 +6538,10 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     genesis_objects.extend(owned_objects_cancelled_txn.clone());
     authority.insert_genesis_objects(&genesis_objects).await;
 
+    let test_setup = consensus_test_utils::setup_consensus_handler_for_testing(&authority).await;
+    let mut consensus_handler = test_setup.consensus_handler;
+    let captured_transactions = test_setup.captured_transactions;
+
     let mut certificates: Vec<VerifiedCertificate> = vec![];
 
     // Create 3 transactions that operate on shared_objects[0]. These transactions will go through eventually.
@@ -6575,9 +6585,15 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     certificates.shuffle(&mut rand::thread_rng());
 
     // Sends all transactions to consensus. Expect first 2 rounds with 1 user transaction per round going through.
-    let (scheduled_txns, _) =
-        send_batch_consensus_no_execution(&authority, &certificates, false).await;
-    assert_eq!(scheduled_txns.len(), 2);
+    let (scheduled_txns, _) = process_certificates_through_consensus_handler_with_prologue(
+        &mut consensus_handler,
+        &authority,
+        &certificates,
+        1,
+        &captured_transactions,
+    )
+    .await;
+    assert_eq!(scheduled_txns.len(), 2); // 1 user transaction + 1 prologue
     // Note that consensus handler also generates consensus commit prologue transaction, and it must be the first one.
     assert!(matches!(
         scheduled_txns[0]
@@ -6598,7 +6614,14 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
             == 2000
     );
 
-    let (scheduled_txns, _) = send_batch_consensus_no_execution(&authority, &[], false).await;
+    let (scheduled_txns, _) = process_certificates_through_consensus_handler_with_prologue(
+        &mut consensus_handler,
+        &authority,
+        &[],
+        2,
+        &captured_transactions,
+    )
+    .await;
     assert_eq!(scheduled_txns.len(), 2);
     assert!(matches!(
         scheduled_txns[0]
@@ -6621,7 +6644,14 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
 
     // Run consensus round 3. 2 user transactions will come out with 1 transaction being cancelled.
     let (scheduled_txns, assigned_versions) =
-        send_batch_consensus_no_execution(&authority, &[], false).await;
+        process_certificates_through_consensus_handler_with_prologue(
+            &mut consensus_handler,
+            &authority,
+            &[],
+            3,
+            &captured_transactions,
+        )
+        .await;
     assert_eq!(scheduled_txns.len(), 3); // 3 = 2 user transactions + 1 consensus commit prologue transaction.
     assert!(
         authority

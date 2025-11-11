@@ -615,6 +615,13 @@ impl TryFrom<MoveTypeParsedTokenTransferMessage> for ParsedTokenTransferMessage 
     }
 }
 
+pub struct SuiEvents {
+    pub transaction_digest: TransactionDigest,
+    pub checkpoint: Option<u64>,
+    pub timestamp_ms: Option<u64>,
+    pub events: Vec<sui_json_rpc_types::SuiEvent>,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test_utils::get_test_authority_and_key;
