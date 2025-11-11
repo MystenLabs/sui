@@ -112,6 +112,21 @@ pub fn hash<const BYTES: usize, const HASHES: u32, const SEED: u128>(
         .map(move |h| (h as usize) % num_bits)
 }
 
+/// Byte offsets and bit masks of values, used for SQL membership checks.
+pub fn probe<const BYTES: usize, const HASHES: u32, const SEED: u128>(
+    values: impl IntoIterator<Item = impl AsRef<[u8]>>,
+) -> BloomProbe {
+    let mut byte_offsets = Vec::new();
+    let mut bit_masks = Vec::new();
+    for value in values {
+        for b in hash::<BYTES, HASHES, SEED>(value.as_ref()) {
+            byte_offsets.push(b / 8);
+            bit_masks.push(1 << (b % 8));
+        }
+    }
+    (byte_offsets, bit_masks)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+
 use crate::blooms::hash::DoubleHasher;
 use crate::blooms::hash::set_bit;
 
@@ -74,6 +76,29 @@ pub fn hash<const BYTES: usize, const BLOCKS: usize, const HASHES: u32>(
         .take(HASHES as usize)
         .map(move |h| (h as usize) % bits_per_block);
     (block_idx, bit_iter)
+}
+
+/// Probes for blocked bloom filters, returning block index, byte offsets and bit masks.
+///
+/// Used for SQL `bloom_contains` checks: for each (byte_offset, bit_mask) pair,
+/// verifies `(bloom_filter[byte_offset] & bit_mask) == bit_mask`.
+pub fn probe<const BYTES: usize, const BLOCKS: usize, const HASHES: u32>(
+    values: impl IntoIterator<Item = impl AsRef<[u8]>>,
+    seed: u128,
+) -> Vec<BlockedBloomProbe> {
+    let mut by_block: HashMap<usize, (Vec<usize>, Vec<usize>)> = HashMap::new();
+    for value in values {
+        let (block_idx, bits) = hash::<BYTES, BLOCKS, HASHES>(value.as_ref(), seed);
+        let entry = by_block.entry(block_idx).or_default();
+        for b in bits {
+            entry.0.push(b / 8);
+            entry.1.push(1 << (b % 8));
+        }
+    }
+    by_block
+        .into_iter()
+        .map(|(idx, (byte_offsets, bit_masks))| (idx, byte_offsets, bit_masks))
+        .collect()
 }
 
 #[cfg(test)]

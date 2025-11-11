@@ -53,3 +53,8 @@ pub struct StoredCpBlooms {
 pub fn hash(value: &[u8]) -> impl Iterator<Item = usize> {
     bloom::hash::<CP_BLOOM_NUM_BYTES, CP_BLOOM_NUM_HASHES, BLOOM_FILTER_SEED>(value)
 }
+
+/// Probe using `CpBloomFilter` dimensions for SQL membership checks.
+pub fn probe(values: impl IntoIterator<Item = impl AsRef<[u8]>>) -> bloom::BloomProbe {
+    bloom::probe::<CP_BLOOM_NUM_BYTES, CP_BLOOM_NUM_HASHES, BLOOM_FILTER_SEED>(values)
+}
