@@ -219,6 +219,7 @@ impl AnalyzedPkgInfo {
     pub fn new_precompiled_only(
         program_deps: Arc<PreCompiledProgramInfo>,
         dep_names: BTreeSet<Symbol>,
+        dep_hashes: Vec<FileHash>,
     ) -> Self {
         Self {
             program_deps,
@@ -227,7 +228,7 @@ impl AnalyzedPkgInfo {
             program: None,
             file_paths: Arc::new(BTreeMap::new()),
             user_file_hashes: Arc::new(BTreeMap::new()),
-            dep_hashes: vec![],
+            dep_hashes,
         }
     }
 }
@@ -439,8 +440,11 @@ pub fn get_compiled_pkg(
                         compiler_flags,
                         overlay_fs_root.clone(),
                     ) {
-                        let analyzed_pkg_info =
-                            AnalyzedPkgInfo::new_precompiled_only(program_deps, dep_names);
+                        let analyzed_pkg_info = AnalyzedPkgInfo::new_precompiled_only(
+                            program_deps,
+                            dep_names,
+                            mapped_files_data.dep_hashes.clone(),
+                        );
                         CachingResult::new(Some(analyzed_pkg_info), None, None)
                     } else {
                         CachingResult::empty()

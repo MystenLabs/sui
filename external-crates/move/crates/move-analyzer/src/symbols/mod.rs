@@ -438,6 +438,10 @@ pub fn compute_symbols_typed_program(
                     |(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str)
                 ),
             };
+
+            // Filter program ASTs to remove dependencies before caching
+            filter_program_asts(&mut compiled_pkg_info.program, &cached_deps.dep_hashes);
+
             Arc::new(deps_computation_data)
         };
         Some(deps_symbols_data)
@@ -512,6 +516,47 @@ fn pre_process_parsed_program(
     prog.lib_definitions.iter().for_each(|pkg_def| {
         pre_process_parsed_pkg(pkg_def, fields_order_info, typed_mod_named_address_maps);
     });
+}
+
+/// Filter dependency ASTs from compiled program in place, keeping only user code
+fn filter_program_asts(program: &mut CompiledProgram, dep_hashes: &[FileHash]) {
+    fn is_dep_pkg(pkg_def: &P::PackageDefinition, dep_hashes: &[FileHash]) -> bool {
+        let file_hash = match &pkg_def.def {
+            P::Definition::Module(mdef) => mdef.loc.file_hash(),
+            P::Definition::Address(adef) => adef.loc.file_hash(),
+        };
+        dep_hashes.contains(&file_hash)
+    }
+
+    // Remove dependency packages from source_definitions
+    program
+        .parsed_definitions
+        .source_definitions
+        .retain(|pkg_def| !is_dep_pkg(pkg_def, dep_hashes));
+
+    // Remove dependency packages from lib_definitions
+    program
+        .parsed_definitions
+        .lib_definitions
+        .retain(|pkg_def| !is_dep_pkg(pkg_def, dep_hashes));
+
+    // Collect dependency module identifiers
+    let dep_module_idents: Vec<ModuleIdent> = program
+        .typed_modules
+        .key_cloned_iter()
+        .filter_map(|(mident, mdef)| {
+            if dep_hashes.contains(&mdef.loc.file_hash()) {
+                Some(mident)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Remove dependency modules from typed_modules
+    for mident in dep_module_idents {
+        program.typed_modules.remove(&mident);
+    }
 }
 
 /// Pre-process parsed package to get initial info before AST traversals

@@ -189,6 +189,7 @@ pub fn run(
                 flavor,
             )
         {
+            eprintln!("initial symbols computed successfully");
             let mut old_symbols_map = symbols_map.lock().unwrap();
             old_symbols_map.insert(p, new_symbols);
         }
