@@ -49,7 +49,7 @@ impl ColumnBuilder {
 }
 
 // Save table entries to parquet files.
-pub(crate) struct ParquetWriter {
+pub struct ParquetWriter {
     root_dir_path: PathBuf,
     file_type: FileType,
     epoch: EpochId,
@@ -59,7 +59,7 @@ pub(crate) struct ParquetWriter {
 }
 
 impl ParquetWriter {
-    pub(crate) fn new(
+    pub fn new(
         root_dir_path: &Path,
         file_type: FileType,
         start_checkpoint_seq_num: u64,
@@ -92,10 +92,6 @@ impl ParquetWriter {
 }
 
 impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
-    fn file_format(&self) -> Result<FileFormat> {
-        Ok(FileFormat::PARQUET)
-    }
-
     fn write(&mut self, rows: Box<dyn Iterator<Item = S> + Send + Sync>) -> Result<()> {
         // Make the iterator peekable
         let mut row_iter = rows.peekable();
@@ -188,13 +184,6 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         self.builders.clear();
         self.row_count = 0;
         Ok(())
-    }
-
-    fn file_size(&self) -> Result<Option<u64>> {
-        // parquet writer doesn't write records in a temp staging file
-        // and only flushes records after serializing and compressing them
-        // when flush is invoked
-        Ok(None)
     }
 
     fn rows(&self) -> Result<usize> {

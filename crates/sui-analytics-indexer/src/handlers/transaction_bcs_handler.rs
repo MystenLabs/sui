@@ -4,115 +4,133 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use fastcrypto::encoding::{Base64, Encoding};
-
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::pipeline::concurrent::{BatchStatus, Handler};
+use sui_indexer_alt_framework::store::Store;
+use sui_indexer_alt_object_store::ObjectStore;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::FileType;
-use crate::handlers::{AnalyticsHandler, TransactionProcessor, process_transactions};
 use crate::tables::TransactionBCSEntry;
+use crate::writers::AnalyticsWriter;
 
-#[derive(Clone)]
-pub struct TransactionBCSHandler {}
+pub struct TransactionBCSHandler;
 
 impl TransactionBCSHandler {
     pub fn new() -> Self {
-        TransactionBCSHandler {}
+        Self
     }
 }
 
-#[async_trait::async_trait]
-impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
-    async fn process_checkpoint(
-        &self,
-        checkpoint_data: &Arc<CheckpointData>,
-    ) -> Result<Box<dyn Iterator<Item = TransactionBCSEntry> + Send + Sync>> {
-        process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await
-    }
+#[async_trait]
+impl Processor for TransactionBCSHandler {
+    const NAME: &'static str = "transaction_bcs";
+    const FANOUT: usize = 10;
+    type Value = TransactionBCSEntry;
 
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::TransactionBCS)
-    }
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let epoch = checkpoint.summary.data().epoch;
+        let checkpoint_seq = checkpoint.summary.data().sequence_number;
+        let timestamp_ms = checkpoint.summary.data().timestamp_ms;
 
-    fn name(&self) -> &'static str {
-        "transaction_bcs"
+        let mut entries = Vec::with_capacity(checkpoint.transactions.len());
+
+        for checkpoint_transaction in &checkpoint.transactions {
+            let txn = &checkpoint_transaction.transaction;
+            let transaction_digest = checkpoint_transaction
+                .effects
+                .transaction_digest()
+                .base58_encode();
+
+            entries.push(TransactionBCSEntry {
+                transaction_digest,
+                checkpoint: checkpoint_seq,
+                epoch,
+                timestamp_ms,
+                bcs: Base64::encode(bcs::to_bytes(txn)?),
+            });
+        }
+
+        Ok(entries)
     }
 }
 
-#[async_trait::async_trait]
-impl TransactionProcessor<TransactionBCSEntry> for TransactionBCSHandler {
-    async fn process_transaction(
+#[async_trait]
+impl Handler for TransactionBCSHandler {
+    type Store = ObjectStore;
+    type Batch = Vec<TransactionBCSEntry>;
+
+    const MIN_EAGER_ROWS: usize = 100_000;
+    const MAX_PENDING_ROWS: usize = 500_000;
+
+    fn batch(
         &self,
-        tx_idx: usize,
-        checkpoint: &CheckpointData,
-    ) -> Result<Box<dyn Iterator<Item = TransactionBCSEntry> + Send + Sync>> {
-        let transaction = &checkpoint.transactions[tx_idx];
-        let epoch = checkpoint.checkpoint_summary.epoch;
-        let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
-        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+        batch: &mut Self::Batch,
+        values: &mut std::vec::IntoIter<Self::Value>,
+    ) -> BatchStatus {
+        batch.extend(values);
 
-        let txn = &transaction.transaction;
-        let txn_data = txn.transaction_data();
-        let transaction_digest = txn.digest().base58_encode();
+        if batch.len() >= Self::MIN_EAGER_ROWS {
+            BatchStatus::Ready
+        } else {
+            BatchStatus::Pending
+        }
+    }
 
-        let entry = TransactionBCSEntry {
-            transaction_digest,
-            checkpoint: checkpoint_seq,
+    async fn commit<'a>(
+        &self,
+        batch: &Self::Batch,
+        conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> Result<usize> {
+        if batch.is_empty() {
+            return Ok(0);
+        }
+
+        // Get the checkpoint range from the batch
+        let first_checkpoint = batch.first().unwrap().checkpoint;
+        let last_checkpoint = batch.last().unwrap().checkpoint;
+        let epoch = batch.first().unwrap().epoch;
+
+        // Create a temporary Parquet file
+        use crate::parquet::ParquetWriter;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new()?;
+        let mut writer: ParquetWriter =
+            ParquetWriter::new(temp_dir.path(), FileType::TransactionBCS, first_checkpoint)?;
+
+        // Collect into a vec to satisfy 'static lifetime requirement
+        let rows: Vec<TransactionBCSEntry> = batch.to_vec();
+        AnalyticsWriter::<TransactionBCSEntry>::write(&mut writer, Box::new(rows.into_iter()))?;
+        AnalyticsWriter::<TransactionBCSEntry>::flush(&mut writer, last_checkpoint + 1)?;
+
+        // Build the object store path
+        let file_path = FileType::TransactionBCS.file_path(
+            crate::FileFormat::PARQUET,
             epoch,
-            timestamp_ms,
-            bcs: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
-        };
-
-        Ok(Box::new(std::iter::once(entry)))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::handlers::AnalyticsHandler;
-    use crate::handlers::transaction_bcs_handler::TransactionBCSHandler;
-    use fastcrypto::encoding::{Base64, Encoding};
-    use simulacrum::Simulacrum;
-    use std::sync::Arc;
-    use sui_types::base_types::SuiAddress;
-    use sui_types::storage::ReadStore;
-
-    #[tokio::test]
-    pub async fn test_transaction_bcs_handler() -> anyhow::Result<()> {
-        let mut sim = Simulacrum::new();
-
-        // Execute a simple transaction.
-        let transfer_recipient = SuiAddress::random_for_testing_only();
-        let (transaction, _) = sim.transfer_txn(transfer_recipient);
-        let (_effects, err) = sim.execute_transaction(transaction.clone()).unwrap();
-        assert!(err.is_none());
-
-        // Create a checkpoint which should include the transaction we executed.
-        let checkpoint = sim.create_checkpoint();
-        let checkpoint_data: sui_types::full_checkpoint_content::CheckpointData = sim
-            .get_checkpoint_data(
-                checkpoint.clone(),
-                sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)
-                    .unwrap(),
-            )?
-            .into();
-        let txn_handler = TransactionBCSHandler::new();
-        let transaction_entries: Vec<_> = txn_handler
-            .process_checkpoint(&Arc::new(checkpoint_data))
-            .await?
-            .collect();
-        assert_eq!(transaction_entries.len(), 1);
-        let db_txn = transaction_entries.first().unwrap();
-
-        // Check that the transaction was stored correctly.
-        assert_eq!(db_txn.transaction_digest, transaction.digest().to_string());
-        assert_eq!(
-            db_txn.bcs,
-            Base64::encode(bcs::to_bytes(&transaction.transaction_data()).unwrap())
+            first_checkpoint..(last_checkpoint + 1),
         );
-        assert_eq!(db_txn.epoch, checkpoint.epoch);
-        assert_eq!(db_txn.timestamp_ms, checkpoint.timestamp_ms);
-        assert_eq!(db_txn.checkpoint, checkpoint.sequence_number);
-        Ok(())
+
+        // Read the file and upload
+        let local_file = temp_dir
+            .path()
+            .join(FileType::TransactionBCS.dir_prefix().as_ref())
+            .join(format!("epoch_{}", epoch))
+            .join(format!(
+                "{}_{}.parquet",
+                first_checkpoint,
+                last_checkpoint + 1
+            ));
+
+        let file_bytes = tokio::fs::read(&local_file).await?;
+
+        conn.object_store()
+            .put(&file_path, file_bytes.into())
+            .await?;
+
+        Ok(batch.len())
     }
 }

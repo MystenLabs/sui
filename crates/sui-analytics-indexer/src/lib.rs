@@ -1,62 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
-use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
 use anyhow::{Result, anyhow};
-use arrow_array::{Array, Int32Array};
-use gcp_bigquery_client::Client;
-use gcp_bigquery_client::model::query_request::QueryRequest;
-use handlers::package_bcs_handler::PackageBCSHandler;
-use handlers::transaction_bcs_handler::TransactionBCSHandler;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
 use once_cell::sync::Lazy;
-use package_store::{LazyPackageCache, PackageCache};
+use package_store::PackageCache;
 use serde::{Deserialize, Serialize};
-use snowflake_api::{QueryResult, SnowflakeApi};
 use strum_macros::EnumIter;
-use tempfile::TempDir;
 use tracing::info;
 
 use sui_config::object_storage_config::ObjectStoreConfig;
-use sui_data_ingestion_core::Worker;
-use sui_storage::object_store::util::{
-    find_all_dirs_with_epoch_prefix, find_all_files_with_epoch_prefix,
-};
 use sui_types::base_types::EpochId;
 use sui_types::dynamic_field::DynamicFieldType;
-use sui_types::full_checkpoint_content::CheckpointData;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
-use crate::analytics_metrics::AnalyticsMetrics;
-use crate::analytics_processor::AnalyticsProcessor;
-use crate::handlers::AnalyticsHandler;
-use crate::handlers::checkpoint_handler::CheckpointHandler;
-use crate::handlers::df_handler::DynamicFieldHandler;
-use crate::handlers::event_handler::EventHandler;
-use crate::handlers::move_call_handler::MoveCallHandler;
-use crate::handlers::object_handler::ObjectHandler;
-use crate::handlers::package_handler::PackageHandler;
-use crate::handlers::transaction_handler::TransactionHandler;
-use crate::handlers::transaction_objects_handler::TransactionObjectsHandler;
-use crate::handlers::wrapped_object_handler::WrappedObjectHandler;
 use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
 use crate::writers::AnalyticsWriter;
-use crate::writers::csv_writer::CSVWriter;
-use crate::writers::parquet_writer::ParquetWriter;
-use gcp_bigquery_client::model::query_response::ResultSet;
 
 pub mod analytics_metrics;
-pub mod analytics_processor;
 pub mod errors;
 mod handlers;
 pub mod package_store;
+pub mod parquet;
 pub mod tables;
 mod writers;
 
@@ -198,52 +167,6 @@ pub struct JobConfig {
 }
 
 impl JobConfig {
-    pub async fn create_checkpoint_processors(
-        self,
-        metrics: AnalyticsMetrics,
-    ) -> Result<(Vec<Processor>, Option<Arc<PackageCache>>)> {
-        use crate::package_store::LazyPackageCache;
-        use std::sync::Mutex;
-
-        let lazy_package_cache = Arc::new(Mutex::new(LazyPackageCache::new(
-            self.package_cache_path.clone(),
-            self.rest_url.clone(),
-        )));
-
-        let job_config = Arc::new(self);
-        let mut processors = Vec::with_capacity(job_config.task_configs.len());
-        let mut task_names = HashSet::new();
-
-        for task_config in job_config.task_configs.clone() {
-            let task_name = &task_config.task_name;
-
-            if !task_names.insert(task_name.clone()) {
-                return Err(anyhow!("Duplicate task_name '{}' found", task_name));
-            }
-
-            let temp_dir = tempfile::Builder::new()
-                .prefix(&format!("{}-work-dir", task_name))
-                .tempdir_in(&job_config.checkpoint_root)?;
-
-            let task_context = TaskContext {
-                job_config: Arc::clone(&job_config),
-                config: task_config,
-                checkpoint_dir: Arc::new(temp_dir),
-                metrics: metrics.clone(),
-                lazy_package_cache: lazy_package_cache.clone(),
-            };
-
-            processors.push(task_context.create_analytics_processor().await?);
-        }
-
-        let package_cache = lazy_package_cache
-            .lock()
-            .unwrap()
-            .get_cache_if_initialized();
-
-        Ok((processors, package_cache))
-    }
-
     // Convenience method to get task configs for compatibility
     pub fn task_configs(&self) -> &[TaskConfig] {
         &self.task_configs
@@ -296,6 +219,8 @@ impl TaskConfig {
     }
 }
 
+// Old implementation commented out - depends on removed AnalyticsProcessor
+/*
 pub struct TaskContext {
     pub config: TaskConfig,
     pub job_config: Arc<JobConfig>,
@@ -634,6 +559,7 @@ impl MaxCheckpointReader for NoOpCheckpointReader {
         Ok(-1)
     }
 }
+*/
 
 #[derive(
     Copy,
@@ -826,20 +752,6 @@ pub struct FileMetadata {
 }
 
 impl FileMetadata {
-    fn new(
-        file_type: FileType,
-        file_format: FileFormat,
-        epoch_num: u64,
-        checkpoint_seq_range: Range<u64>,
-    ) -> FileMetadata {
-        FileMetadata {
-            file_type,
-            file_format,
-            epoch_num,
-            checkpoint_seq_range,
-        }
-    }
-
     pub fn file_path(&self) -> Path {
         self.file_type.file_path(
             self.file_format,
@@ -849,6 +761,8 @@ impl FileMetadata {
     }
 }
 
+// Old Processor implementation commented out - depends on removed AnalyticsProcessor
+/*
 pub struct Processor {
     pub processor: Box<dyn Worker<Result = ()>>,
     pub starting_checkpoint_seq_num: CheckpointSequenceNumber,
@@ -942,4 +856,268 @@ pub fn join_paths(base: Option<&Path>, child: &Path) -> Path {
 fn load_password(path: &str) -> anyhow::Result<String> {
     let contents = fs::read_to_string(std::path::Path::new(path))?;
     Ok(contents.trim().to_string())
+}
+*/
+
+// New framework-based indexer implementation
+pub mod indexer_alt {
+    use super::*;
+    use anyhow::Context;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use sui_indexer_alt_framework::pipeline::CommitterConfig;
+    use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+    use sui_indexer_alt_framework::{Indexer, ingestion::IngestionConfig};
+    use sui_indexer_alt_object_store::ObjectStore;
+    use tokio_util::sync::CancellationToken;
+
+    // Import all the handlers
+    use crate::handlers::checkpoint_handler::CheckpointHandler;
+    use crate::handlers::df_handler::DynamicFieldHandler;
+    use crate::handlers::event_handler::EventHandler;
+    use crate::handlers::move_call_handler::MoveCallHandler;
+    use crate::handlers::object_handler::ObjectHandler;
+    use crate::handlers::package_bcs_handler::PackageBCSHandler;
+    use crate::handlers::package_handler::PackageHandler;
+    use crate::handlers::transaction_bcs_handler::TransactionBCSHandler;
+    use crate::handlers::transaction_handler::TransactionHandler;
+    use crate::handlers::transaction_objects_handler::TransactionObjectsHandler;
+    use crate::handlers::wrapped_object_handler::WrappedObjectHandler;
+
+    pub struct AnalyticsIndexerConfig {
+        pub job_config: JobConfig,
+        pub write_concurrency: usize,
+        pub watermark_interval: Duration,
+        pub first_checkpoint: Option<u64>,
+        pub last_checkpoint: Option<u64>,
+    }
+
+    impl Default for AnalyticsIndexerConfig {
+        fn default() -> Self {
+            Self {
+                job_config: JobConfig {
+                    rest_url: "https://checkpoints.mainnet.sui.io".to_string(),
+                    client_metric_host: default_client_metric_host(),
+                    client_metric_port: default_client_metric_port(),
+                    remote_store_config: ObjectStoreConfig::default(),
+                    batch_size: default_batch_size(),
+                    data_limit: default_data_limit(),
+                    remote_store_url: default_remote_store_url(),
+                    remote_store_options: vec![],
+                    remote_store_timeout_secs: default_remote_store_timeout_secs(),
+                    package_cache_path: default_package_cache_path(),
+                    checkpoint_root: default_checkpoint_root(),
+                    bq_service_account_key_file: None,
+                    bq_project_id: None,
+                    bq_dataset_id: None,
+                    sf_account_identifier: None,
+                    sf_warehouse: None,
+                    sf_database: None,
+                    sf_schema: None,
+                    sf_username: None,
+                    sf_role: None,
+                    sf_password_file: None,
+                    task_configs: vec![],
+                },
+                write_concurrency: 10,
+                watermark_interval: Duration::from_secs(60),
+                first_checkpoint: None,
+                last_checkpoint: None,
+            }
+        }
+    }
+
+    pub async fn start_analytics_indexer(
+        config: AnalyticsIndexerConfig,
+        registry: prometheus::Registry,
+        cancel: CancellationToken,
+    ) -> Result<tokio::task::JoinHandle<()>> {
+        info!("Starting analytics indexer with framework");
+        info!("Job config: {:#?}", config.job_config);
+
+        // Setup object store from remote_store_config
+        let object_store = create_object_store_from_config(
+            &config.job_config.remote_store_config,
+            config.job_config.remote_store_timeout_secs,
+        )
+        .await?;
+
+        let store = ObjectStore::new(object_store, None);
+
+        // Create package cache for handlers that need it
+        let package_cache = if needs_package_cache(&config.job_config.task_configs) {
+            Some(Arc::new(PackageCache::new(
+                &config.job_config.package_cache_path,
+                &config.job_config.rest_url,
+            )))
+        } else {
+            None
+        };
+
+        // Create the indexer args from config
+        let indexer_args = sui_indexer_alt_framework::IndexerArgs {
+            first_checkpoint: config.first_checkpoint,
+            last_checkpoint: config.last_checkpoint,
+            skip_watermark: false,
+            pipeline: vec![],
+        };
+
+        let client_args = sui_indexer_alt_framework::ingestion::ClientArgs {
+            remote_store_url: Some(url::Url::parse(&config.job_config.remote_store_url)?),
+            local_ingestion_path: None,
+            rpc_api_url: None,
+            rpc_username: None,
+            rpc_password: None,
+        };
+
+        let ingestion_config = IngestionConfig {
+            checkpoint_buffer_size: config.job_config.data_limit,
+            ingest_concurrency: config.job_config.batch_size,
+            retry_interval_ms: 5000,
+        };
+
+        let concurrent_config = ConcurrentConfig {
+            committer: CommitterConfig {
+                write_concurrency: config.write_concurrency,
+                watermark_interval_ms: config.watermark_interval.as_millis() as u64,
+                ..Default::default()
+            },
+            pruner: None,
+        };
+
+        let mut indexer = Indexer::new(
+            store.clone(),
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            &registry,
+            cancel.clone(),
+        )
+        .await?;
+
+        // Register pipelines for each enabled file type
+        for task_config in &config.job_config.task_configs {
+            info!(
+                "Registering pipeline for task: {} with file type: {:?}",
+                task_config.task_name, task_config.file_type
+            );
+
+            register_pipeline_for_task(
+                &mut indexer,
+                task_config,
+                package_cache.clone(),
+                concurrent_config.clone(),
+            )
+            .await?;
+        }
+
+        // Start the indexer
+        let handle = indexer.run().await?;
+
+        Ok(handle)
+    }
+
+    fn needs_package_cache(task_configs: &[TaskConfig]) -> bool {
+        task_configs.iter().any(|t| {
+            matches!(
+                t.file_type,
+                FileType::Event
+                    | FileType::Object
+                    | FileType::DynamicField
+                    | FileType::WrappedObject
+            )
+        })
+    }
+
+    async fn register_pipeline_for_task(
+        indexer: &mut Indexer<ObjectStore>,
+        task_config: &TaskConfig,
+        package_cache: Option<Arc<PackageCache>>,
+        config: ConcurrentConfig,
+    ) -> Result<()> {
+        match task_config.file_type {
+            FileType::Checkpoint => {
+                indexer
+                    .concurrent_pipeline(CheckpointHandler::new(), config)
+                    .await?;
+            }
+            FileType::Transaction => {
+                indexer
+                    .concurrent_pipeline(TransactionHandler::new(), config)
+                    .await?;
+            }
+            FileType::TransactionBCS => {
+                indexer
+                    .concurrent_pipeline(TransactionBCSHandler::new(), config)
+                    .await?;
+            }
+            FileType::Event => {
+                let cache = package_cache
+                    .clone()
+                    .ok_or_else(|| anyhow!("Package cache required for Event handler"))?;
+                indexer
+                    .concurrent_pipeline(EventHandler::new(cache), config)
+                    .await?;
+            }
+            FileType::MoveCall => {
+                indexer
+                    .concurrent_pipeline(MoveCallHandler::new(), config)
+                    .await?;
+            }
+            FileType::Object => {
+                let cache = package_cache
+                    .clone()
+                    .ok_or_else(|| anyhow!("Package cache required for Object handler"))?;
+                indexer
+                    .concurrent_pipeline(
+                        ObjectHandler::new(cache, &task_config.package_id_filter),
+                        config,
+                    )
+                    .await?;
+            }
+            FileType::DynamicField => {
+                let cache = package_cache
+                    .clone()
+                    .ok_or_else(|| anyhow!("Package cache required for DynamicField handler"))?;
+                indexer
+                    .concurrent_pipeline(DynamicFieldHandler::new(cache), config)
+                    .await?;
+            }
+            FileType::TransactionObjects => {
+                indexer
+                    .concurrent_pipeline(TransactionObjectsHandler::new(), config)
+                    .await?;
+            }
+            FileType::MovePackage => {
+                indexer
+                    .concurrent_pipeline(PackageHandler::new(), config)
+                    .await?;
+            }
+            FileType::MovePackageBCS => {
+                indexer
+                    .concurrent_pipeline(PackageBCSHandler::new(), config)
+                    .await?;
+            }
+            FileType::WrappedObject => {
+                let cache = package_cache
+                    .clone()
+                    .ok_or_else(|| anyhow!("Package cache required for WrappedObject handler"))?;
+                indexer
+                    .concurrent_pipeline(WrappedObjectHandler::new(cache), config)
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn create_object_store_from_config(
+        config: &ObjectStoreConfig,
+        _timeout_secs: u64,
+    ) -> Result<Arc<dyn object_store::ObjectStore>> {
+        let store = config
+            .make()
+            .context("Failed to create object store from configuration")?;
+        Ok(store)
+    }
 }

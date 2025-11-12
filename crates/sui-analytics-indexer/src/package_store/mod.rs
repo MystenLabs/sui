@@ -26,7 +26,6 @@ use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::{DBMapUtils, Map, TypedStoreError};
 
 pub mod cache_coordinator;
-pub mod package_cache_worker;
 
 use std::sync::OnceLock;
 
@@ -134,18 +133,6 @@ impl LocalDBPackageStore {
         if object.data.try_as_package().is_some() {
             self.tables.update(object)?;
         }
-        Ok(())
-    }
-
-    fn update_batch<'a, I>(&self, objects: I) -> StdResult<(), Error>
-    where
-        I: IntoIterator<Item = &'a Object>,
-    {
-        let filtered = objects
-            .into_iter()
-            .filter(|o| o.data.try_as_package().is_some());
-
-        self.tables.update_batch(filtered)?;
         Ok(())
     }
 
@@ -269,19 +256,6 @@ impl PackageCache {
             base: self.base_store.clone(),
             epochs: self.epochs.clone(),
         })
-    }
-
-    pub fn update(&self, object: &Object) -> Result<()> {
-        self.base_store.update(object)?;
-        Ok(())
-    }
-
-    fn update_batch<'a, I>(&self, objects: I) -> Result<()>
-    where
-        I: IntoIterator<Item = &'a Object>,
-    {
-        self.base_store.update_batch(objects)?;
-        Ok(())
     }
 
     #[cfg(not(test))]

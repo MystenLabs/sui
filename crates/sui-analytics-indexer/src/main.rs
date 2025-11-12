@@ -3,16 +3,8 @@
 
 use anyhow::Result;
 use prometheus::Registry;
-use std::{collections::HashMap, env};
-use sui_analytics_indexer::{
-    JobConfig,
-    analytics_metrics::AnalyticsMetrics,
-    package_store::package_cache_worker::{PACKAGE_CACHE_WORKER_NAME, PackageCacheWorker},
-};
-use sui_data_ingestion_core::{
-    DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimIndexerProgressStore, WorkerPool,
-};
-use tokio::{signal, sync::oneshot};
+use std::env;
+use sui_analytics_indexer::JobConfig;
 use tracing::info;
 
 #[tokio::main]
@@ -28,6 +20,14 @@ async fn main() -> Result<()> {
     let config: JobConfig = serde_yaml::from_str(&std::fs::read_to_string(&args[1])?)?;
     info!("Parsed config: {:#?}", config);
 
+    info!("Using sui-indexer-alt-framework");
+    run_with_alt_framework(config).await
+}
+
+async fn run_with_alt_framework(config: JobConfig) -> Result<()> {
+    use std::time::Duration;
+    use sui_analytics_indexer::indexer_alt::{AnalyticsIndexerConfig, start_analytics_indexer};
+
     // Setup metrics
     let registry_service = mysten_metrics::start_prometheus_server(
         format!(
@@ -38,86 +38,67 @@ async fn main() -> Result<()> {
         .unwrap(),
     );
     let registry: Registry = registry_service.default_registry();
-    mysten_metrics::init_metrics(&registry);
-    let metrics = AnalyticsMetrics::new(&registry);
 
-    let remote_store_url = config.remote_store_url.clone();
-    let remote_store_options = config.remote_store_options.clone();
-    let batch_size = config.batch_size;
-    let data_limit = config.data_limit;
-    let timeout_secs = config.remote_store_timeout_secs;
+    let cancel = tokio_util::sync::CancellationToken::new();
 
-    let (processors, maybe_package_cache) = config.create_checkpoint_processors(metrics).await?;
-
-    let mut watermarks = HashMap::new();
-    let mut min_watermark = processors
-        .iter()
-        .peekable()
-        .peek()
-        .map(|p| p.starting_checkpoint_seq_num)
-        .unwrap_or(0);
-    for processor in processors.iter() {
-        let watermark = processor
-            .last_committed_checkpoint()
-            .map(|seq_num| seq_num + 1)
-            .unwrap_or(0);
-        min_watermark = watermark.min(min_watermark);
-        watermarks.insert(processor.task_name.clone(), watermark);
-    }
-
-    let num_workers = processors.len() + if maybe_package_cache.is_some() { 1 } else { 0 };
-
-    if maybe_package_cache.is_some() {
-        watermarks.insert(PACKAGE_CACHE_WORKER_NAME.to_string(), min_watermark);
-    }
-
-    let progress_store = ShimIndexerProgressStore::new(watermarks);
-    let mut executor = IndexerExecutor::new(
-        progress_store,
-        num_workers,
-        DataIngestionMetrics::new(&registry),
-    );
-    if let Some(package_cache) = maybe_package_cache {
-        let worker = PackageCacheWorker::new(package_cache);
-        executor
-            .register(WorkerPool::new(
-                worker,
-                PACKAGE_CACHE_WORKER_NAME.to_string(),
-                1,
-            ))
-            .await?;
-    }
-
-    for processor in processors {
-        let task_name = processor.task_name.clone();
-        let worker_pool = WorkerPool::new(processor, task_name, 1);
-        executor.register(worker_pool).await?;
-    }
-
-    let reader_options = ReaderOptions {
-        batch_size,
-        data_limit,
-        timeout_secs,
-        ..Default::default()
+    // Create analytics indexer config from job config
+    let analytics_config = AnalyticsIndexerConfig {
+        job_config: config,
+        write_concurrency: 10,
+        watermark_interval: Duration::from_secs(60),
+        first_checkpoint: None,
+        last_checkpoint: None,
     };
 
-    let (exit_sender, exit_receiver) = oneshot::channel();
-    let executor_progress = executor.run(
-        tempfile::tempdir()?.keep(),
-        Some(remote_store_url),
-        remote_store_options,
-        reader_options,
-        exit_receiver,
-    );
+    let mut h_indexer = start_analytics_indexer(analytics_config, registry, cancel.clone()).await?;
 
-    tokio::spawn(async {
-        signal::ctrl_c()
-            .await
-            .expect("Failed to install Ctrl+C handler");
-        exit_sender
-            .send(())
-            .expect("Failed to gracefully process shutdown");
-    });
-    executor_progress.await?;
-    Ok(())
+    enum ExitReason {
+        Completed,
+        UserInterrupt,
+        Terminated,
+    }
+
+    let is_bounded_job = false; // TODO: detect from config
+
+    let exit_reason = tokio::select! {
+        res = &mut h_indexer => {
+            info!("Indexer completed successfully");
+            res?;
+            ExitReason::Completed
+        }
+        _ = tokio::signal::ctrl_c() => {
+            info!("Received SIGINT, shutting down...");
+            ExitReason::UserInterrupt
+        }
+        _ = wait_for_sigterm() => {
+            info!("Received SIGTERM, shutting down...");
+            ExitReason::Terminated
+        }
+    };
+
+    cancel.cancel();
+    info!("Waiting for graceful shutdown...");
+    let _ = h_indexer.await;
+
+    match exit_reason {
+        ExitReason::Completed => Ok(()),
+        ExitReason::UserInterrupt => Ok(()),
+        ExitReason::Terminated if is_bounded_job => {
+            std::process::exit(1);
+        }
+        ExitReason::Terminated => Ok(()),
+    }
+}
+
+#[cfg(unix)]
+async fn wait_for_sigterm() {
+    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .expect("Failed to install SIGTERM handler")
+        .recv()
+        .await;
+}
+
+#[cfg(not(unix))]
+async fn wait_for_sigterm() {
+    std::future::pending::<()>().await
 }
