@@ -17,9 +17,9 @@ use bridge::limiter::{
     usd_value_multiplier
 };
 use bridge::treasury::{Self, BTC, ETH, USDC, USDT};
+use std::unit_test::{assert_eq, destroy};
 use sui::clock;
 use sui::test_scenario;
-use sui::test_utils::{assert_eq, destroy};
 
 #[test]
 fun test_24_hours_windows() {
@@ -71,7 +71,7 @@ fun test_24_hours_windows() {
     };
     let record = limiter.transfer_records().get(&route);
     let mut expected_value = 24000 * 5 * usd_value_multiplier();
-    assert_eq(record.total_amount(), expected_value);
+    assert_eq!(record.total_amount(), expected_value);
 
     // transfer 1000 * i ETH every hour for 24 hours, the 24 hours
     // totol should be 300 * 1000 * 5
@@ -93,12 +93,12 @@ fun test_24_hours_windows() {
         let record = limiter.transfer_records().get(&route);
 
         expected_value = expected_value + 1000 * 5 * i * usd_value_multiplier();
-        assert_eq(record.total_amount(), expected_value);
+        assert_eq!(record.total_amount(), expected_value);
         i = i + 1;
     };
 
     let record = limiter.transfer_records().get(&route);
-    assert_eq(record.total_amount(), 300 * 1000 * 5 * usd_value_multiplier());
+    assert_eq!(record.total_amount(), 300 * 1000 * 5 * usd_value_multiplier());
 
     destroy(limiter);
     destroy(treasury);
@@ -189,7 +189,7 @@ fun test_exceed_limit() {
     );
 
     let record = limiter.transfer_records().get(&route);
-    assert_eq(record.total_amount(), 90000 * 10 * usd_value_multiplier());
+    assert_eq!(record.total_amount(), 90000 * 10 * usd_value_multiplier());
 
     clock.increment_for_testing(60 * 60 * 1000);
     assert!(
@@ -202,7 +202,7 @@ fun test_exceed_limit() {
         0,
     );
     let record = limiter.transfer_records().get(&route);
-    assert_eq(record.total_amount(), 100000 * 10 * usd_value_multiplier());
+    assert_eq!(record.total_amount(), 100000 * 10 * usd_value_multiplier());
 
     // Tx should fail with a tiny amount because the limit is hit
     assert!(!limiter.check_and_record_sending_transfer<ETH>(&treasury, &clock, route, 1), 0);
@@ -228,12 +228,12 @@ fun test_exceed_limit() {
         0,
     );
     let record = limiter.transfer_records().get(&route);
-    assert_eq(record.total_amount(), 100000 * 10 * usd_value_multiplier());
+    assert_eq!(record.total_amount(), 100000 * 10 * usd_value_multiplier());
 
     // But now limit is hit again
     assert!(!limiter.check_and_record_sending_transfer<ETH>(&treasury, &clock, route, 1), 0);
     let record = limiter.transfer_records().get(&route);
-    assert_eq(record.total_amount(), 100000 * 10 * usd_value_multiplier());
+    assert_eq!(record.total_amount(), 100000 * 10 * usd_value_multiplier());
 
     destroy(limiter);
     destroy(treasury);
@@ -302,8 +302,8 @@ fun test_limiter_basic_op() {
         0,
     );
     let record = limiter.transfer_records().get(&route);
-    assert_eq(record.hour_head(), 10023);
-    assert_eq(record.hour_tail(), 10000);
+    assert_eq!(record.hour_head(), 10023);
+    assert_eq!(record.hour_tail(), 10000);
     assert!(
         record.per_hour_amounts() ==
             &vector[
@@ -312,7 +312,7 @@ fun test_limiter_basic_op() {
             ],
         0,
     );
-    assert_eq(record.total_amount(), 15 * eth_price);
+    assert_eq!(record.total_amount(), 15 * eth_price);
 
     // hour 0 (10023): $37.5 + $10 = $47.5
     // 10 uddc = $10
@@ -326,8 +326,8 @@ fun test_limiter_basic_op() {
         0,
     );
     let record = limiter.transfer_records().get(&route);
-    assert_eq(record.hour_head(), 10023);
-    assert_eq(record.hour_tail(), 10000);
+    assert_eq!(record.hour_head(), 10023);
+    assert_eq!(record.hour_tail(), 10000);
     let expected_notion_amount_10023 = 15 * eth_price + 10 * usd_value_multiplier();
     assert!(
         record.per_hour_amounts() ==
@@ -338,7 +338,7 @@ fun test_limiter_basic_op() {
             ],
         0,
     );
-    assert_eq(record.total_amount(), expected_notion_amount_10023);
+    assert_eq!(record.total_amount(), expected_notion_amount_10023);
 
     // hour 1 (10024): $20
     clock.increment_for_testing(60 * 60 * 1000);
@@ -353,8 +353,8 @@ fun test_limiter_basic_op() {
         0,
     );
     let record = limiter.transfer_records().get(&route);
-    assert_eq(record.hour_head(), 10024);
-    assert_eq(record.hour_tail(), 10001);
+    assert_eq!(record.hour_head(), 10024);
+    assert_eq!(record.hour_tail(), 10001);
     let expected_notion_amount_10024 = 20 * usd_value_multiplier();
     assert!(
         record.per_hour_amounts() ==
@@ -365,7 +365,7 @@ fun test_limiter_basic_op() {
             ],
         0,
     );
-    assert_eq(record.total_amount(), expected_notion_amount_10023 + expected_notion_amount_10024);
+    assert_eq!(record.total_amount(), expected_notion_amount_10023 + expected_notion_amount_10024);
 
     // Fast forward 22 hours, now hour 23 (10046): try to transfer $33 willf fail
     clock.increment_for_testing(60 * 60 * 1000 * 22);
@@ -382,8 +382,8 @@ fun test_limiter_basic_op() {
     );
     // but window slid
     let record = limiter.transfer_records().get(&route);
-    assert_eq(record.hour_head(), 10046);
-    assert_eq(record.hour_tail(), 10023);
+    assert_eq!(record.hour_head(), 10046);
+    assert_eq!(record.hour_tail(), 10023);
     assert!(
         record.per_hour_amounts() ==
             &vector[
@@ -392,7 +392,7 @@ fun test_limiter_basic_op() {
             ],
         0,
     );
-    assert_eq(record.total_amount(), expected_notion_amount_10023 + expected_notion_amount_10024);
+    assert_eq!(record.total_amount(), expected_notion_amount_10023 + expected_notion_amount_10024);
 
     // hour 23 (10046): $32.5 deposit will succeed
     // 65 usdt = $32.5
@@ -407,8 +407,8 @@ fun test_limiter_basic_op() {
     );
     let record = limiter.transfer_records().get(&route);
     let expected_notion_amount_10046 = 325 * usd_value_multiplier() / 10;
-    assert_eq(record.hour_head(), 10046);
-    assert_eq(record.hour_tail(), 10023);
+    assert_eq!(record.hour_head(), 10046);
+    assert_eq!(record.hour_tail(), 10023);
     assert!(
         record.per_hour_amounts() ==
             &vector[
@@ -419,7 +419,7 @@ fun test_limiter_basic_op() {
             ],
         0,
     );
-    assert_eq(
+    assert_eq!(
         record.total_amount(),
         expected_notion_amount_10023 + expected_notion_amount_10024 + expected_notion_amount_10046,
     );
@@ -433,8 +433,8 @@ fun test_limiter_basic_op() {
     );
     let record = limiter.transfer_records().get(&route);
     let expected_notion_amount_10047 = 5 * usd_value_multiplier() / 10;
-    assert_eq(record.hour_head(), 10047);
-    assert_eq(record.hour_tail(), 10024);
+    assert_eq!(record.hour_head(), 10047);
+    assert_eq!(record.hour_tail(), 10024);
     assert!(
         record.per_hour_amounts() ==
             &vector[
@@ -445,7 +445,7 @@ fun test_limiter_basic_op() {
             ],
         0,
     );
-    assert_eq(
+    assert_eq!(
         record.total_amount(),
         expected_notion_amount_10024 + expected_notion_amount_10046 + expected_notion_amount_10047,
     );
@@ -464,8 +464,8 @@ fun test_limiter_basic_op() {
     );
     let record = limiter.transfer_records().get(&route);
     let expected_notion_amount_10053 = 1 * usd_value_multiplier();
-    assert_eq(record.hour_head(), 10053);
-    assert_eq(record.hour_tail(), 10030);
+    assert_eq!(record.hour_head(), 10053);
+    assert_eq!(record.hour_tail(), 10030);
     assert!(
         record.per_hour_amounts() ==
             &vector[
@@ -477,7 +477,7 @@ fun test_limiter_basic_op() {
             ],
         0,
     );
-    assert_eq(
+    assert_eq!(
         record.total_amount(),
         expected_notion_amount_10046 + expected_notion_amount_10047 + expected_notion_amount_10053,
     );
@@ -496,8 +496,8 @@ fun test_limiter_basic_op() {
     );
     let record = limiter.transfer_records().get(&route);
     let expected_notion_amount_10153 = 1 * usd_value_multiplier();
-    assert_eq(record.hour_head(), 10153);
-    assert_eq(record.hour_tail(), 10130);
+    assert_eq!(record.hour_head(), 10153);
+    assert_eq!(record.hour_tail(), 10130);
     assert!(
         record.per_hour_amounts() ==
             &vector[
@@ -507,7 +507,7 @@ fun test_limiter_basic_op() {
             ],
         0,
     );
-    assert_eq(record.total_amount(), expected_notion_amount_10153);
+    assert_eq!(record.total_amount(), expected_notion_amount_10153);
 
     destroy(limiter);
     destroy(treasury);
@@ -519,14 +519,14 @@ fun test_limiter_basic_op() {
 fun test_update_route_limit() {
     // default routes, default notion values
     let mut limiter = new();
-    assert_eq(
+    assert_eq!(
         limiter.transfer_limits()[
             &chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet()),
         ],
         5_000_000 * usd_value_multiplier(),
     );
 
-    assert_eq(
+    assert_eq!(
         limiter.transfer_limits()[
             &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet()),
         ],
@@ -539,14 +539,14 @@ fun test_update_route_limit() {
         &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet()),
         1_000 * usd_value_multiplier(),
     );
-    assert_eq(
+    assert_eq!(
         limiter.transfer_limits()[
             &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet()),
         ],
         1_000 * usd_value_multiplier(),
     );
     // mainnet route does not change
-    assert_eq(
+    assert_eq!(
         limiter.transfer_limits()[
             &chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet()),
         ],
@@ -559,7 +559,7 @@ fun test_update_route_limit() {
 fun test_update_route_limit_all_paths() {
     let mut limiter = new();
     // pick an existing route limit
-    assert_eq(
+    assert_eq!(
         limiter.transfer_limits()[
             &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet()),
         ],
@@ -571,7 +571,7 @@ fun test_update_route_limit_all_paths() {
         &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet()),
         new_limit,
     );
-    assert_eq(
+    assert_eq!(
         limiter.transfer_limits()[
             &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet()),
         ],
@@ -584,7 +584,7 @@ fun test_update_route_limit_all_paths() {
         &chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia()),
         new_limit,
     );
-    assert_eq(
+    assert_eq!(
         limiter.transfer_limits()[
             &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet()),
         ],
@@ -601,18 +601,18 @@ fun test_update_asset_price() {
     let ctx = test_scenario::ctx(&mut scenario);
     let mut treasury = treasury::mock_for_test(ctx);
 
-    assert_eq(treasury.notional_value<BTC>(), (50_000 * usd_value_multiplier()));
-    assert_eq(treasury.notional_value<ETH>(), (3_000 * usd_value_multiplier()));
-    assert_eq(treasury.notional_value<USDC>(), (1 * usd_value_multiplier()));
-    assert_eq(treasury.notional_value<USDT>(), (1 * usd_value_multiplier()));
+    assert_eq!(treasury.notional_value<BTC>(), (50_000 * usd_value_multiplier()));
+    assert_eq!(treasury.notional_value<ETH>(), (3_000 * usd_value_multiplier()));
+    assert_eq!(treasury.notional_value<USDC>(), (1 * usd_value_multiplier()));
+    assert_eq!(treasury.notional_value<USDT>(), (1 * usd_value_multiplier()));
     // change usdt price
     let id = treasury.token_id<USDT>();
     treasury.update_asset_notional_price(id, 11 * usd_value_multiplier() / 10);
-    assert_eq(treasury.notional_value<USDT>(), (11 * usd_value_multiplier() / 10));
+    assert_eq!(treasury.notional_value<USDT>(), (11 * usd_value_multiplier() / 10));
     // other prices do not change
-    assert_eq(treasury.notional_value<BTC>(), (50_000 * usd_value_multiplier()));
-    assert_eq(treasury.notional_value<ETH>(), (3_000 * usd_value_multiplier()));
-    assert_eq(treasury.notional_value<USDC>(), (1 * usd_value_multiplier()));
+    assert_eq!(treasury.notional_value<BTC>(), (50_000 * usd_value_multiplier()));
+    assert_eq!(treasury.notional_value<ETH>(), (3_000 * usd_value_multiplier()));
+    assert_eq!(treasury.notional_value<USDC>(), (1 * usd_value_multiplier()));
     scenario.end();
     destroy(treasury);
 }

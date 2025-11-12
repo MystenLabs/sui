@@ -4,10 +4,10 @@
 use std::{borrow::Cow, sync::Arc};
 
 use axum::extract::MatchedPath;
-use http::{header::CONTENT_TYPE, StatusCode};
+use http::{StatusCode, header::CONTENT_TYPE};
 use mysten_network::callback::{MakeCallbackHandler, ResponseHandler};
 use prometheus::HistogramTimer;
-use tonic::{metadata::GRPC_CONTENT_TYPE, Code};
+use tonic::{Code, metadata::GRPC_CONTENT_TYPE};
 
 use crate::rpc::metrics::RpcMetrics;
 

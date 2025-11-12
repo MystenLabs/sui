@@ -34,7 +34,6 @@ mod checked {
     use sui_types::committee::EpochId;
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
-    use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
@@ -368,7 +367,7 @@ mod checked {
                 result = Err(conservation_err);
                 gas_charger.reset(temporary_store);
                 gas_charger.charge_gas(temporary_store, &mut result);
-                // check conservation once more more
+                // check conservation once more
                 if let Err(recovery_err) = {
                     temporary_store
                         .check_sui_conserved(simple_conservation_checks, cost_summary)
@@ -642,6 +641,12 @@ mod checked {
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
                             panic!("EndOfEpochTransactionKind::AccumulatorRootCreate should not exist in v1");
                         }
+                        EndOfEpochTransactionKind::CoinRegistryCreate => {
+                            panic!("EndOfEpochTransactionKind::CoinRegistryCreate should not exist in v1");
+                        }
+                        EndOfEpochTransactionKind::DisplayRegistryCreate => {
+                            panic!("EndOfEpochTransactionKind::DisplayRegistryCreate should not exist in v1");
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
@@ -868,7 +873,7 @@ mod checked {
             }
         }
 
-        let binary_config = to_binary_config(protocol_config);
+        let binary_config = protocol_config.binary_config(None);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
                 .iter()
@@ -1001,7 +1006,7 @@ mod checked {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                         initial_shared_version: update.authenticator_obj_initial_shared_version,
-                        mutable: true,
+                        mutability: sui_types::transaction::SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure(bcs::to_bytes(&update.new_active_jwks).unwrap()),
                 ],
@@ -1037,7 +1042,7 @@ mod checked {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                         initial_shared_version: expire.authenticator_obj_initial_shared_version,
-                        mutable: true,
+                        mutability: sui_types::transaction::SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure(bcs::to_bytes(&expire.min_epoch).unwrap()),
                 ],

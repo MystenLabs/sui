@@ -32,6 +32,7 @@ members = [
 aes-gcm = "0.8.0"
 anyhow = "1.0.52"
 append-only-vec = "0.1.7"
+aquamarine = "0.6.0"
 arbitrary = { version = "1.1.7", features = ["derive", "derive_arbitrary"] }
 async-trait = "0.1.42"
 bcs = "0.1.4"
@@ -92,6 +93,8 @@ petgraph = "0.8.1"
 phf = { version = "0.11", features = ["macros"] }
 plotters = { version = "0.3.0", default-features = false, features = ["evcxr", "line_series", "histogram"] }
 pretty = "0.10.0"
+pretty_simple = "0.1.1"
+pretty_assertions = "1.4.1"
 prettydiff = "0.4.0"
 primitive-types = { version = "0.10.1", features = ["impl-serde"] }
 proc-macro2 = "1.0.24"
@@ -123,6 +126,7 @@ static_assertions = "1.1.0"
 strum = { version = "0.27.1", features = ["derive"] }
 strum_macros = "0.27.1"
 syn = { version = "1.0.64", features = ["derive"] }
+sysinfo = "0.35.2"
 tempfile = "3.2.0"
 tera = "1.16.0"
 test-log = { version = "0.2.17", features = ["trace"] }
@@ -168,6 +172,7 @@ move-command-line-common = { path = "crates/move-command-line-common" }
 move-compiler = { path = "crates/move-compiler" }
 move-core-types = { path = "crates/move-core-types" }
 move-coverage = { path = "crates/move-coverage" }
+move-decompiler = { path = "crates/move-decompiler" }
 move-disassembler = { path = "crates/move-disassembler" }
 move-docgen = { path = "crates/move-docgen" }
 move-docgen-tests = { path = "crates/move-docgen-tests" }
@@ -183,6 +188,7 @@ move-package-alt-compilation = { path = "crates/move-package-alt-compilation" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-regex-borrow-graph = { path = "crates/move-regex-borrow-graph" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
+move-stackless-bytecode-2 = { path = "crates/move-stackless-bytecode-2" }
 move-stdlib = { path = "crates/move-stdlib" }
 move-stdlib-natives = { path = "crates/move-stdlib-natives" }
 move-symbol-pool = { path = "crates/move-symbol-pool" }

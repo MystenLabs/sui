@@ -3,19 +3,15 @@
 
 use std::{sync::Arc, time::Duration};
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::{
-    metrics::IndexerMetrics,
-    store::{CommitterWatermark, Store},
-    types::full_checkpoint_content::CheckpointData,
-    FieldCount,
-};
+use crate::{metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::Checkpoint};
 
-use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
+use super::{CommitterConfig, PIPELINE_BUFFER, Processor, WatermarkPart, processor::processor};
 
 use self::{
     collector::collector, commit_watermark::commit_watermark, committer::committer, pruner::pruner,
@@ -27,6 +23,15 @@ mod commit_watermark;
 mod committer;
 mod pruner;
 mod reader_watermark;
+
+/// Status returned by `Handler::batch` to indicate whether the batch is ready to be committed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BatchStatus {
+    /// The batch can accept more values.
+    Pending,
+    /// The batch is full and should be committed.
+    Ready,
+}
 
 /// Handlers implement the logic for a given indexing pipeline: How to process checkpoint data (by
 /// implementing [Processor]) into rows for their table, and how to write those rows to the database.
@@ -47,9 +52,10 @@ mod reader_watermark;
 /// Back-pressure is handled through the `MAX_PENDING_SIZE` constant -- if more than this many rows
 /// build up, the collector will stop accepting new checkpoints, which will eventually propagate
 /// back to the ingestion service.
-#[async_trait::async_trait]
-pub trait Handler: Processor<Value: FieldCount> {
+#[async_trait]
+pub trait Handler: Processor {
     type Store: Store;
+    type Batch: Default + Send + Sync + 'static;
 
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
@@ -62,10 +68,24 @@ pub trait Handler: Processor<Value: FieldCount> {
     /// checkpoints -- the size of these pipeline's batches will be dominated by watermark updates.
     const MAX_WATERMARK_UPDATES: usize = 10_000;
 
-    /// Take a chunk of values and commit them to the database, returning the number of rows
-    /// affected.
+    /// Add values from the iterator to the batch. The implementation may take all, some, or none
+    /// of the values from the iterator by calling `.next()`.
+    ///
+    /// Returns `BatchStatus::Ready` if the batch is full and should be committed,
+    /// or `BatchStatus::Pending` if the batch can accept more values.
+    ///
+    /// Note: The handler can signal batch readiness via `BatchStatus::Ready`, but the framework
+    /// may also decide to commit a batch based on the trait parameters above.
+    fn batch(
+        &self,
+        batch: &mut Self::Batch,
+        values: &mut std::vec::IntoIter<Self::Value>,
+    ) -> BatchStatus;
+
+    /// Commit the batch to the database, returning the number of rows affected.
     async fn commit<'a>(
-        values: &[Self::Value],
+        &self,
+        batch: &Self::Batch,
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize>;
 
@@ -116,10 +136,27 @@ pub struct PrunerConfig {
 /// Values inside each batch may or may not be from the same checkpoint. Values in the same
 /// checkpoint can also be split across multiple batches.
 struct BatchedRows<H: Handler> {
-    /// The rows to write
-    values: Vec<H::Value>,
+    /// The batch to write
+    batch: H::Batch,
+    /// Number of rows in the batch
+    batch_len: usize,
     /// Proportions of all the watermarks that are represented in this chunk
     watermark: Vec<WatermarkPart>,
+}
+
+impl<H, V> BatchedRows<H>
+where
+    H: Handler<Batch = Vec<V>, Value = V>,
+{
+    #[cfg(test)]
+    pub fn from_vec(batch: Vec<V>, watermark: Vec<WatermarkPart>) -> Self {
+        let batch_len = batch.len();
+        Self {
+            batch,
+            batch_len,
+            watermark,
+        }
+    }
 }
 
 impl PrunerConfig {
@@ -129,27 +166,6 @@ impl PrunerConfig {
 
     pub fn delay(&self) -> Duration {
         Duration::from_millis(self.delay_ms)
-    }
-}
-
-impl<H: Handler> BatchedRows<H> {
-    fn new() -> Self {
-        Self {
-            values: vec![],
-            watermark: vec![],
-        }
-    }
-
-    /// Number of rows in this batch.
-    fn len(&self) -> usize {
-        self.values.len()
-    }
-
-    /// The batch is full if it has more than enough values to write to the database, or more than
-    /// enough watermarks to update.
-    fn is_full(&self) -> bool {
-        self.values.len() >= max_chunk_rows::<H>()
-            || self.watermark.len() >= H::MAX_WATERMARK_UPDATES
     }
 }
 
@@ -187,11 +203,11 @@ impl Default for PrunerConfig {
 /// reports an issue.
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
-    initial_commit_watermark: Option<CommitterWatermark>,
+    next_checkpoint: u64,
     config: ConcurrentConfig,
     skip_watermark: bool,
     store: H::Store,
-    checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
+    checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -205,8 +221,10 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     } = config;
 
     let (processor_tx, collector_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
+    //docs::#buff (see docs/content/guides/developer/advanced/custom-indexer.mdx)
     let (collector_tx, committer_rx) =
         mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
+    //docs::/#buff
     let (committer_tx, watermark_rx) =
         mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
 
@@ -226,6 +244,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let collector = collector::<H>(
+        handler.clone(),
         committer_config.clone(),
         collector_rx,
         collector_tx,
@@ -234,6 +253,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let committer = committer::<H>(
+        handler.clone(),
         committer_config.clone(),
         skip_watermark,
         committer_rx,
@@ -244,7 +264,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let commit_watermark = commit_watermark::<H>(
-        initial_commit_watermark,
+        next_checkpoint,
         committer_config,
         skip_watermark,
         watermark_rx,
@@ -276,33 +296,23 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     })
 }
 
-const fn max_chunk_rows<H: Handler>() -> usize {
-    if H::Value::FIELD_COUNT == 0 {
-        i16::MAX as usize
-    } else {
-        i16::MAX as usize / H::Value::FIELD_COUNT
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::{sync::Arc, time::Duration};
 
-    use async_trait::async_trait;
     use prometheus::Registry;
     use tokio::{sync::mpsc, time::timeout};
     use tokio_util::sync::CancellationToken;
 
     use crate::{
-        metrics::IndexerMetrics,
-        pipeline::Processor,
-        store::CommitterWatermark,
-        testing::mock_store::MockStore,
-        types::{
-            full_checkpoint_content::CheckpointData,
-            test_checkpoint_data_builder::TestCheckpointDataBuilder,
-        },
         FieldCount,
+        metrics::IndexerMetrics,
+        mocks::store::{MockConnection, MockStore},
+        pipeline::Processor,
+        types::{
+            full_checkpoint_content::Checkpoint,
+            test_checkpoint_data_builder::TestCheckpointBuilder,
+        },
     };
 
     use super::*;
@@ -318,13 +328,14 @@ mod tests {
 
     struct DataPipeline;
 
+    #[async_trait]
     impl Processor for DataPipeline {
         const NAME: &'static str = "test_handler";
         const FANOUT: usize = 2;
         type Value = TestValue;
 
-        fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
-            let cp_num = checkpoint.checkpoint_summary.sequence_number;
+        async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
+            let cp_num = checkpoint.summary.sequence_number;
 
             // Every checkpoint will come with 2 processed values
             Ok(vec![
@@ -343,18 +354,31 @@ mod tests {
     #[async_trait]
     impl Handler for DataPipeline {
         type Store = MockStore;
+        type Batch = Vec<TestValue>;
+
         const MIN_EAGER_ROWS: usize = 1000; // High value to disable eager batching
         const MAX_PENDING_ROWS: usize = 4; // Small value to trigger back pressure quickly
         const MAX_WATERMARK_UPDATES: usize = 1; // Each batch will have 1 checkpoint for an ease of testing.
 
+        fn batch(
+            &self,
+            batch: &mut Self::Batch,
+            values: &mut std::vec::IntoIter<Self::Value>,
+        ) -> BatchStatus {
+            // Take all values
+            batch.extend(values);
+            BatchStatus::Pending
+        }
+
         async fn commit<'a>(
-            values: &[Self::Value],
-            conn: &mut crate::testing::mock_store::MockConnection<'a>,
+            &self,
+            batch: &Self::Batch,
+            conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
             // Group values by checkpoint
             let mut grouped: std::collections::HashMap<u64, Vec<u64>> =
                 std::collections::HashMap::new();
-            for value in values {
+            for value in batch {
                 grouped
                     .entry(value.checkpoint)
                     .or_default()
@@ -362,32 +386,28 @@ mod tests {
             }
 
             // Commit all data at once
-            conn.0.commit_data(grouped).await
+            conn.0.commit_bulk_data(DataPipeline::NAME, grouped).await
         }
 
         async fn prune<'a>(
             &self,
             from: u64,
             to_exclusive: u64,
-            conn: &mut crate::testing::mock_store::MockConnection<'a>,
+            conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
-            conn.0.prune_data(from, to_exclusive)
+            conn.0.prune_data(DataPipeline::NAME, from, to_exclusive)
         }
     }
 
     struct TestSetup {
         store: MockStore,
-        checkpoint_tx: mpsc::Sender<Arc<CheckpointData>>,
+        checkpoint_tx: mpsc::Sender<Arc<Checkpoint>>,
         pipeline_handle: JoinHandle<()>,
         cancel: CancellationToken,
     }
 
     impl TestSetup {
-        async fn new(
-            config: ConcurrentConfig,
-            store: MockStore,
-            initial_watermark: Option<CommitterWatermark>,
-        ) -> Self {
+        async fn new(config: ConcurrentConfig, store: MockStore, next_checkpoint: u64) -> Self {
             let (checkpoint_tx, checkpoint_rx) = mpsc::channel(TEST_CHECKPOINT_BUFFER_SIZE);
             let metrics = IndexerMetrics::new(None, &Registry::default());
             let cancel = CancellationToken::new();
@@ -395,7 +415,7 @@ mod tests {
             let skip_watermark = false;
             let pipeline_handle = pipeline(
                 DataPipeline,
-                initial_watermark,
+                next_checkpoint,
                 config,
                 skip_watermark,
                 store.clone(),
@@ -414,7 +434,7 @@ mod tests {
 
         async fn send_checkpoint(&self, checkpoint: u64) -> anyhow::Result<()> {
             let checkpoint = Arc::new(
-                TestCheckpointDataBuilder::new(checkpoint)
+                TestCheckpointBuilder::new(checkpoint)
                     .with_epoch(1)
                     .with_network_total_transactions(checkpoint * 2)
                     .with_timestamp_ms(1000000000 + checkpoint * 1000)
@@ -461,7 +481,7 @@ mod tests {
             ..Default::default()
         };
         let store = MockStore::default();
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send initial checkpoints
         for i in 0..3 {
@@ -473,7 +493,10 @@ mod tests {
 
         // Verify all initial data is available (before any pruning)
         for i in 0..3 {
-            let data = setup.store.wait_for_data(i, TEST_TIMEOUT).await;
+            let data = setup
+                .store
+                .wait_for_data(DataPipeline::NAME, i, TEST_TIMEOUT)
+                .await;
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
 
@@ -488,7 +511,10 @@ mod tests {
         // Verify data is still available BEFORE pruning kicks in
         // With long pruning interval (5s), we can safely verify data without race conditions
         for i in 0..6 {
-            let data = setup.store.wait_for_data(i, Duration::from_secs(1)).await;
+            let data = setup
+                .store
+                .wait_for_data(DataPipeline::NAME, i, Duration::from_secs(1))
+                .await;
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
 
@@ -497,7 +523,7 @@ mod tests {
 
         // Verify pruning has occurred
         {
-            let data = setup.store.data.lock().unwrap();
+            let data = setup.store.data.get(DataPipeline::NAME).unwrap();
 
             // Verify recent checkpoints are still available
             assert!(data.contains_key(&3));
@@ -520,7 +546,7 @@ mod tests {
             ..Default::default()
         };
         let store = MockStore::default();
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send several checkpoints
         for i in 0..10 {
@@ -531,11 +557,17 @@ mod tests {
         }
 
         // Wait for all data to be processed and committed
-        let watermark = setup.store.wait_for_watermark(9, TEST_TIMEOUT).await;
+        let watermark = setup
+            .store
+            .wait_for_watermark(DataPipeline::NAME, 9, TEST_TIMEOUT)
+            .await;
 
         // Verify ALL data was processed correctly (no pruning)
         for i in 0..10 {
-            let data = setup.store.wait_for_data(i, Duration::from_secs(1)).await;
+            let data = setup
+                .store
+                .wait_for_data(DataPipeline::NAME, i, Duration::from_secs(1))
+                .await;
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
 
@@ -546,7 +578,7 @@ mod tests {
 
         // Verify no data was pruned - all 10 checkpoints should still exist
         let total_checkpoints = {
-            let data = setup.store.data.lock().unwrap();
+            let data = setup.store.data.get(DataPipeline::NAME).unwrap();
             data.len()
         };
         assert_eq!(total_checkpoints, 10);
@@ -558,7 +590,7 @@ mod tests {
     async fn test_out_of_order_processing() {
         let config = ConcurrentConfig::default();
         let store = MockStore::default();
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send checkpoints out of order
         let checkpoints = vec![2, 0, 4, 1, 3];
@@ -570,14 +602,17 @@ mod tests {
         }
 
         // Wait for all data to be processed
-        let _watermark = setup
+        setup
             .store
-            .wait_for_watermark(4, Duration::from_secs(5))
+            .wait_for_watermark(DataPipeline::NAME, 4, Duration::from_secs(5))
             .await;
 
         // Verify all checkpoints were processed correctly despite out-of-order arrival
         for i in 0..5 {
-            let data = setup.store.wait_for_data(i, Duration::from_secs(1)).await;
+            let data = setup
+                .store
+                .wait_for_data(DataPipeline::NAME, i, Duration::from_secs(1))
+                .await;
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
 
@@ -588,7 +623,7 @@ mod tests {
     async fn test_watermark_progression_with_gaps() {
         let config = ConcurrentConfig::default();
         let store = MockStore::default();
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send checkpoints with a gap (0, 1, 3, 4) - missing checkpoint 2
         for cp in [0, 1, 3, 4] {
@@ -602,7 +637,7 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         // Watermark should only progress to 1 (can't progress past the gap)
-        let watermark = setup.store.get_watermark();
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
 
         // Now send the missing checkpoint 2
@@ -612,7 +647,10 @@ mod tests {
             .unwrap();
 
         // Now watermark should progress to 4
-        let watermark = setup.store.wait_for_watermark(4, TEST_TIMEOUT).await;
+        let watermark = setup
+            .store
+            .wait_for_watermark(DataPipeline::NAME, 4, TEST_TIMEOUT)
+            .await;
         assert_eq!(watermark.checkpoint_hi_inclusive, 4);
 
         setup.shutdown().await;
@@ -643,7 +681,7 @@ mod tests {
             ..Default::default()
         };
         let store = MockStore::default();
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Wait for initial setup
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -679,7 +717,10 @@ mod tests {
             .unwrap();
 
         // Verify data was processed correctly
-        let data = setup.store.wait_for_data(0, TEST_TIMEOUT).await;
+        let data = setup
+            .store
+            .wait_for_data(DataPipeline::NAME, 0, TEST_TIMEOUT)
+            .await;
         assert_eq!(data, vec![1, 2]);
 
         setup.shutdown().await;
@@ -707,7 +748,7 @@ mod tests {
             ..Default::default()
         };
         let store = MockStore::default().with_commit_delay(10_000); // 10 seconds delay
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Pipeline capacity analysis with slow commits:
         // Configuration: FANOUT=2, write_concurrency=1, PIPELINE_BUFFER=5
@@ -750,7 +791,10 @@ mod tests {
         );
 
         // Verify that some data has been processed (pipeline is working)
-        setup.store.wait_for_any_data(TEST_TIMEOUT).await;
+        setup
+            .store
+            .wait_for_any_data(DataPipeline::NAME, TEST_TIMEOUT)
+            .await;
 
         // Allow pipeline to drain by sending the blocked checkpoint with longer timeout
         setup
@@ -767,7 +811,7 @@ mod tests {
     async fn test_commit_failure_retry() {
         let config = ConcurrentConfig::default();
         let store = MockStore::default().with_commit_failures(2); // Fail 2 times, then succeed
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send a checkpoint
         setup
@@ -776,10 +820,16 @@ mod tests {
             .unwrap();
 
         // Should eventually succeed despite initial commit failures
-        let _watermark = setup.store.wait_for_watermark(0, TEST_TIMEOUT).await;
+        setup
+            .store
+            .wait_for_watermark(DataPipeline::NAME, 0, TEST_TIMEOUT)
+            .await;
 
         // Verify data was eventually committed
-        let data = setup.store.wait_for_data(0, Duration::from_secs(1)).await;
+        let data = setup
+            .store
+            .wait_for_data(DataPipeline::NAME, 0, Duration::from_secs(1))
+            .await;
         assert_eq!(data, vec![1, 2]);
 
         setup.shutdown().await;
@@ -799,7 +849,7 @@ mod tests {
 
         // Configure prune failures for range [0, 2) - fail twice then succeed
         let store = MockStore::default().with_prune_failures(0, 2, 1);
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send enough checkpoints to trigger pruning
         for i in 0..4 {
@@ -812,7 +862,10 @@ mod tests {
         // Verify data is still available BEFORE pruning kicks in
         // With long pruning interval (5s), we can safely verify data without race conditions
         for i in 0..4 {
-            let data = setup.store.wait_for_data(i, Duration::from_secs(1)).await;
+            let data = setup
+                .store
+                .wait_for_data(DataPipeline::NAME, i, Duration::from_secs(1))
+                .await;
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
 
@@ -822,7 +875,7 @@ mod tests {
             .wait_for_prune_attempts(0, 2, 1, TEST_TIMEOUT)
             .await;
         {
-            let data = setup.store.data.lock().unwrap();
+            let data = setup.store.data.get(DataPipeline::NAME).unwrap();
             for i in 0..4 {
                 assert!(data.contains_key(&i));
             }
@@ -834,7 +887,7 @@ mod tests {
             .wait_for_prune_attempts(0, 2, 2, TEST_TIMEOUT)
             .await;
         {
-            let data = setup.store.data.lock().unwrap();
+            let data = setup.store.data.get(DataPipeline::NAME).unwrap();
             // Verify recent checkpoints are still available
             assert!(data.contains_key(&2));
             assert!(data.contains_key(&3));
@@ -861,7 +914,7 @@ mod tests {
 
         // Configure reader watermark failures - fail 2 times then succeed
         let store = MockStore::default().with_reader_watermark_failures(2);
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send checkpoints to trigger reader watermark updates
         for i in 0..6 {
@@ -872,13 +925,16 @@ mod tests {
         }
 
         // Wait for processing to complete
-        let _watermark = setup.store.wait_for_watermark(5, TEST_TIMEOUT).await;
+        setup
+            .store
+            .wait_for_watermark(DataPipeline::NAME, 5, TEST_TIMEOUT)
+            .await;
 
         // Wait for reader watermark task to attempt updates (with failures and retries)
         tokio::time::sleep(Duration::from_secs(2)).await;
 
         // Verify that reader watermark was eventually updated despite failures
-        let watermark = setup.store.get_watermark();
+        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.reader_lo, 3);
 
         setup.shutdown().await;
@@ -888,7 +944,7 @@ mod tests {
     async fn test_database_connection_failure_retry() {
         let config = ConcurrentConfig::default();
         let store = MockStore::default().with_connection_failures(2); // Fail 2 times, then succeed
-        let setup = TestSetup::new(config, store, None).await;
+        let setup = TestSetup::new(config, store, 0).await;
 
         // Send a checkpoint
         setup
@@ -897,10 +953,16 @@ mod tests {
             .unwrap();
 
         // Should eventually succeed despite initial failures
-        let _watermark = setup.store.wait_for_watermark(0, TEST_TIMEOUT).await;
+        setup
+            .store
+            .wait_for_watermark(DataPipeline::NAME, 0, TEST_TIMEOUT)
+            .await;
 
         // Verify data was eventually committed
-        let data = setup.store.wait_for_data(0, TEST_TIMEOUT).await;
+        let data = setup
+            .store
+            .wait_for_data(DataPipeline::NAME, 0, TEST_TIMEOUT)
+            .await;
         assert_eq!(data, vec![1, 2]);
 
         setup.shutdown().await;

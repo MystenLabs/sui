@@ -6,11 +6,11 @@ use std::{sync::Arc, time::Duration};
 use arc_swap::{ArcSwapOption, Guard};
 use consensus_core::{ClientError, TransactionClient};
 use sui_types::{
-    error::{SuiError, SuiResult},
+    error::{SuiErrorKind, SuiResult},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
 };
 use tap::prelude::*;
-use tokio::time::{sleep, Instant};
+use tokio::time::{Instant, sleep};
 use tracing::{error, info, warn};
 
 use crate::{
@@ -113,11 +113,13 @@ impl ConsensusClient for LazyMysticetiClient {
                     }
                 };
             })
-            .map_err(|err| SuiError::FailedToSubmitToConsensus(err.to_string()))?;
+            .map_err(|err| SuiErrorKind::FailedToSubmitToConsensus(err.to_string()))?;
 
         let is_soft_bundle = transactions.len() > 1;
+        let is_ping = transactions.is_empty();
 
         if !is_soft_bundle
+            && !is_ping
             && matches!(
                 transactions[0].kind,
                 ConsensusTransactionKind::EndOfPublish(_)

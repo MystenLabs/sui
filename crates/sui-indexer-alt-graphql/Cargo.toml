@@ -4,7 +4,7 @@ version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "sui-indexer-alt-graphql"
@@ -30,11 +30,17 @@ const-str.workspace = true
 diesel.workspace = true
 diesel-async.workspace = true
 fastcrypto.workspace = true
+fastcrypto-zkp.workspace = true
 futures.workspace = true
 headers.workspace = true
+im.workspace = true
+itertools.workspace = true
+pin-project.workspace = true
 prometheus.workspace = true
+prost-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+shared-crypto.workspace = true
 telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -45,16 +51,24 @@ tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
 
+move-binary-format.workspace = true
 move-core-types.workspace = true
+move-disassembler.workspace = true
+move-ir-types.workspace = true
 
 bin-version.workspace = true
 sui-default-config.workspace = true
+sui-display.workspace = true
 sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-reader.workspace = true
 sui-indexer-alt-schema.workspace = true
+sui-name-service.workspace = true
 sui-package-resolver.workspace = true
 sui-pg-db.workspace = true
 sui-protocol-config.workspace = true
+sui-rpc.workspace = true
+sui-rpc-api.workspace = true
+sui-sdk-types.workspace = true
 sui-sql-macro.workspace = true
 sui-types.workspace = true
 

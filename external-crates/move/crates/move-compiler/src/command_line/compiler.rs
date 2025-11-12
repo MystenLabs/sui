@@ -15,12 +15,16 @@ use crate::{
         *,
     },
     editions::Edition,
-    expansion, hlir, interface_generator, naming,
-    parser::{self, *},
+    expansion::{self, ast as E},
+    hlir, interface_generator,
+    naming::{self, ast as N},
+    parser::{self, ast::FunctionName, *},
     shared::{
         CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath, NamedAddressMap,
         NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths, SaveFlag, SaveHook,
         files::{FilesSourceText, MappedFiles},
+        program_info::ModuleInfo,
+        unique_map::UniqueMap,
     },
     to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
@@ -55,7 +59,7 @@ pub struct Compiler {
     targets: Vec<IndexedPhysicalPackagePath>,
     deps: Vec<IndexedPhysicalPackagePath>,
     interface_files_dir_opt: Option<String>,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
     visitors: Vec<Visitor>,
@@ -74,7 +78,7 @@ pub struct Compiler {
 
 pub struct SteppedCompiler<const P: Pass> {
     compilation_env: CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     program: Option<PassResult>,
 }
 
@@ -100,17 +104,20 @@ enum PassResult {
 }
 
 #[derive(Clone)]
-pub struct FullyCompiledProgram {
-    pub files: MappedFiles,
-    pub parser: parser::ast::Program,
-    pub expansion: expansion::ast::Program,
-    pub naming: naming::ast::Program,
-    pub typing: typing::ast::Program,
-    pub hlir: hlir::ast::Program,
-    pub cfgir: cfgir::ast::Program,
-    pub compiled: Vec<AnnotatedCompiledUnit>,
-}
+pub struct PreCompiledProgramInfo(BTreeMap<E::ModuleIdent, Arc<PreCompiledModuleInfo>>);
 
+#[derive(Clone)]
+pub struct PreCompiledModuleInfo {
+    pub file_name: Symbol,
+    pub file_content: Arc<str>,
+    /// to extract macros in typing/translate.rs (need function bodies for this)
+    pub macro_definitions: Option<(N::UseFuns, UniqueMap<FunctionName, N::Function>)>,
+    /// information about the module from `TypingProgramInfo` used in to extract
+    /// various information needed throughout the compilation process
+    pub info: ModuleInfo,
+    /// for transactional test runner in move-transactional-test-runner/src/framework.rs
+    pub compiled_unit: Option<AnnotatedCompiledUnit>,
+}
 pub enum Visitor {
     TypingVisitor(TypingVisitorObj),
     CFGIRVisitor(CFGIRVisitorObj),
@@ -247,15 +254,9 @@ impl Compiler {
         self
     }
 
-    pub fn set_pre_compiled_lib(mut self, pre_compiled_lib: Arc<FullyCompiledProgram>) -> Self {
-        assert!(self.pre_compiled_lib.is_none());
-        self.pre_compiled_lib = Some(pre_compiled_lib);
-        self
-    }
-
-    pub fn set_pre_compiled_lib_opt(
+    pub fn set_pre_compiled_program_opt(
         mut self,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     ) -> Self {
         assert!(self.pre_compiled_lib.is_none());
         self.pre_compiled_lib = pre_compiled_lib;
@@ -493,19 +494,19 @@ impl<const P: Pass> SteppedCompiler<P> {
         );
         let Self {
             compilation_env,
-            pre_compiled_lib,
+            pre_compiled_lib: pre_compiled_module_info,
             program,
         } = self;
         let new_prog = run(
             &compilation_env,
-            pre_compiled_lib.clone(),
+            pre_compiled_module_info.clone(),
             program.unwrap(),
             TARGET,
         )?;
         assert!(new_prog.equivalent_pass() == TARGET);
         Ok(SteppedCompiler {
             compilation_env,
-            pre_compiled_lib,
+            pre_compiled_lib: pre_compiled_module_info,
             program: Some(new_prog),
         })
     }
@@ -539,7 +540,7 @@ macro_rules! ast_stepped_compilers {
             impl<'a> SteppedCompiler<{$pass}> {
                 fn $new(
                     compilation_env: CompilationEnv,
-                    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+                    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
                     ast: $mod::ast::Program,
                 ) -> Self {
                     Self {
@@ -633,23 +634,86 @@ impl SteppedCompiler<PASS_COMPILATION> {
     }
 }
 
-/// Given a set of dependencies, precompile them and save the ASTs so that they can be used again
-/// to compile against without having to recompile these dependencies
+impl PreCompiledProgramInfo {
+    pub fn new(modules: BTreeMap<E::ModuleIdent, Arc<PreCompiledModuleInfo>>) -> Self {
+        Self(modules)
+    }
+
+    pub fn iter(
+        &self,
+    ) -> std::collections::btree_map::Iter<'_, E::ModuleIdent, Arc<PreCompiledModuleInfo>> {
+        self.0.iter()
+    }
+
+    pub fn iter_mut(
+        &mut self,
+    ) -> std::collections::btree_map::IterMut<'_, E::ModuleIdent, Arc<PreCompiledModuleInfo>> {
+        self.0.iter_mut()
+    }
+
+    pub fn module_info(&self, mident: &E::ModuleIdent) -> Option<&ModuleInfo> {
+        self.0.get(mident).map(|info| &info.info)
+    }
+
+    pub fn files(&self) -> MappedFiles {
+        let mut mapped_files = MappedFiles::empty();
+        for module_info in self.0.values() {
+            mapped_files.add(
+                module_info.info.defined_loc.file_hash(),
+                module_info.file_name,
+                module_info.file_content.clone(),
+            );
+        }
+        mapped_files
+    }
+}
+
+// Implement IntoIterator for references to PreCompiledProgramInfo
+impl<'a> IntoIterator for &'a PreCompiledProgramInfo {
+    type Item = (&'a E::ModuleIdent, &'a Arc<PreCompiledModuleInfo>);
+    type IntoIter =
+        std::collections::btree_map::Iter<'a, E::ModuleIdent, Arc<PreCompiledModuleInfo>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+// Implement IntoIterator for owned PreCompiledProgramInfo
+impl IntoIterator for PreCompiledProgramInfo {
+    type Item = (E::ModuleIdent, Arc<PreCompiledModuleInfo>);
+    type IntoIter =
+        std::collections::btree_map::IntoIter<E::ModuleIdent, Arc<PreCompiledModuleInfo>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+/// Given a set of dependencies, pre-compile them and save all data needed to compile
+/// against these dependencies without having to recompile them again. You can pass
+/// already pre-compiled transitive dependencies to avoid re-compiling them
+/// (`pre_compiled_program_opt` parameter). You can also obtain pre-compile a set of
+/// dependencies without the actual compiled modules in cases where these are not needed
+/// (`interface_only` parameter).
 pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol>>(
     targets: Vec<PackagePaths<Paths, NamedAddress>>,
     interface_files_dir_opt: Option<String>,
+    pre_compiled_program_opt: Option<Arc<PreCompiledProgramInfo>>,
+    interface_only: bool,
     flags: Flags,
     vfs_root: Option<VfsPath>,
-) -> anyhow::Result<Result<FullyCompiledProgram, (MappedFiles, Diagnostics)>> {
+) -> anyhow::Result<Result<PreCompiledProgramInfo, (MappedFiles, Diagnostics)>> {
     let hook = SaveHook::new([
-        SaveFlag::Parser,
-        SaveFlag::Expansion,
-        SaveFlag::Naming,
-        SaveFlag::Typing,
         SaveFlag::TypingInfo,
-        SaveFlag::HLIR,
-        SaveFlag::CFGIR,
+        SaveFlag::ModuleNameAddresses,
+        SaveFlag::MacroDefinitions,
     ]);
+    let files_to_compile = if interface_only {
+        Some(BTreeSet::new())
+    } else {
+        None
+    };
     let (files, pprog_and_comments_res) = Compiler::from_package_paths(
         vfs_root,
         targets,
@@ -657,6 +721,8 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     )?
     .set_interface_files_dir_opt(interface_files_dir_opt)
     .set_flags(flags)
+    .set_pre_compiled_program_opt(pre_compiled_program_opt.clone())
+    .set_files_to_compile(files_to_compile)
     .add_save_hook(&hook)
     .run::<PASS_PARSER>()?;
 
@@ -668,18 +734,75 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     let (empty_compiler, ast) = stepped.into_ast();
     let compilation_env = empty_compiler.compilation_env;
     let start = PassResult::Parser(ast);
-    match run(&compilation_env, None, start, PASS_COMPILATION) {
+    match run(
+        &compilation_env,
+        pre_compiled_program_opt.clone(),
+        start,
+        PASS_COMPILATION,
+    ) {
         Err((_pass, errors)) => Ok(Err((files, errors))),
-        Ok(PassResult::Compilation(compiled, _)) => Ok(Ok(FullyCompiledProgram {
-            files,
-            parser: hook.take_parser_ast(),
-            expansion: hook.take_expansion_ast(),
-            naming: hook.take_naming_ast(),
-            typing: hook.take_typing_ast(),
-            hlir: hook.take_hlir_ast(),
-            cfgir: hook.take_cfgir_ast(),
-            compiled,
-        })),
+        Ok(PassResult::Compilation(compiled, _)) => {
+            let program_info = hook.take_typing_info();
+            let mut macro_definitions = hook.take_macro_definitions();
+
+            let mut compiled_units_by_module = compiled
+                .into_iter()
+                .map(|unit| (unit.module_ident(), unit))
+                .collect::<BTreeMap<_, _>>();
+
+            // compute a set of already pre-compiled module identifiers (for modules
+            // passed in `pre_compiled_program_opt` parameter) for efficient lookup
+            let already_precompile_mod_ids: BTreeSet<E::ModuleIdent> = pre_compiled_program_opt
+                .as_ref()
+                .map(|pre_compiled_program| {
+                    pre_compiled_program
+                        .iter()
+                        .map(|(mod_ident, _)| *mod_ident)
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let precompiled_modules: BTreeMap<E::ModuleIdent, Arc<PreCompiledModuleInfo>> = program_info
+                 .modules
+                 .key_cloned_iter()
+                 .filter_map(|(mod_ident, typing_module_info)| {
+                     // skip modules that are already present in pre_compiled_program_opt
+                     if already_precompile_mod_ids.contains(&mod_ident) {
+                         return None;
+                     }
+                     Some((mod_ident, typing_module_info))
+                 })
+                 .map(|(mod_ident, typing_module_info)| -> anyhow::Result<(E::ModuleIdent, Arc<PreCompiledModuleInfo>)> {
+
+                     let Some((file_name, file_content)) = files.get(&typing_module_info.defined_loc.file_hash()) else {
+                        return Err(anyhow::anyhow!("file name not found for module: {:?}", mod_ident));
+                     };
+
+                     let macro_definitions = macro_definitions.remove(&mod_ident);
+
+                     let compiled_unit = if interface_only {
+                        None
+                     } else {
+                        Some(compiled_units_by_module
+                        .remove(&mod_ident)
+                        .ok_or_else(|| anyhow::anyhow!("compiled unit not found for module: {:?}", mod_ident))?)
+                     };
+
+                     Ok((
+                         mod_ident,
+                         Arc::new(PreCompiledModuleInfo {
+                             file_name,
+                             file_content,
+                             macro_definitions,
+                             info: typing_module_info.clone(),
+                             compiled_unit,
+                         }),
+                     ))
+                 })
+                 .collect::<anyhow::Result<_>>()?;
+
+            Ok(Ok(PreCompiledProgramInfo::new(precompiled_modules)))
+        }
         Ok(_) => unreachable!(),
     }
 }
@@ -952,14 +1075,14 @@ impl PassResult {
 
 fn run(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     cur: PassResult,
     until: Pass,
 ) -> Result<PassResult, (Pass, Diagnostics)> {
     #[growing_stack]
     fn rec(
         compilation_env: &CompilationEnv,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
         cur: PassResult,
         until: Pass,
     ) -> Result<PassResult, (Pass, Diagnostics)> {
@@ -1018,8 +1141,7 @@ fn run(
                 compilation_env
                     .check_diags_at_or_above_severity(Severity::BlockingError)
                     .map_err(|diags| (cur_pass, diags))?;
-                let hprog =
-                    hlir::translate::program(compilation_env, pre_compiled_lib.clone(), tprog);
+                let hprog = hlir::translate::program(compilation_env, tprog);
                 rec(
                     compilation_env,
                     pre_compiled_lib,
@@ -1060,7 +1182,9 @@ fn run(
                     PASS_COMPILATION,
                 )
             }
-            PassResult::Compilation(_, _) => unreachable!("ICE Pass::Compilation is >= all passes"),
+            PassResult::Compilation(_, _) => {
+                unreachable!("ICE Pass::Compilation is >= all passes")
+            }
         }
     }
     rec(compilation_env, pre_compiled_lib, cur, until)

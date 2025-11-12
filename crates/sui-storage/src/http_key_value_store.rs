@@ -5,9 +5,9 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::stream::{self, StreamExt};
 use moka::sync::{Cache as MokaCache, CacheBuilder as MokaCacheBuilder};
-use reqwest::header::{HeaderValue, CONTENT_LENGTH};
 use reqwest::Client;
 use reqwest::Url;
+use reqwest::header::{CONTENT_LENGTH, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -18,7 +18,7 @@ use sui_types::storage::ObjectKey;
 use sui_types::{
     digests::{CheckpointContentsDigest, CheckpointDigest, TransactionDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
-    error::{SuiError, SuiResult},
+    error::{SuiErrorKind, SuiResult},
     messages_checkpoint::{
         CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     },
@@ -66,7 +66,7 @@ where
     E: std::error::Error,
 {
     fn into_sui_result(self) -> SuiResult<T> {
-        self.map_err(|e| SuiError::Storage(e.to_string()))
+        self.map_err(|e| SuiErrorKind::Storage(e.to_string()).into())
     }
 }
 

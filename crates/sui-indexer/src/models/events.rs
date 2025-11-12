@@ -7,7 +7,7 @@ use std::sync::Arc;
 use diesel::prelude::*;
 use move_core_types::identifier::Identifier;
 
-use sui_json_rpc_types::{type_and_fields_from_move_event_data, BcsEvent, SuiEvent};
+use sui_json_rpc_types::{BcsEvent, SuiEvent, type_and_fields_from_move_event_data};
 use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;
@@ -73,7 +73,7 @@ impl StoredEvent {
             })?
         };
         let sender = match sender {
-            Some(ref s) => SuiAddress::from_bytes(s).map_err(|_e| {
+            Some(s) => SuiAddress::from_bytes(s).map_err(|_e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
                     "Failed to parse event sender address: {:?}",
                     sender
@@ -82,7 +82,7 @@ impl StoredEvent {
             None => {
                 return Err(IndexerError::PersistentStorageDataCorruptionError(
                     "Event senders element should not be null".to_string(),
-                ))
+                ));
             }
         };
 

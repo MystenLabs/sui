@@ -12,6 +12,7 @@ use crate::{
     shared::{
         ast_debug::*,
         known_attributes::{AttributeKind, KnownAttribute, ModeAttribute},
+        stdlib_definitions::StdlibName,
         unique_map::UniqueMap,
         unique_set::UniqueSet,
         *,
@@ -19,7 +20,12 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::{collections::VecDeque, fmt, hash::Hash, sync::Arc};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    fmt,
+    hash::Hash,
+    sync::Arc,
+};
 
 //**************************************************************************************************
 // Program
@@ -102,11 +108,14 @@ pub struct ModuleDefinition {
     pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
+    /// The named address map used by this module during `expansion`.
+    pub named_address_map: Arc<NamedAddressMap>,
     pub attributes: Attributes,
     pub loc: Loc,
     pub target_kind: P::TargetKind,
     pub use_funs: UseFuns,
     pub friends: UniqueMap<ModuleIdent, Friend>,
+    pub stdlib_definitions: StdlibDefinitions,
     pub structs: UniqueMap<DatatypeName, StructDefinition>,
     pub enums: UniqueMap<DatatypeName, EnumDefinition>,
     pub functions: UniqueMap<FunctionName, Function>,
@@ -124,6 +133,16 @@ pub struct Friend {
     // discards the overall attribute spans, but we need them to comment full attribute forms out.
     pub attr_locs: Vec<Loc>,
     pub loc: Loc,
+}
+
+//**************************************************************************************************
+// Std Library Definitions
+//**************************************************************************************************
+
+#[derive(Debug, Clone)]
+pub struct StdlibDefinitions {
+    pub functions: BTreeMap<StdlibName, ModuleAccess_>,
+    pub types: BTreeMap<StdlibName, ModuleAccess_>,
 }
 
 //**************************************************************************************************
@@ -346,7 +365,10 @@ pub enum Value_ {
     // true
     // false
     Bool(bool),
+    // hex strings and byte strings
     Bytearray(Vec<u8>),
+    // string literals
+    InferredString(Vec<u8>),
 }
 pub type Value = Spanned<Value_>;
 
@@ -415,7 +437,9 @@ pub enum Exp_ {
 pub type Exp = Spanned<Exp_>;
 
 pub type Sequence = (UseFuns, VecDeque<SequenceItem>);
+
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum SequenceItem_ {
     Seq(Box<Exp>),
     Declare(LValueList, Option<Type>),
@@ -605,6 +629,13 @@ impl Address {
             Self::NamedUnassigned(_) => None,
         }
     }
+
+    pub fn name(&self) -> Option<Symbol> {
+        match self {
+            Address::Numerical { name, .. } => name.map(|name| name.value),
+            Address::NamedUnassigned(name) => Some(name.value),
+        }
+    }
 }
 
 impl ModuleIdent_ {
@@ -621,6 +652,15 @@ impl ModuleIdent_ {
             module: m,
         } = self;
         a.is(address) && m == module.as_ref()
+    }
+
+    /// Indicates this identifer matches the provided address and module name, as
+    /// `address::module`. Returns false is the address does not have a sybmol name.
+    pub fn named_address_is(&self, address: impl AsRef<str>, module: impl AsRef<str>) -> bool {
+        let Some(self_address) = self.address.name() else {
+            return false;
+        };
+        self_address.as_ref() == address.as_ref() && &self.module == module.as_ref()
     }
 }
 
@@ -689,7 +729,7 @@ impl AbilitySet {
         self.0.is_subset(&other.0)
     }
 
-    pub fn iter(&self) -> AbilitySetIter {
+    pub fn iter(&self) -> AbilitySetIter<'_> {
         self.into_iter()
     }
 
@@ -897,6 +937,11 @@ impl std::fmt::Display for Value_ {
                 }
                 write!(f, "]")
             }
+            V::InferredString(v) => {
+                let string = String::from_utf8(v.to_vec())
+                    .expect("How did we parse a string we cannot reconstruct?");
+                write!(f, "\"{}\"", string)
+            }
         }
     }
 }
@@ -996,6 +1041,7 @@ impl AstDebug for Attributes {
 impl AstDebug for ModuleDefinition {
     fn ast_debug(&self, w: &mut AstWriter) {
         let ModuleDefinition {
+            named_address_map: _,
             doc,
             package_name,
             attributes,
@@ -1003,6 +1049,7 @@ impl AstDebug for ModuleDefinition {
             target_kind,
             use_funs,
             friends,
+            stdlib_definitions,
             structs,
             enums,
             functions,
@@ -1017,6 +1064,7 @@ impl AstDebug for ModuleDefinition {
         attributes.ast_debug(w);
         target_kind.ast_debug(w);
         use_funs.ast_debug(w);
+        stdlib_definitions.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(format!("friend {};", mident));
             w.new_line();
@@ -1036,6 +1084,18 @@ impl AstDebug for ModuleDefinition {
         for fdef in functions.key_cloned_iter() {
             fdef.ast_debug(w);
             w.new_line();
+        }
+    }
+}
+
+impl AstDebug for StdlibDefinitions {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.writeln("stdlib definitions: ");
+        for (key, value) in &self.functions {
+            w.writeln(format!("  {} -> {}", key, value));
+        }
+        for (key, value) in &self.types {
+            w.writeln(format!("  {} -> {}", key, value));
         }
     }
 }
@@ -1399,6 +1459,7 @@ impl AstDebug for Value_ {
             V::U256(u) => w.write(format!("{}u256", u)),
             V::Bool(b) => w.write(format!("{}", b)),
             V::Bytearray(v) => w.write(format!("{:?}", v)),
+            V::InferredString(v) => w.write(format!("string<{:?}>", v)),
         }
     }
 }

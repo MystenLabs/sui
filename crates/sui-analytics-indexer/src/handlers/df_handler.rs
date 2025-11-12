@@ -6,8 +6,8 @@ use fastcrypto::encoding::{Base64, Encoding};
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_indexer::errors::IndexerError;
-use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::TypeTag;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use tap::tap::TapFallible;
 use tracing::warn;
 
@@ -19,10 +19,10 @@ use sui_types::dynamic_field::{DynamicFieldName, DynamicFieldType};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::object::Object;
 
-use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
+use crate::FileType;
+use crate::handlers::{AnalyticsHandler, TransactionProcessor, process_transactions};
 use crate::package_store::PackageCache;
 use crate::tables::DynamicFieldEntry;
-use crate::FileType;
 
 use super::wait_for_cache;
 
@@ -94,13 +94,12 @@ impl DynamicFieldHandler {
                     .to_canonical_string(/* with_prefix */ true),
             },
             DynamicFieldType::DynamicObject => {
-                let object =
-                    all_written_objects
-                        .get(&object_id)
-                        .ok_or(IndexerError::UncategorizedError(anyhow::anyhow!(
-                    "Failed to find object_id {:?} when trying to create dynamic field info",
-                    object_id
-                )))?;
+                let object = all_written_objects.get(&object_id).ok_or(
+                    IndexerError::UncategorizedError(anyhow::anyhow!(
+                        "Failed to find object_id {:?} when trying to create dynamic field info",
+                        object_id
+                    )),
+                )?;
                 let version = object.version().value();
                 let digest = object.digest().to_string();
                 let object_type = object.data.type_().unwrap().clone();

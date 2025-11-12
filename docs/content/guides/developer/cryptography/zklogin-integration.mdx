@@ -1,5 +1,7 @@
 ---
 title: zkLogin Integration Guide
+description: zkLogin can be integrated into applications deployed on Sui.
+keywords: [ zklogin, how to use zklogin, generate ephemeral key pair, fetch JWT, decode JWT, generate salt, generate user Sui address, fetch ZK proof, assemble zkLogin signature, oauth, openid ]
 ---
 
 Here is the high-level flow the wallet or frontend application must implement to support zkLogin-enabled transactions:
@@ -18,13 +20,13 @@ Let's dive into the specific implementation details.
 To use the zkLogin TypeScript SDK in your project, run the following command in your project root:
 
 ```sh npm2yarn
-npm install @mysten/sui
+$ npm install @mysten/sui
 ```
 
 If you want to use the latest experimental version:
 
 ```sh npm2yarn
-npm install @mysten/sui@experimental
+$ npm install @mysten/sui@experimental
 ```
 
 ## Get JWT
@@ -148,7 +150,6 @@ There are two options:
 
 If you want to use the Mysten hosted ZK Proving Service for Mainnet, please refer to [Enoki docs](https://docs.enoki.mystenlabs.com/) and contact us for accessing it.
 
-Use the `prover-dev` endpoint (https://prover-dev.mystenlabs.com/v1) freely for testing on Devnet. Note that you can submit proofs generated with this endpoint for Devnet zkLogin transactions only; submitting them to Testnet or Mainnet fails.
 
 You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
 
@@ -228,7 +229,7 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 
 ### Run the proving service in your backend
 
-1. Install [Git Large File Storage](https://git-lfs.com/) (an open-source Git extension for large file versioning) before downloading the zkey.
+1. Install [Git Large File Storage](https://git-lfs.com/) (an open source Git extension for large file versioning) before downloading the zkey.
 
 1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/). There are zkeys available for all Sui networks. See [the Ceremony section](#ceremony) for more details on how the main proving key is generated.
 
@@ -249,7 +250,7 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
      | Mainnet, Testnet | `zkLogin-main.zkey` | `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` |
      | Devnet           | `zkLogin-test.zkey` | `686e2f5fd969897b1c034d7654799ee2c3952489814e4eaaf3d7e1bb539841047ae8ee5fdcdaca5f4ddd76abb5a8e8eb77b44b693a2ba9d4be57e94292b26ce2` |
 
-1. For the next step, you need two Docker images from the [mysten/zklogin repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) (tagged as `prover` and `prover-fe`). To simplify, a docker compose file is available that automates this process. Run `docker compose` with the downloaded zkey from the same directory as the YAML file.
+1. For the next step, you need two Docker images from the [mysten/zklogin repository](https://hub.docker.com/r/mysten/zklogin) (tagged as `prover` and `prover-fe`). To simplify, a docker compose file is available that automates this process. Run `docker compose` with the downloaded zkey from the same directory as the YAML file.
 
 ```yaml
 services:
@@ -294,7 +295,7 @@ A few important things to note:
 
 ## Assemble the zkLogin signature and submit the transaction
 
-First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional KeyPair signing](https://sdk.mystenlabs.com/typescript/cryptography/keypairs). Make sure that the transaction `sender ` is also defined.
+First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional key pair signing](https://sdk.mystenlabs.com/typescript/cryptography/keypairs). Make sure that the transaction `sender` is also defined.
 
 ```typescript
 const ephemeralKeyPair = new Ed25519Keypair();
@@ -367,6 +368,6 @@ The prover that Mysten Labs maintains is set to auto-scale to handle traffic sur
 
 ## Related links
 
-- [zkLogin Concepts](../../../concepts/cryptography/zklogin.mdx)
-- [zkLogin Example](./zklogin-integration/zklogin-example.mdx)
-- [Configure OpenID Providers](./zklogin-integration/developer-account.mdx)
+<RelatedLink to="/concepts/cryptography/zklogin.mdx" />
+<RelatedLink to="/guides/developer/cryptography/zklogin-integration/zklogin-example.mdx" />
+<RelatedLink to="/guides/developer/cryptography/zklogin-integration/developer-account.mdx" />

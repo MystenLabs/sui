@@ -12,6 +12,8 @@ use move_core_types::{
 use serde::{Deserialize, Serialize};
 use sui_macros::EnumVariantOrder;
 
+use crate::base_types::MoveObjectType;
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
 pub struct StructInput {
     pub address: AccountAddress,
@@ -127,7 +129,9 @@ impl TypeInput {
             TypeInput::U256 => TypeTag::U256,
             TypeInput::Address => TypeTag::Address,
             TypeInput::Signer => TypeTag::Signer,
-            TypeInput::Vector(inner) => TypeTag::Vector(Box::new(inner.into_type_tag_unchecked())),
+            TypeInput::Vector(inner) => unsafe {
+                TypeTag::Vector(Box::new(inner.into_type_tag_unchecked()))
+            },
             TypeInput::Struct(inner) => {
                 let StructInput {
                     address,
@@ -135,15 +139,17 @@ impl TypeInput {
                     name,
                     type_params,
                 } = *inner;
-                TypeTag::Struct(Box::new(StructTag {
-                    address,
-                    module: Identifier::new_unchecked(module),
-                    name: Identifier::new_unchecked(name),
-                    type_params: type_params
-                        .into_iter()
-                        .map(|ty| ty.into_type_tag_unchecked())
-                        .collect(),
-                }))
+                unsafe {
+                    TypeTag::Struct(Box::new(StructTag {
+                        address,
+                        module: Identifier::new_unchecked(module),
+                        name: Identifier::new_unchecked(name),
+                        type_params: type_params
+                            .into_iter()
+                            .map(|ty| ty.into_type_tag_unchecked())
+                            .collect(),
+                    }))
+                }
             }
         }
     }
@@ -239,6 +245,12 @@ impl StructInput {
             data: self,
             with_prefix,
         }
+    }
+}
+
+impl From<MoveObjectType> for TypeInput {
+    fn from(obj: MoveObjectType) -> Self {
+        Self::from(TypeTag::from(obj))
     }
 }
 

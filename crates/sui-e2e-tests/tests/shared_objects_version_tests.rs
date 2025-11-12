@@ -4,13 +4,13 @@
 use std::path::PathBuf;
 use sui_macros::*;
 use sui_test_transaction_builder::publish_package;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
-use sui_types::object::{Owner, OBJECT_START_VERSION};
-use sui_types::transaction::{CallArg, ObjectArg};
-use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::object::{OBJECT_START_VERSION, Owner};
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use test_cluster::{TestCluster, TestClusterBuilder};
 
 #[sim_test]
@@ -90,10 +90,11 @@ async fn shared_object_not_found() {
     let env = TestEnvironment::new().await;
     let nonexistent_id = ObjectID::random();
     let initial_shared_seq = SequenceNumber::from_u64(42);
-    assert!(env
-        .increment_shared_counter(nonexistent_id, initial_shared_seq)
-        .await
-        .is_err());
+    assert!(
+        env.increment_shared_counter(nonexistent_id, initial_shared_seq)
+            .await
+            .is_err()
+    );
 }
 
 fn is_shared_at(owner: &Owner, version: SequenceNumber) -> bool {
@@ -140,7 +141,11 @@ impl TestEnvironment {
                 arguments,
             )
             .build();
-        let transaction = self.test_cluster.wallet.sign_transaction(&transaction);
+        let transaction = self
+            .test_cluster
+            .wallet
+            .sign_transaction(&transaction)
+            .await;
         self.test_cluster
             .execute_transaction_return_raw_effects(transaction)
             .await
@@ -222,7 +227,7 @@ impl TestEnvironment {
                 vec![CallArg::Object(ObjectArg::SharedObject {
                     id: counter,
                     initial_shared_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 })],
             )
             .await?;

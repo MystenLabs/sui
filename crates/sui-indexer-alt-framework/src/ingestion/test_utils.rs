@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use rand::prelude::StdRng;
 use rand::SeedableRng;
+use rand::prelude::StdRng;
 use sui_storage::blob::{Blob, BlobEncoding};
 
 use crate::types::crypto::KeypairTraits;
@@ -33,6 +33,7 @@ pub(crate) fn test_checkpoint_data(cp: u64) -> Vec<u8> {
         GasCostSummary::default(),
         None,
         0,
+        Vec::new(),
         Vec::new(),
     );
 

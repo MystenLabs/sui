@@ -1,14 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::mem;
-
 use anyhow::Context as _;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use sui_default_config::DefaultConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
-use tracing::warn;
 
 pub use sui_name_service::NameServiceConfig;
 
@@ -41,6 +38,7 @@ pub struct RpcConfig {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct RpcLayer {
     pub objects: ObjectsLayer,
     pub dynamic_fields: DynamicFieldsLayer,
@@ -49,9 +47,6 @@ pub struct RpcLayer {
     pub coins: CoinsLayer,
     pub node: NodeLayer,
     pub package_resolver: PackageResolverLayer,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 #[derive(Debug, Clone)]
@@ -92,6 +87,7 @@ pub struct ObjectsConfig {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct ObjectsLayer {
     pub max_multi_get_objects: Option<usize>,
     pub default_page_size: Option<usize>,
@@ -103,9 +99,6 @@ pub struct ObjectsLayer {
     pub filter_scan_size: Option<usize>,
     pub obj_retry_count: Option<usize>,
     pub obj_retry_interval_ms: Option<u64>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 #[derive(Debug, Clone)]
@@ -120,12 +113,10 @@ pub struct DynamicFieldsConfig {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct DynamicFieldsLayer {
     pub default_page_size: Option<usize>,
     pub max_page_size: Option<usize>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 #[derive(Debug, Clone)]
@@ -147,25 +138,21 @@ pub struct TransactionsConfig {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct TransactionsLayer {
     pub default_page_size: Option<usize>,
     pub max_page_size: Option<usize>,
     pub tx_retry_count: Option<usize>,
     pub tx_retry_interval_ms: Option<u64>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct NameServiceLayer {
     pub package_address: Option<SuiAddress>,
     pub registry_id: Option<ObjectID>,
     pub reverse_registry_id: Option<ObjectID>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 #[derive(Debug, Clone)]
@@ -180,12 +167,10 @@ pub struct CoinsConfig {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct CoinsLayer {
     pub default_page_size: Option<usize>,
     pub max_page_size: Option<usize>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 #[derive(Clone, Debug)]
@@ -198,24 +183,20 @@ pub struct NodeConfig {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct NodeLayer {
     pub header_value: Option<String>,
     pub max_request_size: Option<u32>,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 #[DefaultConfig]
 #[derive(Clone, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct PackageResolverLayer {
     pub max_type_argument_depth: usize,
     pub max_type_argument_width: usize,
     pub max_type_nodes: usize,
     pub max_move_value_depth: usize,
-
-    #[serde(flatten)]
-    pub extra: toml::Table,
 }
 
 impl RpcLayer {
@@ -230,12 +211,10 @@ impl RpcLayer {
             coins: CoinsConfig::default().into(),
             package_resolver: PackageResolverLayer::default(),
             node: NodeConfig::default().into(),
-            extra: Default::default(),
         }
     }
 
-    pub fn finish(mut self) -> RpcConfig {
-        check_extra("top-level", mem::take(&mut self.extra));
+    pub fn finish(self) -> RpcConfig {
         RpcConfig {
             objects: self.objects.finish(ObjectsConfig::default()),
             dynamic_fields: self.dynamic_fields.finish(DynamicFieldsConfig::default()),
@@ -250,7 +229,6 @@ impl RpcLayer {
 
 impl ObjectsLayer {
     pub fn finish(self, base: ObjectsConfig) -> ObjectsConfig {
-        check_extra("objects", self.extra);
         ObjectsConfig {
             max_multi_get_objects: self
                 .max_multi_get_objects
@@ -276,7 +254,6 @@ impl ObjectsLayer {
 
 impl DynamicFieldsLayer {
     pub fn finish(self, base: DynamicFieldsConfig) -> DynamicFieldsConfig {
-        check_extra("dynamic fields", self.extra);
         DynamicFieldsConfig {
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
@@ -286,7 +263,6 @@ impl DynamicFieldsLayer {
 
 impl TransactionsLayer {
     pub fn finish(self, base: TransactionsConfig) -> TransactionsConfig {
-        check_extra("transactions", self.extra);
         TransactionsConfig {
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
@@ -300,7 +276,6 @@ impl TransactionsLayer {
 
 impl NameServiceLayer {
     pub fn finish(self, base: NameServiceConfig) -> NameServiceConfig {
-        check_extra("name service", self.extra);
         NameServiceConfig {
             package_address: self.package_address.unwrap_or(base.package_address),
             registry_id: self.registry_id.unwrap_or(base.registry_id),
@@ -311,7 +286,6 @@ impl NameServiceLayer {
 
 impl CoinsLayer {
     pub fn finish(self, base: CoinsConfig) -> CoinsConfig {
-        check_extra("coins", self.extra);
         CoinsConfig {
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
@@ -337,7 +311,6 @@ impl NodeConfig {
 
 impl NodeLayer {
     pub fn finish(self, base: NodeConfig) -> NodeConfig {
-        check_extra("node", self.extra);
         NodeConfig {
             header_value: self.header_value.unwrap_or(base.header_value),
             max_request_size: self.max_request_size.unwrap_or(base.max_request_size),
@@ -347,7 +320,6 @@ impl NodeLayer {
 
 impl PackageResolverLayer {
     pub fn finish(self) -> sui_package_resolver::Limits {
-        check_extra("package-resolver", self.extra);
         sui_package_resolver::Limits {
             max_type_argument_depth: self.max_type_argument_depth,
             max_type_argument_width: self.max_type_argument_width,
@@ -438,8 +410,6 @@ impl Default for PackageResolverLayer {
             max_type_argument_width: config.max_generic_instantiation_length() as usize,
             max_type_nodes: config.max_type_nodes() as usize,
             max_move_value_depth: config.max_move_value_depth() as usize,
-
-            extra: Default::default(),
         }
     }
 }
@@ -457,7 +427,6 @@ impl From<ObjectsConfig> for ObjectsLayer {
             filter_scan_size: Some(config.filter_scan_size),
             obj_retry_count: Some(config.obj_retry_count),
             obj_retry_interval_ms: Some(config.obj_retry_interval_ms),
-            extra: Default::default(),
         }
     }
 }
@@ -467,7 +436,6 @@ impl From<DynamicFieldsConfig> for DynamicFieldsLayer {
         Self {
             default_page_size: Some(config.default_page_size),
             max_page_size: Some(config.max_page_size),
-            extra: Default::default(),
         }
     }
 }
@@ -479,7 +447,6 @@ impl From<TransactionsConfig> for TransactionsLayer {
             max_page_size: Some(config.max_page_size),
             tx_retry_count: Some(config.tx_retry_count),
             tx_retry_interval_ms: Some(config.tx_retry_interval_ms),
-            extra: Default::default(),
         }
     }
 }
@@ -490,7 +457,6 @@ impl From<NameServiceConfig> for NameServiceLayer {
             package_address: Some(config.package_address),
             registry_id: Some(config.registry_id),
             reverse_registry_id: Some(config.reverse_registry_id),
-            extra: Default::default(),
         }
     }
 }
@@ -500,7 +466,6 @@ impl From<CoinsConfig> for CoinsLayer {
         Self {
             default_page_size: Some(config.default_page_size),
             max_page_size: Some(config.max_page_size),
-            extra: Default::default(),
         }
     }
 }
@@ -510,19 +475,6 @@ impl From<NodeConfig> for NodeLayer {
         Self {
             header_value: Some(config.header_value),
             max_request_size: Some(config.max_request_size),
-            extra: Default::default(),
         }
-    }
-}
-
-/// Check whether there are any unrecognized extra fields and if so, warn about them.
-fn check_extra(pos: &str, extra: toml::Table) {
-    if !extra.is_empty() {
-        warn!(
-            "Found unrecognized {pos} field{} which will be ignored. This could be \
-             because of a typo, or because it was introduced in a newer version of the indexer:\n{}",
-            if extra.len() != 1 { "s" } else { "" },
-            extra,
-        )
     }
 }

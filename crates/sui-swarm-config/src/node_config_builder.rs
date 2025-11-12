@@ -8,18 +8,18 @@ use std::time::Duration;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
 use sui_config::node::{
-    default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
-    CheckpointExecutorConfig, DBCheckpointConfig, ExecutionCacheConfig,
-    ExecutionTimeObserverConfig, ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath,
-    StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
+    CheckpointExecutorConfig, DBCheckpointConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
+    ExecutionCacheConfig, ExecutionTimeObserverConfig, ExpensiveSafetyCheckConfig, Genesis,
+    KeyPairWithPath, StateSnapshotConfig, default_enable_index_processing,
+    default_end_of_epoch_broadcast_channel_capacity,
 };
-use sui_config::node::{default_zklogin_oauth_providers, RunWithRange};
+use sui_config::node::{RunWithRange, TransactionDriverConfig, default_zklogin_oauth_providers};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{
-    local_ip_utils, ConsensusConfig, NodeConfig, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
-    FULL_NODE_DB_PATH,
+    AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME, ConsensusConfig, FULL_NODE_DB_PATH, NodeConfig,
+    local_ip_utils,
 };
 use sui_protocol_config::Chain;
 use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair};
@@ -253,6 +253,9 @@ impl ValidatorConfigBuilder {
             enable_db_write_stall: None,
             execution_time_observer_config: self.execution_time_observer_config,
             chain_override_for_testing: self.chain_override,
+            validator_client_monitor_config: None,
+            fork_recovery: None,
+            transaction_driver_config: Some(TransactionDriverConfig::default()),
         }
     }
 
@@ -290,6 +293,8 @@ pub struct FullnodeConfigBuilder {
     data_ingestion_dir: Option<PathBuf>,
     disable_pruning: bool,
     chain_override: Option<Chain>,
+    transaction_driver_config: Option<TransactionDriverConfig>,
+    rpc_config: Option<sui_config::RpcConfig>,
 }
 
 impl FullnodeConfigBuilder {
@@ -317,6 +322,11 @@ impl FullnodeConfigBuilder {
     pub fn with_rpc_addr(mut self, addr: SocketAddr) -> Self {
         assert!(self.rpc_addr.is_none() && self.rpc_port.is_none());
         self.rpc_addr = Some(addr);
+        self
+    }
+
+    pub fn with_rpc_config(mut self, rpc_config: sui_config::RpcConfig) -> Self {
+        self.rpc_config = Some(rpc_config);
         self
     }
 
@@ -410,6 +420,14 @@ impl FullnodeConfigBuilder {
 
     pub fn with_data_ingestion_dir(mut self, path: Option<PathBuf>) -> Self {
         self.data_ingestion_dir = path;
+        self
+    }
+
+    pub fn with_transaction_driver_config(
+        mut self,
+        config: Option<TransactionDriverConfig>,
+    ) -> Self {
+        self.transaction_driver_config = config;
         self
     }
 
@@ -539,9 +557,11 @@ impl FullnodeConfigBuilder {
             indexer_max_subscriptions: Default::default(),
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: Default::default(),
-            rpc: Some(sui_rpc_api::Config {
-                enable_indexing: Some(true),
-                ..Default::default()
+            rpc: self.rpc_config.or_else(|| {
+                Some(sui_rpc_api::Config {
+                    enable_indexing: Some(true),
+                    ..Default::default()
+                })
             }),
             // note: not used by fullnodes.
             jwk_fetch_interval_seconds: 3600,
@@ -560,6 +580,11 @@ impl FullnodeConfigBuilder {
             enable_db_write_stall: None,
             execution_time_observer_config: None,
             chain_override_for_testing: self.chain_override,
+            validator_client_monitor_config: None,
+            fork_recovery: None,
+            transaction_driver_config: self
+                .transaction_driver_config
+                .or(Some(TransactionDriverConfig::default())),
         }
     }
 }

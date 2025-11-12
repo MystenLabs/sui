@@ -2,19 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::static_programmable_transactions::{
-    env::Env, linkage::resolved_linkage::RootedLinkage, loading::ast as L,
+    env::Env,
+    linkage::resolved_linkage::RootedLinkage,
+    loading::ast as L,
+    metering::{self, translation_meter::TranslationMeter},
 };
 use move_core_types::language_storage::StructTag;
 use sui_types::{
     error::ExecutionError,
     object::Owner,
-    transaction::{self as P, CallArg, ObjectArg},
+    transaction::{self as P, CallArg, ObjectArg, SharedObjectMutability},
 };
 
 pub fn transaction(
+    meter: &mut TranslationMeter<'_, '_>,
     env: &Env,
     pt: P::ProgrammableTransaction,
 ) -> Result<L::Transaction, ExecutionError> {
+    metering::pre_translation::meter(meter, &pt)?;
     let P::ProgrammableTransaction { inputs, commands } = pt;
     let inputs = inputs
         .into_iter()
@@ -25,7 +30,9 @@ pub fn transaction(
         .enumerate()
         .map(|(idx, cmd)| command(env, cmd).map_err(|e| e.with_command_index(idx)))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(L::Transaction { inputs, commands })
+    let loaded_tx = L::Transaction { inputs, commands };
+    metering::loading::meter(meter, &loaded_tx)?;
+    Ok(loaded_tx)
 }
 
 fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), ExecutionError> {
@@ -56,7 +63,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
         CallArg::Object(ObjectArg::SharedObject {
             id,
             initial_shared_version,
-            mutable,
+            mutability,
         }) => {
             let obj = env.read_object(&id)?;
             let Some(ty) = obj.type_() else {
@@ -64,20 +71,36 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
             };
             let tag: StructTag = ty.clone().into();
             let ty = env.load_type_from_struct(&tag)?;
+            let kind = match obj.owner {
+                Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
+                    invariant_violation!("Unexpected owner for SharedObject: {:?}", obj.owner)
+                }
+                Owner::Shared { .. } => L::SharedObjectKind::Legacy,
+                Owner::ConsensusAddressOwner { .. } => L::SharedObjectKind::Party,
+            };
             (
                 L::InputArg::Object(L::ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
-                    mutable,
+                    mutability: object_mutability(mutability),
+                    kind,
                 }),
                 L::InputType::Fixed(ty),
             )
         }
-        CallArg::BalanceWithdraw(_) => {
+        CallArg::FundsWithdrawal(_) => {
             // TODO(address-balances): Add support for balance withdraws.
             todo!("Load balance withdraw call arg")
         }
     })
+}
+
+fn object_mutability(mutability: SharedObjectMutability) -> L::ObjectMutability {
+    match mutability {
+        SharedObjectMutability::Mutable => L::ObjectMutability::Mutable,
+        SharedObjectMutability::NonExclusiveWrite => L::ObjectMutability::NonExclusiveWrite,
+        SharedObjectMutability::Immutable => L::ObjectMutability::Immutable,
+    }
 }
 
 fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError> {

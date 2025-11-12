@@ -13,13 +13,13 @@ use std::{
 use anyhow::bail;
 use fastcrypto::encoding::Base64;
 use move_binary_format::{
-    normalized::{self, Type},
     CompiledModule,
+    normalized::{self, Type},
 };
-use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule, Modules};
+use move_bytecode_utils::{Modules, layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
-    diagnostics::{report_diagnostics_to_buffer, report_warnings, Diagnostics},
+    diagnostics::{Diagnostics, report_diagnostics_to_buffer, report_warnings},
     editions::Edition,
     linters::LINT_WARNING_PREFIX,
     shared::files::MappedFiles,
@@ -29,6 +29,7 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag, TypeTag},
 };
 use move_package::{
+    BuildConfig as MoveBuildConfig,
     compilation::{
         build_plan::BuildPlan, compiled_package::CompiledPackage as MoveCompiledPackage,
     },
@@ -37,7 +38,6 @@ use move_package::{
     source_package::parsed_manifest::{
         Dependencies, Dependency, DependencyKind, GitInfo, InternalDependency, PackageName,
     },
-    BuildConfig as MoveBuildConfig,
 };
 use move_package::{
     source_package::parsed_manifest::OnChainInfo, source_package::parsed_manifest::SourceManifest,
@@ -45,18 +45,17 @@ use move_package::{
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
 use sui_package_management::{
-    resolve_published_id,
-    system_package_versions::{SystemPackagesVersion, SYSTEM_GIT_REPO},
-    PublishedAtError,
+    PublishedAtError, resolve_published_id,
+    system_package_versions::{SYSTEM_GIT_REPO, SystemPackagesVersion},
 };
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
-    base_types::ObjectID,
-    error::{SuiError, SuiResult},
-    is_system_package,
-    move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
     BRIDGE_ADDRESS, DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
     SUI_SYSTEM_ADDRESS,
+    base_types::ObjectID,
+    error::{SuiError, SuiErrorKind, SuiResult},
+    is_system_package,
+    move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
@@ -218,7 +217,7 @@ impl BuildConfig {
         chain_id: Option<String>,
     ) -> SuiResult<ResolvedGraph> {
         if let Some(err_msg) = set_sui_flavor(&mut self.config) {
-            return Err(SuiError::ModuleBuildFailure { error: err_msg });
+            return Err(SuiErrorKind::ModuleBuildFailure { error: err_msg }.into());
         }
 
         if self.print_diags_to_stderr {
@@ -228,8 +227,11 @@ impl BuildConfig {
             self.config
                 .resolution_graph_for_package(path, chain_id, &mut std::io::sink())
         }
-        .map_err(|err| SuiError::ModuleBuildFailure {
-            error: format!("{:?}", err),
+        .map_err(|err| {
+            SuiErrorKind::ModuleBuildFailure {
+                error: format!("{:?}", err),
+            }
+            .into()
         })
     }
 }
@@ -247,7 +249,9 @@ pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&MappedFiles>
         eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
     }
     if filtered_diags_num > 0 {
-        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (unique lints: {unique})");
+        eprintln!(
+            "Total number of linter warnings suppressed: {filtered_diags_num} (unique lints: {unique})"
+        );
     }
 }
 
@@ -286,7 +290,7 @@ pub fn build_from_resolution_graph(
         BuildConfig::compile_package(&resolution_graph, &mut std::io::sink())
     };
 
-    let (package, fn_info) = result.map_err(|error| SuiError::ModuleBuildFailure {
+    let (package, fn_info) = result.map_err(|error| SuiErrorKind::ModuleBuildFailure {
         // Use [Debug] formatting to capture [anyhow] error context
         error: format!("{:?}", error),
     })?;
@@ -317,18 +321,18 @@ fn collect_bytecode_deps(
         {
             continue;
         }
-        let modules =
-            pkg.get_bytecodes_bytes()
-                .map_err(|error| SuiError::ModuleDeserializationFailure {
-                    error: format!(
-                        "Deserializing bytecode dependency for package {}: {:?}",
-                        name, error
-                    ),
-                })?;
+        let modules = pkg.get_bytecodes_bytes().map_err(|error| {
+            SuiErrorKind::ModuleDeserializationFailure {
+                error: format!(
+                    "Deserializing bytecode dependency for package {}: {:?}",
+                    name, error
+                ),
+            }
+        })?;
         for module in modules {
             let module =
                 CompiledModule::deserialize_with_defaults(module.as_ref()).map_err(|error| {
-                    SuiError::ModuleDeserializationFailure {
+                    SuiErrorKind::ModuleDeserializationFailure {
                         error: format!(
                             "Deserializing bytecode dependency for package {}: {:?}",
                             name, error
@@ -349,7 +353,7 @@ fn verify_bytecode(package: &MoveCompiledPackage, fn_info: &FnInfoMap) -> SuiRes
 
     for m in compiled_modules.iter_modules() {
         move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {
-            SuiError::ModuleVerificationFailure {
+            SuiErrorKind::ModuleVerificationFailure {
                 error: err.to_string(),
             }
         })?;
@@ -582,7 +586,7 @@ impl CompiledPackage {
     }
 
     /// Checks for root modules with non-zero package addresses.  Returns an arbitrary one, if one
-    /// can can be found, otherwise returns `None`.
+    /// can be found, otherwise returns `None`.
     pub fn published_root_module(&self) -> Option<&CompiledModule> {
         self.package.root_compiled_units.iter().find_map(|unit| {
             if unit.unit.module.self_id().address() != &AccountAddress::ZERO {
@@ -636,9 +640,10 @@ impl CompiledPackage {
                 .into(),
         );
 
-        Err(SuiError::ModulePublishFailure {
+        Err(SuiErrorKind::ModulePublishFailure {
             error: error_message.join("\n"),
-        })
+        }
+        .into())
     }
 
     pub fn get_published_dependencies_ids(&self) -> Vec<ObjectID> {
@@ -882,9 +887,10 @@ pub fn check_unpublished_dependencies(unpublished: &BTreeSet<Symbol>) -> Result<
             .into(),
     );
 
-    Err(SuiError::ModulePublishFailure {
+    Err(SuiErrorKind::ModulePublishFailure {
         error: error_messages.join("\n"),
-    })
+    }
+    .into())
 }
 
 pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<(), SuiError> {
@@ -903,9 +909,10 @@ pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<
         })
         .collect::<Vec<_>>();
 
-    Err(SuiError::ModulePublishFailure {
+    Err(SuiErrorKind::ModulePublishFailure {
         error: error_messages.join("\n"),
-    })
+    }
+    .into())
 }
 
 pub fn check_conflicting_addresses(
@@ -940,10 +947,10 @@ pub fn check_conflicting_addresses(
     let error = format!("{err_msg}\n{conflicting_addresses_msg}\n{suggestion_message}");
 
     let err = if dump_bytecode_base64 {
-        SuiError::ModuleBuildFailure { error }
+        SuiErrorKind::ModuleBuildFailure { error }
     } else {
-        SuiError::ModulePublishFailure { error }
+        SuiErrorKind::ModulePublishFailure { error }
     };
 
-    Err(err)
+    Err(err.into())
 }

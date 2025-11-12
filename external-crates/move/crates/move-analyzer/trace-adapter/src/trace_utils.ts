@@ -471,6 +471,35 @@ export const EXT_EVENT_FRAME_ID = Number.MAX_SAFE_INTEGER - 4;
 
 
 /**
+ * Splits decompressed trace file data into lines without creating a large intermediate string.
+ * This avoids hitting JavaScript's maximum string length limit for large trace files.
+ *
+ * @param decompressed the decompressed buffer containing trace data
+ * @returns array of strings representing lines from the trace file
+ */
+function splitTraceFileLines(decompressed: Uint8Array): string[] {
+    const NEWLINE_BYTE = 0x0A;
+    const decoder = new TextDecoder();
+    const lines: string[] = [];
+
+    let lineStart = 0;
+
+    for (let i = 0; i <= decompressed.length; i++) {
+        if (i === decompressed.length || decompressed[i] === NEWLINE_BYTE) {
+            // end of the buffer or a new line
+            if (i > lineStart) {
+                const lineBytes = decompressed.slice(lineStart, i);
+                const line = decoder.decode(lineBytes).trimEnd();
+                lines.push(line);
+            }
+            lineStart = i + 1;
+        }
+    }
+
+    return lines;
+}
+
+/**
  * Reads a Move VM execution trace from a JSON file.
  *
  * @param traceFilePath path to the trace JSON file.
@@ -491,7 +520,8 @@ export async function readTrace(
 ): Promise<ITrace> {
     const buf = Buffer.from(fs.readFileSync(traceFilePath));
     const decompressed = await decompress(buf);
-    const [header, ...rest] = new TextDecoder().decode(decompressed).trimEnd().split('\n');
+    const lines = splitTraceFileLines(decompressed);
+    const [header, ...rest] = lines;
     const jsonVersion: number = JSON.parse(header).version;
     const jsonEvents: JSONTraceEvent[] = rest.map((line) => {
         return JSON.parse(line);

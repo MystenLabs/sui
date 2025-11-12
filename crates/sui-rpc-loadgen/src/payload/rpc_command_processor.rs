@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use dashmap::{DashMap, DashSet};
 use futures::future::join_all;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::fmt;
 use std::fs::{self, File};
@@ -25,7 +25,7 @@ use tracing::{debug, info};
 use crate::load_test::LoadTestConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
-use sui_types::crypto::{get_key_pair, AccountKeyPair, EncodeDecodeBase64, Signature, SuiKeyPair};
+use sui_types::crypto::{AccountKeyPair, EncodeDecodeBase64, Signature, SuiKeyPair, get_key_pair};
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::{Transaction, TransactionData};
 
@@ -79,15 +79,15 @@ impl RpcCommandProcessor {
         signer_info: &Option<SignerInfo>,
     ) -> Result<()> {
         match command {
-            CommandData::DryRun(ref v) => self.process(v, signer_info).await,
-            CommandData::GetCheckpoints(ref v) => self.process(v, signer_info).await,
-            CommandData::PaySui(ref v) => self.process(v, signer_info).await,
-            CommandData::QueryTransactionBlocks(ref v) => self.process(v, signer_info).await,
-            CommandData::MultiGetTransactionBlocks(ref v) => self.process(v, signer_info).await,
-            CommandData::MultiGetObjects(ref v) => self.process(v, signer_info).await,
-            CommandData::GetObject(ref v) => self.process(v, signer_info).await,
-            CommandData::GetAllBalances(ref v) => self.process(v, signer_info).await,
-            CommandData::GetReferenceGasPrice(ref v) => self.process(v, signer_info).await,
+            CommandData::DryRun(v) => self.process(v, signer_info).await,
+            CommandData::GetCheckpoints(v) => self.process(v, signer_info).await,
+            CommandData::PaySui(v) => self.process(v, signer_info).await,
+            CommandData::QueryTransactionBlocks(v) => self.process(v, signer_info).await,
+            CommandData::MultiGetTransactionBlocks(v) => self.process(v, signer_info).await,
+            CommandData::MultiGetObjects(v) => self.process(v, signer_info).await,
+            CommandData::GetObject(v) => self.process(v, signer_info).await,
+            CommandData::GetAllBalances(v) => self.process(v, signer_info).await,
+            CommandData::GetReferenceGasPrice(v) => self.process(v, signer_info).await,
         }
     }
 
@@ -241,7 +241,10 @@ impl Processor for RpcCommandProcessor {
                 }
                 let clients = self.get_clients().await?;
                 let checkpoint_stats = get_latest_checkpoint_stats(&clients, None).await;
-                info!("Repeat {i}: Checkpoint stats {checkpoint_stats}, elapse {:.4} since last repeat", elapsed_time.as_secs_f64());
+                info!(
+                    "Repeat {i}: Checkpoint stats {checkpoint_stats}, elapse {:.4} since last repeat",
+                    elapsed_time.as_secs_f64()
+                );
             }
         }
         Ok(())
@@ -338,10 +341,10 @@ impl Processor for RpcCommandProcessor {
     }
 
     fn dump_cache_to_file(&self, config: &LoadTestConfig) {
-        if let CommandData::GetCheckpoints(data) = &config.command.data {
-            if data.record {
-                self.dump_cache_to_file();
-            }
+        if let CommandData::GetCheckpoints(data) = &config.command.data
+            && data.record
+        {
+            self.dump_cache_to_file();
         }
     }
 }
@@ -562,7 +565,9 @@ async fn prepare_new_signer_and_coins(
     // 2. gas fee for splitting the primary coin into `num_coins`
     let required_balance = pay_amount + gas_fee_for_split + gas_fee_for_pay_sui;
     if required_balance > balance {
-        panic!("Current balance {balance} is smaller than require amount of MIST to fund the operation {required_balance}");
+        panic!(
+            "Current balance {balance} is smaller than require amount of MIST to fund the operation {required_balance}"
+        );
     }
 
     // There is a limit for the number of new objects in a transactions, therefore we need

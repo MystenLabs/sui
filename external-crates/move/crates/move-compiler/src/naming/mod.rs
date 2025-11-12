@@ -4,6 +4,7 @@
 
 pub mod ast;
 pub(crate) mod fake_natives;
+mod resolvable_module;
 pub(crate) mod resolve_use_funs;
 pub(crate) mod syntax_methods;
 pub(crate) mod translate;

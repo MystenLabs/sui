@@ -3,14 +3,14 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use diesel::prelude::QueryableByName;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{concurrent::Handler, Processor},
-    postgres::{Connection, Db},
-    types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object},
     FieldCount,
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
+    types::{base_types::ObjectID, full_checkpoint_content::Checkpoint, object::Object},
 };
 use sui_indexer_alt_schema::{
     objects::{StoredObjInfo, StoredObjInfoDeletionReference},
@@ -18,6 +18,7 @@ use sui_indexer_alt_schema::{
 };
 
 use super::checkpoint_input_objects;
+use async_trait::async_trait;
 
 pub(crate) struct ObjInfo;
 
@@ -40,18 +41,16 @@ pub(crate) struct ProcessedObjInfo {
     pub update: ProcessedObjInfoUpdate,
 }
 
+#[async_trait]
 impl Processor for ObjInfo {
     const NAME: &'static str = "obj_info";
     type Value = ProcessedObjInfo;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let cp_sequence_number = checkpoint.summary.sequence_number;
         let checkpoint_input_objects = checkpoint_input_objects(checkpoint)?;
-        let latest_live_output_objects = checkpoint
-            .latest_live_output_objects()
-            .into_iter()
-            .map(|o| (o.id(), o))
-            .collect::<BTreeMap<_, _>>();
+        let latest_live_output_objects = checkpoint.latest_live_output_objects();
+
         let mut values: BTreeMap<ObjectID, Self::Value> = BTreeMap::new();
         for object_id in checkpoint_input_objects.keys() {
             if !latest_live_output_objects.contains_key(object_id) {
@@ -83,7 +82,7 @@ impl Processor for ObjInfo {
                     ProcessedObjInfo {
                         cp_sequence_number,
                         update: ProcessedObjInfoUpdate::Upsert {
-                            object: (*object).clone(),
+                            object: object.clone(),
                             created,
                         },
                     },
@@ -95,10 +94,8 @@ impl Processor for ObjInfo {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for ObjInfo {
-    type Store = Db;
-
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         let stored = values
             .iter()
@@ -273,14 +270,14 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 #[cfg(test)]
 mod tests {
     use sui_indexer_alt_framework::{
-        types::{
-            base_types::{dbg_addr, SequenceNumber},
-            object::Owner,
-            test_checkpoint_data_builder::TestCheckpointDataBuilder,
-        },
         Indexer,
+        types::{
+            base_types::{SequenceNumber, dbg_addr},
+            object::Owner,
+            test_checkpoint_data_builder::TestCheckpointBuilder,
+        },
     };
-    use sui_indexer_alt_schema::{objects::StoredOwnerKind, MIGRATIONS};
+    use sui_indexer_alt_schema::{MIGRATIONS, objects::StoredOwnerKind};
 
     use super::*;
 
@@ -302,13 +299,13 @@ mod tests {
     async fn test_process_basics() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
         let checkpoint1 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint1)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint1)).await.unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert_eq!(processed.cp_sequence_number, 0);
@@ -326,8 +323,8 @@ mod tests {
         assert_eq!(rows_pruned, 0);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
-        let object0 = TestCheckpointDataBuilder::derive_object_id(0);
-        let addr0 = TestCheckpointDataBuilder::derive_address(0);
+        let object0 = TestCheckpointBuilder::derive_object_id(0);
+        let addr0 = TestCheckpointBuilder::derive_address(0);
         // No deletion references are created for newly created objects.
         let all_obj_info_deletion_references = get_all_obj_info_deletion_references(&mut conn)
             .await
@@ -344,7 +341,7 @@ mod tests {
             .mutate_owned_object(0)
             .finish_transaction();
         let checkpoint2 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint2)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint2)).await.unwrap();
         assert!(result.is_empty());
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 0);
@@ -362,7 +359,7 @@ mod tests {
             .transfer_object(0, 1)
             .finish_transaction();
         let checkpoint3 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint3)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint3)).await.unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert_eq!(processed.cp_sequence_number, 2);
@@ -377,7 +374,7 @@ mod tests {
         assert_eq!(rows_inserted, 2);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
-        let addr1 = TestCheckpointDataBuilder::derive_address(1);
+        let addr1 = TestCheckpointBuilder::derive_address(1);
         assert_eq!(all_obj_info.len(), 2);
         assert_eq!(all_obj_info[1].object_id, object0.to_vec());
         assert_eq!(all_obj_info[1].cp_sequence_number, 2);
@@ -400,7 +397,7 @@ mod tests {
             .delete_object(0)
             .finish_transaction();
         let checkpoint4 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint4)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint4)).await.unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert_eq!(processed.cp_sequence_number, 3);
@@ -426,7 +423,7 @@ mod tests {
         let mut conn = indexer.store().connect().await.unwrap();
         // In this checkpoint, an object is created and deleted in the same checkpoint.
         // We expect that no updates are made to the table.
-        let mut builder = TestCheckpointDataBuilder::new(0)
+        let mut builder = TestCheckpointBuilder::new(0)
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction()
@@ -434,7 +431,7 @@ mod tests {
             .delete_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         assert!(result.is_empty());
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 0);
@@ -451,12 +448,12 @@ mod tests {
     async fn test_process_wrap_and_prune_before_unwrap() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0)
+        let mut builder = TestCheckpointBuilder::new(0)
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
 
@@ -465,7 +462,7 @@ mod tests {
             .wrap_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(
@@ -477,7 +474,7 @@ mod tests {
         assert_eq!(rows_inserted, 3);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
-        let object0 = TestCheckpointDataBuilder::derive_object_id(0);
+        let object0 = TestCheckpointBuilder::derive_object_id(0);
         assert_eq!(all_obj_info.len(), 2);
         assert_eq!(all_obj_info[0].object_id, object0.to_vec());
         assert_eq!(all_obj_info[0].cp_sequence_number, 0);
@@ -499,7 +496,7 @@ mod tests {
             .unwrap_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(
@@ -530,12 +527,12 @@ mod tests {
     async fn test_process_wrap_and_prune_after_unwrap() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0)
+        let mut builder = TestCheckpointBuilder::new(0)
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
 
@@ -544,7 +541,7 @@ mod tests {
             .wrap_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(
@@ -560,7 +557,7 @@ mod tests {
             .unwrap_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(
@@ -591,12 +588,12 @@ mod tests {
     async fn test_process_shared_object() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0)
+        let mut builder = TestCheckpointBuilder::new(0)
             .start_transaction(0)
             .create_shared_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(
@@ -613,7 +610,7 @@ mod tests {
         assert_eq!(rows_pruned, 0);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
-        let object0 = TestCheckpointDataBuilder::derive_object_id(0);
+        let object0 = TestCheckpointBuilder::derive_object_id(0);
         assert_eq!(all_obj_info.len(), 1);
         assert_eq!(all_obj_info[0].object_id, object0.to_vec());
         assert_eq!(all_obj_info[0].cp_sequence_number, 0);
@@ -624,12 +621,12 @@ mod tests {
     async fn test_process_immutable_object() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0)
+        let mut builder = TestCheckpointBuilder::new(0)
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         ObjInfo::commit(&result, &mut conn).await.unwrap();
 
         builder = builder
@@ -637,7 +634,7 @@ mod tests {
             .change_object_owner(0, Owner::Immutable)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(
@@ -654,7 +651,7 @@ mod tests {
         assert_eq!(rows_pruned, 2);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
-        let object0 = TestCheckpointDataBuilder::derive_object_id(0);
+        let object0 = TestCheckpointBuilder::derive_object_id(0);
         assert_eq!(all_obj_info.len(), 1);
         assert_eq!(all_obj_info[0].object_id, object0.to_vec());
         assert_eq!(all_obj_info[0].cp_sequence_number, 1);
@@ -665,12 +662,12 @@ mod tests {
     async fn test_process_object_owned_object() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0)
+        let mut builder = TestCheckpointBuilder::new(0)
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         ObjInfo::commit(&result, &mut conn).await.unwrap();
 
         builder = builder
@@ -678,7 +675,7 @@ mod tests {
             .change_object_owner(0, Owner::ObjectOwner(dbg_addr(0)))
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(
@@ -696,8 +693,8 @@ mod tests {
         assert_eq!(rows_pruned, 2);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
-        let object0 = TestCheckpointDataBuilder::derive_object_id(0);
-        let addr0 = TestCheckpointDataBuilder::derive_address(0);
+        let object0 = TestCheckpointBuilder::derive_object_id(0);
+        let addr0 = TestCheckpointBuilder::derive_address(0);
         assert_eq!(all_obj_info.len(), 1);
         assert_eq!(all_obj_info[0].object_id, object0.to_vec());
         assert_eq!(all_obj_info[0].cp_sequence_number, 1);
@@ -709,12 +706,12 @@ mod tests {
     async fn test_process_consensus_v2_object() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0)
+        let mut builder = TestCheckpointBuilder::new(0)
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
 
@@ -729,7 +726,7 @@ mod tests {
             )
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         assert_eq!(result.len(), 1);
         let processed = &result[0];
         assert!(matches!(
@@ -750,8 +747,8 @@ mod tests {
         assert_eq!(rows_pruned, 2);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
-        let object0 = TestCheckpointDataBuilder::derive_object_id(0);
-        let addr0 = TestCheckpointDataBuilder::derive_address(0);
+        let object0 = TestCheckpointBuilder::derive_object_id(0);
+        let addr0 = TestCheckpointBuilder::derive_address(0);
         assert_eq!(all_obj_info.len(), 1);
         assert_eq!(all_obj_info[0].object_id, object0.to_vec());
         assert_eq!(all_obj_info[0].cp_sequence_number, 1);
@@ -763,13 +760,13 @@ mod tests {
     async fn test_obj_info_batch_prune() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         ObjInfo::commit(&values, &mut conn).await.unwrap();
 
         builder = builder
@@ -777,7 +774,7 @@ mod tests {
             .transfer_object(0, 1)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         ObjInfo::commit(&values, &mut conn).await.unwrap();
 
         builder = builder
@@ -785,7 +782,7 @@ mod tests {
             .delete_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         ObjInfo::commit(&values, &mut conn).await.unwrap();
 
         let rows_pruned = ObjInfo.prune(0, 3, &mut conn).await.unwrap();
@@ -800,13 +797,13 @@ mod tests {
     async fn test_obj_info_prune_with_missing_data() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         ObjInfo::commit(&values, &mut conn).await.unwrap();
 
         // No entries to prune yet.
@@ -817,7 +814,7 @@ mod tests {
             .transfer_object(0, 1)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         ObjInfo::commit(&values, &mut conn).await.unwrap();
 
         // Now we can prune both checkpoints 0 and 1.
@@ -828,7 +825,7 @@ mod tests {
             .transfer_object(0, 0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         ObjInfo::commit(&values, &mut conn).await.unwrap();
 
         // Prune based on new info from checkpoint 2
@@ -839,7 +836,7 @@ mod tests {
             .delete_object(0)
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
-        let values = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let values = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         ObjInfo::commit(&values, &mut conn).await.unwrap();
 
         // Now we can prune checkpoint 2, as well as 3.
@@ -848,9 +845,9 @@ mod tests {
 
     /// In our processing logic, we consider objects that appear as input to the checkpoint but not
     /// in the output as wrapped or deleted. This emits a tombstone row. Meanwhile, the remote store
-    /// containing `CheckpointData` used to include unchanged shared objects in the `input_objects`
-    /// of a `CheckpointTransaction`. Because these read-only shared objects were not modified, they
-    ///were not included in `output_objects`. But that means within our pipeline, these object
+    /// containing `Checkpoint` used to include unchanged consensus objects in the `input_objects`
+    /// of a `CheckpointTransaction`. Because these read-only consensus objects were not modified, they
+    /// were not included in `output_objects`. But that means within our pipeline, these object
     /// states were incorrectly treated as deleted, and thus every transaction read emitted a
     /// tombstone row. This test validates that unless an object appears as an input object from
     /// `tx.effects.object_changes`, we do not consider it within our pipeline.
@@ -858,13 +855,13 @@ mod tests {
     /// Use the checkpoint builder to create a shared object. Then, remove this from the checkpoint,
     /// and replace it with a transaction that takes the shared object as read-only.
     #[tokio::test]
-    async fn test_process_unchanged_shared_object() {
-        let mut builder = TestCheckpointDataBuilder::new(0)
+    async fn test_process_unchanged_consensus_object() {
+        let mut builder = TestCheckpointBuilder::new(0)
             .start_transaction(0)
             .create_shared_object(1)
             .finish_transaction();
 
-        builder.build_checkpoint();
+        let _: Checkpoint = builder.build_checkpoint();
 
         builder = builder
             .start_transaction(0)
@@ -872,7 +869,7 @@ mod tests {
             .finish_transaction();
 
         let checkpoint = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).await.unwrap();
         assert!(result.is_empty());
     }
 
@@ -882,7 +879,7 @@ mod tests {
     async fn test_process_out_of_order_pruning() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder
             .start_transaction(0)
             .create_owned_object(0)
@@ -890,7 +887,7 @@ mod tests {
             .create_owned_object(2)
             .finish_transaction();
         let checkpoint0 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint0)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint0)).await.unwrap();
         assert_eq!(result.len(), 3);
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 3);
@@ -902,7 +899,7 @@ mod tests {
             .transfer_object(2, 1)
             .finish_transaction();
         let checkpoint1 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint1)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint1)).await.unwrap();
         assert_eq!(result.len(), 3);
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 6);
@@ -914,7 +911,7 @@ mod tests {
             .transfer_object(2, 0)
             .finish_transaction();
         let checkpoint2 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint2)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint2)).await.unwrap();
         assert_eq!(result.len(), 3);
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 6);
@@ -968,7 +965,7 @@ mod tests {
     async fn test_process_concurrent_pruning() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
 
         // Create the same scenario as the out-of-order test
         builder = builder
@@ -978,7 +975,7 @@ mod tests {
             .create_owned_object(2)
             .finish_transaction();
         let checkpoint0 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint0)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint0)).await.unwrap();
         ObjInfo::commit(&result, &mut conn).await.unwrap();
 
         builder = builder
@@ -988,7 +985,7 @@ mod tests {
             .transfer_object(2, 1)
             .finish_transaction();
         let checkpoint1 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint1)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint1)).await.unwrap();
         ObjInfo::commit(&result, &mut conn).await.unwrap();
 
         builder = builder
@@ -998,7 +995,7 @@ mod tests {
             .transfer_object(2, 0)
             .finish_transaction();
         let checkpoint2 = builder.build_checkpoint();
-        let result = ObjInfo.process(&Arc::new(checkpoint2)).unwrap();
+        let result = ObjInfo.process(&Arc::new(checkpoint2)).await.unwrap();
         ObjInfo::commit(&result, &mut conn).await.unwrap();
 
         // Verify initial state

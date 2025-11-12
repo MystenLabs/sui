@@ -44,7 +44,7 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
 
 task 5, line 31:
 //# transfer-object 3,0 --sender A --recipient B
-Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(3,0), parent_id: object(2,0) }
+Error: Error checking transaction input objects: Object object(3,0) is owned by object object(2,0). Objects owned by other objects cannot be used as input arguments
 
 task 6, line 33:
 //# view-object 3,0

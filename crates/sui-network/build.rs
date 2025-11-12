@@ -18,7 +18,7 @@ fn main() -> Result<()> {
     };
 
     let codec_path = "mysten_network::codec::BcsCodec";
-    let prost_codec_path = "tonic::codec::ProstCodec";
+    let prost_codec_path = "tonic_prost::ProstCodec";
 
     let validator_service = Service::builder()
         .name("Validator")
@@ -130,6 +130,15 @@ fn main() -> Result<()> {
                 .input_type("sui_types::messages_grpc::SystemStateRequest")
                 .output_type("sui_types::sui_system_state::SuiSystemState")
                 .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
+                .name("validator_health")
+                .route_name("ValidatorHealth")
+                .input_type("sui_types::messages_grpc::RawValidatorHealthRequest")
+                .output_type("sui_types::messages_grpc::RawValidatorHealthResponse")
+                .codec_path(prost_codec_path)
                 .build(),
         )
         .build();

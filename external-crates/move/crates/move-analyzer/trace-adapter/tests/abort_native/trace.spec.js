@@ -1,5 +1,5 @@
 const { run } = require('node:test');
-const { ExecutionResult } = require('../../out/runtime');
+const { ExecutionResultKind } = require('../../out/runtime');
 
 let action = (runtime) => {
     let res = '';
@@ -11,7 +11,8 @@ let action = (runtime) => {
     runtime.step(false);
     // step out of a function containing native call
     // before this call is executed
-    res += ExecutionResult[runtime.stepOut()];
+    err = runtime.stepOut();
+    res += ExecutionResultKind[err.kind] + ": " + err.msg;
     return res;
 };
 run_spec(__dirname, action);

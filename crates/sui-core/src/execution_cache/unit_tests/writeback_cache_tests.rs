@@ -2,23 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::default_registry;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 use std::{
     collections::{BTreeMap, BTreeSet},
     future::Future,
     path::PathBuf,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     },
     time::{Duration, Instant},
 };
 use sui_framework::BuiltInFramework;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
-    base_types::{random_object_ref, FullObjectRef, SuiAddress},
-    crypto::{deterministic_random_account_key, get_key_pair_from_rng, AccountKeyPair},
-    object::{MoveObject, Owner, OBJECT_START_VERSION},
+    base_types::{FullObjectRef, SuiAddress, random_object_ref},
+    crypto::{AccountKeyPair, deterministic_random_account_key, get_key_pair_from_rng},
+    object::{MoveObject, OBJECT_START_VERSION, Owner},
     storage::ChildObjectResolver,
 };
 use sui_types::{
@@ -29,7 +29,7 @@ use tokio::sync::RwLock;
 
 use super::*;
 use crate::{
-    authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState, AuthorityStore},
+    authority::{AuthorityState, AuthorityStore, test_authority_builder::TestAuthorityBuilder},
     execution_cache::ExecutionCacheAPI,
 };
 
@@ -103,11 +103,11 @@ impl Scenario {
 
     fn count_action(&mut self) {
         let prev = self.action_count.fetch_add(1, Ordering::Relaxed);
-        if let Some((count, _)) = &self.do_after {
-            if prev == *count {
-                let (_, f) = self.do_after.take().unwrap();
-                f(self);
-            }
+        if let Some((count, _)) = &self.do_after
+            && prev == *count
+        {
+            let (_, f) = self.do_after.take().unwrap();
+            f(self);
         }
     }
 
@@ -162,6 +162,7 @@ impl Scenario {
             transaction: Arc::new(tx),
             effects,
             events,
+            unchanged_loaded_runtime_objects: Default::default(),
             accumulator_events: Default::default(),
             markers: Default::default(),
             wrapped: Default::default(),
@@ -777,10 +778,11 @@ async fn test_lt_or_eq_caching() {
         assert!(!s.cache.object_by_id_cache.contains_key(&s.obj_id(1)));
 
         // version <= 0 does not exist
-        assert!(s
-            .cache()
-            .find_object_lt_or_eq_version(s.obj_id(1), 0.into())
-            .is_none());
+        assert!(
+            s.cache()
+                .find_object_lt_or_eq_version(s.obj_id(1), 0.into())
+                .is_none()
+        );
 
         // query above populates cache
         assert_eq!(
@@ -860,8 +862,7 @@ async fn test_write_transaction_outputs_is_sync() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "should be empty due to revert_state_update")]
-async fn test_missing_reverts_panic() {
+async fn test_revert_unnecessary() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
         s.with_created(&[1]);
@@ -872,43 +873,14 @@ async fn test_missing_reverts_panic() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "attempt to revert committed transaction")]
-async fn test_revert_committed_tx_panics() {
-    telemetry_subscribers::init_for_testing();
-    Scenario::iterate(|mut s| async move {
-        s.with_created(&[1]);
-        let tx1 = s.do_tx().await;
-        s.commit(tx1).await.unwrap();
-        s.cache().revert_state_update(&tx1);
-    })
-    .await;
-}
-
-#[tokio::test]
-async fn test_revert_unexecuted_tx() {
-    telemetry_subscribers::init_for_testing();
-    Scenario::iterate(|mut s| async move {
-        s.with_created(&[1]);
-        let tx1 = s.do_tx().await;
-        s.commit(tx1).await.unwrap();
-        let random_digest = TransactionDigest::random();
-        // must not panic - pending_consensus_transactions is a super set of
-        // executed but un-checkpointed transactions
-        s.cache().revert_state_update(&random_digest);
-    })
-    .await;
-}
-
-#[tokio::test]
-async fn test_revert_state_update_created() {
+async fn test_clear_state_update_created() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
         // newly created object
         s.with_created(&[1]);
-        let tx1 = s.do_tx().await;
+        s.do_tx().await;
         s.assert_live(&[1]);
 
-        s.cache().revert_state_update(&tx1);
         s.clear_state_end_of_epoch();
 
         s.assert_not_exists(&[1]);
@@ -917,7 +889,7 @@ async fn test_revert_state_update_created() {
 }
 
 #[tokio::test]
-async fn test_revert_state_update_mutated() {
+async fn test_clear_state_update_mutated() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
         let v1 = {
@@ -928,36 +900,35 @@ async fn test_revert_state_update_mutated() {
         };
 
         s.with_mutated(&[1]);
-        let tx = s.do_tx().await;
+        s.do_tx().await;
 
-        s.cache().revert_state_update(&tx);
         s.clear_state_end_of_epoch();
 
-        let version_after_revert = s.cache().get_object(&s.obj_id(1)).unwrap().version();
-        assert_eq!(v1, version_after_revert);
+        let version_after_clear = s.cache().get_object(&s.obj_id(1)).unwrap().version();
+        assert_eq!(v1, version_after_clear);
     })
     .await;
 }
 
 #[tokio::test]
-async fn test_invalidate_package_cache_on_revert() {
+async fn test_invalidate_package_cache_on_clear() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
         s.with_created(&[1]);
         s.with_packages(&[2]);
-        let tx1 = s.do_tx().await;
+        s.do_tx().await;
 
         s.assert_live(&[1]);
         s.assert_packages(&[2]);
 
-        s.cache().revert_state_update(&tx1);
         s.clear_state_end_of_epoch();
 
-        assert!(s
-            .cache()
-            .get_package_object(&s.obj_id(2))
-            .unwrap()
-            .is_none());
+        assert!(
+            s.cache()
+                .get_package_object(&s.obj_id(2))
+                .unwrap()
+                .is_none()
+        );
     })
     .await;
 }

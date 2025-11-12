@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{btree_map::Entry, BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashSet, btree_map::Entry};
 
 use anyhow::Context;
 use sui_indexer_alt_framework::types::{
     base_types::ObjectID, digests::ObjectDigest, effects::TransactionEffectsAPI,
-    full_checkpoint_content::CheckpointData, object::Object,
+    full_checkpoint_content::Checkpoint, object::Object,
 };
 
 pub(crate) mod balances;
@@ -17,21 +17,21 @@ pub(crate) mod object_by_type;
 /// checkpoint. These are objects that existed prior to the checkpoint, and excludes objects that
 /// were created or unwrapped within the checkpoint.
 pub(crate) fn checkpoint_input_objects(
-    checkpoint: &CheckpointData,
+    checkpoint: &Checkpoint,
 ) -> anyhow::Result<BTreeMap<ObjectID, (&Object, ObjectDigest)>> {
     let mut from_this_checkpoint = HashSet::new();
     let mut input_objects = BTreeMap::new();
     for tx in &checkpoint.transactions {
         let input_objects_map: BTreeMap<_, _> = tx
-            .input_objects
-            .iter()
+            .input_objects(&checkpoint.object_set)
             .map(|obj| ((obj.id(), obj.version()), obj))
             .collect();
 
         for change in tx.effects.object_changes() {
             let id = change.id;
 
-            let (Some(version), Some(digest)) = (change.input_version, change.input_digest) else {
+            // Get input version - if None, this object was created in this transaction
+            let Some(version) = change.input_version else {
                 continue;
             };
 
@@ -46,10 +46,13 @@ pub(crate) fn checkpoint_input_objects(
                 continue;
             };
 
-            let input_object = input_objects_map
+            let input_object = *input_objects_map
                 .get(&(id, version))
-                .copied()
                 .with_context(|| format!("{id} at {version} in effects, not in input_objects"))?;
+
+            // Input digests are only populated in Effects V2. For Effects V1, we need to calculate
+            // the digest from the input object's contents.
+            let digest = change.input_digest.unwrap_or_else(|| input_object.digest());
 
             entry.insert((input_object, digest));
         }
@@ -67,13 +70,12 @@ pub(crate) fn checkpoint_input_objects(
 /// Returns all versions of objects that were output by transactions in the checkpoint, and are
 /// still live at the end of the checkpoint.
 pub(crate) fn checkpoint_output_objects(
-    checkpoint: &CheckpointData,
+    checkpoint: &Checkpoint,
 ) -> anyhow::Result<BTreeMap<ObjectID, (&Object, ObjectDigest)>> {
     let mut output_objects = BTreeMap::new();
     for tx in &checkpoint.transactions {
         let output_objects_map: BTreeMap<_, _> = tx
-            .output_objects
-            .iter()
+            .output_objects(&checkpoint.object_set)
             .map(|obj| ((obj.id(), obj.version()), obj))
             .collect();
 
@@ -88,9 +90,8 @@ pub(crate) fn checkpoint_output_objects(
                 continue;
             };
 
-            let output_object = output_objects_map
+            let output_object = *output_objects_map
                 .get(&(id, version))
-                .copied()
                 .with_context(|| format!("{id} at {version} in effects, not in output_objects"))?;
 
             output_objects.insert(id, (output_object, digest));

@@ -1,29 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
-    move_package::{self, CSysPackage, MovePackage},
-    object::{self, Object},
-    protocol_configs::ProtocolConfigs,
-};
-use crate::api::types::safe_mode::{from_system_state, SafeMode};
-use crate::api::types::stake_subsidy::{from_stake_subsidy_v1, StakeSubsidy};
-use crate::api::types::storage_fund::StorageFund;
-use crate::api::types::system_parameters::{
-    from_system_parameters_v1, from_system_parameters_v2, SystemParameters,
-};
-use crate::{
-    api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
-    api::types::validator_set::ValidatorSet,
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
+use std::sync::Arc;
+
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Error, Object};
+use async_graphql::{Context, Object, connection::Connection, dataloader::DataLoader};
 use fastcrypto::encoding::{Base58, Encoding};
 use futures::try_join;
-use std::sync::Arc;
 use sui_indexer_alt_reader::cp_sequence_numbers::CpSequenceNumberKey;
 use sui_indexer_alt_reader::{
     epochs::{CheckpointBoundedEpochStartKey, EpochEndKey, EpochStartKey},
@@ -31,11 +14,40 @@ use sui_indexer_alt_reader::{
 };
 use sui_indexer_alt_schema::cp_sequence_numbers::StoredCpSequenceNumbers;
 use sui_indexer_alt_schema::epochs::{StoredEpochEnd, StoredEpochStart};
+use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use tokio::sync::OnceCell;
+
+use crate::api::scalars::cursor::JsonCursor;
+use crate::{
+    api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
+    api::types::safe_mode::{SafeMode, from_system_state},
+    api::types::stake_subsidy::{StakeSubsidy, from_stake_subsidy_v1},
+    api::types::storage_fund::StorageFund,
+    api::types::system_parameters::{
+        SystemParameters, from_system_parameters_v1, from_system_parameters_v2,
+    },
+    api::types::validator_set::ValidatorSet,
+    error::RpcError,
+    error::upcast,
+    pagination::{Page, PaginationConfig},
+    scope::Scope,
+};
+
+use super::{
+    checkpoint::{CCheckpoint, Checkpoint, filter::CheckpointFilter},
+    move_package::{CSysPackage, MovePackage},
+    object::Object,
+    protocol_configs::ProtocolConfigs,
+    transaction::{
+        CTransaction, Transaction,
+        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
+    },
+};
+
+pub(crate) type CEpoch = JsonCursor<usize>;
 
 pub(crate) struct Epoch {
     pub(crate) epoch_id: u64,
@@ -62,13 +74,36 @@ impl Epoch {
         self.epoch_id.into()
     }
 
+    /// The epoch's corresponding checkpoints.
+    async fn checkpoints(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CCheckpoint>,
+        last: Option<u64>,
+        before: Option<CCheckpoint>,
+        filter: Option<CheckpointFilter>,
+    ) -> Result<Option<Connection<String, Checkpoint>>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Epoch", "checkpoints");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(filter) = filter.unwrap_or_default().intersect(CheckpointFilter {
+            at_epoch: Some(self.epoch_id.into()),
+            ..Default::default()
+        }) else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        Ok(Some(
+            Checkpoint::paginate(ctx, self.scope.clone(), page, filter).await?,
+        ))
+    }
+
     /// State of the Coin DenyList object (0x403) at the start of this epoch.
     ///
     /// The DenyList controls access to Regulated Coins. Writes to the DenyList are accumulated and only take effect on the next epoch boundary. Consequently, it's possible to determine the state of the DenyList for a transaction by reading it at the start of the epoch the transaction is in.
-    async fn coin_deny_list(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Object>, RpcError<object::Error>> {
+    async fn coin_deny_list(&self, ctx: &Context<'_>) -> Result<Option<Object>, RpcError> {
         let Some(start) = self.start(ctx).await? else {
             return Ok(None);
         };
@@ -114,6 +149,50 @@ impl Epoch {
         Ok(Some(DateTime::from_ms(contents.start_timestamp_ms)?))
     }
 
+    /// The transactions in this epoch, optionally filtered by transaction filters.
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
+    async fn transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        let (Some(start), end) = try_join!(self.start(ctx), self.end(ctx))? else {
+            return Ok(None);
+        };
+        let Some(checkpoint_viewed_at_exclusive_bound) =
+            self.scope.checkpoint_viewed_at_exclusive_bound()
+        else {
+            return Ok(None);
+        };
+
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Epoch", "transactions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let cp_lo_exclusive = (start.cp_lo as u64).checked_sub(1);
+        let cp_hi = end.as_ref().map_or_else(
+            || checkpoint_viewed_at_exclusive_bound,
+            |end| end.cp_hi as u64,
+        );
+
+        let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
+            after_checkpoint: cp_lo_exclusive.map(UInt53::from),
+            before_checkpoint: Some(UInt53::from(cp_hi)),
+            ..Default::default()
+        }) else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        Ok(Some(
+            Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
+        ))
+    }
+
     /// The system packages used by all transactions in this epoch.
     async fn system_packages(
         &self,
@@ -122,12 +201,12 @@ impl Epoch {
         after: Option<CSysPackage>,
         last: Option<u64>,
         before: Option<CSysPackage>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError<move_package::Error>> {
+    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Epoch", "systemPackages");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(contents) = self.start(ctx).await? else {
+        let Some(contents) = self.start(ctx).await.map_err(upcast)? else {
             return Ok(None);
         };
 
@@ -157,29 +236,42 @@ impl Epoch {
             return Ok(None);
         };
 
-        let validator_set = match system_state {
-            SuiSystemState::V1(inner) => inner.validators.into(),
-            SuiSystemState::V2(inner) => inner.validators.into(),
+        let (validator_set_v1, report_records) = match system_state {
+            SuiSystemState::V1(inner) => (inner.validators, inner.validator_report_records),
+            SuiSystemState::V2(inner) => (inner.validators, inner.validator_report_records),
             #[cfg(msim)]
             SuiSystemState::SimTestV1(_)
             | SuiSystemState::SimTestShallowV2(_)
             | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
         };
 
+        let validator_set = ValidatorSet::from_validator_set_v1(
+            self.scope.clone(),
+            validator_set_v1,
+            report_records,
+        );
+
         Ok(Some(validator_set))
     }
 
     /// The total number of checkpoints in this epoch.
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
         let (Some(start), end) = try_join!(self.start(ctx), self.end(ctx))? else {
             return Ok(None);
         };
 
         let lo = start.cp_lo as u64;
-        let hi = end.as_ref().map_or_else(
-            || self.scope.checkpoint_viewed_at_exclusive_bound(),
-            |end| end.cp_hi as u64,
-        );
+        let hi = match end.as_ref() {
+            Some(end) => end.cp_hi as u64,
+            None => {
+                let Some(bound) = self.scope.checkpoint_viewed_at_exclusive_bound() else {
+                    return Ok(None);
+                };
+                bound
+            }
+        };
 
         Ok(Some(UInt53::from(hi - lo)))
     }
@@ -371,13 +463,12 @@ impl Epoch {
         let commitments: Vec<CheckpointCommitment> = bcs::from_bytes(&end.epoch_commitments)
             .context("Failed to deserialize epoch commitments")?;
 
-        let digest = commitments.into_iter().next().map(
-            |CheckpointCommitment::ECMHLiveObjectSetDigest(digest)| {
-                Base58::encode(digest.digest.into_inner())
-            },
-        );
-
-        Ok(digest)
+        for commitment in commitments {
+            if let CheckpointCommitment::ECMHLiveObjectSetDigest(digest) = commitment {
+                return Ok(Some(Base58::encode(digest.digest.into_inner())));
+            }
+        }
+        Ok(None)
     }
 }
 
@@ -399,12 +490,18 @@ impl Epoch {
     /// fetched). If `epoch_id` is provided, the epoch with that ID is loaded. Otherwise, the
     /// latest epoch for the current checkpoint is loaded.
     ///
-    /// Returns `None` if the epoch does not exist (or started after the checkpoint being viewed).
+    /// Returns `None` if the epoch does not exist, started after the checkpoint being viewed,
+    /// or when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn fetch(
         ctx: &Context<'_>,
         scope: Scope,
         epoch_id: Option<UInt53>,
     ) -> Result<Option<Self>, RpcError> {
+        // In execution scope, epoch queries return None
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(None);
+        };
+
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
         let stored = match epoch_id {
@@ -413,13 +510,13 @@ impl Epoch {
                 .await
                 .context("Failed to fetch epoch start information by start key")?,
             None => pg_loader
-                .load_one(CheckpointBoundedEpochStartKey(scope.checkpoint_viewed_at()))
+                .load_one(CheckpointBoundedEpochStartKey(checkpoint_viewed_at))
                 .await
                 .context(
                     "Failed to fetch epoch start information by checkpoint bounded start key",
                 )?,
         }
-        .filter(|start| start.cp_lo as u64 <= scope.checkpoint_viewed_at());
+        .filter(|start| start.cp_lo as u64 <= checkpoint_viewed_at);
 
         Ok(stored.map(|start| Self {
             epoch_id: start.epoch as u64,
@@ -430,7 +527,30 @@ impl Epoch {
         }))
     }
 
-    async fn start(&self, ctx: &Context<'_>) -> Result<&Option<StoredEpochStart>, Error> {
+    /// Paginate through epochs.
+    pub(crate) async fn paginate(
+        ctx: &Context<'_>,
+        scope: &Scope,
+        page: Page<CEpoch>,
+    ) -> Result<Option<Connection<String, Epoch>>, RpcError> {
+        let Some(latest_epoch) = Epoch::fetch(ctx, scope.clone(), None).await? else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        page.paginate_indices(1 + latest_epoch.epoch_id as usize, |id| {
+            Ok(Epoch::with_id(scope.clone(), id as u64))
+        })
+        .map(Some)
+    }
+
+    /// Get the epoch start information.
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
+    async fn start(&self, ctx: &Context<'_>) -> Result<&Option<StoredEpochStart>, RpcError> {
+        let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
+            return Ok(&None);
+        };
+
         self.start
             .get_or_try_init(async || {
                 let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
@@ -439,7 +559,7 @@ impl Epoch {
                     .load_one(EpochStartKey(self.epoch_id))
                     .await
                     .context("Failed to fetch epoch start information")?
-                    .filter(|start| start.cp_lo as u64 <= self.scope.checkpoint_viewed_at());
+                    .filter(|start| start.cp_lo as u64 <= checkpoint_viewed_at);
 
                 Ok(stored)
             })
@@ -458,19 +578,21 @@ impl Epoch {
     }
 
     /// Attempt to fetch information about the end of an epoch from the store. May return an empty
-    /// response if the epoch has not ended yet, as of the checkpoint being viewed.
-    async fn end(&self, ctx: &Context<'_>) -> Result<&Option<StoredEpochEnd>, Error> {
+    /// response if the epoch has not ended yet, as of the checkpoint being viewed, or when
+    /// no checkpoint is set in scope (e.g. execution scope).
+    async fn end(&self, ctx: &Context<'_>) -> Result<&Option<StoredEpochEnd>, RpcError> {
+        let Some(checkpoint_bound) = self.scope.checkpoint_viewed_at_exclusive_bound() else {
+            return Ok(&None);
+        };
+
         self.end
             .get_or_try_init(async || {
                 let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-
                 let stored = pg_loader
                     .load_one(EpochEndKey(self.epoch_id))
                     .await
                     .context("Failed to fetch epoch end information")?
-                    .filter(|end| {
-                        end.cp_hi as u64 <= self.scope.checkpoint_viewed_at_exclusive_bound()
-                    });
+                    .filter(|end| end.cp_hi as u64 <= checkpoint_bound);
 
                 Ok(stored)
             })
@@ -480,7 +602,7 @@ impl Epoch {
     async fn cp_sequence_numbers(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<&Option<StoredCpSequenceNumbers>, Error> {
+    ) -> Result<&Option<StoredCpSequenceNumbers>, RpcError> {
         let Some(start) = self.start(ctx).await? else {
             return Ok(&None);
         };

@@ -6,6 +6,12 @@ use crate::{loaded_data::runtime_types::Type, values::*, views::*};
 use move_binary_format::errors::*;
 use move_core_types::{account_address::AccountAddress, runtime_value, u256::U256};
 
+#[cfg(test)]
+const SIZE_CONFIG: SizeConfig = SizeConfig {
+    traverse_references: false,
+    include_vector_size: false,
+};
+
 #[test]
 fn locals() -> PartialVMResult<()> {
     const LEN: usize = 4;
@@ -144,19 +150,19 @@ fn leagacy_ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
 
     locals.store_loc(0, Value::u128(0), true)?;
     let r = locals.borrow_loc(0)?;
-    assert_eq!(r.legacy_abstract_memory_size(), r.legacy_size());
+    assert_eq!(r.abstract_memory_size(&SIZE_CONFIG), r.legacy_size());
 
     locals.store_loc(1, Value::vector_u8([1, 2, 3]), true)?;
     let r = locals.borrow_loc(1)?;
-    assert_eq!(r.legacy_abstract_memory_size(), r.legacy_size());
+    assert_eq!(r.abstract_memory_size(&SIZE_CONFIG), r.legacy_size());
 
     let r: VectorRef = r.value_as()?;
     let r = r.borrow_elem(0, &Type::U8)?;
-    assert_eq!(r.legacy_abstract_memory_size(), r.legacy_size());
+    assert_eq!(r.abstract_memory_size(&SIZE_CONFIG), r.legacy_size());
 
     locals.store_loc(2, Value::struct_(Struct::pack([])), true)?;
     let r: Reference = locals.borrow_loc(2)?.value_as()?;
-    assert_eq!(r.legacy_abstract_memory_size(), r.legacy_size());
+    assert_eq!(r.abstract_memory_size(&SIZE_CONFIG), r.legacy_size());
 
     Ok(())
 }
@@ -169,7 +175,7 @@ fn legacy_struct_abstract_memory_size_consistenty() -> PartialVMResult<()> {
     ];
 
     for s in &structs {
-        assert_eq!(s.legacy_abstract_memory_size(), s.legacy_size());
+        assert_eq!(s.abstract_memory_size(&SIZE_CONFIG), s.legacy_size());
     }
 
     Ok(())
@@ -202,7 +208,7 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
     for (idx, val) in vals.iter().enumerate() {
         locals.store_loc(idx, val.copy_value()?, true)?;
 
-        let val_size_new = val.legacy_abstract_memory_size();
+        let val_size_new = val.abstract_memory_size(&SIZE_CONFIG);
         let val_size_old = val.legacy_size();
 
         assert_eq!(val_size_new, val_size_old);
@@ -211,7 +217,7 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
             .borrow_loc(idx)?
             .value_as::<Reference>()?
             .value_view()
-            .legacy_abstract_memory_size();
+            .abstract_memory_size(&SIZE_CONFIG);
 
         assert_eq!(val_size_through_ref, val_size_old)
     }

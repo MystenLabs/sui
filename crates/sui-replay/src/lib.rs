@@ -20,7 +20,6 @@ use crate::config::get_rpc_url;
 use crate::replay::ExecutionSandboxState;
 use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
-use move_vm_config::runtime::get_default_output_filepath;
 use std::env;
 use std::io::BufRead;
 use std::path::PathBuf;
@@ -236,7 +235,6 @@ pub async fn execute_replay_command(
                 None,
                 None,
                 None,
-                None,
             )
             .await?;
 
@@ -354,11 +352,9 @@ pub async fn execute_replay_command(
             tx_digest,
             executor_version,
             protocol_version,
-            profile_output,
+            profile_output: _,
             config_objects,
         } => {
-            let output_path = profile_output.or(Some(get_default_output_filepath()));
-
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let _sandbox_state = LocalExec::replay_with_network_config(
@@ -368,7 +364,6 @@ pub async fn execute_replay_command(
                 use_authority,
                 executor_version,
                 protocol_version,
-                output_path,
                 parse_configs_versions(config_objects),
             )
             .await?;
@@ -393,7 +388,6 @@ pub async fn execute_replay_command(
                 use_authority,
                 executor_version,
                 protocol_version,
-                None,
                 parse_configs_versions(config_objects),
             )
             .await?;
@@ -416,8 +410,12 @@ pub async fn execute_replay_command(
             // We need this for other activities in this session
             lx.current_protocol_version = *epoch_table.keys().peekable().last().unwrap();
 
-            println!("  Protocol Version  |                Epoch Change TX               |      Epoch Range     |   Checkpoint Range   ");
-            println!("---------------------------------------------------------------------------------------------------------------");
+            println!(
+                "  Protocol Version  |                Epoch Change TX               |      Epoch Range     |   Checkpoint Range   "
+            );
+            println!(
+                "---------------------------------------------------------------------------------------------------------------"
+            );
 
             for (
                 protocol_version,
@@ -588,7 +586,10 @@ fn parse_configs_versions(
 ) -> Option<Vec<(ObjectID, SequenceNumber)>> {
     let configs_and_versions = configs_and_versions?;
 
-    assert!(configs_and_versions.len() % 2 == 0, "Invalid number of arguments for configs and version -- you must supply a version for each config");
+    assert!(
+        configs_and_versions.len() % 2 == 0,
+        "Invalid number of arguments for configs and version -- you must supply a version for each config"
+    );
     Some(
         configs_and_versions
             .chunks_exact(2)

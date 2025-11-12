@@ -21,16 +21,15 @@ use move_binary_format::{
     },
 };
 use move_bytecode_verifier::absint::{
-    analyze_function, AbstractDomain, FunctionContext, JoinResult, TransferFunctions,
+    AbstractDomain, FunctionContext, JoinResult, TransferFunctions, analyze_function,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
-use move_core_types::{
-    account_address::AccountAddress, ident_str, identifier::IdentStr, vm_status::StatusCode,
-};
+use move_core_types::{ident_str, vm_status::StatusCode};
 use std::{collections::BTreeMap, error::Error, num::NonZeroU64};
 use sui_types::bridge::BRIDGE_MODULE_NAME;
 use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
 use sui_types::{
+    BRIDGE_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
     accumulator_event::ACCUMULATOR_MODULE_NAME,
     authenticator_state::AUTHENTICATOR_STATE_MODULE_NAME,
     clock::CLOCK_MODULE_NAME,
@@ -38,12 +37,11 @@ use sui_types::{
     id::OBJECT_MODULE_NAME,
     randomness_state::RANDOMNESS_MODULE_NAME,
     sui_system_state::SUI_SYSTEM_MODULE_NAME,
-    BRIDGE_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
 
 use crate::{
-    check_for_verifier_timeout, to_verification_timeout_error, verification_failure,
-    TEST_SCENARIO_MODULE_NAME,
+    FunctionIdent, TEST_SCENARIO_MODULE_NAME, check_for_verifier_timeout,
+    to_verification_timeout_error, verification_failure,
 };
 pub(crate) const JOIN_BASE_COST: u128 = 10;
 pub(crate) const JOIN_PER_LOCAL_COST: u128 = 5;
@@ -55,56 +53,65 @@ enum AbstractValue {
     Other,
 }
 
-type FunctionIdent<'a> = (&'a AccountAddress, &'a IdentStr, &'a IdentStr);
-const OBJECT_NEW: FunctionIdent = (
-    &SUI_FRAMEWORK_ADDRESS,
-    OBJECT_MODULE_NAME,
-    ident_str!("new"),
-);
+const OBJECT_NEW: FunctionIdent = (SUI_FRAMEWORK_ADDRESS, OBJECT_MODULE_NAME, ident_str!("new"));
 const OBJECT_NEW_UID_FROM_HASH: FunctionIdent = (
-    &SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS,
     OBJECT_MODULE_NAME,
     ident_str!("new_uid_from_hash"),
 );
+const OBJECT_NEW_DERIVED: FunctionIdent = (
+    SUI_FRAMEWORK_ADDRESS,
+    ident_str!("derived_object"),
+    ident_str!("claim"),
+);
 const TS_NEW_OBJECT: FunctionIdent = (
-    &SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS,
     ident_str!(TEST_SCENARIO_MODULE_NAME),
     ident_str!("new_object"),
 );
 const SUI_SYSTEM_CREATE: FunctionIdent = (
-    &SUI_SYSTEM_ADDRESS,
+    SUI_SYSTEM_ADDRESS,
     SUI_SYSTEM_MODULE_NAME,
     ident_str!("create"),
 );
 const SUI_CLOCK_CREATE: FunctionIdent = (
-    &SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS,
     CLOCK_MODULE_NAME,
     ident_str!("create"),
 );
 const SUI_AUTHENTICATOR_STATE_CREATE: FunctionIdent = (
-    &SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS,
     AUTHENTICATOR_STATE_MODULE_NAME,
     ident_str!("create"),
 );
 const SUI_RANDOMNESS_STATE_CREATE: FunctionIdent = (
-    &SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS,
     RANDOMNESS_MODULE_NAME,
     ident_str!("create"),
 );
 const SUI_DENY_LIST_CREATE: FunctionIdent = (
-    &SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS,
     DENY_LIST_MODULE,
     DENY_LIST_CREATE_FUNC,
 );
 
-const SUI_BRIDGE_CREATE: FunctionIdent =
-    (&BRIDGE_ADDRESS, BRIDGE_MODULE_NAME, ident_str!("create"));
+const SUI_BRIDGE_CREATE: FunctionIdent = (BRIDGE_ADDRESS, BRIDGE_MODULE_NAME, ident_str!("create"));
 const SUI_ACCUMULATOR_CREATE: FunctionIdent = (
-    &SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS,
     ACCUMULATOR_MODULE_NAME,
     ident_str!("create"),
 );
-const FRESH_ID_FUNCTIONS: &[FunctionIdent] = &[OBJECT_NEW, OBJECT_NEW_UID_FROM_HASH, TS_NEW_OBJECT];
+const SUI_COIN_REGISTRY_CREATE: FunctionIdent = (
+    SUI_FRAMEWORK_ADDRESS,
+    ident_str!("coin_registry"),
+    ident_str!("create"),
+);
+const FRESH_ID_FUNCTIONS: &[FunctionIdent] = &[
+    OBJECT_NEW,
+    OBJECT_NEW_UID_FROM_HASH,
+    OBJECT_NEW_DERIVED,
+    TS_NEW_OBJECT,
+];
 const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[
     SUI_SYSTEM_CREATE,
     SUI_CLOCK_CREATE,
@@ -113,6 +120,7 @@ const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[
     SUI_DENY_LIST_CREATE,
     SUI_BRIDGE_CREATE,
     SUI_ACCUMULATOR_CREATE,
+    SUI_COIN_REGISTRY_CREATE,
 ];
 
 impl AbstractValue {
@@ -147,10 +155,7 @@ fn verify_id_leak(
         let initial_state = AbstractState::new(&function_context);
         let mut verifier = IDLeakAnalysis::new(module, &function_context);
         let function_to_verify = verifier.cur_function();
-        if FUNCTIONS_TO_SKIP
-            .iter()
-            .any(|to_skip| function_to_verify == *to_skip)
-        {
+        if FUNCTIONS_TO_SKIP.contains(&function_to_verify) {
             continue;
         }
         analyze_function(&function_context, meter, &mut verifier, initial_state).map_err(
@@ -263,7 +268,7 @@ impl<'a> IDLeakAnalysis<'a> {
 
     fn resolve_function(&self, function_handle: &FunctionHandle) -> FunctionIdent<'a> {
         let m = self.binary_view.module_handle_at(function_handle.module);
-        let address = self.binary_view.address_identifier_at(m.address);
+        let address = *self.binary_view.address_identifier_at(m.address);
         let module = self.binary_view.identifier_at(m.name);
         let function = self.binary_view.identifier_at(function_handle.name);
         (address, module, function)
@@ -316,10 +321,7 @@ fn call(
 
     let return_ = verifier.binary_view.signature_at(function_handle.return_);
     let function = verifier.resolve_function(function_handle);
-    if FRESH_ID_FUNCTIONS
-        .iter()
-        .any(|makes_fresh| function == *makes_fresh)
-    {
+    if FRESH_ID_FUNCTIONS.contains(&function) {
         if return_.0.len() != 1 {
             debug_assert!(false, "{:?} should have a single return value", function);
             return Err(PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)
@@ -359,9 +361,14 @@ fn pack(
         let msg = format!(
             "Invalid object creation in {cur_package}::{cur_module}::{cur_function}. \
                 Object created without a newly created UID. \
-                The UID must come directly from sui::{}::{}. \
-                Or for tests, it can come from sui::{}::{}",
-            OBJECT_NEW.1, OBJECT_NEW.2, TS_NEW_OBJECT.1, TS_NEW_OBJECT.2,
+                The UID must come directly from `sui::{}::{}`, or `sui::{}::{}`. \
+                For tests, it can also come from `sui::{}::{}`",
+            OBJECT_NEW.1,
+            OBJECT_NEW.2,
+            OBJECT_NEW_DERIVED.1,
+            OBJECT_NEW_DERIVED.2,
+            TS_NEW_OBJECT.1,
+            TS_NEW_OBJECT.2
         );
 
         return Err(PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)

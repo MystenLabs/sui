@@ -5,11 +5,12 @@ use std::{fmt, str::FromStr};
 
 use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
 use move_core_types::account_address::AccountAddress;
+use serde::{Deserialize, Serialize};
 use sui_types::base_types::{ObjectID, SuiAddress as NativeSuiAddress};
 
 const SUI_ADDRESS_LENGTH: usize = 32;
 
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub(crate) struct SuiAddress([u8; SUI_ADDRESS_LENGTH]);
 
 #[derive(thiserror::Error, Debug)]
@@ -41,6 +42,12 @@ impl ScalarType for SuiAddress {
 
     fn to_value(&self) -> Value {
         Value::String(self.to_string())
+    }
+}
+
+impl SuiAddress {
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0.to_vec()
     }
 }
 
@@ -116,6 +123,12 @@ impl From<SuiAddress> for ObjectID {
 impl From<NativeSuiAddress> for SuiAddress {
     fn from(value: NativeSuiAddress) -> Self {
         SuiAddress(value.to_inner())
+    }
+}
+
+impl From<AccountAddress> for SuiAddress {
+    fn from(value: AccountAddress) -> Self {
+        SuiAddress(value.into_bytes())
     }
 }
 

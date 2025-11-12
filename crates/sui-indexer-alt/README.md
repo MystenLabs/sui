@@ -2,12 +2,41 @@
 
 ## Set-up
 
-Running the indexer requires Postgres to be installed and running on the
-system. The indexer has been tested with Postgres 15:
+Running the indexer requires a Postgres-compatible database to be installed and running on the
+system.
 
-```sh
-brew install postgresql@15
-```
+### Postgres
+
+#### Postgres 15 setup
+1. Install postgres
+   ```sh
+   brew install postgresql@15
+   ```
+   Resulting in this connection string
+   ```
+   postgresql://$(whoami):postgres@localhost:5432/postgres
+   ```
+
+### AlloyDB Omni
+
+#### Docker setup
+1. Install docker
+   ```sh
+   brew install --cask docker
+   ```
+2. Run docker (requires password)
+   ```sh
+   open -a Docker
+   ```
+#### AlloyDB setup
+1. Run AlloyDB Omni in docker
+   ```sh
+   docker run --detach --publish 5433:5432 --env POSTGRES_PASSWORD=postgres_pw google/alloydbomni
+   ```
+   Resulting in this connection string
+   ```
+   postgresql://postgres:postgres_pw@localhost:5433/postgres
+   ```
 
 The indexer will try to connect to the following database URL by default:
 

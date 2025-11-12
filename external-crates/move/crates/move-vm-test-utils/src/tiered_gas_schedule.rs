@@ -17,11 +17,10 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 
-use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
     loaded_data::runtime_types::Type,
-    views::{TypeView, ValueView},
+    views::{SizeConfig, TypeView, ValueView},
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -182,7 +181,6 @@ pub struct GasStatus<'a> {
     instructions_next_tier_start: Option<u64>,
     instructions_current_tier_mult: u64,
 
-    profiler: Option<GasProfiler>,
     num_native_calls: u64,
 }
 
@@ -213,7 +211,6 @@ impl<'a> GasStatus<'a> {
             stack_height_next_tier_start,
             stack_size_next_tier_start,
             instructions_next_tier_start,
-            profiler: None,
             num_native_calls: 0,
         }
     }
@@ -238,7 +235,6 @@ impl<'a> GasStatus<'a> {
             stack_height_next_tier_start: None,
             stack_size_next_tier_start: None,
             instructions_next_tier_start: None,
-            profiler: None,
             num_native_calls: 0,
         }
     }
@@ -723,14 +719,6 @@ impl<'b> GasMeter for GasStatus<'b> {
     fn remaining_gas(&self) -> InternalGas {
         self.gas_left
     }
-
-    fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler> {
-        self.profiler.as_mut()
-    }
-
-    fn set_profiler(&mut self, profiler: GasProfiler) {
-        self.profiler = Some(profiler);
-    }
 }
 
 pub fn zero_cost_schedule() -> CostTable {
@@ -792,11 +780,17 @@ pub fn initial_cost_schedule() -> CostTable {
 }
 
 fn abstract_memory_size(v: impl ValueView) -> AbstractMemorySize {
-    v.abstract_memory_size(false)
+    v.abstract_memory_size(&SizeConfig {
+        include_vector_size: true,
+        traverse_references: false,
+    })
 }
 
 fn abstract_memory_size_with_traversal(v: impl ValueView) -> AbstractMemorySize {
-    v.abstract_memory_size(true)
+    v.abstract_memory_size(&SizeConfig {
+        include_vector_size: true,
+        traverse_references: true,
+    })
 }
 
 static ZERO_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(zero_cost_schedule);

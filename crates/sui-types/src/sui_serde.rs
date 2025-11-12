@@ -15,15 +15,15 @@ use serde;
 use serde::de::{Deserializer, Error};
 use serde::ser::{Error as SerError, Serializer};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+use serde_with::serde_as;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
 
 use sui_protocol_config::ProtocolVersion;
 
 use crate::{
-    parse_sui_struct_tag, parse_sui_type_tag, DEEPBOOK_ADDRESS, SUI_CLOCK_ADDRESS,
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_STATE_ADDRESS,
+    DEEPBOOK_ADDRESS, SUI_CLOCK_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
+    SUI_SYSTEM_STATE_ADDRESS, parse_sui_struct_tag, parse_sui_type_tag,
 };
 
 #[inline]
@@ -341,7 +341,7 @@ impl<'de> DeserializeAs<'de, roaring::RoaringBitmap> for SuiBitmap {
 
 // RoaringBitmap::deserialize_from() or iter() do not check for duplicates.
 // So this function is needed to sanitize the bitmap to ensure unique entries.
-fn deserialize_sui_bitmap(bytes: &[u8]) -> std::io::Result<roaring::RoaringBitmap> {
+pub(crate) fn deserialize_sui_bitmap(bytes: &[u8]) -> std::io::Result<roaring::RoaringBitmap> {
     let orig_bitmap = roaring::RoaringBitmap::deserialize_from(bytes)?;
     // Ensure there is no duplicated entries in the bitmap.
     let mut seen = std::collections::BTreeSet::new();

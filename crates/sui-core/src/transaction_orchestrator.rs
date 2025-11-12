@@ -7,38 +7,34 @@ submit transactions to validators for finality, and proactively executes
 finalized transactions locally, when possible.
 */
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::AuthorityState;
-use crate::authority_aggregator::AuthorityAggregator;
-use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
-use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
-use crate::transaction_driver::{
-    QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxRequest, TransactionDriver,
-    TransactionDriverMetrics,
-};
-use futures::future::{select, Either, Future};
-use futures::FutureExt;
-use mysten_common::sync::notify_read::NotifyRead;
-use mysten_metrics::{add_server_timing, spawn_logged_monitored_task, spawn_monitored_task};
-use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
-use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
-use prometheus::{
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, Histogram, Registry,
-};
-use rand::Rng;
-use std::env;
 use std::net::SocketAddr;
 use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+
+use futures::FutureExt;
+use futures::future::{Either, Future, select};
+use futures::stream::{FuturesUnordered, StreamExt};
+use mysten_common::in_antithesis;
+use mysten_common::sync::notify_read::NotifyRead;
+use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
+use mysten_metrics::{add_server_timing, spawn_logged_monitored_task, spawn_monitored_task};
+use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
+use prometheus::{
+    HistogramVec, IntCounter, IntCounterVec, Registry, register_histogram_vec_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
+};
+use rand::Rng;
+use sui_config::NodeConfig;
+use sui_protocol_config::Chain;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
+use sui_types::messages_grpc::{SubmitTxRequest, TxType};
 use sui_types::quorum_driver_types::{
     EffectsFinalityInfo, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
     ExecuteTransactionResponseV3, FinalizedEffects, IsTransactionExecutedLocally,
@@ -47,19 +43,32 @@ use sui_types::quorum_driver_types::{
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{Transaction, TransactionData, VerifiedTransaction};
 use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChecks};
-use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
-use tokio::time::timeout;
-use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
+use tokio::time::{Instant, sleep, timeout};
+use tracing::{Instrument, debug, error, error_span, info, instrument, warn};
+
+use crate::authority::AuthorityState;
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority_aggregator::AuthorityAggregator;
+use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
+use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
+use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
+use crate::transaction_driver::{
+    QuorumTransactionResponse, SubmitTransactionOptions, TransactionDriver, TransactionDriverError,
+    TransactionDriverMetrics, choose_transaction_driver_percentage,
+};
 
 // How long to wait for local execution (including parents) before a timeout
 // is returned to client.
 const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 // Timeout for waiting for finality for each transaction.
-const WAIT_FOR_FINALITY_TIMEOUT: Duration = Duration::from_secs(30);
+const WAIT_FOR_FINALITY_TIMEOUT: Duration = Duration::from_secs(90);
 
+pub type QuorumTransactionEffectsResult =
+    Result<(Transaction, QuorumTransactionResponse), (TransactionDigest, QuorumDriverError)>;
 pub struct TransactionOrchestrator<A: Clone> {
     quorum_driver_handler: Arc<QuorumDriverHandler<A>>,
     validator_state: Arc<AuthorityState>,
@@ -69,6 +78,8 @@ pub struct TransactionOrchestrator<A: Clone> {
     metrics: Arc<TransactionOrchestratorMetrics>,
     transaction_driver: Option<Arc<TransactionDriver<A>>>,
     td_percentage: u8,
+    td_allowed_submission_list: Vec<String>,
+    enable_early_validation: bool,
 }
 
 impl TransactionOrchestrator<NetworkAuthorityClient> {
@@ -78,6 +89,7 @@ impl TransactionOrchestrator<NetworkAuthorityClient> {
         reconfig_channel: Receiver<SuiSystemState>,
         parent_path: &Path,
         prometheus_registry: &Registry,
+        node_config: &NodeConfig,
     ) -> Self {
         let observer = OnsiteReconfigObserver::new(
             reconfig_channel,
@@ -92,6 +104,7 @@ impl TransactionOrchestrator<NetworkAuthorityClient> {
             parent_path,
             prometheus_registry,
             observer,
+            node_config,
         )
     }
 }
@@ -107,6 +120,7 @@ where
         parent_path: &Path,
         prometheus_registry: &Registry,
         reconfig_observer: OnsiteReconfigObserver,
+        node_config: &NodeConfig,
     ) -> Self {
         let metrics = Arc::new(QuorumDriverMetrics::new(prometheus_registry));
         let notifier = Arc::new(NotifyRead::new());
@@ -131,23 +145,40 @@ where
         };
         Self::schedule_txes_in_log(pending_tx_log.clone(), quorum_driver_handler.clone());
 
-        // TODO(fastpath): Plumb in transaction driver percentage from TransactionOrchestrator init instead of env var
-        let td_percentage = env::var("TRANSACTION_DRIVER")
-            .ok()
-            .and_then(|s| s.parse::<u8>().ok())
-            .filter(|&p| p <= 100) // Ensure percentage is between 0-100
-            .unwrap_or(0);
+        let epoch_store = validator_state.load_epoch_store_one_call_per_task();
+        let td_percentage = if !epoch_store.protocol_config().mysticeti_fastpath() {
+            0
+        } else {
+            choose_transaction_driver_percentage(Some(epoch_store.get_chain_identifier()))
+        };
 
         let transaction_driver = if td_percentage > 0 {
             let td_metrics = Arc::new(TransactionDriverMetrics::new(prometheus_registry));
+            let client_metrics = Arc::new(
+                crate::validator_client_monitor::ValidatorClientMetrics::new(prometheus_registry),
+            );
             Some(TransactionDriver::new(
                 validators.clone(),
                 reconfig_observer.clone(),
                 td_metrics,
+                Some(node_config),
+                client_metrics,
             ))
         } else {
             None
         };
+
+        let td_allowed_submission_list = node_config
+            .transaction_driver_config
+            .as_ref()
+            .map(|config| config.allowed_submission_validators.clone())
+            .unwrap_or_default();
+
+        let enable_early_validation = node_config
+            .transaction_driver_config
+            .as_ref()
+            .map(|config| config.enable_early_validation)
+            .unwrap_or(true);
 
         Self {
             quorum_driver_handler,
@@ -158,6 +189,8 @@ where
             metrics,
             transaction_driver,
             td_percentage,
+            td_allowed_submission_list,
+            enable_early_validation,
         }
     }
 }
@@ -170,8 +203,7 @@ where
     fields(
         tx_digest = ?request.transaction.digest(),
         tx_type = ?request_type,
-    ),
-    err)]
+    ))]
     pub async fn execute_transaction_block(
         &self,
         request: ExecuteTransactionRequestV3,
@@ -179,7 +211,14 @@ where
         client_addr: Option<SocketAddr>,
     ) -> Result<(ExecuteTransactionResponseV3, IsTransactionExecutedLocally), QuorumDriverError>
     {
-        let transaction = request.transaction.clone();
+        let timer = Instant::now();
+        let tx_type = if request.transaction.is_consensus_tx() {
+            TxType::SharedObject
+        } else {
+            TxType::SingleWriter
+        };
+        let tx_digest = *request.transaction.digest();
+
         let (response, mut executed_locally) = self
             .execute_transaction_with_effects_waiting(request, client_addr)
             .await?;
@@ -191,12 +230,13 @@ where
             ) {
                 let executed_locally = Self::wait_for_finalized_tx_executed_locally_with_timeout(
                     &self.validator_state,
-                    &transaction,
+                    tx_digest,
+                    tx_type,
                     &self.metrics,
                 )
                 .await
                 .is_ok();
-                add_server_timing("local_execution");
+                add_server_timing("local_execution done");
                 executed_locally
             } else {
                 false
@@ -219,20 +259,41 @@ where
             auxiliary_data,
         };
 
+        self.metrics
+            .request_latency
+            .with_label_values(&[
+                tx_type.as_str(),
+                "execute_transaction_block",
+                executed_locally.to_string().as_str(),
+            ])
+            .observe(timer.elapsed().as_secs_f64());
+
         Ok((response, executed_locally))
     }
 
     // Utilize the handle_certificate_v3 validator api to request input/output objects
-    #[instrument(name = "tx_orchestrator_execute_transaction_v3", level = "trace", skip_all,
+    #[instrument(name = "tx_orchestrator_execute_transaction_v3", level = "debug", skip_all,
                  fields(tx_digest = ?request.transaction.digest()))]
     pub async fn execute_transaction_v3(
         &self,
         request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
     ) -> Result<ExecuteTransactionResponseV3, QuorumDriverError> {
+        let timer = Instant::now();
+        let tx_type = if request.transaction.is_consensus_tx() {
+            TxType::SharedObject
+        } else {
+            TxType::SingleWriter
+        };
+
         let (response, _) = self
             .execute_transaction_with_effects_waiting(request, client_addr)
             .await?;
+
+        self.metrics
+            .request_latency
+            .with_label_values(&[tx_type.as_str(), "execute_transaction_v3", "false"])
+            .observe(timer.elapsed().as_secs_f64());
 
         let QuorumTransactionResponse {
             effects,
@@ -258,109 +319,292 @@ where
         client_addr: Option<SocketAddr>,
     ) -> Result<(QuorumTransactionResponse, IsTransactionExecutedLocally), QuorumDriverError> {
         let epoch_store = self.validator_state.load_epoch_store_one_call_per_task();
-        let transaction = request.transaction.clone();
-        let tx_digest = *transaction.digest();
+        let verified_transaction = epoch_store
+            .verify_transaction(request.transaction.clone())
+            .map_err(QuorumDriverError::InvalidUserSignature)?;
+        let tx_digest = *verified_transaction.digest();
 
-        // Set up parallel waiting for effects
-        let cache_reader = self.validator_state.get_transaction_cache_reader().clone();
-        let digests = [tx_digest];
-        let effects_await =
-            epoch_store.within_alive_epoch(cache_reader.notify_read_executed_effects(
-                "TransactionOrchestrator::notify_read_execute_transaction_with_effects_waiting",
-                &digests,
-            ));
+        // Early validation check against local state before submission to catch non-retriable errors
+        // TODO: Consider moving this check to TransactionDriver for per-retry validation
+        if self.enable_early_validation
+            && let Err(e) = self
+                .validator_state
+                .check_transaction_validity(&epoch_store, &verified_transaction)
+        {
+            let error_category = e.categorize();
+            if !error_category.is_submission_retriable() {
+                // Skip early validation rejection if transaction has already been executed (allows retries to return cached results)
+                if !self.validator_state.is_tx_already_executed(&tx_digest) {
+                    self.metrics
+                        .early_validation_rejections
+                        .with_label_values(&[e.as_ref()])
+                        .inc();
+                    debug!(
+                        error = ?e,
+                        "Transaction rejected during early validation"
+                    );
 
-        // Wait for either execution result or local effects to become available
-        let mut local_effects_future = effects_await.boxed();
-        let mut execution_future = self
-            .execute_transaction_impl(&epoch_store, request, client_addr)
-            .boxed();
+                    return Err(QuorumDriverError::TransactionFailed {
+                        category: error_category,
+                        details: e.to_string(),
+                    });
+                }
+            }
+        }
 
-        // Add timeout to the overall operation
+        // Add transaction to WAL log.
+        let is_new_transaction = self
+            .pending_tx_log
+            .write_pending_transaction_maybe(&verified_transaction)
+            .await
+            .map_err(|e| {
+                warn!("QuorumDriverInternalError: {e:?}");
+                QuorumDriverError::QuorumDriverInternalError(e)
+            })?;
+        if is_new_transaction {
+            debug!("Added transaction to WAL log for TransactionDriver");
+        } else {
+            debug!("Transaction already in pending_tx_log");
+        }
+
+        let include_events = request.include_events;
+        let include_input_objects = request.include_input_objects;
+        let include_output_objects = request.include_output_objects;
+        let include_auxiliary_data = request.include_auxiliary_data;
+
+        // Track whether TD is being used for this transaction
+        let using_td = Arc::new(AtomicBool::new(false));
+
         let finality_timeout = std::env::var("WAIT_FOR_FINALITY_TIMEOUT_SECS")
             .ok()
             .and_then(|v| v.parse().ok())
             .map(Duration::from_secs)
             .unwrap_or(WAIT_FOR_FINALITY_TIMEOUT);
 
+        let num_submissions = if !is_new_transaction {
+            // No need to submit when the transaction is already being processed.
+            0
+        } else if cfg!(msim) || in_antithesis() {
+            // Allow duplicated submissions in tests.
+            let r = rand::thread_rng().gen_range(1..=100);
+            let n = if r <= 10 {
+                3
+            } else if r <= 30 {
+                2
+            } else {
+                1
+            };
+            if n > 1 {
+                debug!("Making {n} execution calls");
+            }
+            n
+        } else {
+            1
+        };
+
+        // Wait for one of the execution futures to succeed, or all of them to fail.
+        let mut execution_futures = FuturesUnordered::new();
+        for i in 0..num_submissions {
+            // Generate jitter values outside the async block
+            let should_delay = i > 0 && rand::thread_rng().gen_bool(0.8);
+            let delay_ms = if should_delay {
+                rand::thread_rng().gen_range(100..=500)
+            } else {
+                0
+            };
+
+            let epoch_store = epoch_store.clone();
+            let request = request.clone();
+            let verified_transaction = verified_transaction.clone();
+            let using_td = using_td.clone();
+
+            let future = async move {
+                if delay_ms > 0 {
+                    // Add jitters to duplicated submissions.
+                    sleep(Duration::from_millis(delay_ms)).await;
+                }
+                self.execute_transaction_impl(
+                    &epoch_store,
+                    request,
+                    verified_transaction,
+                    client_addr,
+                    Some(finality_timeout),
+                    using_td,
+                )
+                .await
+            }
+            .boxed();
+            execution_futures.push(future);
+        }
+
+        // Track the last execution error.
+        let mut last_execution_error: Option<QuorumDriverError> = None;
+
+        // Wait for execution result outside of this call to become available.
+        let digests = [tx_digest];
+        let mut local_effects_future = epoch_store
+            .within_alive_epoch(
+                self.validator_state
+                    .get_transaction_cache_reader()
+                    .notify_read_executed_effects(
+                    "TransactionOrchestrator::notify_read_execute_transaction_with_effects_waiting",
+                    &digests,
+                ),
+            )
+            .boxed();
+
+        // Wait for execution timeout.
         let mut timeout_future = tokio::time::sleep(finality_timeout).boxed();
 
-        loop {
+        let result = loop {
             tokio::select! {
-                // Execution result returned
-                execution_result = &mut execution_future => {
-                    return execution_result.map(|resp| (resp, false));
-                }
+                biased;
+
                 // Local effects might be available
                 local_effects_result = &mut local_effects_future => {
-                    debug!(
-                        ?tx_digest,
-                        "Effects became available while execution was running"
-                    );
                     match local_effects_result {
                         Ok(effects) => {
+                            debug!(
+                                "Effects became available while execution was running"
+                            );
                             if let Some(effects) = effects.into_iter().next() {
+                                self.metrics.concurrent_execution.inc();
                                 let epoch = effects.executed_epoch();
+                                let events = if include_events {
+                                    if effects.events_digest().is_some() {
+                                        Some(self.validator_state.get_transaction_events(effects.transaction_digest())
+                                            .map_err(QuorumDriverError::QuorumDriverInternalError)?)
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                };
+                                let input_objects = include_input_objects
+                                    .then(|| self.validator_state.get_transaction_input_objects(&effects))
+                                    .transpose()
+                                    .map_err(QuorumDriverError::QuorumDriverInternalError)?;
+                                let output_objects = include_output_objects
+                                    .then(|| self.validator_state.get_transaction_output_objects(&effects))
+                                    .transpose()
+                                    .map_err(QuorumDriverError::QuorumDriverInternalError)?;
                                 let response = QuorumTransactionResponse {
                                     effects: FinalizedEffects {
                                         effects,
                                         finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
                                     },
-                                    events: None,
-                                    input_objects: None,
-                                    output_objects: None,
+                                    events,
+                                    input_objects,
+                                    output_objects,
                                     auxiliary_data: None,
                                 };
-                                return Ok((response, true));
+                                break Ok((response, true));
                             }
                         }
                         Err(_) => {
-                            warn!(?tx_digest, "Epoch terminated before effects were available");
+                            warn!("Epoch terminated before effects were available");
                         }
                     };
 
                     // Prevent this branch from being selected again
                     local_effects_future = futures::future::pending().boxed();
                 }
+
+                // This branch is disabled if execution_futures is empty.
+                Some(result) = execution_futures.next() => {
+                    match result {
+                        Ok(resp) => {
+                            // First success gets returned.
+                            debug!("Execution succeeded, returning response");
+                            let QuorumTransactionResponse {
+                                effects,
+                                events,
+                                input_objects,
+                                output_objects,
+                                auxiliary_data,
+                            } = resp;
+                            // Filter fields based on request flags.
+                            let resp = QuorumTransactionResponse {
+                                effects,
+                                events: if include_events { events } else { None },
+                                input_objects: if include_input_objects { input_objects } else { None },
+                                output_objects: if include_output_objects { output_objects } else { None },
+                                auxiliary_data: if include_auxiliary_data { auxiliary_data } else { None },
+                            };
+                            break Ok((resp, false));
+                        }
+                        Err(QuorumDriverError::PendingExecutionInTransactionOrchestrator) => {
+                            debug!(
+                                "Transaction is already being processed"
+                            );
+                            // Avoid overriding errors with transaction already being processed.
+                            if last_execution_error.is_none() {
+                                last_execution_error = Some(QuorumDriverError::PendingExecutionInTransactionOrchestrator);
+                            }
+                        }
+                        Err(e) => {
+                            debug!(?e, "Execution attempt failed, wait for other attempts");
+                            last_execution_error = Some(e);
+                        }
+                    };
+
+                    // Last error must have been recorded.
+                    if execution_futures.is_empty() {
+                        break Err(last_execution_error.unwrap());
+                    }
+                }
+
                 // A timeout has occurred while waiting for finality
                 _ = &mut timeout_future => {
-                    debug!(?tx_digest, "Timeout waiting for transaction finality.");
+                    debug!("Timeout waiting for transaction finality.");
                     self.metrics.wait_for_finality_timeout.inc();
-                    return Err(QuorumDriverError::TimeoutBeforeFinality);
+
+                    // Clean up transaction from WAL log only for TD submissions
+                    // For QD submissions, the cleanup happens in loop_pending_transaction_log
+                    if using_td.load(Ordering::Acquire) {
+                        debug!("Cleaning up TD transaction from WAL due to timeout");
+                        if let Err(err) = self.pending_tx_log.finish_transaction(&tx_digest) {
+                            warn!(
+                                "Failed to finish TD transaction in pending transaction log: {err}"
+                            );
+                        }
+                    }
+
+                    break Err(QuorumDriverError::TimeoutBeforeFinality);
                 }
             }
+        };
+
+        // Clean up transaction from WAL log
+        if let Err(err) = self.pending_tx_log.finish_transaction(&tx_digest) {
+            warn!("Failed to finish transaction in pending transaction log: {err}");
         }
+
+        result
     }
 
-    pub async fn execute_transaction_impl(
+    #[instrument(level = "error", skip_all)]
+    async fn execute_transaction_impl(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         request: ExecuteTransactionRequestV3,
+        verified_transaction: VerifiedTransaction,
         client_addr: Option<SocketAddr>,
+        finality_timeout: Option<Duration>,
+        using_td: Arc<AtomicBool>,
     ) -> Result<QuorumTransactionResponse, QuorumDriverError> {
-        let verified_transaction = epoch_store
-            .verify_transaction(request.transaction.clone())
-            .map_err(QuorumDriverError::InvalidUserSignature)?;
+        let tx_digest = *verified_transaction.digest();
+        debug!("TO Received transaction execution request.");
+
+        let timer = Instant::now();
+        let tx_type = if verified_transaction.is_consensus_tx() {
+            TxType::SharedObject
+        } else {
+            TxType::SingleWriter
+        };
+
         let (_in_flight_metrics_guards, good_response_metrics) =
             self.update_metrics(&request.transaction);
-        let tx_digest = *verified_transaction.digest();
-        debug!(?tx_digest, "TO Received transaction execution request.");
-
-        let (_e2e_latency_timer, _txn_finality_timer) = if request.transaction.is_consensus_tx() {
-            (
-                self.metrics.request_latency_shared_obj.start_timer(),
-                self.metrics
-                    .wait_for_finality_latency_shared_obj
-                    .start_timer(),
-            )
-        } else {
-            (
-                self.metrics.request_latency_single_writer.start_timer(),
-                self.metrics
-                    .wait_for_finality_latency_single_writer
-                    .start_timer(),
-            )
-        };
 
         // TODO: refactor all the gauge and timer metrics with `monitored_scope`
         let wait_for_finality_gauge = self.metrics.wait_for_finality_in_flight.clone();
@@ -369,74 +613,74 @@ where
             in_flight.dec();
         });
 
-        // Check if TransactionDriver should be used for submission
-        if let Some(td) = &self.transaction_driver {
-            let random_value = rand::thread_rng().gen_range(1..=100);
-            if random_value <= self.td_percentage {
-                let td_response = self
-                    .submit_with_transaction_driver(
-                        td,
-                        &request,
-                        client_addr,
-                        &verified_transaction,
-                        good_response_metrics,
-                        tx_digest,
-                    )
-                    .await;
+        // Select TransactionDriver or QuorumDriver for submission.
+        let (response, driver_type) = if self.transaction_driver.is_some()
+            && self.should_use_transaction_driver(epoch_store, tx_digest)
+        {
+            // Mark that we're using TD before submitting.
+            using_td.store(true, Ordering::Release);
 
-                add_server_timing("[TransactionDriver] wait_for_finality");
-
-                drop(_txn_finality_timer);
-                drop(_wait_for_finality_gauge);
-                self.metrics.wait_for_finality_finished.inc();
-
-                return td_response;
-            }
-        }
-
-        // Submit transaction through QuorumDriver
-        let result = self
-            .submit_with_quorum_driver(
-                epoch_store.clone(),
-                verified_transaction.clone(),
-                request,
-                client_addr,
+            (
+                self.submit_with_transaction_driver(
+                    self.transaction_driver.as_ref().unwrap(),
+                    &request,
+                    client_addr,
+                    &verified_transaction,
+                    good_response_metrics,
+                    finality_timeout,
+                )
+                .await?,
+                "transaction_driver",
             )
-            .await
-            .map_err(|e| {
-                warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
-                QuorumDriverError::QuorumDriverInternalError(e)
-            })?
-            .await;
+        } else {
+            // Submit transaction through QuorumDriver.
+            using_td.store(false, Ordering::Release);
 
-        add_server_timing("[QuorumDriver] wait_for_finality");
+            let resp = self
+                .submit_with_quorum_driver(
+                    epoch_store.clone(),
+                    verified_transaction.clone(),
+                    request,
+                    client_addr,
+                )
+                .await
+                .map_err(|e| {
+                    warn!("QuorumDriverInternalError: {e:?}");
+                    QuorumDriverError::QuorumDriverInternalError(e)
+                })?
+                .await
+                .map_err(|e| {
+                    warn!("QuorumDriverInternalError: {e:?}");
+                    QuorumDriverError::QuorumDriverInternalError(e)
+                })??;
 
-        drop(_txn_finality_timer);
-        drop(_wait_for_finality_gauge);
+            (
+                QuorumTransactionResponse {
+                    effects: FinalizedEffects::new_from_effects_cert(resp.effects_cert.into()),
+                    events: resp.events,
+                    input_objects: resp.input_objects,
+                    output_objects: resp.output_objects,
+                    auxiliary_data: resp.auxiliary_data,
+                },
+                "quorum_driver",
+            )
+        };
+
+        add_server_timing("wait_for_finality done");
+
         self.metrics.wait_for_finality_finished.inc();
 
-        match result {
-            Err(err) => {
-                warn!(?tx_digest, "QuorumDriverInternalError: {err:?}");
-                Err(QuorumDriverError::QuorumDriverInternalError(err))
-            }
-            Ok(Err(err)) => Err(err),
-            Ok(Ok(qd_response)) => {
-                good_response_metrics.inc();
-                let effects_cert = qd_response.effects_cert;
+        let elapsed = timer.elapsed().as_secs_f64();
+        self.metrics
+            .settlement_finality_latency
+            .with_label_values(&[tx_type.as_str(), driver_type])
+            .observe(elapsed);
+        good_response_metrics.inc();
 
-                let quorum_response = QuorumTransactionResponse {
-                    effects: FinalizedEffects::new_from_effects_cert(effects_cert.into()),
-                    events: qd_response.events,
-                    input_objects: qd_response.input_objects,
-                    output_objects: qd_response.output_objects,
-                    auxiliary_data: qd_response.auxiliary_data,
-                };
-                Ok(quorum_response)
-            }
-        }
+        Ok(response)
     }
 
+    #[instrument(level = "error", skip_all, err(level = "info"))]
     async fn submit_with_transaction_driver(
         &self,
         td: &Arc<TransactionDriver<A>>,
@@ -444,51 +688,40 @@ where
         client_addr: Option<SocketAddr>,
         verified_transaction: &VerifiedTransaction,
         good_response_metrics: &GenericCounter<AtomicU64>,
-        tx_digest: TransactionDigest,
+        timeout_duration: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, QuorumDriverError> {
+        let tx_digest = *verified_transaction.digest();
         debug!("Using TransactionDriver for transaction {:?}", tx_digest);
-        // Add transaction to WAL log for TransactionDriver path
-        if self
-            .pending_tx_log
-            .write_pending_transaction_maybe(verified_transaction)
-            .await
-            .map_err(|e| {
-                warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
-                QuorumDriverError::QuorumDriverInternalError(e)
-            })?
-        {
-            debug!(
-                ?tx_digest,
-                "Added transaction to WAL log for TransactionDriver"
-            );
-        }
 
         let td_response = td
             .drive_transaction(
-                SubmitTxRequest {
-                    transaction: request.transaction.clone(),
-                },
+                SubmitTxRequest::new_transaction(request.transaction.clone()),
                 SubmitTransactionOptions {
                     forwarded_client_addr: client_addr,
+                    allowed_validators: self.td_allowed_submission_list.clone(),
                 },
+                timeout_duration,
             )
             .await
-            .map_err(|e| QuorumDriverError::TransactionFailed {
-                retriable: e.is_retriable(),
-                details: e.to_string(),
+            .map_err(|e| match e {
+                TransactionDriverError::TimeoutWithLastRetriableError {
+                    last_error,
+                    attempts,
+                    timeout,
+                } => QuorumDriverError::TimeoutBeforeFinalityWithErrors {
+                    last_error: last_error.map(|e| e.to_string()).unwrap_or_default(),
+                    attempts,
+                    timeout,
+                },
+                other => QuorumDriverError::TransactionFailed {
+                    category: other.categorize(),
+                    details: other.to_string(),
+                },
             });
-
-        // Clean up transaction from WAL log
-        if let Err(err) = self.pending_tx_log.finish_transaction(&tx_digest) {
-            warn!(
-                ?tx_digest,
-                "Failed to finish transaction in pending transaction log: {err}"
-            );
-        }
 
         match td_response {
             Err(e) => {
-                warn!(?tx_digest, "{e:?}");
+                warn!("TransactionDriver error: {e:?}");
                 Err(e)
             }
             Ok(quorum_transaction_response) => {
@@ -509,19 +742,12 @@ where
         client_addr: Option<SocketAddr>,
     ) -> SuiResult<impl Future<Output = SuiResult<QuorumDriverResult>> + '_> {
         let tx_digest = *transaction.digest();
+
         let ticket = self.notifier.register_one(&tx_digest);
-        // TODO(william) need to also write client adr to pending tx log below
-        // so that we can re-execute with this client addr if we restart
-        if self
-            .pending_tx_log
-            .write_pending_transaction_maybe(&transaction)
-            .await?
-        {
-            debug!(?tx_digest, "no pending request in flight, submitting.");
-            self.quorum_driver()
-                .submit_transaction_no_ticket(request.clone(), client_addr)
-                .await?;
-        }
+        self.quorum_driver()
+            .submit_transaction_no_ticket(request.clone(), client_addr)
+            .await?;
+
         // It's possible that the transaction effects is already stored in DB at this point.
         // So we also subscribe to that. If we hear from `effects_await` first, it means
         // the ticket misses the previous notification, and we want to ask quorum driver
@@ -540,10 +766,7 @@ where
             let res = match select(ticket, effects_await.boxed()).await {
                 Either::Left((quorum_driver_response, _)) => Ok(quorum_driver_response),
                 Either::Right((_, unfinished_quorum_driver_task)) => {
-                    debug!(
-                        ?tx_digest,
-                        "Effects are available in DB, use quorum driver to get a certificate"
-                    );
+                    debug!("Effects are available in DB, use quorum driver to get a certificate");
                     qd.submit_transaction_no_ticket(request, client_addr)
                         .await?;
                     Ok(unfinished_quorum_driver_task.await)
@@ -553,28 +776,29 @@ where
         })
     }
 
-    #[instrument(name = "tx_orchestrator_wait_for_finalized_tx_executed_locally_with_timeout", level = "debug", skip_all, fields(tx_digest = ?transaction.digest()), err)]
+    #[instrument(
+        name = "tx_orchestrator_wait_for_finalized_tx_executed_locally_with_timeout",
+        level = "debug",
+        skip_all,
+        err(level = "info")
+    )]
     async fn wait_for_finalized_tx_executed_locally_with_timeout(
         validator_state: &Arc<AuthorityState>,
-        transaction: &Transaction,
+        tx_digest: TransactionDigest,
+        tx_type: TxType,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
-        let tx_digest = *transaction.digest();
         metrics.local_execution_in_flight.inc();
         let _metrics_guard =
             scopeguard::guard(metrics.local_execution_in_flight.clone(), |in_flight| {
                 in_flight.dec();
             });
 
-        let _guard = if transaction.is_consensus_tx() {
-            metrics.local_execution_latency_shared_obj.start_timer()
-        } else {
-            metrics.local_execution_latency_single_writer.start_timer()
-        };
-        debug!(
-            ?tx_digest,
-            "Waiting for finalized tx to be executed locally."
-        );
+        let _latency_guard = metrics
+            .local_execution_latency
+            .with_label_values(&[tx_type.as_str()])
+            .start_timer();
+        debug!("Waiting for finalized tx to be executed locally.");
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
             validator_state
@@ -592,18 +816,37 @@ where
         {
             Err(_elapsed) => {
                 debug!(
-                    ?tx_digest,
                     "Waiting for finalized tx to be executed locally timed out within {:?}.",
                     LOCAL_EXECUTION_TIMEOUT
                 );
                 metrics.local_execution_timeout.inc();
-                Err(SuiError::TimeoutError)
+                Err(SuiErrorKind::TimeoutError.into())
             }
             Ok(_) => {
                 metrics.local_execution_success.inc();
                 Ok(())
             }
         }
+    }
+
+    fn should_use_transaction_driver(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        tx_digest: TransactionDigest,
+    ) -> bool {
+        const MAX_PERCENTAGE: u8 = 100;
+        let unknown_network = epoch_store.get_chain() == Chain::Unknown;
+        let v = if unknown_network {
+            rand::thread_rng().gen_range(1..=MAX_PERCENTAGE)
+        } else {
+            let v = u32::from_le_bytes(tx_digest.inner()[..4].try_into().unwrap());
+            (v % (MAX_PERCENTAGE as u32) + 1) as u8
+        };
+        debug!(
+            "Choosing whether to use transaction driver: {} vs {}",
+            v, self.td_percentage
+        );
+        v <= self.td_percentage
     }
 
     // TODO: Potentially cleanup this function and pending transaction log.
@@ -653,14 +896,10 @@ where
         self.quorum_driver().authority_aggregator().load_full()
     }
 
-    pub fn subscribe_to_effects_queue(&self) -> Receiver<QuorumDriverEffectsQueueResult> {
-        self.quorum_driver_handler.subscribe_to_effects()
-    }
-
-    fn update_metrics(
-        &'_ self,
+    fn update_metrics<'a>(
+        &'a self,
         transaction: &Transaction,
-    ) -> (impl Drop, &'_ GenericCounter<AtomicU64>) {
+    ) -> (impl Drop + use<A>, &'a GenericCounter<AtomicU64>) {
         let (in_flight, good_response) = if transaction.is_consensus_tx() {
             self.metrics.total_req_received_shared_object.inc();
             (
@@ -724,7 +963,7 @@ where
                         "Failed to enqueue transaction from pending_tx_log, err: {err:?}"
                     );
                 } else {
-                    debug!(?tx_digest, "Enqueued transaction from pending_tx_log");
+                    debug!("Enqueued transaction from pending_tx_log");
                     if (i + 1) % 1000 == 0 {
                         info!("Enqueued {} transactions from pending_tx_log.", i + 1);
                     }
@@ -735,11 +974,10 @@ where
         });
     }
 
-    pub fn load_all_pending_transactions(&self) -> SuiResult<Vec<VerifiedTransaction>> {
+    pub fn load_all_pending_transactions_in_test(&self) -> SuiResult<Vec<VerifiedTransaction>> {
         self.pending_tx_log.load_all_pending_transactions()
     }
 }
-
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 #[derive(Clone)]
 pub struct TransactionOrchestratorMetrics {
@@ -760,12 +998,13 @@ pub struct TransactionOrchestratorMetrics {
     local_execution_success: GenericCounter<AtomicU64>,
     local_execution_timeout: GenericCounter<AtomicU64>,
 
-    request_latency_single_writer: Histogram,
-    request_latency_shared_obj: Histogram,
-    wait_for_finality_latency_single_writer: Histogram,
-    wait_for_finality_latency_shared_obj: Histogram,
-    local_execution_latency_single_writer: Histogram,
-    local_execution_latency_shared_obj: Histogram,
+    concurrent_execution: IntCounter,
+
+    early_validation_rejections: IntCounterVec,
+
+    request_latency: HistogramVec,
+    local_execution_latency: HistogramVec,
+    settlement_finality_latency: HistogramVec,
 }
 
 // Note that labeled-metrics are stored upfront individually
@@ -810,31 +1049,6 @@ impl TransactionOrchestratorMetrics {
             req_in_flight.with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]);
         let req_in_flight_shared_object = req_in_flight.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]);
 
-        let request_latency = register_histogram_vec_with_registry!(
-            "tx_orchestrator_request_latency",
-            "Time spent in processing one Transaction Orchestrator request",
-            &["tx_type"],
-            mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
-            registry,
-        )
-        .unwrap();
-        let wait_for_finality_latency = register_histogram_vec_with_registry!(
-            "tx_orchestrator_wait_for_finality_latency",
-            "Time spent in waiting for one Transaction Orchestrator request gets finalized",
-            &["tx_type"],
-            mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
-            registry,
-        )
-        .unwrap();
-        let local_execution_latency = register_histogram_vec_with_registry!(
-            "tx_orchestrator_local_execution_latency",
-            "Time spent in waiting for one Transaction Orchestrator gets locally executed",
-            &["tx_type"],
-            mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
-            registry,
-        )
-        .unwrap();
-
         Self {
             total_req_received_single_writer,
             total_req_received_shared_object,
@@ -878,17 +1092,43 @@ impl TransactionOrchestratorMetrics {
                 registry,
             )
             .unwrap(),
-            request_latency_single_writer: request_latency
-                .with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]),
-            request_latency_shared_obj: request_latency.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]),
-            wait_for_finality_latency_single_writer: wait_for_finality_latency
-                .with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]),
-            wait_for_finality_latency_shared_obj: wait_for_finality_latency
-                .with_label_values(&[TX_TYPE_SHARED_OBJ_TX]),
-            local_execution_latency_single_writer: local_execution_latency
-                .with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]),
-            local_execution_latency_shared_obj: local_execution_latency
-                .with_label_values(&[TX_TYPE_SHARED_OBJ_TX]),
+            concurrent_execution: register_int_counter_with_registry!(
+                "tx_orchestrator_concurrent_execution",
+                "Total number of concurrent execution where effects are available locally finishing driving the transaction to finality",
+                registry,
+            )
+            .unwrap(),
+            early_validation_rejections: register_int_counter_vec_with_registry!(
+                "tx_orchestrator_early_validation_rejections",
+                "Total number of transactions rejected during early validation before submission, by error type",
+                &["error_type"],
+                registry,
+            )
+            .unwrap(),
+            request_latency: register_histogram_vec_with_registry!(
+                "tx_orchestrator_request_latency",
+                "Time spent in processing one Transaction Orchestrator request",
+                &["tx_type", "route", "wait_for_local_execution"],
+                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            local_execution_latency: register_histogram_vec_with_registry!(
+                "tx_orchestrator_local_execution_latency",
+                "Time spent in waiting for one Transaction Orchestrator gets locally executed",
+                &["tx_type"],
+                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            settlement_finality_latency: register_histogram_vec_with_registry!(
+                "tx_orchestrator_settlement_finality_latency",
+                "Time spent in waiting for one Transaction Orchestrator gets settled and finalized",
+                &["tx_type", "driver_type"],
+                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
         }
     }
 

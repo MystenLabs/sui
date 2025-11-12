@@ -4,12 +4,18 @@
 use async_graphql::{Context, Object, Result};
 
 use crate::{
+    api::types::available_range::{AvailableRange, AvailableRangeKey},
     config::Limits,
     error::RpcError,
-    pagination::{is_connection, PaginationConfig},
+    pagination::{PaginationConfig, is_connection},
+    scope::Scope,
 };
 
-pub(crate) struct ServiceConfig;
+pub(crate) struct ServiceConfig {
+    /// Retention queries will use this scope if it is populated, instead of creating a fresh scope from
+    /// information in the request-wide [Context].
+    pub(crate) scope: Scope,
+}
 
 #[Object]
 impl ServiceConfig {
@@ -170,5 +176,51 @@ impl ServiceConfig {
     async fn max_move_value_depth(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
         let limits: &Limits = ctx.data()?;
         Ok(Some(limits.max_move_value_depth))
+    }
+
+    /// Maximum budget in bytes to spend when outputting a structured `MoveValue`.
+    async fn max_move_value_bound(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_move_value_bound))
+    }
+
+    /// Maximum depth of nested field access supported in display outputs.
+    async fn max_display_field_depth(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_display_field_depth))
+    }
+
+    /// Maximum output size of a display output.
+    async fn max_display_output_size(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_display_output_size))
+    }
+
+    /// Maximum output size of a disassembled MoveModule, in bytes.
+    async fn max_disassembled_module_size(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_disassembled_module_size))
+    }
+
+    /// Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.
+    async fn available_range(
+        &self,
+        ctx: &Context<'_>,
+        type_: String,
+        field: Option<String>,
+        filters: Option<Vec<String>>,
+    ) -> Result<AvailableRange, RpcError> {
+        AvailableRange::new(
+            ctx,
+            &self.scope,
+            AvailableRangeKey {
+                type_,
+                field,
+                filters,
+            },
+        )
     }
 }

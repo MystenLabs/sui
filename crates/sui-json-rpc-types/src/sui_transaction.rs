@@ -10,7 +10,7 @@ use serde_with::serde_as;
 use sui_package_resolver::{PackageStore, Resolver};
 use tabled::{
     builder::Builder as TableBuilder,
-    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
+    settings::{Panel as TablePanel, Style as TableStyle, style::HorizontalLine},
 };
 
 use fastcrypto::encoding::Base64;
@@ -20,21 +20,26 @@ use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::identifier::{IdentStr, Identifier};
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use mysten_metrics::monitored_scope;
-use sui_json::{primitive_type, SuiJsonValue};
-use sui_types::authenticator_state::ActiveJwk;
+use sui_json::{SuiJsonValue, primitive_type};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use sui_types::crypto::SuiSignature;
+use sui_types::digests::Digest;
 use sui_types::digests::{
     AdditionalConsensusStateDigest, CheckpointDigest, ConsensusCommitDigest, ObjectDigest,
     TransactionEventsDigest,
 };
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::effects::{
+    AccumulatorOperation, AccumulatorValue, TransactionEffects, TransactionEffectsAPI,
+    TransactionEvents,
+};
 use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
-use sui_types::layout_resolver::{get_layout_from_struct_tag, LayoutResolver};
+use sui_types::layout_resolver::{LayoutResolver, get_layout_from_struct_tag};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::Owner;
@@ -50,9 +55,9 @@ use sui_types::transaction::{
     Argument, CallArg, ChangeEpoch, Command, EndOfEpochTransactionKind, GenesisObject,
     InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, Reservation,
     SenderSignedData, TransactionData, TransactionDataAPI, TransactionKind, WithdrawFrom,
-    WithdrawTypeParam,
+    WithdrawalTypeArg,
 };
-use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::{authenticator_state::ActiveJwk, transaction::SharedObjectMutability};
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
@@ -257,6 +262,35 @@ impl SuiTransactionBlockResponse {
     pub fn status_ok(&self) -> Option<bool> {
         self.effects.as_ref().map(|e| e.status().is_ok())
     }
+
+    pub fn get_new_package_obj(&self) -> Option<ObjectRef> {
+        self.object_changes.as_ref().and_then(|changes| {
+            changes
+                .iter()
+                .find(|change| matches!(change, ObjectChange::Published { .. }))
+                .map(|change| change.object_ref())
+        })
+    }
+
+    pub fn get_new_package_upgrade_cap(&self) -> Option<ObjectRef> {
+        self.object_changes.as_ref().and_then(|changes| {
+            changes
+                .iter()
+                .find(|change| {
+                    matches!(change, ObjectChange::Created {
+                        owner: Owner::AddressOwner(_),
+                        object_type: StructTag {
+                            address: SUI_FRAMEWORK_ADDRESS,
+                            module,
+                            name,
+                            ..
+                        },
+                        ..
+                    } if module.as_str() == "package" && name.as_str() == "UpgradeCap")
+                })
+                .map(|change| change.object_ref())
+        })
+    }
 }
 
 /// We are specifically ignoring events for now until events become more stable.
@@ -366,39 +400,6 @@ fn write_obj_changes<T: Display>(
     Ok(())
 }
 
-pub fn get_new_package_obj_from_response(
-    response: &SuiTransactionBlockResponse,
-) -> Option<ObjectRef> {
-    response.object_changes.as_ref().and_then(|changes| {
-        changes
-            .iter()
-            .find(|change| matches!(change, ObjectChange::Published { .. }))
-            .map(|change| change.object_ref())
-    })
-}
-
-pub fn get_new_package_upgrade_cap_from_response(
-    response: &SuiTransactionBlockResponse,
-) -> Option<ObjectRef> {
-    response.object_changes.as_ref().and_then(|changes| {
-        changes
-            .iter()
-            .find(|change| {
-                matches!(change, ObjectChange::Created {
-                    owner: Owner::AddressOwner(_),
-                    object_type: StructTag {
-                        address: SUI_FRAMEWORK_ADDRESS,
-                        module,
-                        name,
-                        ..
-                    },
-                    ..
-                } if module.as_str() == "package" && name.as_str() == "UpgradeCap")
-            })
-            .map(|change| change.object_ref())
-    })
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename = "TransactionBlockKind", tag = "kind")]
 pub enum SuiTransactionBlockKind {
@@ -462,7 +463,11 @@ impl Display for SuiTransactionBlockKind {
                 writeln!(
                     writer,
                     "Epoch: {}, Round: {}, SubDagIndex: {:?}, Timestamp: {}, ConsensusCommitDigest: {}",
-                    p.epoch, p.round, p.sub_dag_index, p.commit_timestamp_ms, p.consensus_commit_digest
+                    p.epoch,
+                    p.round,
+                    p.sub_dag_index,
+                    p.commit_timestamp_ms,
+                    p.consensus_commit_digest
                 )?;
             }
             Self::ConsensusCommitPrologueV4(p) => {
@@ -470,7 +475,12 @@ impl Display for SuiTransactionBlockKind {
                 writeln!(
                     writer,
                     "Epoch: {}, Round: {}, SubDagIndex: {:?}, Timestamp: {}, ConsensusCommitDigest: {} AdditionalStateDigest: {}",
-                    p.epoch, p.round, p.sub_dag_index, p.commit_timestamp_ms, p.consensus_commit_digest, p.additional_state_digest
+                    p.epoch,
+                    p.round,
+                    p.sub_dag_index,
+                    p.commit_timestamp_ms,
+                    p.consensus_commit_digest,
+                    p.additional_state_digest
                 )?;
             }
             Self::ProgrammableTransaction(p) => {
@@ -602,6 +612,12 @@ impl SuiTransactionBlockKind {
                             }
                             EndOfEpochTransactionKind::AccumulatorRootCreate => {
                                 SuiEndOfEpochTransactionKind::AccumulatorRootCreate
+                            }
+                            EndOfEpochTransactionKind::CoinRegistryCreate => {
+                                SuiEndOfEpochTransactionKind::CoinRegistryCreate
+                            }
+                            EndOfEpochTransactionKind::DisplayRegistryCreate => {
+                                SuiEndOfEpochTransactionKind::DisplayRegistryCreate
                             }
                         })
                         .collect(),
@@ -739,6 +755,8 @@ pub trait SuiTransactionBlockEffectsAPI {
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)>;
     fn all_changed_objects(&self) -> Vec<(&OwnedObjectRef, WriteKind)>;
     fn all_deleted_objects(&self) -> Vec<(&SuiObjectRef, DeleteKind)>;
+
+    fn accumulator_events(&self) -> Vec<SuiAccumulatorEvent>;
 }
 
 #[serde_as]
@@ -752,6 +770,69 @@ pub struct SuiTransactionBlockEffectsModifiedAtVersions {
     #[schemars(with = "AsSequenceNumber")]
     #[serde_as(as = "AsSequenceNumber")]
     sequence_number: SequenceNumber,
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "AccumulatorEvent", rename_all = "camelCase")]
+pub struct SuiAccumulatorEvent {
+    pub accumulator_obj: ObjectID,
+    pub address: SuiAddress,
+    pub ty: SuiTypeTag,
+    pub operation: SuiAccumulatorOperation,
+    pub value: SuiAccumulatorValue,
+}
+
+impl From<AccumulatorEvent> for SuiAccumulatorEvent {
+    fn from(event: AccumulatorEvent) -> Self {
+        let AccumulatorEvent {
+            accumulator_obj,
+            write,
+        } = event;
+        Self {
+            accumulator_obj: accumulator_obj.inner().to_owned(),
+            address: write.address.address,
+            ty: write.address.ty.into(),
+            operation: write.operation.into(),
+            value: write.value.into(),
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "AccumulatorOperation", rename_all = "camelCase")]
+pub enum SuiAccumulatorOperation {
+    Merge,
+    Split,
+}
+
+impl From<AccumulatorOperation> for SuiAccumulatorOperation {
+    fn from(operation: AccumulatorOperation) -> Self {
+        match operation {
+            AccumulatorOperation::Merge => Self::Merge,
+            AccumulatorOperation::Split => Self::Split,
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "AccumulatorValue", rename_all = "camelCase")]
+pub enum SuiAccumulatorValue {
+    Integer(u64),
+    IntegerTuple(u64, u64),
+    EventDigest(u64 /* event index in the transaction */, Digest),
+}
+
+impl From<AccumulatorValue> for SuiAccumulatorValue {
+    fn from(value: AccumulatorValue) -> Self {
+        match value {
+            AccumulatorValue::Integer(value) => Self::Integer(value),
+            AccumulatorValue::IntegerTuple(value1, value2) => Self::IntegerTuple(value1, value2),
+            AccumulatorValue::EventDigest(idx, value) => Self::EventDigest(idx, value),
+        }
+    }
 }
 
 /// The response from processing a transaction or a certified transaction
@@ -795,6 +876,8 @@ pub struct SuiTransactionBlockEffectsV1 {
     /// Object refs of objects now wrapped in other objects.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wrapped: Vec<SuiObjectRef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accumulator_events: Vec<SuiAccumulatorEvent>,
     /// The updated gas object reference. Have a dedicated field for convenient access.
     /// It's also included in mutated.
     pub gas_object: OwnedObjectRef,
@@ -906,6 +989,10 @@ impl SuiTransactionBlockEffectsAPI for SuiTransactionBlockEffectsV1 {
             .chain(self.wrapped.iter().map(|r| (r, DeleteKind::Wrap)))
             .collect()
     }
+
+    fn accumulator_events(&self) -> Vec<SuiAccumulatorEvent> {
+        self.accumulator_events.clone()
+    }
 }
 
 impl SuiTransactionBlockEffects {
@@ -933,6 +1020,7 @@ impl SuiTransactionBlockEffects {
             events_digest: None,
             dependencies: vec![],
             abort_error: None,
+            accumulator_events: vec![],
         })
     }
 }
@@ -958,7 +1046,7 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                 gas_used: effect.gas_cost_summary().clone(),
                 shared_objects: to_sui_object_ref(
                     effect
-                        .input_shared_objects()
+                        .input_consensus_objects()
                         .into_iter()
                         .map(|kind| {
                             #[allow(deprecated)]
@@ -982,6 +1070,11 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                 abort_error: effect
                     .move_abort()
                     .map(|(abort, code)| SuiMoveAbort::new(abort, code)),
+                accumulator_events: effect
+                    .accumulator_events()
+                    .into_iter()
+                    .map(SuiAccumulatorEvent::from)
+                    .collect(),
             },
         ))
     }
@@ -1317,7 +1410,7 @@ impl Display for SuiExecutionStatus {
 
 impl SuiExecutionStatus {
     pub fn is_ok(&self) -> bool {
-        matches!(self, SuiExecutionStatus::Success { .. })
+        matches!(self, SuiExecutionStatus::Success)
     }
     pub fn is_err(&self) -> bool {
         matches!(self, SuiExecutionStatus::Failure { .. })
@@ -1687,6 +1780,8 @@ pub enum SuiEndOfEpochTransactionKind {
     BridgeCommitteeUpdate(SequenceNumber),
     StoreExecutionTimeObservations,
     AccumulatorRootCreate,
+    CoinRegistryCreate,
+    DisplayRegistryCreate,
 }
 
 #[serde_as]
@@ -1842,19 +1937,19 @@ impl SuiProgrammableTransactionBlock {
                         return result_types;
                     };
                     for (arg, type_) in c.arguments.iter().zip(types) {
-                        if let (&Argument::Input(i), Some(type_)) = (arg, type_) {
-                            if let Some(x) = result_types.get_mut(i as usize) {
-                                x.replace(type_);
-                            }
+                        if let (&Argument::Input(i), Some(type_)) = (arg, type_)
+                            && let Some(x) = result_types.get_mut(i as usize)
+                        {
+                            x.replace(type_);
                         }
                     }
                 }
                 Command::SplitCoins(_, amounts) => {
                     for arg in amounts {
-                        if let &Argument::Input(i) = arg {
-                            if let Some(x) = result_types.get_mut(i as usize) {
-                                x.replace(MoveTypeLayout::U64);
-                            }
+                        if let &Argument::Input(i) = arg
+                            && let Some(x) = result_types.get_mut(i as usize)
+                        {
+                            x.replace(MoveTypeLayout::U64);
                         }
                     }
                 }
@@ -2121,11 +2216,16 @@ impl From<InputObjectKind> for SuiInputObjectKind {
             InputObjectKind::SharedMoveObject {
                 id,
                 initial_shared_version,
-                mutable,
+                mutability,
             } => Self::SharedMoveObject {
                 id,
                 initial_shared_version,
-                mutable,
+                mutable: match mutability {
+                    SharedObjectMutability::Mutable => true,
+                    SharedObjectMutability::Immutable => false,
+                    // TODO(address-balances): expose detailed mutability info
+                    SharedObjectMutability::NonExclusiveWrite => false,
+                },
             },
         }
     }
@@ -2239,7 +2339,7 @@ pub enum SuiCallArg {
     Pure(SuiPureValue),
     // Reservation to withdraw balance. This will be converted into a Withdrawal struct and passed into Move.
     // It is allowed to have multiple withdraw arguments even for the same balance type.
-    BalanceWithdraw(SuiBalanceWithdrawArg),
+    FundsWithdrawal(SuiFundsWithdrawalArg),
 }
 
 impl SuiCallArg {
@@ -2259,14 +2359,15 @@ impl SuiCallArg {
                     digest,
                 })
             }
+            // TODO(address-balances): Expose the full mutability enum
             CallArg::Object(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutable,
+                mutability,
             }) => SuiCallArg::Object(SuiObjectArg::SharedObject {
                 object_id: id,
                 initial_shared_version,
-                mutable,
+                mutable: mutability.is_exclusive(),
             }),
             CallArg::Object(ObjectArg::Receiving((object_id, version, digest))) => {
                 SuiCallArg::Object(SuiObjectArg::Receiving {
@@ -2275,18 +2376,19 @@ impl SuiCallArg {
                     digest,
                 })
             }
-            CallArg::BalanceWithdraw(arg) => SuiCallArg::BalanceWithdraw(SuiBalanceWithdrawArg {
+            CallArg::FundsWithdrawal(arg) => SuiCallArg::FundsWithdrawal(SuiFundsWithdrawalArg {
                 reservation: match arg.reservation {
                     Reservation::EntireBalance => SuiReservation::EntireBalance,
                     Reservation::MaxAmountU64(amount) => SuiReservation::MaxAmountU64(amount),
                 },
-                type_param: match arg.type_param {
-                    WithdrawTypeParam::Balance(type_input) => {
-                        SuiWithdrawTypeParam::Balance(type_input.to_type_tag()?.into())
+                type_arg: match arg.type_arg {
+                    WithdrawalTypeArg::Balance(type_input) => {
+                        SuiWithdrawalTypeArg::Balance(type_input.to_type_tag()?.into())
                     }
                 },
                 withdraw_from: match arg.withdraw_from {
                     WithdrawFrom::Sender => SuiWithdrawFrom::Sender,
+                    WithdrawFrom::Sponsor => SuiWithdrawFrom::Sponsor,
                 },
             }),
         })
@@ -2377,7 +2479,7 @@ pub enum SuiReservation {
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub enum SuiWithdrawTypeParam {
+pub enum SuiWithdrawalTypeArg {
     Balance(SuiTypeTag),
 }
 
@@ -2385,13 +2487,14 @@ pub enum SuiWithdrawTypeParam {
 #[serde(rename_all = "camelCase")]
 pub enum SuiWithdrawFrom {
     Sender,
+    Sponsor,
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SuiBalanceWithdrawArg {
+pub struct SuiFundsWithdrawalArg {
     pub reservation: SuiReservation,
-    pub type_param: SuiWithdrawTypeParam,
+    pub type_arg: SuiWithdrawalTypeArg,
     pub withdraw_from: SuiWithdrawFrom,
 }
 

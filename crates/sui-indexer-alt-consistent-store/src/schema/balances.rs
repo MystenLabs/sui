@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bincode::{Decode, Encode};
-use sui_indexer_alt_framework::types::{base_types::SuiAddress, TypeTag};
+use sui_indexer_alt_framework::types::{TypeTag, base_types::SuiAddress};
 
 /// Key for the index that supports fetching an account's balance (the sum of balances of all coins
 /// it owns).
@@ -18,8 +18,8 @@ pub(crate) struct Key {
 }
 
 /// Options for creating this index's column family in RocksDB.
-pub(crate) fn options() -> rocksdb::Options {
-    let mut opts = rocksdb::Options::default();
+pub(crate) fn options(base_options: &rocksdb::Options) -> rocksdb::Options {
+    let mut opts = base_options.clone();
     opts.set_merge_operator_associative("merge_balances", merge_balances);
     opts.set_compaction_filter("compact_balances", compact_balances);
     opts

@@ -6,7 +6,7 @@ use std::fmt::{Display, Formatter};
 
 use tabled::{
     builder::Builder as TableBuilder,
-    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
+    settings::{Panel as TablePanel, Style as TableStyle, style::HorizontalLine},
 };
 impl Display for Pretty<'_, Summary> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

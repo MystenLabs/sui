@@ -4,6 +4,7 @@
 const standards = [
 	'standards',
 	'standards/coin',
+	'standards/currency',
 	{
 		type: 'category',
 		label: 'Closed-Loop Token',
@@ -23,34 +24,24 @@ const standards = [
 	'standards/kiosk-apps',
 	{
 		type: 'category',
-		label: 'DeepBook',
+		label: 'DeepBookV3',
 		link: {
 			type: 'doc',
 			id: 'standards/deepbook',
 		},
 		items: [
-			{
-				type: 'category',
-				label: 'DeepBookV3',
-				link: {
-					type: 'doc',
-					id: 'standards/deepbookv3',
-				},
-				items: [
-					'standards/deepbookv3/design',
-					'standards/deepbookv3/balance-manager',
-					'standards/deepbookv3/permissionless-pool',
-					'standards/deepbookv3/query-the-pool',
-					'standards/deepbookv3/orders',
-					'standards/deepbookv3/swaps',
-					'standards/deepbookv3/flash-loans',
-					'standards/deepbookv3/staking-governance',
-				],
-			},
+			'standards/deepbookv3/design',
+			'standards/deepbookv3/balance-manager',
+			'standards/deepbookv3/permissionless-pool',
+			'standards/deepbookv3/query-the-pool',
+			'standards/deepbookv3/orders',
+			'standards/deepbookv3/swaps',
+			'standards/deepbookv3/flash-loans',
+			'standards/deepbookv3/staking-governance',
 			'standards/deepbookv3-indexer',
 			{
 				type: 'category',
-				label: 'DeepBookV3 SDK',
+				label: 'SDK',
 				link: {
 					type: 'doc',
 					id: 'standards/deepbookv3-sdk',
@@ -63,25 +54,38 @@ const standards = [
 					'standards/deepbookv3-sdk/swaps',
 				],
 			},
+		],
+	},
+	{
+		type: 'category',
+		label: 'DeepBook Margin',
+		link: {
+			type: 'doc',
+			id: 'standards/deepbook-margin',
+		},
+		items: [
+			'standards/deepbook-margin/design',
+			'standards/deepbook-margin/margin-manager',
+			'standards/deepbook-margin/margin-pool',
+			'standards/deepbook-margin/orders',
 			{
 				type: 'category',
-				label: 'DeepBookV2',
+				label: 'SDK',
 				link: {
 					type: 'doc',
-					id: 'standards/deepbookv2',
+					id: 'standards/deepbook-margin-sdk',
 				},
 				items: [
-					'standards/deepbookv2/design',
-					'standards/deepbookv2/orders',
-					'standards/deepbookv2/pools',
-					'standards/deepbookv2/query-the-pool',
-					'standards/deepbookv2/routing-a-swap',
-					'standards/deepbookv2/trade-and-swap',
+					'standards/deepbook-margin-sdk/orders',
+					'standards/deepbook-margin-sdk/margin-manager',
+					'standards/deepbook-margin-sdk/margin-pool',
+					'standards/deepbook-margin-sdk/maintainer',
 				],
 			},
 		],
 	},
 	'standards/display',
+	'standards/payment-kit',
 	'standards/wallet-standard',
 ];
-module.exports = standards;
+export default standards;

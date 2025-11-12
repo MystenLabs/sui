@@ -6,9 +6,6 @@ use move_core_types::account_address::AccountAddress;
 use std::collections::HashMap;
 use std::{fs, io, path::Path};
 use std::{path::PathBuf, str};
-use sui_json_rpc_types::{
-    get_new_package_obj_from_response, get_new_package_upgrade_cap_from_response,
-};
 use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::{make_publish_transaction, make_publish_transaction_with_deps};
@@ -16,8 +13,8 @@ use sui_types::base_types::ObjectID;
 use sui_types::move_package::UpgradePolicy;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
 use sui_types::{
-    base_types::{ObjectRef, SuiAddress, TransactionDigest},
     SUI_SYSTEM_STATE_OBJECT_ID,
+    base_types::{ObjectRef, SuiAddress, TransactionDigest},
 };
 use test_cluster::TestClusterBuilder;
 
@@ -369,7 +366,9 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
-    let expected = expect!["Dependency ID contains a Sui object, not a Move package: 0x0000000000000000000000000000000000000000000000000000000000000005"];
+    let expected = expect![
+        "Dependency ID contains a Sui object, not a Move package: 0x0000000000000000000000000000000000000000000000000000000000000005"
+    ];
     expected.assert_eq(
         &BytecodeSourceVerifier::new(client.read_api())
             .verify(&a_pkg, ValidationMode::deps())
@@ -531,7 +530,7 @@ async fn linkage_differs() -> anyhow::Result<()> {
         upgrade_package(context, b_v1.0, b_cap.0, b_src).await
     };
 
-    // Publish b-v2 a second time, to create a third version of the package that is othewise
+    // Publish b-v2 a second time, to create a third version of the package that is otherwise
     // byte-for-byte identical with the second version;
     let b_v3_fixtures = tempfile::tempdir()?;
     let b_v3 = {
@@ -747,8 +746,8 @@ fn sanitize_id(mut message: String, m: &HashMap<SuiAddress, &str>) -> String {
 async fn publish_package(context: &WalletContext, package: PathBuf) -> (ObjectRef, ObjectRef) {
     let txn = make_publish_transaction(context, package).await;
     let response = context.execute_transaction_must_succeed(txn).await;
-    let package = get_new_package_obj_from_response(&response).unwrap();
-    let cap = get_new_package_upgrade_cap_from_response(&response).unwrap();
+    let package = response.get_new_package_obj().unwrap();
+    let cap = response.get_new_package_upgrade_cap().unwrap();
     (package, cap)
 }
 
@@ -781,7 +780,7 @@ async fn upgrade_package(
 async fn publish_package_and_deps(context: &WalletContext, package: PathBuf) -> ObjectRef {
     let txn = make_publish_transaction_with_deps(context, package).await;
     let response = context.execute_transaction_must_succeed(txn).await;
-    get_new_package_obj_from_response(&response).unwrap()
+    response.get_new_package_obj().unwrap()
 }
 
 /// Copy `package` from fixtures into `directory`, setting its named address in the copied package's
@@ -879,13 +878,10 @@ pub async fn upgrade_package_with_wallet(
             .await
             .unwrap();
 
-        context.sign_transaction(&data)
+        context.sign_transaction(&data).await
     };
 
     let resp = context.execute_transaction_must_succeed(transaction).await;
 
-    (
-        get_new_package_obj_from_response(&resp).unwrap(),
-        resp.digest,
-    )
+    (resp.get_new_package_obj().unwrap(), resp.digest)
 }

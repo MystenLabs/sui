@@ -1,6 +1,7 @@
 ---
 title: Upgrading Packages
 description: Sui provides a method of upgrading your packages while still retaining their immutable properties.
+keywords: [ upgrading packages, upgrade considerations, how to upgrade a package, how to upgrade, update package, update, how to update ]
 ---
 
 Sui smart contracts are immutable package objects consisting of a collection of Move modules. Because the packages are immutable, transactions can safely access smart contracts without full consensus (fastpath transactions). If someone could change these packages, they would become [shared objects](/concepts/object-ownership/shared.mdx#shared), which would require full consensus before completing a transaction.
@@ -212,10 +213,10 @@ This pattern forms the basis for upgradeable packages involving shared objects, 
 - The version constraints can be made more expressive:
   - Rather than using a single `u64`, versions could be specified as a `String`, or a pair of upper and lower bounds.
   - You can control access to specific functions or sets of functions by adding and removing marker types as dynamic fields on the shared object.
-- The `migrate` function could be made more sophisticated (modifying other fields in the shared object, adding/removing dynamic fields, migrating multiple shared objects simultaneously).
+- The `migrate` function could be made more sophisticated (modifying other fields in the shared object, adding or removing dynamic fields, migrating multiple shared objects simultaneously).
 - You can implement large migrations that need to run over multiple transactions in a three phase set-up:
-  - Disable general access to the shared object by setting its version to a sentinel value (e.g. `U64_MAX`), using an `AdminCap`-guarded call.
-  - Run the migration over the course of multiple transactions (e.g. if a large volume of objects need to be moved, it is best to do this in batches, to avoid hitting transaction limits).
+  - Disable general access to the shared object by setting its version to a sentinel value (for example, `U64_MAX`), using an `AdminCap`-guarded call.
+  - Run the migration over the course of multiple transactions (for example, if a large volume of objects need to be moved, it is best to do this in batches, to avoid hitting transaction limits).
   - Set the version of the shared object back to a usable value.
 
 ## Upgrade requirements
@@ -241,7 +242,7 @@ If you have a package with a dependency, and that dependency is upgraded, your p
 
 Use the `sui client upgrade` command to upgrade packages that meet the previous requirements, providing values for the following flags:
 
-{@include: ../../../snippets/info-gas-budget.mdx}
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
 - `--gas-budget`: The maximum number of gas units that can be expended before the network cancels the transaction.
 - `--cap`: The ID of the `UpgradeCap`. You receive this ID as a return from the publish command.
@@ -269,7 +270,8 @@ When your package is ready, you publish it:
 $ sui client publish
 ```
 
-And receive the response:
+<details>
+<summary>Output</summary>
 
 ```sh
 INCLUDING DEPENDENCY Sui
@@ -421,6 +423,8 @@ Transaction Digest: GPSpH264CjQPaXQPpMHpkzyGidZnQFvd1yUH5s9ncesi
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+</details>
+
 The result includes an **Object changes** section with two pieces of information you need for upgrading, an `UpgradeCap` ID and your package ID.
 
 You can identify the different objects using the `Object.objectType` value in the response. The `UpgradeCap` entry has a value of `String("0x2::package::UpgradeCap")` and the `objectType` for the package reads `String("<PACKAGE-ID>::sui_package::<MODULE-NAME>")`
@@ -443,7 +447,7 @@ After a while, you decide to upgrade your `sui_package` to include some requeste
 
 <TabItem value="manual-address-management" label="Manual Addresses">
 
-If your package has not [adopted automated address management](automated-address-management#adopting-automated-address-management-for-published-packages) you'll need to take the following manual steps.
+If your package has not [adopted automated address management](automated-address-management#adopting-automated-address-management-for-published-packages) you need to take the following manual steps.
 
 To make sure your other packages can use this package as a dependency, you must update the `Move.toml` manifest file for your package to include published information.
 
@@ -485,7 +489,10 @@ Run `sui client upgrade` command to upgrade your package. Pass the `UpgradeCap` 
 $ sui client upgrade --upgrade-capability <UPGRADE-CAP-ID>
 ```
 
-The console alerts you if the new package doesn't satisfy [requirements](#requirements), otherwise the compiler publishes the upgraded package to the network and returns its result:
+The console alerts you if the new package doesn't satisfy [requirements](#requirements), otherwise the compiler publishes the upgraded package to the network and returns its result.
+
+<details>
+<summary>Output</summary>
 
 ```sh
 Transaction Digest: 3NnJGryz2k2BJzjpndDVqVcdZmmefNMB8SJ9bCEQct22
@@ -636,6 +643,8 @@ Transaction Digest: 3NnJGryz2k2BJzjpndDVqVcdZmmefNMB8SJ9bCEQct22
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+</details>
+
 The result provides a new ID for the upgraded package.
 
 <Tabs>
@@ -646,7 +655,7 @@ The result provides a new ID for the upgraded package.
 
 Beginning with the Sui `v1.29.0` release, upgraded addresses are automatically managed in the `Move.lock` file and you do not need to take further action.
 
-If the package was published or upgraded with a Sui version prior to `v1.29.0`, you may follow [the guide for adopting automated address management](automated-address-management#adopting-automated-address-management-for-published-packages). Alternatively, refer to the `Manual Addresses` tab above for further steps.
+If the package was published or upgraded with a Sui version prior to `v1.29.0`, you might follow [the guide for adopting automated address management](automated-address-management#adopting-automated-address-management-for-published-packages). Alternatively, refer to the `Manual Addresses` tab above for further steps.
 
 :::
 

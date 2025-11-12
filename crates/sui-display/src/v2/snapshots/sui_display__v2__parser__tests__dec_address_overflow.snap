@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{@12345678901234567890123456789012345678901234567890123456789012345678901234567890}\"#)"
+---
+Error: Invalid 'address': the number is too large for the type

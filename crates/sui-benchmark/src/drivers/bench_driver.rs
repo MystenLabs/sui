@@ -2,30 +2,30 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use futures::future::try_join_all;
-use futures::future::BoxFuture;
 use futures::FutureExt;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::future::BoxFuture;
+use futures::future::try_join_all;
+use futures::{StreamExt, stream::FuturesUnordered};
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
-use prometheus::register_histogram_vec_with_registry;
 use prometheus::IntCounterVec;
 use prometheus::Registry;
-use prometheus::{register_counter_vec_with_registry, register_gauge_vec_with_registry};
-use prometheus::{register_int_counter_vec_with_registry, CounterVec};
+use prometheus::register_histogram_vec_with_registry;
+use prometheus::{CounterVec, register_int_counter_vec_with_registry};
 use prometheus::{
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, GaugeVec,
+    GaugeVec, register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use prometheus::{HistogramVec, IntGauge, IntGaugeVec};
+use prometheus::{register_counter_vec_with_registry, register_gauge_vec_with_registry};
 use rand::seq::SliceRandom;
-use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::OnceCell;
+use tokio::sync::mpsc::{Sender, channel};
 use tokio_util::sync::CancellationToken;
 
-use crate::drivers::driver::Driver;
 use crate::drivers::HistogramWrapper;
+use crate::drivers::driver::Driver;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::ExpectedFailureType;
@@ -35,8 +35,8 @@ use mysten_metrics::InflightGuardFutureExt as _;
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{Debug, Formatter};
 use std::future::Future;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use sui_types::committee::Committee;
 use sui_types::quorum_driver_types::QuorumDriverError;
@@ -63,10 +63,6 @@ pub struct BenchMetrics {
     pub cpu_usage: GaugeVec,
     pub num_success_cmds: IntCounterVec,
 }
-
-const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.1, 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.5, 5., 10., 20., 30., 60., 90.,
-];
 
 impl BenchMetrics {
     fn new(registry: &Registry) -> Self {
@@ -123,7 +119,7 @@ impl BenchMetrics {
                 "latency_s",
                 "Total time in seconds to return a response",
                 &["workload", "client_type"],
-                LATENCY_SEC_BUCKETS.to_vec(),
+                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -168,6 +164,7 @@ struct Stats {
     pub bench_stats: BenchmarkStats,
 }
 
+#[derive(Debug)]
 pub enum ClientType {
     // Used for Mysticeti Fast Path
     TransactionDriver,
@@ -827,7 +824,11 @@ async fn run_bench_worker(
                 );
                 match payload.get_failure_type() {
                     Some(ExpectedFailureType::NoFailure) => {
-                        panic!("Transaction failed unexpectedly");
+                        panic!(
+                            "Transaction {} failed unexpectedly {}",
+                            transaction.digest(),
+                            err
+                        );
                     }
                     Some(_) => {
                         metrics

@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinSet;
-use tokio_rustls::rustls;
 use tokio_rustls::TlsAcceptor;
+use tokio_rustls::rustls;
 use tower::{Service, ServiceBuilder, ServiceExt};
 use tracing::trace;
 
@@ -103,7 +103,7 @@ impl Builder {
     {
         let listener = listener::TcpListenerWithOptions::new(
             addr,
-            self.config.tcp_nodelay,
+            /* nodelay */ true,
             self.config.tcp_keepalive,
         )?;
 

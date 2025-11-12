@@ -26,6 +26,11 @@ AccumulatorValue:
         TUPLE:
           - U64
           - U64
+    2:
+      EventDigest:
+        TUPLE:
+          - U64
+          - TYPENAME: Digest
 AccumulatorWriteV1:
   STRUCT:
     - address:
@@ -83,14 +88,6 @@ AuthorityQuorumSignInfo:
           CONTENT: U8
           SIZE: 48
     - signers_map: BYTES
-BalanceWithdrawArg:
-  STRUCT:
-    - reservation:
-        TYPENAME: Reservation
-    - type_param:
-        TYPENAME: WithdrawTypeParam
-    - withdraw_from:
-        TYPENAME: WithdrawFrom
 CallArg:
   ENUM:
     0:
@@ -102,9 +99,9 @@ CallArg:
         NEWTYPE:
           TYPENAME: ObjectArg
     2:
-      BalanceWithdraw:
+      FundsWithdrawal:
         NEWTYPE:
-          TYPENAME: BalanceWithdrawArg
+          TYPENAME: FundsWithdrawalArg
 ChainIdentifier:
   NEWTYPESTRUCT:
     TYPENAME: CheckpointDigest
@@ -126,12 +123,19 @@ ChangeEpoch:
                 SEQ: U8
             - SEQ:
                 TYPENAME: ObjectID
+CheckpointArtifactsDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
 CheckpointCommitment:
   ENUM:
     0:
       ECMHLiveObjectSetDigest:
         NEWTYPE:
           TYPENAME: ECMHLiveObjectSetDigest
+    1:
+      CheckpointArtifactsDigest:
+        NEWTYPE:
+          TYPENAME: CheckpointArtifactsDigest
 CheckpointContents:
   ENUM:
     0:
@@ -466,6 +470,10 @@ EndOfEpochTransactionKind:
           TYPENAME: StoredExecutionTimeObservations
     8:
       AccumulatorRootCreate: UNIT
+    9:
+      CoinRegistryCreate: UNIT
+    10:
+      DisplayRegistryCreate: UNIT
 Event:
   STRUCT:
     - package_id:
@@ -623,6 +631,11 @@ ExecutionFailureStatus:
       InvalidLinkage: UNIT
     40:
       InsufficientBalanceForWithdraw: UNIT
+    41:
+      NonExclusiveWriteInputObjectModified:
+        STRUCT:
+          - id:
+              TYPENAME: ObjectID
 ExecutionStatus:
   ENUM:
     0:
@@ -667,6 +680,14 @@ FullCheckpointContents:
         SEQ:
           SEQ:
             TYPENAME: GenericSignature
+FundsWithdrawalArg:
+  STRUCT:
+    - reservation:
+        TYPENAME: Reservation
+    - type_arg:
+        TYPENAME: WithdrawalTypeArg
+    - withdraw_from:
+        TYPENAME: WithdrawFrom
 GasCostSummary:
   STRUCT:
     - computationCost: U64
@@ -773,6 +794,12 @@ MoveObjectType_:
       Coin:
         NEWTYPE:
           TYPENAME: TypeTag
+    4:
+      SuiBalanceAccumulatorField: UNIT
+    5:
+      BalanceAccumulatorField:
+        NEWTYPE:
+          TYPENAME: TypeTag
 MovePackage:
   STRUCT:
     - id:
@@ -833,7 +860,8 @@ ObjectArg:
               TYPENAME: ObjectID
           - initial_shared_version:
               TYPENAME: SequenceNumber
-          - mutable: BOOL
+          - mutability:
+              TYPENAME: SharedObjectMutability
     2:
       Receiving:
         NEWTYPE:
@@ -1018,6 +1046,14 @@ SenderSignedTransaction:
           TYPENAME: GenericSignature
 SequenceNumber:
   NEWTYPESTRUCT: U64
+SharedObjectMutability:
+  ENUM:
+    0:
+      Immutable: UNIT
+    1:
+      Mutable: UNIT
+    2:
+      NonExclusiveWrite: UNIT
 StoredExecutionTimeObservations:
   ENUM:
     0:
@@ -1184,11 +1220,11 @@ TransactionEffectsV2:
           TUPLE:
             - TYPENAME: ObjectID
             - TYPENAME: EffectsObjectChange
-    - unchanged_shared_objects:
+    - unchanged_consensus_objects:
         SEQ:
           TUPLE:
             - TYPENAME: ObjectID
-            - TYPENAME: UnchangedSharedKind
+            - TYPENAME: UnchangedConsensusKind
     - aux_data_digest:
         OPTION:
           TYPENAME: EffectsAuxDataDigest
@@ -1207,6 +1243,20 @@ TransactionExpiration:
     1:
       Epoch:
         NEWTYPE: U64
+    2:
+      ValidDuring:
+        STRUCT:
+          - min_epoch:
+              OPTION: U64
+          - max_epoch:
+              OPTION: U64
+          - min_timestamp_seconds:
+              OPTION: U64
+          - max_timestamp_seconds:
+              OPTION: U64
+          - chain:
+              TYPENAME: ChainIdentifier
+          - nonce: U32
 TransactionKind:
   ENUM:
     0:
@@ -1339,7 +1389,7 @@ TypedStoreError:
       MetricsReporting: UNIT
     5:
       RetryableTransactionError: UNIT
-UnchangedSharedKind:
+UnchangedConsensusKind:
   ENUM:
     0:
       ReadOnlyRoot:
@@ -1371,7 +1421,9 @@ WithdrawFrom:
   ENUM:
     0:
       Sender: UNIT
-WithdrawTypeParam:
+    1:
+      Sponsor: UNIT
+WithdrawalTypeArg:
   ENUM:
     0:
       Balance:

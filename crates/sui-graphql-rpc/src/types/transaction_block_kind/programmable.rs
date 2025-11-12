@@ -21,7 +21,7 @@ use sui_json_rpc_types::SuiArgument;
 use sui_types::transaction::{
     Argument as NativeArgument, CallArg as NativeCallArg, Command as NativeProgrammableTransaction,
     ObjectArg as NativeObjectArg, ProgrammableMoveCall as NativeMoveCallTransaction,
-    ProgrammableTransaction as NativeProgrammableTransactionBlock,
+    ProgrammableTransaction as NativeProgrammableTransactionBlock, SharedObjectMutability,
 };
 
 #[derive(Clone, Eq, PartialEq)]
@@ -60,7 +60,7 @@ struct OwnedOrImmutable {
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 struct SharedInput {
     address: SuiAddress,
-    /// The version that this this object was shared at.
+    /// The version at which this object was shared.​
     initial_shared_version: UInt53,
     /// Controls whether the transaction block can reference the shared object as a mutable
     /// reference or by value. This has implications for scheduling: Transactions that just read
@@ -435,11 +435,18 @@ impl TransactionInput {
             N::Object(O::SharedObject {
                 id,
                 initial_shared_version,
-                mutable,
+                mutability,
             }) => I::SharedInput(SharedInput {
                 address: id.into(),
                 initial_shared_version: initial_shared_version.value().into(),
-                mutable,
+                mutable: match mutability {
+                    SharedObjectMutability::Mutable => true,
+                    SharedObjectMutability::Immutable => false,
+                    SharedObjectMutability::NonExclusiveWrite => {
+                        // TODO: graphql should probably expose the full mutability enum
+                        true
+                    }
+                },
             }),
 
             N::Object(O::Receiving(oref)) => I::Receiving(Receiving {
@@ -450,7 +457,7 @@ impl TransactionInput {
             }),
 
             // TODO(address-balances): Add support for balance withdraws.
-            N::BalanceWithdraw(_) => todo!("BalanceWithdraw is not supported for GraphQL"),
+            N::FundsWithdrawal(_) => todo!("FundsWithdrawal is not supported for GraphQL"),
         }
     }
 }

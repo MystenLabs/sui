@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::abi::{
-    eth_bridge_committee, eth_committee_upgradeable_contract, eth_sui_bridge, EthBridgeCommittee,
-    EthBridgeLimiter, EthCommitteeUpgradeableContract,
+    EthBridgeCommittee, EthBridgeLimiter, EthCommitteeUpgradeableContract, eth_bridge_committee,
+    eth_committee_upgradeable_contract, eth_sui_bridge,
 };
-use crate::abi::{eth_bridge_config, eth_bridge_limiter, EthBridgeConfig};
+use crate::abi::{EthBridgeConfig, eth_bridge_config, eth_bridge_limiter};
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::{
     AddTokensOnEvmAction, AssetPriceUpdateAction, BlocklistCommitteeAction,
@@ -86,7 +86,7 @@ pub async fn build_emergency_op_approve_transaction(
 ) -> BridgeResult<ContractCall<EthSigner, ()>> {
     let contract = EthSuiBridge::new(contract_address, signer.into());
 
-    let message: eth_sui_bridge::Message = action.clone().into();
+    let message: eth_sui_bridge::Message = action.clone().try_into()?;
     let signatures = sigs
         .signatures
         .values()
@@ -103,7 +103,7 @@ pub async fn build_committee_blocklist_approve_transaction(
 ) -> BridgeResult<ContractCall<EthSigner, ()>> {
     let contract = EthBridgeCommittee::new(contract_address, signer.into());
 
-    let message: eth_bridge_committee::Message = action.clone().into();
+    let message: eth_bridge_committee::Message = action.clone().try_into()?;
     let signatures = sigs
         .signatures
         .values()
@@ -120,7 +120,7 @@ pub async fn build_limit_update_approve_transaction(
 ) -> BridgeResult<ContractCall<EthSigner, ()>> {
     let contract = EthBridgeLimiter::new(contract_address, signer.into());
 
-    let message: eth_bridge_limiter::Message = action.clone().into();
+    let message: eth_bridge_limiter::Message = action.clone().try_into()?;
     let signatures = sigs
         .signatures
         .values()
@@ -136,7 +136,7 @@ pub async fn build_asset_price_update_approve_transaction(
     sigs: &BridgeCommitteeValiditySignInfo,
 ) -> BridgeResult<ContractCall<EthSigner, ()>> {
     let contract = EthBridgeConfig::new(contract_address, signer.into());
-    let message: eth_bridge_config::Message = action.clone().into();
+    let message: eth_bridge_config::Message = action.clone().try_into()?;
     let signatures = sigs
         .signatures
         .values()
@@ -152,7 +152,7 @@ pub async fn build_add_tokens_on_evm_transaction(
     sigs: &BridgeCommitteeValiditySignInfo,
 ) -> BridgeResult<ContractCall<EthSigner, ()>> {
     let contract = EthBridgeConfig::new(contract_address, signer.into());
-    let message: eth_bridge_config::Message = action.clone().into();
+    let message: eth_bridge_config::Message = action.clone().try_into()?;
     let signatures = sigs
         .signatures
         .values()
@@ -168,7 +168,7 @@ pub async fn build_evm_upgrade_transaction(
 ) -> BridgeResult<ContractCall<EthSigner, ()>> {
     let contract_address = action.proxy_address;
     let contract = EthCommitteeUpgradeableContract::new(contract_address, signer.into());
-    let message: eth_committee_upgradeable_contract::Message = action.clone().into();
+    let message: eth_committee_upgradeable_contract::Message = action.clone().try_into()?;
     let signatures = sigs
         .signatures
         .values()

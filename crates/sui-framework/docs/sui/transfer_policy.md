@@ -59,15 +59,20 @@ of the type at once.
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
+<b>use</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata">sui::accumulator_metadata</a>;
+<b>use</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement">sui::accumulator_settlement</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
+<b>use</b> <a href="../sui/bcs.md#sui_bcs">sui::bcs</a>;
 <b>use</b> <a href="../sui/coin.md#sui_coin">sui::coin</a>;
 <b>use</b> <a href="../sui/config.md#sui_config">sui::config</a>;
 <b>use</b> <a href="../sui/deny_list.md#sui_deny_list">sui::deny_list</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
+<b>use</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator">sui::funds_accumulator</a>;
+<b>use</b> <a href="../sui/hash.md#sui_hash">sui::hash</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/package.md#sui_package">sui::package</a>;
@@ -555,7 +560,7 @@ Kiosk trades will not be possible.
     <b>let</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a> { <a href="../sui/transfer_policy.md#sui_transfer_policy_item">item</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_paid">paid</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_from">from</a>, receipts } = request;
     <b>let</b> <b>mut</b> completed = receipts.into_keys();
     <b>let</b> <b>mut</b> total = completed.length();
-    <b>assert</b>!(total == self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.size(), <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>);
+    <b>assert</b>!(total == self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.length(), <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>);
     <b>while</b> (total &gt; 0) {
         <b>let</b> rule_type = completed.pop_back();
         <b>assert</b>!(self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.contains(&rule_type), <a href="../sui/transfer_policy.md#sui_transfer_policy_EIllegalRule">EIllegalRule</a>);
@@ -602,7 +607,7 @@ even if graceful unpacking has not been implemented in a "rule module".
     <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(policy) == cap.policy_id, <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(!<a href="../sui/transfer_policy.md#sui_transfer_policy_has_rule">has_rule</a>&lt;T, Rule&gt;(policy), <a href="../sui/transfer_policy.md#sui_transfer_policy_ERuleAlreadySet">ERuleAlreadySet</a>);
     df::add(&<b>mut</b> policy.id, <a href="../sui/transfer_policy.md#sui_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {}, cfg);
-    policy.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.insert(type_name::get&lt;Rule&gt;())
+    policy.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.insert(type_name::with_defining_ids&lt;Rule&gt;())
 }
 </code></pre>
 
@@ -682,7 +687,7 @@ confirming that the policy requirements are satisfied.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_add_receipt">add_receipt</a>&lt;T, Rule: drop&gt;(_: Rule, request: &<b>mut</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;) {
-    request.receipts.insert(type_name::get&lt;Rule&gt;())
+    request.receipts.insert(type_name::with_defining_ids&lt;Rule&gt;())
 }
 </code></pre>
 
@@ -737,7 +742,7 @@ Remove the Rule from the <code><a href="../sui/transfer_policy.md#sui_transfer_p
 ) {
     <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(policy) == cap.policy_id, <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>);
     <b>let</b> _: Config = df::remove(&<b>mut</b> policy.id, <a href="../sui/transfer_policy.md#sui_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {});
-    policy.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.remove(&type_name::get&lt;Rule&gt;());
+    policy.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.remove(&type_name::with_defining_ids&lt;Rule&gt;());
 }
 </code></pre>
 

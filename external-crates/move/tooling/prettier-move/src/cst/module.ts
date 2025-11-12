@@ -18,6 +18,8 @@ const { join, hardline, indent } = doc.builders;
  */
 export default function (path: AstPath<Node>): treeFn | null {
     switch (path.node.type) {
+        case Module.ModuleExtensionDefinition:
+            return printModuleExtensionDefinition;
         case Module.ModuleDefinition:
             return printModuleDefinition;
         case Module.ModuleIdentity:
@@ -35,11 +37,23 @@ export default function (path: AstPath<Node>): treeFn | null {
  * Module - top-level definition in a Move source file.
  */
 export enum Module {
+    ModuleExtensionDefinition = 'module_extension_definition',
     ModuleDefinition = 'module_definition',
     BlockComment = 'block_comment',
     ModuleIdentity = 'module_identity',
     ModuleIdentifier = 'module_identifier',
     ModuleBody = 'module_body',
+}
+
+/**
+ * Print `module_extension_definition` node.
+ */
+export function printModuleExtensionDefinition(
+    path: AstPath<Node>,
+    _options: MoveOptions,
+    print: printFn,
+): Doc {
+    return ['extend ', path.call(print, 'nonFormattingChildren', 0)];
 }
 
 /**
@@ -55,7 +69,19 @@ export function printModuleDefinition(
     // when option is present we must check that there's only one module per file
     if (options.useModuleLabel) {
         const modules = path.parent!.nonFormattingChildren.filter(
-            (node) => node.type === path.node.type,
+            (node) =>
+                node.type === 'module_definition' || node.type === 'module_extension_definition',
+        );
+
+        useLabel = modules.length == 1;
+    }
+
+    // module definition can be a part of the extension, do decide whether to use
+    // the label for it, we need to check its parent's parent
+    if (options.useModuleLabel && path.parent!.type === 'module_extension_definition') {
+        const modules = path.parent!.parent!.nonFormattingChildren.filter(
+            (node) =>
+                node.type === 'module_definition' || node.type === 'module_extension_definition',
         );
 
         useLabel = modules.length == 1;
@@ -66,12 +92,17 @@ export function printModuleDefinition(
     // if we're using the label, we must add a semicolon and print the body in a
     // new line
     if (useLabel) {
-        return result.concat([
-            ';',
-            hardline,
-            hardline,
-            path.call(print, 'nonFormattingChildren', 1),
-        ]);
+        // print hard lines only if there is more than one child
+        if (path.node.nonFormattingChildren[1]!.children.length > 1) {
+            return result.concat([
+                ';',
+                hardline,
+                hardline,
+                path.call(print, 'nonFormattingChildren', 1),
+            ]);
+        } else {
+            return result.concat([';']);
+        }
     }
 
     // when not module mabel, module body is a block with curly braces and

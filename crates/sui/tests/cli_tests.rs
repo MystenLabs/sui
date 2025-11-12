@@ -13,20 +13,20 @@ use std::str::FromStr;
 
 use expect_test::expect;
 use fastcrypto::encoding::{Base64, Encoding};
-use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildConfig};
+use move_package::{BuildConfig as MoveBuildConfig, lock_file::schema::ManagedPackage};
 use serde_json::json;
 use sui::client_commands::{GasDataArgs, PaymentArgs, TxProcessingArgs};
 use sui::client_ptb::ptb::PTB;
-use sui::sui_commands::IndexerArgs;
+use sui::sui_commands::RpcArgs;
 use sui_keys::key_identity::KeyIdentity;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
 use sui_types::transaction::{
-    TransactionDataAPI, TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+    TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
     TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TransactionDataAPI,
 };
 use tokio::time::sleep;
 
@@ -34,9 +34,9 @@ use std::path::Path;
 use std::{fs, io};
 use sui::{
     client_commands::{
-        estimate_gas_budget, SuiClientCommandResult, SuiClientCommands, SwitchResponse,
+        SuiClientCommandResult, SuiClientCommands, SwitchResponse, estimate_gas_budget,
     },
-    sui_commands::{parse_host_port, SuiCommand},
+    sui_commands::{SuiCommand, parse_host_port},
 };
 use sui_config::{
     PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
@@ -44,10 +44,9 @@ use sui_config::{
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    get_new_package_obj_from_response, OwnedObjectRef, SuiExecutionStatus, SuiObjectData,
-    SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsAPI,
+    OwnedObjectRef, SuiExecutionStatus, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiRawData, SuiTransactionBlockDataAPI,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -304,24 +303,24 @@ fn add_ids_to_manifest(
 ) -> Result<(), anyhow::Error> {
     let content = std::fs::read_to_string(package_path.join("Move.toml"))?;
     let mut toml: toml::Value = toml::from_str(&content)?;
-    if let Some(tbl) = toml.get_mut("package") {
-        if let Some(tbl) = tbl.as_table_mut() {
-            tbl.insert(
-                "published-at".to_string(),
-                toml::Value::String(published_at_id.to_hex_uncompressed()),
-            );
-        }
+    if let Some(tbl) = toml.get_mut("package")
+        && let Some(tbl) = tbl.as_table_mut()
+    {
+        tbl.insert(
+            "published-at".to_string(),
+            toml::Value::String(published_at_id.to_hex_uncompressed()),
+        );
     }
 
-    if let (Some(address_id), Some(tbl)) = (address_id, toml.get_mut("addresses")) {
-        if let Some(tbl) = tbl.as_table_mut() {
-            // Get the first address item
-            let first_key = tbl.keys().next().unwrap();
-            tbl.insert(
-                first_key.to_string(),
-                toml::Value::String(address_id.to_hex_uncompressed()),
-            );
-        }
+    if let (Some(address_id), Some(tbl)) = (address_id, toml.get_mut("addresses"))
+        && let Some(tbl) = tbl.as_table_mut()
+    {
+        // Get the first address item
+        let first_key = tbl.keys().next().unwrap();
+        tbl.insert(
+            first_key.to_string(),
+            toml::Value::String(address_id.to_hex_uncompressed()),
+        );
     }
 
     let toml_str = toml::to_string(&toml)?;
@@ -345,7 +344,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         epoch_duration_ms: None,
         no_full_node: false,
         committee_size: None,
-        indexer_feature_args: IndexerArgs::for_testing(),
+        rpc_args: RpcArgs::for_testing(),
     }
     .execute()
     .await;
@@ -419,7 +418,8 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         context
             .config
             .keystore
-            .import(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
+            .import(None, SuiKeyPair::Ed25519(get_key_pair().1))
+            .await?;
     }
 
     // Print all addresses
@@ -1000,7 +1000,10 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     assert!(resp.is_err());
     let err_string = format!("{} ", resp.err().unwrap());
-    assert!(err_string.contains("Gas price 1 under reference gas price"));
+    assert!(
+        err_string.contains("Gas price 1 under reference gas price"),
+        "Error: {err_string}"
+    );
 
     // FIXME: uncomment once we figure out what is going on with `resolve_and_type_check`
     // let err_string = format!("{} ", resp.err().unwrap());
@@ -1199,7 +1202,8 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
                 response.effects.as_ref().unwrap().gas_object().object_id(),
                 gas_obj_id
             );
-            get_new_package_obj_from_response(&response)
+            response
+                .get_new_package_obj()
                 .ok_or_else(|| anyhow::anyhow!("No package object response"))?
         } else {
             unreachable!("Invalid response");
@@ -1763,8 +1767,8 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
-async fn test_package_publish_command_with_unpublished_dependency_succeeds(
-) -> Result<(), anyhow::Error> {
+async fn test_package_publish_command_with_unpublished_dependency_succeeds()
+-> Result<(), anyhow::Error> {
     let with_unpublished_dependencies = true; // Value under test, results in successful response.
 
     let mut test_cluster = TestClusterBuilder::new().build().await;
@@ -1841,8 +1845,8 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
 }
 
 #[sim_test]
-async fn test_package_publish_command_with_unpublished_dependency_fails(
-) -> Result<(), anyhow::Error> {
+async fn test_package_publish_command_with_unpublished_dependency_fails()
+-> Result<(), anyhow::Error> {
     let with_unpublished_dependencies = false; // Value under test, results in error response.
 
     let mut test_cluster = TestClusterBuilder::new().build().await;
@@ -2432,7 +2436,8 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     .await?;
 
     // Get Original Package ID and version
-    let (expect_original_id, _, _) = get_new_package_obj_from_response(&publish_response)
+    let (expect_original_id, _, _) = publish_response
+        .get_new_package_obj()
         .ok_or_else(|| anyhow::anyhow!("No package object response"))?;
 
     // Get Upgraded Package ID and version
@@ -2442,7 +2447,8 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
                 response.effects.as_ref().unwrap().gas_object().object_id(),
                 gas_obj_id
             );
-            get_new_package_obj_from_response(&response)
+            response
+                .get_new_package_obj()
                 .ok_or_else(|| anyhow::anyhow!("No package object response"))?
         } else {
             unreachable!("Invalid response");
@@ -3779,9 +3785,11 @@ async fn key_identity_test() {
             .unwrap()
     );
     // alias does not exist
-    assert!(context
-        .get_identity_address(Some(KeyIdentity::Alias("alias".to_string())))
-        .is_err());
+    assert!(
+        context
+            .get_identity_address(Some(KeyIdentity::Alias("alias".to_string())))
+            .is_err()
+    );
 
     // get active address instead when no alias/address is given
     assert_eq!(
@@ -4142,7 +4150,7 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
     .await?;
 
     // pay sui takes the input coins and transfers from each of them (in order) the amounts to the
-    // respective receipients.
+    // respective recipients.
     // check if each recipient has one object, if the tx status is success,
     // and if the gas object used was the first object in the input coins
     // we also check if the balances of each recipient are right!
@@ -4409,10 +4417,12 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
             2,
             "Expected to have two coins when calling transfer sui the 2nd time"
         );
-        assert!(objs_refs
-            .data
-            .iter()
-            .any(|x| x.object().unwrap().object_id == object_id1));
+        assert!(
+            objs_refs
+                .data
+                .iter()
+                .any(|x| x.object().unwrap().object_id == object_id1)
+        );
     } else {
         panic!("TransferSui test failed");
     }
@@ -5158,8 +5168,8 @@ async fn test_tree_shaking_package_with_transitive_dependencies1() -> Result<(),
 }
 
 #[sim_test]
-async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_references(
-) -> Result<(), anyhow::Error> {
+async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_references()
+-> Result<(), anyhow::Error> {
     // Publish package C_B with no code references_B and check the linkage table
     // we use here the package B published in TEST 3
     let mut test = TreeShakingTest::new().await?;
@@ -5212,9 +5222,12 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::E
         linkage_table_d.contains_key(&package_a_id),
         "Package D should depend on A"
     );
-    assert!(linkage_table_d
-        .get(&package_a_id)
-        .is_some_and(|x| x.upgraded_id == package_a_v1_id), "Package D should depend on A_v1 after upgrade, and the UpgradeInfo should have matching ids");
+    assert!(
+        linkage_table_d
+            .get(&package_a_id)
+            .is_some_and(|x| x.upgraded_id == package_a_v1_id),
+        "Package D should depend on A_v1 after upgrade, and the UpgradeInfo should have matching ids"
+    );
 
     let (package_e_id, _) = test.publish_package("E_A_v1", false).await?;
 
@@ -5282,9 +5295,12 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
         linkage_table_i.contains_key(&package_a_id),
         "Package I linkage table should have A"
     );
-    assert!(linkage_table_i
-        .get(&package_a_id)
-        .is_some_and(|x| x.upgraded_id == package_a_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
+    assert!(
+        linkage_table_i
+            .get(&package_a_id)
+            .is_some_and(|x| x.upgraded_id == package_a_v2_id),
+        "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids"
+    );
 
     Ok(())
 }
@@ -5323,9 +5339,12 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_2() -> Result<(), anyhow:
         "Package M should depend on K"
     );
 
-    assert!(linkage_table_m
-        .get(&package_k_id)
-        .is_some_and(|x| x.upgraded_id == package_k_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
+    assert!(
+        linkage_table_m
+            .get(&package_k_id)
+            .is_some_and(|x| x.upgraded_id == package_k_v2_id),
+        "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids"
+    );
 
     // publish everything again but without automated address mgmt.
 
@@ -5369,9 +5388,12 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_3() -> Result<(), anyhow:
         "Package M should depend on K"
     );
 
-    assert!(linkage_table_m
-        .get(&package_k_id)
-        .is_some_and(|x| x.upgraded_id == package_k_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
+    assert!(
+        linkage_table_m
+            .get(&package_k_id)
+            .is_some_and(|x| x.upgraded_id == package_k_v2_id),
+        "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids"
+    );
 
     Ok(())
 }

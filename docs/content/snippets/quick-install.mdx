@@ -1,16 +1,62 @@
-Use one of the following commands for [Homebrew](https://brew.sh/) (MacOS, Linux, or Windows Subsystem for Linux), [Chocolatey](https://chocolatey.org/) (Windows), or [suiup](https://github.com/MystenLabs/suiup) (a custom installer and version manager for Sui related tools) to install Sui.
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
-<Tabs groupId="operating-systems">
+<Tabs groupId="install-tool">
 
-<TabItem label="Homebrew" value="mac">
+<TabItem label="suiup" value="suiup">
+
+First, install `suiup`:
+
+```sh
+$ curl -sSfL \
+  https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh \
+  | sh
+```
+
+Then, install Sui:
+
+```sh
+$ suiup install sui@testnet
+```
+
+For alternative installation methods, refer to the [`suiup` repository](https://github.com/MystenLabs/suiup).
+
+:::danger
+
+Installing Sui with `suiup` does not configure the client. To use `sui` commands, you must [configure the Sui client](/guides/developer/getting-started/configure-sui-client.mdx).
+
+To confirm that Sui installed correctly:
+
+1. Open a terminal or console
+2. Type `sui --version` and press Enter
+
+If you receive a "command not found" error, verify the Sui binaries directory is in your `PATH` environment variable.
+
+:::
+
+</TabItem>
+
+<TabItem label="Homebrew" value="brew">
+
+You must have [Homebrew](https://brew.sh/) installed before running the following command:
 
 ```sh
 $ brew install sui
 ```
 
+To confirm that Sui installed correctly:
+
+1. Open a terminal or console
+2. Type `sui --version` and press Enter
+
+If you receive a "command not found" error, verify the Sui binaries directory is in your `PATH` environment variable.
+
+
 </TabItem>
 
-<TabItem label="Chocolatey" value="win">
+<TabItem label="Chocolatey" value="choco">
+
+You must have [Chocolately](https://chocolatey.org/) installed before running the following command:
 
 ```sh
 $ choco install sui
@@ -18,15 +64,12 @@ $ choco install sui
 
 Find more [versions of Sui for Windows](https://community.chocolatey.org/packages/sui) on the Chocolatey community website.
 
-</TabItem>
+To confirm that Sui installed correctly:
 
-<TabItem label="suiup (experimental)" value="suiup">
+1. Open a terminal or console
+2. Type `sui --version` and press Enter
 
-```sh
-$ suiup install sui@testnet
-```
-
-Find more information on installation and a quick start guide in the suiup repository: [https://github.com/MystenLabs/suiup](https://github.com/MystenLabs/suiup).
+If you receive a "command not found" error, verify the Sui binaries directory is in your `PATH` environment variable.
 
 </TabItem>
 

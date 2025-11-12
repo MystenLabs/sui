@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, fmt::Write};
 
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use move_core_types::{
     annotated_extractor::Extractor,
     annotated_value::{MoveTypeLayout, MoveValue},

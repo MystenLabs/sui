@@ -6,11 +6,10 @@ use move_core_types::{
     gas_algebra::{AbstractMemorySize, InternalGas, NumArgs, NumBytes},
     language_storage::ModuleId,
 };
-use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
     loaded_data::runtime_types::Type,
-    views::{TypeView, ValueView},
+    views::{SizeConfig, TypeView, ValueView},
 };
 use sui_types::gas_model::{
     gas_predicates::{native_function_threshold_exceeded, use_legacy_abstract_size},
@@ -193,11 +192,15 @@ impl GasMeter for SuiGasMeter<'_> {
     }
 
     fn charge_move_loc(&mut self, val: impl ValueView) -> PartialVMResult<()> {
-        // Charge for the move of the local on to the stack. Note that we charge here since we
-        // aren't tracking the local size (at least not yet). If we were, this should be a net-zero
-        // operation in terms of memory usage.
-        self.0
-            .charge(1, 1, 0, abstract_memory_size(self.0, val).into(), 0)
+        if reweight_move_loc(self.0.gas_model_version) {
+            self.0.charge(1, 1, 0, REFERENCE_SIZE.into(), 0)
+        } else {
+            // Charge for the move of the local on to the stack. Note that we charge here since we
+            // aren't tracking the local size (at least not yet). If we were, this should be a net-zero
+            // operation in terms of memory usage.
+            self.0
+                .charge(1, 1, 0, abstract_memory_size(self.0, val).into(), 0)
+        }
     }
 
     fn charge_store_loc(&mut self, val: impl ValueView) -> PartialVMResult<()> {
@@ -240,13 +243,12 @@ impl GasMeter for SuiGasMeter<'_> {
         // We read the reference so we are decreasing the size of the stack by the size of the
         // reference, and adding to it the size of the value that has been read from that
         // reference.
-        self.0.charge(
-            1,
-            1,
-            1,
-            abstract_memory_size(self.0, ref_val).into(),
-            REFERENCE_SIZE.into(),
-        )
+        let size = if reweight_read_ref(self.0.gas_model_version) {
+            abstract_memory_size_with_traversal(self.0, ref_val)
+        } else {
+            abstract_memory_size(self.0, ref_val)
+        };
+        self.0.charge(1, 1, 1, size.into(), REFERENCE_SIZE.into())
     }
 
     fn charge_write_ref(
@@ -281,7 +283,7 @@ impl GasMeter for SuiGasMeter<'_> {
     fn charge_neq(&mut self, lhs: impl ValueView, rhs: impl ValueView) -> PartialVMResult<()> {
         let size_reduction = abstract_memory_size_with_traversal(self.0, lhs)
             + abstract_memory_size_with_traversal(self.0, rhs);
-        let size_increase = if traverse_refs(self.0.gas_model_version) {
+        let size_increase = if enable_traverse_refs(self.0.gas_model_version) {
             Type::Bool.size() + size_reduction
         } else {
             Type::Bool.size()
@@ -369,35 +371,53 @@ impl GasMeter for SuiGasMeter<'_> {
         }
         self.0.gas_left
     }
-
-    fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler> {
-        self.0.profiler.as_mut()
-    }
-
-    fn set_profiler(&mut self, profiler: GasProfiler) {
-        self.0.profiler = Some(profiler);
-    }
 }
 
 fn abstract_memory_size(status: &GasStatus, val: impl ValueView) -> AbstractMemorySize {
-    if use_legacy_abstract_size(status.gas_model_version) {
-        val.legacy_abstract_memory_size()
-    } else {
-        val.abstract_memory_size(false)
-    }
+    let config = size_config_for_gas_model_version(status.gas_model_version, false);
+    val.abstract_memory_size(&config)
 }
 
 fn abstract_memory_size_with_traversal(
     status: &GasStatus,
     val: impl ValueView,
 ) -> AbstractMemorySize {
-    if use_legacy_abstract_size(status.gas_model_version) {
-        val.legacy_abstract_memory_size()
-    } else {
-        val.abstract_memory_size(traverse_refs(status.gas_model_version))
-    }
+    let config = size_config_for_gas_model_version(status.gas_model_version, true);
+    val.abstract_memory_size(&config)
 }
 
-fn traverse_refs(gas_model_version: u64) -> bool {
+fn enable_traverse_refs(gas_model_version: u64) -> bool {
     gas_model_version > 9
+}
+
+fn reweight_read_ref(gas_model_version: u64) -> bool {
+    // Reweighting `ReadRef` is only done in gas model versions 10 and above.
+    gas_model_version > 10
+}
+
+fn reweight_move_loc(gas_model_version: u64) -> bool {
+    // Reweighting `MoveLoc` is only done in gas model versions 10 and above.
+    gas_model_version > 10
+}
+
+fn size_config_for_gas_model_version(
+    gas_model_version: u64,
+    should_traverse_refs: bool,
+) -> SizeConfig {
+    if use_legacy_abstract_size(gas_model_version) {
+        SizeConfig {
+            traverse_references: false,
+            include_vector_size: false,
+        }
+    } else if should_traverse_refs {
+        SizeConfig {
+            traverse_references: enable_traverse_refs(gas_model_version),
+            include_vector_size: true,
+        }
+    } else {
+        SizeConfig {
+            traverse_references: false,
+            include_vector_size: true,
+        }
+    }
 }

@@ -8,17 +8,13 @@
 use std::{str::FromStr, time::Duration};
 
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
-use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
-use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster};
-use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
-use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
+use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig, find};
 use sui_types::{
     base_types::SuiAddress,
-    crypto::{get_account_key_pair, Signature, Signer},
+    crypto::{Signature, Signer, get_account_key_pair},
     digests::TransactionDigest,
     effects::TransactionEffectsAPI,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -213,15 +209,13 @@ async fn test_digests_pruned() {
 async fn cluster_with_pipelines(pipeline: PipelineLayer) -> FullCluster {
     FullCluster::new_with_configs(
         Simulacrum::new(),
-        IndexerArgs::default(),
-        IndexerArgs::default(),
-        IndexerConfig {
-            pipeline,
-            ..IndexerConfig::for_test()
+        OffchainClusterConfig {
+            indexer_config: IndexerConfig {
+                pipeline,
+                ..IndexerConfig::for_test()
+            },
+            ..Default::default()
         },
-        ConsistentConfig::for_test(),
-        JsonRpcConfig::default(),
-        GraphQlConfig::default(),
         &prometheus::Registry::new(),
         CancellationToken::new(),
     )
@@ -254,7 +248,7 @@ fn transfer_dust(
         .request_gas(sender, DEFAULT_GAS_BUDGET + 1)
         .expect("Failed to request gas");
 
-    let gas = find_address_owned(&fx).expect("Failed to find gas object");
+    let gas = find::address_owned(&fx).expect("Failed to find gas object");
 
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.transfer_sui(recipient, Some(1));

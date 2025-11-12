@@ -2,24 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::command::Component;
-use crate::mock_account::{batch_create_account_and_gas, Account};
+use crate::mock_account::{Account, batch_create_account_and_gas};
 use crate::mock_storage::InMemoryObjectStore;
 use crate::single_node::SingleValidator;
 use crate::tx_generator::SharedObjectCreateTxGenerator;
 use crate::tx_generator::{RootObjectCreateTxGenerator, TxGenerator};
 use crate::workload::Workload;
-use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
 use std::sync::Arc;
 use sui_config::node::RunWithRange;
-use sui_core::authority::shared_object_version_manager::AssignedTxAndVersions;
+use sui_core::authority::shared_object_version_manager::{AssignedTxAndVersions, AssignedVersions};
+use sui_core::mock_checkpoint_builder::ValidatorKeypairProvider;
 use sui_test_transaction_builder::PublishData;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::HandleTransactionResponse;
-use sui_types::mock_checkpoint_builder::ValidatorKeypairProvider;
 use sui_types::transaction::{
     CertifiedTransaction, SignedTransaction, Transaction, VerifiedTransaction,
 };
@@ -313,7 +313,13 @@ impl BenchmarkContext {
                     let validator = self.validator();
                     let component = self.benchmark_component;
                     tokio::spawn(async move {
-                        validator.execute_certificate(tx, &vec![], component).await
+                        validator
+                            .execute_certificate(
+                                tx,
+                                &AssignedVersions::new(vec![], None),
+                                component,
+                            )
+                            .await
                     })
                 })
                 .collect();
@@ -513,7 +519,11 @@ impl BenchmarkContext {
                     let validator = self.validator();
                     tokio::spawn(async move {
                         validator
-                            .execute_transaction_in_memory(store, tx, &vec![])
+                            .execute_transaction_in_memory(
+                                store,
+                                tx,
+                                &AssignedVersions::new(vec![], None),
+                            )
                             .await
                     })
                 })

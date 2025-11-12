@@ -8,7 +8,7 @@ use jsonrpsee::{PendingSubscriptionSink, RpcModule};
 use tap::TapFallible;
 
 use sui_json_rpc::SuiRpcModule;
-use sui_json_rpc_api::{cap_page_limit, IndexerApiServer};
+use sui_json_rpc_api::{IndexerApiServer, cap_page_limit};
 use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectResponse,
     SuiObjectResponseQuery, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
@@ -16,16 +16,16 @@ use sui_json_rpc_types::{
 };
 use sui_name_service::{Domain, NameRecord, NameServiceConfig, NameServiceError};
 use sui_open_rpc::Module;
+use sui_types::TypeTag;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::{DynamicFieldName, Field};
 use sui_types::error::SuiObjectResponseError;
 use sui_types::event::EventID;
 use sui_types::object::ObjectRead;
-use sui_types::TypeTag;
 
-use crate::indexer_reader::IndexerReader;
 use crate::IndexerError;
+use crate::indexer_reader::IndexerReader;
 
 pub(crate) struct IndexerApi {
     inner: IndexerReader,

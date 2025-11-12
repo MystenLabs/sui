@@ -7,7 +7,7 @@ use std::ops::Range;
 use std::path::Path;
 use std::{fs, fs::File, path::PathBuf};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use csv::{Writer, WriterBuilder};
 use serde::Serialize;
 

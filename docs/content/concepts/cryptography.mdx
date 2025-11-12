@@ -1,29 +1,19 @@
 ---
 title: Cryptography
+description: Sui supports multiple cryptography algorithms and primitives, while also defining its own such as public keys, signatures, aggregated signatures, and hash functions. 
+keywords: [ cryptographic primitives, public keys, signatures, aggregated signatures, hash functions, cryptographic algorithms, cryptography on sui, zkLogin, transaction authentication, passkey ]
+pagination_prev: null
 ---
 
 Cryptographic agility is core to Sui. The system supports multiple cryptography algorithms and primitives and can switch between them rapidly. With Sui, you can choose the right cryptography solution for your system and implement the latest algorithms as they become available.
 
 Sui defines its cryptography primitives, such as public key, signature, aggregated signature, and hash functions, under one unified type alias or enum wrapper that is shared across the entire repository. Making changes to these primitives affects all of an application's components. You can quickly update application cryptography and be assured of uniform security.
 
-## Transaction Authentication
-
-Transaction authentication features on Sui provide security against unauthorized access to on-chain data. Transaction Authentication provides an overview of related topics.
-
-Go to [Transaction Authentication](./cryptography/transaction-auth.mdx).
-
-## zkLogin
-
-zkLogin is a Sui primitive that enables you to send transactions from a Sui address using an OAuth credential, without publicly linking the two.
-
-Go to [zkLogin](./cryptography/zklogin.mdx).
-
-## Passkey
-
-Sui supports the passkey signature scheme that enables you to sign-in to apps and sign transactions for Sui using a private key securely stored on a passkey authenticator. It uses the WebAuthn standard.
-
-Go to [Passkey](./cryptography/passkeys.mdx).
-
-## Related links
-
-- [Cryptography guides](../guides/developer/cryptography.mdx): See the cryptography guides for instruction on applying these concepts.
+<Cards>
+<Card title="Transaction Authentication" href="/concepts/cryptography/transaction-auth">
+</Card>
+<Card title="zkLogin" href="/concepts/cryptography/zklogin">
+</Card>
+<Card title="Passkey" href="/concepts/cryptography/passkeys">
+</Card>
+</Cards>

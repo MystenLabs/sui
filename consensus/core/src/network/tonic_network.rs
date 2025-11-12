@@ -13,29 +13,30 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
-use futures::{stream, Stream, StreamExt as _};
+use futures::{Stream, StreamExt as _, stream};
 use mysten_network::{
+    Multiaddr,
     callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
     multiaddr::Protocol,
-    Multiaddr,
 };
 use parking_lot::RwLock;
 use sui_http::ServerHandle;
 use sui_tls::AllowPublicKeys;
-use tokio_stream::{iter, Iter};
-use tonic::{codec::CompressionEncoding, Request, Response, Streaming};
+use tokio_stream::{Iter, iter};
+use tonic::{Request, Response, Streaming, codec::CompressionEncoding};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
 use tracing::{debug, error, info, trace, warn};
 
 use super::{
+    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
     metrics_layer::{MetricsCallbackMaker, MetricsResponseCallback, SizedRequest, SizedResponse},
     tonic_gen::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
     },
-    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
+    CommitIndex,
     block::VerifiedBlock,
     commit::CommitRange,
     context::Context,
@@ -44,7 +45,6 @@ use crate::{
         tonic_gen::consensus_service_server::ConsensusServiceServer,
         tonic_tls::certificate_server_name,
     },
-    CommitIndex,
 };
 
 // Maximum bytes size in a single fetch_blocks()response.
@@ -53,6 +53,8 @@ const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
 // Maximum total bytes fetched in a single fetch_blocks() call, after combining the responses.
 const MAX_TOTAL_FETCHED_BYTES: usize = 128 * 1024 * 1024;
+
+const DEFAULT_GRPC_SERVER_TIMEOUT: Duration = Duration::from_secs(300);
 
 // Implements Tonic RPC client for Consensus.
 pub(crate) struct TonicClient {
@@ -80,15 +82,11 @@ impl TonicClient {
             .channel_pool
             .get_channel(self.network_keypair.clone(), peer, timeout)
             .await?;
-        let mut client = ConsensusServiceClient::new(channel)
+        let client = ConsensusServiceClient::new(channel)
             .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit);
-
-        if self.context.protocol_config.consensus_zstd_compression() {
-            client = client
-                .send_compressed(CompressionEncoding::Zstd)
-                .accept_compressed(CompressionEncoding::Zstd);
-        }
+            .max_decoding_message_size(config.message_size_limit)
+            .send_compressed(CompressionEncoding::Zstd)
+            .accept_compressed(CompressionEncoding::Zstd);
         Ok(client)
     }
 }
@@ -727,12 +725,10 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             .map_request(move |mut request: http::Request<_>| {
                 if let Some(peer_certificates) =
                     request.extensions().get::<sui_http::PeerCertificates>()
-                {
-                    if let Some(peer_info) =
+                    && let Some(peer_info) =
                         peer_info_from_certs(&connections_info, peer_certificates)
-                    {
-                        request.extensions_mut().insert(peer_info);
-                    }
+                {
+                    request.extensions_mut().insert(peer_info);
                 }
                 request
             })
@@ -745,17 +741,20 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
             )
-            .layer_fn(|service| mysten_network::grpc_timeout::GrpcTimeout::new(service, None));
+            .layer_fn(|service| {
+                mysten_network::grpc_timeout::GrpcTimeout::new(
+                    service,
+                    // This should only bound the unary and initial response time,
+                    // not the duration of streaming responses.
+                    DEFAULT_GRPC_SERVER_TIMEOUT,
+                )
+            });
 
-        let mut consensus_service_server = ConsensusServiceServer::new(service)
+        let consensus_service_server = ConsensusServiceServer::new(service)
             .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit);
-
-        if self.context.protocol_config.consensus_zstd_compression() {
-            consensus_service_server = consensus_service_server
-                .send_compressed(CompressionEncoding::Zstd)
-                .accept_compressed(CompressionEncoding::Zstd);
-        }
+            .max_decoding_message_size(config.message_size_limit)
+            .send_compressed(CompressionEncoding::Zstd)
+            .accept_compressed(CompressionEncoding::Zstd);
 
         let consensus_service = tonic::service::Routes::new(consensus_service_server)
             .into_axum_router()
@@ -810,7 +809,6 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
         }
 
         let http_config = sui_http::Config::default()
-            .tcp_nodelay(true)
             .initial_connection_window_size(64 << 20)
             .initial_stream_window_size(32 << 20)
             .http2_keepalive_interval(Some(config.keepalive_interval))

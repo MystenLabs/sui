@@ -6,8 +6,8 @@ use anyhow::Result;
 use bytes::Bytes;
 use object_store::DynObjectStore;
 use prometheus::{
-    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
-    Registry,
+    IntCounter, IntGauge, Registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry,
 };
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -17,11 +17,11 @@ use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::db_checkpoint_handler::{STATE_SNAPSHOT_COMPLETED_MARKER, SUCCESS_MARKER};
+use sui_storage::FileCompression;
 use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_missing_epochs_dirs, path_to_filesystem, put,
     run_manifest_update_loop,
 };
-use sui_storage::FileCompression;
 use sui_types::digests::ChainIdentifier;
 use sui_types::messages_checkpoint::CheckpointCommitment::ECMHLiveObjectSetDigest;
 use tracing::{debug, error, info};
@@ -135,16 +135,21 @@ impl StateSnapshotUploader {
                 let db = Arc::new(AuthorityPerpetualTables::open(
                     &path_to_filesystem(self.db_checkpoint_path.clone(), &db_path.child("store"))?,
                     None,
+                    None,
                 ));
                 let commitments = self
                     .checkpoint_store
                     .get_epoch_state_commitments(*epoch)
                     .expect("Expected last checkpoint of epoch to have end of epoch data")
                     .expect("Expected end of epoch data to be present");
-                let ECMHLiveObjectSetDigest(state_hash_commitment) = commitments
+                let state_hash_commitment = match commitments
                     .last()
                     .expect("Expected at least one commitment")
-                    .clone();
+                    .clone()
+                {
+                    ECMHLiveObjectSetDigest(digest) => digest,
+                    _ => return Err(anyhow::anyhow!("Expected ECMHLiveObjectSetDigest")),
+                };
                 state_snapshot_writer
                     .write(*epoch, db, state_hash_commitment, self.chain_identifier)
                     .await?;

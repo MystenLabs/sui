@@ -5,7 +5,7 @@ use crate::abi::{
     EthBridgeCommittee, EthBridgeConfig, EthBridgeLimiter, EthBridgeVault, EthSuiBridge,
 };
 use crate::config::{
-    default_ed25519_key_pair, BridgeNodeConfig, EthConfig, MetricsConfig, SuiConfig, WatchdogConfig,
+    BridgeNodeConfig, EthConfig, MetricsConfig, SuiConfig, WatchdogConfig, default_ed25519_key_pair,
 };
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
@@ -36,17 +36,17 @@ use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keypair_file::read_key;
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::BRIDGE_PACKAGE_ID;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeChainId;
 use sui_types::bridge::{BRIDGE_MODULE_NAME, BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME};
 use sui_types::committee::StakeUnit;
-use sui_types::crypto::get_key_pair;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::ToFromBytes;
+use sui_types::crypto::get_key_pair;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::{ObjectArg, TransactionData};
-use sui_types::BRIDGE_PACKAGE_ID;
 
 pub type EthSigner = SignerMiddleware<Provider<Http>, Wallet<SigningKey>>;
 
@@ -283,7 +283,7 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
         let tx = TestTransactionBuilder::new(sender, gas, rgp)
             .publish(token_package_dir.to_path_buf())
             .build();
-        let tx = wallet_context.sign_transaction(&tx);
+        let tx = wallet_context.sign_transaction(&tx).await;
         let api_clone = quorum_driver_api.clone();
         publish_tokens_tasks.push(tokio::spawn(async move {
             api_clone.execute_transaction_block(
@@ -358,7 +358,7 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
             .unwrap()
             .unwrap();
         let tx = TransactionData::new_programmable(sender, vec![gas], pt, 1_000_000_000, rgp);
-        let signed_tx = wallet_context.sign_transaction(&tx);
+        let signed_tx = wallet_context.sign_transaction(&tx).await;
         let api_clone = quorum_driver_api.clone();
         register_tasks.push(async move {
             api_clone

@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::CoinMetadataCache;
 use crate::operations::Operations;
 use crate::types::{ConstructionMetadata, OperationStatus, OperationType};
-use crate::CoinMetadataCache;
 use anyhow::anyhow;
+use futures::StreamExt;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use rand::seq::{IteratorRandom, SliceRandom};
@@ -12,32 +13,33 @@ use serde_json::json;
 use shared_crypto::intent::Intent;
 use signature::rand_core::OsRng;
 use std::collections::{BTreeMap, HashMap};
+use std::future;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::str::FromStr;
-use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use sui_json_rpc_types::{Coin, SuiTransactionBlockResponseOptions};
 use sui_json_rpc_types::{
     ObjectChange, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponseQuery,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_move_build::BuildConfig;
+use sui_sdk::SuiClient;
 use sui_sdk::rpc_types::{
     OwnedObjectRef, SuiData, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponse,
 };
-use sui_sdk::SuiClient;
+use sui_types::TypeTag;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SuiAddress};
-use sui_types::gas_coin::{GasCoin, GAS};
+use sui_types::gas_coin::{GAS, GasCoin};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::{
-    CallArg, InputObjectKind, ObjectArg, ProgrammableTransaction, Transaction, TransactionData,
-    TransactionDataAPI, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    CallArg, InputObjectKind, ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
-    TEST_ONLY_GAS_UNIT_FOR_STAKING, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    TEST_ONLY_GAS_UNIT_FOR_STAKING, TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData,
+    TransactionDataAPI, TransactionKind,
 };
-use sui_types::TypeTag;
 use test_cluster::TestClusterBuilder;
 
 #[tokio::test]
@@ -111,7 +113,7 @@ async fn test_transfer_object() {
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient = get_random_address(&addresses, vec![sender]);
-    let object_ref = get_random_sui(&client, sender, vec![]).await;
+    let object_ref = get_random_sui(&client, sender, vec![]).await.object_ref();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -236,7 +238,7 @@ async fn test_split_coin() {
 
     // Test spilt coin
     let sender = get_random_address(&network.get_addresses(), vec![]);
-    let coin = get_random_sui(&client, sender, vec![]).await;
+    let coin = get_random_sui(&client, sender, vec![]).await.object_ref();
     let tx = client
         .transaction_builder()
         .split_coin(sender, coin.0, vec![100000], None, 10000)
@@ -269,8 +271,10 @@ async fn test_merge_coin() {
 
     // Test merge coin
     let sender = get_random_address(&network.get_addresses(), vec![]);
-    let coin = get_random_sui(&client, sender, vec![]).await;
-    let coin2 = get_random_sui(&client, sender, vec![coin.0]).await;
+    let coin = get_random_sui(&client, sender, vec![]).await.object_ref();
+    let coin2 = get_random_sui(&client, sender, vec![coin.0])
+        .await
+        .object_ref();
     let tx = client
         .transaction_builder()
         .merge_coins(sender, coin.0, coin2.0, None, 10000)
@@ -305,7 +309,7 @@ async fn test_pay() {
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient = get_random_address(&addresses, vec![sender]);
-    let coin = get_random_sui(&client, sender, vec![]).await;
+    let coin = get_random_sui(&client, sender, vec![]).await.object_ref();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -339,8 +343,10 @@ async fn test_pay_multiple_coin_multiple_recipient() {
     let sender = get_random_address(&addresses, vec![]);
     let recipient1 = get_random_address(&addresses, vec![sender]);
     let recipient2 = get_random_address(&addresses, vec![sender, recipient1]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await;
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
+        .await
+        .object_ref();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -377,8 +383,10 @@ async fn test_pay_sui_multiple_coin_same_recipient() {
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient1 = get_random_address(&addresses, vec![sender]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await;
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
+        .await
+        .object_ref();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -415,8 +423,10 @@ async fn test_pay_sui() {
     let sender = get_random_address(&addresses, vec![]);
     let recipient1 = get_random_address(&addresses, vec![sender]);
     let recipient2 = get_random_address(&addresses, vec![sender, recipient1]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await;
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
+        .await
+        .object_ref();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -450,8 +460,10 @@ async fn test_failed_pay_sui() {
     let sender = get_random_address(&addresses, vec![]);
     let recipient1 = get_random_address(&addresses, vec![sender]);
     let recipient2 = get_random_address(&addresses, vec![sender, recipient1]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await;
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
+        .await
+        .object_ref();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -482,8 +494,10 @@ async fn test_stake_sui() {
 
     // Test Delegate Sui
     let sender = get_random_address(&network.get_addresses(), vec![]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await;
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
+        .await
+        .object_ref();
     let validator = client
         .governance_api()
         .get_latest_sui_system_state()
@@ -530,8 +544,10 @@ async fn test_stake_sui_with_none_amount() {
 
     // Test Staking Sui
     let sender = get_random_address(&network.get_addresses(), vec![]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await;
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
+        .await
+        .object_ref();
     let validator = client
         .governance_api()
         .get_latest_sui_system_state()
@@ -580,8 +596,10 @@ async fn test_pay_all_sui() {
     let addresses = network.get_addresses();
     let sender = get_random_address(&addresses, vec![]);
     let recipient = get_random_address(&addresses, vec![sender]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await;
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let coin1 = get_random_sui(&client, sender, vec![]).await.object_ref();
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0])
+        .await
+        .object_ref();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder.pay_all_sui(recipient);
@@ -607,7 +625,9 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     let rgp = network.get_reference_gas_price().await;
     let client = network.wallet.get_client().await.unwrap();
     let sender = get_random_address(&network.get_addresses(), vec![]);
-    let gas = get_random_sui(&client, sender, vec![]).await;
+    let coin = get_random_sui(&client, sender, vec![]).await;
+    let gas = coin.object_ref();
+    let total_coin_value = coin.balance as i128;
     let validator = client
         .governance_api()
         .get_latest_sui_system_state()
@@ -628,15 +648,22 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     .unwrap();
     let metadata = ConstructionMetadata {
         sender,
-        coins: vec![gas],
+        gas_coins: vec![gas],
+        extra_gas_coins: vec![],
         objects: vec![],
-        total_coin_value: 0,
+        total_coin_value,
         gas_price: rgp,
         budget: rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,
         currency: None,
     };
     let parsed_data = ops.clone().into_internal()?.try_into_data(metadata)?;
-    assert_eq!(ops, Operations::try_from(parsed_data)?);
+    assert_eq!(
+        ops,
+        Operations::try_from(parsed_data.clone())?,
+        "expected {:#?}, got: {:#?}",
+        ops,
+        Operations::try_from(parsed_data)?
+    );
 
     Ok(())
 }
@@ -656,17 +683,16 @@ fn find_module_object(
                 digest,
                 ..
             } = change
+                && type_pred(object_type)
             {
-                if type_pred(object_type) {
-                    return Some(OwnedObjectRef {
-                        owner: owner.clone(),
-                        reference: SuiObjectRef {
-                            object_id: *object_id,
-                            version: *version,
-                            digest: *digest,
-                        },
-                    });
-                }
+                return Some(OwnedObjectRef {
+                    owner: owner.clone(),
+                    reference: SuiObjectRef {
+                        object_id: *object_id,
+                        version: *version,
+                        digest: *digest,
+                    },
+                });
             };
             None
         })
@@ -704,7 +730,11 @@ async fn test_transaction(
                 }
             })
             .collect::<Vec<_>>();
-        vec![get_random_sui(client, sender, input_objects).await]
+        vec![
+            get_random_sui(client, sender, input_objects)
+                .await
+                .object_ref(),
+        ]
     };
 
     let data = TransactionData::new_with_gas_coins(
@@ -717,6 +747,7 @@ async fn test_transaction(
 
     let signature = keystore
         .sign_secure(&data.sender(), &data, Intent::sui_transaction())
+        .await
         .unwrap();
 
     // Balance before execution
@@ -788,7 +819,9 @@ fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128
                     | OperationType::Stake => {
                         if let (Some(addr), Some(amount)) = (op.account, op.amount) {
                             // Todo: amend this method and tests to cover other coin types too (eg. test_publish_and_move_call also mints MY_COIN)
-                            if amount.currency.metadata.coin_type == GAS::type_().to_string() {
+                            if amount.currency.metadata.coin_type
+                                == sui_types::TypeTag::from(GAS::type_()).to_canonical_string(true)
+                            {
                                 *changes.entry(addr.address).or_default() += amount.value
                             }
                         }
@@ -800,39 +833,15 @@ fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128
         })
 }
 
-async fn get_random_sui(
-    client: &SuiClient,
-    sender: SuiAddress,
-    except: Vec<ObjectID>,
-) -> ObjectRef {
+async fn get_random_sui(client: &SuiClient, sender: SuiAddress, except: Vec<ObjectID>) -> Coin {
     let coins = client
-        .read_api()
-        .get_owned_objects(
-            sender,
-            Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::new()
-                    .with_type()
-                    .with_owner()
-                    .with_previous_transaction(),
-            )),
-            /* cursor */ None,
-            /* limit */ None,
-        )
-        .await
-        .unwrap()
-        .data;
+        .coin_read_api()
+        .get_coins_stream(sender, None)
+        .filter(|c| future::ready(!except.contains(&c.coin_object_id)))
+        .collect::<Vec<_>>()
+        .await;
 
-    let coin_resp = coins
-        .iter()
-        .filter(|object| {
-            let obj = object.object().unwrap();
-            obj.is_gas_coin() && !except.contains(&obj.object_id)
-        })
-        .choose(&mut OsRng)
-        .unwrap();
-
-    let coin = coin_resp.object().unwrap();
-    (coin.object_id, coin.version, coin.digest)
+    coins.into_iter().choose(&mut OsRng).unwrap()
 }
 
 fn get_random_address(addresses: &[SuiAddress], except: Vec<SuiAddress>) -> SuiAddress {

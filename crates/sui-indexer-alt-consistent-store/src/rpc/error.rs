@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)]
 
 use std::{convert::Infallible, str::FromStr, sync::Arc};
 
 use anyhow::anyhow;
 use tonic::{
-    metadata::{MetadataMap, MetadataValue},
     Status,
+    metadata::{MetadataMap, MetadataValue},
 };
 
 use crate::db;
@@ -18,8 +17,6 @@ pub(super) trait StatusCode {
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(super) enum RpcError<E = Infallible> {
-    Unimplemented,
-
     /// Checkpoint requested is not in the available range.
     NotInRange(u64),
 
@@ -27,7 +24,7 @@ pub(super) enum RpcError<E = Infallible> {
     Custom(Arc<E>),
 
     /// Error to wrap existing framework errors.
-    Status(#[from] tonic::Status),
+    Status(Arc<tonic::Status>),
 
     /// An error produced by the internal works of the service (our fault).
     InternalError(Arc<anyhow::Error>),
@@ -42,6 +39,14 @@ impl StatusCode for Infallible {
 impl<E: std::error::Error + StatusCode> From<E> for RpcError<E> {
     fn from(err: E) -> Self {
         RpcError::Custom(Arc::new(err))
+    }
+}
+
+/// Cannot use `#[from]` for this conversion because we want to avoid cloning the `tonic::Status`,
+/// when cloning the eror.
+impl<E> From<tonic::Status> for RpcError<E> {
+    fn from(err: tonic::Status) -> Self {
+        RpcError::Status(Arc::new(err))
     }
 }
 
@@ -60,8 +65,6 @@ where
 {
     fn from(err: RpcError<E>) -> Self {
         match err {
-            RpcError::Unimplemented => Status::unimplemented("Not implemented yet"),
-
             RpcError::NotInRange(checkpoint) => Status::out_of_range(format!(
                 "Checkpoint {checkpoint} not in the consistent range"
             )),
@@ -72,7 +75,7 @@ where
                 status
             }
 
-            RpcError::Status(status) => status,
+            RpcError::Status(status) => status.as_ref().clone(),
 
             RpcError::InternalError(err) => {
                 let mut chain = err.chain().enumerate();

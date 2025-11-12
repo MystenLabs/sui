@@ -16,8 +16,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 pub use executor::{
-    setup_single_workflow, setup_single_workflow_with_options, IndexerExecutor,
-    MAX_CHECKPOINTS_IN_PROGRESS,
+    IndexerExecutor, MAX_CHECKPOINTS_IN_PROGRESS, setup_single_workflow,
+    setup_single_workflow_with_options,
 };
 pub use metrics::DataIngestionMetrics;
 pub use progress_store::{

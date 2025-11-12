@@ -75,7 +75,6 @@ impl ReplayFuzzer {
                 None,
                 None,
                 None,
-                None,
             )
             .await?;
 
@@ -158,8 +157,7 @@ impl ReplayFuzzer {
                     Err(e) => {
                         error!(
                             "Error executing transaction: base tx: {}, mutation: {:?} with error{:?}",
-                            self.sandbox_state.transaction_info.tx_digest,
-                            mutation, e
+                            self.sandbox_state.transaction_info.tx_digest, mutation, e
                         );
                         if self.config.fail_over_on_err {
                             return Err(e);

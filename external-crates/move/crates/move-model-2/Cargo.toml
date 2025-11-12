@@ -17,11 +17,12 @@ move-command-line-common.workspace = true
 move-symbol-pool.workspace = true
 indexmap = { workspace = true, features = ["serde"] }
 
-bcs.workspace = true
-codespan.workspace = true
-codespan-reporting.workspace = true
-num.workspace = true
 anyhow.workspace = true
+bcs.workspace = true
+codespan-reporting.workspace = true
+codespan.workspace = true
+num.workspace = true
+pretty_simple.workspace = true
 serde.workspace = true
 vfs.workspace = true
 

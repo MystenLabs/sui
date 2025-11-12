@@ -1,8 +1,239 @@
+"""
+System transaction for creating the accumulator root.
+"""
+type AccumulatorRootCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+type ActiveJwk {
+	"""
+	The JWK algorithm parameter, (RFC 7517, Section 4.4).
+	"""
+	alg: String
+	"""
+	The JWK RSA public exponent, (RFC 7517, Section 9.3).
+	"""
+	e: String
+	"""
+	The most recent epoch in which the JWK was validated.
+	"""
+	epoch: Epoch
+	"""
+	The string (Issuing Authority) that identifies the OIDC provider.
+	"""
+	iss: String
+	"""
+	The string (Key ID) that identifies the JWK among a set of JWKs, (RFC 7517, Section 4.5).
+	"""
+	kid: String
+	"""
+	The JWK key type parameter, (RFC 7517, Section 4.1).
+	"""
+	kty: String
+	"""
+	The JWK RSA modulus, (RFC 7517, Section 9.3).
+	"""
+	n: String
+}
+
+type ActiveJwkConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [ActiveJwkEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ActiveJwk!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type ActiveJwkEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: ActiveJwk!
+}
+
 type Address implements IAddressable {
 	"""
 	The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
 	"""
 	address: SuiAddress!
+	"""
+	Attempts to fetch the object at this address.
+	"""
+	asObject: Object
+	"""
+	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	
+	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
+	If the address does not own any coins of that type, a balance of zero is returned.
+	"""
+	balance(coinType: String!): Balance
+	"""
+	Total balance across coins owned by this address, grouped by coin type.
+	"""
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
+	"""
+	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to the object with this address.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Dynamic fields owned by this address.
+	
+	The address must correspond to an object (account addresses cannot own dynamic fields), but that object may be wrapped.
+	"""
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	"""
+	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to the object with this address.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	
+	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
+	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	"""
+	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access dynamic fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Access dynamic object fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicObjectFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Objects owned by this address, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	Transactions associated with this address.
+	
+	Similar behavior to the `transactions` in Query but supporting the additional `AddressTransactionRelationship` filter, which defaults to `SENT`.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String, relation: AddressTransactionRelationship, filter: TransactionFilter): TransactionConnection
+}
+
+"""
+Object is exclusively owned by a single address, and is mutable.
+"""
+type AddressOwner {
+	"""
+	The owner's address.
+	"""
+	address: Address
+}
+
+"""
+The possible relationship types for a transaction: sent or affected.
+"""
+enum AddressTransactionRelationship {
+	"""
+	Transactions this address has sent.
+	"""
+	SENT
+	"""
+	Transactions that this address was involved in, either as the sender, sponsor, or as the owner of some object that was created, modified or transferred.
+	"""
+	AFFECTED
+}
+
+"""
+System transaction for creating the on-chain state used by zkLogin.
+"""
+type AuthenticatorStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
+System transaction that is executed at the end of an epoch to expire JSON Web Keys (JWKs) that are no longer valid, based on their associated epoch. This is part of the on-chain state management for zkLogin and authentication.
+"""
+type AuthenticatorStateExpireTransaction {
+	"""
+	The initial version that the AuthenticatorStateUpdate was shared at.
+	"""
+	authenticatorObjInitialSharedVersion: UInt53
+	"""
+	Expire JWKs that have a lower epoch than this.
+	"""
+	minEpoch: Epoch
+}
+
+type AuthenticatorStateUpdateTransaction {
+	"""
+	The initial version of the authenticator object that it was shared at.
+	"""
+	authenticatorObjInitialSharedVersion: UInt53
+	"""
+	Epoch of the authenticator state update transaction.
+	"""
+	epoch: Epoch
+	"""
+	Newly active JWKs (JSON Web Keys).
+	"""
+	newActiveJwks(first: Int, after: String, last: Int, before: String): ActiveJwkConnection
+	"""
+	Consensus round of the authenticator state update.
+	"""
+	round: UInt53
+}
+
+"""
+Checkpoint range for which data is available.
+"""
+type AvailableRange {
+	"""
+	Inclusive lower checkpoint for which data is available.
+	"""
+	first: Checkpoint
+	"""
+	Inclusive upper checkpoint for which data is available.
+	"""
+	last: Checkpoint
+}
+
+"""
+The total balance for a particular coin type.
+"""
+type Balance {
+	"""
+	Coin type for the balance, such as `0x2::sui::SUI`.
+	"""
+	coinType: MoveType
+	"""
+	The total balance across all coin objects of this coin type.
+	"""
+	totalBalance: BigInt
 }
 
 """
@@ -10,24 +241,20 @@ Effects to the balance (sum of coin values per coin type) of addresses and objec
 """
 type BalanceChange {
 	"""
-	The address or object whose balance has changed.
-	"""
-	owner: Address
-	"""
-	The inner type of the coin whose balance has changed (e.g. `0x2::sui::SUI`).
-	"""
-	coinType: String
-	"""
 	The signed balance change.
 	"""
 	amount: BigInt
+	"""
+	The inner type of the coin whose balance has changed (e.g. `0x2::sui::SUI`).
+	"""
+	coinType: MoveType
+	"""
+	The address or object whose balance has changed.
+	"""
+	owner: Address
 }
 
 type BalanceChangeConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
 	"""
 	A list of edges.
 	"""
@@ -36,6 +263,10 @@ type BalanceChangeConnection {
 	A list of nodes.
 	"""
 	nodes: [BalanceChange!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -43,13 +274,42 @@ An edge in a connection.
 """
 type BalanceChangeEdge {
 	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
 	The item at the end of the edge
 	"""
 	node: BalanceChange!
+}
+
+type BalanceConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [BalanceEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Balance!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type BalanceEdge {
 	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Balance!
 }
 
 """
@@ -64,25 +324,86 @@ scalar BigInt
 
 
 """
+System transaction for initializing bridge committee.
+"""
+type BridgeCommitteeInitTransaction {
+	"""
+	The initial shared version of the bridge object.
+	"""
+	bridgeObjectVersion: UInt53
+}
+
+"""
+System transaction for creating bridge state for cross-chain operations.
+"""
+type BridgeStateCreateTransaction {
+	"""
+	The chain identifier for which this bridge state is being created.
+	"""
+	chainIdentifier: String
+}
+
+"""
+A system transaction that updates epoch information on-chain (increments the current epoch). Executed by the system once per epoch, without using gas. Epoch change transactions cannot be submitted by users, because validators will refuse to sign them.
+
+This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
+"""
+type ChangeEpochTransaction {
+	"""
+	The total amount of gas charged for computation during the epoch.
+	"""
+	computationCharge: UInt53
+	"""
+	The next (to become) epoch.
+	"""
+	epoch: Epoch
+	"""
+	Unix timestamp when epoch started.
+	"""
+	epochStartTimestamp: DateTime
+	"""
+	The non-refundable storage fee.
+	"""
+	nonRefundableStorageFee: UInt53
+	"""
+	The epoch's corresponding protocol configuration.
+	"""
+	protocolConfigs: ProtocolConfigs
+	"""
+	The total amount of gas charged for storage during the epoch.
+	"""
+	storageCharge: UInt53
+	"""
+	The amount of storage rebate refunded to the transaction senders.
+	"""
+	storageRebate: UInt53
+	"""
+	System packages that will be written by validators before the new epoch starts, to upgrade them on-chain. These objects do not have a "previous transaction" because they are not written on-chain yet. Consult `effects.objectChanges` for this transaction to see the actual objects written.
+	"""
+	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection
+}
+
+"""
 Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 """
 type Checkpoint {
 	"""
-	The checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
+	A commitment by the committee at each checkpoint on the artifacts of the checkpoint.
+	e.g., object checkpoint states
 	"""
-	sequenceNumber: UInt53!
+	artifactsDigest: String
 	"""
-	Query the RPC as if this checkpoint were the latest checkpoint.
+	The Base64 serialized BCS bytes of this checkpoint's contents.
 	"""
-	query: Query
-	"""
-	A 32-byte hash that uniquely identifies the checkpoint, encoded in Base58. This is a hash of the checkpoint's summary.
-	"""
-	digest: String
+	contentBcs: Base64
 	"""
 	A 32-byte hash that uniquely identifies the checkpoint's content, encoded in Base58.
 	"""
 	contentDigest: String
+	"""
+	A 32-byte hash that uniquely identifies the checkpoint, encoded in Base58. This is a hash of the checkpoint's summary.
+	"""
+	digest: String
 	"""
 	The epoch that this checkpoint is part of.
 	"""
@@ -96,46 +417,671 @@ type Checkpoint {
 	"""
 	previousCheckpointDigest: String
 	"""
+	Query the RPC as if this checkpoint were the latest checkpoint.
+	"""
+	query: Query
+	"""
 	The computation cost, storage cost, storage rebate, and non-refundable storage fee accumulated during this epoch, up to and including this checkpoint. These values increase monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
 	"""
 	rollingGasSummary: GasCostSummary
+	"""
+	The checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
+	"""
+	sequenceNumber: UInt53!
 	"""
 	The Base64 serialized BCS bytes of this checkpoint's summary.
 	"""
 	summaryBcs: Base64
 	"""
-	The Base64 serialized BCS bytes of this checkpoint's contents.
-	"""
-	contentBcs: Base64
-	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
 	timestamp: DateTime
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
 	The aggregation of signatures from a quorum of validators for the checkpoint proposal.
 	"""
 	validatorSignatures: ValidatorAggregatedSignature
-	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+}
+
+type CheckpointConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [CheckpointEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Checkpoint!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
-Filter for paginating packages published within a range of checkpoints.
+An edge in a connection.
 """
+type CheckpointEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Checkpoint!
+}
+
 input CheckpointFilter {
 	"""
-	Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
+	Limit query results to checkpoints that occured strictly after the given checkpoint.
 	"""
 	afterCheckpoint: UInt53
 	"""
-	Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
+	Limit query results to checkpoints that occured at the given checkpoint.
+	"""
+	atCheckpoint: UInt53
+	"""
+	Limit query results to checkpoints at this epoch.
+	"""
+	atEpoch: UInt53
+	"""
+	Limit query results to checkpoints that occured strictly before the given checkpoint.
 	"""
 	beforeCheckpoint: UInt53
+}
+
+"""
+System transaction for creating the coin deny list state.
+"""
+type CoinDenyListStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
+An object representing metadata about a coin type.
+"""
+type CoinMetadata implements IAddressable & IMoveObject & IObject {
+	"""
+	The CoinMetadata's ID.
+	"""
+	address: SuiAddress!
+	"""
+	Whether the `DenyCap` can be used to enable a global pause that behaves as if all addresses were added to the deny list. `null` indicates that it is not known whether the currency can be paused or not. This field is only populated on currencies held in the Coin Registry. To determine whether a legacy currency can be paused, check the contents of its `DenyCap`, if it can be found.
+	"""
+	allowGlobalPause: Boolean
+	"""
+	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	
+	If the address does not own any coins of that type, a balance of zero is returned.
+	"""
+	balance(coinType: String!): Balance
+	"""
+	Total balance across coins owned by this address, grouped by coin type.
+	"""
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The structured representation of the object's contents.
+	"""
+	contents: MoveValue
+	"""
+	Number of decimal places the coin uses.
+	"""
+	decimals: Int
+	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
+	"""
+	If the currency is regulated, this object represents the capability to modify the deny list. If a capability is known but wrapped, its address can be fetched but other fields will not be accessible.
+	"""
+	denyCap: MoveObject
+	"""
+	Description of the coin.
+	"""
+	description: String
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String
+	"""
+	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Dynamic fields owned by this object.
+	
+	Dynamic fields on wrapped objects can be accessed using `Address.dynamicFields`.
+	"""
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	"""
+	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
+	
+	Both these operations require the object to have both the `key` and `store` abilities.
+	"""
+	hasPublicTransfer: Boolean
+	"""
+	URL for the coin logo.
+	"""
+	iconUrl: String
+	"""
+	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
+	"""
+	moveObjectBcs: Base64
+	"""
+	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	
+	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	"""
+	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access dynamic fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Access dynamic object fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicObjectFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Name for the coin.
+	"""
+	name: String
+	"""
+	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
+	"""
+	The Base64-encoded BCS serialization of this object, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	Paginate all versions of this object after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
+	"""
+	Paginate all versions of this object before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
+	"""
+	Objects owned by this object, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	The object's owner kind.
+	"""
+	owner: Owner
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
+	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
+	Whether the currency is regulated or not. `null` indicates that the regulatory status is unknown.
+	"""
+	regulatedState: RegulatedState
+	"""
+	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+	"""
+	storageRebate: BigInt
+	"""
+	The overall balance of coins issued.
+	"""
+	supply: BigInt
+	"""
+	Future behavior of the supply. `null` indicates that the future behavior of the supply is not known because the currency's treasury still exists.
+	"""
+	supplyState: SupplyState
+	"""
+	Symbol for the coin.
+	"""
+	symbol: String
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53
+}
+
+"""
+System transaction for creating the coin registry.
+"""
+type CoinRegistryCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
+A single command in the programmable transaction.
+"""
+union Command = MakeMoveVecCommand | MergeCoinsCommand | MoveCallCommand | PublishCommand | SplitCoinsCommand | TransferObjectsCommand | UpgradeCommand | OtherCommand
+
+type CommandConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [CommandEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Command!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type CommandEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Command!
+}
+
+"""
+A value produced or modified during command execution.
+
+This can represent either a return value from a command or an argument that was mutated by reference.
+"""
+type CommandOutput {
+	"""
+	The transaction argument that this value corresponds to (if any).
+	"""
+	argument: TransactionArgument
+	"""
+	The structured Move value, if available.
+	"""
+	value: MoveValue
+}
+
+"""
+The intermediate results for each command of a transaction simulation.
+"""
+type CommandResult {
+	"""
+	Changes made to arguments that were mutably borrowed by each command in this transaction.
+	"""
+	mutatedReferences: [CommandOutput!]
+	"""
+	Return results of each command in this transaction.
+	"""
+	returnValues: [CommandOutput!]
+}
+
+"""
+Object is exclusively owned by a single adderss and sequenced via consensus.
+"""
+type ConsensusAddressOwner {
+	"""
+	The owner's address.
+	"""
+	address: Address
+	"""
+	The version at which the object most recently bcame a consensus object. This serves the same function as `Shared.initialSharedVersion`, except it may change if the object's `owner` type changes.
+	"""
+	startVersion: UInt53
+}
+
+"""
+System transaction that runs at the beginning of a checkpoint, and is responsible for setting the current value of the clock, based on the timestamp from consensus.
+"""
+type ConsensusCommitPrologueTransaction {
+	"""
+	Digest of any additional state computed by the consensus handler.
+	Used to detect forking bugs as early as possible.
+	
+	Present in V4.
+	"""
+	additionalStateDigest: String
+	"""
+	Unix timestamp from consensus.
+	
+	Present in V1, V2, V3, V4.
+	"""
+	commitTimestamp: DateTime
+	"""
+	Digest of consensus output, encoded as a Base58 string.
+	
+	Present in V2, V3, V4.
+	"""
+	consensusCommitDigest: String
+	"""
+	Epoch of the commit prologue transaction.
+	
+	Present in V1, V2, V3, V4.
+	"""
+	epoch: Epoch
+	"""
+	Consensus round of the commit.
+	
+	Present in V1, V2, V3, V4.
+	"""
+	round: UInt53
+	"""
+	The sub DAG index of the consensus commit. This field is populated if there
+	are multiple consensus commits per round.
+	
+	Present in V3, V4.
+	"""
+	subDagIndex: UInt53
+}
+
+"""
+Reason why a transaction that attempted to access a consensus-managed object was cancelled.
+"""
+enum ConsensusObjectCancellationReason {
+	"""
+	Read operation was cancelled.
+	"""
+	CANCELLED_READ
+	"""
+	Object congestion prevented execution.
+	"""
+	CONGESTED
+	"""
+	Randomness service was unavailable.
+	"""
+	RANDOMNESS_UNAVAILABLE
+	"""
+	Internal use only.
+	"""
+	UNKNOWN
+}
+
+"""
+A transaction that was cancelled before it could access the consensus-managed object, so the object was an input but remained unchanged.
+"""
+type ConsensusObjectCancelled {
+	"""
+	The ID of the consensus-managed object that the transaction intended to access.
+	"""
+	address: SuiAddress
+	"""
+	Reason why the transaction was cancelled.
+	"""
+	cancellationReason: ConsensusObjectCancellationReason
+}
+
+type ConsensusObjectRead {
+	"""
+	The version of the consensus-managed object that was read by this transaction.
+	"""
+	object: Object
 }
 
 """
 ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. Note that the milliseconds part is optional, and it may be omitted if its value is 0.
 """
 scalar DateTime
+
+"""
+A rendered JSON blob based on an on-chain template.
+"""
+type Display {
+	"""
+	If any fields failed to render, this will contain a mapping from failed field names to error messages. If all fields succeed, this will be `null`.
+	"""
+	errors: JSON
+	"""
+	Output for all successfully substituted display fields. Unsuccessful fields will be `null`, and will be accompanied by a field in `errors`, explaining the error.
+	"""
+	output: JSON
+}
+
+"""
+System transaction for creating the display registry.
+"""
+type DisplayRegistryCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
+Dynamic fields are heterogenous fields that can be added or removed from an object at runtime. Their names are arbitrary Move values that have `copy`, `drop`, and `store`.
+
+There are two sub-types of dynamic fields:
+
+- Dynamic fields can store any value that has `store`. Objects stored in this kind of field will be considered wrapped (not accessible via its ID by external tools like explorers, wallets, etc. accessing storage).
+- Dynamic object fields can only store objects (values that have the `key` ability, and an `id: UID` as its first field) that have `store`, but they will still be directly accessible off-chain via their ID after being attached as a field.
+"""
+type DynamicField implements IAddressable & IMoveObject & IObject {
+	"""
+	The DynamicField's ID.
+	"""
+	address: SuiAddress!
+	"""
+	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	
+	If the address does not own any coins of that type, a balance of zero is returned.
+	"""
+	balance(coinType: String!): Balance
+	"""
+	Total balance across coins owned by this address, grouped by coin type.
+	"""
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The structured representation of the object's contents.
+	"""
+	contents: MoveValue
+	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String
+	"""
+	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Dynamic fields owned by this object.
+	
+	Dynamic fields on wrapped objects can be accessed using `Address.dynamicFields`.
+	"""
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	"""
+	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
+	
+	Both these operations require the object to have both the `key` and `store` abilities.
+	"""
+	hasPublicTransfer: Boolean
+	"""
+	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
+	"""
+	moveObjectBcs: Base64
+	"""
+	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	
+	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	"""
+	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access dynamic fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Access dynamic object fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicObjectFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	The dynamic field's name, as a Move value.
+	"""
+	name: MoveValue
+	"""
+	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
+	"""
+	The Base64-encoded BCS serialization of this object, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	Paginate all versions of this object after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
+	"""
+	Paginate all versions of this object before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
+	"""
+	Objects owned by this object, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	The object's owner kind.
+	"""
+	owner: Owner
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
+	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
+	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+	"""
+	storageRebate: BigInt
+	"""
+	The dynamic field's value, as a Move value for dynamic fields and as a MoveObject for dynamic object fields.
+	"""
+	value: DynamicFieldValue
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53
+}
+
+type DynamicFieldConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [DynamicFieldEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [DynamicField!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type DynamicFieldEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: DynamicField!
+}
+
+"""
+A description of a dynamic field's name.
+"""
+input DynamicFieldName {
+	"""
+	The Base64-encoded BCS serialization of the dynamic field's 'name'.
+	"""
+	bcs: Base64!
+	"""
+	The type of the dynamic field's name, like 'u64' or '0x2::kiosk::Listing'.
+	"""
+	type: String!
+}
+
+"""
+The value of a dynamic field (`MoveValue`) or dynamic object field (`MoveObject`).
+"""
+union DynamicFieldValue = MoveObject | MoveValue
+
+"""
+System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other optional transactions to run at the end of the epoch.
+"""
+type EndOfEpochTransaction {
+	"""
+	The list of system transactions that are allowed to run at the end of the epoch.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection
+}
+
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction | DisplayRegistryCreateTransaction
+
+type EndOfEpochTransactionKindConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [EndOfEpochTransactionKindEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [EndOfEpochTransactionKind!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type EndOfEpochTransactionKindEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: EndOfEpochTransactionKind!
+}
 
 """
 Activity on Sui is partitioned in time, into epochs.
@@ -151,15 +1097,45 @@ During a particular epoch the following data is fixed:
 """
 type Epoch {
 	"""
-	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
+	The epoch's corresponding checkpoints.
 	"""
-	epochId: UInt53!
+	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection
 	"""
 	State of the Coin DenyList object (0x403) at the start of this epoch.
 	
 	The DenyList controls access to Regulated Coins. Writes to the DenyList are accumulated and only take effect on the next epoch boundary. Consequently, it's possible to determine the state of the DenyList for a transaction by reading it at the start of the epoch the transaction is in.
 	"""
 	coinDenyList: Object
+	"""
+	The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
+	"""
+	endTimestamp: DateTime
+	"""
+	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
+	"""
+	epochId: UInt53!
+	"""
+	The storage fees paid for transactions executed during the epoch (or `null` if the epoch has not finished yet).
+	"""
+	fundInflow: BigInt
+	"""
+	The storage fee rebates paid to users who deleted the data associated with past transactions (or `null` if the epoch has not finished yet).
+	"""
+	fundOutflow: BigInt
+	"""
+	The storage fund available in this epoch (or `null` if the epoch has not finished yet).
+	This fund is used to redistribute storage fees from past transactions to future validators.
+	"""
+	fundSize: BigInt
+	"""
+	A commitment by the committee at the end of epoch on the contents of the live object set at that time.
+	This can be used to verify state snapshots.
+	"""
+	liveObjectSetDigest: String
+	"""
+	The difference between the fund inflow and outflow, representing the net amount of storage fees accumulated in this epoch (or `null` if the epoch has not finished yet).
+	"""
+	netInflow: BigInt
 	"""
 	The epoch's corresponding protocol configuration, including the feature flags and the configuration options.
 	"""
@@ -169,29 +1145,41 @@ type Epoch {
 	"""
 	referenceGasPrice: BigInt
 	"""
+	Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
+	"""
+	safeMode: SafeMode
+	"""
 	The timestamp associated with the first checkpoint in the epoch.
 	"""
 	startTimestamp: DateTime
+	"""
+	SUI set aside to account for objects stored on-chain, at the start of the epoch.
+	This is also used for storage rebates.
+	"""
+	storageFund: StorageFund
 	"""
 	The system packages used by all transactions in this epoch.
 	"""
 	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection
 	"""
-	The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
+	Details of the system that are decided during genesis.
 	"""
-	endTimestamp: DateTime
+	systemParameters: SystemParameters
 	"""
-	Validator-related properties, including the active validators.
+	Parameters related to the subsidy that supplements staking rewards
 	"""
-	validatorSet: ValidatorSet
+	systemStakeSubsidy: StakeSubsidy
+	"""
+	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
+	This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
+	"""
+	systemStateVersion: UInt53
 	"""
 	The total number of checkpoints in this epoch.
+	
+	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
 	"""
 	totalCheckpoints: UInt53
-	"""
-	The total number of transaction blocks in this epoch (or `null` if the epoch has not finished yet).
-	"""
-	totalTransactions: UInt53
 	"""
 	The total amount of gas fees (in MIST) that were paid in this epoch (or `null` if the epoch has not finished yet).
 	"""
@@ -205,52 +1193,55 @@ type Epoch {
 	"""
 	totalStakeSubsidies: BigInt
 	"""
-	The storage fund available in this epoch (or `null` if the epoch has not finished yet).
-	This fund is used to redistribute storage fees from past transactions to future validators.
+	The total number of transaction blocks in this epoch (or `null` if the epoch has not finished yet).
 	"""
-	fundSize: BigInt
+	totalTransactions: UInt53
 	"""
-	The difference between the fund inflow and outflow, representing the net amount of storage fees accumulated in this epoch (or `null` if the epoch has not finished yet).
+	The transactions in this epoch, optionally filtered by transaction filters.
+	
+	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
 	"""
-	netInflow: BigInt
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 	"""
-	The storage fees paid for transactions executed during the epoch (or `null` if the epoch has not finished yet).
+	Validator-related properties, including the active validators.
 	"""
-	fundInflow: BigInt
+	validatorSet: ValidatorSet
+}
+
+type EpochConnection {
 	"""
-	The storage fee rebates paid to users who deleted the data associated with past transactions (or `null` if the epoch has not finished yet).
+	A list of edges.
 	"""
-	fundOutflow: BigInt
+	edges: [EpochEdge!]!
 	"""
-	SUI set aside to account for objects stored on-chain, at the start of the epoch.
-	This is also used for storage rebates.
+	A list of nodes.
 	"""
-	storageFund: StorageFund
+	nodes: [Epoch!]!
 	"""
-	Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
+	Information to aid in pagination.
 	"""
-	safeMode: SafeMode
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type EpochEdge {
 	"""
-	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
-	This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
+	A cursor for use in pagination
 	"""
-	systemStateVersion: UInt53
+	cursor: String!
 	"""
-	Details of the system that are decided during genesis.
+	The item at the end of the edge
 	"""
-	systemParameters: SystemParameters
-	"""
-	Parameters related to the subsidy that supplements staking rewards
-	"""
-	systemStakeSubsidy: StakeSubsidy
-	"""
-	A commitment by the committee at the end of epoch on the contents of the live object set at that time.
-	This can be used to verify state snapshots.
-	"""
-	liveObjectSetDigest: String
+	node: Epoch!
 }
 
 type Event {
+	"""
+	The Move value emitted for this event.
+	"""
+	contents: MoveValue
 	"""
 	The Base64 encoded BCS serialized bytes of the entire Event structure from sui-types.
 	This includes: package_id, transaction_module, sender, type, and contents (which itself contains the BCS-serialized Move struct data).
@@ -273,13 +1264,13 @@ type Event {
 	The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.
 	"""
 	transaction: Transaction
+	"""
+	The module containing the function that was called in the programmable transaction, that resulted in this event being emitted.
+	"""
+	transactionModule: MoveModule
 }
 
 type EventConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
 	"""
 	A list of edges.
 	"""
@@ -288,6 +1279,10 @@ type EventConnection {
 	A list of nodes.
 	"""
 	nodes: [Event!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -295,13 +1290,46 @@ An edge in a connection.
 """
 type EventEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: Event!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Event!
+}
+
+input EventFilter {
+	"""
+	Limit to events that occured strictly after the given checkpoint.
+	"""
+	afterCheckpoint: UInt53
+	"""
+	Limit to events in the given checkpoint.
+	"""
+	atCheckpoint: UInt53
+	"""
+	Limit to event that occured strictly before the given checkpoint.
+	"""
+	beforeCheckpoint: UInt53
+	"""
+	Events emitted by a particular module. An event is emitted by a particular module if some function in the module is called by a PTB and emits an event.
+	
+	Modules can be filtered by their package, or package::module. We currently do not support filtering by emitting module and event type at the same time so if both are provided in one filter, the query will error.
+	"""
+	module: String
+	"""
+	Filter on events by transaction sender address.
+	"""
+	sender: SuiAddress
+	"""
+	This field is used to specify the type of event emitted.
+	
+	Events can be filtered by their type's package, package::module, or their fully qualified type name.
+	
+	Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
+	"""
+	type: String
 }
 
 """
@@ -315,23 +1343,52 @@ type ExecutionError {
 	"""
 	abortCode: BigInt
 	"""
-	The source line number for the abort. Only populated for clever errors.
-	"""
-	sourceLineNumber: Int
-	"""
-	The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
-	"""
-	instructionOffset: Int
-	"""
-	The error's name. Only populated for clever errors.
-	"""
-	identifier: String
-	"""
 	An associated constant for the error. Only populated for clever errors.
 	
 	Constants are returned as human-readable strings when possible. Complex types are returned as Base64-encoded bytes.
 	"""
 	constant: String
+	"""
+	The function that the abort originated from. Only populated for Move aborts and primitive runtime errors that have function name information.
+	"""
+	function: MoveFunction
+	"""
+	The error's name. Only populated for clever errors.
+	"""
+	identifier: String
+	"""
+	The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
+	"""
+	instructionOffset: Int
+	"""
+	Human readable explanation of why the transaction failed.
+	
+	For Move aborts, the error message will be resolved to a human-readable form if possible, otherwise it will fall back to displaying the abort code and location.
+	"""
+	message: String!
+	"""
+	The module that the abort originated from. Only populated for Move aborts and primitive runtime errors.
+	"""
+	module: MoveModule
+	"""
+	The source line number for the abort. Only populated for clever errors.
+	"""
+	sourceLineNumber: Int
+}
+
+"""
+The execution result of a transaction, including the transaction effects and any potential errors due to signing or quorum-driving.
+"""
+type ExecutionResult {
+	"""
+	The effects of the transaction execution, if successful.
+	"""
+	effects: TransactionEffects
+	"""
+	Errors that occurred during execution (e.g., network errors, validation failures).
+	These are distinct from execution failures within the transaction itself.
+	"""
+	errors: [String!]
 }
 
 """
@@ -364,6 +1421,16 @@ type FeatureFlag {
 
 
 """
+Access to the gas inputs, after they have been smashed into one coin. The gas coin can only be used by reference, except for with `TransferObjectsTransaction` that can accept it by value.
+"""
+type GasCoin {
+	"""
+	Placeholder field (gas coin has no additional data)
+	"""
+	_: Boolean
+}
+
+"""
 Summary of charges from transactions.
 
 Storage is charged in three parts -- `storage_cost`, `-storage_rebate`, and `non_refundable_storage_fee` -- independently of `computation_cost`.
@@ -376,6 +1443,10 @@ type GasCostSummary {
 	"""
 	computationCost: UInt53
 	"""
+	Amount that is retained by the system in the storage fund from the cost of the previous versions of objects being mutated or deleted.
+	"""
+	nonRefundableStorageFee: UInt53
+	"""
 	Cost for storage at the time the transaction is executed, calculated as the size of the objects being mutated in bytes multiplied by a storage cost per byte (part of the protocol).
 	"""
 	storageCost: UInt53
@@ -383,10 +1454,6 @@ type GasCostSummary {
 	Amount the user gets back from the storage cost of the previous versions of objects being mutated or deleted.
 	"""
 	storageRebate: UInt53
-	"""
-	Amount that is retained by the system in the storage fund from the cost of the previous versions of objects being mutated or deleted.
-	"""
-	nonRefundableStorageFee: UInt53
 }
 
 """
@@ -405,14 +1472,6 @@ type GasEffects {
 
 type GasInput {
 	"""
-	Address of the owner of the gas object(s) used.
-	"""
-	gasSponsor: Address
-	"""
-	An unsigned integer specifying the number of native tokens per gas unit this transaction will pay (in MIST).
-	"""
-	gasPrice: BigInt
-	"""
 	The maximum SUI that can be expended by executing this transaction
 	"""
 	gasBudget: BigInt
@@ -420,6 +1479,24 @@ type GasInput {
 	Objects used to pay for a transaction's execution and storage
 	"""
 	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
+	"""
+	An unsigned integer specifying the number of native tokens per gas unit this transaction will pay (in MIST).
+	"""
+	gasPrice: BigInt
+	"""
+	Address of the owner of the gas object(s) used.
+	"""
+	gasSponsor: Address
+}
+
+"""
+System transaction that initializes the network and writes the initial set of objects on-chain.
+"""
+type GenesisTransaction {
+	"""
+	Objects to be created during genesis.
+	"""
+	objects(first: Int, after: String, last: Int, before: String): ObjectConnection
 }
 
 """
@@ -429,21 +1506,117 @@ An address uniquely represents either the public key of an account, or an object
 """
 interface IAddressable {
 	address: SuiAddress!
+	"""
+	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	
+	If the address does not own any coins of that type, a balance of zero is returned.
+	"""
+	balance(coinType: String!): Balance
+	"""
+	Total balance across coins owned by this address, grouped by coin type.
+	"""
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
+	"""
+	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	
+	Returns `null` when no checkpoint is set in scope (e.g. execution scope). If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	"""
+	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Objects owned by this address, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
 }
 
+
+"""
+Interface implemented by all GraphQL types that represent a Move datatype definition (either a struct or an enum definition).
+
+This interface is used to provide a way to access fields that are shared by both structs and enums, e.g., the module that the datatype belongs to, the name of the datatype, type parameters etc.
+"""
+interface IMoveDatatype {
+	"""
+	Abilities on this datatype definition.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	The module that this datatype is defined in
+	"""
+	module: MoveModule!
+	"""
+	The datatype's unqualified name
+	"""
+	name: String!
+	"""
+	Constraints on the datatype's formal type parameters
+	
+	Move bytecode does not name type parameters, so when they are referenced (e.g. in field types), they are identified by their index in this list.
+	"""
+	typeParameters: [MoveDatatypeTypeParameter!]
+}
+
+"""
+Interface implemented by types that represent a Move object on-chain (A Move value whose type has `key`).
+"""
+interface IMoveObject {
+	"""
+	The structured representation of the object's contents.
+	"""
+	contents: MoveValue
+	"""
+	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Dynamic fields and dynamic object fields owned by this object.
+	
+	Dynamic fields on wrapped objects can be accessed using `Address.dynamicFields`.
+	"""
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	"""
+	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
+	
+	Both these operations require the object to have both the `key` and `store` abilities.
+	"""
+	hasPublicTransfer: Boolean
+	"""
+	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
+	"""
+	moveObjectBcs: Base64
+	"""
+	Access dynamic fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Access dynamic object fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicObjectFields(keys: [DynamicFieldName!]!): [DynamicField]!
+}
 
 """
 Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
 """
 interface IObject {
 	"""
-	The version of this object that this content comes from.
-	"""
-	version: UInt53!
-	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
-	digest: String!
+	digest: String
 	"""
 	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
 	"""
@@ -461,121 +1634,540 @@ interface IObject {
 	"""
 	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
 	"""
+	The object's owner kind.
+	"""
+	owner: Owner
+	"""
 	The transaction that created this version of the object
 	"""
 	previousTransaction: Transaction
+	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
+	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+	"""
+	storageRebate: BigInt
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53
+}
+
+"""
+Object is accessible to all addresses, and is immutable.
+"""
+type Immutable {
+	_: Boolean
+}
+
+type Input {
+	"""
+	The index of the input.
+	"""
+	ix: Int
 }
 
 
 """
-A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
+Arbitrary JSON data.
 """
-type MovePackage implements IAddressable & IObject {
+scalar JSON
+
+"""
+Information used by a package to link to a specific version of its dependency.
+"""
+type Linkage {
 	"""
-	The MovePackage's ID.
+	The ID on-chain of the first version of the dependency.
 	"""
-	address: SuiAddress!
+	originalId: SuiAddress
 	"""
-	The version of this package that this content comes from.
+	The ID on-chain of the version of the dependency that this package depends on.
 	"""
-	version: UInt53!
+	upgradedId: SuiAddress
 	"""
-	32-byte hash that identifies the package's contents, encoded in Base58.
+	The version of the dependency that this package depends on.
 	"""
-	digest: String!
-	"""
-	Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.
-	
-	If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
-	"""
-	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
-	"""
-	The Base64-encoded BCS serialization of this package, as an `Object`.
-	"""
-	objectBcs: Base64
-	"""
-	Paginate all versions of this package treated as an object, after this one.
-	"""
-	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
-	"""
-	Paginate all versions of this package treated as an object, before this one.
-	"""
-	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
-	"""
-	Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.
-	
-	If no additional bound is provided, the latest version of this package is fetched at the latest checkpoint.
-	"""
-	packageAt(version: UInt53, checkpoint: UInt53): MovePackage
-	"""
-	The Base64-encoded BCS serialization of this package, as a `MovePackage`.
-	"""
-	packageBcs: Base64
-	"""
-	Paginate all versions of this package after this one.
-	"""
-	packageVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): MovePackageConnection!
-	"""
-	Paginate all versions of this package before this one.
-	"""
-	packageVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): MovePackageConnection!
-	"""
-	The transaction that created this version of the object.
-	"""
-	previousTransaction: Transaction
+	version: UInt53
 }
 
-type MovePackageConnection {
+"""
+Create a vector (can be empty).
+"""
+type MakeMoveVecCommand {
+	"""
+	The values to pack into the vector, all of the same type.
+	"""
+	elements: [TransactionArgument!]
+	"""
+	If the elements are not objects, or the vector is empty, a type must be supplied.
+	"""
+	type: MoveType
+}
+
+"""
+Merges `coins` into the first `coin` (produces no results).
+"""
+type MergeCoinsCommand {
+	"""
+	The coin to merge into.
+	"""
+	coin: TransactionArgument
+	"""
+	The coins to be merged.
+	"""
+	coins: [TransactionArgument!]!
+}
+
+"""
+Abilities are keywords in Sui Move that define how types behave at the compiler level.
+"""
+enum MoveAbility {
+	"""
+	Enables values to be copied.
+	"""
+	COPY
+	"""
+	Enables values to be popped/dropped.
+	"""
+	DROP
+	"""
+	Enables values to be held directly in global storage.
+	"""
+	KEY
+	"""
+	Enables values to be held inside a struct in global storage.
+	"""
+	STORE
+}
+
+type MoveCallCommand {
+	"""
+	The actual function parameters passed in for this move call.
+	"""
+	arguments: [TransactionArgument!]!
+	"""
+	The function being called.
+	"""
+	function: MoveFunction!
+}
+
+"""
+Description of a datatype, defined in a Move module.
+"""
+type MoveDatatype implements IMoveDatatype {
+	"""
+	Abilities on this datatype definition.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	Attempts to convert the `MoveDatatype` to a `MoveEnum`.
+	"""
+	asMoveEnum: MoveEnum
+	"""
+	Attempts to convert the `MoveDatatype` to a `MoveStruct`.
+	"""
+	asMoveStruct: MoveStruct
+	"""
+	The module that this datatype is defined in.
+	"""
+	module: MoveModule!
+	"""
+	The datatype's unqualified name.
+	"""
+	name: String!
+	"""
+	Constraints on the datatype's formal type parameters.
+	
+	Move bytecode does not name type parameters, so when they are referenced (e.g. in field types), they are identified by their index in this list.
+	"""
+	typeParameters: [MoveDatatypeTypeParameter!]
+}
+
+type MoveDatatypeConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [MoveDatatypeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveDatatype!]!
 	"""
 	Information to aid in pagination.
 	"""
 	pageInfo: PageInfo!
-	"""
-	A list of edges.
-	"""
-	edges: [MovePackageEdge!]!
-	"""
-	A list of nodes.
-	"""
-	nodes: [MovePackage!]!
 }
 
 """
 An edge in a connection.
 """
-type MovePackageEdge {
-	"""
-	The item at the end of the edge
-	"""
-	node: MovePackage!
+type MoveDatatypeEdge {
 	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveDatatype!
 }
 
 """
-An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
-
-Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
+Declaration of a type parameter on a Move struct.
 """
-type Object implements IAddressable & IObject {
+type MoveDatatypeTypeParameter {
 	"""
-	The Object's ID.
+	Ability constraints on this type parameter.
+	"""
+	constraints: [MoveAbility!]!
+	"""
+	Whether this type parameter is marked `phantom` or not.
+	
+	Phantom type parameters are not referenced in the struct's fields.
+	"""
+	isPhantom: Boolean!
+}
+
+"""
+Description of an enum type, defined in a Move module.
+"""
+type MoveEnum implements IMoveDatatype {
+	"""
+	Abilities on this enum definition.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	The module that this enum is defined in.
+	"""
+	module: MoveModule!
+	"""
+	The enum's unqualified name.
+	"""
+	name: String!
+	"""
+	Constraints on the enum's formal type parameters.
+	
+	Move bytecode does not name type parameters, so when they are referenced (e.g. in field types), they are identified by their index in this list.
+	"""
+	typeParameters: [MoveDatatypeTypeParameter!]
+	"""
+	The names and fields of the enum's variants
+	
+	Field types reference type parameters by their index in the defining enum's `typeParameters` list.
+	"""
+	variants: [MoveEnumVariant!]
+}
+
+type MoveEnumConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [MoveEnumEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveEnum!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveEnumEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveEnum!
+}
+
+type MoveEnumVariant {
+	"""
+	The names and types of the variant's fields.
+	
+	Field types reference type parameters by their index in the defining struct's `typeParameters` list.
+	"""
+	fields: [MoveField!]
+	"""
+	The variant's name.
+	"""
+	name: String
+}
+
+type MoveField {
+	"""
+	The field's name.
+	"""
+	name: String
+	"""
+	The field's type.
+	
+	This type can reference type parameters introduced by the defining struct (see `typeParameters`).
+	"""
+	type: OpenMoveType
+}
+
+"""
+A function defined in a Move module.
+"""
+type MoveFunction {
+	"""
+	Whether the function is marked `entry` or not.
+	"""
+	isEntry: Boolean
+	"""
+	The module that this function is defined in.
+	"""
+	module: MoveModule!
+	"""
+	The function's unqualified name.
+	"""
+	name: String!
+	"""
+	The function's parameter types. These types can reference type parameters introduced by this function (see `typeParameters`).
+	"""
+	parameters: [OpenMoveType!]
+	"""
+	The function's return types. There can be multiple because functions in Move can return multiple values. These types can reference type parameters introduced by this function (see `typeParameters`).
+	"""
+	return: [OpenMoveType!]
+	"""
+	Constraints on the function's formal type parameters.
+	
+	Move bytecode does not name type parameters, so when they are referenced (e.g. in parameter and return types), they are identified by their index in this list.
+	"""
+	typeParameters: [MoveFunctionTypeParameter!]
+	"""
+	The function's visibility: `public`, `public(friend)`, or `private`.
+	"""
+	visibility: MoveVisibility
+}
+
+type MoveFunctionConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [MoveFunctionEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveFunction!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveFunctionEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveFunction!
+}
+
+"""
+Declaration of a type parameter on a Move function.
+"""
+type MoveFunctionTypeParameter {
+	"""
+	Ability constraints on this type parameter.
+	"""
+	constraints: [MoveAbility!]!
+}
+
+"""
+Modules are a unit of code organization in Move.
+
+Modules belong to packages, and contain type and function definitions.
+"""
+type MoveModule {
+	"""
+	Base64 encoded bytes of the serialized CompiledModule.
+	"""
+	bytes: Base64
+	"""
+	The datatype (struct or enum) named `name` in this module.
+	"""
+	datatype(name: String!): MoveDatatype
+	"""
+	Paginate through this module's datatype definitions.
+	"""
+	datatypes(first: Int, after: String, last: Int, before: String): MoveDatatypeConnection
+	"""
+	Textual representation of the module's bytecode.
+	"""
+	disassembly: String
+	"""
+	The enum named `name` in this module.
+	"""
+	enum(name: String!): MoveEnum
+	"""
+	Paginate through this module's enum definitions.
+	"""
+	enums(first: Int, after: String, last: Int, before: String): MoveEnumConnection
+	"""
+	Bytecode format version.
+	"""
+	fileFormatVersion: Int
+	"""
+	Modules that this module considers friends. These modules can call `public(package)` functions in this module.
+	"""
+	friends(first: Int, after: String, last: Int, before: String): MoveModuleConnection
+	"""
+	The function named `name` in this module.
+	"""
+	function(name: String!): MoveFunction
+	"""
+	Paginate through this module's function definitions.
+	"""
+	functions(first: Int, after: String, last: Int, before: String): MoveFunctionConnection
+	"""
+	The module's unqualified name.
+	"""
+	name: String!
+	"""
+	The package that this module was defined in.
+	"""
+	package: MovePackage
+	"""
+	The struct named `name` in this module.
+	"""
+	struct(name: String!): MoveStruct
+	"""
+	Paginate through this module's struct definitions.
+	"""
+	structs(first: Int, after: String, last: Int, before: String): MoveStructConnection
+}
+
+type MoveModuleConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [MoveModuleEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveModule!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveModuleEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveModule!
+}
+
+"""
+A MoveObject is a kind of Object that reprsents data stored on-chain.
+"""
+type MoveObject implements IAddressable & IMoveObject & IObject {
+	"""
+	The MoveObject's ID.
 	"""
 	address: SuiAddress!
 	"""
-	The version of this object that this content comes from.
+	Attempts to convert the object into a CoinMetadata.
 	"""
-	version: UInt53!
+	asCoinMetadata: CoinMetadata
+	"""
+	Attempts to convert the object into a DynamicField.
+	"""
+	asDynamicField: DynamicField
+	"""
+	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	
+	If the address does not own any coins of that type, a balance of zero is returned.
+	"""
+	balance(coinType: String!): Balance
+	"""
+	Total balance across coins owned by this address, grouped by coin type.
+	"""
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The structured representation of the object's contents.
+	"""
+	contents: MoveValue
+	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
-	digest: String!
+	digest: String
 	"""
-	Attempts to convert the object into a MovePackage.
+	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
 	"""
-	asMovePackage: MovePackage
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Dynamic fields owned by this object.
+	
+	Dynamic fields on wrapped objects can be accessed using `Address.dynamicFields`.
+	"""
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	"""
+	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
+	
+	Both these operations require the object to have both the `key` and `store` abilities.
+	"""
+	hasPublicTransfer: Boolean
+	"""
+	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
+	"""
+	moveObjectBcs: Base64
+	"""
+	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	
+	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	"""
+	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access dynamic fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Access dynamic object fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicObjectFields(keys: [DynamicFieldName!]!): [DynamicField]!
 	"""
 	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
 	
@@ -589,15 +2181,530 @@ type Object implements IAddressable & IObject {
 	"""
 	Paginate all versions of this object after this one.
 	"""
-	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
 	"""
 	Paginate all versions of this object before this one.
 	"""
-	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
+	"""
+	Objects owned by this object, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	The object's owner kind.
+	"""
+	owner: Owner
 	"""
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
+	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+	"""
+	storageRebate: BigInt
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53
+}
+
+type MoveObjectConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [MoveObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveObject!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveObjectEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveObject!
+}
+
+"""
+A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
+"""
+type MovePackage implements IAddressable & IObject {
+	"""
+	The MovePackage's ID.
+	"""
+	address: SuiAddress!
+	"""
+	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	
+	If the address does not own any coins of that type, a balance of zero is returned.
+	"""
+	balance(coinType: String!): Balance
+	"""
+	Total balance across coins owned by this address, grouped by coin type.
+	"""
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
+	"""
+	32-byte hash that identifies the package's contents, encoded in Base58.
+	"""
+	digest: String
+	"""
+	The transitive dependencies of this package.
+	"""
+	linkage: [Linkage!]
+	"""
+	The module named `name` in this package.
+	"""
+	module(name: String!): MoveModule
+	"""
+	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module name, followed by module bytes), in alphabetic order by module name.
+	"""
+	moduleBcs: Base64
+	"""
+	Paginate through this package's modules.
+	"""
+	modules(first: Int, after: String, last: Int, before: String): MoveModuleConnection
+	"""
+	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	
+	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	"""
+	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.
+	
+	If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
+	"""
+	The Base64-encoded BCS serialization of this package, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	Paginate all versions of this package treated as an object, after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
+	"""
+	Paginate all versions of this package treated as an object, before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
+	"""
+	Objects owned by this package, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	The object's owner kind.
+	"""
+	owner: Owner
+	"""
+	Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.
+	
+	If no additional bound is provided, the latest version of this package is fetched at the latest checkpoint.
+	"""
+	packageAt(version: UInt53, checkpoint: UInt53): MovePackage
+	"""
+	The Base64-encoded BCS serialization of this package, as a `MovePackage`.
+	"""
+	packageBcs: Base64
+	"""
+	Paginate all versions of this package after this one.
+	"""
+	packageVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): MovePackageConnection
+	"""
+	Paginate all versions of this package before this one.
+	"""
+	packageVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): MovePackageConnection
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
+	"""
+	The transactions that sent objects to this object.
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
+	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+	"""
+	storageRebate: BigInt
+	"""
+	A table identifying which versions of a package introduced each of its types.
+	"""
+	typeOrigins: [TypeOrigin!]
+	"""
+	The version of this package that this content comes from.
+	"""
+	version: UInt53
+}
+
+type MovePackageConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [MovePackageEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MovePackage!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type MovePackageEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MovePackage!
+}
+
+"""
+Description of a struct type, defined in a Move module.
+"""
+type MoveStruct implements IMoveDatatype {
+	"""
+	Abilities on this struct definition.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	The names and types of the struct's fields.
+	
+	Field types reference type parameters by their index in the defining struct's `typeParameters` list.
+	"""
+	fields: [MoveField!]
+	"""
+	The module that this struct is defined in.
+	"""
+	module: MoveModule!
+	"""
+	The struct's unqualified name.
+	"""
+	name: String!
+	"""
+	Constraints on the struct's formal type parameters.
+	
+	Move bytecode does not name type parameters, so when they are referenced (e.g. in field types), they are identified by their index in this list.
+	"""
+	typeParameters: [MoveDatatypeTypeParameter!]
+}
+
+type MoveStructConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [MoveStructEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveStruct!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveStructEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveStruct!
+}
+
+"""
+Represents instances of concrete types (no type parameters, no references).
+"""
+type MoveType {
+	"""
+	The abilities this concrete type has. Returns no abilities if the type is invalid.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	Structured representation of the "shape" of values that match this type. May return no
+	layout if the type is invalid.
+	"""
+	layout: MoveTypeLayout
+	"""
+	Flat representation of the type signature, as a displayable string.
+	"""
+	repr: String!
+	"""
+	Structured representation of the type signature.
+	"""
+	signature: MoveTypeSignature!
+}
+
+"""
+The shape of a concrete Move Type (a type with all its type parameters instantiated with concrete types), corresponding to the following recursive type:
+
+type MoveTypeLayout =
+    "address"
+  | "bool"
+  | "u8" | "u16" | ... | "u256"
+  | { vector: MoveTypeLayout }
+  | {
+      struct: {
+        type: string,
+        fields: [{ name: string, layout: MoveTypeLayout }],
+      }
+    }
+  | { enum: [{
+          type: string,
+          variants: [{
+              name: string,
+              fields: [{ name: string, layout: MoveTypeLayout }],
+          }]
+      }]
+  }
+"""
+scalar MoveTypeLayout
+
+"""
+The signature of a concrete Move Type (a type with all its type parameters instantiated with concrete types, that contains no references), corresponding to the following recursive type:
+
+type MoveTypeSignature =
+    "address"
+  | "bool"
+  | "u8" | "u16" | ... | "u256"
+  | { vector: MoveTypeSignature }
+  | {
+      datatype: {
+        package: string,
+        module: string,
+        type: string,
+        typeParameters: [MoveTypeSignature],
+      }
+    }
+"""
+scalar MoveTypeSignature
+
+type MoveValue {
+	"""
+	The BCS representation of this value, Base64-encoded.
+	"""
+	bcs: Base64
+	"""
+	A rendered JSON blob based on an on-chain template, substituted with data from this value.
+	
+	Returns `null` if the value's type does not have an associated `Display` template.
+	"""
+	display: Display
+	"""
+	Representation of a Move value in JSON, where:
+	
+	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
+	- Bools are represented by JSON boolean literals.
+	- u8, u16, and u32 are represented as JSON numbers.
+	- u64, u128, and u256 are represented as JSON strings.
+	- Balances, Strings, and Urls are represented as JSON strings.
+	- Vectors of bytes are represented as Base64 blobs, and other vectors are represented by JSON arrays.
+	- Structs are represented by JSON objects.
+	- Enums are represented by JSON objects, with a field named `@variant` containing the variant name.
+	- Empty optional values are represented by `null`.
+	"""
+	json: JSON
+	"""
+	The value's type.
+	"""
+	type: MoveType
+}
+
+"""
+The visibility modifier describes which modules can access this module member.
+
+By default, a module member can be called only within the same module.
+"""
+enum MoveVisibility {
+	"""
+	A public member can be accessed by any module.
+	"""
+	PUBLIC
+	"""
+	A private member can be accessed in the module it is defined in.
+	"""
+	PRIVATE
+	"""
+	A friend member can be accessed in the module it is defined in and any other module in its package that is explicitly specified in its friend list.
+	"""
+	FRIEND
+}
+
+"""
+A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
+"""
+type MutateConsensusStreamEnded {
+	"""
+	The ID of the consensus-managed object.
+	"""
+	address: SuiAddress
+	"""
+	The sequence number associated with the consensus stream ending.
+	"""
+	sequenceNumber: UInt53
+}
+
+"""
+Mutations are used to write to the Sui network.
+"""
+type Mutation {
+	"""
+	Execute a transaction, committing its effects on chain.
+	
+	- `transactionDataBcs` contains the BCS-encoded transaction data (Base64-encoded).
+	- `signatures` are a list of `flag || signature || pubkey` bytes, Base64-encoded.
+	
+	Waits until the transaction has reached finality on chain to return its transaction digest, or returns the error that prevented finality if that was not possible. A transaction is final when its effects are guaranteed on chain (it cannot be revoked).
+	
+	There may be a delay between transaction finality and when GraphQL requests (including the request that issued the transaction) reflect its effects. As a result, queries that depend on indexing the state of the chain (e.g. contents of output objects, address-level balance information at the time of the transaction), must wait for indexing to catch up by polling for the transaction digest using `Query.transaction`.
+	"""
+	executeTransaction(transactionDataBcs: Base64!, signatures: [Base64!]!): ExecutionResult!
+}
+
+"""
+An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
+
+Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
+"""
+type Object implements IAddressable & IObject {
+	"""
+	The Object's ID.
+	"""
+	address: SuiAddress!
+	"""
+	Attempts to convert the object into a MoveObject.
+	"""
+	asMoveObject: MoveObject
+	"""
+	Attempts to convert the object into a MovePackage.
+	"""
+	asMovePackage: MovePackage
+	"""
+	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	
+	If the address does not own any coins of that type, a balance of zero is returned.
+	"""
+	balance(coinType: String!): Balance
+	"""
+	Total balance across coins owned by this address, grouped by coin type.
+	"""
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String
+	"""
+	Access a dynamic field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic field with that name could not be found attached to this object.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Dynamic fields owned by this object.
+	"""
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	"""
+	Access a dynamic object field on an object using its type and BCS-encoded name.
+	
+	Returns `null` if a dynamic object field with that name could not be found attached to this object.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	
+	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
+	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	"""
+	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Access dynamic fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic fields that is guaranteed to be the same length as `keys`. If a dynamic field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Access dynamic object fields on an object using their types and BCS-encoded names.
+	
+	Returns a list of dynamic object fields that is guaranteed to be the same length as `keys`. If a dynamic object field in `keys` could not be found in the store, its corresponding entry in the result will be `null`.
+	"""
+	multiGetDynamicObjectFields(keys: [DynamicFieldName!]!): [DynamicField]!
+	"""
+	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
+	
+	If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
+	"""
+	The Base64-encoded BCS serialization of this object, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	Paginate all versions of this object after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
+	"""
+	Paginate all versions of this object before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
+	"""
+	Objects owned by this object, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	The object's owner kind.
+	"""
+	owner: Owner
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
+	"""
+	The transactions that sent objects to this object
+	"""
+	receivedTransactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
+	The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
+	"""
+	storageRebate: BigInt
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53
 }
 
 type ObjectChange {
@@ -606,14 +2713,6 @@ type ObjectChange {
 	"""
 	address: SuiAddress!
 	"""
-	The contents of the object immediately before the transaction.
-	"""
-	inputState: Object
-	"""
-	The contents of the object immediately after the transaction.
-	"""
-	outputState: Object
-	"""
 	Whether the ID was created in this transaction.
 	"""
 	idCreated: Boolean
@@ -621,13 +2720,17 @@ type ObjectChange {
 	Whether the ID was deleted in this transaction.
 	"""
 	idDeleted: Boolean
+	"""
+	The contents of the object immediately before the transaction.
+	"""
+	inputState: Object
+	"""
+	The contents of the object immediately after the transaction.
+	"""
+	outputState: Object
 }
 
 type ObjectChangeConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
 	"""
 	A list of edges.
 	"""
@@ -636,6 +2739,10 @@ type ObjectChangeConnection {
 	A list of nodes.
 	"""
 	nodes: [ObjectChange!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -643,20 +2750,16 @@ An edge in a connection.
 """
 type ObjectChangeEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: ObjectChange!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: ObjectChange!
 }
 
 type ObjectConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
 	"""
 	A list of edges.
 	"""
@@ -665,6 +2768,10 @@ type ObjectConnection {
 	A list of nodes.
 	"""
 	nodes: [Object!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -672,19 +2779,55 @@ An edge in a connection.
 """
 type ObjectEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: Object!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Object!
+}
+
+"""
+A filter over the live object set, the filter can be one of:
+
+- A filter on type (all live objects whose type matches that filter).
+- Fetching all objects owned by an address or object, optionally filtered by type.
+- Fetching all shared or immutable objects, filtered by type.
+"""
+input ObjectFilter {
+	"""
+	Specifies the address of the owning address or object.
+	
+	This field is required if `ownerKind` is "ADDRESS" or "OBJECT". If provided without `ownerKind`, `ownerKind` defaults to "ADDRESS".
+	"""
+	owner: SuiAddress
+	"""
+	Filter on whether the object is address-owned, object-owned, shared, or immutable.
+	
+	- If this field is set to "ADDRESS" or "OBJECT", then an owner filter must also be provided.
+	- If this field is set to "SHARED" or "IMMUTABLE", then a type filter must also be provided.
+	"""
+	ownerKind: OwnerKind
+	"""
+	Filter on the object's type.
+	
+	The filter can be one of:
+	
+	- A package address: `0x2`,
+	- A module: `0x2::coin`,
+	- A fully-qualified name: `0x2::coin::Coin`,
+	- A type instantiation: `0x2::coin::Coin<0x2::sui::SUI>`.
+	"""
+	type: String
 }
 
 """
 Identifies a specific version of an object.
 
 The `address` field must be specified, as well as at most one of `version`, `rootVersion`, or `atCheckpoint`. If none are provided, the object is fetched at the current checkpoint.
+
+Specifying a `version` or a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
 
 See `Query.object` for more details.
 """
@@ -694,11 +2837,11 @@ input ObjectKey {
 	"""
 	address: SuiAddress!
 	"""
-	If specified, tries to fetch the object at this exact version.
+	If specified, tries to fetch the latest version as of this checkpoint. Fails if the checkpoint is later than the RPC's latest checkpoint.
 	"""
-	version: UInt53
+	atCheckpoint: UInt53
 	"""
-	If specified, tries to fetch the latest version of the object at or before this version.
+	If specified, tries to fetch the latest version of the object at or before this version. Nested dynamic field accesses will also be subject to this bound.
 	
 	This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
 	
@@ -708,9 +2851,117 @@ input ObjectKey {
 	"""
 	rootVersion: UInt53
 	"""
-	If specified, tries to fetch the latest version as of this checkpoint. Fails if the checkpoint is later than the RPC's latest checkpoint.
+	If specified, tries to fetch the object at this exact version.
 	"""
-	atCheckpoint: UInt53
+	version: UInt53
+}
+
+"""
+Object is exclusively owned by a single object, and is mutable. Note that the owning object may be inaccessible because it is wrapped.
+"""
+type ObjectOwner {
+	"""
+	The owner's address.
+	"""
+	address: Address
+}
+
+"""
+Represents types that could contain references or free type parameters.  Such types can appear
+as function parameters, in fields of structs, or as actual type parameter.
+"""
+type OpenMoveType {
+	"""
+	Flat representation of the type signature, as a displayable string.
+	"""
+	repr: String!
+	"""
+	Structured representation of the type signature.
+	"""
+	signature: OpenMoveTypeSignature!
+}
+
+"""
+The shape of an abstract Move Type (a type that can contain free type parameters, and can optionally be taken by reference), corresponding to the following recursive type:
+
+type OpenMoveTypeSignature = {
+  ref: ("&" | "&mut")?,
+  body: OpenMoveTypeSignatureBody,
+}
+
+type OpenMoveTypeSignatureBody =
+    "address"
+  | "bool"
+  | "u8" | "u16" | ... | "u256"
+  | { vector: OpenMoveTypeSignatureBody }
+  | {
+      datatype {
+        package: string,
+        module: string,
+        type: string,
+        typeParameters: [OpenMoveTypeSignatureBody]
+      }
+    }
+  | { typeParameter: number }
+"""
+scalar OpenMoveTypeSignature
+
+"""
+Placeholder for unimplemented command types
+"""
+type OtherCommand {
+	"""
+	Placeholder field for unimplemented commands
+	"""
+	_: Boolean
+}
+
+"""
+A Move object, either immutable, or owned mutable.
+"""
+type OwnedOrImmutable {
+	object: Object
+}
+
+"""
+The object's owner kind.
+"""
+union Owner = AddressOwner | ObjectOwner | Shared | Immutable | ConsensusAddressOwner
+
+"""
+Filter on who owns an object.
+"""
+enum OwnerKind {
+	"""
+	Object is owned by an address.
+	"""
+	ADDRESS
+	"""
+	Object is a child of another object (e.g. a dynamic field or dynamic object field).
+	"""
+	OBJECT
+	"""
+	Object is shared among multiple owners.
+	"""
+	SHARED
+	"""
+	Object is frozen.
+	"""
+	IMMUTABLE
+}
+
+"""
+Filter for paginating packages published within a range of checkpoints.
+"""
+input PackageCheckpointFilter {
+	"""
+	Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
+	"""
+	afterCheckpoint: UInt53
+	"""
+	Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
+	"""
+	beforeCheckpoint: UInt53
 }
 
 """
@@ -726,13 +2977,13 @@ input PackageKey {
 	"""
 	address: SuiAddress!
 	"""
-	If specified, tries to fetch the package at this exact version.
-	"""
-	version: UInt53
-	"""
 	If specified, tries to fetch the latest version as of this checkpoint.
 	"""
 	atCheckpoint: UInt53
+	"""
+	If specified, tries to fetch the package at this exact version.
+	"""
+	version: UInt53
 }
 
 """
@@ -740,21 +2991,53 @@ Information about pagination in a connection
 """
 type PageInfo {
 	"""
-	When paginating backwards, are there more items?
+	When paginating forwards, the cursor to continue.
 	"""
-	hasPreviousPage: Boolean!
+	endCursor: String
 	"""
 	When paginating forwards, are there more items?
 	"""
 	hasNextPage: Boolean!
 	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
 	When paginating backwards, the cursor to continue.
 	"""
 	startCursor: String
+}
+
+type PerEpochConfig {
 	"""
-	When paginating forwards, the cursor to continue.
+	The per-epoch configuration object as of when the transaction was executed.
 	"""
-	endCursor: String
+	object: Object
+}
+
+"""
+ProgrammableSystemTransaction is identical to ProgrammableTransaction, but GraphQL does not allow multiple variants with the same type.
+"""
+type ProgrammableSystemTransaction {
+	"""
+	The transaction commands, executed sequentially.
+	"""
+	commands(first: Int, after: String, last: Int, before: String): CommandConnection
+	"""
+	Input objects or primitive values.
+	"""
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection
+}
+
+type ProgrammableTransaction {
+	"""
+	The transaction commands, executed sequentially.
+	"""
+	commands(first: Int, after: String, last: Int, before: String): CommandConnection
+	"""
+	Input objects or primitive values.
+	"""
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection
 }
 
 """
@@ -777,7 +3060,6 @@ Constants that control how the chain operates.
 These can only change during protocol upgrades which happen on epoch boundaries. Configuration is split into feature flags (which are just booleans), and configs which can take any value (including no value at all), and will be represented by a string.
 """
 type ProtocolConfigs {
-	protocolVersion: UInt53!
 	"""
 	Query for the value of the configuration with name `key`.
 	"""
@@ -794,13 +3076,46 @@ type ProtocolConfigs {
 	List all available feature flags and their values.
 	"""
 	featureFlags: [FeatureFlag!]!
+	protocolVersion: UInt53!
+}
+
+"""
+Publishes a Move Package.
+"""
+type PublishCommand {
+	"""
+	IDs of the transitive dependencies of the package to be published.
+	"""
+	dependencies: [SuiAddress!]
+	"""
+	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+	"""
+	modules: [Base64!]
+}
+
+"""
+BCS encoded primitive value (not an object or Move struct).
+"""
+type Pure {
+	"""
+	BCS serialized and Base64 encoded primitive value.
+	"""
+	bytes: Base64
 }
 
 type Query {
 	"""
 	Look-up an account by its SuiAddress.
+	
+	If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+	
+	- The root object of the object it is wrapped in, if it is wrapped.
+	- The root object of its owner, if it is owned by another object.
+	- The object itself, if it is not object-owned or wrapped.
+	
+	Specifying a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
 	"""
-	address(address: SuiAddress!): Address!
+	address(address: SuiAddress!, rootVersion: UInt53): Address!
 	"""
 	First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
 	"""
@@ -812,11 +3127,29 @@ type Query {
 	"""
 	checkpoint(sequenceNumber: UInt53): Checkpoint
 	"""
+	Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
+	"""
+	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection
+	"""
+	Fetch the CoinMetadata for a given coin type.
+	
+	Returns `null` if no CoinMetadata object exists for the given coin type.
+	"""
+	coinMetadata(coinType: String!): CoinMetadata
+	"""
 	Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
 	
 	Returns `null` if the epoch does not exist yet, or was pruned.
 	"""
 	epoch(epochId: UInt53): Epoch
+	"""
+	Paginate epochs that are in the network.
+	"""
+	epochs(first: Int, after: String, last: Int, before: String): EpochConnection
+	"""
+	Paginate events that are emitted in the network, optionally filtered by event filters.
+	"""
+	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	"""
 	Fetch checkpoints by their sequence numbers.
 	
@@ -842,27 +3175,37 @@ type Query {
 	"""
 	multiGetPackages(keys: [PackageKey!]!): [MovePackage]!
 	"""
-	Fetch transactions by their digests.
-	
-	Returns a list of transactions that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction never existed, or because it was pruned.
-	"""
-	multiGetTransactions(keys: [String!]!): [Transaction]!
-	"""
 	Fetch transaction effects by their transactions' digests.
 	
 	Returns a list of transaction effects that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction effects never existed, or because it was pruned.
 	"""
 	multiGetTransactionEffects(keys: [String!]!): [TransactionEffects]!
 	"""
+	Fetch transactions by their digests.
+	
+	Returns a list of transactions that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction never existed, or because it was pruned.
+	"""
+	multiGetTransactions(keys: [String!]!): [Transaction]!
+	"""
+	Fetch types by their string representations.
+	
+	Types are canonicalized: In the input they can be at any package address at or after the package that first defines them, and in the output they will be relocated to the package that first defines them.
+	
+	Returns a list of types that is guaranteed to be the same length as `keys`. If a type in `keys` could not be found, its corresponding entry in the result will be `null`.
+	"""
+	multiGetTypes(keys: [String!]!): [MoveType]!
+	"""
 	Fetch an object by its address.
 	
 	If `version` is specified, the object will be fetched at that exact version.
 	
-	If `rootVersion` is specified, the object will be fetched at the latest version at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+	If `rootVersion` is specified, the object will be fetched at the latest version at or before this version. Nested dynamic field accesses will also be subject to this bound. This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
 	
 	- The root object of the object it is wrapped in, if it is wrapped.
 	- The root object of its owner, if it is owned by another object.
 	- The object itself, if it is not object-owned or wrapped.
+	
+	Specifying a `version` or a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
 	
 	If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
 	
@@ -878,6 +3221,14 @@ type Query {
 	"""
 	objectVersions(first: Int, after: String, last: Int, before: String, address: SuiAddress!, filter: VersionFilter): ObjectConnection
 	"""
+	Paginate objects in the live object set, optionally filtered by owner and/or type. `filter` can be one of:
+	
+	- A filter on type (all live objects whose type matches that filter).
+	- Fetching all objects owned by an address or object, optionally filtered by type.
+	- Fetching all shared or immutable objects, filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter!): ObjectConnection
+	"""
 	Fetch a package by its address.
 	
 	If `version` is specified, the package loaded is the one that shares its original ID with the package at `address`, but whose version is `version`.
@@ -892,15 +3243,15 @@ type Query {
 	"""
 	package(address: SuiAddress!, version: UInt53, atCheckpoint: UInt53): MovePackage
 	"""
-	Paginate all packages published on-chain, optionally bounded to packages published strictly after `filter.afterCheckpoint` and/or strictly before `filter.beforeCheckpoint`.
-	"""
-	packages(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): MovePackageConnection
-	"""
 	Paginate all versions of a package at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
 	
 	Different versions of a package will have different object IDs, unless they are system packages, but will share the same original ID.
 	"""
 	packageVersions(first: Int, after: String, last: Int, before: String, address: SuiAddress!, filter: VersionFilter): MovePackageConnection
+	"""
+	Paginate all packages published on-chain, optionally bounded to packages published strictly after `filter.afterCheckpoint` and/or strictly before `filter.beforeCheckpoint`.
+	"""
+	packages(first: Int, after: String, last: Int, before: String, filter: PackageCheckpointFilter): MovePackageConnection
 	"""
 	Fetch the protocol config by protocol version, or the latest protocol config used on chain if no version is provided.
 	"""
@@ -909,6 +3260,22 @@ type Query {
 	Configuration for this RPC service.
 	"""
 	serviceConfig: ServiceConfig!
+	"""
+	Simulate a transaction to preview its effects without executing it on chain.
+	
+	Accepts a JSON transaction matching the [Sui gRPC API schema](https://docs.sui.io/references/fullnode-protocol#sui-rpc-v2-Transaction).
+	The JSON format allows for partial transaction specification where certain fields can be automatically resolved by the server.
+	
+	Alternatively, for already serialized transactions, you can pass BCS-encoded data:
+	`{"bcs": {"value": "<base64>"}}`
+	
+	Unlike `executeTransaction`, this does not require signatures since the transaction is not committed to the blockchain. This allows for previewing transaction effects, estimating gas costs, and testing transaction logic without spending gas or requiring valid signatures.
+	"""
+	simulateTransaction(transaction: JSON!): SimulationResult!
+	"""
+	Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
+	"""
+	suinsName(address: String!, rootVersion: UInt53): Address
 	"""
 	Fetch a transaction by its digest.
 	
@@ -924,7 +3291,93 @@ type Query {
 	"""
 	The transactions that exist in the network, optionally filtered by transaction filters.
 	"""
-	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection!
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
+	"""
+	Fetch a structured representation of a concrete type, including its layout information.
+	
+	Types are canonicalized: In the input they can be at any package address at or after the package that first defines them, and in the output they will be relocated to the package that first defines them.
+	
+	Fails if the type is malformed, returns `null` if a type mentioned does not exist.
+	"""
+	type(type: String!): MoveType
+	"""
+	Verify a zkLogin signature os from the given `author`.
+	
+	Returns a `ZkLoginVerifyResult` where `success` is `true` and `error` is empty if the signature is valid. If the signature is invalid, `success` is `false` and `error` contains the relevant error message.
+	
+	- `bytes` are either the bytes of a serialized personal message, or `TransactionData`, Base64-encoded.
+	- `signature` is a serialized zkLogin signature, also Base64-encoded.
+	- `intentScope` indicates whether `bytes` are to be parsed as a personal message or `TransactionData`.
+	- `author` is the signer's address.
+	"""
+	verifyZkLoginSignature(bytes: Base64!, signature: Base64!, intentScope: ZkLoginIntentScope!, author: SuiAddress!): ZkLoginVerifyResult!
+}
+
+"""
+System transaction for creating the on-chain randomness state.
+"""
+type RandomnessStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
+System transaction to update the source of on-chain randomness.
+"""
+type RandomnessStateUpdateTransaction {
+	"""
+	Epoch of the randomness state update transaction.
+	"""
+	epoch: Int
+	"""
+	Updated random bytes, Base64 encoded.
+	"""
+	randomBytes: Base64
+	"""
+	The initial version of the randomness object that it was shared at.
+	"""
+	randomnessObjInitialSharedVersion: Int
+	"""
+	Randomness round of the update.
+	"""
+	randomnessRound: Int
+}
+
+"""
+A transaction that wanted to read a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
+"""
+type ReadConsensusStreamEnded {
+	"""
+	The ID of the consensus-managed object.
+	"""
+	address: SuiAddress
+	"""
+	The sequence number associated with the consensus stream ending.
+	"""
+	sequenceNumber: UInt53
+}
+
+"""
+A Move object that can be received in this transaction.
+"""
+type Receiving {
+	object: Object
+}
+
+"""
+Whether the currency is regulated or not.
+"""
+enum RegulatedState {
+	"""
+	A `DenyCap` or a `RegulatedCoinMetadata` exists for this currency.
+	"""
+	REGULATED
+	"""
+	The currency was created without a deny list.
+	"""
+	UNREGULATED
 }
 
 type SafeMode {
@@ -941,21 +3394,39 @@ type SafeMode {
 
 type ServiceConfig {
 	"""
-	Maximum time in milliseconds spent waiting for a response from fullnode after issuing a transaction to execute. Note that the transaction may still succeed even in the case of a timeout. Transactions are idempotent, so a transaction that times out should be re-submitted until the network returns a definite response (success or failure, not timeout).
+	Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.
 	"""
-	mutationTimeoutMs: Int
+	availableRange(type: String!, field: String, filters: [String!]): AvailableRange!
 	"""
-	Maximum time in milliseconds that will be spent to serve one query request.
+	Number of elements a paginated connection will return if a page size is not supplied.
+	
+	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its default page size is returned. If it does not exist or is not paginated, `null` is returned.
 	"""
-	queryTimeoutMs: Int
+	defaultPageSize(type: String!, field: String!): Int
 	"""
-	Maximum depth of a GraphQL query that can be accepted by this service.
+	Maximum output size of a disassembled MoveModule, in bytes.
 	"""
-	maxQueryDepth: Int
+	maxDisassembledModuleSize: Int
 	"""
-	The maximum number of nodes (field names) the service will accept in a single query.
+	Maximum depth of nested field access supported in display outputs.
 	"""
-	maxQueryNodes: Int
+	maxDisplayFieldDepth: Int
+	"""
+	Maximum output size of a display output.
+	"""
+	maxDisplayOutputSize: Int
+	"""
+	Maximum budget in bytes to spend when outputting a structured `MoveValue`.
+	"""
+	maxMoveValueBound: Int
+	"""
+	Maximum nesting allowed in datatype fields when calculating the layout of a single type.
+	"""
+	maxMoveValueDepth: Int
+	"""
+	Maximum number of elements that can be requested from a multi-get query. A request to fetch more keys will result in an error.
+	"""
+	maxMultiGetSize: Int
 	"""
 	Maximum number of estimated output nodes in a GraphQL response.
 	
@@ -997,31 +3468,29 @@ type ServiceConfig {
 	"""
 	maxOutputNodes: Int
 	"""
-	Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
-	
-	This is cumulative across all matching fields in a single GraphQL request.
-	"""
-	maxTransactionPayloadSize: Int
-	"""
-	Maximum size in bytes of a single GraphQL request, excluding the elements covered by `maxTransactionPayloadSize`.
-	"""
-	maxQueryPayloadSize: Int
-	"""
-	Number of elements a paginated connection will return if a page size is not supplied.
-	
-	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its default page size is returned. If it does not exist or is not paginated, `null` is returned.
-	"""
-	defaultPageSize(type: String!, field: String!): Int
-	"""
 	Maximum number of elements that can be requested from a paginated connection. A request to fetch more elements will result in an error.
 	
 	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its max page size is returned. If it does not exist or is not paginated, `null` is returned.
 	"""
 	maxPageSize(type: String!, field: String!): Int
 	"""
-	Maximum number of elements that can be requested from a multi-get query. A request to fetch more keys will result in an error.
+	Maximum depth of a GraphQL query that can be accepted by this service.
 	"""
-	maxMultiGetSize: Int
+	maxQueryDepth: Int
+	"""
+	The maximum number of nodes (field names) the service will accept in a single query.
+	"""
+	maxQueryNodes: Int
+	"""
+	Maximum size in bytes of a single GraphQL request, excluding the elements covered by `maxTransactionPayloadSize`.
+	"""
+	maxQueryPayloadSize: Int
+	"""
+	Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
+	
+	This is cumulative across all matching fields in a single GraphQL request.
+	"""
+	maxTransactionPayloadSize: Int
 	"""
 	Maximum amount of nesting among type arguments (type arguments nest when a type argument is itself generic and has arguments).
 	"""
@@ -1035,9 +3504,85 @@ type ServiceConfig {
 	"""
 	maxTypeNodes: Int
 	"""
-	Maximum nesting allowed in datatype fields when calculating the layout of a single type.
+	Maximum time in milliseconds spent waiting for a response from fullnode after issuing a transaction to execute. Note that the transaction may still succeed even in the case of a timeout. Transactions are idempotent, so a transaction that times out should be re-submitted until the network returns a definite response (success or failure, not timeout).
 	"""
-	maxMoveValueDepth: Int
+	mutationTimeoutMs: Int
+	"""
+	Maximum time in milliseconds that will be spent to serve one query request.
+	"""
+	queryTimeoutMs: Int
+}
+
+"""
+Object is shared, can be used by any address, and is mutable.
+"""
+type Shared {
+	"""
+	The version at which the object became shared.
+	"""
+	initialSharedVersion: UInt53
+}
+
+"""
+A Move object that's shared.
+"""
+type SharedInput {
+	"""
+	The address of the shared object.
+	"""
+	address: SuiAddress
+	"""
+	The version that this object was shared at.
+	"""
+	initialSharedVersion: UInt53
+	"""
+	Controls whether the transaction block can reference the shared object as a mutable reference or by value.
+	
+	This has implications for scheduling: Transactions that just read shared objects at a certain version (mutable = false) can be executed concurrently, while transactions that write shared objects (mutable = true) must be executed serially with respect to each other.
+	"""
+	mutable: Boolean
+}
+
+"""
+The result of simulating a transaction, including the predicted effects, events, and any errors.
+"""
+type SimulationResult {
+	"""
+	The predicted effects of the transaction if it were executed.
+	
+	`None` if the simulation failed due to an error.
+	"""
+	effects: TransactionEffects
+	"""
+	Error message if the simulation failed.
+	
+	`None` if the simulation was successful.
+	"""
+	error: String
+	"""
+	The events that would be emitted if the transaction were executed.
+	
+	`None` if the simulation failed or no events would be emitted.
+	"""
+	events: [Event!]
+	"""
+	The intermediate outputs for each command of the transaction simulation, including contents of mutated references and return values.
+	"""
+	outputs: [CommandResult!]
+}
+
+"""
+Splits off coins with denominations in `amounts` from `coin`, returning multiple results (as many as there are amounts.)
+"""
+type SplitCoinsCommand {
+	"""
+	The denominations to split off from the coin.
+	"""
+	amounts: [TransactionArgument!]!
+	"""
+	The coin to split.
+	"""
+	coin: TransactionArgument
 }
 
 """
@@ -1049,22 +3594,22 @@ type StakeSubsidy {
 	"""
 	balance: BigInt
 	"""
+	Amount of stake subsidy deducted from the balance per distribution -- decays over time.
+	"""
+	currentDistributionAmount: BigInt
+	"""
+	Percentage of the current distribution amount to deduct at the end of the current subsidy period, expressed in basis points.
+	"""
+	decreaseRate: Int
+	"""
 	Number of times stake subsidies have been distributed.
 	Subsidies are distributed with other staking rewards, at the end of the epoch.
 	"""
 	distributionCounter: Int
 	"""
-	Amount of stake subsidy deducted from the balance per distribution -- decays over time.
-	"""
-	currentDistributionAmount: BigInt
-	"""
 	Maximum number of stake subsidy distributions that occur with the same distribution amount (before the amount is reduced).
 	"""
 	periodLength: Int
-	"""
-	Percentage of the current distribution amount to deduct at the end of the current subsidy period, expressed in basis points.
-	"""
-	decreaseRate: Int
 }
 
 """
@@ -1072,14 +3617,24 @@ SUI set aside to account for objects stored on-chain.
 """
 type StorageFund {
 	"""
-	Sum of storage rebates of live objects on chain.
-	"""
-	totalObjectStorageRebates: BigInt
-	"""
 	The portion of the storage fund that will never be refunded through storage rebates.
 	The system maintains an invariant that the sum of all storage fees into the storage fund is equal to the sum of all storage rebates out, the total storage rebates remaining, and the non-refundable balance.
 	"""
 	nonRefundableBalance: BigInt
+	"""
+	Sum of storage rebates of live objects on chain.
+	"""
+	totalObjectStorageRebates: BigInt
+}
+
+"""
+System transaction for storing execution time observations.
+"""
+type StoreExecutionTimeObservationsTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
 }
 
 
@@ -1087,6 +3642,20 @@ type StorageFund {
 String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
 """
 scalar SuiAddress
+
+"""
+Future behavior of a currency's supply.
+"""
+enum SupplyState {
+	"""
+	The supply can only decrease.
+	"""
+	BURN_ONLY
+	"""
+	The supply can neither increase nor decrease.
+	"""
+	FIXED
+}
 
 """
 Details of the system that are decided during genesis.
@@ -1097,21 +3666,25 @@ type SystemParameters {
 	"""
 	durationMs: BigInt
 	"""
-	The epoch at which stake subsidies start being paid out.
+	The maximum number of active validators that the system supports.
 	"""
-	stakeSubsidyStartEpoch: UInt53
+	maxValidatorCount: Int
 	"""
 	The minimum number of active validators that the system supports.
 	"""
 	minValidatorCount: Int
 	"""
-	The maximum number of active validators that the system supports.
-	"""
-	maxValidatorCount: Int
-	"""
 	Minimum stake needed to become a new validator.
 	"""
 	minValidatorJoiningStake: BigInt
+	"""
+	The epoch at which stake subsidies start being paid out.
+	"""
+	stakeSubsidyStartEpoch: UInt53
+	"""
+	The number of epochs that a validator has to recover from having less than `validatorLowStakeThreshold` stake.
+	"""
+	validatorLowStakeGracePeriod: BigInt
 	"""
 	Validators with stake below this threshold will enter the grace period (see `validatorLowStakeGracePeriod`), after which they are removed from the active validator set.
 	"""
@@ -1120,10 +3693,6 @@ type SystemParameters {
 	Validators with stake below this threshold will be removed from the active validator set at the next epoch boundary, without a grace period.
 	"""
 	validatorVeryLowStakeThreshold: BigInt
-	"""
-	The number of epochs that a validator has to recover from having less than `validatorLowStakeThreshold` stake.
-	"""
-	validatorLowStakeGracePeriod: BigInt
 }
 
 """
@@ -1147,24 +3716,29 @@ type Transaction {
 	"""
 	gasInput: GasInput
 	"""
+	The type of this transaction as well as the commands and/or parameters comprising the transaction of this kind.
+	"""
+	kind: TransactionKind
+	"""
 	The address corresponding to the public key that signed this transaction. System transactions do not have senders.
 	"""
 	sender: Address
 	"""
-	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
-	"""
-	transactionBcs: Base64
-	"""
 	User signatures for this transaction.
 	"""
 	signatures: [UserSignature!]!
+	"""
+	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
+	"""
+	transactionBcs: Base64
 }
 
+"""
+An argument to a programmable transaction command.
+"""
+union TransactionArgument = GasCoin | Input | TxResult
+
 type TransactionConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
 	"""
 	A list of edges.
 	"""
@@ -1173,6 +3747,10 @@ type TransactionConnection {
 	A list of nodes.
 	"""
 	nodes: [Transaction!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
 }
 
 """
@@ -1180,13 +3758,13 @@ An edge in a connection.
 """
 type TransactionEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: Transaction!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Transaction!
 }
 
 """
@@ -1194,47 +3772,23 @@ The results of executing a transaction.
 """
 type TransactionEffects {
 	"""
-	A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
-	
-	Note that this is different from the execution digest, which is the unique hash of the transaction effects.
+	The effect this transaction had on the balances (sum of coin values per coin type) of addresses and objects.
 	"""
-	digest: String!
-	"""
-	The transaction that ran to produce these effects.
-	"""
-	transaction: Transaction
+	balanceChanges(first: Int, after: String, last: Int, before: String): BalanceChangeConnection
 	"""
 	The checkpoint this transaction was finalized in.
 	"""
 	checkpoint: Checkpoint
 	"""
-	Whether the transaction executed successfully or not.
+	Transactions whose outputs this transaction depends upon.
 	"""
-	status: ExecutionStatus
+	dependencies(first: Int, after: String, last: Int, before: String): TransactionConnection
 	"""
-	The latest version of all objects (apart from packages) that have been created or modified by this transaction, immediately following this transaction.
+	A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
+	
+	Note that this is different from the execution digest, which is the unique hash of the transaction effects.
 	"""
-	lamportVersion: UInt53
-	"""
-	Rich execution error information for failed transactions.
-	"""
-	executionError: ExecutionError
-	"""
-	Timestamp corresponding to the checkpoint this transaction was finalized in.
-	"""
-	timestamp: DateTime
-	"""
-	The epoch this transaction was finalized in.
-	"""
-	epoch: Epoch
-	"""
-	Events emitted by this transaction.
-	"""
-	events(first: Int, after: String, last: Int, before: String): EventConnection
-	"""
-	The effect this transaction had on the balances (sum of coin values per coin type) of addresses and objects.
-	"""
-	balanceChanges(first: Int, after: String, last: Int, before: String): BalanceChangeConnection
+	digest: String!
 	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
@@ -1244,34 +3798,245 @@ type TransactionEffects {
 	"""
 	effectsDigest: String
 	"""
-	The before and after state of objects that were modified by this transaction.
+	The epoch this transaction was finalized in.
 	"""
-	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection
+	epoch: Epoch
+	"""
+	Events emitted by this transaction.
+	"""
+	events(first: Int, after: String, last: Int, before: String): EventConnection
+	"""
+	Rich execution error information for failed transactions.
+	"""
+	executionError: ExecutionError
 	"""
 	Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
 	"""
 	gasEffects: GasEffects
+	"""
+	The latest version of all objects (apart from packages) that have been created or modified by this transaction, immediately following this transaction.
+	"""
+	lamportVersion: UInt53
+	"""
+	The before and after state of objects that were modified by this transaction.
+	"""
+	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection
+	"""
+	Whether the transaction executed successfully or not.
+	"""
+	status: ExecutionStatus
+	"""
+	Timestamp corresponding to the checkpoint this transaction was finalized in.
+	"""
+	timestamp: DateTime
+	"""
+	The transaction that ran to produce these effects.
+	"""
+	transaction: Transaction
+	"""
+	The unchanged consensus-managed objects that were referenced by this transaction.
+	"""
+	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection
 }
 
 input TransactionFilter {
 	"""
-	Limit to transactions that occured strictly after the given checkpoint.
+	Limit to transactions that interacted with the given address.
+	The address could be a sender, sponsor, or recipient of the transaction.
+	"""
+	affectedAddress: SuiAddress
+	"""
+	Limit to transactions that interacted with the given object.
+	The object could have been created, read, modified, deleted, wrapped, or unwrapped by the transaction.
+	Objects that were passed as a `Receiving` input are not considered to have been affected by a transaction unless they were actually received.
+	"""
+	affectedObject: SuiAddress
+	"""
+	Filter to transactions that occurred strictly after the given checkpoint.
 	"""
 	afterCheckpoint: UInt53
 	"""
-	Limit to transactions in the given checkpoint.
+	Filter to transactions in the given checkpoint.
 	"""
 	atCheckpoint: UInt53
 	"""
-	Limit to transaction that occured strictly before the given checkpoint.
+	Filter to transaction that occurred strictly before the given checkpoint.
 	"""
 	beforeCheckpoint: UInt53
+	"""
+	Filter transactions by move function called. Calls can be filtered by the `package`, `package::module`, or the `package::module::name` of their function.
+	"""
+	function: String
+	"""
+	An input filter selecting for either system or programmable transactions.
+	"""
+	kind: TransactionKindInput
+	"""
+	Limit to transactions that were sent by the given address.
+	"""
+	sentAddress: SuiAddress
+}
+
+"""
+Input argument to a Programmable Transaction Block (PTB) command.
+"""
+union TransactionInput = Pure | OwnedOrImmutable | SharedInput | Receiving
+
+type TransactionInputConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionInputEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [TransactionInput!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type TransactionInputEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: TransactionInput!
+}
+
+"""
+Different types of transactions that can be executed on the Sui network.
+"""
+union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction | ProgrammableTransaction | ProgrammableSystemTransaction
+
+"""
+An input filter selecting for either system or programmable transactions.
+"""
+enum TransactionKindInput {
+	"""
+	A system transaction can be one of several types of transactions.
+	See [unions/transaction-block-kind] for more details.
+	"""
+	SYSTEM_TX
+	"""
+	A user submitted transaction block.
+	"""
+	PROGRAMMABLE_TX
+}
+
+"""
+Transfers `inputs` to `address`. All inputs must have the `store` ability (allows public transfer) and must not be previously immutable or shared.
+"""
+type TransferObjectsCommand {
+	"""
+	The address to transfer to.
+	"""
+	address: TransactionArgument
+	"""
+	The objects to transfer.
+	"""
+	inputs: [TransactionArgument!]!
+}
+
+"""
+The result of another command.
+"""
+type TxResult {
+	"""
+	The index of the command that produced this result.
+	"""
+	cmd: Int
+	"""
+	For nested results, the index within the result.
+	"""
+	ix: Int
+}
+
+"""
+Information about which previous versions of a package introduced its types.
+"""
+type TypeOrigin {
+	"""
+	The storage ID of the package that first defined this type.
+	"""
+	definingId: SuiAddress
+	"""
+	Module defining the type.
+	"""
+	module: String
+	"""
+	Name of the struct.
+	"""
+	struct: String
 }
 
 """
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+"""
+Details pertaining to consensus-managed objects that are referenced by but not changed by a transaction.
+"""
+union UnchangedConsensusObject = ConsensusObjectRead | MutateConsensusStreamEnded | ReadConsensusStreamEnded | ConsensusObjectCancelled | PerEpochConfig
+
+type UnchangedConsensusObjectConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [UnchangedConsensusObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [UnchangedConsensusObject!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+An edge in a connection.
+"""
+type UnchangedConsensusObjectEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: UnchangedConsensusObject!
+}
+
+"""
+Upgrades a Move Package.
+"""
+type UpgradeCommand {
+	"""
+	ID of the package being upgraded.
+	"""
+	currentPackage: SuiAddress
+	"""
+	IDs of the transitive dependencies of the package to be published.
+	"""
+	dependencies: [SuiAddress!]
+	"""
+	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+	"""
+	modules: [Base64!]
+	"""
+	The `UpgradeTicket` authorizing the upgrade.
+	"""
+	upgradeTicket: TransactionArgument
+}
 
 type UserSignature {
 	"""
@@ -1280,6 +4045,140 @@ type UserSignature {
 	For complex signatures: flag || bcs_serialized_struct
 	"""
 	signatureBytes: Base64
+}
+
+type Validator implements IAddressable {
+	"""
+	The validator's address.
+	"""
+	address: SuiAddress!
+	"""
+	The number of epochs for which this validator has been below the low stake threshold.
+	"""
+	atRisk: UInt53
+	"""
+	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
+	
+	If the address does not own any coins of that type, a balance of zero is returned.
+	"""
+	balance(coinType: String!): Balance
+	"""
+	Total balance across coins owned by this address, grouped by coin type.
+	"""
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The fee charged by the validator for staking services.
+	"""
+	commissionRate: Int
+	"""
+	Validator's set of credentials such as public keys, network addresses and others.
+	"""
+	credentials: ValidatorCredentials
+	"""
+	The domain explicitly configured as the default SuiNS name for this address.
+	"""
+	defaultSuinsName: String
+	"""
+	Validator's description.
+	"""
+	description: String
+	"""
+	Number of exchange rates in the table.
+	"""
+	exchangeRatesSize: UInt53
+	"""
+	A wrapped object containing the validator's exchange rates. This is a table from epoch number to `PoolTokenExchangeRate` value.
+	The exchange rate is used to determine the amount of SUI tokens that each past SUI staker can withdraw in the future.
+	"""
+	exchangeRatesTable: Address
+	"""
+	The reference gas price for this epoch.
+	"""
+	gasPrice: BigInt
+	"""
+	Validator's url containing their custom image.
+	"""
+	imageUrl: String
+	"""
+	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
+	
+	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
+	If the address does not own any coins of a given type, a balance of zero is returned for that type.
+	"""
+	multiGetBalances(keys: [String!]!): [Balance!]
+	"""
+	Validator's name.
+	"""
+	name: String
+	"""
+	The proposed next epoch fee for the validator's staking services.
+	"""
+	nextEpochCommissionRate: Int
+	"""
+	Validator's set of credentials for the next epoch.
+	"""
+	nextEpochCredentials: ValidatorCredentials
+	"""
+	The validator's gas price quote for the next epoch.
+	"""
+	nextEpochGasPrice: BigInt
+	"""
+	The total number of SUI tokens in this pool plus the pending stake amount for this epoch.
+	"""
+	nextEpochStake: BigInt
+	"""
+	Objects owned by this object, optionally filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
+	"""
+	The validator's current valid `Cap` object. Validators can delegate the operation ability to another address.
+	The address holding this `Cap` object can then update the reference gas price and tallying rule on behalf of the validator.
+	"""
+	operationCap: MoveObject
+	"""
+	Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
+	"""
+	pendingPoolTokenWithdraw: BigInt
+	"""
+	Pending stake amount for this epoch.
+	"""
+	pendingStake: BigInt
+	"""
+	Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
+	"""
+	pendingTotalSuiWithdraw: BigInt
+	"""
+	Total number of pool tokens issued by the pool.
+	"""
+	poolTokenBalance: BigInt
+	"""
+	Validator's homepage URL.
+	"""
+	projectUrl: String
+	"""
+	Other validators this validator has reported.
+	"""
+	reportRecords(first: Int, before: String, last: Int, after: String): ValidatorConnection
+	"""
+	The epoch stake rewards will be added here at the end of each epoch.
+	"""
+	rewardsPool: BigInt
+	"""
+	The epoch at which this pool became active.
+	"""
+	stakingPoolActivationEpoch: UInt53
+	"""
+	The ID of this validator's `0x3::staking_pool::StakingPool`.
+	"""
+	stakingPoolId: SuiAddress!
+	"""
+	The total number of SUI tokens in this pool.
+	"""
+	stakingPoolSuiBalance: BigInt
+	"""
+	The voting power of this validator in basis points (e.g., 100 = 1% voting power).
+	"""
+	votingPower: Int
 }
 
 type ValidatorAggregatedSignature {
@@ -1297,19 +4196,65 @@ type ValidatorAggregatedSignature {
 	signersMap: [Int!]!
 }
 
+type ValidatorConnection {
+	"""
+	A list of edges.
+	"""
+	edges: [ValidatorEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Validator!]!
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+}
+
+"""
+The credentials related fields associated with a validator.
+"""
+type ValidatorCredentials {
+	netAddress: String
+	networkPubKey: Base64
+	p2PAddress: String
+	primaryAddress: String
+	proofOfPossession: Base64
+	protocolPubKey: Base64
+	workerAddress: String
+	workerPubKey: Base64
+}
+
+"""
+An edge in a connection.
+"""
+type ValidatorEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: Validator!
+}
+
 """
 Representation of `0x3::validator_set::ValidatorSet`.
 """
 type ValidatorSet {
 	"""
-	Total amount of stake for all active validators at the beginning of the epoch.
+	The current list of active validators.
 	"""
-	totalStake: BigInt
+	activeValidators(first: Int, after: String, last: Int, before: String): ValidatorConnection
 	"""
-	Validators that are pending removal from the active validator set, expressed as indices in
-	to `activeValidators`.
+	Object ID of the `Table` storing the inactive staking pools.
 	"""
-	pendingRemovals: [Int!]
+	inactivePoolsId: SuiAddress
+	"""
+	Size of the inactive pools `Table`.
+	"""
+	inactivePoolsSize: Int
 	"""
 	Object ID of the wrapped object `TableVec` storing the pending active validators.
 	"""
@@ -1319,9 +4264,12 @@ type ValidatorSet {
 	"""
 	pendingActiveValidatorsSize: Int
 	"""
-	Object ID of the `Table` storing the mapping from staking pool ids to the addresses
-	of the corresponding validators. This is needed because a validator's address
-	can potentially change but the object ID of its pool will not.
+	Validators that are pending removal from the active validator set, expressed as indices in to `activeValidators`.
+	"""
+	pendingRemovals: [Int!]
+	"""
+	Object ID of the `Table` storing the mapping from staking pool ids to the addresses of the corresponding validators.
+	This is needed because a validator's address can potentially change but the object ID of its pool will not.
 	"""
 	stakingPoolMappingsId: SuiAddress
 	"""
@@ -1329,13 +4277,9 @@ type ValidatorSet {
 	"""
 	stakingPoolMappingsSize: Int
 	"""
-	Object ID of the `Table` storing the inactive staking pools.
+	Total amount of stake for all active validators at the beginning of the epoch.
 	"""
-	inactivePoolsId: SuiAddress
-	"""
-	Size of the inactive pools `Table`.
-	"""
-	inactivePoolsSize: Int
+	totalStake: BigInt
 	"""
 	Object ID of the `Table` storing the validator candidates.
 	"""
@@ -1360,8 +4304,37 @@ input VersionFilter {
 	beforeVersion: UInt53
 }
 
+"""
+An enum that specifies the intent scope to be used to parse the bytes for signature verification.
+"""
+enum ZkLoginIntentScope {
+	"""
+	Indicates that the bytes are to be parsed as transaction data bytes.
+	"""
+	TRANSACTION_DATA
+	"""
+	Indicates that the bytes are to be parsed as a personal message.
+	"""
+	PERSONAL_MESSAGE
+}
+
+"""
+The result of the zkLogin signature verification.
+"""
+type ZkLoginVerifyResult {
+	"""
+	The error field capture reasons why the signature could not be verified, assuming the inputs are valid and there are no internal errors.
+	"""
+	error: String
+	"""
+	The boolean result of the verification. If true, errors should be empty.
+	"""
+	success: Boolean
+}
+
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: Query
+	mutation: Mutation
 }

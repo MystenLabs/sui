@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 
 use crate::symbols::{
     Symbols,
@@ -104,10 +104,9 @@ pub fn all_mod_functions_to_import<'a>(
                     .filter_map(move |(member_name, fdef)| {
                         if let Some(DefInfo::Function(_, visibility, ..)) =
                             symbols.def_info(&fdef.name_loc)
+                            && exclude_member_from_import(mod_defs, cursor.module, visibility)
                         {
-                            if exclude_member_from_import(mod_defs, cursor.module, visibility) {
-                                return None;
-                            }
+                            return None;
                         }
                         Some(*member_name)
                     }),
@@ -132,10 +131,9 @@ pub fn all_mod_structs_to_import<'a>(
                     .filter_map(move |(member_name, sdef)| {
                         if let Some(DefInfo::Struct(_, _, visibility, ..)) =
                             symbols.def_info(&sdef.name_loc)
+                            && exclude_member_from_import(mod_defs, cursor.module, visibility)
                         {
-                            if exclude_member_from_import(mod_defs, cursor.module, visibility) {
-                                return None;
-                            }
+                            return None;
                         }
                         Some(*member_name)
                     }),
@@ -160,10 +158,9 @@ pub fn all_mod_enums_to_import<'a>(
                     .filter_map(move |(member_name, edef)| {
                         if let Some(DefInfo::Enum(_, _, visibility, ..)) =
                             symbols.def_info(&edef.name_loc)
+                            && exclude_member_from_import(mod_defs, cursor.module, visibility)
                         {
-                            if exclude_member_from_import(mod_defs, cursor.module, visibility) {
-                                return None;
-                            }
+                            return None;
                         }
                         Some(*member_name)
                     }),
@@ -323,20 +320,25 @@ pub fn compute_cursor(
 ) {
     let cursor_info = Some((cursor_path, cursor_pos));
     let mut symbols_computation_data = SymbolsComputationData::new();
-    let mut symbols_computation_data_deps = SymbolsComputationData::new();
     // we only compute cursor context and tag it on the existing symbols to avoid spending time
     // recomputing all symbols (saves quite a bit of time when running the test suite)
+    let typed_mod_named_address_maps = compiled_pkg_info
+        .program
+        .typed_modules
+        .iter()
+        .map(|(_, _, mdef)| (mdef.loc, mdef.named_address_map.clone()))
+        .collect::<BTreeMap<_, _>>();
     let mut cursor_context = compute_symbols_pre_process(
         &mut symbols_computation_data,
-        &mut symbols_computation_data_deps,
         compiled_pkg_info,
         cursor_info,
+        &typed_mod_named_address_maps,
     );
     cursor_context = compute_symbols_parsed_program(
         &mut symbols_computation_data,
-        &mut symbols_computation_data_deps,
         compiled_pkg_info,
         cursor_context,
+        &typed_mod_named_address_maps,
     );
     symbols.cursor_context = cursor_context;
 }

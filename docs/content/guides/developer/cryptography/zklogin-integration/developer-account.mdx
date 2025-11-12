@@ -1,8 +1,10 @@
 ---
 title: Configure OpenID Providers
+description: zkLogin can be integrated with an application using an OpenID provider's OAuth Client ID and redirect URI.
+keywords: [ zklogin, how to integrate zklogin, oauth, openID, integrate openID, openID providers, open id ]
 ---
 
-To integrate zkLogin with your app, you need an OAuth client from at least one of the [available providers](#openid-providers). You use the Client ID and redirect URI from those providers in your zkLogin project. For example, the following TypeScript code constructs a Google login URL for testing.
+To integrate zkLogin with your app, you need an OAuth client from at least one of the [available providers](#openid-providers). You will use the Client ID and redirect URI from those providers in your zkLogin project. For example, the following TypeScript code constructs a Google login URL for testing.
 
 ```typescript
 const REDIRECT_URI = '<YOUR_SITE_URL>';
@@ -22,7 +24,7 @@ const loginURL = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 
 ## OpenID providers
 
-{@include: ../../../../snippets/openid-providers.mdx}
+<ImportContent source="openid-providers.mdx" mode="snippet" />
 
 ## Configuring an OpenID provider
 
@@ -32,7 +34,7 @@ Select a tab for instruction on configuring the client ID (`$CLIENT_ID` in the p
 
 <TabItem label="Google" value="google">
 
-1. Navigate a browser to the [Google Cloud dashboard](https://console.cloud.google.com/home/dashboard). Either sign in or register for a Google Cloud account.
+1. Navigate a browser to the [Google Cloud dashboard](https://console.cloud.google.com/projectselector2/home/dashboard). Either sign in or register for a Google Cloud account.
 1. Open **APIs & Services** > **Credentials** using the Google Cloud dashboard navigation. 
 
     ![1](images/google-nav.png 'Open APIs & Services > Credentials')
@@ -59,7 +61,7 @@ Your new OAuth client should now appear in the **OAuth 2.0 Client IDs** section 
 
 1. Register for a Facebook developer account and access the [dashboard](https://developers.facebook.com/apps/).
 
-1. Select "Build your app" then "Products" then "Facebook Login" where you can find the client ID. Set the redirect URL. This should be the wallet or application frontend.
+1. Select **Build your app** then **Products** then **Facebook Login** where you can find the client ID. Set the redirect URL. This should be the wallet or application frontend.
 
 ![1](../../../../concepts/cryptography/images/zklogin-facebook1.png 'Sign up for Facebook developer account')
 
@@ -75,7 +77,7 @@ _Go to Settings_
 
 1. Register for a Twitch developer account. Access the [dashboard](https://dev.twitch.tv/console).
 
-1. Go to "Register Your Application" then "Application" where you can find the client ID. Set the redirect URL. This should be the wallet or application frontend.
+1. Go to **Register Your Application** then **Application** where you can find the client ID. Set the redirect URL. This should be the wallet or application frontend.
 
 ![1](../../../../concepts/cryptography/images/zklogin-twitch1.png "Sign up for Twitch developer account")
 
@@ -95,7 +97,7 @@ _Go to Settings_
 
 *Add applications to Kakao*
 
-1. Go to "App Keys" where you can find the corresponding client ID for different platforms.
+1. Go to **App Keys** where you can find the corresponding client ID for different platforms.
 
 - Native app key: Used to call APIs through the Android or iOS SDK.
 - JavaScript key: Used to call APIs through the JavaScript SDK.
@@ -105,7 +107,7 @@ _Go to Settings_
 
 *Find client ID*
 
-1. Toggle on "Kakao Login Activation" and "OpenID Connect Activation". Set the redirect URL in "Kakao Login" under "Product Settings". This should be the wallet or application frontend.
+1. Toggle on **Kakao Login Activation** and **OpenID Connect Activation**.Set the redirect URL in **Kakao Login** under **Product Settings**.This should be the wallet or application frontend.
 
 ![1](../../../../concepts/cryptography/images/zklogin-kakao3.png "Set Redirect URL")
 
@@ -115,19 +117,19 @@ _Go to Settings_
 
 <TabItem label="Slack" value="slack">
 
-1. Register for a Slack developer account. Access the [dashboard](https://api.slack.com/apps) and go to "Create New App" then choose "From scratch".
+1. Register for a Slack developer account. Access the [dashboard](https://api.slack.com/apps) and go to **Create New App** then choose **From scratch**.
 
 	![1](../../../../concepts/cryptography/images/zklogin-slack1.png "Create app in Slack")
 
 	*Create app in Slack*
 
-1. Find the Client ID and Client Secret under "App Credentials".
+1. Find the Client ID and Client Secret under **App Credentials**.
 
 	![1](../../../../concepts/cryptography/images/zklogin-slack2.png "Find Client ID and Client Secret")
 
 	*Find Client ID and Client Secret*
 
-1. Set Redirect URL in "OAuth & Permissions" under "Features". This should be the wallet or application frontend.
+1. Set Redirect URL in **OAuth & Permissions** under **Features**. This should be the wallet or application frontend.
 
 	![1](../../../../concepts/cryptography/images/zklogin-slack3.png "Set Redirect URL")
 
@@ -208,5 +210,5 @@ _Go to Settings_
 
 ## Related links
 
-- [zkLogin Integration Guide](../zklogin-integration.mdx)
-- [zkLogin Example](./zklogin-example.mdx)
+<RelatedLink to="/guides/developer/cryptography/zklogin-integration.mdx" />
+<RelatedLink to="/guides/developer/cryptography/zklogin-integration/zklogin-example.mdx" />

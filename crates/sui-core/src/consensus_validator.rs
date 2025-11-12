@@ -7,17 +7,17 @@ use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto_tbls::dkg_v1;
 use mysten_metrics::monitored_scope;
-use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use prometheus::{IntCounter, Registry, register_int_counter_with_registry};
 use sui_types::{
-    error::{SuiError, SuiResult},
+    error::{SuiError, SuiErrorKind, SuiResult},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
     transaction::Transaction,
 };
 use tap::TapFallible;
-use tracing::{debug, info, warn};
+use tracing::{info, instrument, warn};
 
 use crate::{
-    authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityState},
+    authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
     checkpoints::CheckpointServiceNotify,
     consensus_adapter::ConsensusOverloadChecker,
 };
@@ -66,16 +66,30 @@ impl SuiTxValidator {
                     ckpt_messages.push(signature.as_ref());
                     ckpt_batch.push(&signature.summary);
                 }
+                ConsensusTransactionKind::CheckpointSignatureV2(signature) => {
+                    if !epoch_store
+                        .protocol_config()
+                        .consensus_checkpoint_signature_key_includes_digest()
+                    {
+                        return Err(SuiErrorKind::UnexpectedMessage(
+                            "ConsensusTransactionKind::CheckpointSignatureV2 is unsupported"
+                                .to_string(),
+                        )
+                        .into());
+                    }
+                    ckpt_messages.push(signature.as_ref());
+                    ckpt_batch.push(&signature.summary);
+                }
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
                     if bytes.len() > dkg_v1::DKG_MESSAGES_MAX_SIZE {
                         warn!("batch verification error: DKG Message too large");
-                        return Err(SuiError::InvalidDkgMessageSize);
+                        return Err(SuiErrorKind::InvalidDkgMessageSize.into());
                     }
                 }
                 ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
                     if bytes.len() > dkg_v1::DKG_MESSAGES_MAX_SIZE {
                         warn!("batch verification error: DKG Confirmation too large");
-                        return Err(SuiError::InvalidDkgMessageSize);
+                        return Err(SuiErrorKind::InvalidDkgMessageSize.into());
                     }
                 }
 
@@ -88,9 +102,10 @@ impl SuiTxValidator {
 
                 ConsensusTransactionKind::UserTransaction(_tx) => {
                     if !epoch_store.protocol_config().mysticeti_fastpath() {
-                        return Err(SuiError::UnexpectedMessage(
+                        return Err(SuiErrorKind::UnexpectedMessage(
                             "ConsensusTransactionKind::UserTransaction is unsupported".to_string(),
-                        ));
+                        )
+                        .into());
                     }
                     // TODO(fastpath): move deterministic verifications of user transactions here,
                     // for example validity_check() and verify_transaction().
@@ -105,10 +120,11 @@ impl SuiTxValidator {
                             .try_into()
                             .unwrap()
                     {
-                        return Err(SuiError::UnexpectedMessage(format!(
+                        return Err(SuiErrorKind::UnexpectedMessage(format!(
                             "ExecutionTimeObservation contains too many estimates: {}",
                             obs.estimates.len()
-                        )));
+                        ))
+                        .into());
                     }
                 }
             }
@@ -138,6 +154,7 @@ impl SuiTxValidator {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip_all, fields(block_ref = ?block_ref))]
     fn vote_transactions(
         &self,
         block_ref: &BlockRef,
@@ -155,7 +172,6 @@ impl SuiTxValidator {
             };
 
             if let Err(error) = self.vote_transaction(&epoch_store, tx) {
-                debug!("Failed to vote transaction: {:?}", error);
                 result.push(i as TransactionIndex);
 
                 // Cache the rejection vote reason (error) for the transaction
@@ -173,6 +189,7 @@ impl SuiTxValidator {
         result
     }
 
+    #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx.digest()))]
     fn vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -271,22 +288,30 @@ mod tests {
 
     use consensus_core::TransactionVerifier as _;
     use consensus_types::block::BlockRef;
+    use fastcrypto::traits::KeyPair;
     use sui_config::transaction_deny_config::TransactionDenyConfigBuilder;
     use sui_macros::sim_test;
+    use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::crypto::deterministic_random_account_key;
-    use sui_types::error::{SuiError, UserInputError};
+    use sui_types::error::{SuiErrorKind, UserInputError};
+    use sui_types::messages_checkpoint::{
+        CheckpointContents, CheckpointSignatureMessage, CheckpointSummary, SignedCheckpointSummary,
+    };
     use sui_types::messages_consensus::ConsensusPosition;
     use sui_types::{
-        base_types::ObjectID, crypto::Ed25519SuiSignature,
-        messages_consensus::ConsensusTransaction, object::Object, signature::GenericSignature,
+        base_types::{ExecutionDigests, ObjectID},
+        crypto::Ed25519SuiSignature,
+        messages_consensus::ConsensusTransaction,
+        object::Object,
+        signature::GenericSignature,
     };
 
     use crate::{
         authority::test_authority_builder::TestAuthorityBuilder,
         checkpoints::CheckpointServiceNoop,
         consensus_adapter::{
-            consensus_tests::{test_certificates, test_gas_objects, test_user_transaction},
             NoopConsensusOverloadChecker,
+            consensus_tests::{test_certificates, test_gas_objects, test_user_transaction},
         },
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
@@ -462,7 +487,7 @@ mod tests {
 
         assert_eq!(
             reason,
-            SuiError::UserInputError {
+            SuiErrorKind::UserInputError {
                 error: UserInputError::TransactionDenied {
                     error: format!(
                         "Access to input object {:?} is temporarily disabled",
@@ -471,5 +496,114 @@ mod tests {
                 }
             }
         );
+    }
+
+    #[sim_test]
+    async fn reject_checkpoint_signature_v2_when_flag_disabled() {
+        // Build a single-validator network and authority with protocol version < 93 (flag disabled)
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+
+        let disabled_cfg =
+            ProtocolConfig::get_for_version(ProtocolVersion::new(92), Chain::Unknown);
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .with_protocol_config(disabled_cfg)
+            .build()
+            .await;
+
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+
+        // Create a minimal checkpoint summary and sign it with the validator's protocol key
+        let checkpoint_summary = CheckpointSummary::new(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+            epoch_store.epoch(),
+            0,
+            0,
+            &CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]),
+            None,
+            Default::default(),
+            None,
+            0,
+            Vec::new(),
+            Vec::new(),
+        );
+
+        let keypair = network_config.validator_configs()[0].protocol_key_pair();
+        let authority = keypair.public().into();
+        let signed = SignedCheckpointSummary::new(
+            epoch_store.epoch(),
+            checkpoint_summary,
+            keypair,
+            authority,
+        );
+        let message = CheckpointSignatureMessage { summary: signed };
+
+        let tx = ConsensusTransaction::new_checkpoint_signature_message_v2(message);
+        let bytes = bcs::to_bytes(&tx).unwrap();
+
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            Arc::new(NoopConsensusOverloadChecker {}),
+            Arc::new(CheckpointServiceNoop {}),
+            SuiTxValidatorMetrics::new(&Default::default()),
+        );
+
+        let res = validator.verify_batch(&[&bytes]);
+        assert!(res.is_err());
+    }
+
+    #[sim_test]
+    async fn accept_checkpoint_signature_v2_when_flag_enabled() {
+        // Build a single-validator network and authority with protocol version >= 93 (flag enabled)
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+
+        let enabled_cfg = ProtocolConfig::get_for_version(ProtocolVersion::new(93), Chain::Unknown);
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .with_protocol_config(enabled_cfg)
+            .build()
+            .await;
+
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+
+        // Create a minimal checkpoint summary and sign it with the validator's protocol key
+        let checkpoint_summary = CheckpointSummary::new(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+            epoch_store.epoch(),
+            0,
+            0,
+            &CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]),
+            None,
+            Default::default(),
+            None,
+            0,
+            Vec::new(),
+            Vec::new(),
+        );
+
+        let keypair = network_config.validator_configs()[0].protocol_key_pair();
+        let authority = keypair.public().into();
+        let signed = SignedCheckpointSummary::new(
+            epoch_store.epoch(),
+            checkpoint_summary,
+            keypair,
+            authority,
+        );
+        let message = CheckpointSignatureMessage { summary: signed };
+
+        let tx = ConsensusTransaction::new_checkpoint_signature_message_v2(message);
+        let bytes = bcs::to_bytes(&tx).unwrap();
+
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            Arc::new(NoopConsensusOverloadChecker {}),
+            Arc::new(CheckpointServiceNoop {}),
+            SuiTxValidatorMetrics::new(&Default::default()),
+        );
+
+        let res = validator.verify_batch(&[&bytes]);
+        assert!(res.is_ok(), "{res:?}");
     }
 }

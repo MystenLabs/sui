@@ -89,7 +89,7 @@ pub enum UserInputError {
     #[error("Wrong number of parameters for the transaction")]
     ObjectInputArityViolation,
     #[error(
-        "Could not find the referenced object {:?} at version {:?}",
+        "Could not find the referenced object {} at version {:?}",
         object_id,
         version
     )]
@@ -105,25 +105,23 @@ pub enum UserInputError {
         provided_obj_ref: ObjectRef,
         current_version: SequenceNumber,
     },
-    #[error("Package verification failed: {err:?}")]
+    #[error("Package verification failed: {err}")]
     PackageVerificationTimeout { err: String },
-    #[error("Dependent package not found on-chain: {package_id:?}")]
+    #[error("Dependent package not found on-chain: {package_id}")]
     DependentPackageNotFound { package_id: ObjectID },
     #[error("Mutable parameter provided, immutable parameter expected")]
     ImmutableParameterExpectedError { object_id: ObjectID },
     #[error("Size limit exceeded: {limit} is {value}")]
     SizeLimitExceeded { limit: String, value: String },
     #[error(
-        "Object {child_id:?} is owned by object {parent_id:?}. \
+        "Object {child_id} is owned by object {parent_id}. \
         Objects owned by other objects cannot be used as input arguments"
     )]
     InvalidChildObjectArgument {
         child_id: ObjectID,
         parent_id: ObjectID,
     },
-    #[error(
-        "Invalid Object digest for object {object_id:?}. Expected digest : {expected_digest:?}"
-    )]
+    #[error("Invalid Object digest for object {object_id}. Expected digest : {expected_digest}")]
     InvalidObjectDigest {
         object_id: ObjectID,
         expected_digest: ObjectDigest,
@@ -147,14 +145,12 @@ pub enum UserInputError {
     MissingGasPayment,
     #[error("Gas object is not an owned object with owner: {:?}", owner)]
     GasObjectNotOwnedObject { owner: Owner },
-    #[error("Gas budget: {:?} is higher than max: {:?}", gas_budget, max_budget)]
+    #[error("Gas budget: {gas_budget} is higher than max: {max_budget}")]
     GasBudgetTooHigh { gas_budget: u64, max_budget: u64 },
-    #[error("Gas budget: {:?} is lower than min: {:?}", gas_budget, min_budget)]
+    #[error("Gas budget: {gas_budget} is lower than min: {min_budget}")]
     GasBudgetTooLow { gas_budget: u64, min_budget: u64 },
     #[error(
-        "Balance of gas object {:?} is lower than the needed amount: {:?}",
-        gas_balance,
-        needed_gas_amount
+        "Balance of gas object {gas_balance} is lower than the needed amount: {needed_gas_amount}"
     )]
     GasBalanceTooLow {
         gas_balance: u128,
@@ -162,44 +158,46 @@ pub enum UserInputError {
     },
     #[error("Transaction kind does not support Sponsored Transaction")]
     UnsupportedSponsoredTransactionKind,
-    #[error(
-        "Gas price {:?} under reference gas price (RGP) {:?}",
-        gas_price,
-        reference_gas_price
-    )]
+    #[error("Gas price {gas_price} under reference gas price (RGP) {reference_gas_price}")]
     GasPriceUnderRGP {
         gas_price: u64,
         reference_gas_price: u64,
     },
-    #[error("Gas price cannot exceed {:?} mist", max_gas_price)]
+    #[error("Gas price cannot exceed {max_gas_price} mist")]
     GasPriceTooHigh { max_gas_price: u64 },
     #[error("Object {object_id} is not a gas object")]
     InvalidGasObject { object_id: ObjectID },
     #[error("Gas object does not have enough balance to cover minimal gas spend")]
     InsufficientBalanceToCoverMinimalGas,
 
-    #[error("Could not find the referenced object {:?} as the asked version {:?} is higher than the latest {:?}", object_id, asked_version, latest_version)]
+    #[error(
+        "Could not find the referenced object {object_id} as the asked version {asked_version:?} is higher than the latest {latest_version:?}"
+    )]
     ObjectSequenceNumberTooHigh {
         object_id: ObjectID,
         asked_version: SequenceNumber,
         latest_version: SequenceNumber,
     },
-    #[error("Object deleted at reference {:?}", object_ref)]
+    #[error("Object deleted at reference ({}, {:?}, {})", object_ref.0, object_ref.1, object_ref.2)]
     ObjectDeleted { object_ref: ObjectRef },
-    #[error("Invalid Batch Transaction: {}", error)]
+    #[error("Invalid Batch Transaction: {error}")]
     InvalidBatchTransaction { error: String },
     #[error("This Move function is currently disabled and not available for call")]
     BlockedMoveFunction,
     #[error("Empty input coins for Pay related transaction")]
     EmptyInputCoins,
 
-    #[error("SUI payment transactions use first input coin for gas payment, but found a different gas object")]
+    #[error(
+        "SUI payment transactions use first input coin for gas payment, but found a different gas object"
+    )]
     UnexpectedGasPaymentObject,
 
     #[error("Wrong initial version given for shared object")]
     SharedObjectStartingVersionMismatch,
 
-    #[error("Attempt to transfer object {object_id} that does not have public transfer. Object transfer must be done instead using a distinct Move function call")]
+    #[error(
+        "Attempt to transfer object {object_id} that does not have public transfer. Object transfer must be done instead using a distinct Move function call"
+    )]
     TransferObjectWithoutPublicTransferError { object_id: ObjectID },
 
     #[error(
@@ -208,7 +206,7 @@ pub enum UserInputError {
     )]
     EmptyCommandInput,
 
-    #[error("Transaction is denied: {}", error)]
+    #[error("Transaction is denied: {error}")]
     TransactionDenied { error: String },
 
     #[error("Feature is not supported: {0}")]
@@ -236,7 +234,7 @@ pub enum UserInputError {
     TransactionCursorNotFound(u64),
 
     #[error(
-        "Object {:?} is a system object and cannot be accessed by user transactions",
+        "Object {} is a system object and cannot be accessed by user transactions",
         object_id
     )]
     InaccessibleSystemObject { object_id: ObjectID },
@@ -251,7 +249,7 @@ pub enum UserInputError {
     #[error("Immutable parameter provided, mutable parameter expected")]
     MutableParameterExpected { object_id: ObjectID },
 
-    #[error("Address {address:?} is denied for coin {coin_type}")]
+    #[error("Address {address} is denied for coin {coin_type}")]
     AddressDeniedForCoin {
         address: SuiAddress,
         coin_type: String,
@@ -261,27 +259,20 @@ pub enum UserInputError {
     PostRandomCommandRestrictions,
 
     // Soft Bundle related errors
+    #[error("Number of transactions ({size}) exceeds the maximum allowed ({limit}) in a batch")]
+    TooManyTransactionsInBatch { size: usize, limit: u64 },
     #[error(
-        "Number of transactions exceeds the maximum allowed ({:?}) in a Soft Bundle",
-        limit
+        "Total transactions size ({size}) bytes exceeds the maximum allowed ({limit}) bytes in a Soft Bundle"
     )]
-    TooManyTransactionsInSoftBundle { limit: u64 },
-    #[error(
-        "Total transactions size ({:?})bytes exceeds the maximum allowed ({:?})bytes in a Soft Bundle",
-        size, limit
-    )]
-    SoftBundleTooLarge { size: u64, limit: u64 },
-    #[error("Transaction {:?} in Soft Bundle contains no shared objects", digest)]
+    TotalTransactionSizeTooLargeInBatch { size: usize, limit: u64 },
+    #[error("Transaction {digest} in Soft Bundle contains no shared objects")]
     NoSharedObjectError { digest: TransactionDigest },
-    #[error("Transaction {:?} in Soft Bundle has already been executed", digest)]
-    AlreadyExecutedError { digest: TransactionDigest },
+    #[error("Transaction {digest} in Soft Bundle has already been executed")]
+    AlreadyExecutedInSoftBundleError { digest: TransactionDigest },
     #[error("At least one certificate in Soft Bundle has already been processed")]
     CertificateAlreadyProcessed,
     #[error(
-        "Gas price for transaction {:?} in Soft Bundle mismatch: want {:?}, have {:?}",
-        digest,
-        expected,
-        actual
+        "Gas price for transaction {digest} in Soft Bundle mismatch: want {expected}, have {actual}"
     )]
     GasPriceMismatchError {
         digest: TransactionDigest,
@@ -300,6 +291,15 @@ pub enum UserInputError {
 
     #[error("Invalid withdraw reservation: {error}")]
     InvalidWithdrawReservation { error: String },
+
+    #[error("Transaction with empty gas payment must specify an expiration.")]
+    MissingTransactionExpiration,
+
+    #[error("Invalid transaction expiration: {error}")]
+    InvalidExpiration { error: String },
+
+    #[error("Transaction chain ID {provided} does not match network chain ID {expected}.")]
+    InvalidChainId { provided: String, expected: String },
 }
 
 #[derive(
@@ -317,15 +317,12 @@ pub enum UserInputError {
 )]
 #[serde(tag = "code", rename = "ObjectResponseError", rename_all = "camelCase")]
 pub enum SuiObjectResponseError {
-    #[error("Object {:?} does not exist", object_id)]
+    #[error("Object {object_id} does not exist")]
     NotExists { object_id: ObjectID },
-    #[error("Cannot find dynamic field for parent object {:?}", parent_object_id)]
+    #[error("Cannot find dynamic field for parent object {parent_object_id}")]
     DynamicFieldNotFound { parent_object_id: ObjectID },
     #[error(
-        "Object has been deleted object_id: {:?} at version: {:?} in digest {:?}",
-        object_id,
-        version,
-        digest
+        "Object has been deleted object_id: {object_id} at version: {version:?} in digest {digest}"
     )]
     Deleted {
         object_id: ObjectID,
@@ -336,20 +333,25 @@ pub enum SuiObjectResponseError {
     },
     #[error("Unknown Error")]
     Unknown,
-    #[error("Display Error: {:?}", error)]
+    #[error("Display Error: {error}")]
     DisplayError { error: String },
     // TODO: also integrate SuiPastObjectResponse (VersionNotFound,  VersionTooHigh)
 }
 
 /// Custom error type for Sui.
+#[derive(Eq, PartialEq, Clone, Serialize, Deserialize, Error, Hash)]
+#[error(transparent)]
+pub struct SuiError(#[from] pub Box<SuiErrorKind>);
+
+/// Custom error type for Sui.
 #[derive(
     Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr, IntoStaticStr,
 )]
-pub enum SuiError {
-    #[error("Error checking transaction input objects: {:?}", error)]
+pub enum SuiErrorKind {
+    #[error("Error checking transaction input objects: {error}")]
     UserInputError { error: UserInputError },
 
-    #[error("Error checking transaction object: {:?}", error)]
+    #[error("Error checking transaction object: {error}")]
     SuiObjectResponseError { error: SuiObjectResponseError },
 
     #[error("Expecting a single owner, shared ownership found")]
@@ -361,14 +363,18 @@ pub enum SuiError {
     #[error("There are too many transactions pending in consensus")]
     TooManyTransactionsPendingConsensus,
 
-    #[error("Input {object_id} already has {queue_len} transactions pending, above threshold of {threshold}")]
+    #[error(
+        "Input {object_id} already has {queue_len} transactions pending, above threshold of {threshold}"
+    )]
     TooManyTransactionsPendingOnObject {
         object_id: ObjectID,
         queue_len: usize,
         threshold: usize,
     },
 
-    #[error("Input {object_id} has a transaction {txn_age_sec} seconds old pending, above threshold of {threshold} seconds")]
+    #[error(
+        "Input {object_id} has a transaction {txn_age_sec} seconds old pending, above threshold of {threshold} seconds"
+    )]
     TooOldTransactionPendingOnObject {
         object_id: ObjectID,
         txn_age_sec: u64,
@@ -390,7 +396,11 @@ pub enum SuiError {
     SignerSignatureNumberMismatch { expected: usize, actual: usize },
     #[error("Value was not signed by the correct sender: {}", error)]
     IncorrectSigner { error: String },
-    #[error("Value was not signed by a known authority. signer: {:?}, index: {:?}, committee: {committee}", signer, index)]
+    #[error(
+        "Value was not signed by a known authority. signer: {:?}, index: {:?}, committee: {committee}",
+        signer,
+        index
+    )]
     UnknownSigner {
         signer: Option<String>,
         index: Option<u32>,
@@ -458,9 +468,9 @@ pub enum SuiError {
     UnexpectedMessage(String),
 
     // Move module publishing related errors
-    #[error("Failed to verify the Move module, reason: {error:?}.")]
+    #[error("Failed to verify the Move module, reason: {error}.")]
     ModuleVerificationFailure { error: String },
-    #[error("Failed to deserialize the Move module, reason: {error:?}.")]
+    #[error("Failed to deserialize the Move module, reason: {error}.")]
     ModuleDeserializationFailure { error: String },
     #[error("Failed to publish the Move module(s), reason: {error}")]
     ModulePublishFailure { error: String },
@@ -468,11 +478,11 @@ pub enum SuiError {
     ModuleBuildFailure { error: String },
 
     // Move call related errors
-    #[error("Function resolution failure: {error:?}.")]
+    #[error("Function resolution failure: {error}.")]
     FunctionNotFound { error: String },
-    #[error("Module not found in package: {module_name:?}.")]
+    #[error("Module not found in package: {module_name}.")]
     ModuleNotFound { module_name: String },
-    #[error("Type error while binding function arguments: {error:?}.")]
+    #[error("Type error while binding function arguments: {error}.")]
     TypeError { error: String },
     #[error("Circular object ownership detected")]
     CircularObjectOwnership,
@@ -487,7 +497,9 @@ pub enum SuiError {
         obj_ref: ObjectRef,
         pending_transaction: TransactionDigest,
     },
-    #[error("Objects {obj_refs:?} are already locked by a transaction from a future epoch {locked_epoch:?}), attempt to override with a transaction from epoch {new_epoch:?}")]
+    #[error(
+        "Objects {obj_refs:?} are already locked by a transaction from a future epoch {locked_epoch:?}), attempt to override with a transaction from epoch {new_epoch:?}"
+    )]
     ObjectLockedAtFutureEpoch {
         obj_refs: Vec<ObjectRef>,
         locked_epoch: EpochId,
@@ -548,55 +560,40 @@ pub enum SuiError {
     #[error("DEPRECATED")]
     DEPRECATED_StorageCorruptedFieldError,
 
-    #[error("Authority Error: {error:?}")]
+    #[error("Authority Error: {error}")]
     GenericAuthorityError { error: String },
 
-    #[error("Generic Bridge Error: {error:?}")]
+    #[error("Generic Bridge Error: {error}")]
     GenericBridgeError { error: String },
 
-    #[error("Failed to dispatch subscription: {error:?}")]
+    #[error("Failed to dispatch subscription: {error}")]
     FailedToDispatchSubscription { error: String },
 
-    #[error("Failed to serialize Owner: {error:?}")]
+    #[error("Failed to serialize Owner: {error}")]
     OwnerFailedToSerialize { error: String },
 
-    #[error("Failed to deserialize fields into JSON: {error:?}")]
+    #[error("Failed to deserialize fields into JSON: {error}")]
     ExtraFieldFailedToDeserialize { error: String },
 
-    #[error("Failed to execute transaction locally by Orchestrator: {error:?}")]
+    #[error("Failed to execute transaction locally by Orchestrator: {error}")]
     TransactionOrchestratorLocalExecutionError { error: String },
 
     // Errors returned by authority and client read API's
-    #[error("Failure serializing transaction in the requested format: {:?}", error)]
+    #[error("Failure serializing transaction in the requested format: {error}")]
     TransactionSerializationError { error: String },
-    #[error(
-        "Failure deserializing transaction from the provided format: {:?}",
-        error
-    )]
+    #[error("Failure deserializing transaction from the provided format: {error}")]
     TransactionDeserializationError { error: String },
-    #[error(
-        "Failure serializing transaction effects from the provided format: {:?}",
-        error
-    )]
+    #[error("Failure serializing transaction effects from the provided format: {error}")]
     TransactionEffectsSerializationError { error: String },
-    #[error(
-        "Failure deserializing transaction effects from the provided format: {:?}",
-        error
-    )]
+    #[error("Failure deserializing transaction effects from the provided format: {error}")]
     TransactionEffectsDeserializationError { error: String },
-    #[error(
-        "Failure serializing transaction events from the provided format: {:?}",
-        error
-    )]
+    #[error("Failure serializing transaction events from the provided format: {error}")]
     TransactionEventsSerializationError { error: String },
-    #[error(
-        "Failure deserializing transaction events from the provided format: {:?}",
-        error
-    )]
+    #[error("Failure deserializing transaction events from the provided format: {error}")]
     TransactionEventsDeserializationError { error: String },
-    #[error("Failure serializing object in the requested format: {:?}", error)]
+    #[error("Failure serializing object in the requested format: {error}")]
     ObjectSerializationError { error: String },
-    #[error("Failure deserializing object in the requested format: {:?}", error)]
+    #[error("Failure deserializing object in the requested format: {error}")]
     ObjectDeserializationError { error: String },
     #[error("Event store component is not active on this node")]
     NoEventStore,
@@ -607,7 +604,7 @@ pub enum SuiError {
         errors: Vec<(AuthorityName, SuiError)>,
         action: String,
     },
-    #[error("Invalid transaction range query to the fullnode: {:?}", error)]
+    #[error("Invalid transaction range query to the fullnode: {error}")]
     FullNodeInvalidTxRangeQuery { error: String },
 
     // Errors related to the authority-consensus interface.
@@ -635,7 +632,7 @@ pub enum SuiError {
     ValidatorHaltedAtEpochEnd,
     #[error("Operations for epoch {0} have ended")]
     EpochEnded(EpochId),
-    #[error("Error when advancing epoch: {:?}", error)]
+    #[error("Error when advancing epoch: {error}")]
     AdvanceEpochError { error: String },
 
     #[error("Transaction Expired")]
@@ -649,11 +646,10 @@ pub enum SuiError {
     #[error("Method not allowed")]
     InvalidRpcMethodError,
 
-    // TODO: We should fold this into UserInputError::Unsupported.
-    #[error("Use of disabled feature: {:?}", error)]
+    #[error("Use of disabled feature: {error}")]
     UnsupportedFeatureError { error: String },
 
-    #[error("Unable to communicate with the Quorum Driver channel: {:?}", error)]
+    #[error("Unable to communicate with the Quorum Driver channel: {error}")]
     QuorumDriverCommunicationError { error: String },
 
     #[error("Operation timed out")]
@@ -698,7 +694,9 @@ pub enum SuiError {
     #[error("Storage error: {0}")]
     Storage(String),
 
-    #[error("Validator cannot handle the request at the moment. Please retry after at least {retry_after_secs} seconds.")]
+    #[error(
+        "Validator cannot handle the request at the moment. Please retry after at least {retry_after_secs} seconds."
+    )]
     ValidatorOverloadedRetryAfter { retry_after_secs: u64 },
 
     #[error("Too many requests")]
@@ -710,21 +708,25 @@ pub enum SuiError {
     #[error("Nitro attestation verify failed: {0}")]
     NitroAttestationFailedToVerify(String),
 
-    #[error("Failed to serialize {type_info:?}, error: {error:?}")]
+    #[error("Failed to serialize {type_info}, error: {error}")]
     GrpcMessageSerializeError { type_info: String, error: String },
 
-    #[error("Failed to deserialize {type_info:?}, error: {error:?}")]
+    #[error("Failed to deserialize {type_info}, error: {error}")]
     GrpcMessageDeserializeError { type_info: String, error: String },
 
     #[error(
-        "Validator consensus rounds are lagging behind. last committed leader round: {last_committed_round:?}, requested round: {round:?}"
+        "Validator consensus rounds are lagging behind. last committed leader round: {last_committed_round}, requested round: {round}"
     )]
     ValidatorConsensusLagging {
         round: u32,
         last_committed_round: u32,
     },
+
     #[error("Invalid admin request: {0}")]
     InvalidAdminRequest(String),
+
+    #[error("Invalid request: {0}")]
+    InvalidRequest(String),
 }
 
 #[repr(u64)]
@@ -755,52 +757,73 @@ pub enum VMMemoryLimitExceededSubStatusCode {
 pub type SuiResult<T = ()> = Result<T, SuiError>;
 pub type UserInputResult<T = ()> = Result<T, UserInputError>;
 
+impl From<SuiErrorKind> for SuiError {
+    fn from(error: SuiErrorKind) -> Self {
+        SuiError(Box::new(error))
+    }
+}
+
+impl std::ops::Deref for SuiError {
+    type Target = SuiErrorKind;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl From<sui_protocol_config::Error> for SuiError {
     fn from(error: sui_protocol_config::Error) -> Self {
-        SuiError::WrongMessageVersion { error: error.0 }
+        SuiErrorKind::WrongMessageVersion { error: error.0 }.into()
     }
 }
 
 impl From<ExecutionError> for SuiError {
     fn from(error: ExecutionError) -> Self {
-        SuiError::ExecutionError(error.to_string())
+        SuiErrorKind::ExecutionError(error.to_string()).into()
     }
 }
 
 impl From<Status> for SuiError {
     fn from(status: Status) -> Self {
         if status.message() == "Too many requests" {
-            return Self::TooManyRequests;
+            return SuiErrorKind::TooManyRequests.into();
         }
 
         let result = bcs::from_bytes::<SuiError>(status.details());
         if let Ok(sui_error) = result {
             sui_error
         } else {
-            Self::RpcError(
+            SuiErrorKind::RpcError(
                 status.message().to_owned(),
                 status.code().description().to_owned(),
             )
+            .into()
         }
     }
 }
 
 impl From<TypedStoreError> for SuiError {
     fn from(e: TypedStoreError) -> Self {
-        Self::Storage(e.to_string())
+        SuiErrorKind::Storage(e.to_string()).into()
     }
 }
 
 impl From<crate::storage::error::Error> for SuiError {
     fn from(e: crate::storage::error::Error) -> Self {
-        Self::Storage(e.to_string())
+        SuiErrorKind::Storage(e.to_string()).into()
+    }
+}
+
+impl From<SuiErrorKind> for Status {
+    fn from(error: SuiErrorKind) -> Self {
+        let bytes = bcs::to_bytes(&error).unwrap();
+        Status::with_details(tonic::Code::Internal, error.to_string(), bytes.into())
     }
 }
 
 impl From<SuiError> for Status {
     fn from(error: SuiError) -> Self {
-        let bytes = bcs::to_bytes(&error).unwrap();
-        Status::with_details(tonic::Code::Internal, error.to_string(), bytes.into())
+        Status::from(error.into_inner())
     }
 }
 
@@ -812,15 +835,27 @@ impl From<ExecutionErrorKind> for SuiError {
 
 impl From<&str> for SuiError {
     fn from(error: &str) -> Self {
-        SuiError::GenericAuthorityError {
+        SuiErrorKind::GenericAuthorityError {
             error: error.to_string(),
         }
+        .into()
     }
 }
 
 impl From<String> for SuiError {
     fn from(error: String) -> Self {
-        SuiError::GenericAuthorityError { error }
+        SuiErrorKind::GenericAuthorityError { error }.into()
+    }
+}
+
+impl TryFrom<SuiErrorKind> for UserInputError {
+    type Error = anyhow::Error;
+
+    fn try_from(err: SuiErrorKind) -> Result<Self, Self::Error> {
+        match err {
+            SuiErrorKind::UserInputError { error } => Ok(error),
+            other => anyhow::bail!("error {:?} is not UserInputError", other),
+        }
     }
 }
 
@@ -828,30 +863,49 @@ impl TryFrom<SuiError> for UserInputError {
     type Error = anyhow::Error;
 
     fn try_from(err: SuiError) -> Result<Self, Self::Error> {
-        match err {
-            SuiError::UserInputError { error } => Ok(error),
-            other => anyhow::bail!("error {:?} is not UserInputError", other),
-        }
+        err.into_inner().try_into()
     }
 }
 
 impl From<UserInputError> for SuiError {
     fn from(error: UserInputError) -> Self {
-        SuiError::UserInputError { error }
+        SuiErrorKind::UserInputError { error }.into()
     }
 }
 
 impl From<SuiObjectResponseError> for SuiError {
     fn from(error: SuiObjectResponseError) -> Self {
-        SuiError::SuiObjectResponseError { error }
+        SuiErrorKind::SuiObjectResponseError { error }.into()
+    }
+}
+
+impl PartialEq<SuiErrorKind> for SuiError {
+    fn eq(&self, other: &SuiErrorKind) -> bool {
+        &*self.0 == other
+    }
+}
+
+impl PartialEq<SuiError> for SuiErrorKind {
+    fn eq(&self, other: &SuiError) -> bool {
+        self == &*other.0
     }
 }
 
 impl SuiError {
+    pub fn as_inner(&self) -> &SuiErrorKind {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> SuiErrorKind {
+        *self.0
+    }
+}
+
+impl SuiErrorKind {
     pub fn individual_error_indicates_epoch_change(&self) -> bool {
         matches!(
             self,
-            SuiError::ValidatorHaltedAtEpochEnd | SuiError::MissingCommitteeAtEpoch(_)
+            SuiErrorKind::ValidatorHaltedAtEpochEnd | SuiErrorKind::MissingCommitteeAtEpoch(_)
         )
     }
 
@@ -862,15 +916,15 @@ impl SuiError {
     pub fn is_retryable(&self) -> (bool, bool) {
         let retryable = match self {
             // Network error
-            SuiError::RpcError { .. } => true,
+            SuiErrorKind::RpcError { .. } => true,
 
             // Reconfig error
-            SuiError::ValidatorHaltedAtEpochEnd => true,
-            SuiError::MissingCommitteeAtEpoch(..) => true,
-            SuiError::WrongEpoch { .. } => true,
-            SuiError::EpochEnded(..) => true,
+            SuiErrorKind::ValidatorHaltedAtEpochEnd => true,
+            SuiErrorKind::MissingCommitteeAtEpoch(..) => true,
+            SuiErrorKind::WrongEpoch { .. } => true,
+            SuiErrorKind::EpochEnded(..) => true,
 
-            SuiError::UserInputError { error } => {
+            SuiErrorKind::UserInputError { error } => {
                 match error {
                     // Only ObjectNotFound and DependentPackageNotFound is potentially retryable
                     UserInputError::ObjectNotFound { .. } => true,
@@ -879,27 +933,27 @@ impl SuiError {
                 }
             }
 
-            SuiError::PotentiallyTemporarilyInvalidSignature { .. } => true,
+            SuiErrorKind::PotentiallyTemporarilyInvalidSignature { .. } => true,
 
             // Overload errors
-            SuiError::TooManyTransactionsPendingExecution { .. } => true,
-            SuiError::TooManyTransactionsPendingOnObject { .. } => true,
-            SuiError::TooOldTransactionPendingOnObject { .. } => true,
-            SuiError::TooManyTransactionsPendingConsensus => true,
-            SuiError::ValidatorOverloadedRetryAfter { .. } => true,
+            SuiErrorKind::TooManyTransactionsPendingExecution { .. } => true,
+            SuiErrorKind::TooManyTransactionsPendingOnObject { .. } => true,
+            SuiErrorKind::TooOldTransactionPendingOnObject { .. } => true,
+            SuiErrorKind::TooManyTransactionsPendingConsensus => true,
+            SuiErrorKind::ValidatorOverloadedRetryAfter { .. } => true,
 
             // Non retryable error
-            SuiError::ExecutionError(..) => false,
-            SuiError::ByzantineAuthoritySuspicion { .. } => false,
-            SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => false,
-            SuiError::TxAlreadyFinalizedWithDifferentUserSigs => false,
-            SuiError::FailedToVerifyTxCertWithExecutedEffects { .. } => false,
-            SuiError::ObjectLockConflict { .. } => false,
+            SuiErrorKind::ExecutionError(..) => false,
+            SuiErrorKind::ByzantineAuthoritySuspicion { .. } => false,
+            SuiErrorKind::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => false,
+            SuiErrorKind::TxAlreadyFinalizedWithDifferentUserSigs => false,
+            SuiErrorKind::FailedToVerifyTxCertWithExecutedEffects { .. } => false,
+            SuiErrorKind::ObjectLockConflict { .. } => false,
 
             // NB: This is not an internal overload, but instead an imposed rate
             // limit / blocking of a client. It must be non-retryable otherwise
             // we will make the threat worse through automatic retries.
-            SuiError::TooManyRequests => false,
+            SuiErrorKind::TooManyRequests => false,
 
             // For all un-categorized errors, return here with categorized = false.
             _ => return (false, false),
@@ -908,56 +962,9 @@ impl SuiError {
         (retryable, true)
     }
 
-    /// Checks if this error is retriable with transaction resubmission attempts,
-    /// when this error is received outside of validators during transaction lifecycle.
-    ///
-    /// When a non-retriable error is returned by an honest validator during
-    /// transaction submission or effects query, this and other honest validators will
-    /// never vote to accept the same transaction with the same user signature.
-    /// So this transaction can never be finalized and retrying submission will not help.
-    ///
-    /// Also, when an error is categorized as non-retriable, we expect some consistency
-    /// among honest validators in also returning non-retriable errors for the same transaction
-    /// when there are no other temporary failures (network, overload, etc).
-    ///
-    /// SuiError contains many variants unrelated to transaction processing.
-    /// They can be returned externally by malicious validators or due to software bugs.
-    /// These variants are considered retriable, because they don't meet the criteria for
-    /// non-retriable errors above.
-    pub fn is_transaction_submission_retriable(&self) -> bool {
-        match self {
-            SuiError::UserInputError { error } => {
-                match error {
-                    // ObjectNotFound and DependentPackageNotFound are potentially retriable because the missing
-                    // input can be created by other transactions.
-                    UserInputError::ObjectNotFound { .. } => true,
-                    UserInputError::DependentPackageNotFound { .. } => true,
-                    // Other UserInputError variants are not retriable with resubmission.
-                    _ => false,
-                }
-            }
-
-            // Non retryable errors
-            SuiError::ByzantineAuthoritySuspicion { .. } => false,
-            SuiError::ObjectLockConflict { .. } => false,
-            SuiError::TransactionExpired => false,
-            SuiError::InvalidTxKindInSoftBundle { .. } => false,
-            SuiError::UnsupportedFeatureError { .. } => false,
-
-            SuiError::InvalidSignature { .. } => false,
-            SuiError::SignerSignatureAbsent { .. } => false,
-            SuiError::SignerSignatureNumberMismatch { .. } => false,
-            SuiError::IncorrectSigner { .. } => false,
-            SuiError::UnknownSigner { .. } => false,
-
-            // Other variants are assumed to be retriable.
-            _ => true,
-        }
-    }
-
     pub fn is_object_or_package_not_found(&self) -> bool {
         match self {
-            SuiError::UserInputError { error } => {
+            SuiErrorKind::UserInputError { error } => {
                 matches!(
                     error,
                     UserInputError::ObjectNotFound { .. }
@@ -971,21 +978,67 @@ impl SuiError {
     pub fn is_overload(&self) -> bool {
         matches!(
             self,
-            SuiError::TooManyTransactionsPendingExecution { .. }
-                | SuiError::TooManyTransactionsPendingOnObject { .. }
-                | SuiError::TooOldTransactionPendingOnObject { .. }
-                | SuiError::TooManyTransactionsPendingConsensus
+            SuiErrorKind::TooManyTransactionsPendingExecution { .. }
+                | SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
+                | SuiErrorKind::TooOldTransactionPendingOnObject { .. }
+                | SuiErrorKind::TooManyTransactionsPendingConsensus
         )
     }
 
     pub fn is_retryable_overload(&self) -> bool {
-        matches!(self, SuiError::ValidatorOverloadedRetryAfter { .. })
+        matches!(self, SuiErrorKind::ValidatorOverloadedRetryAfter { .. })
     }
 
     pub fn retry_after_secs(&self) -> u64 {
         match self {
-            SuiError::ValidatorOverloadedRetryAfter { retry_after_secs } => *retry_after_secs,
+            SuiErrorKind::ValidatorOverloadedRetryAfter { retry_after_secs } => *retry_after_secs,
             _ => 0,
+        }
+    }
+
+    /// Categorizes SuiError into ErrorCategory.
+    pub fn categorize(&self) -> ErrorCategory {
+        match self {
+            SuiErrorKind::UserInputError { error } => {
+                match error {
+                    // ObjectNotFound and DependentPackageNotFound are potentially valid because the missing
+                    // input can be created by other transactions.
+                    UserInputError::ObjectNotFound { .. } => ErrorCategory::Aborted,
+                    UserInputError::DependentPackageNotFound { .. } => ErrorCategory::Aborted,
+                    // Other UserInputError variants indeed indicate invalid transaction.
+                    _ => ErrorCategory::InvalidTransaction,
+                }
+            }
+
+            SuiErrorKind::InvalidSignature { .. }
+            | SuiErrorKind::SignerSignatureAbsent { .. }
+            | SuiErrorKind::SignerSignatureNumberMismatch { .. }
+            | SuiErrorKind::IncorrectSigner { .. }
+            | SuiErrorKind::UnknownSigner { .. }
+            | SuiErrorKind::TransactionExpired => ErrorCategory::InvalidTransaction,
+
+            SuiErrorKind::ObjectLockConflict { .. } => ErrorCategory::LockConflict,
+
+            SuiErrorKind::Unknown { .. }
+            | SuiErrorKind::GrpcMessageSerializeError { .. }
+            | SuiErrorKind::GrpcMessageDeserializeError { .. }
+            | SuiErrorKind::ByzantineAuthoritySuspicion { .. }
+            | SuiErrorKind::InvalidTxKindInSoftBundle
+            | SuiErrorKind::UnsupportedFeatureError { .. }
+            | SuiErrorKind::InvalidRequest { .. } => ErrorCategory::Internal,
+
+            SuiErrorKind::TooManyTransactionsPendingExecution { .. }
+            | SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
+            | SuiErrorKind::TooOldTransactionPendingOnObject { .. }
+            | SuiErrorKind::TooManyTransactionsPendingConsensus
+            | SuiErrorKind::ValidatorOverloadedRetryAfter { .. } => {
+                ErrorCategory::ValidatorOverloaded
+            }
+
+            SuiErrorKind::TimeoutError => ErrorCategory::Unavailable,
+
+            // Other variants are assumed to be retriable with new transaction submissions.
+            _ => ErrorCategory::Aborted,
         }
     }
 }
@@ -999,6 +1052,12 @@ impl Ord for SuiError {
 impl PartialOrd for SuiError {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl std::fmt::Debug for SuiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.as_inner().fmt(f)
     }
 }
 
@@ -1086,4 +1145,34 @@ pub fn command_argument_error(e: CommandArgumentError, arg_idx: usize) -> Execut
         e,
         arg_idx as u16,
     ))
+}
+
+/// Types of SuiError.
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, IntoStaticStr)]
+pub enum ErrorCategory {
+    // A generic error that is retriable with new transaction resubmissions.
+    Aborted,
+    // Any validator or full node can check if a transaction is valid.
+    InvalidTransaction,
+    // Lock conflict on the transaction input.
+    LockConflict,
+    // Unexpected client error, for example generating invalid request or entering into invalid state.
+    // And unexpected error from the remote peer. The validator may be malicious or there is a software bug.
+    Internal,
+    // Validator is overloaded.
+    ValidatorOverloaded,
+    // Target validator is down or there are network issues.
+    Unavailable,
+}
+
+impl ErrorCategory {
+    // Whether the failure is retriable with new transaction submission.
+    pub fn is_submission_retriable(&self) -> bool {
+        matches!(
+            self,
+            ErrorCategory::Aborted
+                | ErrorCategory::ValidatorOverloaded
+                | ErrorCategory::Unavailable
+        )
+    }
 }

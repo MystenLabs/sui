@@ -7,7 +7,7 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{SuiClient, SuiClientBuilder, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL};
+use crate::{SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL, SuiClient, SuiClientBuilder};
 use sui_config::Config;
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::*;
@@ -15,9 +15,15 @@ use sui_types::base_types::*;
 #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct SuiClientConfig {
+    /// The keystore that holds the user's private keys, typically filebased keystore
     pub keystore: Keystore,
+    /// Optional external keystore for managing keys that are not stored in the main keystore.
+    pub external_keys: Option<Keystore>,
+    /// List of environments that the client can connect to.
     pub envs: Vec<SuiEnv>,
+    /// The alias of the currently active environment.
     pub active_env: Option<String>,
+    /// The address that is currently active in the keystore.
     pub active_address: Option<SuiAddress>,
 }
 
@@ -25,6 +31,7 @@ impl SuiClientConfig {
     pub fn new(keystore: Keystore) -> Self {
         SuiClientConfig {
             keystore,
+            external_keys: None,
             envs: vec![],
             active_env: None,
             active_address: None,
@@ -57,6 +64,21 @@ impl SuiClientConfig {
             self.envs.push(env)
         }
     }
+
+    /// Update the cached chain ID for the specified environment.
+    pub fn update_env_chain_id(
+        &mut self,
+        alias: &str,
+        chain_id: String,
+    ) -> Result<(), anyhow::Error> {
+        let env = self
+            .envs
+            .iter_mut()
+            .find(|env| env.alias == alias)
+            .ok_or_else(|| anyhow!("Environment {} not found", alias))?;
+        env.chain_id = Some(chain_id);
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,6 +88,9 @@ pub struct SuiEnv {
     pub ws: Option<String>,
     /// Basic HTTP access authentication in the format of username:password, if needed.
     pub basic_auth: Option<String>,
+    /// Cached chain identifier for this environment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain_id: Option<String>,
 }
 
 impl SuiEnv {
@@ -103,6 +128,7 @@ impl SuiEnv {
             rpc: SUI_DEVNET_URL.into(),
             ws: None,
             basic_auth: None,
+            chain_id: None,
         }
     }
     pub fn testnet() -> Self {
@@ -111,6 +137,7 @@ impl SuiEnv {
             rpc: SUI_TESTNET_URL.into(),
             ws: None,
             basic_auth: None,
+            chain_id: None,
         }
     }
 
@@ -120,6 +147,7 @@ impl SuiEnv {
             rpc: SUI_LOCAL_NETWORK_URL.into(),
             ws: None,
             basic_auth: None,
+            chain_id: None,
         }
     }
 }
@@ -136,6 +164,10 @@ impl Display for SuiEnv {
         if let Some(basic_auth) = &self.basic_auth {
             writeln!(writer)?;
             write!(writer, "Basic Auth: {}", basic_auth)?;
+        }
+        if let Some(chain_id) = &self.chain_id {
+            writeln!(writer)?;
+            write!(writer, "Chain ID: {}", chain_id)?;
         }
         write!(f, "{}", writer)
     }

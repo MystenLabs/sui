@@ -3,24 +3,20 @@
 
 use std::{path::PathBuf, time::Duration};
 
-use anyhow::{ensure, Context as _};
+use anyhow::{Context as _, ensure};
 use jsonrpsee::types::error::INVALID_PARAMS_CODE;
 use move_core_types::ident_str;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use simulacrum::Simulacrum;
-use sui_indexer_alt::config::IndexerConfig;
-use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
-use sui_indexer_alt_e2e_tests::{find_immutable, find_shared, FullCluster};
-use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig, find};
 use sui_indexer_alt_jsonrpc::config::{NameServiceConfig, RpcConfig as JsonRpcConfig};
 use sui_move_build::BuildConfig;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     effects::TransactionEffectsAPI,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{ObjectArg, Transaction, TransactionData},
+    transaction::{ObjectArg, SharedObjectMutability, Transaction, TransactionData},
 };
 use tokio_util::sync::CancellationToken;
 
@@ -356,7 +352,7 @@ impl SuiNSCluster {
             .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
             .expect("Publish failed");
 
-        let package_address = find_immutable(&fx).expect("Couldn't find package").0;
+        let package_address = find::immutable(&fx).expect("Couldn't find package").0;
 
         // (5) Initialize the forward registry.
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -382,11 +378,11 @@ impl SuiNSCluster {
             .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
             .expect("Forward registry initialization failed");
 
-        let registry_id = find_shared(&fx).expect("Couldn't find forward registry").0;
+        let registry_id = find::shared(&fx).expect("Couldn't find forward registry").0;
         let forward_registry = ObjectArg::SharedObject {
             id: registry_id,
             initial_shared_version: fx.lamport_version(),
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         };
 
         // (6) Initialize the reverse registry.
@@ -413,11 +409,11 @@ impl SuiNSCluster {
             .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
             .expect("Reverse registry initialization failed");
 
-        let reverse_registry_id = find_shared(&fx).expect("Couldn't find reverse registry").0;
+        let reverse_registry_id = find::shared(&fx).expect("Couldn't find reverse registry").0;
         let reverse_registry = ObjectArg::SharedObject {
             id: reverse_registry_id,
             initial_shared_version: fx.lamport_version(),
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         };
 
         // (7) Configure the RPC to read from the mock SuiNS package. Everything else is configured
@@ -436,12 +432,10 @@ impl SuiNSCluster {
         // (8) Spin up the rest of the cluster.
         let cluster = FullCluster::new_with_configs(
             sim,
-            IndexerArgs::default(),
-            IndexerArgs::default(),
-            IndexerConfig::for_test(),
-            ConsistentConfig::for_test(),
-            jsonrpc_config,
-            GraphQlConfig::default(),
+            OffchainClusterConfig {
+                jsonrpc_config,
+                ..Default::default()
+            },
             &prometheus::Registry::new(),
             CancellationToken::new(),
         )

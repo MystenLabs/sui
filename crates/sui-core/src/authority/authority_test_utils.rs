@@ -2,21 +2,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::checkpoints::CheckpointServiceNoop;
-use crate::consensus_handler::SequencedConsensusTransaction;
-use crate::execution_scheduler::ExecutionSchedulerAPI;
 use core::default::Default;
 use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
 use sui_protocol_config::Chain;
 use sui_types::base_types::FullObjectRef;
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair};
-use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::utils::to_sender_signed_transaction;
 
-use super::shared_object_version_manager::AssignedTxAndVersions;
+use super::shared_object_version_manager::AssignedVersions;
 use super::test_authority_builder::TestAuthorityBuilder;
 use super::*;
+
+#[cfg(test)]
+use super::shared_object_version_manager::{AssignedTxAndVersions, Schedulable};
 
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
@@ -119,7 +118,7 @@ pub async fn execute_certificate_with_execution_error(
                 .unwrap()
         }
     } else {
-        vec![]
+        AssignedVersions::new(vec![], None)
     };
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
@@ -129,7 +128,7 @@ pub async fn execute_certificate_with_execution_error(
             &certificate,
             ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
         )
-        .await?;
+        .await;
     let state_after =
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
@@ -146,7 +145,7 @@ pub async fn execute_certificate_with_execution_error(
                 &certificate,
                 ExecutionEnv::new().with_assigned_versions(assigned_versions),
             )
-            .await?;
+            .await;
     }
     Ok((
         certificate.into_inner(),
@@ -408,7 +407,7 @@ pub async fn execute_sequenced_certificate_to_effects(
     authority: &AuthorityState,
     certificate: VerifiedCertificate,
     assigned_versions: AssignedVersions,
-) -> Result<(TransactionEffects, Option<ExecutionError>), SuiError> {
+) -> (TransactionEffects, Option<ExecutionError>) {
     let env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
     authority.execution_scheduler.enqueue(
         vec![(
@@ -418,37 +417,30 @@ pub async fn execute_sequenced_certificate_to_effects(
         &authority.epoch_store_for_testing(),
     );
 
-    let (result, execution_error_opt) = authority.try_execute_for_test(&certificate, env).await?;
+    let (result, execution_error_opt) = authority.try_execute_for_test(&certificate, env).await;
     let effects = result.inner().data().clone();
-    Ok((effects, execution_error_opt))
+    (effects, execution_error_opt)
 }
 
 pub async fn send_consensus(
     authority: &AuthorityState,
     cert: &VerifiedCertificate,
 ) -> AssignedVersions {
-    let transaction = SequencedConsensusTransaction::new_test(
-        ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
-    );
-
-    let (_, assigned_versions) = authority
+    let assigned_versions = authority
         .epoch_store_for_testing()
-        .process_consensus_transactions_for_tests(
-            vec![transaction],
-            &Arc::new(CheckpointServiceNoop {}),
+        .assign_shared_object_versions_for_tests(
             authority.get_object_cache_reader().as_ref(),
-            &authority.metrics,
-            true,
+            &vec![VerifiedExecutableTransaction::new_from_certificate(
+                cert.clone(),
+            )],
         )
-        .await
         .unwrap();
 
     let assigned_versions = assigned_versions
-        .0
-        .into_iter()
-        .next()
-        .map(|(_, v)| v)
-        .unwrap_or(vec![]);
+        .into_map()
+        .get(&cert.key())
+        .cloned()
+        .unwrap_or_else(|| AssignedVersions::new(vec![], None));
 
     let certs = vec![(
         VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
@@ -466,53 +458,70 @@ pub async fn send_consensus_no_execution(
     authority: &AuthorityState,
     cert: &VerifiedCertificate,
 ) -> AssignedVersions {
-    let transaction = SequencedConsensusTransaction::new_test(
-        ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
-    );
-
-    // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
+    // Use the simpler assign_shared_object_versions_for_tests API to avoid actually executing cert.
     // This allows testing cert execution independently.
-    let (_, assigned_versions) = authority
+    let assigned_versions = authority
         .epoch_store_for_testing()
-        .process_consensus_transactions_for_tests(
-            vec![transaction],
-            &Arc::new(CheckpointServiceNoop {}),
+        .assign_shared_object_versions_for_tests(
             authority.get_object_cache_reader().as_ref(),
-            &authority.metrics,
-            true,
+            &vec![VerifiedExecutableTransaction::new_from_certificate(
+                cert.clone(),
+            )],
         )
-        .await
         .unwrap();
-    assert_eq!(assigned_versions.0.len(), 1);
-    assigned_versions.0.into_iter().next().unwrap().1
+
+    assigned_versions
+        .into_map()
+        .get(&cert.key())
+        .cloned()
+        .unwrap_or_else(|| AssignedVersions::new(vec![], None))
 }
 
-pub async fn send_batch_consensus_no_execution(
+#[cfg(test)]
+pub async fn send_batch_consensus_no_execution<C>(
     authority: &AuthorityState,
     certificates: &[VerifiedCertificate],
-    skip_consensus_commit_prologue_in_test: bool,
-) -> (Vec<Schedulable>, AssignedTxAndVersions) {
-    let transactions = certificates
+    consensus_handler: &mut crate::consensus_handler::ConsensusHandler<C>,
+    captured_transactions: &crate::consensus_test_utils::CapturedTransactions,
+) -> (Vec<Schedulable>, AssignedTxAndVersions)
+where
+    C: crate::checkpoints::CheckpointServiceNotify + Send + Sync + 'static,
+{
+    use crate::consensus_test_utils::TestConsensusCommit;
+    use sui_types::messages_consensus::ConsensusTransaction;
+
+    let consensus_transactions: Vec<ConsensusTransaction> = certificates
         .iter()
         .map(|cert| {
-            SequencedConsensusTransaction::new_test(ConsensusTransaction::new_certificate_message(
-                &authority.name,
-                cert.clone().into_inner(),
-            ))
+            ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into())
         })
         .collect();
 
-    // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
-    // This allows testing cert execution independently.
-    authority
-        .epoch_store_for_testing()
-        .process_consensus_transactions_for_tests(
-            transactions,
-            &Arc::new(CheckpointServiceNoop {}),
-            authority.get_object_cache_reader().as_ref(),
-            &authority.metrics,
-            skip_consensus_commit_prologue_in_test,
-        )
-        .await
-        .unwrap()
+    // Determine appropriate round and timestamp
+    let epoch_store = authority.epoch_store_for_testing();
+    let round = epoch_store.get_highest_pending_checkpoint_height() + 1;
+    let timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
+    let sub_dag_index = 0;
+
+    let commit =
+        TestConsensusCommit::new(consensus_transactions, round, timestamp_ms, sub_dag_index);
+
+    consensus_handler
+        .handle_consensus_commit_for_test(commit)
+        .await;
+
+    // Wait for captured transactions to be available
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let (scheduled_txns, assigned_tx_and_versions) = {
+        let mut captured = captured_transactions.lock();
+        assert!(
+            !captured.is_empty(),
+            "Expected transactions to be scheduled"
+        );
+        let (scheduled_txns, assigned_tx_and_versions, _) = captured.remove(0);
+        (scheduled_txns, assigned_tx_and_versions)
+    };
+
+    (scheduled_txns, assigned_tx_and_versions)
 }

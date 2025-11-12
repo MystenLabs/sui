@@ -1,23 +1,25 @@
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
-use serde::{
-    Deserialize, Deserializer,
-    de::{self, SeqAccess, Visitor},
-};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_spanned::Spanned;
+
+use move_compiler::editions::Edition;
+
+use crate::compatibility::legacy::LegacyData;
 
 use super::{
     EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, PublishAddresses, ResolverName,
+    toml_format::RenderToml,
 };
 
 /// The on-chain identifier for an environment (such as a chain ID); these are bound to environment
 /// names in the `[environments]` table of the manifest
 pub type EnvironmentID = String;
 
-// Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
-// writing these files should use [toml_edit] to set / preserve the formatting, since these are
-// user-editable files
-#[derive(Debug, Deserialize, Clone)]
+// Note: [Manifest] objects should not be mutated or serialized; they are user-defined files so
+// tools that write them should use [toml_edit] to set / preserve the formatting. However, we do
+// implement [Serialize] and provide [render_as_toml], primarily for generating tests
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ParsedManifest {
     pub package: PackageMetadata,
@@ -32,37 +34,31 @@ pub struct ParsedManifest {
     #[serde(default)]
     pub dep_replacements:
         BTreeMap<EnvironmentName, BTreeMap<PackageName, Spanned<ReplacementDependency>>>,
+
+    /// Additional information that we may need when we handle legacy packages. This data is only
+    /// populated by the legacy parser
+    #[serde(skip)]
+    pub legacy_data: Option<LegacyData>,
 }
 
 /// The `[package]` section of a manifest
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct PackageMetadata {
     pub name: Spanned<PackageName>,
-    pub edition: String,
+
+    #[serde(default, deserialize_with = "from_str_option")]
+    pub edition: Option<Edition>,
 
     #[serde(default)]
-    pub implicit_deps: ImplicitDepMode,
+    pub system_dependencies: Option<Vec<String>>,
 
     #[serde(flatten)]
     pub unrecognized_fields: BTreeMap<String, toml::Value>,
 }
 
-/// The `implicit-deps` field of a manifest
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ImplicitDepMode {
-    /// There is no `implicit-deps` field, or there's `implicit-deps = ["foo", "bar"]`
-    Enabled(Option<Vec<String>>),
-
-    /// `implicit-deps = false`
-    Disabled,
-
-    /// `implicit-deps = "internal"`
-    Testing,
-}
-
 /// An entry in the `[dependencies]` section of a manifest
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct DefaultDependency {
     #[serde(flatten)]
@@ -76,7 +72,7 @@ pub struct DefaultDependency {
 }
 
 /// An entry in the `[dep-replacements]` section of a manifest
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
 pub struct ReplacementDependency {
@@ -95,7 +91,7 @@ pub struct ReplacementDependency {
 ///
 /// There are additional general fields in the manifest format (like `override` or `rename-from`);
 /// these are in the [ManifestDependency] or [ManifestDependencyReplacement] types.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ManifestDependencyInfo {
     Git(ManifestGitDependency),
     External(ExternalDependency),
@@ -105,7 +101,7 @@ pub enum ManifestDependencyInfo {
 
 /// An external dependency has the form `{ r.<res> = <data> }`. External
 /// dependencies are resolved by external resolvers.
-#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(try_from = "RField", into = "RField")]
 pub struct ExternalDependency {
     /// The `<res>` in `{ r.<res> = <data> }`
@@ -116,7 +112,7 @@ pub struct ExternalDependency {
 }
 
 /// A `{git = "..."}` dependency in a manifest
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ManifestGitDependency {
     /// The repository containing the dependency
     #[serde(rename = "git")]
@@ -132,67 +128,14 @@ pub struct ManifestGitDependency {
 }
 
 /// Convenience type for serializing/deserializing external deps
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct RField {
     r: BTreeMap<String, toml::Value>,
 }
 
-impl Default for ImplicitDepMode {
-    fn default() -> Self {
-        Self::Enabled(None)
-    }
-}
-
-impl<'de> Deserialize<'de> for ImplicitDepMode {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct ImplicitDepModeVisitor;
-        impl<'de> Visitor<'de> for ImplicitDepModeVisitor {
-            type Value = ImplicitDepMode;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                // there's other things you can write, but we won't advertise that
-                formatter.write_str("the value false or a vector of names")
-            }
-
-            fn visit_bool<E: de::Error>(self, b: bool) -> Result<Self::Value, E> {
-                if b {
-                    Err(E::custom(
-                        "implicit-deps = true is the default behavior, so should be omitted",
-                    ))
-                } else {
-                    Ok(Self::Value::Disabled)
-                }
-            }
-
-            fn visit_str<E: de::Error>(self, s: &str) -> Result<Self::Value, E> {
-                if s == "internal" {
-                    Ok(Self::Value::Testing)
-                } else {
-                    // We hide the truth from the users! For testing in the monorepo, you may also pass
-                    // `implicit-deps = "internal"`
-                    Err(E::custom(
-                        "the only valid value for `implicit-deps` is `implicit-deps = false`",
-                    ))
-                }
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
-                let mut values = Vec::new();
-                while let Some(s) = seq.next_element::<String>()? {
-                    values.push(s)
-                }
-
-                Ok(Self::Value::Enabled(Some(values)))
-            }
-        }
-
-        deserializer.deserialize_any(ImplicitDepModeVisitor)
+impl RenderToml for ParsedManifest {
+    fn render_as_toml(&self) -> String {
+        todo!()
     }
 }
 
@@ -247,23 +190,44 @@ impl TryFrom<RField> for ExternalDependency {
     }
 }
 
+impl From<ExternalDependency> for RField {
+    fn from(value: ExternalDependency) -> Self {
+        Self {
+            r: BTreeMap::from([(value.resolver, value.data)]),
+        }
+    }
+}
+
+fn from_str_option<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: FromStr,
+    T::Err: std::fmt::Display,
+    D: Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    match s {
+        Some(s) => T::from_str(&s).map(Some).map_err(serde::de::Error::custom),
+        None => Ok(None),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
-
-    use crate::schema::{ImplicitDepMode, LocalDepInfo, OnChainDepInfo};
 
     use super::{
         DefaultDependency, ExternalDependency, ManifestDependencyInfo, ManifestGitDependency,
         ParsedManifest, ReplacementDependency,
     };
+    use move_compiler::editions::Edition;
+    use std::str::FromStr;
 
     impl ParsedManifest {
         /// (unsafe) convenience method for pulling out a dependency having given `name`
         fn get_dep(&self, name: impl AsRef<str>) -> &DefaultDependency {
             self.dependencies
                 .iter()
-                .find(|(dep_name, dep)| dep_name.as_ref().as_str() == name.as_ref())
+                .find(|(dep_name, _)| dep_name.as_ref().as_str() == name.as_ref())
                 .unwrap()
                 .1
         }
@@ -278,7 +242,7 @@ mod tests {
                 .get(env.as_ref())
                 .expect("environment exists")
                 .iter()
-                .find(|(dep_name, dep)| dep_name.as_ref().as_str() == name.as_ref())
+                .find(|(dep_name, _)| dep_name.as_ref().as_str() == name.as_ref())
                 .unwrap()
                 .1
                 .as_ref()
@@ -294,25 +258,11 @@ mod tests {
             ext
         }
 
-        fn as_local(&self) -> &LocalDepInfo {
-            let Self::Local(loc) = self else {
-                panic!("expected local dependency")
-            };
-            loc
-        }
-
         fn as_git(&self) -> &ManifestGitDependency {
             let Self::Git(git) = self else {
                 panic!("expected git dependency")
             };
             git
-        }
-
-        fn as_onchain(&self) -> &OnChainDepInfo {
-            let Self::OnChain(onchain) = self else {
-                panic!("expected onchain dependency")
-            };
-            onchain
         }
     }
 
@@ -328,7 +278,7 @@ mod tests {
     /// Parsing a basic file using a number of features succeeds
     #[test]
     fn basic() {
-        let manifest: ParsedManifest = toml_edit::de::from_str(
+        let _: ParsedManifest = toml_edit::de::from_str(
             r#"
             [package]
             name = "example"
@@ -447,7 +397,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(manifest.package.implicit_deps == ImplicitDepMode::Enabled(None));
+        assert!(manifest.package.system_dependencies.is_none());
     }
 
     /// You can turn implicit deps off
@@ -458,12 +408,12 @@ mod tests {
             [package]
             name = "test"
             edition = "2024"
-            implicit-deps = false
+            system-dependencies = []
             "#,
         )
         .unwrap();
 
-        assert!(manifest.package.implicit_deps == ImplicitDepMode::Disabled);
+        assert!(manifest.package.system_dependencies == Some(vec![]));
     }
 
     /// You can define specific implicit deps.
@@ -474,53 +424,15 @@ mod tests {
                 [package]
                 name = "test"
                 edition = "2024"
-                implicit-deps = ["foo", "bar"]
+                system-dependencies = ["foo", "bar"]
                 "#,
         )
         .unwrap();
 
-        assert!(
-            manifest.package.implicit_deps
-                == ImplicitDepMode::Enabled(Some(vec!["foo".to_string(), "bar".to_string()]))
+        assert_eq!(
+            manifest.package.system_dependencies,
+            Some(vec!["foo".to_string(), "bar".to_string()])
         );
-    }
-
-    /// You can ask for internal implicit deps
-    #[test]
-    fn parse_internal_implicit_deps() {
-        let manifest: ParsedManifest = toml_edit::de::from_str(
-            r#"
-            [package]
-            name = "test"
-            edition = "2024"
-            implicit-deps = "internal"
-            "#,
-        )
-        .unwrap();
-
-        assert!(manifest.package.implicit_deps == ImplicitDepMode::Testing);
-    }
-
-    /// implicit deps can't be a random string
-    #[test]
-    fn parse_bad_implicit_deps() {
-        let error = toml_edit::de::from_str::<ParsedManifest>(
-            r#"
-            [package]
-            name = "test"
-            edition = "2024"
-            implicit-deps = "bogus"
-            "#,
-        )
-        .unwrap_err()
-        .to_string();
-        assert_snapshot!(error, @r###"
-        TOML parse error at line 5, column 29
-          |
-        5 |             implicit-deps = "bogus"
-          |                             ^^^^^^^
-        the only valid value for `implicit-deps` is `implicit-deps = false`
-        "###);
     }
 
     // Dependency and dep-replacement parsing ////////////////////////////////////////////
@@ -653,7 +565,7 @@ mod tests {
             r#"
             [package]
             name = "name"
-            edition = "2025"
+            edition = "2024"
 
             [package]
             "#,
@@ -720,7 +632,10 @@ mod tests {
         .unwrap();
 
         assert_eq!(manifest.package.name.as_ref().as_str(), "name");
-        assert_eq!(manifest.package.edition, "2024");
+        assert_eq!(
+            manifest.package.edition,
+            Some(Edition::from_str("2024").unwrap())
+        );
 
         let unrecognized = manifest.package.unrecognized_fields.keys();
         assert_eq!(
@@ -839,23 +754,24 @@ mod tests {
         "###);
     }
 
-    /// package.edition must be present
+    /// package.edition not allowed
     #[test]
-    fn parse_no_edition() {
+    fn parse_unsupported_edition() {
         let error = toml_edit::de::from_str::<ParsedManifest>(
             r#"
             [package]
             name = "test"
+            edition = "2025"
             "#,
         )
         .unwrap_err()
         .to_string();
         assert_snapshot!(error, @r###"
-        TOML parse error at line 2, column 13
+        TOML parse error at line 4, column 23
           |
-        2 |             [package]
-          |             ^^^^^^^^^
-        missing field `edition`
+        4 |             edition = "2025"
+          |                       ^^^^^^
+        Unsupported edition "2025". Current supported editions include: "legacy", "2024.alpha", "2024.beta", and "2024"
         "###);
     }
 

@@ -134,6 +134,7 @@ impl LocalFaucet {
             .config
             .keystore
             .sign_secure(&self.active_address, &tx_data, Intent::sui_transaction())
+            .await
             .map_err(FaucetError::internal)?;
         let tx = Transaction::from_data(tx_data.clone(), vec![signature]);
 

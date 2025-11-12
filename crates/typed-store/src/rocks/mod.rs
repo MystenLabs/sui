@@ -9,7 +9,7 @@ use crate::memstore::{InMemoryBatch, InMemoryDB};
 use crate::rocks::errors::typed_store_err_from_bcs_err;
 use crate::rocks::errors::typed_store_err_from_rocks_err;
 pub use crate::rocks::options::{
-    default_db_options, read_size_from_env, DBMapTableConfigMap, DBOptions, ReadWriteOptions,
+    DBMapTableConfigMap, DBOptions, ReadWriteOptions, default_db_options, read_size_from_env,
 };
 use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
 #[cfg(tidehunter)]
@@ -17,22 +17,22 @@ use crate::tidehunter_util::{
     apply_range_bounds, transform_th_iterator, transform_th_key, typed_store_error_from_th_error,
 };
 use crate::util::{be_fix_int_ser, iterator_bounds, iterator_bounds_with_range};
+use crate::{DbIterator, TypedStoreError};
 use crate::{
     metrics::{DBMetrics, RocksDBPerfContext, SamplingInterval},
     traits::{Map, TableSummary},
 };
-use crate::{DbIterator, TypedStoreError};
 use backoff::backoff::Backoff;
 use fastcrypto::hash::{Digest, HashFunction};
 use mysten_common::debug_fatal;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::properties::num_files_at_level;
-use rocksdb::{checkpoint::Checkpoint, DBPinnableSlice, LiveFile};
 use rocksdb::{
-    properties, AsColumnFamilyRef, ColumnFamilyDescriptor, Error, MultiThreaded, ReadOptions,
-    WriteBatch,
+    AsColumnFamilyRef, ColumnFamilyDescriptor, Error, MultiThreaded, ReadOptions, WriteBatch,
+    properties,
 };
-use serde::{de::DeserializeOwned, Serialize};
+use rocksdb::{DBPinnableSlice, LiveFile, checkpoint::Checkpoint};
+use serde::{Serialize, de::DeserializeOwned};
 use std::ops::{Bound, Deref};
 use std::{
     borrow::Borrow,
@@ -384,6 +384,14 @@ impl Database {
         fail_point!("batch-write-after");
         #[allow(clippy::let_and_return)]
         ret
+    }
+
+    #[cfg(tidehunter)]
+    pub fn start_relocation(&self) -> anyhow::Result<()> {
+        if let Storage::TideHunter(db) = &self.storage {
+            db.start_relocation()?;
+        }
+        Ok(())
     }
 
     pub fn compact_range_cf<K: AsRef<[u8]>>(
@@ -968,6 +976,14 @@ impl<K, V> DBMap<K, V> {
         })
     }
 
+    fn start_iter_timer(&self) -> HistogramTimer {
+        self.db_metrics
+            .op_metrics
+            .rocksdb_iter_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer()
+    }
+
     // Creates metrics and context for tracking an iterator usage and performance.
     fn create_iter_context(
         &self,
@@ -977,12 +993,7 @@ impl<K, V> DBMap<K, V> {
         Option<Histogram>,
         Option<RocksDBPerfContext>,
     ) {
-        let timer = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_latency_seconds
-            .with_label_values(&[&self.cf])
-            .start_timer();
+        let timer = self.start_iter_timer();
         let bytes_scanned = self
             .db_metrics
             .op_metrics
@@ -1060,7 +1071,11 @@ impl<K, V> DBMap<K, V> {
                     let mut iter = db.iterator(*ks);
                     apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound);
                     iter.reverse();
-                    Ok(Box::new(transform_th_iterator(iter, prefix)))
+                    Ok(Box::new(transform_th_iterator(
+                        iter,
+                        prefix,
+                        self.start_iter_timer(),
+                    )))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
@@ -1554,9 +1569,11 @@ where
             Storage::InMemory(db) => db.iterator(&self.cf, None, None, false),
             #[cfg(tidehunter)]
             Storage::TideHunter(db) => match &self.column_family {
-                ColumnFamily::TideHunter((ks, prefix)) => {
-                    Box::new(transform_th_iterator(db.iterator(*ks), prefix))
-                }
+                ColumnFamily::TideHunter((ks, prefix)) => Box::new(transform_th_iterator(
+                    db.iterator(*ks),
+                    prefix,
+                    self.start_iter_timer(),
+                )),
                 _ => unreachable!("storage backend invariant violation"),
             },
         }
@@ -1592,7 +1609,7 @@ where
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
                     apply_range_bounds(&mut iter, lower_bound, upper_bound);
-                    Box::new(transform_th_iterator(iter, prefix))
+                    Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
@@ -1625,7 +1642,7 @@ where
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
                     apply_range_bounds(&mut iter, lower_bound, upper_bound);
-                    Box::new(transform_th_iterator(iter, prefix))
+                    Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
@@ -1800,6 +1817,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
 }
 
 // Drops a database if there is no other handle to it, with retries and timeout.
+#[cfg(not(tidehunter))]
 pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksdb::Error> {
     let mut backoff = backoff::ExponentialBackoff {
         max_elapsed_time: Some(timeout),
@@ -1814,6 +1832,11 @@ pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksd
             },
         }
     }
+}
+
+#[cfg(tidehunter)]
+pub async fn safe_drop_db(path: PathBuf, _: Duration) -> Result<(), std::io::Error> {
+    std::fs::remove_dir_all(path)
 }
 
 fn populate_missing_cfs(

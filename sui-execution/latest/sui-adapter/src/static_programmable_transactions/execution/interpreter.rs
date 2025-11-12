@@ -84,13 +84,12 @@ where
         receiving,
     )?;
     let mut mode_results = Mode::empty_results();
-    for (sp!(idx, command), tys) in commands {
+    for sp!(idx, c) in commands {
         let start = Instant::now();
         if let Err(err) = execute_command::<Mode>(
             &mut context,
             &mut mode_results,
-            command,
-            tys,
+            c,
             trace_builder_opt.as_mut(),
         ) {
             let object_runtime = context.object_runtime()?;
@@ -116,6 +115,8 @@ where
     // We record what objects were contained in at the start of the transaction
     // for expensive invariant checks
     let wrapped_object_containers = object_runtime.wrapped_object_containers();
+    // We record the generated object IDs for expensive invariant checks
+    let generated_object_ids = object_runtime.generated_object_ids();
 
     // apply changes
     let finished = context.finish::<Mode>();
@@ -124,7 +125,9 @@ where
         .save_loaded_runtime_objects(loaded_runtime_objects);
     env.state_view
         .save_wrapped_object_containers(wrapped_object_containers);
-    env.state_view.record_execution_results(finished?);
+    env.state_view.record_execution_results(finished?)?;
+    env.state_view
+        .record_generated_object_ids(generated_object_ids);
     Ok(mode_results)
 }
 
@@ -133,13 +136,18 @@ where
 fn execute_command<Mode: ExecutionMode>(
     context: &mut Context,
     mode_results: &mut Mode::ExecutionResults,
-    command: T::Command_,
-    result_tys: T::ResultType,
+    c: T::Command_,
     trace_builder_opt: Option<&mut MoveTraceBuilder>,
 ) -> Result<(), ExecutionError> {
+    let T::Command_ {
+        command,
+        result_type,
+        drop_values,
+        consumed_shared_objects: _,
+    } = c;
     let mut args_to_update = vec![];
     let result = match command {
-        T::Command_::MoveCall(move_call) => {
+        T::Command__::MoveCall(move_call) => {
             let T::MoveCall {
                 function,
                 arguments,
@@ -155,7 +163,7 @@ fn execute_command<Mode: ExecutionMode>(
             let arguments = context.arguments(arguments)?;
             context.vm_move_call(function, arguments, trace_builder_opt)?
         }
-        T::Command_::TransferObjects(objects, recipient) => {
+        T::Command__::TransferObjects(objects, recipient) => {
             let object_tys = objects
                 .iter()
                 .map(|sp!(_, (_, ty))| ty.clone())
@@ -173,7 +181,7 @@ fn execute_command<Mode: ExecutionMode>(
             }
             vec![]
         }
-        T::Command_::SplitCoins(_, coin, amounts) => {
+        T::Command__::SplitCoins(_, coin, amounts) => {
             // TODO should we just call a Move function?
             if Mode::TRACK_EXECUTION {
                 args_to_update.push(coin.clone());
@@ -203,7 +211,7 @@ fn execute_command<Mode: ExecutionMode>(
                 .map(|a| context.new_coin(a))
                 .collect::<Result<_, _>>()?
         }
-        T::Command_::MergeCoins(_, target, coins) => {
+        T::Command__::MergeCoins(_, target, coins) => {
             // TODO should we just call a Move function?
             if Mode::TRACK_EXECUTION {
                 args_to_update.push(target.clone());
@@ -231,11 +239,11 @@ fn execute_command<Mode: ExecutionMode>(
             target_ref.coin_ref_add_balance(additional)?;
             vec![]
         }
-        T::Command_::MakeMoveVec(ty, items) => {
+        T::Command__::MakeMoveVec(ty, items) => {
             let items: Vec<CtxValue> = context.arguments(items)?;
             vec![CtxValue::vec_pack(ty, items)?]
         }
-        T::Command_::Publish(module_bytes, dep_ids, linkage) => {
+        T::Command__::Publish(module_bytes, dep_ids, linkage) => {
             let modules =
                 context.deserialize_modules(&module_bytes, /* is upgrade */ false)?;
 
@@ -253,7 +261,7 @@ fn execute_command<Mode: ExecutionMode>(
                 std::vec![context.new_upgrade_cap(runtime_id)?]
             }
         }
-        T::Command_::Upgrade(
+        T::Command__::Upgrade(
             module_bytes,
             dep_ids,
             current_package_id,
@@ -306,9 +314,18 @@ fn execute_command<Mode: ExecutionMode>(
     };
     if Mode::TRACK_EXECUTION {
         let argument_updates = context.argument_updates(args_to_update)?;
-        let command_result = context.tracked_results(&result, &result_tys)?;
+        let command_result = context.tracked_results(&result, &result_type)?;
         Mode::finish_command_v2(mode_results, argument_updates, command_result)?;
     }
+    assert_invariant!(
+        result.len() == drop_values.len(),
+        "result values and drop values mismatch"
+    );
+    let result = result
+        .into_iter()
+        .zip(drop_values)
+        .map(|(value, drop)| if !drop { Some(value) } else { None })
+        .collect::<Vec<_>>();
     context.result(result)?;
     Ok(())
 }

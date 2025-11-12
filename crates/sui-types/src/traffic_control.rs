@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use serde::{de::Deserializer, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Deserializer};
 use serde_with::serde_as;
 use std::path::PathBuf;
 
@@ -52,12 +52,12 @@ const TRAFFIC_SINK_TIMEOUT_SEC: u64 = 300;
 ///
 /// 1. Set `x-forwarded-for: 0` for the `client-id-source` in the config.
 /// 2. Run the node and query any endpoint (AuthorityServer for validator, or json rpc for rpc node)
-///     from a known IP address.
+///    from a known IP address.
 /// 3. Search for lines containing `x-forwarded-for` in the logs. The log lines should contain
 ///    the contents of the `x-forwarded-for` header, if present, or a corresponding error if not.
 /// 4. The value for number of hops is derived from any such log line that contains your known IP
-///     address, and is defined as 1 + the number of IP addresses in the `x-forwarded-for` that occur
-///     **after** the known client IP address. Example:
+///    address, and is defined as 1 + the number of IP addresses in the `x-forwarded-for` that occur
+///    **after** the known client IP address. Example:
 ///
 /// ```ignore
 ///     [<known client IP>] <--- number of hops is 1
@@ -299,7 +299,7 @@ impl PolicyConfig {
         PolicyConfig {
             client_id_source: ClientIdSource::SocketAddr,
             spam_policy_type: PolicyType::FreqThreshold(FreqThresholdConfig {
-                client_threshold: 500,
+                client_threshold: 1000,
                 window_size_secs: 5,
                 update_interval_secs: 1,
                 ..FreqThresholdConfig::default()

@@ -4,7 +4,7 @@
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use move_cli::base;
 use shared_crypto::intent::Intent;
@@ -25,12 +25,12 @@ use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::{
     Command, ObjectArg, Transaction, TransactionData, TransactionDataAPI,
 };
-use sui_types::{Identifier, TypeTag, SUI_FRAMEWORK_PACKAGE_ID};
-use test_cluster::TestClusterBuilder;
+use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag};
 
 use tracing::debug;
 
 const DEFAULT_GAS_BUDGET: u64 = 900_000_000;
+pub const TEST_COIN_DECIMALS: u64 = 6;
 
 pub struct GasRet {
     pub object: ObjectRef,
@@ -118,10 +118,12 @@ pub async fn select_gas(
             });
         }
     }
-    Err(anyhow!("Cannot find gas coin for signer address [{signer_addr}] with amount sufficient for the required gas amount [{budget}]."))
+    Err(anyhow!(
+        "Cannot find gas coin for signer address [{signer_addr}] with amount sufficient for the required gas amount [{budget}]."
+    ))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InitRet {
     pub owner: SuiAddress,
     pub treasury_cap: ObjectRef,
@@ -161,7 +163,9 @@ pub async fn init_package(
         sender,
     );
 
-    let sig = keystore.sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())
+        .await?;
 
     let res = client
         .quorum_driver_api()
@@ -184,18 +188,17 @@ pub async fn init_package(
             owner,
             ..
         } = change
+            && object_type.to_string().contains("2::coin::TreasuryCap")
         {
-            if object_type.to_string().contains("2::coin::TreasuryCap") {
-                let Owner::AddressOwner(owner) = owner else {
-                    return None;
-                };
-                let coin_tag = object_type.type_params.into_iter().next().unwrap();
-                return Some(InitRet {
-                    owner,
-                    treasury_cap: (object_id, version, digest),
-                    coin_tag,
-                });
-            }
+            let Owner::AddressOwner(owner) = owner else {
+                return None;
+            };
+            let coin_tag = object_type.type_params.into_iter().next().unwrap();
+            return Some(InitRet {
+                owner,
+                treasury_cap: (object_id, version, digest),
+                coin_tag,
+            });
         }
         None
     });
@@ -237,7 +240,9 @@ pub async fn mint(
         gas_data.price,
     );
 
-    let sig = keystore.sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())
+        .await?;
 
     let res = client
         .quorum_driver_api()
@@ -252,56 +257,4 @@ pub async fn mint(
         .await?;
 
     Ok(res)
-}
-
-#[tokio::test]
-async fn test_mint() {
-    const COIN1_BALANCE: u64 = 100_000_000;
-    const COIN2_BALANCE: u64 = 200_000_000;
-    let test_cluster = TestClusterBuilder::new().build().await;
-    let client = test_cluster.wallet.get_client().await.unwrap();
-    let keystore = &test_cluster.wallet.config.keystore;
-
-    let sender = test_cluster.get_address_0();
-    let init_ret = init_package(
-        &client,
-        keystore,
-        sender,
-        Path::new("tests/custom_coins/test_coin"),
-    )
-    .await
-    .unwrap();
-
-    let address1 = test_cluster.get_address_1();
-    let address2 = test_cluster.get_address_2();
-    let balances_to = vec![(COIN1_BALANCE, address1), (COIN2_BALANCE, address2)];
-
-    let mint_res = mint(&client, keystore, init_ret, balances_to)
-        .await
-        .unwrap();
-    let coins = mint_res
-        .object_changes
-        .unwrap()
-        .into_iter()
-        .filter_map(|change| {
-            if let ObjectChange::Created {
-                object_type, owner, ..
-            } = change
-            {
-                Some((object_type, owner))
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-    let coin1 = coins
-        .iter()
-        .find(|coin| coin.1.get_address_owner_address().unwrap() == address1)
-        .unwrap();
-    let coin2 = coins
-        .iter()
-        .find(|coin| coin.1.get_address_owner_address().unwrap() == address2)
-        .unwrap();
-    assert!(coin1.0.to_string().contains("::test_coin::TEST_COIN"));
-    assert!(coin2.0.to_string().contains("::test_coin::TEST_COIN"));
 }

@@ -4,6 +4,9 @@
 //! Lint to encourage the use of named constants with 'abort' and 'assert' for enhanced code readability.
 //! Detects cases where non-constants are used and issues a warning.
 
+use std::sync::Arc;
+
+use crate::PreCompiledProgramInfo;
 use crate::diagnostics::DiagnosticReporter;
 use crate::diagnostics::warning_filters::WarningFilters;
 use crate::linters::StyleCodes;
@@ -32,7 +35,11 @@ pub struct Context<'a> {
 impl CFGIRVisitorConstructor for AssertAbortNamedConstants {
     type Context<'a> = Context<'a>;
 
-    fn context<'a>(env: &'a CompilationEnv, program: &G::Program) -> Self::Context<'a> {
+    fn context<'a>(
+        env: &'a CompilationEnv,
+        _pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+        program: &G::Program,
+    ) -> Self::Context<'a> {
         let package_name = program
             .modules
             .iter()

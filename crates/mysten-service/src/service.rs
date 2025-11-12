@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::health::HealthResponse;
 use crate::DEFAULT_PORT;
+use crate::health::HealthResponse;
 use anyhow::Result;
-use axum::routing::get;
 use axum::Json;
 use axum::Router;
+use axum::routing::get;
 use tracing::debug;
 
 pub fn get_mysten_service<S>(app_name: &str, app_version: &str) -> Router<S>

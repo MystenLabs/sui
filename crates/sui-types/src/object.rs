@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
@@ -13,15 +12,19 @@ use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveTypeLay
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use mysten_common::debug_fatal;
+use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use serde_with::Bytes;
+use serde_with::serde_as;
 
+use crate::accumulator_root::AccumulatorValue;
 use crate::base_types::{FullObjectID, FullObjectRef, MoveObjectType, ObjectIDParseError};
 use crate::coin::{Coin, CoinMetadata, TreasuryCap};
 use crate::crypto::{default_hash, deterministic_random_account_key};
-use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
+use crate::error::{
+    ExecutionError, ExecutionErrorKind, SuiErrorKind, UserInputError, UserInputResult,
+};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::GAS;
 use crate::is_system_package;
@@ -40,6 +43,7 @@ use self::bounded_visitor::BoundedVisitor;
 
 mod balance_traversal;
 pub mod bounded_visitor;
+pub mod option_visitor;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 300_000_000_000_000;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
@@ -96,7 +100,15 @@ impl MoveObject {
         } else {
             protocol_config.max_move_object_size()
         };
-        Self::new_from_execution_with_limit(type_, has_public_transfer, version, contents, bound)
+        unsafe {
+            Self::new_from_execution_with_limit(
+                type_,
+                has_public_transfer,
+                version,
+                contents,
+                bound,
+            )
+        }
     }
 
     /// # Safety
@@ -216,6 +228,10 @@ impl MoveObject {
             .splice(ID_END_INDEX.., timestamp_ms.to_le_bytes());
     }
 
+    pub fn set_contents_unsafe(&mut self, contents: Vec<u8>) {
+        self.contents = contents;
+    }
+
     pub fn is_coin(&self) -> bool {
         self.type_.is_coin()
     }
@@ -230,6 +246,10 @@ impl MoveObject {
 
     pub fn version(&self) -> SequenceNumber {
         self.version
+    }
+
+    pub fn contents_and_type_equal(&self, other: &Self) -> bool {
+        self.contents == other.contents && self.type_ == other.type_
     }
 
     /// Contents of the object that are specific to its type--i.e., not its ID and version, which all objects have
@@ -315,7 +335,7 @@ impl MoveObject {
     ) -> Result<MoveStructLayout, SuiError> {
         let type_ = TypeTag::Struct(Box::new(struct_tag));
         let layout = TypeLayoutBuilder::build_with_types(&type_, resolver).map_err(|e| {
-            SuiError::ObjectSerializationError {
+            SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
             }
         })?;
@@ -330,9 +350,10 @@ impl MoveObject {
     /// Convert `self` to the JSON representation dictated by `layout`.
     pub fn to_move_struct(&self, layout: &MoveStructLayout) -> Result<MoveStruct, SuiError> {
         BoundedVisitor::deserialize_struct(&self.contents, layout).map_err(|e| {
-            SuiError::ObjectSerializationError {
+            SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
             }
+            .into()
         })
     }
 
@@ -362,36 +383,36 @@ impl MoveObject {
 
     /// Get the total amount of SUI embedded in `self`. Intended for testing purposes
     pub fn get_total_sui(&self, layout_resolver: &mut dyn LayoutResolver) -> Result<u64, SuiError> {
-        let balances = self.get_coin_balances(layout_resolver)?;
-        Ok(balances.get(&GAS::type_tag()).copied().unwrap_or(0))
-    }
-}
-
-// Helpers for extracting Coin<T> balances for all T
-impl MoveObject {
-    /// Get the total balances for all `Coin<T>` embedded in `self`.
-    pub fn get_coin_balances(
-        &self,
-        layout_resolver: &mut dyn LayoutResolver,
-    ) -> Result<BTreeMap<TypeTag, u64>, SuiError> {
-        // Fast path without deserialization.
-        if let Some(type_tag) = self.type_.coin_type_maybe() {
+        if self.type_.is_gas_coin() {
             let balance = self.get_coin_value_unsafe();
-            Ok(if balance > 0 {
-                BTreeMap::from([(type_tag.clone(), balance)])
-            } else {
-                BTreeMap::default()
-            })
+            Ok(balance)
+        } else if self.type_.coin_type_maybe().is_some() {
+            // It's a coin, but its not SUI
+            Ok(0)
+        } else if self.type_.is_sui_balance_accumulator_field() {
+            let value = AccumulatorValue::try_from(self)?;
+            let AccumulatorValue::U128(v) = value;
+            // Well behaved balance types can never have more than their total supply
+            // anywhere, which is 10B for SUI.
+            assert!(
+                v.value <= u64::MAX as u128,
+                "SUI balance cannot exceed u64::MAX"
+            );
+            Ok(v.value as u64)
         } else {
             let layout = layout_resolver.get_annotated_layout(&self.type_().clone().into())?;
 
             let mut traversal = BalanceTraversal::default();
             MoveValue::visit_deserialize(&self.contents, &layout.into_layout(), &mut traversal)
-                .map_err(|e| SuiError::ObjectSerializationError {
+                .map_err(|e| SuiErrorKind::ObjectSerializationError {
                     error: e.to_string(),
                 })?;
 
-            Ok(traversal.finish())
+            Ok(traversal
+                .finish()
+                .get(&GAS::type_tag())
+                .copied()
+                .unwrap_or(0))
         }
     }
 }
@@ -508,7 +529,7 @@ impl Owner {
             Self::Shared { .. }
             | Self::Immutable
             | Self::ObjectOwner(_)
-            | Self::ConsensusAddressOwner { .. } => Err(SuiError::UnexpectedOwnerType),
+            | Self::ConsensusAddressOwner { .. } => Err(SuiErrorKind::UnexpectedOwnerType.into()),
         }
     }
 
@@ -520,7 +541,7 @@ impl Owner {
             Self::AddressOwner(address)
             | Self::ObjectOwner(address)
             | Self::ConsensusAddressOwner { owner: address, .. } => Ok(*address),
-            Self::Shared { .. } | Self::Immutable => Err(SuiError::UnexpectedOwnerType),
+            Self::Shared { .. } | Self::Immutable => Err(SuiErrorKind::UnexpectedOwnerType.into()),
         }
     }
 
@@ -620,9 +641,30 @@ pub struct ObjectInner {
     pub storage_rebate: u64,
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+#[derive(Eq, PartialEq, Clone, Deserialize, Serialize, Hash)]
 #[serde(from = "ObjectInner")]
 pub struct Object(Arc<ObjectInner>);
+
+fn is_object_debug_verbose() -> bool {
+    static SUI_OBJECT_DEBUG_VERBOSE: Lazy<bool> =
+        Lazy::new(|| std::env::var("SUI_OBJECT_DEBUG_VERBOSE").is_ok());
+    *SUI_OBJECT_DEBUG_VERBOSE
+}
+
+impl std::fmt::Debug for Object {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if is_object_debug_verbose() {
+            // Just call debug on ObjectInner for verbose debugging.
+            (*self.0).fmt(f)
+        } else {
+            f.debug_struct("Object")
+                .field("id", &self.id())
+                .field("version", &self.version())
+                .field("owner", &self.owner())
+                .finish()
+        }
+    }
+}
 
 impl From<ObjectInner> for Object {
     fn from(inner: ObjectInner) -> Self {
@@ -938,14 +980,18 @@ impl ObjectInner {
     /// like this: `S<T>`.
     /// Returns the inner parameter type `T`.
     pub fn get_move_template_type(&self) -> SuiResult<TypeTag> {
-        let move_struct = self.data.struct_tag().ok_or_else(|| SuiError::TypeError {
-            error: "Object must be a Move object".to_owned(),
-        })?;
+        let move_struct = self
+            .data
+            .struct_tag()
+            .ok_or_else(|| SuiErrorKind::TypeError {
+                error: "Object must be a Move object".to_owned(),
+            })?;
         fp_ensure!(
             move_struct.type_params.len() == 1,
-            SuiError::TypeError {
+            SuiErrorKind::TypeError {
                 error: "Move object struct must have one type parameter".to_owned()
             }
+            .into()
         );
         // Index access safe due to checks above.
         let type_tag = move_struct.type_params[0].clone();
@@ -1259,7 +1305,11 @@ impl Display for PastObjectRead {
                 asked_version,
                 latest_version,
             } => {
-                write!(f, "PastObjectRead::VersionTooHigh ({:?}, asked sequence number {:?}, latest sequence number {:?})", object_id, asked_version, latest_version)
+                write!(
+                    f,
+                    "PastObjectRead::VersionTooHigh ({:?}, asked sequence number {:?}, latest sequence number {:?})",
+                    object_id, asked_version, latest_version
+                )
             }
         }
     }
@@ -1267,7 +1317,7 @@ impl Display for PastObjectRead {
 
 #[cfg(test)]
 mod tests {
-    use crate::object::{Object, Owner, OBJECT_START_VERSION};
+    use crate::object::{OBJECT_START_VERSION, Object, Owner};
     use crate::{
         base_types::{ObjectID, SuiAddress, TransactionDigest},
         gas_coin::GasCoin,
@@ -1297,7 +1347,10 @@ mod tests {
         );
 
         let objref = format!("{:?}", o.compute_object_reference());
-        assert_eq!(objref, "(0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(1), o#59tZq65HVqZjUyNtD7BCGLTD87N5cpayYwEFrtwR4aMz)");
+        assert_eq!(
+            objref,
+            "(0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(1), o#59tZq65HVqZjUyNtD7BCGLTD87N5cpayYwEFrtwR4aMz)"
+        );
     }
 
     #[test]

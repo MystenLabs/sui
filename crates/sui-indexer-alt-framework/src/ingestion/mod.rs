@@ -16,16 +16,14 @@ use url::Url;
 use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::client::IngestionClient;
 use crate::ingestion::error::{Error, Result};
-use crate::ingestion::regulator::regulator;
 use crate::metrics::IndexerMetrics;
-use crate::types::full_checkpoint_content::CheckpointData;
+use crate::types::full_checkpoint_content::Checkpoint;
 
 mod broadcaster;
 pub mod client;
 pub mod error;
 mod local_client;
-mod regulator;
-mod remote_client;
+pub mod remote_client;
 mod rpc_client;
 #[cfg(test)]
 mod test_utils;
@@ -71,9 +69,9 @@ pub struct IngestionConfig {
 pub struct IngestionService {
     config: IngestionConfig,
     client: IngestionClient,
-    ingest_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
-    ingest_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
-    subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
+    commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
+    commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
+    subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
     cancel: CancellationToken,
 }
 
@@ -109,12 +107,12 @@ impl IngestionService {
         };
 
         let subscribers = Vec::new();
-        let (ingest_hi_tx, ingest_hi_rx) = mpsc::unbounded_channel();
+        let (commit_hi_tx, commit_hi_rx) = mpsc::unbounded_channel();
         Ok(Self {
             config,
             client,
-            ingest_hi_tx,
-            ingest_hi_rx,
+            commit_hi_tx,
+            commit_hi_rx,
             subscribers,
             cancel,
         })
@@ -129,20 +127,20 @@ impl IngestionService {
     /// the "slow receiver" problem: If one receiver is slower to process checkpoints than the
     /// checkpoint ingestion rate, it will eventually hold up all receivers.
     ///
-    /// The ingestion service can optionally receive checkpoint high watermarks from its
-    /// subscribers. If a subscriber provides a watermark, the ingestion service will commit to not
-    /// run ahead of the watermark by more than the config's buffer_size.
+    /// The ingestion service can optionally receive checkpoint high values from its
+    /// subscribers. If a subscriber provides a commit_hi, the ingestion service will commit to not
+    /// run ahead of the commit_hi by more than the config's buffer_size.
     ///
-    /// Returns the channel to receive checkpoints from and the channel to accept watermarks from.
+    /// Returns the channel to receive checkpoints from and the channel to send commit_hi values to.
     pub fn subscribe(
         &mut self,
     ) -> (
-        mpsc::Receiver<Arc<CheckpointData>>,
+        mpsc::Receiver<Arc<Checkpoint>>,
         mpsc::UnboundedSender<(&'static str, u64)>,
     ) {
         let (sender, receiver) = mpsc::channel(self.config.checkpoint_buffer_size);
         self.subscribers.push(sender);
-        (receiver, self.ingest_hi_tx.clone())
+        (receiver, self.commit_hi_tx.clone())
     }
 
     /// Start the ingestion service as a background task, consuming it in the process.
@@ -159,16 +157,19 @@ impl IngestionService {
     /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
     /// not exist yet. These will be retried repeatedly on a fixed `retry_interval` until they
     /// become available.
-    pub async fn run<I>(self, checkpoints: I) -> Result<(JoinHandle<()>, JoinHandle<()>)>
+    pub async fn run<R>(
+        self,
+        checkpoints: R,
+        initial_commit_hi: Option<u64>,
+    ) -> Result<JoinHandle<()>>
     where
-        I: IntoIterator<Item = u64> + Send + Sync + 'static,
-        I::IntoIter: Send + Sync + 'static,
+        R: std::ops::RangeBounds<u64> + Send + 'static,
     {
         let IngestionService {
             config,
             client,
-            ingest_hi_tx: _,
-            ingest_hi_rx,
+            commit_hi_tx: _,
+            commit_hi_rx,
             subscribers,
             cancel,
         } = self;
@@ -177,19 +178,17 @@ impl IngestionService {
             return Err(Error::NoSubscribers);
         }
 
-        let (checkpoint_tx, checkpoint_rx) = mpsc::channel(config.ingest_concurrency);
-
-        let regulator = regulator(
+        let broadcaster = broadcaster(
             checkpoints,
-            config.checkpoint_buffer_size,
-            ingest_hi_rx,
-            checkpoint_tx,
+            initial_commit_hi,
+            config,
+            client,
+            commit_hi_rx,
+            subscribers,
             cancel.clone(),
         );
 
-        let broadcaster = broadcaster(config, client, checkpoint_rx, subscribers, cancel.clone());
-
-        Ok((regulator, broadcaster))
+        Ok(broadcaster)
     }
 }
 
@@ -243,7 +242,7 @@ mod tests {
 
     async fn test_subscriber(
         stop_after: usize,
-        mut rx: mpsc::Receiver<Arc<CheckpointData>>,
+        mut rx: mpsc::Receiver<Arc<Checkpoint>>,
         cancel: CancellationToken,
     ) -> JoinHandle<Vec<u64>> {
         tokio::spawn(async move {
@@ -252,7 +251,7 @@ mod tests {
                 tokio::select! {
                     _ = cancel.cancelled() => break,
                     Some(checkpoint) = rx.recv() => {
-                        seqs.push(checkpoint.checkpoint_summary.sequence_number);
+                        seqs.push(checkpoint.summary.sequence_number);
                     }
                 }
             }
@@ -276,7 +275,7 @@ mod tests {
         let cancel = CancellationToken::new();
         let ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
 
-        let err = ingestion_service.run(0..).await.unwrap_err();
+        let err = ingestion_service.run(0.., None).await.unwrap_err();
         assert!(matches!(err, Error::NoSubscribers));
     }
 
@@ -298,11 +297,10 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(usize::MAX, rx, cancel.clone()).await;
-        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
+        let broadcaster = ingestion_service.run(0.., None).await.unwrap();
 
         cancel.cancel();
         subscriber.await.unwrap();
-        regulator.await.unwrap();
         broadcaster.await.unwrap();
     }
 
@@ -324,11 +322,10 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(1, rx, cancel.clone()).await;
-        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
+        let broadcaster = ingestion_service.run(0.., None).await.unwrap();
 
         cancel.cancelled().await;
         subscriber.await.unwrap();
-        regulator.await.unwrap();
         broadcaster.await.unwrap();
     }
 
@@ -356,11 +353,10 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(5, rx, cancel.clone()).await;
-        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
+        let broadcaster = ingestion_service.run(0.., None).await.unwrap();
 
         cancel.cancelled().await;
         let seqs = subscriber.await.unwrap();
-        regulator.await.unwrap();
         broadcaster.await.unwrap();
 
         assert_eq!(seqs, vec![1, 2, 3, 6, 7]);
@@ -389,11 +385,10 @@ mod tests {
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(5, rx, cancel.clone()).await;
-        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
+        let broadcaster = ingestion_service.run(0.., None).await.unwrap();
 
         cancel.cancelled().await;
         let seqs = subscriber.await.unwrap();
-        regulator.await.unwrap();
         broadcaster.await.unwrap();
 
         assert_eq!(seqs, vec![1, 2, 3, 6, 7]);
@@ -421,14 +416,14 @@ mod tests {
 
         // This subscriber will take its sweet time processing checkpoints.
         let (mut laggard, _) = ingestion_service.subscribe();
-        async fn unblock(laggard: &mut mpsc::Receiver<Arc<CheckpointData>>) -> u64 {
+        async fn unblock(laggard: &mut mpsc::Receiver<Arc<Checkpoint>>) -> u64 {
             let checkpoint = laggard.recv().await.unwrap();
-            checkpoint.checkpoint_summary.sequence_number
+            checkpoint.summary.sequence_number
         }
 
         let (rx, _) = ingestion_service.subscribe();
         let subscriber = test_subscriber(5, rx, cancel.clone()).await;
-        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
+        let broadcaster = ingestion_service.run(0.., None).await.unwrap();
 
         // At this point, the service will have been able to pass 3 checkpoints to the non-lagging
         // subscriber, while the laggard's buffer fills up. Now the laggard will pull two
@@ -439,7 +434,6 @@ mod tests {
 
         cancel.cancelled().await;
         let seqs = subscriber.await.unwrap();
-        regulator.await.unwrap();
         broadcaster.await.unwrap();
 
         assert_eq!(seqs, vec![1, 2, 3, 4, 5]);

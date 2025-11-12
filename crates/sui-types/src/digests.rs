@@ -3,12 +3,16 @@
 
 use std::{env, fmt};
 
-use crate::{error::SuiError, sui_serde::Readable};
+use crate::{
+    error::{SuiError, SuiErrorKind, SuiResult},
+    sui_serde::Readable,
+};
 use fastcrypto::encoding::{Base58, Encoding, Hex};
+use fastcrypto::hash::{Blake2b256, HashFunction};
 use once_cell::sync::{Lazy, OnceCell};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, Bytes};
+use serde_with::{Bytes, serde_as};
 use sui_protocol_config::Chain;
 use tracing::info;
 
@@ -90,7 +94,7 @@ impl TryFrom<Vec<u8>> for Digest {
 
     fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
         let bytes: [u8; 32] =
-            <[u8; 32]>::try_from(&bytes[..]).map_err(|_| SuiError::InvalidDigestLength {
+            <[u8; 32]>::try_from(&bytes[..]).map_err(|_| SuiErrorKind::InvalidDigestLength {
                 expected: 32,
                 actual: bytes.len(),
             })?;
@@ -253,7 +257,7 @@ pub fn get_testnet_chain_identifier() -> ChainIdentifier {
 
 impl fmt::Display for ChainIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for byte in self.0 .0 .0[0..4].iter() {
+        for byte in self.0.0.0[0..4].iter() {
             write!(f, "{:02x}", byte)?;
         }
 
@@ -625,7 +629,7 @@ impl TryFrom<&[u8]> for TransactionDigest {
     fn try_from(bytes: &[u8]) -> Result<Self, crate::error::SuiError> {
         let arr: [u8; 32] = bytes
             .try_into()
-            .map_err(|_| crate::error::SuiError::InvalidTransactionDigest)?;
+            .map_err(|_| crate::error::SuiErrorKind::InvalidTransactionDigest)?;
         Ok(Self::new(arr))
     }
 }
@@ -742,6 +746,20 @@ impl fmt::LowerHex for TransactionEffectsDigest {
 impl fmt::UpperHex for TransactionEffectsDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::UpperHex::fmt(&self.0, f)
+    }
+}
+
+impl std::str::FromStr for TransactionEffectsDigest {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut result = [0; 32];
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
+        Ok(TransactionEffectsDigest::new(result))
     }
 }
 
@@ -998,7 +1016,7 @@ impl TryFrom<&[u8]> for ObjectDigest {
     fn try_from(bytes: &[u8]) -> Result<Self, crate::error::SuiError> {
         let arr: [u8; 32] = bytes
             .try_into()
-            .map_err(|_| crate::error::SuiError::InvalidTransactionDigest)?;
+            .map_err(|_| crate::error::SuiErrorKind::InvalidTransactionDigest)?;
         Ok(Self::new(arr))
     }
 }
@@ -1103,6 +1121,47 @@ impl fmt::Debug for AdditionalConsensusStateDigest {
         f.debug_tuple("AdditionalConsensusStateDigest")
             .field(&self.0)
             .finish()
+    }
+}
+
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+pub struct CheckpointArtifactsDigest(Digest);
+
+impl CheckpointArtifactsDigest {
+    pub const fn new(digest: [u8; 32]) -> Self {
+        Self(Digest::new(digest))
+    }
+
+    pub const fn inner(&self) -> &[u8; 32] {
+        self.0.inner()
+    }
+
+    pub const fn into_inner(self) -> [u8; 32] {
+        self.0.into_inner()
+    }
+
+    pub fn base58_encode(&self) -> String {
+        Base58::encode(self.0)
+    }
+
+    pub fn from_artifact_digests(digests: Vec<Digest>) -> SuiResult<Self> {
+        let bytes =
+            bcs::to_bytes(&digests).map_err(|e| SuiError::from(format!("BCS error: {}", e)))?;
+        Ok(Self(Digest::new(Blake2b256::digest(&bytes).into())))
+    }
+}
+
+impl From<[u8; 32]> for CheckpointArtifactsDigest {
+    fn from(digest: [u8; 32]) -> Self {
+        Self(Digest::new(digest))
+    }
+}
+
+impl fmt::Display for CheckpointArtifactsDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
     }
 }
 

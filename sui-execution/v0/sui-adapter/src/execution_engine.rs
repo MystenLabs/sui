@@ -22,7 +22,6 @@ mod checked {
     use sui_types::committee::EpochId;
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
-    use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
@@ -356,7 +355,7 @@ mod checked {
                 result = Err(conservation_err);
                 gas_charger.reset(temporary_store);
                 gas_charger.charge_gas(temporary_store, &mut result);
-                // check conservation once more more
+                // check conservation once more
                 let mut layout_resolver =
                     TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
                 if let Err(recovery_err) = temporary_store.check_sui_conserved(
@@ -700,7 +699,7 @@ mod checked {
             }
         }
 
-        let binary_config = to_binary_config(protocol_config);
+        let binary_config = protocol_config.binary_config(None);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
                 .iter()

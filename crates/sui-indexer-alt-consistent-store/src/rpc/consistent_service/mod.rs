@@ -9,7 +9,7 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     ServiceConfigResponse,
 };
 
-use super::state::{checkpointed_response, State};
+use super::state::{State, checkpointed_response};
 
 use self::available_range::available_range;
 use self::balances::{batch_get_balances, get_balance, list_balances};
@@ -29,9 +29,9 @@ impl ConsistentService for State {
         &self,
         request: tonic::Request<AvailableRangeRequest>,
     ) -> Result<tonic::Response<AvailableRangeResponse>, tonic::Status> {
-        available_range(self, request.into_inner())
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        let checkpoint = self.checkpoint(&request)?;
+        let response = available_range(self, checkpoint, request.into_inner())?;
+        Ok(checkpointed_response(checkpoint, response)?)
     }
 
     async fn batch_get_balances(

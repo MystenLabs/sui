@@ -30,6 +30,8 @@ jobs:
   create-release:
     name: Create Release for ${{ inputs.network }}
     runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.sui.outputs.new_tag }}
 
     steps:
       - name: Checkout sui main branch
@@ -83,11 +85,14 @@ jobs:
 
       - name: Create ${{ inputs.network }}-v${{ env.sui_release_version }} release tag
         shell: bash
+        id: sui
         env:
           SUI_RELEASE_VERSION: ${{ env.sui_release_version }}
         run: |
           export release_tag="${{ inputs.network }}-v${{ env.SUI_RELEASE_VERSION }}"
           echo "release_tag=${release_tag}" >> $GITHUB_ENV
+          echo "new_tag=${release_tag}" >> "$GITHUB_OUTPUT"
+
           curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \

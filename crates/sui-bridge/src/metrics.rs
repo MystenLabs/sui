@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, HistogramVec, IntCounter, IntCounterVec, IntGauge,
-    IntGaugeVec, Registry,
+    register_int_gauge_with_registry,
 };
 
 const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[

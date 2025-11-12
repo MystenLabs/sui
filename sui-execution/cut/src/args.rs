@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{self, bail, Result};
+use anyhow::{self, Result, bail};
 use clap::{ArgAction, Parser};
 use std::env;
 use std::path::PathBuf;

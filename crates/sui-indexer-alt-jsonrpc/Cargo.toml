@@ -4,7 +4,7 @@ version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "sui-indexer-alt-jsonrpc"
@@ -29,6 +29,7 @@ futures.workspace = true
 http.workspace = true
 jsonrpsee = { workspace = true, features = ["macros", "server"] }
 pin-project-lite.workspace = true
+pin-project.workspace = true
 prometheus.workspace = true
 schemars.workspace = true
 serde.workspace = true

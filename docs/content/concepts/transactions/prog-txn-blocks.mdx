@@ -1,6 +1,7 @@
 ---
 title: Programmable Transaction Blocks
 description: Programmable transaction blocks are a group of commands that complete a transaction on Sui.
+keywords: [ programmable transaction blocks, transaction blocks, program transaction blocks, PTB, PTBs, what are PTBs, what is PTB, transaction group, programmable group of transactions, program transaction block, block of transactions, group of transactions ]
 ---
 
 On Sui, a transaction is more than a basic record of the flow of assets. Transactions on Sui are composed of a number of commands that execute on inputs to define the result of the transaction. Termed programmable transaction blocks (PTBs), these groups of commands define all user transactions on Sui. PTBs allow a user to call multiple Move functions, manage their objects, and manage their coins in a single transaction--without publishing a new Move package. Designed with automation and transaction builders in mind, PTBs are a lightweight and flexible way of generating transactions. More intricate programming patterns, such as loops, are not supported, however, and in those cases you must publish a new Move package.
@@ -12,7 +13,7 @@ A PTB can perform up to 1,024 unique operations in a single execution, whereas t
 The remainder of this topic covers the semantics of the execution of the transaction commands. It assumes familiarity with the Sui object model and the Move language. For more information on those topics, see the following documents:
 
 - [Object model](../object-model.mdx)
-- [Move Concepts](../sui-move-concepts.mdx)
+- [Move concepts](../sui-move-concepts.mdx)
 
 ## Transaction type
 
@@ -45,13 +46,13 @@ The inputs and results can be seen as populating an array of values. For inputs,
 
 ### Inputs
 
-Input arguments to a PTB are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. This section describes information or data the Sui network needs when specifying the list of inputs, `[Input]`. Each `Input` is either an object, `Input::Object(ObjectArg)`, which contains the necessary metadata to specify to object being used, or a pure value, `Input::Pure(PureArg)`, which contains the bytes of the value.
+Input arguments to a PTB are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. This section describes information or data the Sui network needs when specifying the list of inputs, `[Input]`. Each `Input` is either an object, `Input::Object(ObjectArg)`, which contains the necessary metadata to specify the object being used, or a pure value, `Input::Pure(PureArg)`, which contains the bytes of the value.
 
 For object inputs, the metadata needed differs depending on the type of [ownership of the object](../object-ownership.mdx). The data for the `ObjectArg` enum follows:
 
 If the object is owned by an address (or it is immutable), then use `ObjectArg::ImmOrOwnedObject(ObjectID, SequenceNumber, ObjectDigest)`. The triple respectively specifies the object's ID, its sequence number (also known as its version), and the digest of the object's data.
 
-If an object is shared, then use `Object::SharedObject { id: ObjectID, initial_shared_version: SequenceNumber, mutable: bool }`. Unlike `ImmOrOwnedObject`, a shared objects version and digest are determined by the network's consensus protocol. The `initial_shared_version` is the version of the object when it was first shared, which is used by consensus when it has not yet seen a transaction with that object. While all shared objects _can_ be mutated, the `mutable` flag indicates whether the object is to be used mutably in this transaction. In the case where the `mutable` flag is set to `false`, the object is read-only, and the system can schedule other read-only transactions in parallel.
+If an object is shared, then use `ObjectArg::SharedObject { id: ObjectID, initial_shared_version: SequenceNumber, mutable: bool }`. Unlike `ImmOrOwnedObject`, a shared objects version and digest are determined by the network's consensus protocol. The `initial_shared_version` is the version of the object when it was first shared, which is used by consensus when it has not yet seen a transaction with that object. While all shared objects _can_ be mutated, the `mutable` flag indicates whether the object is to be used mutably in this transaction. In the case where the `mutable` flag is set to `false`, the object is read-only, and the system can schedule other read-only transactions in parallel.
 
 If the object is owned by another object, as in it was sent to an object's ID via the `TransferObjects` command or the `sui::transfer::transfer` function, then use `ObjectArg::Receiving(ObjectID, SequenceNumber, ObjectDigest)`. The object data is the same as for the `ImmOrOwnedObject` case.
 

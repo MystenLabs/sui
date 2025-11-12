@@ -126,7 +126,10 @@ impl AncestorStateManager {
             * Self::SCORE_EXCLUSION_THRESHOLD_PERCENTAGE)
             / 100;
 
-        debug!("Updating all ancestor state at round {current_clock_round} using network high quorum round of {network_high_quorum_round}, low score threshold of {low_score_threshold}, and exclude stake threshold of {}", self.excluded_nodes_stake_threshold);
+        debug!(
+            "Updating all ancestor state at round {current_clock_round} using network high quorum round of {network_high_quorum_round}, low score threshold of {low_score_threshold}, and exclude stake threshold of {}",
+            self.excluded_nodes_stake_threshold
+        );
 
         // We will first collect all potential state transitions as we need to ensure
         // we do not move more ancestors to EXCLUDE state than the excluded_nodes_stake_threshold

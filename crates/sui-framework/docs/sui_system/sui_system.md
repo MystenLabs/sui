@@ -82,13 +82,17 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `validator_address_by_pool_id`](#sui_system_sui_system_validator_address_by_pool_id)
 -  [Function `pool_exchange_rates`](#sui_system_sui_system_pool_exchange_rates)
 -  [Function `active_validator_addresses`](#sui_system_sui_system_active_validator_addresses)
+-  [Function `active_validator_addresses_ref`](#sui_system_sui_system_active_validator_addresses_ref)
+-  [Function `active_validator_voting_powers`](#sui_system_sui_system_active_validator_voting_powers)
 -  [Function `calculate_rewards`](#sui_system_sui_system_calculate_rewards)
 -  [Function `advance_epoch`](#sui_system_sui_system_advance_epoch)
 -  [Function `load_system_state`](#sui_system_sui_system_load_system_state)
 -  [Function `load_system_state_mut`](#sui_system_sui_system_load_system_state_mut)
+-  [Function `load_system_state_ref`](#sui_system_sui_system_load_system_state_ref)
 -  [Function `load_inner_maybe_upgrade`](#sui_system_sui_system_load_inner_maybe_upgrade)
 -  [Function `validator_voting_powers`](#sui_system_sui_system_validator_voting_powers)
 -  [Function `store_execution_time_estimates`](#sui_system_sui_system_store_execution_time_estimates)
+-  [Function `store_execution_time_estimates_v2`](#sui_system_sui_system_store_execution_time_estimates_v2)
 
 
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
@@ -100,15 +104,20 @@ the SuiSystemStateInner version, or vice versa.
 <b>use</b> <a href="../std/u64.md#std_u64">std::u64</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
+<b>use</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata">sui::accumulator_metadata</a>;
+<b>use</b> <a href="../sui/accumulator_settlement.md#sui_accumulator_settlement">sui::accumulator_settlement</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
+<b>use</b> <a href="../sui/bcs.md#sui_bcs">sui::bcs</a>;
 <b>use</b> <a href="../sui/coin.md#sui_coin">sui::coin</a>;
 <b>use</b> <a href="../sui/config.md#sui_config">sui::config</a>;
 <b>use</b> <a href="../sui/deny_list.md#sui_deny_list">sui::deny_list</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
+<b>use</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator">sui::funds_accumulator</a>;
+<b>use</b> <a href="../sui/hash.md#sui_hash">sui::hash</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
@@ -1427,6 +1436,56 @@ Getter returning addresses of the currently active validators.
 
 </details>
 
+<a name="sui_system_sui_system_active_validator_addresses_ref"></a>
+
+## Function `active_validator_addresses_ref`
+
+Getter returning addresses of the currently active validators by reference.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_addresses_ref">active_validator_addresses_ref</a>(wrapper: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>): vector&lt;<b>address</b>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_addresses_ref">active_validator_addresses_ref</a>(wrapper: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): vector&lt;<b>address</b>&gt; {
+    wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_ref">load_system_state_ref</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_addresses">active_validator_addresses</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_active_validator_voting_powers"></a>
+
+## Function `active_validator_voting_powers`
+
+Getter returns the voting power of the active validators, values are voting power in the scale of 10000.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_voting_powers">active_validator_voting_powers</a>(wrapper: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>): <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<b>address</b>, u64&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_voting_powers">active_validator_voting_powers</a>(wrapper: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): VecMap&lt;<b>address</b>, u64&gt; {
+    wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_ref">load_system_state_ref</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_voting_powers">active_validator_voting_powers</a>()
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_system_sui_system_calculate_rewards"></a>
 
 ## Function `calculate_rewards`
@@ -1570,6 +1629,35 @@ gas coins.
 
 </details>
 
+<a name="sui_system_sui_system_load_system_state_ref"></a>
+
+## Function `load_system_state_ref`
+
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_ref">load_system_state_ref</a>(self: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>): &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_ref">load_system_state_ref</a>(self: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): &SuiSystemStateInnerV2 {
+    <b>let</b> inner: &SuiSystemStateInnerV2 = dynamic_field::borrow(
+        &self.id,
+        self.version,
+    );
+    <b>assert</b>!(inner.system_state_version() == self.version, <a href="../sui_system/sui_system.md#sui_system_sui_system_EWrongInnerVersion">EWrongInnerVersion</a>);
+    inner
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_system_sui_system_load_inner_maybe_upgrade"></a>
 
 ## Function `load_inner_maybe_upgrade`
@@ -1622,7 +1710,7 @@ Returns the voting power of the active validators, values are voting power in th
 
 
 <pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_validator_voting_powers">validator_voting_powers</a>(wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): VecMap&lt;<b>address</b>, u64&gt; {
-    wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state">load_system_state</a>().active_validator_voting_powers()
+    wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state">load_system_state</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_voting_powers">active_validator_voting_powers</a>()
 }
 </code></pre>
 
@@ -1649,6 +1737,35 @@ at the start of the next epoch.
 
 <pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_store_execution_time_estimates">store_execution_time_estimates</a>(wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>, estimates_bytes: vector&lt;u8&gt;) {
     wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_store_execution_time_estimates">store_execution_time_estimates</a>(estimates_bytes)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_store_execution_time_estimates_v2"></a>
+
+## Function `store_execution_time_estimates_v2`
+
+Saves the given execution time estimate chunks to the SuiSystemState object, for system use
+at the start of the next epoch.
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_store_execution_time_estimates_v2">store_execution_time_estimates_v2</a>(wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>, estimate_chunks: vector&lt;vector&lt;u8&gt;&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_store_execution_time_estimates_v2">store_execution_time_estimates_v2</a>(
+    wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>,
+    estimate_chunks: vector&lt;vector&lt;u8&gt;&gt;,
+) {
+    wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_store_execution_time_estimates_v2">store_execution_time_estimates_v2</a>(estimate_chunks)
 }
 </code></pre>
 

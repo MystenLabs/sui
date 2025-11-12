@@ -197,25 +197,6 @@ mod checked {
                 metrics.clone(),
             );
 
-            // Set the profiler if in CLI
-            #[skip_checked_arithmetic]
-            move_vm_profiler::tracing_feature_enabled! {
-                use move_vm_profiler::GasProfiler;
-                use move_vm_types::gas::GasMeter;
-                use crate::gas_meter::SuiGasMeter;
-
-                let tx_digest = tx_context.digest();
-                let remaining_gas: u64 = move_vm_types::gas::GasMeter::remaining_gas(&SuiGasMeter(
-                    gas_charger.move_gas_status_mut(),
-                ))
-                .into();
-                SuiGasMeter(gas_charger.move_gas_status_mut()).set_profiler(GasProfiler::init(
-                    &vm.config().profiler_config,
-                    format!("{}", tx_digest),
-                    remaining_gas,
-                ));
-            }
-
             Ok(Self {
                 protocol_config,
                 metrics,
@@ -1234,7 +1215,7 @@ mod checked {
             CallArg::Object(obj_arg) => {
                 load_object_arg(vm, state_view, session, input_object_map, obj_arg)?
             }
-            CallArg::BalanceWithdraw(_) => unreachable!("Impossible to hit BalanceWithdraw in v0"),
+            CallArg::FundsWithdrawal(_) => unreachable!("Impossible to hit BalanceWithdraw in v0"),
         })
     }
 
@@ -1255,12 +1236,12 @@ mod checked {
                 /* imm override */ false,
                 id,
             ),
-            ObjectArg::SharedObject { id, mutable, .. } => load_object(
+            ObjectArg::SharedObject { id, mutability, .. } => load_object(
                 vm,
                 state_view,
                 session,
                 input_object_map,
-                /* imm override */ !mutable,
+                /* imm override */ !mutability.is_exclusive(),
                 id,
             ),
             ObjectArg::Receiving(_) => unreachable!("Impossible to hit Receiving in v0"),

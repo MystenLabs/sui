@@ -4,10 +4,10 @@
 use std::sync::Arc;
 
 use prometheus::{
+    Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
     register_histogram_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
-    Registry,
+    register_int_gauge_with_registry,
 };
 
 /// Histogram buckets for the distribution of latency (time between receiving a request and sending
@@ -45,6 +45,7 @@ pub struct RpcMetrics {
     pub queries_received: IntCounter,
     pub queries_succeeded: IntCounter,
     pub queries_failed: IntCounterVec,
+    pub queries_cancelled: IntCounter,
     pub queries_in_flight: IntGauge,
 
     pub limits_validation_latency: Histogram,
@@ -68,7 +69,7 @@ impl RpcMetrics {
     pub(crate) fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
             watermark_epoch: register_int_gauge_vec_with_registry!(
-                "watermark_epoch",
+                "graphql_watermark_epoch",
                 "The epoch that the RPC considers to be the latest, for this pipeline",
                 &["pipeline"],
                 registry
@@ -76,7 +77,7 @@ impl RpcMetrics {
             .unwrap(),
 
             watermark_checkpoint: register_int_gauge_vec_with_registry!(
-                "watermark_checkpoint",
+                "graphql_watermark_checkpoint",
                 "The checkpoint sequence number that the RPC considers to be the latest, for this pipeline",
                 &["pipeline"],
                 registry
@@ -84,7 +85,7 @@ impl RpcMetrics {
             .unwrap(),
 
             watermark_transaction: register_int_gauge_vec_with_registry!(
-                "watermark_transaction",
+                "graphql_watermark_transaction",
                 "This RPC's exclusive upper bound on transaction sequence numbers, for this pipeline",
                 &["pipeline"],
                 registry
@@ -92,7 +93,7 @@ impl RpcMetrics {
             .unwrap(),
 
             watermark_timestamp_ms: register_int_gauge_vec_with_registry!(
-                "watermark_timestamp_ms",
+                "graphql_watermark_timestamp_ms",
                 "The timestamp in milliseconds of the checkpoint that the RPC considers to be the latest, for this pipeline",
                 &["pipeline"],
                 registry
@@ -100,7 +101,7 @@ impl RpcMetrics {
             .unwrap(),
 
             watermark_reader_epoch_lo: register_int_gauge_vec_with_registry!(
-                "watermark_reader_epoch_lo",
+                "graphql_watermark_reader_epoch_lo",
                 "The earliest epoch that the RPC has data for, for this pipeline",
                 &["pipeline"],
                 registry
@@ -108,7 +109,7 @@ impl RpcMetrics {
             .unwrap(),
 
             watermark_reader_checkpoint_lo: register_int_gauge_vec_with_registry!(
-                "watermark_reader_checkpoint_lo",
+                "graphql_watermark_reader_checkpoint_lo",
                 "The earliest checkpoint that the RPC has data for, for this pipeline",
                 &["pipeline"],
                 registry
@@ -116,7 +117,7 @@ impl RpcMetrics {
             .unwrap(),
 
             watermark_reader_transaction_lo: register_int_gauge_vec_with_registry!(
-                "watermark_reader_transaction_lo",
+                "graphql_watermark_reader_transaction_lo",
                 "The earliest transaction that the RPC has data for, for this pipeline",
                 &["pipeline"],
                 registry
@@ -149,6 +150,13 @@ impl RpcMetrics {
                 "graphql_queries_failed",
                 "Number of read requests that have completed with at least one error",
                 &["code"],
+                registry,
+            )
+            .unwrap(),
+
+            queries_cancelled: register_int_counter_with_registry!(
+                "graphql_queries_cancelled",
+                "Number of read requests that were cancelled before completion",
                 registry,
             )
             .unwrap(),

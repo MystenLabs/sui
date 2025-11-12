@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use move_binary_format::CompiledModule;
@@ -48,15 +47,10 @@ pub(crate) struct Verifier<'m> {
 }
 
 impl Executor {
-    pub(crate) fn new(
-        protocol_config: &ProtocolConfig,
-        silent: bool,
-        enable_profiler: Option<PathBuf>,
-    ) -> Result<Self, SuiError> {
+    pub(crate) fn new(protocol_config: &ProtocolConfig, silent: bool) -> Result<Self, SuiError> {
         Ok(Executor(Arc::new(new_move_vm(
             all_natives(silent),
             protocol_config,
-            enable_profiler,
         )?)))
     }
 }
@@ -219,6 +213,10 @@ impl executor::Executor for Executor {
 impl verifier::Verifier for Verifier<'_> {
     fn meter(&self, config: MeterConfig) -> Box<dyn Meter> {
         Box::new(SuiVerifierMeter::new(config))
+    }
+
+    fn override_deprecate_global_storage_ops_during_deserialization(&self) -> Option<bool> {
+        None
     }
 
     fn meter_compiled_modules(

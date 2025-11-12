@@ -8,7 +8,7 @@ use std::sync::Arc;
 use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::handlers::{
-    get_move_struct, parse_struct, process_transactions, AnalyticsHandler, TransactionProcessor,
+    AnalyticsHandler, TransactionProcessor, get_move_struct, parse_struct, process_transactions,
 };
 use crate::{AnalyticsMetrics, FileType};
 

@@ -4,7 +4,7 @@
 use crate::{
     compiler_info::CompilerInfo,
     symbols::{
-        compilation::{CompiledPkgInfo, SymbolsComputationData},
+        compilation::{CompiledPkgInfo, ParsedDefinitions, SymbolsComputationData},
         cursor::CursorContext,
         def_info::DefInfo,
         mod_defs::ModuleDefs,
@@ -15,11 +15,11 @@ use crate::{
 
 use im::ordmap::OrdMap;
 use lsp_types::Position;
-use std::collections::BTreeMap;
+use move_command_line_common::files::FileHash;
+use std::{collections::BTreeMap, sync::Arc};
 
 use move_compiler::{
     expansion::ast::ModuleIdent,
-    parser::ast as P,
     shared::{NamedAddressMap, files::MappedFiles, unique_map::UniqueMap},
     typing::{ast::ModuleDefinition, visitor::TypingVisitorContext},
 };
@@ -36,24 +36,25 @@ pub fn run_parsing_analysis(
     computation_data: &mut SymbolsComputationData,
     compiled_pkg_info: &CompiledPkgInfo,
     cursor_context: Option<&mut CursorContext>,
-    parsed_program: &P::Program,
+    parsed_program: &ParsedDefinitions,
+    typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) {
     let mut parsing_symbolicator = parsing_analysis::ParsingAnalysisContext {
         mod_outer_defs: &mut computation_data.mod_outer_defs,
         files: &compiled_pkg_info.mapped_files,
         references: &mut computation_data.references,
         def_info: &mut computation_data.def_info,
-        use_defs: UseDefMap::new(),
+        use_defs: &mut computation_data.use_defs,
         current_mod_ident_str: None,
         alias_lengths: BTreeMap::new(),
-        pkg_addresses: &NamedAddressMap::new(),
+        pkg_addresses: Arc::new(NamedAddressMap::new()),
         cursor: cursor_context,
     };
 
     parsing_symbolicator.prog_symbols(
         parsed_program,
-        &mut computation_data.mod_use_defs,
         &mut computation_data.mod_to_alias_lengths,
+        typed_mod_named_address_maps,
     );
 }
 
@@ -69,7 +70,7 @@ pub fn run_typing_analysis(
         files: mapped_files,
         references: &mut computation_data.references,
         def_info: &mut computation_data.def_info,
-        use_defs: UseDefMap::new(),
+        use_defs: &mut computation_data.use_defs,
         current_mod_ident_str: None,
         alias_lengths: &BTreeMap::new(),
         traverse_only: false,
@@ -82,7 +83,6 @@ pub fn run_typing_analysis(
         typed_program_modules,
         &computation_data.mod_to_alias_lengths,
         &mut typing_symbolicator,
-        &mut computation_data.mod_use_defs,
     );
     computation_data
 }
@@ -103,16 +103,11 @@ fn process_typed_modules<'a>(
     typed_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
     mod_to_alias_lengths: &'a BTreeMap<String, BTreeMap<Position, usize>>,
     typing_symbolicator: &mut typing_analysis::TypingAnalysisContext<'a>,
-    mod_use_defs: &mut BTreeMap<String, UseDefMap>,
 ) {
     for (module_ident, module_def) in typed_modules.key_cloned_iter() {
         let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
-        typing_symbolicator.use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
         typing_symbolicator.alias_lengths = mod_to_alias_lengths.get(&mod_ident_str).unwrap();
         typing_symbolicator.visit_module(module_ident, module_def);
-
-        let use_defs = std::mem::replace(&mut typing_symbolicator.use_defs, UseDefMap::new());
-        mod_use_defs.insert(mod_ident_str, use_defs);
     }
 }
 
@@ -125,7 +120,7 @@ fn add_member_use_def(
     use_loc: &Loc,
     references: &mut References,
     def_info: &DefMap,
-    use_defs: &mut UseDefMap,
+    use_defs: &mut BTreeMap<FileHash, UseDefMap>,
     alias_lengths: &BTreeMap<Position, usize>,
 ) -> Option<UseDef> {
     let Some(name_file_start) = files.start_position_opt(use_loc) else {
@@ -159,7 +154,11 @@ fn add_member_use_def(
             use_name,
             ident_type_def_loc,
         );
-        use_defs.insert(name_start.line, ud.clone());
+
+        use_defs
+            .entry(use_loc.file_hash())
+            .or_default()
+            .insert(name_start.line, ud.clone());
         return Some(ud);
     }
     None

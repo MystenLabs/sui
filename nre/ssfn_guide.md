@@ -4,7 +4,7 @@ State sync fullnodes are in essence just regular fullnodes, with a few tweaks.
 
 I won't detail setting up a Sui fullnode here, just the ways in which state sync fullnodes differ:
 
-1. State sync fullnodes should be peered directly to a validator, these are the only nodes in the network that explictly set validators as their peer
+1. State sync fullnodes should be peered directly to a validator, these are the only nodes in the network that explicitly set validators as their peer
 
 The way to allow your state sync fullnode to connect to your validator is as follows:
 
@@ -33,7 +33,7 @@ $ vim /opt/sui/config/sui-node.yaml #on validator host
 #       peer-id: abcdefg2
 ```
 
-2. State sync fullnodes should have indexing disabled, run with pruning, and push metrics to mystens metric proxy
+2. State sync fullnodes should have indexing disabled, run with pruning, and push metrics to Mysten's metric proxy
 
 This is a simple change, just add the following configs to your fullnode:
 ```

@@ -338,6 +338,7 @@ pub enum StatusCode {
     TYPE_RESOLUTION_FAILURE = 2021,
     DUPLICATE_NATIVE_FUNCTION = 2022,
     ARITHMETIC_OVERFLOW = 2023,
+    REFERENCE_SAFETY_INCONSISTENT = 2024,
 
     // Errors that can arise from binary decoding (deserialization)
     // Deserializtion Errors: 3000-3999
@@ -366,6 +367,7 @@ pub enum StatusCode {
     TRAILING_BYTES = 3026,
     UNKNOWN_ENUM_FLAG = 3027,
     UNKNOWN_JUMP_TABLE_FLAG = 3028,
+    DEPRECATED_BYTECODE_FORMAT = 3029,
 
     // Errors that can arise at runtime
     // Runtime Errors: 4000-4999

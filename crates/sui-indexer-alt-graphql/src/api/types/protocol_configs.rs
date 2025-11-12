@@ -4,7 +4,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::Context as _;
-use async_graphql::{dataloader::DataLoader, Context, Object, SimpleObject};
+use async_graphql::{Context, Object, SimpleObject, dataloader::DataLoader};
 use diesel::{ExpressionMethods, QueryDsl as _};
 use sui_indexer_alt_reader::{epochs::CheckpointBoundedEpochStartKey, pg_reader::PgReader};
 use sui_indexer_alt_schema::{
@@ -111,10 +111,14 @@ impl ProtocolConfigs {
     }
 
     /// Fetch the protocol config for the latest epoch in scope.
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
     pub(crate) async fn latest(ctx: &Context<'_>, scope: &Scope) -> Result<Option<Self>, RpcError> {
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+        let Some(cp) = scope.checkpoint_viewed_at() else {
+            return Ok(None);
+        };
 
-        let cp = scope.checkpoint_viewed_at();
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
         let Some(stored) = pg_loader
             .load_one(CheckpointBoundedEpochStartKey(cp))
             .await

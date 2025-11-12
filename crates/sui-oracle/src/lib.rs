@@ -17,17 +17,17 @@ use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponseOptions,
 };
+use sui_sdk::SuiClient;
 use sui_sdk::apis::ReadApi;
 use sui_sdk::rpc_types::SuiObjectResponse;
-use sui_sdk::SuiClient;
+use sui_types::Identifier;
 use sui_types::error::UserInputError;
 use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_type_tag;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::NON_RECOVERABLE_ERROR_MSG;
 use sui_types::transaction::{Argument, Transaction};
-use sui_types::transaction::{Command, ObjectArg};
-use sui_types::Identifier;
+use sui_types::transaction::{Command, ObjectArg, SharedObjectMutability};
 use sui_types::{
     base_types::SuiAddress,
     transaction::{CallArg, TransactionData},
@@ -35,7 +35,7 @@ use sui_types::{
 use tap::tap::TapFallible;
 
 use sui_sdk::wallet_context::WalletContext;
-use sui_types::base_types::{random_object_ref, ObjectID, ObjectRef};
+use sui_types::base_types::{ObjectID, ObjectRef, random_object_ref};
 use tracing::{debug, error, info, warn};
 pub mod config;
 mod metrics;
@@ -358,18 +358,20 @@ impl OnChainDataUploader {
         loop {
             read_interval.tick().await;
             let data_points = self.collect().await;
-            if !data_points.is_empty() {
-                if let Err(err) = self.upload(data_points).await {
-                    error!("Upload failure: {err}. About to resting for {UPLOAD_FAILURE_RECOVER_SEC} sec.");
-                    tokio::time::sleep(Duration::from_secs(UPLOAD_FAILURE_RECOVER_SEC)).await;
-                    self.gas_obj_ref = get_gas_obj_ref(
-                        self.client.read_api(),
-                        self.gas_obj_ref.0,
-                        self.signer_address,
-                    )
-                    .await;
-                    error!("Updated gas object reference: {:?}", self.gas_obj_ref);
-                }
+            if !data_points.is_empty()
+                && let Err(err) = self.upload(data_points).await
+            {
+                error!(
+                    "Upload failure: {err}. About to resting for {UPLOAD_FAILURE_RECOVER_SEC} sec."
+                );
+                tokio::time::sleep(Duration::from_secs(UPLOAD_FAILURE_RECOVER_SEC)).await;
+                self.gas_obj_ref = get_gas_obj_ref(
+                    self.client.read_api(),
+                    self.gas_obj_ref.0,
+                    self.signer_address,
+                )
+                .await;
+                error!("Updated gas object reference: {:?}", self.gas_obj_ref);
             }
         }
     }
@@ -499,7 +501,7 @@ impl OnChainDataUploader {
             rgp,
         );
 
-        let signed_tx = self.wallet_ctx.sign_transaction(&tx);
+        let signed_tx = self.wallet_ctx.sign_transaction(&tx).await;
         let tx_digest = *signed_tx.digest();
 
         let timer_start = Instant::now();
@@ -708,7 +710,11 @@ async fn get_object_arg(
         } => ObjectArg::SharedObject {
             id,
             initial_shared_version,
-            mutable: is_mutable_ref,
+            mutability: if is_mutable_ref {
+                SharedObjectMutability::Mutable
+            } else {
+                SharedObjectMutability::Immutable
+            },
         },
         Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
             ObjectArg::ImmOrOwnedObject(obj_ref)

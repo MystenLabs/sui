@@ -24,7 +24,7 @@ use crate::{
     metrics::BridgeMetrics,
     monitor::BridgeMonitor,
     orchestrator::BridgeOrchestrator,
-    server::{handler::BridgeRequestHandler, run_server, BridgeNodePublicMetadata},
+    server::{BridgeNodePublicMetadata, handler::BridgeRequestHandler, run_server},
     storage::BridgeOrchestratorTables,
     sui_syncer::SuiSyncer,
 };
@@ -40,12 +40,12 @@ use std::{
     time::Duration,
 };
 use sui_types::{
+    Identifier,
     bridge::{
         BRIDGE_COMMITTEE_MODULE_NAME, BRIDGE_LIMITER_MODULE_NAME, BRIDGE_MODULE_NAME,
         BRIDGE_TREASURY_MODULE_NAME,
     },
     event::EventID,
-    Identifier,
 };
 use tokio::task::JoinHandle;
 use tracing::info;
@@ -241,15 +241,15 @@ async fn start_watchdog(
         observables.push(Box::new(balance));
     }
 
-    if let Some(watchdog_config) = watchdog_config {
-        if !watchdog_config.total_supplies.is_empty() {
-            let total_supplies = TotalSupplies::new(
-                Arc::new(sui_client.sui_client().clone()),
-                watchdog_config.total_supplies,
-                watchdog_metrics.total_supplies.clone(),
-            );
-            observables.push(Box::new(total_supplies));
-        }
+    if let Some(watchdog_config) = watchdog_config
+        && !watchdog_config.total_supplies.is_empty()
+    {
+        let total_supplies = TotalSupplies::new(
+            Arc::new(sui_client.sui_client().clone()),
+            watchdog_config.total_supplies,
+            watchdog_metrics.total_supplies.clone(),
+        );
+        observables.push(Box::new(total_supplies));
     }
 
     BridgeWatchDog::new(observables).run().await
@@ -438,10 +438,10 @@ mod tests {
     use prometheus::Registry;
 
     use super::*;
-    use crate::config::default_ed25519_key_pair;
     use crate::config::BridgeNodeConfig;
     use crate::config::EthConfig;
     use crate::config::SuiConfig;
+    use crate::config::default_ed25519_key_pair;
     use crate::e2e_tests::test_utils::BridgeTestCluster;
     use crate::e2e_tests::test_utils::BridgeTestClusterBuilder;
     use crate::utils::wait_for_server_to_be_up;
@@ -449,10 +449,10 @@ mod tests {
     use sui_config::local_ip_utils::get_available_port;
     use sui_types::base_types::SuiAddress;
     use sui_types::bridge::BridgeChainId;
-    use sui_types::crypto::get_key_pair;
     use sui_types::crypto::EncodeDecodeBase64;
     use sui_types::crypto::KeypairTraits;
     use sui_types::crypto::SuiKeyPair;
+    use sui_types::crypto::get_key_pair;
     use sui_types::digests::TransactionDigest;
     use sui_types::event::EventID;
     use tempfile::tempdir;

@@ -17,13 +17,14 @@ use crate::{
         },
     },
     editions::{Edition, FeatureGate, Flavor, check_feature_or_error, feature_edition_error_msg},
-    expansion::ast as E,
+    expansion::ast::{self as E, ModuleIdent},
     hlir::ast as H,
-    naming::ast as N,
-    parser::ast as P,
+    naming::ast::{self as N, Function, UseFuns},
+    parser::ast::{self as P, FunctionName},
     shared::{
         files::{FileName, MappedFiles},
         ide::IDEInfo,
+        unique_map::UniqueMap,
     },
     sui_mode,
     typing::{
@@ -31,11 +32,12 @@ use crate::{
         visitor::{TypingVisitor, TypingVisitorObj},
     },
 };
+
 use clap::*;
 use known_attributes::ModeAttribute;
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
+use move_symbol_pool::{Symbol, symbol};
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -56,6 +58,7 @@ pub mod known_attributes;
 pub mod matching;
 pub mod program_info;
 pub mod remembering_unique_map;
+pub mod stdlib_definitions;
 pub mod string_utils;
 pub mod unique_map;
 pub mod unique_set;
@@ -179,7 +182,7 @@ pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 pub struct NamedAddressMapIndex(usize);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct NamedAddressMaps(Vec<NamedAddressMap>);
+pub struct NamedAddressMaps(Vec<Arc<NamedAddressMap>>);
 
 impl Default for NamedAddressMaps {
     fn default() -> Self {
@@ -194,15 +197,15 @@ impl NamedAddressMaps {
 
     pub fn insert(&mut self, m: NamedAddressMap) -> NamedAddressMapIndex {
         let index = self.0.len();
-        self.0.push(m);
+        self.0.push(Arc::new(m));
         NamedAddressMapIndex(index)
     }
 
-    pub fn get(&self, idx: NamedAddressMapIndex) -> &NamedAddressMap {
-        &self.0[idx.0]
+    pub fn get(&self, idx: NamedAddressMapIndex) -> Arc<NamedAddressMap> {
+        self.0[idx.0].clone()
     }
 
-    pub fn all(&self) -> &[NamedAddressMap] {
+    pub fn all(&self) -> &[Arc<NamedAddressMap>] {
         &self.0
     }
 }
@@ -218,7 +221,7 @@ pub struct CompilationEnv {
     flags: Flags,
     modes: BTreeSet<Symbol>,
     top_level_warning_filter_scope: Option<&'static WarningFiltersBuilder>,
-    diags: RwLock<Diagnostics>,
+    diags: Arc<RwLock<Diagnostics>>,
     visitors: Visitors,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     /// Config for any package not found in `package_configs`, or for inputs without a package.
@@ -232,7 +235,7 @@ pub struct CompilationEnv {
     // pub counter: u64,
     mapped_files: MappedFiles,
     save_hooks: Vec<SaveHook>,
-    ide_information: RwLock<IDEInfo>,
+    ide_information: Arc<RwLock<IDEInfo>>,
     // Files to fully compile (as opposed to omitting function bodies)
     files_to_compile: Option<BTreeSet<PathBuf>>,
 }
@@ -303,7 +306,7 @@ impl CompilationEnv {
             flags,
             modes,
             top_level_warning_filter_scope,
-            diags: RwLock::new(diags),
+            diags: Arc::new(RwLock::new(diags)),
             visitors: Visitors::new(visitors),
             package_configs,
             default_config: default_config.unwrap_or_default(),
@@ -312,7 +315,7 @@ impl CompilationEnv {
             prim_definers: OnceLock::new(),
             mapped_files: MappedFiles::empty(),
             save_hooks,
-            ide_information: RwLock::new(IDEInfo::new()),
+            ide_information: Arc::new(RwLock::new(IDEInfo::new())),
             files_to_compile,
         }
     }
@@ -348,12 +351,20 @@ impl CompilationEnv {
         &self.mapped_files
     }
 
-    pub fn diagnostic_reporter_at_top_level(&self) -> DiagnosticReporter {
+    pub fn diagnostic_reporter_at_top_level(&self) -> DiagnosticReporter<'_> {
         DiagnosticReporter::new(
             &self.flags,
             &self.known_filter_names,
-            &self.diags,
-            &self.ide_information,
+            Arc::clone(&self.diags),
+            Arc::clone(&self.ide_information),
+            WarningFiltersScope::root(self.top_level_warning_filter_scope),
+        )
+    }
+
+    pub fn dummy_diagnostic_reporter(&self) -> DiagnosticReporter<'_> {
+        DiagnosticReporter::dummy_reporter(
+            &self.flags,
+            &self.known_filter_names,
             WarningFiltersScope::root(self.top_level_warning_filter_scope),
         )
     }
@@ -563,6 +574,15 @@ impl CompilationEnv {
         }
     }
 
+    pub fn save_macro_definitions(
+        &self,
+        macro_definitions: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_macro_definitions(macro_definitions)
+        }
+    }
+
     // -- Flag Information --
 
     pub fn sources_shadow_deps(&self) -> bool {
@@ -713,7 +733,7 @@ pub struct Flags {
     ide_mode: bool,
 
     /// Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]`
-    /// annodations during compiltaion.
+    /// annotations during compilation.
     #[arg(
         long = "mode",
         value_name = "MODE",
@@ -750,7 +770,7 @@ impl Flags {
             keep_testing_functions: false,
             ide_mode: false,
             ide_test_mode: false,
-            modes: vec![],
+            modes: vec![symbol!("test")],
         }
     }
 
@@ -804,7 +824,9 @@ impl Flags {
     }
 
     pub fn set_modes(self, value: Vec<Symbol>) -> Self {
+        let test = self.test || value.contains(&symbol!("test"));
         Self {
+            test,
             modes: value,
             ..self
         }
@@ -815,7 +837,7 @@ impl Flags {
     }
 
     pub fn is_testing(&self) -> bool {
-        self.test
+        self.test || self.mode(symbol!("test"))
     }
 
     pub fn keep_testing_functions(&self) -> bool {
@@ -851,7 +873,7 @@ impl Flags {
     }
 
     pub fn mode(&self, mode: Symbol) -> bool {
-        self.modes.iter().any(|m| *m == mode)
+        self.modes.contains(&mode)
     }
 
     pub fn publishable(&self) -> bool {
@@ -945,6 +967,7 @@ pub(crate) struct SavedInfo {
     typing_info: Option<Arc<program_info::TypingProgramInfo>>,
     hlir: Option<H::Program>,
     cfgir: Option<G::Program>,
+    macro_definitions: Option<BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>>,
 }
 
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -956,6 +979,10 @@ pub enum SaveFlag {
     TypingInfo,
     HLIR,
     CFGIR,
+    ModuleNameAddresses,
+    ModuleResolvedMembers,
+    MacroDefinitions,
+    ModuleInfo,
 }
 
 impl SaveHook {
@@ -970,6 +997,7 @@ impl SaveHook {
             typing_info: None,
             hlir: None,
             cfgir: None,
+            macro_definitions: None,
         })))
     }
 
@@ -1019,6 +1047,16 @@ impl SaveHook {
         let mut r = self.0.lock().unwrap();
         if r.cfgir.is_none() && r.flags.contains(&SaveFlag::CFGIR) {
             r.cfgir = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_macro_definitions(
+        &self,
+        macro_definitions: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.macro_definitions.is_none() && r.flags.contains(&SaveFlag::MacroDefinitions) {
+            r.macro_definitions = Some(macro_definitions.clone());
         }
     }
 
@@ -1084,6 +1122,17 @@ impl SaveHook {
         );
         r.cfgir.take().unwrap()
     }
+
+    pub fn take_macro_definitions(
+        &self,
+    ) -> BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::MacroDefinitions),
+            "Macro definitions not saved. Please set the flag when creating the SaveHook"
+        );
+        r.macro_definitions.take().unwrap()
+    }
 }
 
 //**************************************************************************************************
@@ -1110,11 +1159,11 @@ impl SaveHook {
 ///
 /// * `$e` - The initial expression to start processing.
 /// * `$work_pat` - The pattern used to disassemble entries in the work queue. Note that the work
-///    queue may contain any arbitrary type (such as a tuple of a block and expression), so the
-///    work pattern is used to disassemble and bind component parts.
+///   queue may contain any arbitrary type (such as a tuple of a block and expression), so the
+///   work pattern is used to disassemble and bind component parts.
 /// * `$work_exp` - The actual expression to match on, as defined in the `$work_pat`.
 /// * `$binop_pat` - This is a pattern matched against the `$work_exp` that matches if and only if
-///    the `$work_exp` is in fact a binary operation expression.
+///   the `$work_exp` is in fact a binary operation expression.
 /// * `$bind_rhs` - This block is executed when `$work_exp` matches `$binop_pat`, with any pattern
 ///   binders from `$binop_pat` in scope. This block must return a 3-tuple consisting of the
 ///   left-hand side work queue entry, the `$optype` entry for the operand, and the right-hand side

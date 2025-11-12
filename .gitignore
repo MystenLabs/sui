@@ -2,7 +2,8 @@
 **/.history/
 **/.vscode/
 **/.idea/
-**/CLAUDE.md
+**/CLAUDE-local.md
+**/CLAUDE.local.md
 **/.claude/
 
 # OSX
@@ -79,3 +80,4 @@ lcov.info
 output.bpl
 *.bpl.log
 .sparse
+docs/content/documentation.json

@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 12 tasks
+processed 13 tasks
 
 init:
 A: object(0,0)
@@ -59,7 +59,7 @@ Response: {
   }
 }
 
-task 8, lines 47-80:
+task 8, lines 47-74:
 //# run-graphql
 Response: {
   "data": {
@@ -75,15 +75,11 @@ Response: {
     "c2": {
       "address": "0x50592365811b6d08409158a0917066ca3e822a4c49dd6ae4465150f8aeb9a1da",
       "version": 3
-    },
-    "c3": {
-      "address": "0x50592365811b6d08409158a0917066ca3e822a4c49dd6ae4465150f8aeb9a1da",
-      "version": 3
     }
   }
 }
 
-task 9, lines 82-109:
+task 9, lines 76-98:
 //# run-graphql
 Response: {
   "data": {
@@ -99,15 +95,11 @@ Response: {
     "c2": {
       "address": "0x50592365811b6d08409158a0917066ca3e822a4c49dd6ae4465150f8aeb9a1da",
       "version": 3
-    },
-    "c3": {
-      "address": "0x50592365811b6d08409158a0917066ca3e822a4c49dd6ae4465150f8aeb9a1da",
-      "version": 3
     }
   }
 }
 
-task 10, lines 111-132:
+task 10, lines 100-121:
 //# run-graphql
 Response: {
   "data": {
@@ -130,7 +122,30 @@ Response: {
   }
 }
 
-task 11, lines 134-150:
+task 11, lines 123-126:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Checkpoint 3 in the future",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "future"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 12, lines 128-144:
 //# run-graphql
 Response: {
   "data": {

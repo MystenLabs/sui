@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::{eth_sui_bridge, EthSuiBridge};
+use crate::abi::{EthSuiBridge, eth_sui_bridge};
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::e2e_tests::test_utils::TestClusterWrapperBuilder;
 use crate::e2e_tests::test_utils::{
-    get_signatures, initiate_bridge_erc20_to_sui, initiate_bridge_eth_to_sui,
-    initiate_bridge_sui_to_eth, send_eth_tx_and_get_tx_receipt, BridgeTestClusterBuilder,
+    BridgeTestClusterBuilder, get_signatures, initiate_bridge_erc20_to_sui,
+    initiate_bridge_eth_to_sui, initiate_bridge_sui_to_eth, send_eth_tx_and_get_tx_receipt,
 };
 use crate::eth_transaction_builder::build_eth_transaction;
 use crate::events::{
@@ -16,22 +16,18 @@ use crate::events::{
 use crate::sui_transaction_builder::build_add_tokens_on_sui_transaction;
 use crate::types::{AddTokensOnEvmAction, BridgeAction};
 use crate::utils::publish_and_register_coins_return_add_coins_on_sui_action;
-use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
 use ethers::prelude::*;
 use ethers::types::Address as EthAddress;
 use std::collections::HashSet;
-use sui_json_rpc_api::BridgeReadApiClient;
 use sui_types::crypto::get_key_pair;
-use test_cluster::TestClusterBuilder;
 
 use std::path::Path;
 
 use std::sync::Arc;
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_types::bridge::{
-    get_bridge, BridgeChainId, BridgeTokenMetadata, BridgeTrait, TOKEN_ID_ETH,
+    BridgeChainId, BridgeTokenMetadata, BridgeTrait, TOKEN_ID_ETH, get_bridge,
 };
-use sui_types::SUI_BRIDGE_OBJECT_ID;
 use tracing::info;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
@@ -146,7 +142,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     assert_eq!(parsed_msg.parsed_payload.token_type, TOKEN_ID_ETH);
     assert_eq!(parsed_msg.parsed_payload.amount, sui_amount);
 
-    let message = eth_sui_bridge::Message::from(sui_to_eth_bridge_action);
+    let message: eth_sui_bridge::Message = sui_to_eth_bridge_action.try_into().unwrap();
     let signatures = get_signatures(bridge_test_cluster.bridge_client(), nonce, sui_chain_id).await;
 
     let eth_sui_bridge = EthSuiBridge::new(
@@ -321,45 +317,6 @@ async fn test_add_new_coins_on_sui_and_eth() {
     .unwrap();
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-async fn test_create_bridge_state_object() {
-    let test_cluster = TestClusterBuilder::new()
-        .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION - 1).into())
-        .with_epoch_duration_ms(20000)
-        .build()
-        .await;
-
-    let handles = test_cluster.all_node_handles();
-
-    // no node has the bridge state object yet
-    for h in &handles {
-        h.with(|node| {
-            assert!(node
-                .state()
-                .get_object_cache_reader()
-                .get_latest_object_ref_or_tombstone(SUI_BRIDGE_OBJECT_ID)
-                .is_none());
-        });
-    }
-
-    // wait until feature is enabled
-    test_cluster
-        .wait_for_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-        .await;
-    // wait until next epoch - authenticator state object is created at the end of the first epoch
-    // in which it is supported.
-    test_cluster.wait_for_epoch_all_nodes(2).await; // protocol upgrade completes in epoch 1
-
-    for h in &handles {
-        h.with(|node| {
-            node.state()
-                .get_object_cache_reader()
-                .get_latest_object_ref_or_tombstone(SUI_BRIDGE_OBJECT_ID)
-                .expect("auth state object should exist");
-        });
-    }
-}
-
 #[tokio::test]
 async fn test_committee_registration() {
     telemetry_subscribers::init_for_testing();
@@ -393,22 +350,4 @@ async fn test_committee_registration() {
     test_cluster
         .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
         .await;
-}
-
-#[tokio::test]
-async fn test_bridge_api_compatibility() {
-    let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-        .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-        .build()
-        .await;
-
-    test_cluster.trigger_reconfiguration().await;
-    let client = test_cluster.rpc_client();
-    client.get_latest_bridge().await.unwrap();
-    // TODO: assert fields in summary
-
-    client
-        .get_bridge_object_initial_shared_version()
-        .await
-        .unwrap();
 }

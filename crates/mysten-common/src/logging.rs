@@ -6,13 +6,22 @@ use once_cell::sync::Lazy;
 
 #[macro_export]
 macro_rules! fatal {
-    ($($arg:tt)*) => {{
-        tracing::error!(fatal = true, $($arg)*);
-        panic!($($arg)*);
+    ($msg:literal $(, $arg:expr)*) => {{
+        if $crate::in_antithesis() {
+            let full_msg = format!($msg $(, $arg)*);
+            let json = $crate::logging::json!({ "message": full_msg });
+            $crate::logging::assert_unreachable_antithesis!($msg, &json);
+        }
+        tracing::error!(fatal = true, $msg $(, $arg)*);
+        panic!($msg $(, $arg)*);
     }};
 }
 
 pub use antithesis_sdk::assert_reachable as assert_reachable_antithesis;
+pub use antithesis_sdk::assert_sometimes as assert_sometimes_antithesis;
+pub use antithesis_sdk::assert_unreachable as assert_unreachable_antithesis;
+
+pub use serde_json::json;
 
 #[inline(always)]
 pub fn crash_on_debug() -> bool {
@@ -67,13 +76,14 @@ macro_rules! register_debug_fatal_handler {
 
 #[macro_export]
 macro_rules! debug_fatal {
-    ($($arg:tt)*) => {{
+    //($msg:literal $(, $arg:expr)* $(,)?)
+    ($msg:literal $(, $arg:expr)*) => {{
         loop {
             #[cfg(msim)]
             {
                 if let Some(cb) = $crate::logging::intercept_debug_fatal::get_callback() {
-                    tracing::error!($($arg)*);
-                    let msg = format!($($arg)*);
+                    tracing::error!($msg $(, $arg)*);
+                    let msg = format!($msg $(, $arg)*);
                     if msg.contains(&cb.pattern) {
                         (cb.callback)();
                     }
@@ -81,14 +91,23 @@ macro_rules! debug_fatal {
                 }
             }
 
-            if $crate::logging::crash_on_debug() {
-                $crate::fatal!($($arg)*);
+            // In antithesis, rather than crashing, we will use the assert_unreachable_antithesis
+            // macro to catch the signal that something has gone wrong.
+            if !$crate::in_antithesis() && $crate::logging::crash_on_debug() {
+                $crate::fatal!($msg $(, $arg)*);
             } else {
                 let stacktrace = std::backtrace::Backtrace::capture();
-                tracing::error!(debug_fatal = true, stacktrace = ?stacktrace, $($arg)*);
+                tracing::error!(debug_fatal = true, stacktrace = ?stacktrace, $msg $(, $arg)*);
                 let location = concat!(file!(), ':', line!());
                 if let Some(metrics) = mysten_metrics::get_metrics() {
                     metrics.system_invariant_violations.with_label_values(&[location]).inc();
+                }
+                if $crate::in_antithesis() {
+                    // antithesis requires a literal for first argument. pass the formatted argument
+                    // as a string.
+                    let full_msg = format!($msg $(, $arg)*);
+                    let json = $crate::logging::json!({ "message": full_msg });
+                    $crate::logging::assert_unreachable_antithesis!($msg, &json);
                 }
             }
             break;
@@ -105,6 +124,19 @@ macro_rules! assert_reachable {
         // calling in to antithesis sdk breaks determinisim in simtests (on linux only)
         if !cfg!(msim) {
             $crate::logging::assert_reachable_antithesis!($message);
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! assert_sometimes {
+    ($expr:expr, $message:literal) => {{
+        // calling in to antithesis sdk breaks determinisim in simtests (on linux only)
+        if !cfg!(msim) {
+            $crate::logging::assert_sometimes_antithesis!($expr, $message);
+        } else {
+            // evaluate the expression in case it has side effects
+            let _ = $expr;
         }
     }};
 }
@@ -131,5 +163,18 @@ mod tests {
     #[test]
     fn test_debug_fatal_release_mode() {
         debug_fatal!("This is a debug fatal error");
+    }
+
+    #[test]
+    fn test_assert_sometimes_side_effects() {
+        let mut x = 0;
+
+        let mut inc = || {
+            x += 1;
+            true
+        };
+
+        assert_sometimes!(inc(), "");
+        assert_eq!(x, 1);
     }
 }

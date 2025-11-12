@@ -125,7 +125,7 @@ impl TestRunner {
     ) -> Result<Self> {
         // If we want to trace the execution, check that the tracing compilation feature is
         // enabled, otherwise we won't generate a trace.
-        move_vm_profiler::tracing_feature_disabled! {
+        move_vm_config::tracing_feature_disabled! {
             if trace_location.is_some() {
                 return Err(anyhow::anyhow!(
                     "Tracing is enabled but the binary was not compiled with the `tracing` \
@@ -263,7 +263,7 @@ impl SharedTestingConfig {
         arguments: Vec<MoveValue>,
     ) -> (
         VMResult<ChangeSet>,
-        VMResult<NativeContextExtensions>,
+        VMResult<NativeContextExtensions<'_>>,
         VMResult<Vec<Vec<u8>>>,
         TestRunInfo,
     ) {
@@ -286,14 +286,6 @@ impl SharedTestingConfig {
         let mut session =
             move_vm.new_session_with_extensions(&self.starting_storage_state, extensions);
         let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
-        move_vm_profiler::tracing_feature_enabled! {
-            use move_vm_profiler::GasProfiler;
-            use move_vm_types::gas::GasMeter;
-            gas_meter.set_profiler(GasProfiler::init_default_cfg(
-                function_name.to_owned(),
-                self.execution_bound,
-            ));
-        }
 
         // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
         let now = Instant::now();
@@ -311,10 +303,10 @@ impl SharedTestingConfig {
                 .map(|(bytes, _layout)| bytes)
                 .collect()
         });
-        if !self.report_stacktrace_on_abort {
-            if let Err(err) = &mut return_result {
-                err.remove_exec_state();
-            }
+        if !self.report_stacktrace_on_abort
+            && let Err(err) = &mut return_result
+        {
+            err.remove_exec_state();
         }
         let trace = if self.trace_location.is_some() {
             Some(move_tracer.into_trace())

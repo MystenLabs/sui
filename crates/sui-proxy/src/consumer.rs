@@ -12,8 +12,8 @@ use fastcrypto::ed25519::Ed25519PublicKey;
 use multiaddr::Multiaddr;
 use once_cell::sync::Lazy;
 use prometheus::proto::{self, MetricFamily};
-use prometheus::{register_counter, register_counter_vec, register_histogram_vec};
 use prometheus::{Counter, CounterVec, HistogramVec};
+use prometheus::{register_counter, register_counter_vec, register_histogram_vec};
 use prost::Message;
 use protobuf::CodedInputStream;
 use std::io::Read;
@@ -76,7 +76,7 @@ pub struct NodeMetric {
 
 /// The ProtobufDecoder will decode message delimited protobuf messages from prom_model.proto types
 /// They are delimited by size, eg a format is such:
-/// []byte{size, data, size, data, size, data}, etc etc
+/// []byte{size, data, size, data, size, data}, etc
 pub struct ProtobufDecoder {
     buf: Reader<Bytes>,
 }

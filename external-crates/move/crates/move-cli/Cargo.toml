@@ -26,6 +26,7 @@ serde.workspace = true
 move-bytecode-source-map.workspace = true
 move-bytecode-verifier.workspace = true
 move-disassembler.workspace = true
+move-decompiler.workspace = true
 move-docgen.workspace = true
 move-command-line-common.workspace = true
 move-bytecode-utils.workspace = true
@@ -39,6 +40,7 @@ move-vm-types.workspace = true
 move-vm-runtime.workspace = true
 move-vm-profiler.workspace = true
 move-vm-test-utils.workspace = true
+move-vm-config.workspace = true
 move-binary-format.workspace = true
 move-package.workspace = true
 move-symbol-pool.workspace = true
@@ -64,6 +66,10 @@ harness = false
 
 [[test]]
 name = "tracing_testsuite"
+harness = false
+
+[[test]]
+name = "move_unit_testsuite"
 harness = false
 
 [features]

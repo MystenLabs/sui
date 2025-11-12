@@ -13,8 +13,8 @@ use crate::{
     programmable_transactions::execution::subst_signature,
     static_programmable_transactions::{
         linkage::{
-            analysis::{LinkageAnalysis, type_linkage},
-            resolved_linkage::RootedLinkage,
+            analysis::LinkageAnalyzer,
+            resolved_linkage::{ResolvedLinkage, RootedLinkage},
         },
         loading::ast::{
             self as L, Datatype, LoadedFunction, LoadedFunctionInstantiation, Type, Vector,
@@ -52,7 +52,7 @@ pub struct Env<'pc, 'vm, 'state, 'linkage> {
     pub vm: &'vm MoveVM,
     pub state_view: &'state mut dyn ExecutionState,
     pub linkable_store: &'linkage CachedPackageStore<'state>,
-    pub linkage_analysis: &'linkage dyn LinkageAnalysis,
+    pub linkage_analysis: &'linkage LinkageAnalyzer,
     gas_coin_type: OnceCell<Type>,
     upgrade_ticket_type: OnceCell<Type>,
     upgrade_receipt_type: OnceCell<Type>,
@@ -78,7 +78,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         vm: &'vm MoveVM,
         state_view: &'state mut dyn ExecutionState,
         linkable_store: &'linkage CachedPackageStore<'state>,
-        linkage_analysis: &'linkage dyn LinkageAnalysis,
+        linkage_analysis: &'linkage LinkageAnalyzer,
     ) -> Self {
         Self {
             protocol_config,
@@ -378,7 +378,8 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 type_params,
             } = struct_tag;
 
-            let tag_linkage = type_linkage(&[(*address).into()], env.linkable_store)?;
+            let tag_linkage =
+                ResolvedLinkage::type_linkage(&[(*address).into()], env.linkable_store)?;
             let linkage = RootedLinkage::new(*address, tag_linkage);
             let linked_store = LinkedDataStore::new(&linkage, env.linkable_store);
 

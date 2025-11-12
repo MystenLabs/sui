@@ -1,0 +1,6 @@
+[package]
+name = "loops"
+edition = "2024.beta"
+
+[addresses]
+loops = "0x0"

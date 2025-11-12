@@ -10,7 +10,7 @@ use sui_test_transaction_builder::publish_package;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::{SuiError, UserInputError};
+use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction};
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -45,8 +45,8 @@ async fn receive_object_feature_deny() {
         .unwrap_err();
 
     assert!(matches!(
-        err,
-        SuiError::UserInputError {
+        err.as_inner(),
+        SuiErrorKind::UserInputError {
             error: UserInputError::Unsupported(..)
         }
     ));
@@ -179,7 +179,10 @@ impl TestEnvironment {
             .await
             .move_call(self.move_package, "tto", function, arguments)
             .build();
-        self.test_cluster.wallet.sign_transaction(&transaction)
+        self.test_cluster
+            .wallet
+            .sign_transaction(&transaction)
+            .await
     }
 
     async fn move_call(
@@ -216,11 +219,7 @@ impl TestEnvironment {
                 .iter()
                 .find_map(
                     |(oref, _)| {
-                        if oref.0 == child.0 {
-                            Some(*oref)
-                        } else {
-                            None
-                        }
+                        if oref.0 == child.0 { Some(*oref) } else { None }
                     },
                 )
                 .unwrap();
@@ -256,6 +255,75 @@ impl TestEnvironment {
             })
             .unwrap()
     }
+
+    async fn simulate_receive_ref(
+        &self,
+        parent: ObjectRef,
+        child: ObjectRef,
+        function: &'static str,
+    ) -> anyhow::Result<()> {
+        use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
+        use sui_rpc::proto::sui::rpc::v2::{
+            Argument, Command, Input, MoveCall, ProgrammableTransaction,
+            SimulateTransactionRequest, Transaction, TransactionKind,
+        };
+
+        let sender = self.test_cluster.get_address_0();
+        let mut client =
+            TransactionExecutionServiceClient::connect(self.test_cluster.rpc_url().to_owned())
+                .await?;
+
+        let mut unresolved_transaction = Transaction::default();
+        unresolved_transaction.kind = Some(TransactionKind::from({
+            let mut ptb = ProgrammableTransaction::default();
+            ptb.inputs = vec![
+                {
+                    let mut message = Input::default();
+                    message.object_id = Some(parent.0.to_canonical_string(true));
+                    message
+                },
+                {
+                    let mut message = Input::default();
+                    message.object_id = Some(child.0.to_canonical_string(true));
+                    message
+                },
+            ];
+            ptb.commands = vec![Command::from({
+                let mut message = MoveCall::default();
+                message.package = Some(self.move_package.to_canonical_string(true));
+                message.module = Some("tto".to_string());
+                message.function = Some(function.to_string());
+                message.arguments = vec![Argument::new_input(0), Argument::new_input(1)];
+                message
+            })];
+            ptb
+        }));
+        unresolved_transaction.sender = Some(sender.to_string());
+
+        let mut request = SimulateTransactionRequest::default();
+        request.transaction = Some(unresolved_transaction);
+
+        client.simulate_transaction(request).await?;
+        Ok(())
+    }
+}
+
+#[sim_test]
+async fn simulate_receive_of_object_by_immut_ref() {
+    let env = TestEnvironment::new().await;
+    let (parent, child) = env.start().await;
+    env.simulate_receive_ref(parent, child, "receive_by_immutable_ref")
+        .await
+        .unwrap();
+}
+
+#[sim_test]
+async fn simulate_receive_of_object_by_mut_ref() {
+    let env = TestEnvironment::new().await;
+    let (parent, child) = env.start().await;
+    env.simulate_receive_ref(parent, child, "receive_by_mutable_ref")
+        .await
+        .unwrap();
 }
 
 async fn publish_move_package(test_cluster: &TestCluster) -> ObjectRef {

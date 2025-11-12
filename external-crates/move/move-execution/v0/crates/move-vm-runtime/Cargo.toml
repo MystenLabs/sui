@@ -22,7 +22,6 @@ smallvec.workspace = true
 move-bytecode-verifier = { path = "../move-bytecode-verifier", package = "move-bytecode-verifier-v0" }
 move-core-types.workspace = true
 move-vm-config.workspace = true
-move-vm-profiler.workspace = true
 move-vm-types = { path = "../move-vm-types", package = "move-vm-types-v0" }
 move-binary-format.workspace = true
 
@@ -43,5 +42,4 @@ testing = []
 lazy_natives = []
 tracing = [
     "move-vm-config/tracing",
-    "move-vm-profiler/tracing",
 ]

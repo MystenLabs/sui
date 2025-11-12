@@ -6,7 +6,7 @@ use crate::static_programmable_transactions::{
 };
 use indexmap::IndexSet;
 use move_vm_types::values::VectorSpecialization;
-use std::cell::OnceCell;
+use std::{cell::OnceCell, vec};
 use sui_types::base_types::{ObjectID, ObjectRef};
 
 //**************************************************************************************************
@@ -60,7 +60,7 @@ pub struct ReceivingInput {
     pub constraint: BytesConstraint,
 }
 
-pub type Commands = Vec<(Command, ResultType)>;
+pub type Commands = Vec<Command>;
 
 pub type ObjectArg = L::ObjectArg;
 
@@ -80,7 +80,23 @@ pub type ResultType = Vec<Type>;
 pub type Command = Spanned<Command_>;
 
 #[derive(Debug)]
-pub enum Command_ {
+pub struct Command_ {
+    /// The command
+    pub command: Command__,
+    /// The type of the return values of the command
+    pub result_type: ResultType,
+    /// Markers to drop unused results from the command. These are inferred based on any usage
+    /// of the given result `Result(i,j)` after this command. This is leveraged by the borrow
+    /// checker to remove unused references to allow potentially reuse of parent references.
+    /// The value at result `j` is unused and can be dropped if `drop_value[j]` is true.
+    pub drop_values: Vec</* drop value */ bool>,
+    /// The set of object shared object IDs that are consumed by this command.
+    /// After this command is executed, these objects must be either reshared or deleted.
+    pub consumed_shared_objects: Vec<ObjectID>,
+}
+
+#[derive(Debug)]
+pub enum Command__ {
     MoveCall(Box<MoveCall>),
     TransferObjects(Vec<Argument>, Argument),
     SplitCoins(/* Coin<T> */ Type, Argument, Vec<Argument>),
@@ -147,6 +163,19 @@ pub enum Argument__ {
 // impl
 //**************************************************************************************************
 
+impl Transaction {
+    pub fn types(&self) -> impl Iterator<Item = &Type> {
+        let pure_types = self.pure.iter().map(|p| &p.ty);
+        let object_types = self.objects.iter().map(|o| &o.ty);
+        let receiving_types = self.receiving.iter().map(|r| &r.ty);
+        let command_types = self.commands.iter().flat_map(command_types);
+        pure_types
+            .chain(object_types)
+            .chain(receiving_types)
+            .chain(command_types)
+    }
+}
+
 impl Usage {
     pub fn new_move(location: Location) -> Usage {
         Usage::Move(location)
@@ -183,6 +212,71 @@ impl Argument__ {
             Self::Freeze(usage) => usage.location(),
         }
     }
+}
+
+impl Command__ {
+    pub fn arguments(&self) -> Vec<&Argument> {
+        match self {
+            Command__::MoveCall(mc) => mc.arguments.iter().collect(),
+            Command__::TransferObjects(objs, addr) => {
+                objs.iter().chain(std::iter::once(addr)).collect()
+            }
+            Command__::SplitCoins(_, coin, amounts) => {
+                std::iter::once(coin).chain(amounts).collect()
+            }
+            Command__::MergeCoins(_, target, sources) => {
+                std::iter::once(target).chain(sources).collect()
+            }
+            Command__::MakeMoveVec(_, elems) => elems.iter().collect(),
+            Command__::Publish(_, _, _) => vec![],
+            Command__::Upgrade(_, _, _, arg, _) => vec![arg],
+        }
+    }
+
+    pub fn types(&self) -> Box<dyn Iterator<Item = &Type> + '_> {
+        match self {
+            Command__::TransferObjects(args, arg) => {
+                Box::new(std::iter::once(arg).chain(args.iter()).map(argument_type))
+            }
+            Command__::SplitCoins(ty, arg, args) | Command__::MergeCoins(ty, arg, args) => {
+                Box::new(
+                    std::iter::once(arg)
+                        .chain(args.iter())
+                        .map(argument_type)
+                        .chain(std::iter::once(ty)),
+                )
+            }
+            Command__::MakeMoveVec(ty, args) => {
+                Box::new(args.iter().map(argument_type).chain(std::iter::once(ty)))
+            }
+            Command__::MoveCall(call) => Box::new(
+                call.arguments
+                    .iter()
+                    .map(argument_type)
+                    .chain(call.function.type_arguments.iter())
+                    .chain(call.function.signature.parameters.iter())
+                    .chain(call.function.signature.return_.iter()),
+            ),
+            Command__::Upgrade(_, _, _, arg, _) => {
+                Box::new(std::iter::once(arg).map(argument_type))
+            }
+            Command__::Publish(_, _, _) => Box::new(std::iter::empty()),
+        }
+    }
+}
+
+//**************************************************************************************************
+// Standalone functions
+//**************************************************************************************************
+
+pub fn command_types(cmd: &Command) -> impl Iterator<Item = &Type> {
+    let result_types = cmd.value.result_type.iter();
+    let command_types = cmd.value.command.types();
+    result_types.chain(command_types)
+}
+
+pub fn argument_type(arg: &Argument) -> &Type {
+    &arg.value.1
 }
 
 //**************************************************************************************************

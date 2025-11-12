@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03002]: unbound module
+  ┌─ tests/move_2024/typing/string_implicits.move:2:19
+  │
+2 │     fun test_0(): std::ascii::String { std::ascii::string("test") }
+  │                   ^^^^^^^^^^ Unbound module 'std::ascii'
+
+error[E03002]: unbound module
+  ┌─ tests/move_2024/typing/string_implicits.move:2:40
+  │
+2 │     fun test_0(): std::ascii::String { std::ascii::string("test") }
+  │                                        ^^^^^^^^^^ Unbound module 'std::ascii'
+
+error[E03002]: unbound module
+  ┌─ tests/move_2024/typing/string_implicits.move:3:19
+  │
+3 │     fun test_1(): std::ascii::String { "test" }
+  │                   ^^^^^^^^^^ Unbound module 'std::ascii'
+
+error[E03002]: unbound module
+  ┌─ tests/move_2024/typing/string_implicits.move:4:19
+  │
+4 │     fun test_2(): std::string::String { std::string::utf8("test") }
+  │                   ^^^^^^^^^^^ Unbound module 'std::string'
+
+error[E03002]: unbound module
+  ┌─ tests/move_2024/typing/string_implicits.move:4:41
+  │
+4 │     fun test_2(): std::string::String { std::string::utf8("test") }
+  │                                         ^^^^^^^^^^^ Unbound module 'std::string'
+
+error[E03002]: unbound module
+  ┌─ tests/move_2024/typing/string_implicits.move:5:19
+  │
+5 │     fun test_3(): std::string::String { "test" }
+  │                   ^^^^^^^^^^^ Unbound module 'std::string'

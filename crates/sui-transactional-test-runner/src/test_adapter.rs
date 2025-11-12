@@ -5,23 +5,23 @@
 
 use crate::offchain_state::OffchainStateReader;
 use crate::simulator_persisted_store::PersistedStore;
+use crate::{TransactionalAdapter, ValidatorWithFullnode, cursor};
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
-use crate::{TransactionalAdapter, ValidatorWithFullnode};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
 use criterion::Criterion;
-use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{Base64, Encoding};
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::traits::KeyPair;
 use iso8601::Duration as IsoDuration;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use move_command_line_common::error_bitset::ErrorBitset;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
+    Flags, PreCompiledProgramInfo,
     editions::{Edition, Flavor},
     shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
-    Flags, FullyCompiledProgram,
 };
 use move_core_types::ident_str;
 use move_core_types::parsing::address::ParsedAddress;
@@ -34,12 +34,12 @@ use move_symbol_pool::Symbol;
 use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
 use move_transactional_test_runner::tasks::TaskCommand;
 use move_transactional_test_runner::{
-    framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
+    framework::{CompiledState, MoveTestAdapter, compile_any, store_modules},
     tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
 };
 use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde::Deserialize;
 use serde_json::Value;
 use std::borrow::Cow;
@@ -52,14 +52,14 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use sui_core::authority::AuthorityState;
 use sui_core::authority::shared_object_version_manager::AssignedVersions;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
-use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_graphql_rpc::test_infra::cluster::{RetentionConfig, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionBlockResponse, SuiExecutionStatus,
+    DevInspectResults, DryRunTransactionBlockResponse, SuiAccumulatorOperation, SuiExecutionStatus,
     SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
 };
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -67,11 +67,18 @@ use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
 use sui_swarm_config::genesis_config::AccountConfig;
+use sui_swarm_config::network_config_builder::KeyPairWrapper;
+use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
-use sui_types::crypto::{get_authority_key_pair, RandomnessRound};
+use sui_types::crypto::{
+    AuthorityKeyPair, AuthorityPublicKeyBytes, RandomnessRound, get_authority_key_pair,
+};
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest};
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::effects::{
+    AccumulatorOperation, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+};
+use sui_types::execution_status::ExecutionFailureStatus;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
@@ -82,29 +89,28 @@ use sui_types::storage::{ObjectStore, RpcStateReader};
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
-use sui_types::SUI_SYSTEM_ADDRESS;
+use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID};
+use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
+use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
-    crypto::{get_key_pair_from_rng, AccountKeyPair},
+    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
+    base_types::{ObjectID, ObjectRef, SUI_ADDRESS_LENGTH, SuiAddress},
+    crypto::{AccountKeyPair, get_key_pair_from_rng},
     event::Event,
     object::{self, Object},
     transaction::{Transaction, TransactionData, VerifiedTransaction},
-    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
+use sui_types::{
+    SUI_FRAMEWORK_PACKAGE_ID, programmable_transaction_builder::ProgrammableTransactionBuilder,
+};
+use sui_types::{SUI_SYSTEM_PACKAGE_ID, utils::to_sender_signed_transaction};
 use sui_types::{execution_status::ExecutionStatus, transaction::TransactionKind};
 use sui_types::{gas::GasCostSummary, object::GAS_VALUE_FOR_TESTING};
 use sui_types::{
     move_package::MovePackage,
     transaction::{Argument, CallArg, TransactionDataAPI, TransactionExpiration},
 };
-use sui_types::{
-    programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_PACKAGE_ID,
-};
-use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
-use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID};
-use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
-use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
-use tempfile::{tempdir, NamedTempFile};
+use tempfile::{NamedTempFile, tempdir};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum FakeID {
@@ -181,7 +187,7 @@ struct AdapterInitConfig {
     account_names: BTreeSet<String>,
     protocol_config: ProtocolConfig,
     is_simulator: bool,
-    custom_validator_account: bool,
+    num_custom_validator_accounts: u64,
     reference_gas_price: Option<u64>,
     default_gas_price: Option<u64>,
     flavor: Option<Flavor>,
@@ -214,6 +220,7 @@ struct TxnSummary {
     wrapped: Vec<ObjectID>,
     unchanged_shared: Vec<ObjectID>,
     events: Vec<Event>,
+    accumulators_written: Vec<(ObjectID, SuiAddress, TypeTag, AccumulatorOperation)>,
     gas_summary: GasCostSummary,
 }
 
@@ -226,7 +233,7 @@ impl AdapterInitConfig {
             max_gas,
             shared_object_deletion,
             simulator,
-            custom_validator_account,
+            num_custom_validator_accounts,
             reference_gas_price,
             default_gas_price,
             snapshot_config,
@@ -234,6 +241,10 @@ impl AdapterInitConfig {
             epochs_to_keep,
             data_ingestion_path,
             rest_api_url,
+            enable_accumulators,
+            enable_authenticated_event_streams,
+            allow_references_in_ptbs,
+            enable_non_exclusive_writes,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -242,10 +253,33 @@ impl AdapterInitConfig {
             .unwrap_or_default();
 
         let mut protocol_config = if let Some(protocol_version) = protocol_version {
+            assert!(
+                protocol_version <= ProtocolVersion::max().as_u64(),
+                "Cannot set the protocol version to {}, since it is higher than the max version {}",
+                protocol_version,
+                ProtocolVersion::max().as_u64(),
+            );
+            assert!(
+                protocol_version != ProtocolVersion::max().as_u64(),
+                "Do not set the protocol version to the max {}. It can lead to unanticipated test changes once the max version is bumped. Instead, leave it unset to always use the max version.",
+                protocol_version,
+            );
             ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
         } else {
             ProtocolConfig::get_for_max_version_UNSAFE()
         };
+        if enable_accumulators {
+            protocol_config.enable_accumulators_for_testing();
+        }
+        if enable_authenticated_event_streams {
+            protocol_config.enable_authenticated_event_streams_for_testing();
+        }
+        if allow_references_in_ptbs {
+            protocol_config.allow_references_in_ptbs_for_testing();
+        }
+        if enable_non_exclusive_writes {
+            protocol_config.enable_non_exclusive_writes_for_testing();
+        }
         if let Some(enable) = shared_object_deletion {
             protocol_config.set_shared_object_deletion_for_testing(enable);
         }
@@ -255,7 +289,8 @@ impl AdapterInitConfig {
             }
             protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
         }
-        if custom_validator_account && !simulator {
+        let num_custom_validator_accounts = num_custom_validator_accounts.unwrap_or(0);
+        if num_custom_validator_accounts > 0 && !simulator {
             panic!("Can only set custom validator account in simulator mode");
         }
         if reference_gas_price.is_some() && !simulator {
@@ -281,7 +316,7 @@ impl AdapterInitConfig {
             account_names: accounts,
             protocol_config,
             is_simulator: simulator,
-            custom_validator_account,
+            num_custom_validator_accounts,
             reference_gas_price,
             default_gas_price,
             flavor,
@@ -336,7 +371,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -357,7 +392,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             account_names,
             mut protocol_config,
             is_simulator,
-            custom_validator_account,
+            num_custom_validator_accounts,
             reference_gas_price,
             default_gas_price,
             flavor,
@@ -366,7 +401,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
             None => AdapterInitConfig::default(),
         };
-        let enabled_ptb_v2 = protocol_config.version >= ProtocolVersion::max()
+        let enabled_ptb_v2 = protocol_config.version == ProtocolVersion::max()
             && ENABLE_PTB_V2.get().copied().unwrap_or(false);
         protocol_config.set_enable_ptb_execution_v2_for_testing(enabled_ptb_v2);
 
@@ -386,7 +421,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 account_names,
                 additional_mapping,
                 &protocol_config,
-                custom_validator_account,
+                num_custom_validator_accounts,
                 reference_gas_price,
                 offchain_config
                     .as_ref()
@@ -579,8 +614,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             .try_as_package()
             .unwrap()
             .serialized_module_map()
-            .iter()
-            .map(|(_, published_module_bytes)| MaybeNamedCompiledModule {
+            .values()
+            .map(|published_module_bytes| MaybeNamedCompiledModule {
                 named_address: named_addr_opt,
                 module: CompiledModule::deserialize_with_defaults(published_module_bytes).unwrap(),
                 source_map: None,
@@ -646,9 +681,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     Ok(obj) => obj,
                 }
             }};
-            ($fake_id:ident) => {{
-                get_obj!($fake_id, None)
-            }};
+            ($fake_id:ident) => {{ get_obj!($fake_id, None) }};
         }
         match command {
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
@@ -764,12 +797,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 Ok(Some(format!("Checkpoint created: {}", latest_chk)))
             }
-            SuiSubcommand::AdvanceEpoch(AdvanceEpochCommand {
-                count,
-                create_random_state,
-            }) => {
-                for _ in 0..count.unwrap_or(1) {
-                    self.executor.advance_epoch(create_random_state).await?;
+            SuiSubcommand::AdvanceEpoch(cmd) => {
+                for _ in 0..cmd.count.unwrap_or(1) {
+                    self.executor.advance_epoch((&cmd).into()).await?;
                 }
                 let epoch = self.get_latest_epoch_id()?;
                 Ok(Some(format!("Epoch advanced: {epoch}")))
@@ -826,7 +856,55 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 self.execute_txn(tx.into()).await?;
                 Ok(None)
             }
-            SuiSubcommand::ViewObject(ViewObjectCommand { id: fake_id }) => {
+            SuiSubcommand::AuthenticatorStateUpdate(AuthenticatorStateUpdateCommand {
+                round,
+                jwk_iss,
+                authenticator_obj_initial_shared_version,
+            }) => {
+                use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
+                use sui_types::authenticator_state::ActiveJwk;
+
+                let current_epoch = self.get_latest_epoch_id()?;
+
+                // Create ActiveJwk instances with auto-generated key IDs
+                // Example: --jwk-iss "google.com,microsoft.com"
+                // Results in: [(google.com, key1), (microsoft.com, key2)]
+                let active_jwks: Vec<ActiveJwk> = jwk_iss
+                    .iter()
+                    .enumerate()
+                    .map(|(index, iss)| ActiveJwk {
+                        jwk_id: JwkId::new(iss.clone(), format!("key{}", index + 1)),
+                        jwk: JWK {
+                            kty: "RSA".to_string(),
+                            e: "AQAB".to_string(),
+                            n: "test_modulus_value".to_string(),
+                            alg: "RS256".to_string(),
+                        },
+                        epoch: current_epoch,
+                    })
+                    .collect();
+
+                let auth_obj_version = authenticator_obj_initial_shared_version
+                    .map(SequenceNumber::from_u64)
+                    .unwrap_or_else(SequenceNumber::new);
+
+                let tx = VerifiedTransaction::new_authenticator_state_update(
+                    current_epoch,
+                    round,
+                    active_jwks,
+                    auth_obj_version,
+                );
+
+                self.execute_txn(tx.into()).await?;
+                Ok(Some(format!(
+                    "AuthenticatorStateUpdate executed at epoch {} round {}",
+                    current_epoch, round
+                )))
+            }
+            SuiSubcommand::ViewObject(ViewObjectCommand {
+                id: fake_id,
+                hide_contents,
+            }) => {
                 let obj = get_obj!(fake_id);
                 Ok(Some(match &obj.data {
                     object::Data::Move(move_obj) => {
@@ -835,12 +913,14 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                             BoundedVisitor::deserialize_struct(move_obj.contents(), &layout)
                                 .unwrap();
 
-                        self.stabilize_str(format!(
-                            "Owner: {}\nVersion: {}\nContents: {:#}",
-                            &obj.owner,
-                            obj.version().value(),
-                            move_struct
-                        ))
+                        let msg =
+                            format!("Owner: {}\nVersion: {}", &obj.owner, obj.version().value());
+                        let msg = if hide_contents {
+                            format!("{msg}\nType: {:#}", &move_struct.type_)
+                        } else {
+                            format!("{msg}\nContents: {move_struct:#}",)
+                        };
+                        self.stabilize_str(msg)
                     }
                     object::Data::Package(package) => {
                         let num_modules = package.serialized_module_map().len();
@@ -1212,8 +1292,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         let package = obj.data.try_as_package().map(|package| {
                             package
                                 .serialized_module_map()
-                                .iter()
-                                .map(|(_, published_module_bytes)| {
+                                .values()
+                                .map(|published_module_bytes| {
                                     let module = CompiledModule::deserialize_with_defaults(
                                         published_module_bytes,
                                     )
@@ -1239,6 +1319,12 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     SuiValue::Receiving(_, _) => bail!("receiving is not supported as an input"),
                     SuiValue::ImmShared(_, _) => {
                         bail!("read-only shared object is not supported as an input")
+                    }
+                    SuiValue::NonExclusiveWrite(_, _) => {
+                        bail!("non-exclusive write object is not supported as an input")
+                    }
+                    SuiValue::Withdraw(_, _) => {
+                        bail!("withdraw reservation is not supported as an input for set-address")
                     }
                 };
                 let value = NumericalAddress::new(value.into_bytes(), NumberFormat::Hex);
@@ -1443,33 +1529,6 @@ impl SuiTestAdapter {
         Ok(interpolated_contents)
     }
 
-    fn encode_cursor(&self, cursor: &str) -> anyhow::Result<String> {
-        // Cursor format is either bcs(object_id,n1,n2,...) or a json value,
-        // in which case we just return its base64 encoding.
-        let Some(args) = cursor
-            .strip_prefix("bcs(")
-            .and_then(|c| c.strip_suffix(")"))
-        else {
-            return Ok(Base64::encode(cursor));
-        };
-
-        let mut parts = args.split(",");
-
-        let id: ObjectID = parts
-            .next()
-            .context("bcs(...) cursors must have at least one argument")?
-            .trim()
-            .parse()?;
-
-        let mut bytes = bcs::to_bytes(&id.to_vec())?;
-        for part in parts {
-            let n: u64 = part.trim().parse()?;
-            bytes.extend(bcs::to_bytes(&n)?);
-        }
-
-        Ok(Base64::encode(bytes))
-    }
-
     fn interpolate_query(
         &self,
         contents: &str,
@@ -1485,11 +1544,13 @@ impl SuiTestAdapter {
 
         // Then interpolate the cursors which may reference objects
         for (idx, s) in cursors.iter().enumerate() {
-            let interpolated_cursor = self.interpolate_contents(s, &variables)?;
-            let encoded_cursor = self.encode_cursor(&interpolated_cursor)?;
+            // Try and parse the encoded cursor, if it fails, assume the cursor is a plain
+            // JSON cursor.
+            let c = self.interpolate_contents(s, &variables)?;
+            let encoded = Base64::encode(cursor::parse(&c).unwrap_or_else(|_| c.into_bytes()));
 
             // Add the encoded cursor to the variables map because they may get used in the query.
-            variables.insert(format!("cursor_{idx}"), encoded_cursor);
+            variables.insert(format!("cursor_{idx}"), encoded);
         }
         self.interpolate_contents(contents, &variables)
     }
@@ -1748,6 +1809,20 @@ impl SuiTestAdapter {
             .map(|(id, _, _)| *id)
             .collect();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|(id, _, _)| *id).collect();
+
+        let accumulator_events = effects.accumulator_events();
+        let mut accumulators_written: Vec<_> = accumulator_events
+            .iter()
+            .map(|event| {
+                (
+                    *event.accumulator_obj.inner(),
+                    event.write.address.address,
+                    event.write.address.ty.clone(),
+                    event.write.operation.clone(),
+                )
+            })
+            .collect();
+
         let gas_summary = effects.gas_cost_summary();
 
         // make sure objects that have previously not been in storage get assigned a fake id.
@@ -1759,12 +1834,22 @@ impl SuiTestAdapter {
 
         // Use a stable sort before assigning fake ids, so test output remains stable.
         might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id));
+
+        accumulators_written.sort_by_key(|(_, address, ty, _)| {
+            (
+                self.stabilize_str(format!("{}", address)),
+                self.stabilize_str(format!("{}", ty)),
+            )
+        });
+
+        might_need_fake_id.extend(accumulators_written.iter().map(|(id, _, _, _)| *id));
+
         for id in might_need_fake_id {
             self.enumerate_fake(id);
         }
 
         let mut unchanged_shared_ids = effects
-            .unchanged_shared_objects()
+            .unchanged_consensus_objects()
             .iter()
             .map(|(id, _)| *id)
             .collect::<Vec<_>>();
@@ -1780,15 +1865,17 @@ impl SuiTestAdapter {
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unchanged_shared_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        accumulators_written.sort_by_key(|(id, _, _, _)| self.real_to_fake_object_id(id));
 
         match effects.status() {
-            ExecutionStatus::Success { .. } => {
+            ExecutionStatus::Success => {
                 let events = self
                     .executor
                     .query_tx_events_asc(digest, *QUERY_MAX_RESULT_LIMIT)
                     .await?;
                 Ok(TxnSummary {
                     events,
+                    accumulators_written,
                     gas_summary: gas_summary.clone(),
                     created: created_ids,
                     mutated: mutated_ids,
@@ -1804,6 +1891,20 @@ impl SuiTestAdapter {
                     format!("Debug of error: {error:?} at command {command:?}")
                 } else {
                     format!("Execution Error: {}", error_opt.unwrap())
+                };
+                let error = match error {
+                    ExecutionFailureStatus::MoveAbort(loc, code)
+                        if ErrorBitset::from_u64(*code).is_some() =>
+                    {
+                        let clever_code = ErrorBitset::from_u64(*code).unwrap();
+                        let line_number = format!("at line {}", clever_code.line_number().unwrap());
+                        let code = match clever_code.error_code() {
+                            Some(code) => format!("{line_number} with clever code {}", code),
+                            None => line_number,
+                        };
+                        format!("Move Abort in {loc} {code}")
+                    }
+                    _ => format!("{error}"),
                 };
                 Err(anyhow::anyhow!(self.stabilize_str(format!(
                     "Transaction Effects Status: {error}\n{execution_msg}",
@@ -1863,6 +1964,27 @@ impl SuiTestAdapter {
             .map(|o| o.object_id)
             .collect();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|o| o.object_id).collect();
+        let accumulator_events = effects.accumulator_events();
+        let mut accumulators_written: Vec<_> = accumulator_events
+            .iter()
+            .map(|event| {
+                let operation = match event.operation {
+                    SuiAccumulatorOperation::Merge => AccumulatorOperation::Merge,
+                    SuiAccumulatorOperation::Split => AccumulatorOperation::Split,
+                };
+                (
+                    event.accumulator_obj,
+                    event.address,
+                    event
+                        .ty
+                        .clone()
+                        .try_into()
+                        .expect("Failed to parse accumulator type tag"),
+                    operation,
+                )
+            })
+            .collect();
+
         let gas_summary = effects.gas_cost_summary();
 
         // make sure objects that have previously not been in storage get assigned a fake id.
@@ -1874,6 +1996,15 @@ impl SuiTestAdapter {
 
         // Use a stable sort before assigning fake ids, so test output remains stable.
         might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id));
+        accumulators_written.sort_by_key(|(_, address, ty, _)| {
+            (
+                self.stabilize_str(format!("{}", address)),
+                self.stabilize_str(format!("{}", ty)),
+            )
+        });
+
+        might_need_fake_id.extend(accumulators_written.iter().map(|(obj_id, _, _, _)| *obj_id));
+
         for id in might_need_fake_id {
             self.enumerate_fake(id);
         }
@@ -1888,6 +2019,7 @@ impl SuiTestAdapter {
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        accumulators_written.sort_by_key(|(id, _, _, _)| self.real_to_fake_object_id(id));
 
         let events = events
             .data
@@ -1906,6 +2038,7 @@ impl SuiTestAdapter {
             wrapped: wrapped_ids,
             // TODO: Properly propagate unchanged shared objects in dev_inspect.
             unchanged_shared: vec![],
+            accumulators_written,
         })
     }
 
@@ -1967,6 +2100,7 @@ impl SuiTestAdapter {
             unwrapped_then_deleted,
             wrapped,
             unchanged_shared,
+            accumulators_written,
         }: &TxnSummary,
         summarize: bool,
     ) -> Option<String> {
@@ -2026,14 +2160,21 @@ impl SuiTestAdapter {
             )
             .unwrap();
         }
+        if !accumulators_written.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            write!(
+                out,
+                "accumulators_written: {}",
+                self.list_accumulator_events(accumulators_written, summarize)
+            )
+            .unwrap();
+        }
         out.push('\n');
         write!(out, "gas summary: {}", gas_summary).unwrap();
 
-        if out.is_empty() {
-            None
-        } else {
-            Some(out)
-        }
+        if out.is_empty() { None } else { Some(out) }
     }
 
     fn list_events(&self, events: &[Event], summarize: bool) -> String {
@@ -2047,21 +2188,47 @@ impl SuiTestAdapter {
             .join(", ")
     }
 
+    fn format_fake_id(&self, obj_id: &ObjectID) -> String {
+        match self.real_to_fake_object_id(obj_id) {
+            None => "object(_)".to_string(),
+            Some(FakeID::Known(id)) => {
+                let id: AccountAddress = id.into();
+                format!("0x{id:x}")
+            }
+            Some(fake) => format!("object({})", fake),
+        }
+    }
+
     fn list_objs(&self, objs: &[ObjectID], summarize: bool) -> String {
         if summarize {
             return format!("{}", objs.len());
         }
         objs.iter()
-            .map(
-                |id| /*id.to_string(), */match self.real_to_fake_object_id(id) {
-                                         None => "object(_)".to_string(),
-                                         Some(FakeID::Known(id)) => {
-                                             let id: AccountAddress = id.into();
-                                             format!("0x{id:x}")
-                                         }
-                                         Some(fake) => format!("object({})", fake),
-                                     },
-            )
+            .map(|id| self.format_fake_id(id))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    fn list_accumulator_events(
+        &self,
+        accumulators: &[(ObjectID, SuiAddress, TypeTag, AccumulatorOperation)],
+        summarize: bool,
+    ) -> String {
+        if summarize {
+            return format!("{}", accumulators.len());
+        }
+        accumulators
+            .iter()
+            .map(|(obj_id, address, ty, operation)| {
+                let fake_id_str = self.format_fake_id(obj_id);
+                let address_str = self.stabilize_str(format!("{}", address));
+                let ty_str = self.stabilize_str(format!("{}", ty));
+                let op_str = match operation {
+                    AccumulatorOperation::Merge => "Merge",
+                    AccumulatorOperation::Split => "Split",
+                };
+                format!("({}, {}, {}, {})", fake_id_str, address_str, ty_str, op_str)
+            })
             .collect::<Vec<_>>()
             .join(", ")
     }
@@ -2206,7 +2373,7 @@ impl Default for AdapterInitConfig {
             account_names: BTreeSet::new(),
             protocol_config: ProtocolConfig::get_for_max_version_UNSAFE(),
             is_simulator: false,
-            custom_validator_account: false,
+            num_custom_validator_accounts: 0,
             reference_gas_price: None,
             default_gas_price: None,
             flavor: None,
@@ -2250,7 +2417,7 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
     map
 });
 
-pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
+pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
     // TODO invoke package system? Or otherwise pull the versions for these packages as per their
     // actual Move.toml files. They way they are treated here is odd, too, though.
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
@@ -2284,7 +2451,7 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         buf.extend(["packages", "bridge", "sources"]);
         buf.to_string_lossy().to_string()
     };
-    let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
+    let pre_compiled_program = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: Some(("sui-framework".into(), config)),
             paths: vec![
@@ -2297,11 +2464,13 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
         None,
+        None,
+        false,
         Flags::empty(),
         None,
     )
     .unwrap();
-    match fully_compiled_res {
+    match pre_compiled_program {
         Err((files, diags)) => {
             eprintln!("!!!Sui framework failed to compile!!!");
             move_compiler::diagnostics::report_diagnostics(&files, diags)
@@ -2373,7 +2542,7 @@ async fn init_val_fullnode_executor(
     let mut mk_account = || {
         let (address, key_pair) = get_key_pair_from_rng(&mut rng);
         let obj = Object::with_id_owner_gas_for_testing(
-            ObjectID::new(rng.gen()),
+            ObjectID::new(rng.r#gen()),
             address,
             GAS_FOR_TESTING,
         );
@@ -2425,7 +2594,7 @@ async fn init_sim_executor(
     account_names: BTreeSet<String>,
     additional_mapping: BTreeMap<String, NumericalAddress>,
     protocol_config: &ProtocolConfig,
-    custom_validator_account: bool,
+    num_custom_validator_accounts: u64,
     reference_gas_price: Option<u64>,
     data_ingestion_path: PathBuf,
 ) -> (
@@ -2449,18 +2618,29 @@ async fn init_sim_executor(
     // Make a default account keypair
     let default_account_kp = get_key_pair_from_rng(&mut rng);
 
-    let (mut validator_addr, mut validator_key, mut key_copy) = (None, None, None);
-    if custom_validator_account {
+    // Validators are sorted by their authority public key in tests. Sort before assigning
+    // names so that validators are ordered by name (validator_0, validator_1, ..).
+    // See https://github.com/MystenLabs/sui/blob/272c471e3ad1f91b2564efdaaa17100e475f732e/crates/sui-swarm-config/src/network_config_builder.rs#L443
+    let addr_keys: Vec<_> = (0..num_custom_validator_accounts)
         // Make a validator account with a gas object
-        let (a, b): (SuiAddress, Ed25519KeyPair) = get_key_pair_from_rng(&mut rng);
-
-        key_copy = Some(
-            Ed25519KeyPair::from_bytes(b.as_bytes())
-                .expect("FATAL: recovering key from bytes failed"),
-        );
-        validator_addr = Some(a);
-        validator_key = Some(b);
-    }
+        .map(|_| {
+            let (addr, account_key_pair): (SuiAddress, AccountKeyPair) =
+                get_key_pair_from_rng(&mut rng);
+            let protocol_key_pair: AuthorityKeyPair = get_key_pair_from_rng(&mut rng).1;
+            (
+                protocol_key_pair.public().into(),
+                (
+                    addr,
+                    KeyPairWrapper {
+                        account_key_pair,
+                        protocol_key_pair: Some(protocol_key_pair),
+                    },
+                ),
+            )
+        })
+        .collect::<BTreeMap<AuthorityPublicKeyBytes, _>>()
+        .into_values()
+        .collect();
 
     let mut acc_cfgs = account_kps
         .values()
@@ -2474,12 +2654,10 @@ async fn init_sim_executor(
         gas_amounts: vec![GAS_FOR_TESTING],
     });
 
-    if let Some(v_addr) = validator_addr {
-        acc_cfgs.push(AccountConfig {
-            address: Some(v_addr),
-            gas_amounts: vec![GAS_FOR_TESTING],
-        });
-    }
+    acc_cfgs.extend(addr_keys.iter().map(|(addr, _)| AccountConfig {
+        address: Some(*addr),
+        gas_amounts: vec![GAS_FOR_TESTING],
+    }));
 
     // Create the simulator with the specific account configs, which also crates objects
 
@@ -2489,9 +2667,14 @@ async fn init_sim_executor(
             DEFAULT_CHAIN_START_TIMESTAMP,
             protocol_config.version,
             acc_cfgs,
-            key_copy.map(|q| vec![q]),
+            addr_keys
+                .iter()
+                .map(|(_, key_pair_wrapper)| key_pair_wrapper.clone())
+                .collect(),
             reference_gas_price,
             None,
+            protocol_config.enable_accumulators(),
+            protocol_config.enable_authenticated_event_streams(),
         );
 
     sim.set_data_ingestion_path(data_ingestion_path.clone());
@@ -2523,16 +2706,17 @@ async fn init_sim_executor(
     };
     objects.push(o.clone());
 
-    if let (Some(v_addr), Some(v_key)) = (validator_addr, validator_key) {
-        let o = sim.store().owned_objects(v_addr).next().unwrap();
+    for (i, (addr, key_pair_wrapper)) in addr_keys.into_iter().enumerate() {
+        let o = sim.store().owned_objects(addr).next().unwrap();
         let validator_account = TestAccount {
-            address: v_addr,
-            key_pair: v_key,
+            address: addr,
+            key_pair: key_pair_wrapper.account_key_pair,
             gas: o.id(),
         };
         objects.push(o.clone());
-        account_objects.insert("validator_0".to_string(), o.id());
-        accounts.insert("validator_0".to_string(), validator_account);
+        let name = format!("validator_{}", i);
+        account_objects.insert(name.clone(), o.id());
+        accounts.insert(name, validator_account);
     }
 
     let sim = Box::new(sim);
@@ -2567,9 +2751,18 @@ async fn update_named_address_mapping(
         .get_active_validator_addresses()
         .await
         .expect("Failed to get validator addresses")
-        .iter()
+        .into_iter()
         .enumerate()
-        .map(|(idx, addr)| (format!("validator_{idx}"), *addr))
+        .map(|(idx, addr)| {
+            let validator_name = accounts
+                .iter()
+                .find(|(_, account)| account.address == addr)
+                .map_or_else(
+                    || format!("validator_{idx}"),
+                    |(validator_name, _)| validator_name.clone(),
+                );
+            (validator_name, addr)
+        })
         .collect();
 
     // For mappings where the address is specified, populate the named address mapping
@@ -2691,5 +2884,19 @@ impl ReadStore for SuiTestAdapter {
     ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         self.executor
             .get_full_checkpoint_contents(sequence_number, digest)
+    }
+
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<Vec<sui_types::storage::ObjectKey>> {
+        self.executor.get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<CheckpointSequenceNumber> {
+        self.executor.get_transaction_checkpoint(digest)
     }
 }

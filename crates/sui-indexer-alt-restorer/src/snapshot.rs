@@ -21,8 +21,8 @@ use sui_indexer_alt_schema::objects::StoredObjInfo;
 use sui_indexer_alt_schema::schema::obj_info;
 use sui_pg_db::Db;
 use sui_snapshot::{
-    reader::{download_bytes, LiveObjectIter, StateSnapshotReaderV1},
     FileMetadata,
+    reader::{LiveObjectIter, StateSnapshotReaderV1, download_bytes},
 };
 use sui_storage::object_store::ObjectStoreGetExt;
 
@@ -64,6 +64,7 @@ impl SnapshotRestorer {
             NonZeroUsize::new(args.concurrency).unwrap(),
             m,
             true, // skip_reset_local_store
+            3,    // max_retries
         )
         .await?;
         let db = Db::for_write(args.database_url.clone(), args.db_args.clone()).await?;

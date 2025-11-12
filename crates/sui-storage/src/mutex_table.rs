@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::hash_map::{DefaultHasher, RandomState};
 use std::collections::HashMap;
+use std::collections::hash_map::{DefaultHasher, RandomState};
 use std::error::Error;
 use std::fmt;
 use std::hash::{BuildHasher, Hash, Hasher};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use parking_lot::{ArcMutexGuard, ArcRwLockReadGuard, ArcRwLockWriteGuard, Mutex, RwLock};
@@ -224,7 +224,8 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
             element
         } else {
             // element doesn't exist
-            let element = {
+
+            {
                 let mut map = self.lock_table[lock_idx].write();
                 map.entry(k)
                     .or_insert_with(|| {
@@ -232,8 +233,7 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
                         Arc::new(L::default())
                     })
                     .clone()
-            };
-            element
+            }
         }
     }
 

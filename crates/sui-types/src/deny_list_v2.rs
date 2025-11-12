@@ -1,19 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{EpochId, ObjectID, SuiAddress};
+use crate::base_types::{EpochId, SuiAddress};
+use crate::coin::COIN_MODULE_NAME;
 use crate::config::{Config, Setting};
 use crate::deny_list_v1::{
-    input_object_coin_types_for_denylist_check, DENY_LIST_COIN_TYPE_INDEX, DENY_LIST_MODULE,
+    DENY_LIST_COIN_TYPE_INDEX, DENY_LIST_MODULE, input_object_coin_types_for_denylist_check,
 };
-use crate::dynamic_field::{get_dynamic_field_from_store, DOFWrapper};
+use crate::dynamic_field::{DOFWrapper, get_dynamic_field_from_store};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
+use crate::gas_coin::GAS;
 use crate::id::UID;
-use crate::object::Object;
 use crate::storage::{DenyListResult, ObjectStore};
 use crate::transaction::{CheckedInputObjects, ReceivingObjects};
-use crate::{MoveTypeTagTrait, SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
+use crate::{
+    MoveTypeTagTrait, SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
+};
 use move_core_types::ident_str;
+use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -21,12 +25,21 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 pub const CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS: usize = 1000;
+pub const DENY_CAP_V2_STRUCT_NAME: &IdentStr = ident_str!("DenyCapV2");
 
 /// Rust representation of the Move type 0x2::coin::DenyCapV2.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DenyCapV2 {
     pub id: UID,
     pub allow_global_pause: bool,
+}
+
+impl DenyCapV2 {
+    pub fn is_deny_cap_v2(other: &StructTag) -> bool {
+        other.address == SUI_FRAMEWORK_ADDRESS
+            && other.module.as_ident_str() == COIN_MODULE_NAME
+            && other.name.as_ident_str() == DENY_CAP_V2_STRUCT_NAME
+    }
 }
 
 /// Rust representation of the Move type 0x2::deny_list::ConfigKey.
@@ -104,9 +117,13 @@ pub fn check_coin_deny_list_v2_during_signing(
     address: SuiAddress,
     input_objects: &CheckedInputObjects,
     receiving_objects: &ReceivingObjects,
+    funds_withdraw_types: BTreeSet<String>,
     object_store: &dyn ObjectStore,
 ) -> UserInputResult {
-    let coin_types = input_object_coin_types_for_denylist_check(input_objects, receiving_objects);
+    let mut coin_types =
+        input_object_coin_types_for_denylist_check(input_objects, receiving_objects);
+    coin_types.extend(funds_withdraw_types);
+
     for coin_type in coin_types {
         let Some(deny_list) = get_per_type_coin_deny_list_v2(&coin_type, object_store) else {
             continue;
@@ -125,36 +142,29 @@ pub fn check_coin_deny_list_v2_during_signing(
 ///         2) the deny lists checked
 ///         2) the number of regulated coin owners checked.
 pub fn check_coin_deny_list_v2_during_execution(
-    written_objects: &BTreeMap<ObjectID, Object>,
+    receiving_funds_type_and_owners: BTreeMap<TypeTag, BTreeSet<SuiAddress>>,
     cur_epoch: EpochId,
     object_store: &dyn ObjectStore,
 ) -> DenyListResult {
-    let mut new_coin_owners = BTreeMap::new();
-    for obj in written_objects.values() {
-        if obj.is_gas_coin() {
-            continue;
-        }
-        let Some(coin_type) = obj.coin_type_maybe() else {
-            continue;
-        };
-        let Ok(owner) = obj.owner.get_address_owner_address() else {
-            continue;
-        };
-        new_coin_owners
-            .entry(coin_type.to_canonical_string(false))
-            .or_insert_with(BTreeSet::new)
-            .insert(owner);
-    }
-    let num_non_gas_coin_owners = new_coin_owners.values().map(|v| v.len() as u64).sum();
-    let new_regulated_coin_owners = new_coin_owners
+    let non_gas_coin_owners = receiving_funds_type_and_owners
+        .into_iter()
+        .filter_map(|(ty, owners)| {
+            if GAS::is_gas_type(&ty) {
+                None
+            } else {
+                Some((ty.to_canonical_string(false), owners))
+            }
+        })
+        .collect::<BTreeMap<_, _>>();
+    let num_non_gas_coin_owners = non_gas_coin_owners.values().map(|v| v.len() as u64).sum();
+    let regulated_coin_owners = non_gas_coin_owners
         .into_iter()
         .filter_map(|(coin_type, owners)| {
             let deny_list_config = get_per_type_coin_deny_list_v2(&coin_type, object_store)?;
             Some((coin_type, (deny_list_config, owners)))
         })
         .collect::<BTreeMap<_, _>>();
-    let result =
-        check_new_regulated_coin_owners(new_regulated_coin_owners, cur_epoch, object_store);
+    let result = check_new_regulated_coin_owners(regulated_coin_owners, cur_epoch, object_store);
     // `num_non_gas_coin_owners` is used to charge for gas. As such we must be extremely careful
     // to not use a number that is not consistent across all validators. For example, relying on
     // the number of coins with a deny list is _not_ consistent since the deny list is created
@@ -240,7 +250,7 @@ fn read_config_setting<K, V>(
     cur_epoch: Option<EpochId>,
 ) -> Option<V>
 where
-    K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
+    K: Clone + MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
     V: Clone + Serialize + DeserializeOwned + fmt::Debug,
 {
     let setting: Setting<V> = {

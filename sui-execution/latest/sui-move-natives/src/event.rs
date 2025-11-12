@@ -1,9 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{legacy_test_cost, object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{
+    NativesCostTable, abstract_size, get_extension, get_extension_mut, legacy_test_cost,
+    object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
+};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{gas_algebra::InternalGas, language_storage::TypeTag, vm_status::StatusCode};
+use move_core_types::{
+    account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
+    vm_status::StatusCode,
+};
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
@@ -12,7 +18,9 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::error::VMMemoryLimitExceededSubStatusCode;
+use sui_types::{base_types::ObjectID, error::VMMemoryLimitExceededSubStatusCode};
+
+pub const NOT_SUPPORTED: u64 = 0;
 
 #[derive(Clone, Debug)]
 pub struct EventEmitCostParams {
@@ -20,7 +28,9 @@ pub struct EventEmitCostParams {
     pub event_emit_value_size_derivation_cost_per_byte: InternalGas,
     pub event_emit_tag_size_derivation_cost_per_byte: InternalGas,
     pub event_emit_output_cost_per_byte: InternalGas,
+    pub event_emit_auth_stream_cost: Option<InternalGas>,
 }
+
 /***************************************************************************************************
  * native fun emit
  * Implementation of the Move native function `event::emit<T: copy + drop>(event: T)`
@@ -38,18 +48,73 @@ pub fn emit(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 1);
 
-    let event_emit_cost_params = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    let ty = ty_args.pop().unwrap();
+    let event_value = args.pop_back().unwrap();
+    emit_impl(context, ty, event_value, None)
+}
+
+pub fn emit_authenticated_impl(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 2);
+    debug_assert!(args.len() == 3);
+
+    let cost = context.gas_used();
+    if !get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .enable_authenticated_event_streams()
+    {
+        return Ok(NativeResult::err(cost, NOT_SUPPORTED));
+    }
+
+    let event_ty = ty_args.pop().unwrap();
+    // This type is always sui::event::EventStreamHead
+    let stream_head_ty = ty_args.pop().unwrap();
+
+    let event_value = args.pop_back().unwrap();
+    let stream_id = args.pop_back().unwrap();
+    let accumulator_id = args.pop_back().unwrap();
+
+    emit_impl(
+        context,
+        event_ty,
+        event_value,
+        Some(StreamRef {
+            accumulator_id,
+            stream_id,
+            stream_head_ty,
+        }),
+    )
+}
+
+struct StreamRef {
+    // The pre-computed id of the accumulator object. This is a hash of
+    // stream_id + ty
+    accumulator_id: Value,
+    // The stream ID (the `stream_id` field of some EventStreamCap)
+    stream_id: Value,
+    // The type of the stream head. Should always be `sui::event::EventStreamHead`
+    stream_head_ty: Type,
+}
+
+fn emit_impl(
+    context: &mut NativeContext,
+    ty: Type,
+    event_value: Value,
+    stream_ref: Option<StreamRef>,
+) -> PartialVMResult<NativeResult> {
+    let event_emit_cost_params = get_extension!(context, NativesCostTable)?
         .event_emit_cost_params
         .clone();
 
     native_charge_gas_early_exit!(context, event_emit_cost_params.event_emit_cost_base);
 
-    let ty = ty_args.pop().unwrap();
-    let event_value = args.pop_back().unwrap();
-
-    let event_value_size = event_value.legacy_size();
+    let event_value_size = abstract_size(
+        get_extension!(context, ObjectRuntime)?.protocol_config,
+        &event_value,
+    );
 
     // Deriving event value size can be expensive due to recursion overhead
     native_charge_gas_early_exit!(
@@ -64,7 +129,7 @@ pub fn emit(
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Sui verifier guarantees this is a struct".to_string()),
-            )
+            );
         }
     };
     let tag_size = tag.abstract_size_for_gas_metering();
@@ -76,7 +141,23 @@ pub fn emit(
             * u64::from(tag_size).into()
     );
 
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    if stream_ref.is_some() {
+        native_charge_gas_early_exit!(
+            context,
+            // this code cannot be reached in protocol versions which don't define
+            // event_emit_auth_stream_cost
+            event_emit_cost_params.event_emit_auth_stream_cost.unwrap()
+        );
+    }
+
+    // Get the type tag before getting the mutable reference to avoid borrowing issues
+    let stream_head_type_tag = if stream_ref.is_some() {
+        Some(context.type_to_type_tag(&stream_ref.as_ref().unwrap().stream_head_ty)?)
+    } else {
+        None
+    };
+
+    let obj_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let max_event_emit_size = obj_runtime.protocol_config.max_event_emit_size();
     let ev_size = u64::from(tag_size + event_value_size);
     // Check if the event size is within the limit
@@ -114,9 +195,35 @@ pub fn emit(
         event_emit_cost_params.event_emit_output_cost_per_byte * ev_size.into()
     );
 
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let obj_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
 
     obj_runtime.emit_event(*tag, event_value)?;
+
+    if let Some(StreamRef {
+        accumulator_id,
+        stream_id,
+        stream_head_ty: _,
+    }) = stream_ref
+    {
+        let stream_id_addr: AccountAddress = stream_id.value_as::<AccountAddress>().unwrap();
+        let accumulator_id: ObjectID = accumulator_id.value_as::<AccountAddress>().unwrap().into();
+        let events_len = obj_runtime.state.events().len();
+        if events_len == 0 {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("No events found after emitting authenticated event".to_string()),
+            );
+        }
+        let event_idx = events_len - 1;
+        obj_runtime.emit_accumulator_event(
+            accumulator_id,
+            MoveAccumulatorAction::Merge,
+            stream_id_addr,
+            stream_head_type_tag.unwrap(),
+            MoveAccumulatorValue::EventRef(event_idx as u64),
+        )?;
+    }
+
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 
@@ -128,7 +235,7 @@ pub fn num_events(
 ) -> PartialVMResult<NativeResult> {
     assert!(ty_args.is_empty());
     assert!(args.is_empty());
-    let object_runtime_ref: &ObjectRuntime = context.extensions().get()?;
+    let object_runtime_ref: &ObjectRuntime = get_extension!(context)?;
     let num_events = object_runtime_ref.state.events().len();
     Ok(NativeResult::ok(
         legacy_test_cost(),
@@ -146,7 +253,7 @@ pub fn get_events_by_type(
     let specified_ty = ty_args.pop().unwrap();
     let specialization: VectorSpecialization = (&specified_ty).try_into()?;
     assert!(args.is_empty());
-    let object_runtime_ref: &ObjectRuntime = context.extensions().get()?;
+    let object_runtime_ref: &ObjectRuntime = get_extension!(context)?;
     let specified_type_tag = match context.type_to_type_tag(&specified_ty)? {
         TypeTag::Struct(s) => *s,
         _ => return Ok(NativeResult::ok(legacy_test_cost(), smallvec![])),

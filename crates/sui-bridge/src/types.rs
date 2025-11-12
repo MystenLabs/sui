@@ -11,37 +11,37 @@ use crate::error::{BridgeError, BridgeResult};
 use crate::events::EmittedSuiToEthTokenBridgeV1;
 use enum_dispatch::enum_dispatch;
 use ethers::types::Address as EthAddress;
-use ethers::types::Log;
 use ethers::types::H256;
 pub use ethers::types::H256 as EthTransactionHash;
+use ethers::types::Log;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Keccak256};
 use num_enum::TryFromPrimitive;
-use rand::seq::SliceRandom;
 use rand::Rng;
+use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use strum_macros::Display;
+use sui_types::TypeTag;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::{
-    BridgeChainId, MoveTypeTokenTransferPayload, APPROVAL_THRESHOLD_ADD_TOKENS_ON_EVM,
-    APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI, BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER,
-    BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER,
+    APPROVAL_THRESHOLD_ADD_TOKENS_ON_EVM, APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI,
+    BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER, BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER, BridgeChainId,
+    MoveTypeTokenTransferPayload,
 };
 use sui_types::bridge::{
-    MoveTypeParsedTokenTransferMessage, APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE,
-    APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST, APPROVAL_THRESHOLD_EMERGENCY_PAUSE,
-    APPROVAL_THRESHOLD_EMERGENCY_UNPAUSE, APPROVAL_THRESHOLD_EVM_CONTRACT_UPGRADE,
-    APPROVAL_THRESHOLD_LIMIT_UPDATE, APPROVAL_THRESHOLD_TOKEN_TRANSFER,
+    APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE, APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST,
+    APPROVAL_THRESHOLD_EMERGENCY_PAUSE, APPROVAL_THRESHOLD_EMERGENCY_UNPAUSE,
+    APPROVAL_THRESHOLD_EVM_CONTRACT_UPGRADE, APPROVAL_THRESHOLD_LIMIT_UPDATE,
+    APPROVAL_THRESHOLD_TOKEN_TRANSFER, MoveTypeParsedTokenTransferMessage,
 };
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::ToFromBytes;
 use sui_types::digests::{Digest, TransactionDigest};
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
-use sui_types::TypeTag;
 
 pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
 
@@ -383,7 +383,10 @@ impl BridgeAction {
     // Digest of BridgeAction (with Keccak256 hasher)
     pub fn digest(&self) -> BridgeActionDigest {
         let mut hasher = Keccak256::default();
-        hasher.update(self.to_bytes());
+        hasher.update(
+            self.to_bytes()
+                .expect("Message encoding should not fail for valid actions"),
+        );
         BridgeActionDigest::new(hasher.finalize().into())
     }
 
@@ -610,6 +613,13 @@ impl TryFrom<MoveTypeParsedTokenTransferMessage> for ParsedTokenTransferMessage 
             parsed_payload: message.parsed_payload,
         })
     }
+}
+
+pub struct SuiEvents {
+    pub transaction_digest: TransactionDigest,
+    pub checkpoint: Option<u64>,
+    pub timestamp_ms: Option<u64>,
+    pub events: Vec<sui_json_rpc_types::SuiEvent>,
 }
 
 #[cfg(test)]

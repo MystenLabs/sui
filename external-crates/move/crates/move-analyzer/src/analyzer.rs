@@ -12,8 +12,8 @@ use lsp_types::{
     TypeDefinitionProviderCapability, WorkDoneProgressOptions, notification::Notification as _,
     request::Request as _,
 };
-use move_compiler::linters::LintLevel;
-use move_package::source_package::parsed_manifest::Dependencies;
+use move_compiler::{editions::Flavor, linters::LintLevel};
+use move_package::{package_hooks::PackageHooks, source_package::parsed_manifest::Dependencies};
 use std::{
     collections::BTreeMap,
     path::PathBuf,
@@ -27,7 +27,7 @@ use crate::{
     inlay_hints,
     symbols::{
         self,
-        compilation::PrecomputedPkgInfo,
+        compilation::CachedPackages,
         requests::{
             on_document_symbol_request, on_go_to_def_request, on_go_to_type_def_request,
             on_hover_request, on_references_request,
@@ -44,7 +44,15 @@ const LINT_DEFAULT: &str = "default";
 const LINT_ALL: &str = "all";
 
 #[allow(deprecated)]
-pub fn run(implicit_deps: Dependencies) {
+pub fn run(
+    implicit_deps: Dependencies,
+    flavor: Option<Flavor>,
+    hooks: Option<Box<dyn PackageHooks + Send + Sync>>,
+) {
+    if let Some(pkg_hooks) = hooks {
+        move_package::package_hooks::register_package_hooks(pkg_hooks);
+    }
+
     // stdio is used to communicate Language Server Protocol requests and responses.
     // stderr is used for logging (and, when Visual Studio Code is used to communicate with this
     // server, it captures this output in a dedicated "output channel").
@@ -59,7 +67,7 @@ pub fn run(implicit_deps: Dependencies) {
 
     let (connection, io_threads) = Connection::stdio();
     let symbols_map = Arc::new(Mutex::new(BTreeMap::new()));
-    let pkg_deps = Arc::new(Mutex::new(BTreeMap::<PathBuf, PrecomputedPkgInfo>::new()));
+    let pkg_deps = Arc::new(Mutex::new(CachedPackages::new()));
     let ide_files_root: VfsPath = MemoryFS::new().into();
 
     let (id, client_response) = connection
@@ -159,6 +167,8 @@ pub fn run(implicit_deps: Dependencies) {
         diag_sender,
         lint,
         implicit_deps.clone(),
+        flavor,
+        initialize_params.process_id,
     );
 
     // If initialization information from the client contains a path to the directory being
@@ -168,19 +178,19 @@ pub fn run(implicit_deps: Dependencies) {
     // to be available right after the client is initialized.
     if let Some(uri) = initialize_params.root_uri {
         let build_path = uri.to_file_path().unwrap();
-        if let Some(p) = SymbolicatorRunner::root_dir(&build_path) {
-            if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
-                Arc::new(Mutex::new(BTreeMap::new())),
+        if let Some(p) = SymbolicatorRunner::root_dir(&build_path)
+            && let Ok((Some(new_symbols), _)) = symbols::get_symbols(
+                Arc::new(Mutex::new(CachedPackages::new())),
                 ide_files_root.clone(),
                 p.as_path(),
-                None,
                 lint,
                 None,
                 implicit_deps.clone(),
-            ) {
-                let mut old_symbols_map = symbols_map.lock().unwrap();
-                old_symbols_map.insert(p, new_symbols);
-            }
+                flavor,
+            )
+        {
+            let mut old_symbols_map = symbols_map.lock().unwrap();
+            old_symbols_map.insert(p, new_symbols);
         }
     }
 
@@ -277,7 +287,7 @@ pub fn run(implicit_deps: Dependencies) {
                         // a chance of completing pending requests (but should not accept new requests
                         // either which is handled inside on_requst) - instead it quits after receiving
                         // the exit notification from the client, which is handled below
-                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received, implicit_deps.clone());
+                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received, implicit_deps.clone(), flavor);
                     }
                     Ok(Message::Response(response)) => on_response(&context, &response),
                     Ok(Message::Notification(notification)) => {
@@ -291,7 +301,12 @@ pub fn run(implicit_deps: Dependencies) {
                             _ => on_notification(ide_files_root.clone(), &symbolicator_runner, &notification),
                         }
                     }
-                    Err(error) => eprintln!("IDE message error: {:?}", error),
+                    Err(error) => {
+                        eprintln!("IDE message error: {:?}", error);
+                        // `error` is of type `RecvError`, which hasonly one meaning: the channel is empty
+                        // and disconnected. We should exit the process in such case.
+                        std::process::exit(-1);
+                    }
                 }
             }
         };
@@ -300,6 +315,8 @@ pub fn run(implicit_deps: Dependencies) {
     io_threads.join().expect("I/O threads could not finish");
     symbolicator_runner.quit();
     eprintln!("Shut down language server '{}'.", exe);
+    // quit process just in case
+    std::process::exit(0);
 }
 
 /// This function returns `true` if shutdown request has been received, and `false` otherwise.
@@ -310,9 +327,10 @@ fn on_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<CachedPackages>>,
     shutdown_request_received: bool,
     implicit_deps: Dependencies,
+    flavor: Option<Flavor>,
 ) -> bool {
     if shutdown_request_received {
         let response = lsp_server::Response::new_err(
@@ -336,6 +354,7 @@ fn on_request(
             ide_files_root.clone(),
             pkg_dependencies,
             implicit_deps,
+            flavor,
         ),
         lsp_types::request::GotoDefinition::METHOD => {
             on_go_to_def_request(context, request);
@@ -362,6 +381,7 @@ fn on_request(
                 ide_files_root.clone(),
                 pkg_dependencies,
                 implicit_deps,
+                flavor,
             );
         }
         lsp_types::request::Shutdown::METHOD => {

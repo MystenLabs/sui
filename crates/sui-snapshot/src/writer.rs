@@ -3,19 +3,19 @@
 #![allow(dead_code)]
 
 use crate::{
-    compute_sha3_checksum, create_file_metadata, FileCompression, FileMetadata, FileType, Manifest,
-    ManifestV1, FILE_MAX_BYTES, MAGIC_BYTES, MANIFEST_FILE_MAGIC, OBJECT_FILE_MAGIC,
-    OBJECT_REF_BYTES, REFERENCE_FILE_MAGIC, SEQUENCE_NUM_BYTES,
+    FILE_MAX_BYTES, FileCompression, FileMetadata, FileType, MAGIC_BYTES, MANIFEST_FILE_MAGIC,
+    Manifest, ManifestV1, OBJECT_FILE_MAGIC, OBJECT_REF_BYTES, REFERENCE_FILE_MAGIC,
+    SEQUENCE_NUM_BYTES, compute_sha3_checksum, create_file_metadata,
 };
 use anyhow::{Context, Result};
 use byteorder::{BigEndian, ByteOrder};
 use fastcrypto::hash::MultisetHash;
 use futures::StreamExt;
 use integer_encoding::VarInt;
-use object_store::path::Path;
 use object_store::DynObjectStore;
-use std::collections::hash_map::Entry::Vacant;
+use object_store::path::Path;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry::Vacant;
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Seek, SeekFrom, Write};
@@ -26,14 +26,14 @@ use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
 use sui_core::global_state_hasher::GlobalStateHasher;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
-use sui_storage::blob::{Blob, BlobEncoding, BLOB_ENCODING_BYTES};
+use sui_storage::blob::{BLOB_ENCODING_BYTES, Blob, BlobEncoding};
 use sui_storage::object_store::util::{copy_file, delete_recursively, path_to_filesystem};
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::digests::ChainIdentifier;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
-use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::get_sui_system_state;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;

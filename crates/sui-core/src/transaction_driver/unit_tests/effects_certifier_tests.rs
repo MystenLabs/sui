@@ -5,14 +5,10 @@ use crate::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::AuthorityAPI,
     transaction_driver::{
-        effects_certifier::EffectsCertifier,
-        error::TransactionDriverError,
-        message_types::{
-            ExecutedData, SubmitTxResponse, WaitForEffectsRequest, WaitForEffectsResponse,
-        },
-        metrics::TransactionDriverMetrics,
-        SubmitTransactionOptions,
+        SubmitTransactionOptions, effects_certifier::EffectsCertifier,
+        error::TransactionDriverError, metrics::TransactionDriverMetrics,
     },
+    validator_client_monitor::ValidatorClientMonitor,
 };
 use async_trait::async_trait;
 use consensus_types::block::BlockRef;
@@ -22,32 +18,34 @@ use std::{
     sync::{Arc, Mutex as StdMutex},
 };
 use sui_types::{
-    base_types::{random_object_ref, AuthorityName},
+    base_types::{AuthorityName, random_object_ref},
     committee::Committee,
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::TransactionEffects,
-    error::{SuiError, UserInputError},
+    error::{SuiError, SuiErrorKind, UserInputError},
     messages_checkpoint::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
     messages_consensus::ConsensusPosition,
     messages_grpc::{
-        HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-        HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-        RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
-        SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        ExecutedData, HandleCertificateRequestV3, HandleCertificateResponseV2,
+        HandleCertificateResponseV3, HandleSoftBundleCertificatesRequestV3,
+        HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
+        ObjectInfoResponse, SubmitTxRequest, SubmitTxResponse, SubmitTxResult, SystemStateRequest,
+        TransactionInfoRequest, TransactionInfoResponse, TxType, ValidatorHealthRequest,
+        ValidatorHealthResponse, WaitForEffectsRequest, WaitForEffectsResponse,
     },
     quorum_driver_types::EffectsFinalityInfo,
     sui_system_state::SuiSystemState,
     transaction::{CertifiedTransaction, Transaction},
 };
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 // Mock AuthorityAPI for testing
 #[derive(Clone)]
 struct MockAuthority {
     _name: AuthorityName,
+    response_delays: Arc<StdMutex<Option<Duration>>>,
     ack_responses: Arc<StdMutex<HashMap<TransactionDigest, WaitForEffectsResponse>>>,
     full_responses: Arc<StdMutex<HashMap<TransactionDigest, WaitForEffectsResponse>>>,
 }
@@ -56,9 +54,14 @@ impl MockAuthority {
     fn new(name: AuthorityName) -> Self {
         Self {
             _name: name,
+            response_delays: Arc::new(StdMutex::new(None)),
             ack_responses: Arc::new(StdMutex::new(HashMap::new())),
             full_responses: Arc::new(StdMutex::new(HashMap::new())),
         }
+    }
+
+    fn set_response_delay(&self, delay: Duration) {
+        *self.response_delays.lock().unwrap() = Some(delay);
     }
 
     fn set_ack_response(&self, tx_digest: TransactionDigest, response: WaitForEffectsResponse) {
@@ -78,15 +81,26 @@ impl MockAuthority {
 
 #[async_trait]
 impl AuthorityAPI for MockAuthority {
+    async fn submit_transaction(
+        &self,
+        _request: SubmitTxRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<SubmitTxResponse, SuiError> {
+        unimplemented!();
+    }
+
     async fn wait_for_effects(
         &self,
-        request: RawWaitForEffectsRequest,
+        request: WaitForEffectsRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError> {
-        let wait_request: WaitForEffectsRequest = request.try_into()?;
+    ) -> Result<WaitForEffectsResponse, SuiError> {
+        let response_delay = *self.response_delays.lock().unwrap();
+        if let Some(delay) = response_delay {
+            sleep(delay).await;
+        }
 
         // Choose the right response based on include_details flag
-        let responses = if wait_request.include_details {
+        let responses = if request.include_details {
             &self.full_responses
         } else {
             &self.ack_responses
@@ -94,34 +108,21 @@ impl AuthorityAPI for MockAuthority {
 
         let maybe_response = {
             let responses = responses.lock().unwrap();
-            responses.get(&wait_request.transaction_digest).cloned()
+            responses.get(&request.transaction_digest.unwrap()).cloned()
         };
 
         if let Some(response) = maybe_response {
-            let raw_response = RawWaitForEffectsResponse::try_from(response).map_err(|e| {
-                SuiError::GrpcMessageSerializeError {
-                    type_info: "WaitForEffectsResponse conversion".to_string(),
-                    error: e.to_string(),
-                }
-            })?;
-            Ok(raw_response)
+            Ok(response)
         } else {
             // No response configured - this simulates a scenario where effects are not available.
             // Since the actual timeout in effects_certifier is 10 seconds, we sleep longer
             // to ensure the timeout is triggered.
             sleep(Duration::from_secs(30)).await;
-            Err(SuiError::TransactionNotFound {
-                digest: wait_request.transaction_digest,
-            })
+            Err(SuiErrorKind::TransactionNotFound {
+                digest: request.transaction_digest.unwrap(),
+            }
+            .into())
         }
-    }
-
-    async fn submit_transaction(
-        &self,
-        _request: RawSubmitTxRequest,
-        _client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
-        unimplemented!();
     }
 
     async fn handle_transaction(
@@ -190,6 +191,13 @@ impl AuthorityAPI for MockAuthority {
     ) -> Result<SuiSystemState, SuiError> {
         unimplemented!()
     }
+
+    async fn validator_health(
+        &self,
+        _request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
+        Ok(ValidatorHealthResponse::default())
+    }
 }
 
 fn create_test_authority_aggregator() -> AuthorityAggregator<MockAuthority> {
@@ -225,6 +233,9 @@ fn create_test_executed_data() -> ExecutedData {
 async fn test_successful_certified_effects() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -236,11 +247,13 @@ async fn test_successful_certified_effects() {
     let executed_response_full = WaitForEffectsResponse::Executed {
         effects_digest,
         details: Some(Box::new(executed_data.clone())),
+        fast_path: false,
     };
 
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest,
         details: None,
+        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -263,13 +276,15 @@ async fn test_successful_certified_effects() {
         .unwrap();
 
     // Get certified effects for tx when consensus positions is returned.
-    let submit_tx_resp = SubmitTxResponse::Submitted { consensus_position };
+    let submit_tx_result = SubmitTxResult::Submitted { consensus_position };
     let result = certifier
         .get_certified_finalized_effects(
             &authority_aggregator,
-            &tx_digest,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
             *name,
-            submit_tx_resp,
+            submit_tx_result,
             &options,
         )
         .await;
@@ -287,6 +302,7 @@ async fn test_successful_certified_effects() {
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest,
         details: None,
+        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -295,16 +311,19 @@ async fn test_successful_certified_effects() {
         client.set_ack_response(tx_digest, executed_response_ack.clone());
     }
 
-    let submit_tx_resp = SubmitTxResponse::Executed {
+    let submit_tx_result = SubmitTxResult::Executed {
         effects_digest,
         details: Some(Box::new(executed_data.clone())),
+        fast_path: false,
     };
     let result = certifier
         .get_certified_finalized_effects(
             &authority_aggregator,
-            &tx_digest,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
             *name,
-            submit_tx_resp,
+            submit_tx_result,
             &options,
         )
         .await;
@@ -323,6 +342,9 @@ async fn test_successful_certified_effects() {
 async fn test_transaction_rejected_non_retriable() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -335,12 +357,15 @@ async fn test_transaction_rejected_non_retriable() {
 
     // Set up rejected responses from all authorities
     let non_retriable_rejected_response = WaitForEffectsResponse::Rejected {
-        error: SuiError::UserInputError {
-            error: UserInputError::ObjectVersionUnavailableForConsumption {
-                provided_obj_ref: random_object_ref(),
-                current_version: 1.into(),
-            },
-        },
+        error: Some(
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectVersionUnavailableForConsumption {
+                    provided_obj_ref: random_object_ref(),
+                    current_version: 1.into(),
+                },
+            }
+            .into(),
+        ),
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -360,16 +385,18 @@ async fn test_transaction_rejected_non_retriable() {
     let result = certifier
         .get_certified_finalized_effects(
             &authority_aggregator,
-            &tx_digest,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
 
     assert!(result.is_err());
     match result.unwrap_err() {
-        TransactionDriverError::InvalidTransaction {
+        TransactionDriverError::RejectedByValidators {
             submission_non_retriable_errors,
             submission_retriable_errors,
         } => {
@@ -384,6 +411,9 @@ async fn test_transaction_rejected_non_retriable() {
 async fn test_transaction_rejected_retriable() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -403,12 +433,15 @@ async fn test_transaction_rejected_retriable() {
     let options = SubmitTransactionOptions::default();
 
     let retriable_rejected_response = WaitForEffectsResponse::Rejected {
-        error: SuiError::UserInputError {
-            error: UserInputError::ObjectNotFound {
-                object_id: random_object_ref().0,
-                version: None,
-            },
-        },
+        error: Some(
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectNotFound {
+                    object_id: random_object_ref().0,
+                    version: None,
+                },
+            }
+            .into(),
+        ),
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -420,9 +453,11 @@ async fn test_transaction_rejected_retriable() {
     let result = certifier
         .get_certified_finalized_effects(
             &authority_aggregator,
-            &tx_digest,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -443,9 +478,84 @@ async fn test_transaction_rejected_retriable() {
 }
 
 #[tokio::test]
+async fn test_transaction_rejected_with_conflicts() {
+    telemetry_subscribers::init_for_testing();
+    let authority_aggregator = Arc::new(create_test_authority_aggregator());
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
+    let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
+    let certifier = EffectsCertifier::new(metrics);
+
+    let tx_digest = create_test_transaction_digest(1);
+    let name = authority_aggregator
+        .authority_clients
+        .keys()
+        .next()
+        .unwrap();
+
+    let epoch = 0;
+    let consensus_position = ConsensusPosition {
+        epoch,
+        block: BlockRef::MIN,
+        index: 0,
+    };
+    let options = SubmitTransactionOptions::default();
+
+    let lock_conflict_rejected_response = WaitForEffectsResponse::Rejected {
+        error: Some(
+            SuiErrorKind::ObjectLockConflict {
+                obj_ref: random_object_ref(),
+                pending_transaction: TransactionDigest::new([0; 32]),
+            }
+            .into(),
+        ),
+    };
+    let consensus_rejected_response = WaitForEffectsResponse::Rejected { error: None };
+
+    for (i, (_, safe_client)) in authority_aggregator.authority_clients.iter().enumerate() {
+        let client = safe_client.authority_client();
+        if i < 2 {
+            client.set_full_response(tx_digest, lock_conflict_rejected_response.clone());
+            client.set_ack_response(tx_digest, lock_conflict_rejected_response.clone());
+        } else {
+            client.set_full_response(tx_digest, consensus_rejected_response.clone());
+            client.set_ack_response(tx_digest, consensus_rejected_response.clone());
+        }
+    }
+
+    let result = certifier
+        .get_certified_finalized_effects(
+            &authority_aggregator,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
+            *name,
+            SubmitTxResult::Submitted { consensus_position },
+            &options,
+        )
+        .await;
+
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        TransactionDriverError::RejectedByValidators {
+            submission_non_retriable_errors,
+            submission_retriable_errors,
+        } => {
+            assert_eq!(submission_non_retriable_errors.total_stake, 5000);
+            assert_eq!(submission_retriable_errors.total_stake, 0);
+        }
+        e => panic!("Expected InvalidTransaction error, got: {:?}", e),
+    }
+}
+
+#[tokio::test]
 async fn test_transaction_expired() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -478,9 +588,11 @@ async fn test_transaction_expired() {
     let result = certifier
         .get_certified_finalized_effects(
             &authority_aggregator,
-            &tx_digest,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -504,6 +616,9 @@ async fn test_transaction_expired() {
 async fn test_mixed_rejected_and_expired() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -528,12 +643,15 @@ async fn test_mixed_rejected_and_expired() {
     };
 
     let non_retriable_rejected_response = WaitForEffectsResponse::Rejected {
-        error: SuiError::UserInputError {
-            error: UserInputError::ObjectVersionUnavailableForConsumption {
-                provided_obj_ref: random_object_ref(),
-                current_version: 1.into(),
-            },
-        },
+        error: Some(
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectVersionUnavailableForConsumption {
+                    provided_obj_ref: random_object_ref(),
+                    current_version: 1.into(),
+                },
+            }
+            .into(),
+        ),
     };
 
     tracing::debug!("Case #1: Test mixed rejected and expired responses - non-retriable");
@@ -556,16 +674,18 @@ async fn test_mixed_rejected_and_expired() {
     let result = certifier
         .get_certified_finalized_effects(
             &authority_aggregator,
-            &tx_digest,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
 
     assert!(result.is_err());
     match result.unwrap_err() {
-        TransactionDriverError::InvalidTransaction {
+        TransactionDriverError::RejectedByValidators {
             submission_non_retriable_errors,
             submission_retriable_errors,
         } => {
@@ -595,9 +715,11 @@ async fn test_mixed_rejected_and_expired() {
     let result = certifier
         .get_certified_finalized_effects(
             &authority_aggregator,
-            &tx_digest,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -610,7 +732,7 @@ async fn test_mixed_rejected_and_expired() {
             observed_effects_digests,
         } => {
             assert_eq!(submission_non_retriable_errors.total_stake, 2500);
-            assert_eq!(submission_retriable_errors.total_stake, 5000);
+            assert_eq!(submission_retriable_errors.total_stake, 7500);
             assert_eq!(observed_effects_digests.total_stake(), 0);
         }
         e => panic!("Expected Aborted error, got: {:?}", e),
@@ -618,9 +740,310 @@ async fn test_mixed_rejected_and_expired() {
 }
 
 #[tokio::test]
+async fn test_mixed_rejected_reasons() {
+    telemetry_subscribers::init_for_testing();
+    let authority_aggregator = Arc::new(create_test_authority_aggregator());
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
+    let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
+    let certifier = EffectsCertifier::new(metrics);
+
+    let tx_digest = create_test_transaction_digest(1);
+    let name = authority_aggregator
+        .authority_clients
+        .keys()
+        .next()
+        .unwrap();
+
+    let epoch = 0;
+    let consensus_position = ConsensusPosition {
+        epoch,
+        block: BlockRef::MIN,
+        index: 0,
+    };
+    let options = SubmitTransactionOptions::default();
+
+    let retriable_rejected_response = WaitForEffectsResponse::Rejected {
+        error: Some(
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectNotFound {
+                    object_id: random_object_ref().0,
+                    version: None,
+                },
+            }
+            .into(),
+        ),
+    };
+    let non_retriable_rejected_response = WaitForEffectsResponse::Rejected {
+        error: Some(
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectVersionUnavailableForConsumption {
+                    provided_obj_ref: random_object_ref(),
+                    current_version: 1.into(),
+                },
+            }
+            .into(),
+        ),
+    };
+    let reason_not_found_response = WaitForEffectsResponse::Rejected { error: None };
+
+    {
+        tracing::debug!("Case #1: Test 2 retriable and 2 non-retriable reasons that arrive later");
+        let authority_aggregator = Arc::new(create_test_authority_aggregator());
+        let authorities: Vec<_> = authority_aggregator.authority_clients.keys().collect();
+        for (i, authority_name) in authorities.iter().enumerate() {
+            let client = authority_aggregator
+                .authority_clients
+                .get(authority_name)
+                .unwrap()
+                .authority_client();
+            if i < 2 {
+                client.set_ack_response(tx_digest, retriable_rejected_response.clone());
+                client.set_full_response(tx_digest, retriable_rejected_response.clone());
+            } else {
+                // Delay non-retriable responses to ensure they are aggregated.
+                client.set_response_delay(Duration::from_secs(1));
+                client.set_ack_response(tx_digest, non_retriable_rejected_response.clone());
+                client.set_full_response(tx_digest, non_retriable_rejected_response.clone());
+            }
+        }
+
+        let result = certifier
+            .get_certified_finalized_effects(
+                &authority_aggregator,
+                &client_monitor,
+                Some(tx_digest),
+                TxType::SingleWriter,
+                *name,
+                SubmitTxResult::Submitted { consensus_position },
+                &options,
+            )
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TransactionDriverError::RejectedByValidators {
+                submission_non_retriable_errors,
+                submission_retriable_errors: _,
+            } => {
+                assert_eq!(submission_non_retriable_errors.total_stake, 5000);
+            }
+            e => panic!("Expected InvalidTransaction error, got: {:?}", e),
+        }
+    }
+
+    {
+        tracing::debug!(
+            "Case #2: Test 1 retriable, 1 not found, and 2 non-retriable reasons that arrive later"
+        );
+        let authority_aggregator = Arc::new(create_test_authority_aggregator());
+        let authorities: Vec<_> = authority_aggregator.authority_clients.keys().collect();
+        for (i, authority_name) in authorities.iter().enumerate() {
+            let client = authority_aggregator
+                .authority_clients
+                .get(authority_name)
+                .unwrap()
+                .authority_client();
+            if i == 0 {
+                client.set_ack_response(tx_digest, retriable_rejected_response.clone());
+                client.set_full_response(tx_digest, retriable_rejected_response.clone());
+            } else if i == 1 {
+                client.set_ack_response(tx_digest, reason_not_found_response.clone());
+                client.set_full_response(tx_digest, reason_not_found_response.clone());
+            } else {
+                // Delay non-retriable responses to ensure they are aggregated.
+                client.set_response_delay(Duration::from_secs(1));
+                client.set_ack_response(tx_digest, non_retriable_rejected_response.clone());
+                client.set_full_response(tx_digest, non_retriable_rejected_response.clone());
+            }
+        }
+
+        let result = certifier
+            .get_certified_finalized_effects(
+                &authority_aggregator,
+                &client_monitor,
+                Some(tx_digest),
+                TxType::SingleWriter,
+                *name,
+                SubmitTxResult::Submitted { consensus_position },
+                &options,
+            )
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TransactionDriverError::RejectedByValidators {
+                submission_non_retriable_errors,
+                submission_retriable_errors: _,
+            } => {
+                assert_eq!(submission_non_retriable_errors.total_stake, 5000);
+            }
+            e => panic!("Expected InvalidTransaction error, got: {:?}", e),
+        }
+    }
+
+    {
+        tracing::debug!(
+            "Case #3: Test 2 retriable, 1 not found, and 1 non-retriable reason that arrives earlier"
+        );
+        let authority_aggregator = Arc::new(create_test_authority_aggregator());
+        let authorities: Vec<_> = authority_aggregator.authority_clients.keys().collect();
+        for (i, authority_name) in authorities.iter().enumerate() {
+            let client = authority_aggregator
+                .authority_clients
+                .get(authority_name)
+                .unwrap()
+                .authority_client();
+            if i == 0 || i == 1 {
+                client.set_response_delay(Duration::from_secs(1));
+                client.set_ack_response(tx_digest, retriable_rejected_response.clone());
+                client.set_full_response(tx_digest, retriable_rejected_response.clone());
+            } else if i == 2 {
+                client.set_response_delay(Duration::from_secs(1));
+                client.set_ack_response(tx_digest, reason_not_found_response.clone());
+                client.set_full_response(tx_digest, reason_not_found_response.clone());
+            } else {
+                client.set_ack_response(tx_digest, non_retriable_rejected_response.clone());
+                client.set_full_response(tx_digest, non_retriable_rejected_response.clone());
+            }
+        }
+
+        let result = certifier
+            .get_certified_finalized_effects(
+                &authority_aggregator,
+                &client_monitor,
+                Some(tx_digest),
+                TxType::SingleWriter,
+                *name,
+                SubmitTxResult::Submitted { consensus_position },
+                &options,
+            )
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TransactionDriverError::Aborted {
+                submission_retriable_errors,
+                submission_non_retriable_errors,
+                observed_effects_digests,
+            } => {
+                assert_eq!(submission_retriable_errors.total_stake, 5000);
+                assert_eq!(submission_non_retriable_errors.total_stake, 2500);
+                assert!(observed_effects_digests.digests.is_empty());
+            }
+            e => panic!("Expected InvalidTransaction error, got: {:?}", e),
+        }
+    }
+
+    {
+        tracing::debug!(
+            "Case #4: Test 1 retriable, 2 not found, and 1 non-retriable reason that arrives earlier"
+        );
+        let authority_aggregator = Arc::new(create_test_authority_aggregator());
+        let authorities: Vec<_> = authority_aggregator.authority_clients.keys().collect();
+        for (i, authority_name) in authorities.iter().enumerate() {
+            let client = authority_aggregator
+                .authority_clients
+                .get(authority_name)
+                .unwrap()
+                .authority_client();
+            if i == 0 {
+                client.set_response_delay(Duration::from_secs(1));
+                client.set_ack_response(tx_digest, retriable_rejected_response.clone());
+                client.set_full_response(tx_digest, retriable_rejected_response.clone());
+            } else if i == 1 || i == 2 {
+                client.set_response_delay(Duration::from_secs(1));
+                client.set_ack_response(tx_digest, reason_not_found_response.clone());
+                client.set_full_response(tx_digest, reason_not_found_response.clone());
+            } else {
+                client.set_ack_response(tx_digest, non_retriable_rejected_response.clone());
+                client.set_full_response(tx_digest, non_retriable_rejected_response.clone());
+            }
+        }
+
+        let result = certifier
+            .get_certified_finalized_effects(
+                &authority_aggregator,
+                &client_monitor,
+                Some(tx_digest),
+                TxType::SingleWriter,
+                *name,
+                SubmitTxResult::Submitted { consensus_position },
+                &options,
+            )
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TransactionDriverError::Aborted {
+                submission_retriable_errors,
+                submission_non_retriable_errors,
+                observed_effects_digests,
+            } => {
+                assert_eq!(submission_retriable_errors.total_stake, 2500);
+                assert_eq!(submission_non_retriable_errors.total_stake, 2500);
+                assert!(observed_effects_digests.digests.is_empty());
+            }
+            e => panic!("Expected InvalidTransaction error, got: {:?}", e),
+        }
+    }
+
+    {
+        tracing::debug!("Case #5: Test 2 retriable arriving later, 2 not found");
+        let authority_aggregator = Arc::new(create_test_authority_aggregator());
+        let authorities: Vec<_> = authority_aggregator.authority_clients.keys().collect();
+        for (i, authority_name) in authorities.iter().enumerate() {
+            let client = authority_aggregator
+                .authority_clients
+                .get(authority_name)
+                .unwrap()
+                .authority_client();
+            if i < 2 {
+                client.set_response_delay(Duration::from_secs(1));
+                client.set_ack_response(tx_digest, retriable_rejected_response.clone());
+                client.set_full_response(tx_digest, retriable_rejected_response.clone());
+            } else {
+                client.set_ack_response(tx_digest, reason_not_found_response.clone());
+                client.set_full_response(tx_digest, reason_not_found_response.clone());
+            }
+        }
+
+        let result = certifier
+            .get_certified_finalized_effects(
+                &authority_aggregator,
+                &client_monitor,
+                Some(tx_digest),
+                TxType::SingleWriter,
+                *name,
+                SubmitTxResult::Submitted { consensus_position },
+                &options,
+            )
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TransactionDriverError::Aborted {
+                submission_retriable_errors,
+                submission_non_retriable_errors,
+                observed_effects_digests,
+            } => {
+                assert_eq!(submission_retriable_errors.total_stake, 5000);
+                assert_eq!(submission_non_retriable_errors.total_stake, 0);
+                assert!(observed_effects_digests.digests.is_empty());
+            }
+            e => panic!("Expected InvalidTransaction error, got: {:?}", e),
+        }
+    }
+}
+
+#[tokio::test]
 async fn test_forked_execution() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -659,12 +1082,14 @@ async fn test_forked_execution() {
         let response = WaitForEffectsResponse::Executed {
             effects_digest: digest,
             details: None,
+            fast_path: false,
         };
         client.set_ack_response(tx_digest, response);
 
         let executed_response_full = WaitForEffectsResponse::Executed {
             effects_digest: digest,
             details: Some(Box::new(executed_data.clone())),
+            fast_path: false,
         };
         client.set_full_response(tx_digest, executed_response_full.clone());
     }
@@ -672,9 +1097,11 @@ async fn test_forked_execution() {
     let result = certifier
         .get_certified_finalized_effects(
             &authority_aggregator,
-            &tx_digest,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -696,10 +1123,106 @@ async fn test_forked_execution() {
     }
 }
 
+// Makes sure TD does not abort if some effects can still be finalized.
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_aborted_with_multiple_effects() {
+    telemetry_subscribers::init_for_testing();
+    let authority_aggregator = Arc::new(create_test_authority_aggregator());
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
+    let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
+    let certifier = EffectsCertifier::new(metrics);
+
+    let tx_digest = create_test_transaction_digest(1);
+    let name = authority_aggregator
+        .authority_clients
+        .keys()
+        .next()
+        .unwrap();
+
+    let epoch = 0;
+    let consensus_position = ConsensusPosition {
+        epoch,
+        block: BlockRef::MIN,
+        index: 0,
+    };
+    let options = SubmitTransactionOptions::default();
+
+    let effects_digest_1 = create_test_effects_digest(2);
+    let effects_digest_2 = create_test_effects_digest(3);
+
+    // Set up conflicting effects digests from different validators
+    let authorities: Vec<_> = authority_aggregator.authority_clients.keys().collect();
+    for (i, authority_name) in authorities.iter().enumerate() {
+        let client = authority_aggregator
+            .authority_clients
+            .get(authority_name)
+            .unwrap()
+            .authority_client();
+        let response = match i {
+            0 => WaitForEffectsResponse::Executed {
+                effects_digest: effects_digest_1, // from fastpath
+                details: None,
+                fast_path: false,
+            },
+            1 => WaitForEffectsResponse::Executed {
+                effects_digest: effects_digest_2, // from fastpath
+                details: None,
+                fast_path: false,
+            },
+            2 => WaitForEffectsResponse::Rejected {
+                error: Some(
+                    SuiErrorKind::ValidatorOverloadedRetryAfter {
+                        retry_after_secs: 5,
+                    }
+                    .into(),
+                ),
+            },
+            3 => WaitForEffectsResponse::Rejected {
+                error: None, // rejected by consensus
+            },
+            _ => panic!("Unexpected authority index: {}", i),
+        };
+        client.set_ack_response(tx_digest, response);
+    }
+
+    let result = certifier
+        .get_certified_finalized_effects(
+            &authority_aggregator,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
+            *name,
+            SubmitTxResult::Submitted { consensus_position },
+            &options,
+        )
+        .await;
+
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        TransactionDriverError::Aborted {
+            submission_non_retriable_errors,
+            submission_retriable_errors,
+            observed_effects_digests,
+        } => {
+            assert_eq!(submission_non_retriable_errors.total_stake, 0);
+            assert_eq!(submission_retriable_errors.total_stake, 2500);
+            assert_eq!(observed_effects_digests.total_stake(), 5000);
+            // Should have 2 different effects digests
+            assert_eq!(observed_effects_digests.digests.len(), 2);
+        }
+        e => panic!("Expected Aborted error, got: {:?}", e),
+    }
+}
+
 #[tokio::test]
 async fn test_full_effects_retry_loop() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -711,6 +1234,7 @@ async fn test_full_effects_retry_loop() {
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest,
         details: None,
+        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -730,12 +1254,15 @@ async fn test_full_effects_retry_loop() {
         if i == 0 {
             // First authority fails to get full effects
             let failed_response = WaitForEffectsResponse::Rejected {
-                error: SuiError::UserInputError {
-                    error: UserInputError::ObjectNotFound {
-                        object_id: random_object_ref().0,
-                        version: None,
-                    },
-                },
+                error: Some(
+                    SuiErrorKind::UserInputError {
+                        error: UserInputError::ObjectNotFound {
+                            object_id: random_object_ref().0,
+                            version: None,
+                        },
+                    }
+                    .into(),
+                ),
             };
             client.set_full_response(tx_digest, failed_response);
         } else {
@@ -743,6 +1270,7 @@ async fn test_full_effects_retry_loop() {
             let successful_response = WaitForEffectsResponse::Executed {
                 effects_digest,
                 details: Some(Box::new(executed_data.clone())),
+                fast_path: false,
             };
             client.set_full_response(tx_digest, successful_response);
         }
@@ -760,9 +1288,11 @@ async fn test_full_effects_retry_loop() {
     let result = certifier
         .get_certified_finalized_effects(
             &authority_aggregator,
-            &tx_digest,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -782,6 +1312,9 @@ async fn test_full_effects_retry_loop() {
 async fn test_full_effects_digest_mismatch() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -794,6 +1327,7 @@ async fn test_full_effects_digest_mismatch() {
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest: certified_digest,
         details: None,
+        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -815,6 +1349,7 @@ async fn test_full_effects_digest_mismatch() {
             let mismatched_response = WaitForEffectsResponse::Executed {
                 effects_digest: mismatched_digest,
                 details: Some(Box::new(executed_data.clone())),
+                fast_path: false,
             };
             client.set_full_response(tx_digest, mismatched_response);
         } else {
@@ -822,6 +1357,7 @@ async fn test_full_effects_digest_mismatch() {
             let correct_response = WaitForEffectsResponse::Executed {
                 effects_digest: certified_digest,
                 details: Some(Box::new(executed_data.clone())),
+                fast_path: false,
             };
             client.set_full_response(tx_digest, correct_response);
         }
@@ -839,9 +1375,11 @@ async fn test_full_effects_digest_mismatch() {
     let result = certifier
         .get_certified_finalized_effects(
             &authority_aggregator,
-            &tx_digest,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;
@@ -861,6 +1399,9 @@ async fn test_full_effects_digest_mismatch() {
 async fn test_request_retrier_exhaustion() {
     telemetry_subscribers::init_for_testing();
     let authority_aggregator = Arc::new(create_test_authority_aggregator());
+    let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(
+        authority_aggregator.clone(),
+    ));
     let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
     let certifier = EffectsCertifier::new(metrics);
 
@@ -871,6 +1412,7 @@ async fn test_request_retrier_exhaustion() {
     let executed_response_ack = WaitForEffectsResponse::Executed {
         effects_digest,
         details: None,
+        fast_path: false,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -882,12 +1424,15 @@ async fn test_request_retrier_exhaustion() {
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
         let client = safe_client.authority_client();
         let failed_response = WaitForEffectsResponse::Rejected {
-            error: SuiError::UserInputError {
-                error: UserInputError::ObjectNotFound {
-                    object_id: random_object_ref().0,
-                    version: None,
-                },
-            },
+            error: Some(
+                SuiErrorKind::UserInputError {
+                    error: UserInputError::ObjectNotFound {
+                        object_id: random_object_ref().0,
+                        version: None,
+                    },
+                }
+                .into(),
+            ),
         };
         client.set_full_response(tx_digest, failed_response);
     }
@@ -908,9 +1453,11 @@ async fn test_request_retrier_exhaustion() {
     let result = certifier
         .get_certified_finalized_effects(
             &authority_aggregator,
-            &tx_digest,
+            &client_monitor,
+            Some(tx_digest),
+            TxType::SingleWriter,
             *name,
-            SubmitTxResponse::Submitted { consensus_position },
+            SubmitTxResult::Submitted { consensus_position },
             &options,
         )
         .await;

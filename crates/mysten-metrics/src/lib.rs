@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::{extract::Extension, http::StatusCode, routing::get, Router};
+use axum::{Router, extract::Extension, http::StatusCode, routing::get};
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use prometheus::core::{AtomicI64, GenericGauge};
@@ -15,12 +15,11 @@ use std::time::Instant;
 
 use once_cell::sync::OnceCell;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, Histogram, IntCounterVec, IntGaugeVec, Registry,
-    TextEncoder,
+    Histogram, IntCounterVec, IntGaugeVec, Registry, TextEncoder, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry,
 };
 use tap::TapFallible;
-use tracing::{warn, Span};
+use tracing::{Span, warn};
 
 pub use scopeguard;
 use uuid::Uuid;
@@ -35,27 +34,35 @@ pub use guards::*;
 pub const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
 pub const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";
 
+/// Used when latency is most definitely sub-second.
 pub const SUBSECOND_LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.3, 0.5, 0.7, 1.,
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3,
+    0.325, 0.35, 0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
+    0.95, 1., 2., 5., 10., 20., 30., 60., 90.,
 ];
 
+/// Used when we don't care about fine-grained values.
 pub const COARSE_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.2, 0.3, 0.5, 0.7, 1., 2., 3., 5., 10., 20., 30., 60.,
+    90.,
 ];
 
+/// Used when latency is usually < 10s. Expensive because of the number of buckets.
 pub const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6,
-    0.7, 0.8, 0.9, 1., 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2., 2.5, 3., 3.5, 4., 4.5, 5.,
-    6., 7., 8., 9., 10., 15., 20., 25., 30., 60., 90.,
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3,
+    0.325, 0.35, 0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
+    0.95, 1., 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2., 2.5, 3., 3.5, 4., 4.5, 5., 6., 7.,
+    8., 9., 10., 15., 20., 25., 30., 60., 90.,
 ];
 
 pub const COUNT_BUCKETS: &[f64] = &[
-    2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000.,
+    1., 2., 3., 4., 5., 7., 10., 15., 20., 25., 30., 40., 50., 75., 100., 150., 200., 500., 1000.,
+    2000., 5000., 10000.,
 ];
 
 pub const BYTES_BUCKETS: &[f64] = &[
-    1024., 4096., 16384., 65536., 262144., 524288., 1048576., 2097152., 4194304., 8388608.,
-    16777216., 33554432., 67108864.,
+    1., 4., 16., 64., 256., 1024., 4096., 16384., 65536., 262144., 524288., 1048576., 2097152.,
+    4194304., 8388608., 16777216., 33554432., 67108864.,
 ];
 
 #[derive(Debug)]
@@ -224,9 +231,7 @@ pub fn add_server_timing(name: &str) {
 
 #[macro_export]
 macro_rules! monitored_future {
-    ($fut: expr) => {{
-        monitored_future!(futures, $fut, "", INFO, false)
-    }};
+    ($fut: expr) => {{ monitored_future!(futures, $fut, "", INFO, false) }};
 
     ($metric: ident, $fut: expr, $name: expr, $logging_level: ident, $logging_enabled: expr) => {{
         let location: &str = if $name.is_empty() {

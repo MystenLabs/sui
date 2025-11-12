@@ -4,6 +4,7 @@
 pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
+#[allow(clippy::type_complexity)]
 mod checked {
     use crate::{
         adapter::new_native_extensions,
@@ -14,8 +15,9 @@ mod checked {
         },
         execution_mode::ExecutionMode,
         execution_value::{
-            CommandKind, ExecutionState, InputObjectMetadata, InputValue, ObjectContents,
-            ObjectValue, RawValueType, ResultValue, SizeBound, TryFromValue, UsageKind, Value,
+            CommandKind, ExecutionState, InputObjectMetadata, InputValue, Mutability,
+            ObjectContents, ObjectValue, RawValueType, ResultValue, SizeBound, TryFromValue,
+            UsageKind, Value,
         },
         gas_charger::GasCharger,
         gas_meter::SuiGasMeter,
@@ -32,6 +34,7 @@ mod checked {
         identifier::IdentStr,
         language_storage::{ModuleId, StructTag, TypeTag},
         resolver::MoveResolver,
+        u256::U256,
         vm_status::StatusCode,
     };
     use move_trace_format::format::MoveTraceBuilder;
@@ -56,6 +59,7 @@ mod checked {
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         accumulator_event::AccumulatorEvent,
+        accumulator_root::AccumulatorObjId,
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
@@ -63,13 +67,15 @@ mod checked {
         error::{ExecutionError, ExecutionErrorKind, SuiError, command_argument_error},
         event::Event,
         execution::{ExecutionResults, ExecutionResultsV2},
-        execution_config_utils::to_binary_config,
         execution_status::CommandArgumentError,
+        funds_accumulator::Withdrawal,
         metrics::LimitsMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::DenyListResult,
-        transaction::{Argument, CallArg, ObjectArg},
+        transaction::{
+            Argument, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability, WithdrawFrom,
+        },
     };
     use tracing::instrument;
 
@@ -109,6 +115,8 @@ mod checked {
         /// Map of arguments that are currently borrowed in this command, true if the borrow is mutable
         /// This gets cleared out when new results are pushed, i.e. the end of a command
         borrowed: HashMap<Arg, /* mut */ bool>,
+        /// Set of the by-value shared objects taken in the current command
+        per_command_by_value_shared_objects: BTreeSet<ObjectID>,
     }
 
     /// A write for an object that was generated outside of the Move ObjectRuntime
@@ -157,6 +165,7 @@ mod checked {
                 state_view.as_sui_resolver(),
             ))));
             let mut input_object_map = BTreeMap::new();
+            let tx_context_ref = RefCell::borrow(&tx_context);
             let inputs = inputs
                 .into_iter()
                 .map(|call_arg| {
@@ -167,10 +176,12 @@ mod checked {
                         &mut linkage_view,
                         &[],
                         &mut input_object_map,
+                        &tx_context_ref,
                         call_arg,
                     )
                 })
                 .collect::<Result<_, ExecutionError>>()?;
+            std::mem::drop(tx_context_ref);
             let gas = if let Some(gas_coin) = gas_charger.gas_coin() {
                 let mut gas = load_object(
                     protocol_config,
@@ -179,7 +190,7 @@ mod checked {
                     &mut linkage_view,
                     &[],
                     &mut input_object_map,
-                    /* imm override */ false,
+                    /* mutability override */ None,
                     gas_coin,
                 )?;
                 // subtract the max gas budget. This amount is off limits in the programmable transaction,
@@ -207,6 +218,7 @@ mod checked {
                     inner: ResultValue {
                         last_usage_kind: None,
                         value: None,
+                        shared_object_ids: BTreeSet::new(),
                     },
                 }
             };
@@ -218,26 +230,6 @@ mod checked {
                 metrics.clone(),
                 tx_context.clone(),
             );
-
-            // Set the profiler if in CLI
-            #[skip_checked_arithmetic]
-            move_vm_profiler::tracing_feature_enabled! {
-                use move_vm_profiler::GasProfiler;
-                use move_vm_types::gas::GasMeter;
-                use crate::gas_meter::SuiGasMeter;
-
-                let ref_context: &RefCell<TxContext> = tx_context.borrow();
-                let tx_digest = ref_context.borrow().digest();
-                let remaining_gas: u64 = move_vm_types::gas::GasMeter::remaining_gas(&SuiGasMeter(
-                    gas_charger.move_gas_status_mut(),
-                ))
-                        .into();
-                SuiGasMeter(gas_charger.move_gas_status_mut()).set_profiler(GasProfiler::init(
-                        &vm.config().profiler_config,
-                        format!("{}", tx_digest),
-                        remaining_gas,
-                    ));
-            }
 
             Ok(Self {
                 protocol_config,
@@ -255,10 +247,11 @@ mod checked {
                 new_packages: vec![],
                 user_events: vec![],
                 borrowed: HashMap::new(),
+                per_command_by_value_shared_objects: BTreeSet::new(),
             })
         }
 
-        pub fn object_runtime(&self) -> Result<&ObjectRuntime, ExecutionError> {
+        pub fn object_runtime(&self) -> Result<&ObjectRuntime<'_>, ExecutionError> {
             self.native_extensions
                 .get::<ObjectRuntime>()
                 .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
@@ -462,7 +455,7 @@ mod checked {
         /// or if it is an object that cannot be taken by value (shared or immutable)
         pub fn by_value_arg<V: TryFromValue>(
             &mut self,
-            command_kind: CommandKind<'_>,
+            command_kind: CommandKind,
             arg_idx: usize,
             arg: Arg,
         ) -> Result<V, ExecutionError> {
@@ -471,12 +464,16 @@ mod checked {
         }
         fn by_value_arg_<V: TryFromValue>(
             &mut self,
-            command_kind: CommandKind<'_>,
+            command_kind: CommandKind,
             arg: Arg,
         ) -> Result<V, EitherError> {
             let shared_obj_deletion_enabled = self.protocol_config.shared_object_deletion();
+            let per_command_shared_object_transfer_rules = self
+                .protocol_config
+                .per_command_shared_object_transfer_rules();
             let is_borrowed = self.arg_is_borrowed(&arg);
-            let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::ByValue)?;
+            let (input_metadata_opt, val_opt, shared_object_ids) =
+                self.borrow_mut(arg, UsageKind::ByValue)?;
             let is_copyable = if let Some(val) = val_opt {
                 val.is_copyable()
             } else {
@@ -517,15 +514,18 @@ mod checked {
                 return Err(CommandArgumentError::InvalidObjectByValue.into());
             }
 
-            // Any input object taken by value must be mutable
-            if matches!(
-                input_metadata_opt,
-                Some(InputObjectMetadata::InputObject {
-                    is_mutable_input: false,
-                    ..
-                })
-            ) {
-                return Err(CommandArgumentError::InvalidObjectByValue.into());
+            // Any input object taken by value must be exclusively mutable
+            match input_metadata_opt {
+                Some(InputObjectMetadata::InputObject { mutability, .. }) => match mutability {
+                    // NonExclusiveWrite can be taken by value, but unless it is re-shared
+                    // with no mutations, the transaction will abort.
+                    Mutability::Mutable | Mutability::NonExclusiveWrite => (),
+                    Mutability::Immutable => {
+                        return Err(CommandArgumentError::InvalidObjectByValue.into());
+                    }
+                },
+                Some(InputObjectMetadata::Receiving { .. }) => (),
+                None => (),
             }
 
             let val = if is_copyable {
@@ -533,6 +533,13 @@ mod checked {
             } else {
                 val_opt.take().unwrap()
             };
+            if per_command_shared_object_transfer_rules {
+                // Track the shared object ID if `per_command_shared_object_transfer_rules`
+                // is enabled
+                let shared_object_ids = shared_object_ids.clone();
+                self.per_command_by_value_shared_objects
+                    .extend(shared_object_ids);
+            }
             Ok(V::try_from_value(val)?)
         }
 
@@ -550,24 +557,31 @@ mod checked {
                 .map_err(|e| e.into_execution_error(arg_idx))
         }
         fn borrow_arg_mut_<V: TryFromValue>(&mut self, arg: Arg) -> Result<V, EitherError> {
+            let per_command_shared_object_transfer_rules = self
+                .protocol_config
+                .per_command_shared_object_transfer_rules();
             // mutable borrowing requires unique usage
             if self.arg_is_borrowed(&arg) {
                 return Err(CommandArgumentError::InvalidValueUsage.into());
             }
             self.borrowed.insert(arg, /* is_mut */ true);
-            let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowMut)?;
+            let (input_metadata_opt, val_opt, shared_object_ids) =
+                self.borrow_mut(arg, UsageKind::BorrowMut)?;
             let is_copyable = if let Some(val) = val_opt {
                 val.is_copyable()
             } else {
                 // error if taken
                 return Err(CommandArgumentError::InvalidValueUsage.into());
             };
-            if let Some(InputObjectMetadata::InputObject {
-                is_mutable_input: false,
-                ..
-            }) = input_metadata_opt
-            {
-                return Err(CommandArgumentError::InvalidObjectByMutRef.into());
+            match input_metadata_opt {
+                Some(InputObjectMetadata::InputObject { mutability, .. }) => match mutability {
+                    Mutability::Mutable | Mutability::NonExclusiveWrite => (),
+                    Mutability::Immutable => {
+                        return Err(CommandArgumentError::InvalidObjectByMutRef.into());
+                    }
+                },
+                Some(InputObjectMetadata::Receiving { .. }) => (),
+                None => (),
             }
             // if it is copyable, don't take it as we allow for the value to be copied even if
             // mutably borrowed
@@ -576,6 +590,29 @@ mod checked {
             } else {
                 val_opt.take().unwrap()
             };
+            if per_command_shared_object_transfer_rules {
+                // track shared object IDs if `per_command_shared_object_transfer_rules`
+                // is enabled--but only for vectors from MakeMoveVec
+                let normalized_arg = match arg {
+                    Arg(Arg_::V2(arg)) => arg,
+                    Arg(Arg_::V1(_)) => {
+                        invariant_violation!(
+                            "v1 should not be used with per_command_shared_object_transfer_rules"
+                        )
+                    }
+                };
+                match normalized_arg {
+                    NormalizedArg::GasCoin | NormalizedArg::Input(_) => (),
+                    NormalizedArg::Result(_, _) => {
+                        // these will be populated only for results from MakeMoveVec, if the
+                        // vector is used mutably, we must assume that it could have been
+                        // taken from the vector
+                        let shared_object_ids = shared_object_ids.clone();
+                        self.per_command_by_value_shared_objects
+                            .extend(shared_object_ids);
+                    }
+                }
+            }
             Ok(V::try_from_value(val)?)
         }
 
@@ -603,7 +640,8 @@ mod checked {
                 return Err(CommandArgumentError::InvalidValueUsage.into());
             }
             self.borrowed.insert(arg, /* is_mut */ false);
-            let (_input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowImm)?;
+            let (_input_metadata_opt, val_opt, _shared_object_ids) =
+                self.borrow_mut(arg, UsageKind::BorrowImm)?;
             if val_opt.is_none() {
                 return Err(CommandArgumentError::InvalidValueUsage.into());
             }
@@ -626,6 +664,9 @@ mod checked {
             arg: Arg,
             value: Value,
         ) -> Result<(), ExecutionError> {
+            let per_command_shared_object_transfer_rules = self
+                .protocol_config
+                .per_command_shared_object_transfer_rules();
             Mode::add_argument_update(self, updates, arg.into(), &value)?;
             let was_mut_opt = self.borrowed.remove(&arg);
             assert_invariant!(
@@ -634,9 +675,28 @@ mod checked {
                 The take+restore is an implementation detail of mutable references"
             );
             // restore is exclusively used for mut
-            let Ok((_, value_opt)) = self.borrow_mut_impl(arg, None) else {
+            let Ok((_, value_opt, shared_object_ids)) = self.borrow_mut_impl(arg, None) else {
                 invariant_violation!("Should be able to borrow argument to restore it")
             };
+            if per_command_shared_object_transfer_rules {
+                let normalized_arg = match arg {
+                    Arg(Arg_::V2(arg)) => arg,
+                    Arg(Arg_::V1(_)) => {
+                        invariant_violation!(
+                            "v1 should not be used with per_command_shared_object_transfer_rules"
+                        )
+                    }
+                };
+                match normalized_arg {
+                    NormalizedArg::GasCoin | NormalizedArg::Input(_) => (),
+                    NormalizedArg::Result(_, _) => {
+                        // these will be populated only for results from MakeMoveVec, if the
+                        // vector is used mutably, we must assume that it could have been
+                        // taken from the vector
+                        shared_object_ids.clear();
+                    }
+                }
+            }
 
             let old_value = value_opt.replace(value);
             assert_invariant!(
@@ -697,15 +757,45 @@ mod checked {
         }
 
         /// Finish a command: clearing the borrows and adding the results to the result vector
-        pub fn push_command_results(&mut self, results: Vec<Value>) -> Result<(), ExecutionError> {
+        pub fn push_command_results(
+            &mut self,
+            command_kind: CommandKind,
+            mut results: Vec<Value>,
+        ) -> Result<(), ExecutionError> {
             assert_invariant!(
                 self.borrowed.values().all(|is_mut| !is_mut),
                 "all mut borrows should be restored"
             );
             // clear borrow state
             self.borrowed = HashMap::new();
-            self.results
-                .push(results.into_iter().map(ResultValue::new).collect());
+            let results = if self
+                .protocol_config
+                .per_command_shared_object_transfer_rules()
+            {
+                if let CommandKind::MakeMoveVec = command_kind {
+                    // For make MoveVec, we propagate the shared objects taken by value
+                    assert_invariant!(
+                        results.len() == 1,
+                        "MakeMoveVec should return a single result"
+                    );
+                    let mut result = ResultValue::new(results.pop().unwrap());
+                    result.shared_object_ids =
+                        std::mem::take(&mut self.per_command_by_value_shared_objects);
+                    vec![result]
+                } else {
+                    // For all other commands, we check the shared objects taken by value
+                    // are deleted or re-shared
+                    check_shared_object_usage(
+                        self.object_runtime()?,
+                        &self.per_command_by_value_shared_objects,
+                    )?;
+                    self.per_command_by_value_shared_objects.clear();
+                    results.into_iter().map(ResultValue::new).collect()
+                }
+            } else {
+                results.into_iter().map(ResultValue::new).collect()
+            };
+            self.results.push(results);
             Ok(())
         }
 
@@ -738,8 +828,13 @@ mod checked {
                 let InputValue {
                     object_metadata:
                         Some(InputObjectMetadata::InputObject {
-                            // We are only interested in mutable inputs.
-                            is_mutable_input: true,
+                            // Both Mutable and NonExclusiveWrite are passed as &mut inputs.
+                            // Therefore, the type checker will allow mutation to either. It
+                            // is illegal to mutate NonExclusiveWrite objects, but we check this
+                            // post-execution.
+                            // Note that NonExclusiveWrite is not currently available to user
+                            // transactions.
+                            mutability: Mutability::Mutable | Mutability::NonExclusiveWrite,
                             id,
                             version,
                             owner,
@@ -772,6 +867,7 @@ mod checked {
                         let ResultValue {
                             last_usage_kind,
                             value,
+                            shared_object_ids: _,
                         } = result_value;
                         match value {
                             None => (),
@@ -841,6 +937,8 @@ mod checked {
                 loaded_child_objects,
                 mut created_object_ids,
                 deleted_object_ids,
+                settlement_input_sui,
+                settlement_output_sui,
             } = object_runtime.finish()?;
             assert_invariant!(
                 remaining_events.is_empty(),
@@ -950,6 +1048,8 @@ mod checked {
                 deleted_object_ids,
                 user_events,
                 accumulator_events,
+                settlement_input_sui,
+                settlement_output_sui,
             )
         }
 
@@ -965,23 +1065,13 @@ mod checked {
 
         /// Special case errors for type arguments to Move functions
         pub fn convert_type_argument_error(&self, idx: usize, error: VMError) -> ExecutionError {
-            use sui_types::execution_status::TypeArgumentError;
-            match error.major_status() {
-                StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
-                    ExecutionErrorKind::TypeArityMismatch.into()
-                }
-                StatusCode::TYPE_RESOLUTION_FAILURE => ExecutionErrorKind::TypeArgumentError {
-                    argument_idx: idx as TypeParameterIndex,
-                    kind: TypeArgumentError::TypeNotFound,
-                }
-                .into(),
-                StatusCode::CONSTRAINT_NOT_SATISFIED => ExecutionErrorKind::TypeArgumentError {
-                    argument_idx: idx as TypeParameterIndex,
-                    kind: TypeArgumentError::ConstraintNotSatisfied,
-                }
-                .into(),
-                _ => self.convert_vm_error(error),
-            }
+            convert_type_argument_error(
+                idx,
+                error,
+                self.vm,
+                &self.linkage_view,
+                self.protocol_config.resolve_abort_locations_to_package_id(),
+            )
         }
 
         /// Returns true if the value at the argument's location is borrowed, mutably or immutably
@@ -999,7 +1089,14 @@ mod checked {
             &mut self,
             arg: Arg,
             usage: UsageKind,
-        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), EitherError> {
+        ) -> Result<
+            (
+                Option<&InputObjectMetadata>,
+                &mut Option<Value>,
+                &mut BTreeSet<ObjectID>,
+            ),
+            EitherError,
+        > {
             self.borrow_mut_impl(arg, Some(usage))
         }
 
@@ -1009,7 +1106,14 @@ mod checked {
             &mut self,
             arg: Arg,
             update_last_usage: Option<UsageKind>,
-        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), EitherError> {
+        ) -> Result<
+            (
+                Option<&InputObjectMetadata>,
+                &mut Option<Value>,
+                &mut BTreeSet<ObjectID>,
+            ),
+            EitherError,
+        > {
             match arg.0 {
                 Arg_::V1(arg) => {
                     assert_invariant!(
@@ -1033,8 +1137,14 @@ mod checked {
             &mut self,
             arg: Argument,
             update_last_usage: Option<UsageKind>,
-        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), CommandArgumentError>
-        {
+        ) -> Result<
+            (
+                Option<&InputObjectMetadata>,
+                &mut Option<Value>,
+                &mut BTreeSet<ObjectID>,
+            ),
+            CommandArgumentError,
+        > {
             let (metadata, result_value) = match arg {
                 Argument::GasCoin => (self.gas.object_metadata.as_ref(), &mut self.gas.inner),
                 Argument::Input(i) => {
@@ -1068,7 +1178,11 @@ mod checked {
             if let Some(usage) = update_last_usage {
                 result_value.last_usage_kind = Some(usage);
             }
-            Ok((metadata, &mut result_value.value))
+            Ok((
+                metadata,
+                &mut result_value.value,
+                &mut result_value.shared_object_ids,
+            ))
         }
 
         // v2 of borrow_mut_impl
@@ -1076,7 +1190,14 @@ mod checked {
             &mut self,
             arg: NormalizedArg,
             update_last_usage: Option<UsageKind>,
-        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), ExecutionError> {
+        ) -> Result<
+            (
+                Option<&InputObjectMetadata>,
+                &mut Option<Value>,
+                &mut BTreeSet<ObjectID>,
+            ),
+            ExecutionError,
+        > {
             let (metadata, result_value) = match arg {
                 NormalizedArg::GasCoin => (self.gas.object_metadata.as_ref(), &mut self.gas.inner),
                 NormalizedArg::Input(i) => {
@@ -1084,7 +1205,8 @@ mod checked {
                         .inputs
                         .get_mut(i as usize)
                         .ok_or_else(|| make_invariant_violation!("bounds already checked"))?;
-                    (input_value.object_metadata.as_ref(), &mut input_value.inner)
+                    let metadata = input_value.object_metadata.as_ref();
+                    (metadata, &mut input_value.inner)
                 }
                 NormalizedArg::Result(i, j) => {
                     let result_value = self
@@ -1099,7 +1221,11 @@ mod checked {
             if let Some(usage) = update_last_usage {
                 result_value.last_usage_kind = Some(usage);
             }
-            Ok((metadata, &mut result_value.value))
+            Ok((
+                metadata,
+                &mut result_value.value,
+                &mut result_value.shared_object_ids,
+            ))
         }
 
         pub(crate) fn execute_function_bypass_visibility(
@@ -1194,7 +1320,7 @@ mod checked {
             &self,
             module_bytes: &[Vec<u8>],
         ) -> Result<Vec<CompiledModule>, ExecutionError> {
-            let binary_config = to_binary_config(self.protocol_config);
+            let binary_config = self.protocol_config.binary_config(None);
             let modules = module_bytes
                 .iter()
                 .map(|b| {
@@ -1262,6 +1388,32 @@ mod checked {
         }
     }
 
+    /// Check for valid shared object usage, either deleted or re-shared, at the end of a command
+    pub fn check_shared_object_usage<'a>(
+        object_runtime: &ObjectRuntime,
+        consumed_shared_objects: impl IntoIterator<Item = &'a ObjectID>,
+    ) -> Result<(), ExecutionError> {
+        for id in consumed_shared_objects {
+            // valid if done deleted or re-shared
+            let is_valid_usage = object_runtime.is_deleted(id)
+                || matches!(
+                    object_runtime.is_transferred(id),
+                    Some(Owner::Shared { .. })
+                );
+            if !is_valid_usage {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                    format!(
+                        "Shared object operation on {} not allowed: \
+                        cannot be frozen, transferred, or wrapped",
+                        id
+                    ),
+                ));
+            }
+        }
+        Ok(())
+    }
+
     pub fn finish(
         protocol_config: &ProtocolConfig,
         state_view: &dyn ExecutionState,
@@ -1275,6 +1427,8 @@ mod checked {
         deleted_object_ids: IndexSet<ObjectID>,
         user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
         accumulator_events: Vec<MoveAccumulatorEvent>,
+        settlement_input_sui: u64,
+        settlement_output_sui: u64,
     ) -> Result<ExecutionResults, ExecutionError> {
         // Before finishing, ensure that any shared object taken by value by the transaction is either:
         // 1. Mutated (and still has a shared ownership); or
@@ -1285,29 +1439,43 @@ mod checked {
             // of `Shared`.
             if let Some(obj) = written_objects.get(id) {
                 if !obj.is_shared() {
-                    return Err(ExecutionError::new(
-                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                        Some(
-                            format!(
-                                "Shared object operation on {} not allowed: \
+                    if protocol_config.per_command_shared_object_transfer_rules() {
+                        invariant_violation!(
+                            "There should be no shared objects unaccounted for when \
+                            per_command_shared_object_transfer_rules is enabled"
+                        )
+                    } else {
+                        return Err(ExecutionError::new(
+                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                            Some(
+                                format!(
+                                    "Shared object operation on {} not allowed: \
                                      cannot be frozen, transferred, or wrapped",
-                                id
-                            )
-                            .into(),
-                        ),
-                    ));
+                                    id
+                                )
+                                .into(),
+                            ),
+                        ));
+                    }
                 }
             } else {
                 // If it's not in the written objects, the object must have been deleted. Otherwise
                 // it's an error.
                 if !deleted_object_ids.contains(id) {
-                    return Err(ExecutionError::new(
+                    if protocol_config.per_command_shared_object_transfer_rules() {
+                        invariant_violation!(
+                            "There should be no shared objects unaccounted for when \
+                            per_command_shared_object_transfer_rules is enabled"
+                        )
+                    } else {
+                        return Err(ExecutionError::new(
                             ExecutionErrorKind::SharedObjectOperationNotAllowed,
                             Some(
                                 format!("Shared object operation on {} not allowed: \
                                          shared objects used by value must be re-shared if not deleted", id).into(),
                             ),
                         ));
+                    }
                 }
             }
         }
@@ -1325,13 +1493,21 @@ mod checked {
                 debug_fatal!(
                     "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
                 );
-                return Err(ExecutionError::new(
+                if protocol_config.per_command_shared_object_transfer_rules() {
+                    invariant_violation!(
+                        "Shared object operation on {} not allowed: \
+                        transaction with singly owned input object must be sent by the owner",
+                        id,
+                    );
+                } else {
+                    return Err(ExecutionError::new(
                                 ExecutionErrorKind::SharedObjectOperationNotAllowed,
                                 Some(
                                     format!("Shared object operation on {} not allowed: \
                                              transaction with singly owned input object must be sent by the owner", id).into(),
                                 ),
                             ));
+                }
             }
             // If an Owner type is implemented with support for more fine-grained authorization,
             // checks should be performed here. For example, transfers and wraps can be detected
@@ -1342,16 +1518,7 @@ mod checked {
             // let deleted = deleted_object_ids.contains(&id);
         }
 
-        if protocol_config.enable_coin_deny_list_v2() {
-            let DenyListResult {
-                result,
-                num_non_gas_coin_owners,
-            } = state_view.check_coin_deny_list(&written_objects);
-            gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
-            result?;
-        }
-
-        let user_events = user_events
+        let user_events: Vec<Event> = user_events
             .into_iter()
             .map(|(module_id, tag, contents)| {
                 Event::new(
@@ -1364,26 +1531,64 @@ mod checked {
             })
             .collect();
 
+        let mut receiving_funds_type_and_owners = BTreeMap::new();
         let accumulator_events = accumulator_events
             .into_iter()
-            .map(|accum_event| match accum_event.value {
-                MoveAccumulatorValue::U64(amount) => {
-                    let value = AccumulatorValue::Integer(amount);
-                    let address = AccumulatorAddress::new(
-                        accum_event.target_addr.into(),
-                        accum_event.target_ty,
-                    );
-
-                    let write = AccumulatorWriteV1 {
-                        address,
-                        operation: accum_event.action.into_sui_accumulator_action(),
-                        value,
-                    };
-
-                    AccumulatorEvent::new(accum_event.accumulator_id, write)
+            .map(|accum_event| {
+                if let Some(ty) = Balance::maybe_get_balance_type_param(&accum_event.target_ty) {
+                    receiving_funds_type_and_owners
+                        .entry(ty)
+                        .or_insert_with(BTreeSet::new)
+                        .insert(accum_event.target_addr.into());
                 }
+                let value = match accum_event.value {
+                    MoveAccumulatorValue::U64(amount) => AccumulatorValue::Integer(amount),
+                    MoveAccumulatorValue::EventRef(event_idx) => {
+                        let Some(event) = user_events.get(event_idx as usize) else {
+                            invariant_violation!(
+                                "Could not find authenticated event at index {}",
+                                event_idx
+                            );
+                        };
+                        let digest = event.digest();
+                        AccumulatorValue::EventDigest(event_idx, digest)
+                    }
+                };
+
+                let address =
+                    AccumulatorAddress::new(accum_event.target_addr.into(), accum_event.target_ty);
+
+                let write = AccumulatorWriteV1 {
+                    address,
+                    operation: accum_event.action.into_sui_accumulator_action(),
+                    value,
+                };
+
+                Ok(AccumulatorEvent::new(
+                    AccumulatorObjId::new_unchecked(accum_event.accumulator_id),
+                    write,
+                ))
             })
-            .collect();
+            .collect::<Result<Vec<_>, ExecutionError>>()?;
+
+        if protocol_config.enable_coin_deny_list_v2() {
+            for object in written_objects.values() {
+                let coin_type = object.type_().and_then(|ty| ty.coin_type_maybe());
+                let owner = object.owner.get_address_owner_address();
+                if let (Some(ty), Ok(owner)) = (coin_type, owner) {
+                    receiving_funds_type_and_owners
+                        .entry(ty)
+                        .or_insert_with(BTreeSet::new)
+                        .insert(owner);
+                }
+            }
+            let DenyListResult {
+                result,
+                num_non_gas_coin_owners,
+            } = state_view.check_coin_deny_list(receiving_funds_type_and_owners);
+            gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+            result?;
+        }
 
         Ok(ExecutionResults::V2(ExecutionResultsV2 {
             written_objects,
@@ -1395,6 +1600,8 @@ mod checked {
             deleted_object_ids: deleted_object_ids.into_iter().collect(),
             user_events,
             accumulator_events,
+            settlement_input_sui,
+            settlement_output_sui,
         }))
     }
 
@@ -1581,7 +1788,7 @@ mod checked {
         linkage_view: &mut LinkageView,
         new_packages: &[MovePackage],
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
-        override_as_immutable: bool,
+        mutability_override: Option<Mutability>,
         id: ObjectID,
     ) -> Result<InputValue, ExecutionError> {
         let Some(obj) = state_view.read_object(&id) else {
@@ -1590,17 +1797,19 @@ mod checked {
         };
         // override_as_immutable ==> Owner::Shared or Owner::ConsensusAddressOwner
         assert_invariant!(
-            !override_as_immutable
+            mutability_override.is_none()
                 || matches!(
                     obj.owner,
                     Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. }
                 ),
             "override_as_immutable should only be set for consensus objects"
         );
-        let is_mutable_input = match obj.owner {
-            Owner::AddressOwner(_) => true,
-            Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => !override_as_immutable,
-            Owner::Immutable => false,
+        let mutability = match obj.owner {
+            Owner::AddressOwner(_) => Mutability::Mutable,
+            Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => {
+                mutability_override.unwrap_or(Mutability::Mutable)
+            }
+            Owner::Immutable => Mutability::Immutable,
             Owner::ObjectOwner(_) => {
                 // protected by transaction input checker
                 invariant_violation!("ObjectOwner objects cannot be input")
@@ -1610,7 +1819,7 @@ mod checked {
         let version = obj.version();
         let object_metadata = InputObjectMetadata::InputObject {
             id,
-            is_mutable_input,
+            mutability,
             owner: owner.clone(),
             version,
         };
@@ -1655,6 +1864,7 @@ mod checked {
         linkage_view: &mut LinkageView,
         new_packages: &[MovePackage],
         input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
+        tx_context: &TxContext,
         call_arg: CallArg,
     ) -> Result<InputValue, ExecutionError> {
         Ok(match call_arg {
@@ -1668,9 +1878,67 @@ mod checked {
                 input_object_map,
                 obj_arg,
             )?,
-            CallArg::BalanceWithdraw(_) => {
-                // TODO(address-balances): Add support for balance withdraws.
-                InputValue::new_balance_withdraw()
+            CallArg::FundsWithdrawal(FundsWithdrawalArg {
+                reservation,
+                type_arg,
+                withdraw_from,
+            }) => {
+                let Ok(type_arg) = type_arg.to_type_tag() else {
+                    // TODO(address-balances): ensure this is caught at signing
+                    invariant_violation!(
+                        "FundsWithdrawArg type arg should have been \
+                        checked at signing"
+                    );
+                };
+                let withdrawal_ty = Withdrawal::type_tag(type_arg);
+                let ty =
+                    load_type(vm, linkage_view, new_packages, &withdrawal_ty).map_err(|e| {
+                        convert_type_argument_error(
+                            0,
+                            e,
+                            vm,
+                            linkage_view,
+                            protocol_config.resolve_abort_locations_to_package_id(),
+                        )
+                    })?;
+                let abilities = vm.get_runtime().get_type_abilities(&ty).map_err(|e| {
+                    convert_vm_error(
+                        e,
+                        vm,
+                        linkage_view,
+                        protocol_config.resolve_abort_locations_to_package_id(),
+                    )
+                })?;
+                let loaded_ty = RawValueType::Loaded {
+                    ty,
+                    abilities,
+                    used_in_non_entry_move_call: false,
+                };
+                let owner = match withdraw_from {
+                    WithdrawFrom::Sender => tx_context.sender(),
+                    WithdrawFrom::Sponsor => {
+                        invariant_violation!(
+                            "WithdrawFrom::Sponsor call arg not supported, \
+                            should have been checked at signing"
+                        );
+                    }
+                };
+                // After this point, we can treat this like any other returned/loaded value, e.g.
+                // from a Move call. As such, sanity check Withdrawal should have only drop.
+                debug_assert!({
+                    !abilities.has_key()
+                        && !abilities.has_store()
+                        && !abilities.has_copy()
+                        && abilities.has_drop()
+                });
+                let limit = match reservation {
+                    sui_types::transaction::Reservation::EntireBalance => {
+                        // TODO(address-balances): support entire balance withdrawal
+                        todo!("Entire balance withdrawal not yet supported")
+                    }
+                    sui_types::transaction::Reservation::MaxAmountU64(u) => U256::from(u),
+                };
+                InputValue::withdrawal(loaded_ty, owner, limit)
             }
         })
     }
@@ -1693,19 +1961,29 @@ mod checked {
                 linkage_view,
                 new_packages,
                 input_object_map,
-                /* imm override */ false,
+                /* mutability override */ None,
                 id,
             ),
-            ObjectArg::SharedObject { id, mutable, .. } => load_object(
-                protocol_config,
-                vm,
-                state_view,
-                linkage_view,
-                new_packages,
-                input_object_map,
-                /* imm override */ !mutable,
-                id,
-            ),
+            ObjectArg::SharedObject { id, mutability, .. } => {
+                let mutability = match mutability {
+                    SharedObjectMutability::Mutable => Mutability::Mutable,
+                    // From the perspective of the adapter, non-exclusive write are mutable,
+                    // in that the move code will receive a &mut arg. The object itself
+                    // cannot be written to, this is enforced by post execution checks.
+                    SharedObjectMutability::NonExclusiveWrite => Mutability::NonExclusiveWrite,
+                    SharedObjectMutability::Immutable => Mutability::Immutable,
+                };
+                load_object(
+                    protocol_config,
+                    vm,
+                    state_view,
+                    linkage_view,
+                    new_packages,
+                    input_object_map,
+                    Some(mutability),
+                    id,
+                )
+            }
             ObjectArg::Receiving((id, version, _)) => {
                 Ok(InputValue::new_receiving_object(id, version))
             }
@@ -1873,5 +2151,31 @@ mod checked {
                 })
             },
         )
+    }
+    /// Special case errors for type arguments to Move functions
+    fn convert_type_argument_error<S: MoveResolver<Err = SuiError>>(
+        idx: usize,
+        error: VMError,
+        vm: &MoveVM,
+        state_view: &S,
+        resolve_abort_location_to_package_id: bool,
+    ) -> ExecutionError {
+        use sui_types::execution_status::TypeArgumentError;
+        match error.major_status() {
+            StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
+                ExecutionErrorKind::TypeArityMismatch.into()
+            }
+            StatusCode::TYPE_RESOLUTION_FAILURE => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::TypeNotFound,
+            }
+            .into(),
+            StatusCode::CONSTRAINT_NOT_SATISFIED => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::ConstraintNotSatisfied,
+            }
+            .into(),
+            _ => convert_vm_error(error, vm, state_view, resolve_abort_location_to_package_id),
+        }
     }
 }

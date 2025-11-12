@@ -53,7 +53,7 @@ module.exports = grammar({
   ],
 
   rules: {
-    source_file: $ => repeat($.module_definition),
+    source_file: $ => repeat(choice($.module_extension_definition, $.module_definition)),
 
     // parse use declarations
     use_declaration: $ => seq(
@@ -108,6 +108,13 @@ module.exports = grammar({
       'store',
       'key',
     ),
+
+    module_extension_definition: $ => {
+      return seq(
+        'extend',
+        field('module', $.module_definition),
+      );
+    },
 
     module_definition: $ => {
       return seq(
@@ -979,7 +986,7 @@ module.exports = grammar({
     mut_ref: $ => seq('&', 'mut'),
     block_identifier: $ => seq($.label, ':'),
     label: $ => seq('\'', $.identifier),
-    address_literal: $ => /@(0x[a-fA-F0-9]+|[0-9]+)/,
+    address_literal: $ => /@(0x[a-fA-F0-9][a-fA-F0-9_]*|[0-9]+)/,
     bool_literal: $ => choice('true', 'false'),
     num_literal: $ => seq(
       choice(

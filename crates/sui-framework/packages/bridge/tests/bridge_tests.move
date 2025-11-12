@@ -44,13 +44,13 @@ use bridge::message_types;
 use bridge::test_token::{TEST_TOKEN, create_bridge_token as create_test_token};
 use bridge::usdc::USDC;
 use std::type_name;
+use std::unit_test::destroy;
 use sui::address;
 use sui::balance;
 use sui::coin::{Self, Coin};
 use sui::hex;
 use sui::package::test_publish;
 use sui::test_scenario;
-use sui::test_utils::destroy;
 
 // common error start code for unexpected errors in tests (assertions).
 // If more than one assert in a test needs to use an unexpected error code,
@@ -158,7 +158,7 @@ fun test_add_token_price_zero_value() {
         addr,
         false,
         vector[test_token_id()],
-        vector[type_name::get<TEST_TOKEN>().into_string()],
+        vector[type_name::with_defining_ids<TEST_TOKEN>().into_string()],
         vector[0],
     );
 
@@ -174,7 +174,7 @@ fun test_add_token_malformed_1() {
         addr,
         false,
         vector[test_token_id(), eth_id()],
-        vector[type_name::get<TEST_TOKEN>().into_string()],
+        vector[type_name::with_defining_ids<TEST_TOKEN>().into_string()],
         vector[10],
     );
 
@@ -190,7 +190,10 @@ fun test_add_token_malformed_2() {
         addr,
         false,
         vector[test_token_id()],
-        vector[type_name::get<TEST_TOKEN>().into_string(), type_name::get<BTC>().into_string()],
+        vector[
+            type_name::with_defining_ids<TEST_TOKEN>().into_string(),
+            type_name::with_defining_ids<BTC>().into_string(),
+        ],
         vector[10],
     );
 
@@ -206,7 +209,7 @@ fun test_add_token_malformed_3() {
         addr,
         false,
         vector[test_token_id()],
-        vector[type_name::get<TEST_TOKEN>().into_string()],
+        vector[type_name::with_defining_ids<TEST_TOKEN>().into_string()],
         vector[10, 20],
     );
 
@@ -223,7 +226,7 @@ fun test_add_native_token_nop() {
         addr,
         true,
         vector[test_token_id()],
-        vector[type_name::get<TEST_TOKEN>().into_string()],
+        vector[type_name::with_defining_ids<TEST_TOKEN>().into_string()],
         vector[100],
     );
     env.destroy_env();

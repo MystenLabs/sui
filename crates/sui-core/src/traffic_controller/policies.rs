@@ -97,7 +97,10 @@ impl TrafficSketch {
             update_interval >= Duration::from_secs(1),
             "Update interval too short, must be at least 1 second"
         );
-        assert!(num_sketches <= 10, "Given parameters require too many sketches to be stored. Reduce window size or increase update interval.");
+        assert!(
+            num_sketches <= 10,
+            "Given parameters require too many sketches to be stored. Reduce window size or increase update interval."
+        );
         let mem_estimate = (num_sketches as usize)
             * CountMinSketch32::<IpAddr>::estimate_memory(
                 sketch_capacity,
@@ -105,7 +108,10 @@ impl TrafficSketch {
                 sketch_tolerance,
             )
             .expect("Failed to estimate memory for CountMinSketch32");
-        assert!(mem_estimate < 128_000_000, "Memory estimate for traffic sketch exceeds 128MB. Reduce window size or increase update interval.");
+        assert!(
+            mem_estimate < 128_000_000,
+            "Memory estimate for traffic sketch exceeds 128MB. Reduce window size or increase update interval."
+        );
 
         let mut sketches = VecDeque::with_capacity(num_sketches as usize);
         for _ in 0..num_sketches {
@@ -189,11 +195,11 @@ impl TrafficSketch {
         let rate = rate as u64;
         if rate_heap.len() < capacity {
             rate_heap.push(Reverse((rate, ip_addr)));
-        } else if let Some(&Reverse((smallest_score, _))) = rate_heap.peek() {
-            if rate > smallest_score {
-                rate_heap.pop();
-                rate_heap.push(Reverse((rate, ip_addr)));
-            }
+        } else if let Some(&Reverse((smallest_score, _))) = rate_heap.peek()
+            && rate > smallest_score
+        {
+            rate_heap.pop();
+            rate_heap.push(Reverse((rate, ip_addr)));
         }
     }
 
@@ -378,9 +384,7 @@ impl FreqThresholdPolicy {
             let req_rate = self.sketch.get_request_rate(&key);
             trace!(
                 "FreqThresholdPolicy handling tally -- req_rate: {:?}, client_threshold: {:?}, client: {:?}",
-                req_rate,
-                self.client_threshold,
-                source,
+                req_rate, self.client_threshold, source,
             );
             if req_rate >= self.client_threshold as f64 {
                 Some(source)

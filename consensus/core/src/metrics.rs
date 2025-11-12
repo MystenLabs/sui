@@ -4,10 +4,10 @@
 use std::sync::Arc;
 
 use prometheus::{
+    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
     exponential_buckets, register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
-    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 
 use crate::network::metrics::NetworkMetrics;
@@ -209,13 +209,16 @@ pub(crate) struct NodeMetrics {
     pub(crate) round_tracker_last_propagation_delay: IntGauge,
     pub(crate) round_prober_request_errors: IntCounterVec,
     pub(crate) certifier_gc_round: IntGauge,
+    pub(crate) certifier_block_latency: HistogramVec,
     pub(crate) certifier_own_reject_votes: IntCounterVec,
     pub(crate) certifier_output_blocks: IntCounterVec,
     pub(crate) certifier_rejected_transactions: IntCounterVec,
     pub(crate) certifier_accepted_transactions: IntCounterVec,
+    pub(crate) certifier_missing_ancestor_during_certification: IntCounterVec,
     pub(crate) finalizer_buffered_commits: IntGauge,
     pub(crate) finalizer_round_delay: Histogram,
     pub(crate) finalizer_transaction_status: IntCounterVec,
+    pub(crate) finalizer_reject_votes: IntCounterVec,
     pub(crate) finalizer_output_commits: IntCounterVec,
     pub(crate) uptime: Histogram,
 }
@@ -495,6 +498,13 @@ impl NodeMetrics {
                 &["authority", "source", "error"],
                 registry,
             ).unwrap(),
+            certifier_block_latency: register_histogram_vec_with_registry!(
+                "certifier_block_latency",
+                "The latency of a block being certified by the transaction certifier. The block's authority is the label",
+                &["authority"],
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
             certifier_rejected_transactions: register_int_counter_vec_with_registry!(
                 "certifier_rejected_transactions",
                 "Number of transactions rejected by authority in transaction certifier",
@@ -505,6 +515,12 @@ impl NodeMetrics {
                 "certifier_accepted_transactions",
                 "Number of transactions accepted by authority in transaction certifier",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            certifier_missing_ancestor_during_certification: register_int_counter_vec_with_registry!(
+                "certifier_missing_ancestor_during_certification",
+                "Number of missing ancestors during certification",
+                &["reason"],
                 registry,
             ).unwrap(),
             rejected_blocks: register_int_counter_vec_with_registry!(
@@ -887,6 +903,12 @@ impl NodeMetrics {
                 "finalizer_transaction_status",
                 "Number of transactions finalized by the finalizer, grouped by status.",
                 &["status"],
+                registry
+            ).unwrap(),
+            finalizer_reject_votes: register_int_counter_vec_with_registry!(
+                "finalizer_reject_votes",
+                "Number of reject votes casted by each authority observed by the finalizer.",
+                &["authority"],
                 registry
             ).unwrap(),
             finalizer_output_commits: register_int_counter_vec_with_registry!(

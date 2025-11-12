@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    FullyCompiledProgram, diag,
+    PreCompiledProgramInfo, diag,
     diagnostics::{Diagnostic, codes::*},
     editions::{FeatureGate, Flavor},
     expansion::ast::{
@@ -12,8 +12,8 @@ use crate::{
     },
     ice, ice_assert,
     naming::ast::{
-        self as N, BlockLabel, DatatypeTypeParameter, IndexSyntaxMethods, ResolvedUseFuns, TParam,
-        TParamID, Type, Type_, TypeName, TypeName_,
+        self as N, BlockLabel, DatatypeTypeParameter, Function, IndexSyntaxMethods,
+        ResolvedUseFuns, TParam, TParamID, Type, Type_, TypeName, TypeName_, UseFuns,
     },
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, DocComment, Field, FunctionName,
@@ -57,7 +57,7 @@ use std::{
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: N::Program,
 ) -> T::Program {
     let N::Program {
@@ -66,7 +66,7 @@ pub fn program(
         inner: N::Program_ { modules: nmodules },
     } = prog;
 
-    let all_macro_definitions = extract_macros(&nmodules, &pre_compiled_lib);
+    let all_macro_definitions = extract_macros(compilation_env, &nmodules, &pre_compiled_lib);
     let mut modules = modules(compilation_env, &mut info, &all_macro_definitions, nmodules);
 
     dependency_ordering::program(compilation_env, &mut modules);
@@ -78,12 +78,12 @@ pub fn program(
         .into_iter()
         .map(|(mident, minfo)| (mident, minfo.use_funs))
         .collect();
-    let module_info =
+    let program_info =
         TypingProgramInfo::new(compilation_env, pre_compiled_lib, &modules, module_use_funs);
     let prog = T::Program {
         modules,
         warning_filters_table,
-        info: Arc::new(module_info),
+        info: Arc::new(program_info),
     };
     compilation_env
         .visitors()
@@ -94,8 +94,9 @@ pub fn program(
 }
 
 fn extract_macros(
+    compilation_env: &CompilationEnv,
     modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>,
-    pre_compiled_lib: &Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: &Option<Arc<PreCompiledProgramInfo>>,
 ) -> UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>> {
     // Merges the methods of the module into the local methods for each macro.
     fn merge_use_funs(module_use_funs: &N::UseFuns, mut macro_use_funs: N::UseFuns) -> N::UseFuns {
@@ -123,33 +124,66 @@ fn extract_macros(
         macro_use_funs
     }
 
+    //
+    let mut macro_definitions: BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)> =
+        BTreeMap::new();
+    modules.key_cloned_iter().for_each(|(mident, mdef)| {
+        let macro_functions =
+            UniqueMap::maybe_from_iter(mdef.functions.key_cloned_iter().filter_map(|(name, f)| {
+                if f.macro_.is_some() {
+                    Some((name, f.clone()))
+                } else {
+                    None
+                }
+            }))
+            .unwrap();
+        if !macro_functions.is_empty() {
+            macro_definitions
+                .entry(mident)
+                .or_insert_with(|| (mdef.use_funs.clone(), macro_functions));
+        }
+    });
+    compilation_env.save_macro_definitions(&macro_definitions);
+
     // Prefer local module definitions to previous ones. This is ostensibly an error, but naming
     // should have already produced that error. To avoid unnecessary error handling, we simply
     // prefer the non-precompiled definitions.
-    let all_modules: UniqueMap<ModuleIdent, &N::ModuleDefinition> =
-        UniqueMap::maybe_from_iter(modules.key_cloned_iter().chain(
-            pre_compiled_lib.iter().flat_map(|pre_compiled| {
-                pre_compiled
-                    .naming
-                    .inner
-                    .modules
-                    .key_cloned_iter()
-                    .filter(|(mident, _m)| !modules.contains_key(mident))
-            }),
-        ))
-        .unwrap();
-
-    all_modules.map(|_mident, mdef| {
-        mdef.functions.ref_filter_map(|_name, f| {
-            let _macro_loc = f.macro_?;
-            if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
-                let use_funs = merge_use_funs(&mdef.use_funs, use_funs.clone());
-                Some((use_funs, body.clone()))
-            } else {
+    let pre_compiled_macro_definitions = || {
+        pre_compiled_lib.iter().flat_map(|module_info| {
+            module_info.iter().filter_map(|(mident, module_info)| {
+                // TOOD rewrite to if ... && let Some(...) once this feature is stable
+                if !modules.contains_key(mident)
+                    && let Some(macro_definitions) = &module_info.macro_definitions
+                {
+                    return Some((*mident, &macro_definitions.0, &macro_definitions.1));
+                }
                 None
-            }
+            })
         })
-    })
+    };
+
+    let all_macro_definitions = modules
+        .key_cloned_iter()
+        .map(|(mident, mdef)| (mident, &mdef.use_funs, &mdef.functions))
+        .chain(pre_compiled_macro_definitions());
+
+    UniqueMap::maybe_from_iter(
+        all_macro_definitions.map(|(mident, mod_use_funs, functions)| {
+            let macro_bodies = functions.ref_filter_map(|_, f| {
+                if f.macro_.is_none() {
+                    return None;
+                }
+                if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
+                    let use_funs = merge_use_funs(mod_use_funs, use_funs.clone());
+                    Some((use_funs, body.clone()))
+                } else {
+                    None
+                }
+            });
+            (mident, macro_bodies)
+        }),
+    )
+    .unwrap()
 }
 
 fn modules(
@@ -261,20 +295,25 @@ fn module<'env>(
         loc,
         warning_filter,
         package_name,
+        named_address_map,
         attributes,
         target_kind,
         syntax_methods,
         use_funs,
         friends,
+        stdlib_definitions,
         structs: nstructs,
         enums: nenums,
         functions: nfunctions,
         constants: nconstants,
     } = mdef;
+
     context.current_module = Some(ident);
     context.current_package = package_name;
     context.push_warning_filter_scope(warning_filter);
     context.add_use_funs_scope(use_funs);
+    context.add_stdlib_definitions(stdlib_definitions);
+
     process_module_attributes(&mut context, &attributes);
     let structs = Mutex::new(UniqueMap::new());
     let enums = Mutex::new(UniqueMap::new());
@@ -334,6 +373,7 @@ fn module<'env>(
         loc,
         warning_filter,
         package_name,
+        named_address_map,
         attributes,
         target_kind,
         dependency_order: 0,
@@ -1295,6 +1335,32 @@ pub fn typing_error<T: ToString, F: FnOnce() -> T>(
             (loc, msg),
             (rloc, "Unable to infer the type. Recursive type found."),
         ),
+        IncompatibleConstraints((lhs_loc, lhs_kind), (rhs_loc, rhs_kind)) => {
+            let m1 = if from_subtype {
+                format!("Given a {} literal", lhs_kind)
+            } else {
+                format!(
+                    "Found a {} literal. It is not compatible with the other type.",
+                    lhs_kind
+                )
+            };
+            let m2 = if from_subtype {
+                format!("Expected a {} literal", rhs_kind)
+            } else {
+                format!(
+                    "Found a {} literal. It is not compatible with the other type.",
+                    rhs_kind
+                )
+            };
+            let mut diag = diag!(
+                TypeSafety::InvariantError,
+                (loc, msg),
+                (lhs_loc, m1),
+                (rhs_loc, m2)
+            );
+            diag.add_note("Inferred value types must be compatible");
+            diag
+        }
     }
 }
 
@@ -1318,6 +1384,7 @@ fn subtype_no_report(
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn subtype_impl<T: ToString, F: FnOnce() -> T>(
     context: &mut Context,
     loc: Loc,
@@ -1349,10 +1416,7 @@ fn subtype_opt<T: ToString, F: FnOnce() -> T>(
     pre_lhs: Type,
     pre_rhs: Type,
 ) -> Option<Type> {
-    match subtype_impl(context, loc, msg, pre_lhs, pre_rhs) {
-        Err(_rhs) => None,
-        Ok(t) => Some(t),
-    }
+    subtype_impl(context, loc, msg, pre_lhs, pre_rhs).ok()
 }
 
 fn subtype<T: ToString, F: FnOnce() -> T>(
@@ -1432,6 +1496,7 @@ fn invariant_no_report(
 }
 
 #[allow(dead_code)]
+#[allow(clippy::result_large_err)]
 fn invariant_impl<T: ToString, F: FnOnce() -> T>(
     context: &mut Context,
     loc: Loc,
@@ -1592,6 +1657,10 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         NE::Value(sp!(vloc, Value_::InferredNum(v))) => (
             core::make_num_tvar(context, eloc),
             TE::Value(sp(vloc, Value_::InferredNum(v))),
+        ),
+        NE::Value(sp!(vloc, Value_::InferredString(v))) => (
+            core::make_string_tvar(context, eloc),
+            TE::Value(sp(vloc, Value_::InferredString(v))),
         ),
         NE::Value(sp!(vloc, v)) => (v.type_(vloc).unwrap(), TE::Value(sp(vloc, v))),
 
@@ -2143,24 +2212,24 @@ fn binop(
         }
 
         Sub | Add | Mul | Mod | Div => {
+            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
             context.add_numeric_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
             context.add_numeric_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
-            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
             (operand_ty.clone(), operand_ty)
         }
 
         BitOr | BitAnd | Xor => {
+            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
             context.add_bits_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
             context.add_bits_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
-            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
             (operand_ty.clone(), operand_ty)
         }
 
         Shl | Shr => {
             let msg = || format!("Invalid argument to '{}'", &bop);
             let u8ty = Type_::u8(er.exp.loc);
-            context.add_bits_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
             subtype(context, er.exp.loc, msg, er.ty.clone(), u8ty);
+            context.add_bits_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
             (el.ty.clone(), el.ty.clone())
         }
 
@@ -2957,7 +3026,7 @@ fn resolve_field(context: &mut Context, loc: Loc, ty: Type, field: &Field) -> Ty
             ));
             context.error_type(loc)
         }
-        sp!(tloc, Var(i)) if !context.subst.is_num_var(&i) => {
+        sp!(tloc, Var(i)) if !context.subst.is_value_constrainted_var(&i) => {
             context.add_diag(diag!(
                 TypeSafety::UninferredType,
                 (loc, msg()),
@@ -3288,14 +3357,14 @@ fn process_exp_dotted(
             Type_::Ref(false, inner) => (BaseRefKind::MutRef, *inner.clone()),
             _ => (BaseRefKind::Owned, base.ty.clone()),
         };
-        if matches!(base_kind, BaseRefKind::Owned) {
-            if let Some(verb) = constraint_verb {
-                context.add_single_type_constraint(
-                    dloc,
-                    format!("Invalid {}", verb),
-                    base_type.clone(),
-                );
-            }
+        if matches!(base_kind, BaseRefKind::Owned)
+            && let Some(verb) = constraint_verb
+        {
+            context.add_single_type_constraint(
+                dloc,
+                format!("Invalid {}", verb),
+                base_type.clone(),
+            );
         }
         let accessors = vec![];
         ExpDotted {
@@ -3885,6 +3954,7 @@ fn ide_report_autocomplete(context: &mut Context, at_loc: &Loc, in_ty: &Type) {
 // Calls
 //**************************************************************************************************
 
+#[allow(clippy::large_enum_variant)]
 enum ResolvedMethodCall {
     Resolved(
         Box<ModuleIdent>,
@@ -4870,14 +4940,12 @@ pub fn collect_known_attribute_module_members(
         Testing(test_attr) => {
             // For Testing attributes we currently assume that none contain module accesses.
             if let known_attributes::TestingAttribute::ExpectedFailure(expected_failure) = test_attr
-            {
-                if let known_attributes::ExpectedFailure::ExpectedWithError {
+                && let known_attributes::ExpectedFailure::ExpectedWithError {
                     minor_code: Some(sp!(_, MinorCode_::Constant(mident, name))),
                     ..
                 } = expected_failure.as_ref()
-                {
-                    set.insert((*mident, *name));
-                }
+            {
+                set.insert((*mident, *name));
             }
         }
         External(ext_attr) => {

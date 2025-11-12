@@ -4,13 +4,16 @@ version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 clap = { version = "4.1.4", features = ["derive"] }
-
 bin-version.workspace = true
 move-analyzer.workspace = true
+move-compiler.workspace = true
 sui-move-build.workspace = true
 sui-package-management.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+tikv-jemalloc-ctl.workspace = true
+tikv-jemallocator.workspace = true

@@ -26,6 +26,7 @@ mod fallback_fetch;
 pub mod global_state_hasher;
 pub mod jsonrpc_index;
 pub mod metrics;
+pub mod mock_checkpoint_builder;
 pub mod mock_consensus;
 pub mod module_cache_metrics;
 pub mod mysticeti_adapter;
@@ -34,8 +35,10 @@ mod par_index_live_object_set;
 pub(crate) mod post_consensus_tx_reorder;
 pub mod quorum_driver;
 pub mod rpc_index;
+pub mod runtime;
 pub mod safe_client;
 mod scoring_decision;
+pub mod signature_verifier;
 mod stake_aggregator;
 mod status_aggregator;
 pub mod storage;
@@ -47,12 +50,16 @@ pub mod transaction_driver;
 mod transaction_input_loader;
 pub mod transaction_orchestrator;
 mod transaction_outputs;
+mod transaction_signing_filter;
+pub mod validator_client_monitor;
 pub mod validator_tx_finalizer;
 pub mod verify_indexes;
 
 #[cfg(test)]
 #[path = "unit_tests/congestion_control_tests.rs"]
 mod congestion_control_tests;
+#[path = "unit_tests/consensus_test_utils.rs"]
+pub mod consensus_test_utils;
 #[cfg(test)]
 #[path = "unit_tests/move_package_management_tests.rs"]
 mod move_package_management_tests;
@@ -82,8 +89,3 @@ mod type_param_tests;
 #[cfg(test)]
 #[path = "unit_tests/unit_test_utils.rs"]
 mod unit_test_utils;
-
-pub mod signature_verifier;
-
-pub mod runtime;
-mod transaction_signing_filter;

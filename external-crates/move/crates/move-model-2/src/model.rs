@@ -55,6 +55,7 @@ pub struct Model<K: SourceKind> {
     pub(crate) packages: BTreeMap<AccountAddress, PackageData<K>>,
     pub(crate) summary: OnceCell<summary::Packages>,
     pub(crate) _phantom: std::marker::PhantomData<K>,
+    pub(crate) config: ModelConfig,
 }
 
 macro_rules! shared_comments {
@@ -64,7 +65,7 @@ Extra functionality is provided in the case that the `Model` had source informat
 (`WithSource`) or did not (`WithoutSource`). If you need to \"forget\" which case you are in,
 `to_any` and `as_any` return a common type that can let values with different source information
 to be in tandem, e.g. as different arms in an `if-else`.
-Conversely, if you need to \"remember\" which case you are in, you can use `kind` to to case on
+Conversely, if you need to \"remember\" which case you are in, you can use `kind` to case on
 the presence source information. This can let you access the extra functionality provided by
 the `source_model` or `compiled_model`.
 "
@@ -155,6 +156,15 @@ pub struct CompiledConstant<'a, K: SourceKind> {
     pub(crate) data: &'a ConstantData,
 }
 
+#[derive(Clone)]
+/// Configuration options for constructing a `Model`. Provides the following options:
+/// - `allow_missing_dependencies`: (default: false) if true, when computing model and summary
+///   information, allow missing dependencies. This can be useful when working with incomplete sets
+///   of modules, but may result in incomplete or inaccurate information.
+pub struct ModelConfig {
+    pub allow_missing_dependencies: bool,
+}
+
 //**************************************************************************************************
 // API
 //**************************************************************************************************
@@ -190,7 +200,7 @@ impl<K: SourceKind> Model<K> {
         package.maybe_module(name)
     }
 
-    pub fn module(&self, module: impl TModuleId) -> Module<K> {
+    pub fn module(&self, module: impl TModuleId) -> Module<'_, K> {
         self.maybe_module(module).unwrap()
     }
 
@@ -762,8 +772,10 @@ pub(crate) struct NamedConstantData {
 //**************************************************************************************************
 
 impl<K: SourceKind> Model<K> {
+    /// Panics if a dependency is missing and `allow_missing_dependencies` is false.
     pub(crate) fn compute_dependencies(&mut self) {
         fn visit(
+            allow_missing_dependencies: bool,
             packages: &BTreeMap<AccountAddress, normalized::Package>,
             acc: &mut BTreeMap<ModuleId, BTreeMap<ModuleId, bool>>,
             id: ModuleId,
@@ -774,16 +786,48 @@ impl<K: SourceKind> Model<K> {
             }
 
             for immediate_dep in &module.immediate_dependencies {
-                let unit = &packages[&immediate_dep.address].modules[&immediate_dep.name];
-                visit(packages, acc, *immediate_dep, unit);
+                let Some(pkg) = packages.get(&immediate_dep.address) else {
+                    if allow_missing_dependencies {
+                        continue;
+                    } else {
+                        panic!(
+                            "Module {:?} depends on missing package {:?}",
+                            id, immediate_dep.address
+                        );
+                    }
+                };
+                let Some(unit) = pkg.modules.get(&immediate_dep.name) else {
+                    if allow_missing_dependencies {
+                        continue;
+                    } else {
+                        panic!(
+                            "Module {:?} depends on missing module {:?}",
+                            id, immediate_dep
+                        );
+                    }
+                };
+                visit(
+                    allow_missing_dependencies,
+                    packages,
+                    acc,
+                    *immediate_dep,
+                    unit,
+                );
             }
             let mut deps = BTreeMap::new();
             for immediate_dep in &module.immediate_dependencies {
                 deps.insert(*immediate_dep, true);
-                for transitive_dep in acc.get(immediate_dep).unwrap().keys() {
-                    if !deps.contains_key(transitive_dep) {
-                        deps.insert(*transitive_dep, false);
+                if let Some(imm_dep) = acc.get(immediate_dep) {
+                    for transitive_dep in imm_dep.keys() {
+                        if *transitive_dep != id {
+                            deps.insert(*transitive_dep, false);
+                        }
                     }
+                } else {
+                    assert!(
+                        allow_missing_dependencies,
+                        "Module {id:?} depends on missing module {immediate_dep:?}",
+                    );
                 }
             }
             acc.insert(id, deps);
@@ -798,7 +842,13 @@ impl<K: SourceKind> Model<K> {
         for (a, package) in &self.compiled.packages {
             for (m, module) in &package.modules {
                 let id = (a, m).module_id();
-                visit(&self.compiled.packages, &mut module_deps, id, module);
+                visit(
+                    self.config.allow_missing_dependencies,
+                    &self.compiled.packages,
+                    &mut module_deps,
+                    id,
+                    module,
+                );
             }
         }
         let mut module_used_by = module_deps
@@ -808,7 +858,13 @@ impl<K: SourceKind> Model<K> {
         for (id, deps) in &module_deps {
             for (dep, immediate) in deps {
                 let immediate = *immediate;
-                let used_by = module_used_by.get_mut(dep).unwrap();
+                let Some(used_by) = module_used_by.get_mut(dep) else {
+                    if self.config.allow_missing_dependencies {
+                        continue;
+                    } else {
+                        panic!("Module {:?} depends on missing module {:?}", id, dep);
+                    }
+                };
                 let is_immediate = used_by.entry(*id).or_insert(false);
                 *is_immediate = *is_immediate || immediate;
             }
@@ -1103,10 +1159,10 @@ fn annotated_constant_layout(ty: &normalized::Type) -> runtime_value::MoveTypeLa
         T::Bool => L::Bool,
         T::U8 => L::U8,
         T::U16 => L::U16,
-        T::U32 => L::U16,
+        T::U32 => L::U32,
         T::U64 => L::U64,
         T::U128 => L::U128,
-        T::U256 => L::U16,
+        T::U256 => L::U256,
         T::Address => L::Address,
         T::Vector(inner) => L::Vector(Box::new(annotated_constant_layout(inner))),
 
@@ -1153,3 +1209,16 @@ derive_all!(Enum);
 derive_all!(Variant);
 derive_all!(Function);
 derive_all!(CompiledConstant);
+
+//**************************************************************************************************
+// Impls
+//**************************************************************************************************
+
+#[allow(clippy::derivable_impls)]
+impl Default for ModelConfig {
+    fn default() -> Self {
+        Self {
+            allow_missing_dependencies: false,
+        }
+    }
+}

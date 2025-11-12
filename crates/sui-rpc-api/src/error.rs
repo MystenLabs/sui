@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_types::error::ErrorCategory;
 use tonic::Code;
 
 use crate::proto::google::rpc::{BadRequest, ErrorInfo, RetryInfo};
-pub use sui_rpc::proto::sui::rpc::v2beta2::ErrorReason;
+pub use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 
 pub type Result<T, E = RpcError> = std::result::Result<T, E>;
 
@@ -105,14 +106,14 @@ impl From<bcs::Error> for RpcError {
 impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
     fn from(error: sui_types::quorum_driver_types::QuorumDriverError) -> Self {
         use itertools::Itertools;
-        use sui_types::error::SuiError;
+        use sui_types::error::SuiErrorKind;
         use sui_types::quorum_driver_types::QuorumDriverError::*;
 
         match error {
             InvalidUserSignature(err) => {
                 let message = {
-                    let err = match err {
-                        SuiError::UserInputError { error } => error.to_string(),
+                    let err = match err.as_inner() {
+                        SuiErrorKind::UserInputError { error } => error.to_string(),
                         _ => err.to_string(),
                     };
                     format!("Invalid user signature: {err}")
@@ -133,8 +134,8 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                     .collect::<std::collections::BTreeMap<_, Vec<_>>>();
 
                 let message = format!(
-                        "Failed to sign transaction by a quorum of validators because of locked objects. Conflicting Transactions:\n{new_map:#?}",  
-                    );
+                    "Failed to sign transaction by a quorum of validators because of locked objects. Conflicting Transactions:\n{new_map:#?}",
+                );
 
                 RpcError::new(Code::FailedPrecondition, message)
             }
@@ -145,13 +146,26 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                     "timed-out before finality could be reached",
                 )
             }
+            TimeoutBeforeFinalityWithErrors {
+                last_error,
+                attempts,
+                timeout,
+            } => {
+                // TODO add a Retry-After header
+                RpcError::new(
+                    Code::Unavailable,
+                    format!(
+                        "Transaction timed out before finality could be reached. Attempts: {attempts} & timeout: {timeout:?}. Last error: {last_error}"
+                    ),
+                )
+            }
             NonRecoverableTransactionError { errors } => {
                 let new_errors: Vec<String> = errors
                     .into_iter()
                     // sort by total stake, descending, so users see the most prominent one first
                     .sorted_by(|(_, a, _), (_, b, _)| b.cmp(a))
                     .filter_map(|(err, _, _)| {
-                        match &err {
+                        match err.as_inner() {
                             // Special handling of UserInputError:
                             // ObjectNotFound and DependentPackageNotFound are considered
                             // retryable errors but they have different treatment
@@ -162,7 +176,7 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                             // So, we take an easier route and consider them non-retryable
                             // at all. Combining this with the sorting above, clients will
                             // see the dominant error first.
-                            SuiError::UserInputError { error } => Some(error.to_string()),
+                            SuiErrorKind::UserInputError { error } => Some(error.to_string()),
                             _ => {
                                 if err.is_retryable().0 {
                                     None
@@ -180,7 +194,10 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                 );
 
                 let error_list = new_errors.join(", ");
-                let error_msg = format!("Transaction execution failed due to issues with transaction inputs, please review the errors and try again: {}.", error_list);
+                let error_msg = format!(
+                    "Transaction execution failed due to issues with transaction inputs, please review the errors and try again: {}.",
+                    error_list
+                );
 
                 RpcError::new(Code::InvalidArgument, error_msg)
             }
@@ -192,14 +209,21 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                 // TODO add a Retry-After header
                 RpcError::new(Code::Unavailable, "system is overloaded")
             }
-            TransactionFailed { retriable, details } => RpcError::new(
-                // TODO(fastpath): improve the error code precision. add a Retry-After header.
-                if retriable {
-                    Code::Aborted
-                } else {
-                    Code::InvalidArgument
+            TransactionFailed { category, details } => RpcError::new(
+                // TODO(fastpath): add a Retry-After header.
+                match category {
+                    ErrorCategory::Internal => Code::Internal,
+                    ErrorCategory::Aborted => Code::Aborted,
+                    ErrorCategory::InvalidTransaction => Code::InvalidArgument,
+                    ErrorCategory::LockConflict => Code::FailedPrecondition,
+                    ErrorCategory::ValidatorOverloaded => Code::ResourceExhausted,
+                    ErrorCategory::Unavailable => Code::Unavailable,
                 },
-                format!("[MFP experimental]: {details}"),
+                details,
+            ),
+            PendingExecutionInTransactionOrchestrator => RpcError::new(
+                Code::AlreadyExists,
+                "Transaction is already being processed in transaction orchestrator (most likely by quorum driver), wait for results",
             ),
         }
     }
@@ -287,12 +311,12 @@ impl ErrorDetails {
 
 #[derive(Debug)]
 pub struct ObjectNotFoundError {
-    object_id: sui_sdk_types::ObjectId,
+    object_id: sui_sdk_types::Address,
     version: Option<sui_sdk_types::Version>,
 }
 
 impl ObjectNotFoundError {
-    pub fn new(object_id: sui_sdk_types::ObjectId) -> Self {
+    pub fn new(object_id: sui_sdk_types::Address) -> Self {
         Self {
             object_id,
             version: None,
@@ -300,7 +324,7 @@ impl ObjectNotFoundError {
     }
 
     pub fn new_with_version(
-        object_id: sui_sdk_types::ObjectId,
+        object_id: sui_sdk_types::Address,
         version: sui_sdk_types::Version,
     ) -> Self {
         Self {
@@ -333,7 +357,7 @@ impl From<ObjectNotFoundError> for crate::RpcError {
 #[derive(Debug)]
 pub struct CheckpointNotFoundError {
     sequence_number: Option<u64>,
-    digest: Option<sui_sdk_types::CheckpointDigest>,
+    digest: Option<sui_sdk_types::Digest>,
 }
 
 impl CheckpointNotFoundError {
@@ -344,7 +368,7 @@ impl CheckpointNotFoundError {
         }
     }
 
-    pub fn digest(digest: sui_sdk_types::CheckpointDigest) -> Self {
+    pub fn digest(digest: sui_sdk_types::Digest) -> Self {
         Self {
             sequence_number: None,
             digest: Some(digest),

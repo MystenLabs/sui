@@ -6,8 +6,8 @@ use move_abstract_interpreter::control_flow_graph::ControlFlowGraph;
 use move_binary_format::file_format::FunctionDefinitionIndex;
 use move_bytecode_verifier::absint::VMControlFlowGraph;
 use move_compiler::{
-    compiled_unit::CompiledUnit, shared::files::MappedFiles,
-    unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
+    compiled_unit::CompiledUnit,
+    shared::{files::MappedFiles, stdlib_definitions::UNIT_TEST_POISON_INJECTION_NAME},
 };
 use move_core_types::language_storage::ModuleId;
 use move_trace_format::format::{MoveTraceReader, TraceEvent};
@@ -163,10 +163,10 @@ impl PackageRecordKeeper {
                         .and_modify(|e| *e += 1)
                         .or_insert(1);
 
-                    if let Some(from) = coming_from {
-                        if let Some(info) = record.branches.get_mut(&(*current_fn_index, from)) {
-                            info.hit_branch(pc)
-                        }
+                    if let Some(from) = coming_from
+                        && let Some(info) = record.branches.get_mut(&(*current_fn_index, from))
+                    {
+                        info.hit_branch(pc)
                     }
 
                     coming_from = None;
@@ -321,7 +321,7 @@ impl FileRecordKeeper {
                 .identifier_at(self.unit.module.function_handle_at(fdef.function).name)
                 .to_string();
 
-            if UNIT_TEST_POISON_FUN_NAME.as_str() == name {
+            if UNIT_TEST_POISON_INJECTION_NAME.as_str() == name {
                 continue;
             }
 

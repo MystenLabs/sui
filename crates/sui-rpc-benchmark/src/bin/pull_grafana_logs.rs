@@ -64,29 +64,81 @@ fn extract_from_message(message: &str) -> Option<LogEntry> {
         .unwrap_or("unknown_host")
         .to_string();
 
-    if let Some(body_start) = message.find("body=") {
-        if let Some(peer_type_start) = message.find(" peer_type=") {
-            let raw_body = &message[(body_start + 5)..peer_type_start].trim();
-            if raw_body.starts_with('b') {
-                let trimmed = raw_body.trim_start_matches('b').trim_matches('"');
-                let unescaped = trimmed.replace("\\\"", "\"");
+    if let Some(body_start) = message.find("body=")
+        && let Some(peer_type_start) = message.find(" peer_type=")
+    {
+        let raw_body = &message[(body_start + 5)..peer_type_start].trim();
+        if raw_body.starts_with('b') {
+            let trimmed = raw_body.trim_start_matches('b').trim_matches('"');
+            let unescaped = trimmed.replace("\\\"", "\"");
 
-                if let Ok(parsed) = serde_json::from_str::<Value>(&unescaped) {
-                    let method = parsed
-                        .get("method")
-                        .and_then(|m| m.as_str())
-                        .unwrap_or("unknown_method")
-                        .to_string();
-                    return Some(LogEntry {
-                        timestamp,
-                        host,
-                        method,
-                        body: unescaped,
-                    });
-                }
+            if let Ok(parsed) = serde_json::from_str::<Value>(&unescaped) {
+                let method = parsed
+                    .get("method")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("unknown_method")
+                    .to_string();
+                return Some(LogEntry {
+                    timestamp,
+                    host,
+                    method,
+                    body: unescaped,
+                });
             }
         }
     }
+    None
+}
+
+/// Example log format:
+/// 2025-08-10T00:05:45.423808Z  INFO sui_indexer_alt_jsonrpc_proxy::handlers: Request: Method: suix_getAllBalances, Params: ["0x10e8a57972082d89f8e2a31589a96da4a0ade2ac003e4f41a0f7b77dbfd752ba"] | Response body (UTF-8): {"jsonrpc":"2.0","id":47539,"result":[...]}
+fn extract_from_proxy_message(message: &str) -> Option<LogEntry> {
+    // Extract timestamp (first token in the message)
+    let timestamp = message.split_whitespace().next()?.to_string();
+
+    // Find the request info
+    let request_start = message.find("Request: ")?;
+    let request_str = &message[request_start..];
+    let request_split: Vec<&str> = request_str.split(" | Response body (UTF-8): ").collect();
+
+    if request_split.len() == 2 {
+        let request_details = request_split[0];
+        let response_body = request_split[1];
+
+        // Extract method from "Request: Method: suix_getAllBalances, Params: ..."
+        let method_start = request_details.find("Method: ")?;
+        let method_str = &request_details[method_start + 8..]; // Skip "Method: "
+        let method = method_str.split(',').next()?.trim().to_string();
+
+        // Extract params from "Params: [...]"
+        let params_start = request_details.find("Params: ")?;
+        let params_str = &request_details[params_start + 8..]; // Skip "Params: "
+        let params = params_str.trim();
+
+        // Extract the id from the response body to reconstruct the request
+        let id = if let Ok(response_json) = serde_json::from_str::<Value>(response_body) {
+            response_json.get("id").cloned().unwrap_or(Value::Null)
+        } else {
+            Value::Null
+        };
+
+        // Construct the JSON-RPC request body
+        let request_body = format!(
+            r#"{{"jsonrpc":"2.0","id":{},"method":"{}","params":{}}}"#,
+            id, method, params
+        );
+
+        // Host is not in this format, use a placeholder
+        let host = "unknown".to_string();
+
+        return Some(LogEntry {
+            timestamp,
+            host,
+            method,
+            body: request_body,
+        });
+    }
+
     None
 }
 
@@ -109,9 +161,12 @@ async fn fetch_logs(
         params.push(("start_from".to_string(), o.to_string()));
     }
 
+    info!("Fetching logs from {} with params: {:?}", url, params);
+
     let resp = client
         .get(url)
         .header(ACCEPT, "application/json")
+        .header("X-Scope-OrgID", "sui-fleet")
         .query(&params)
         .send()
         .await?;
@@ -144,14 +199,19 @@ async fn run() -> Result<(), Box<dyn Error>> {
         "rpc-testnet".to_string()
     } else if net == "mainnet" {
         "rpc-mainnet".to_string()
+    } else if net == "mainnet-proxy" {
+        "sui-indexer-alt-jsonrpc-proxy-mainnet".to_string()
     } else {
         "UNKNOWN_NET".to_string()
     };
-    let substring = env::var("SUBSTRING").unwrap_or_else(|_| "Sampled read request".to_string());
-    let query = format!(
-        r#"{{namespace="{}", container="sui-edge-proxy-mysten"}} |= "{}""#,
-        namespace, substring
-    );
+
+    let default_substring = if net == "mainnet-proxy" {
+        "Request:"
+    } else {
+        "Sampled read request"
+    };
+    let substring = env::var("SUBSTRING").unwrap_or_else(|_| default_substring.to_string());
+    let query = format!(r#"{{namespace="{}"}} |= "{}""#, namespace, substring);
     debug!("Query: {}", query);
 
     let now = chrono::Utc::now();
@@ -185,6 +245,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
             offset,
         )
         .await?;
+
         let batch: Vec<_> = response
             .data
             .result
@@ -211,7 +272,11 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let mut method_map: HashMap<String, usize> = HashMap::new();
     let mut asc_log_entries = Vec::new();
     for log_entry in all_logs.into_iter().rev() {
-        if let Some(entry) = extract_from_message(&log_entry.message) {
+        if let Some(entry) = if net == "mainnet-proxy" {
+            extract_from_proxy_message(&log_entry.message)
+        } else {
+            extract_from_message(&log_entry.message)
+        } {
             *method_map.entry(entry.method.clone()).or_default() += 1;
             asc_log_entries.push(entry);
         }
@@ -222,10 +287,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
 
     let output_dir = env::var("OUTPUT_DIR").unwrap_or_else(|_| ".".to_string());
     let output_file = format!("{}/sampled_read_requests.jsonl", output_dir);
-    if let Some(parent) = std::path::Path::new(&output_file).parent() {
-        if !parent.exists() {
-            std::fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = std::path::Path::new(&output_file).parent()
+        && !parent.exists()
+    {
+        std::fs::create_dir_all(parent)?;
     }
 
     let file = File::create(&output_file)?;

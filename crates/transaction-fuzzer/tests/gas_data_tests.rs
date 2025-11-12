@@ -10,10 +10,10 @@ use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionKind;
 use sui_types::utils::to_sender_signed_transaction;
 use tracing::debug;
-use transaction_fuzzer::executor::Executor;
-use transaction_fuzzer::run_proptest;
 use transaction_fuzzer::GasDataGenConfig;
 use transaction_fuzzer::GasDataWithObjects;
+use transaction_fuzzer::executor::Executor;
+use transaction_fuzzer::run_proptest;
 
 /// Send transfer sui txn with provided random gas data and gas objects to an authority.
 fn test_with_random_gas_data(

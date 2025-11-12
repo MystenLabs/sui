@@ -19,11 +19,11 @@ use crate::{
         SuiToEthBridgeAction,
     },
 };
-use ethers::abi::{long_signature, ParamType};
+use ethers::abi::{ParamType, long_signature};
 use ethers::types::Address as EthAddress;
 use ethers::types::{
-    Block, BlockNumber, Filter, FilterBlockOption, Log, TransactionReceipt, TxHash, ValueOrArray,
-    U64,
+    Block, BlockNumber, Filter, FilterBlockOption, Log, TransactionReceipt, TxHash, U64,
+    ValueOrArray,
 };
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
@@ -43,15 +43,15 @@ use sui_types::bridge::MoveTypeCommitteeMember;
 use sui_types::bridge::{BridgeChainId, BridgeCommitteeSummary, TOKEN_ID_USDC};
 use sui_types::crypto::ToFromBytes;
 use sui_types::object::Owner;
-use sui_types::transaction::{CallArg, ObjectArg};
-use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use sui_types::{BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
+use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
 use tokio::task::JoinHandle;
 
 pub const DUMMY_MUTALBE_BRIDGE_OBJECT_ARG: ObjectArg = ObjectArg::SharedObject {
     id: SUI_BRIDGE_OBJECT_ID,
     initial_shared_version: SequenceNumber::from_u64(1),
-    mutable: true,
+    mutability: SharedObjectMutability::Mutable,
 };
 
 pub fn get_test_authority_and_key(
@@ -307,7 +307,7 @@ pub async fn bridge_token(
         )
         .with_type_args(vec![token_type])
         .build();
-    let signed_tn = context.sign_transaction(&tx);
+    let signed_tn = context.sign_transaction(&tx).await;
     let resp = context.execute_transaction_must_succeed(signed_tn).await;
     let events = resp.events.unwrap();
     let bridge_events = events
@@ -378,7 +378,7 @@ pub async fn approve_action_with_validator_secrets(
         rgp,
     )
     .unwrap();
-    let signed_tx = wallet_context.sign_transaction(&tx_data);
+    let signed_tx = wallet_context.sign_transaction(&tx_data).await;
     let resp = wallet_context
         .execute_transaction_must_succeed(signed_tx)
         .await;

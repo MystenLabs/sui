@@ -196,6 +196,7 @@ fn filter_module<T: FilterContext>(
         loc,
         address,
         name,
+        is_spec_module,
         members,
         definition_mode,
     } = module_def;
@@ -211,6 +212,7 @@ fn filter_module<T: FilterContext>(
         loc,
         address,
         name,
+        is_spec_module,
         members: new_members,
         definition_mode,
     })

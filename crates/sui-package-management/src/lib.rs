@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -9,12 +9,12 @@ use std::str::FromStr;
 
 use move_core_types::account_address::AccountAddress;
 use move_package::{
-    lock_file::{self, schema::ManagedPackage, LockFile},
+    lock_file::{self, LockFile, schema::ManagedPackage},
     resolution::resolution_graph::Package,
     source_package::layout::SourcePackageLayout,
 };
 use move_symbol_pool::Symbol;
-use sui_json_rpc_types::{get_new_package_obj_from_response, SuiTransactionBlockResponse};
+use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::ObjectID;
 
@@ -91,7 +91,7 @@ pub async fn update_lock_file_for_chain_env(
     lock_file: Option<PathBuf>,
     response: &SuiTransactionBlockResponse,
 ) -> Result<(), anyhow::Error> {
-    let (original_id, version, _) = get_new_package_obj_from_response(response).context(
+    let (original_id, version, _) = response.get_new_package_obj().context(
         "Expected a valid published package response but didn't see \
          one when attempting to update the `Move.lock`.",
     )?;

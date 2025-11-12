@@ -10,14 +10,16 @@ use sui_json_rpc_types::{ObjectChange, SuiExecutionStatus};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move_build::BuildConfig;
 use sui_sdk::rpc_types::SuiTransactionBlockResponseOptions;
+use sui_sdk::types::Identifier;
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 use sui_sdk::types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_sdk::types::quorum_driver_types::ExecuteTransactionRequestType;
-use sui_sdk::types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
-use sui_sdk::types::Identifier;
+use sui_sdk::types::transaction::{
+    CallArg, ObjectArg, SharedObjectMutability, Transaction, TransactionData,
+};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
-use sui_types::{parse_sui_type_tag, TypeTag};
+use sui_types::{TypeTag, parse_sui_type_tag};
 
 // Integration tests for SUI Oracle, these test can be run manually on local or remote testnet.
 #[ignore]
@@ -59,7 +61,7 @@ async fn test_publish_primitive() {
             .input(CallArg::Object(ObjectArg::SharedObject {
                 id: simple_oracle_id,
                 initial_shared_version: version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             }))
             .unwrap();
 
@@ -67,7 +69,7 @@ async fn test_publish_primitive() {
             .input(CallArg::Object(ObjectArg::SharedObject {
                 id: ObjectID::from_str("0x6").unwrap(),
                 initial_shared_version: 1.into(),
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             }))
             .unwrap();
 
@@ -95,6 +97,7 @@ async fn test_publish_primitive() {
 
     let signature = keystore
         .sign_secure(&sender, &data, Intent::sui_transaction())
+        .await
         .unwrap();
 
     let tx = Transaction::from_data(data.clone(), vec![signature]);
@@ -164,7 +167,7 @@ async fn test_publish_complex_value() {
             .input(CallArg::Object(ObjectArg::SharedObject {
                 id: simple_oracle_id,
                 initial_shared_version: version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             }))
             .unwrap();
 
@@ -172,7 +175,7 @@ async fn test_publish_complex_value() {
             .input(CallArg::Object(ObjectArg::SharedObject {
                 id: ObjectID::from_str("0x6").unwrap(),
                 initial_shared_version: 1.into(),
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             }))
             .unwrap();
 
@@ -200,6 +203,7 @@ async fn test_publish_complex_value() {
 
     let signature = keystore
         .sign_secure(&sender, &data, Intent::sui_transaction())
+        .await
         .unwrap();
 
     let tx = Transaction::from_data(data.clone(), vec![signature]);
@@ -261,7 +265,7 @@ async fn test_consume_oracle_data() {
             .input(CallArg::Object(ObjectArg::SharedObject {
                 id: simple_oracle_id,
                 initial_shared_version: version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             }))
             .unwrap();
 
@@ -269,7 +273,7 @@ async fn test_consume_oracle_data() {
             .input(CallArg::Object(ObjectArg::SharedObject {
                 id: ObjectID::from_str("0x6").unwrap(),
                 initial_shared_version: 1.into(),
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             }))
             .unwrap();
 
@@ -296,6 +300,7 @@ async fn test_consume_oracle_data() {
 
         let signature = keystore
             .sign_secure(&sender, &data, Intent::sui_transaction())
+            .await
             .unwrap();
 
         let tx = Transaction::from_data(data.clone(), vec![signature]);
@@ -324,7 +329,7 @@ async fn test_consume_oracle_data() {
         .input(CallArg::Object(ObjectArg::SharedObject {
             id: simple_oracle_id,
             initial_shared_version: version,
-            mutable: false,
+            mutability: SharedObjectMutability::Immutable,
         }))
         .unwrap();
     let ticker = builder
@@ -375,7 +380,7 @@ async fn test_consume_oracle_data() {
                 .input(CallArg::Object(ObjectArg::SharedObject {
                     id,
                     initial_shared_version: version,
-                    mutable: false,
+                    mutability: SharedObjectMutability::Immutable,
                 }))
                 .unwrap()
         })
@@ -395,6 +400,7 @@ async fn test_consume_oracle_data() {
 
     let signature = keystore
         .sign_secure(&sender, &data, Intent::sui_transaction())
+        .await
         .unwrap();
 
     let tx = Transaction::from_data(data.clone(), vec![signature]);
@@ -435,7 +441,7 @@ async fn init_test_client() -> (SuiClient, Keystore, SuiAddress) {
         .unwrap();
 
     let keystore = Keystore::File(
-        FileBasedKeystore::new(
+        FileBasedKeystore::load_or_create(
             &dirs::home_dir()
                 .unwrap()
                 .join(".sui/sui_config/sui.keystore"),
@@ -483,6 +489,7 @@ async fn publish_package(
     );
     let signature = keystore
         .sign_secure(&sender, &data, Intent::sui_transaction())
+        .await
         .unwrap();
 
     let tx = Transaction::from_data(data.clone(), vec![signature]);
@@ -555,6 +562,7 @@ async fn create_oracle(
 
     let signature = keystore
         .sign_secure(&sender, &data, Intent::sui_transaction())
+        .await
         .unwrap();
     let tx = Transaction::from_data(data.clone(), vec![signature]);
     let result = client

@@ -3,10 +3,10 @@
 
 use crate::{
     config::Config,
-    multiaddr::{parse_dns, parse_ip4, parse_ip6, Multiaddr, Protocol},
+    multiaddr::{Multiaddr, Protocol, parse_dns, parse_ip4, parse_ip6},
 };
-use eyre::{eyre, Context, Result};
-use hyper_util::client::legacy::connect::{dns::Name, HttpConnector};
+use eyre::{Context, Result, eyre};
+use hyper_util::client::legacy::connect::{HttpConnector, dns::Name};
 use once_cell::sync::OnceCell;
 use std::{
     collections::HashMap,
@@ -175,10 +175,6 @@ fn apply_config_to_endpoint(config: &Config, mut endpoint: Endpoint) -> Endpoint
 
     if let Some(timeout) = config.connect_timeout {
         endpoint = endpoint.connect_timeout(timeout);
-    }
-
-    if let Some(tcp_nodelay) = config.tcp_nodelay {
-        endpoint = endpoint.tcp_nodelay(tcp_nodelay);
     }
 
     if let Some(http2_keepalive_interval) = config.http2_keepalive_interval {

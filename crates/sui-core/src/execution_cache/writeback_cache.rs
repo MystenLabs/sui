@@ -37,6 +37,7 @@
 //!
 //! The above design is used for both objects and markers.
 
+use crate::authority::AuthorityStore;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{
     ExecutionLockWriteGuard, LockDetailsDeprecated, ObjectLockStatus, SuiLockResult,
@@ -44,22 +45,22 @@ use crate::authority::authority_store::{
 use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
-use crate::authority::AuthorityStore;
 use crate::fallback_fetch::{do_fallback_lookup, do_fallback_lookup_fallible};
 use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 
-use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
-use futures::{future::BoxFuture, FutureExt};
+use dashmap::mapref::entry::Entry as DashMapEntry;
+use futures::{FutureExt, future::BoxFuture};
 use moka::sync::SegmentedCache as MokaCache;
+use mysten_common::debug_fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, HashSet};
 use std::hash::Hash;
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
@@ -67,10 +68,10 @@ use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::{
     EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
 };
-use sui_types::bridge::{get_bridge, Bridge};
+use sui_types::bridge::{Bridge, get_bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -79,19 +80,19 @@ use sui_types::object::Object;
 use sui_types::storage::{
     FullObjectKey, InputKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject,
 };
-use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
-use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
+use sui_types::sui_system_state::{SuiSystemState, get_sui_system_state};
+use sui_types::transaction::{TransactionDataAPI, VerifiedSignedTransaction, VerifiedTransaction};
 use tap::TapOptional;
 use tracing::{debug, info, instrument, trace, warn};
 
-use super::cache_types::Ticket;
 use super::ExecutionCacheAPI;
+use super::cache_types::Ticket;
 use super::{
+    Batch, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheReconfigAPI,
+    ExecutionCacheWrite, ObjectCacheRead, StateSyncAPI, TestingAPI, TransactionCacheRead,
     cache_types::{CacheResult, CachedVersionMap, IsNewer, MonotonicCache},
     implement_passthrough_traits,
     object_locks::ObjectLocks,
-    Batch, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheReconfigAPI,
-    ExecutionCacheWrite, ObjectCacheRead, StateSyncAPI, TestingAPI, TransactionCacheRead,
 };
 
 #[cfg(test)]
@@ -225,6 +226,8 @@ struct UncommittedData {
 
     transaction_events: DashMap<TransactionDigest, TransactionEvents>,
 
+    unchanged_loaded_runtime_objects: DashMap<TransactionDigest, Vec<ObjectKey>>,
+
     executed_effects_digests: DashMap<TransactionDigest, TransactionEffectsDigest>,
 
     // Transaction outputs that have not yet been written to the DB. Items are removed from this
@@ -263,6 +266,7 @@ impl UncommittedData {
                 ))
                 .build(),
             transaction_events: DashMap::with_shard_amount(2048),
+            unchanged_loaded_runtime_objects: DashMap::with_shard_amount(2048),
             total_transaction_inserts: AtomicU64::new(0),
             total_transaction_commits: AtomicU64::new(0),
         }
@@ -276,6 +280,7 @@ impl UncommittedData {
         self.pending_transaction_writes.clear();
         self.fastpath_transaction_outputs.invalidate_all();
         self.transaction_events.clear();
+        self.unchanged_loaded_runtime_objects.clear();
         self.total_transaction_inserts
             .store(0, std::sync::atomic::Ordering::Relaxed);
         self.total_transaction_commits
@@ -291,6 +296,7 @@ impl UncommittedData {
                     && self.transaction_effects.is_empty()
                     && self.executed_effects_digests.is_empty()
                     && self.transaction_events.is_empty()
+                    && self.unchanged_loaded_runtime_objects.is_empty()
                     && self
                         .total_transaction_inserts
                         .load(std::sync::atomic::Ordering::Relaxed)
@@ -556,7 +562,7 @@ impl WritebackCache {
         // object_by_id_cache. Otherwise, a surprising bug can occur:
         //
         // 1. A thread executing TX1 can write object (O,1) to the dirty set and then pause.
-        // 2. TX2, which reads (O,1) can begin executing, because TransactionManager immediately
+        // 2. TX2, which reads (O,1) can begin executing, because ExecutionScheduler immediately
         //    schedules transactions if their inputs are available. It does not matter that TX1
         //    hasn't finished executing yet.
         // 3. TX2 can write (O,2) to both the dirty set and the object_by_id_cache.
@@ -711,45 +717,45 @@ impl WritebackCache {
             .record_cache_request(request_type, "object_by_id");
         let entry = self.object_by_id_cache.get(object_id);
 
-        if cfg!(debug_assertions) {
-            if let Some(entry) = &entry {
-                // check that cache is coherent
-                let highest: Option<ObjectEntry> = self
-                    .dirty
-                    .objects
-                    .get(object_id)
-                    .and_then(|entry| entry.get_highest().map(|(_, o)| o.clone()))
-                    .or_else(|| {
-                        let obj: Option<ObjectEntry> = self
-                            .store
-                            .get_latest_object_or_tombstone(*object_id)
-                            .unwrap()
-                            .map(|(_, o)| o.into());
-                        obj
-                    });
+        if cfg!(debug_assertions)
+            && let Some(entry) = &entry
+        {
+            // check that cache is coherent
+            let highest: Option<ObjectEntry> = self
+                .dirty
+                .objects
+                .get(object_id)
+                .and_then(|entry| entry.get_highest().map(|(_, o)| o.clone()))
+                .or_else(|| {
+                    let obj: Option<ObjectEntry> = self
+                        .store
+                        .get_latest_object_or_tombstone(*object_id)
+                        .unwrap()
+                        .map(|(_, o)| o.into());
+                    obj
+                });
 
-                let cache_entry = match &*entry.lock() {
-                    LatestObjectCacheEntry::Object(_, entry) => Some(entry.clone()),
-                    LatestObjectCacheEntry::NonExistent => None,
-                };
+            let cache_entry = match &*entry.lock() {
+                LatestObjectCacheEntry::Object(_, entry) => Some(entry.clone()),
+                LatestObjectCacheEntry::NonExistent => None,
+            };
 
-                // If the cache entry is a tombstone, the db entry may be missing if it was pruned.
-                let tombstone_possibly_pruned = highest.is_none()
-                    && cache_entry
-                        .as_ref()
-                        .map(|e| e.is_tombstone())
-                        .unwrap_or(false);
+            // If the cache entry is a tombstone, the db entry may be missing if it was pruned.
+            let tombstone_possibly_pruned = highest.is_none()
+                && cache_entry
+                    .as_ref()
+                    .map(|e| e.is_tombstone())
+                    .unwrap_or(false);
 
-                if highest != cache_entry && !tombstone_possibly_pruned {
-                    tracing::error!(
-                        ?highest,
-                        ?cache_entry,
-                        ?tombstone_possibly_pruned,
-                        "object_by_id cache is incoherent for {:?}",
-                        object_id
-                    );
-                    panic!("object_by_id cache is incoherent for {:?}", object_id);
-                }
+            if highest != cache_entry && !tombstone_possibly_pruned {
+                tracing::error!(
+                    ?highest,
+                    ?cache_entry,
+                    ?tombstone_possibly_pruned,
+                    "object_by_id cache is incoherent for {:?}",
+                    object_id
+                );
+                panic!("object_by_id cache is incoherent for {:?}", object_id);
             }
         }
 
@@ -903,6 +909,7 @@ impl WritebackCache {
             deleted,
             wrapped,
             events,
+            unchanged_loaded_runtime_objects,
             ..
         } = &*tx_outputs;
 
@@ -942,6 +949,14 @@ impl WritebackCache {
         }
 
         let tx_digest = *transaction.digest();
+        debug!(
+            ?tx_digest,
+            "Writing transaction output objects to cache: {:?}",
+            written
+                .values()
+                .map(|o| (o.id(), o.version()))
+                .collect::<Vec<_>>(),
+        );
         let effects_digest = effects.digest();
 
         self.metrics.record_cache_write("transaction_block");
@@ -963,6 +978,12 @@ impl WritebackCache {
         self.dirty
             .transaction_events
             .insert(tx_digest, events.clone());
+
+        self.metrics
+            .record_cache_write("unchanged_loaded_runtime_objects");
+        self.dirty
+            .unchanged_loaded_runtime_objects
+            .insert(tx_digest, unchanged_loaded_runtime_objects.clone());
 
         self.metrics.record_cache_write("executed_effects_digests");
         self.dirty
@@ -1040,11 +1061,12 @@ impl WritebackCache {
             mysten_metrics::monitored_scope("WritebackCache::commit_transaction_outputs::flush");
         for outputs in all_outputs.iter() {
             let tx_digest = outputs.transaction.digest();
-            assert!(self
-                .dirty
-                .pending_transaction_writes
-                .remove(tx_digest)
-                .is_some());
+            assert!(
+                self.dirty
+                    .pending_transaction_writes
+                    .remove(tx_digest)
+                    .is_some()
+            );
             self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, outputs);
         }
 
@@ -1152,6 +1174,11 @@ impl WritebackCache {
             .transaction_events
             .remove(&tx_digest)
             .expect("events must exist");
+
+        self.dirty
+            .unchanged_loaded_runtime_objects
+            .remove(&tx_digest)
+            .expect("unchanged_loaded_runtime_objects must exist");
 
         self.dirty
             .executed_effects_digests
@@ -1265,51 +1292,46 @@ impl WritebackCache {
 
     fn clear_state_end_of_epoch_impl(&self, execution_guard: &ExecutionLockWriteGuard<'_>) {
         info!("clearing state at end of epoch");
-        assert!(
-            self.dirty.pending_transaction_writes.is_empty(),
-            "should be empty due to revert_state_update"
-        );
+
+        // Note: there cannot be any concurrent writes to self.dirty while we are in this function,
+        // as all transaction execution is paused.
+        for r in self.dirty.pending_transaction_writes.iter() {
+            let outputs = r.value();
+            if !outputs
+                .transaction
+                .transaction_data()
+                .shared_input_objects()
+                .is_empty()
+            {
+                debug_fatal!("transaction must be single writer");
+            }
+            info!(
+                "clearing state for transaction {:?}",
+                outputs.transaction.digest()
+            );
+            for (object_id, object) in outputs.written.iter() {
+                if object.is_package() {
+                    info!("removing non-finalized package from cache: {:?}", object_id);
+                    self.packages.invalidate(object_id);
+                }
+                self.object_by_id_cache.invalidate(object_id);
+                self.cached.object_cache.invalidate(object_id);
+            }
+
+            for ObjectKey(object_id, _) in outputs.deleted.iter().chain(outputs.wrapped.iter()) {
+                self.object_by_id_cache.invalidate(object_id);
+                self.cached.object_cache.invalidate(object_id);
+            }
+        }
+
         self.dirty.clear();
+
         info!("clearing old transaction locks");
         self.object_locks.clear();
         info!("clearing object per epoch marker table");
         self.store
             .clear_object_per_epoch_marker_table(execution_guard)
             .expect("db error");
-    }
-
-    fn revert_state_update_impl(&self, tx: &TransactionDigest) {
-        // TODO: remove revert_state_update_impl entirely, and simply drop all dirty
-        // state when clear_state_end_of_epoch_impl is called.
-        // Further, once we do this, we can delay the insertion of the transaction into
-        // pending_consensus_transactions until after the transaction has executed.
-        let Some((_, outputs)) = self.dirty.pending_transaction_writes.remove(tx) else {
-            assert!(
-                !self.is_tx_already_executed(tx),
-                "attempt to revert committed transaction"
-            );
-
-            // A transaction can be inserted into pending_consensus_transactions, but then reconfiguration
-            // can happen before the transaction executes.
-            info!("Not reverting {:?} as it was not executed", tx);
-            return;
-        };
-
-        for (object_id, object) in outputs.written.iter() {
-            if object.is_package() {
-                info!("removing non-finalized package from cache: {:?}", object_id);
-                self.packages.invalidate(object_id);
-            }
-            self.object_by_id_cache.invalidate(object_id);
-            self.cached.object_cache.invalidate(object_id);
-        }
-
-        for ObjectKey(object_id, _) in outputs.deleted.iter().chain(outputs.wrapped.iter()) {
-            self.object_by_id_cache.invalidate(object_id);
-            self.cached.object_cache.invalidate(object_id);
-        }
-
-        // Note: individual object entries are removed when clear_state_end_of_epoch_impl is called
     }
 
     fn bulk_insert_genesis_objects_impl(&self, objects: &[Object]) {
@@ -1408,11 +1430,12 @@ impl ObjectCacheRead for WritebackCache {
                 self.packages.insert(*package_id, p.clone());
                 Ok(Some(p))
             } else {
-                Err(SuiError::UserInputError {
+                Err(SuiErrorKind::UserInputError {
                     error: UserInputError::MoveObjectAsPackage {
                         object_id: *package_id,
                     },
-                })
+                }
+                .into())
             }
         } else {
             Ok(None)
@@ -2142,6 +2165,21 @@ impl TransactionCacheRead for WritebackCache {
         )
     }
 
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<Vec<ObjectKey>> {
+        self.dirty
+            .unchanged_loaded_runtime_objects
+            .get(digest)
+            .map(|b| b.clone())
+            .or_else(|| {
+                self.store
+                    .get_unchanged_loaded_runtime_objects(digest)
+                    .expect("db error")
+            })
+    }
+
     fn get_mysticeti_fastpath_outputs(
         &self,
         tx_digest: &TransactionDigest,
@@ -2246,16 +2284,16 @@ impl GlobalStateHashStore for WritebackCache {
             };
 
         // first check dirty data
-        if let Some(objects) = self.dirty.objects.get(object_id) {
-            if let Some(prior) = check_versions(&objects) {
-                candidates.push(prior);
-            }
+        if let Some(objects) = self.dirty.objects.get(object_id)
+            && let Some(prior) = check_versions(&objects)
+        {
+            candidates.push(prior);
         }
 
-        if let Some(objects) = self.cached.object_cache.get(object_id) {
-            if let Some(prior) = check_versions(&objects.lock()) {
-                candidates.push(prior);
-            }
+        if let Some(objects) = self.cached.object_cache.get(object_id)
+            && let Some(prior) = check_versions(&objects.lock())
+        {
+            candidates.push(prior);
         }
 
         if let Some(prior) = self

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::object_runtime::ObjectRuntime;
-use crate::NativesCostTable;
+use crate::{NativesCostTable, get_extension};
 use fastcrypto_zkp::bn254::poseidon::poseidon_bytes;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
@@ -20,11 +20,12 @@ use std::ops::Mul;
 
 pub const NON_CANONICAL_INPUT: u64 = 0;
 pub const NOT_SUPPORTED_ERROR: u64 = 1;
+pub const TOO_MANY_INPUTS: u64 = 2;
+
+pub const MAX_POSEIDON_INPUTS: u64 = 16;
 
 fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(context
-        .extensions()
-        .get::<ObjectRuntime>()?
+    Ok(get_extension!(context, ObjectRuntime)?
         .protocol_config
         .enable_poseidon())
 }
@@ -54,9 +55,7 @@ pub fn poseidon_bn254_internal(
     }
 
     // Load the cost parameters from the protocol config
-    let cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()?
+    let cost_params = get_extension!(context, NativesCostTable)?
         .poseidon_bn254_cost_params
         .clone();
 
@@ -81,6 +80,10 @@ pub fn poseidon_bn254_internal(
         .len(&Type::Vector(Box::new(Type::U8)))?
         .value_as::<u64>()?;
 
+    if length > MAX_POSEIDON_INPUTS {
+        return Ok(NativeResult::err(context.gas_used(), TOO_MANY_INPUTS));
+    }
+
     // Charge the msg dependent costs
     native_charge_gas_early_exit!(
         context,
@@ -100,7 +103,7 @@ pub fn poseidon_bn254_internal(
             let value = reference.value_as::<VectorRef>()?.as_bytes_ref().clone();
             Ok(value)
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<PartialVMResult<Vec<_>>>()?;
 
     match poseidon_bytes(&field_elements) {
         Ok(result) => Ok(NativeResult::ok(

@@ -1,13 +1,15 @@
 pub mod legacy;
+pub mod legacy_lockfile;
 pub mod legacy_parser;
 
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
-use move_core_types::account_address::AccountAddress;
+use anyhow::Result;
+use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 use regex::Regex;
+use tracing::debug;
 
 use crate::package::layout::SourcePackageLayout;
 use crate::package::paths::PackagePath;
@@ -34,7 +36,7 @@ const MODULE_REGEX: &str = r"\bmodule\s+([a-zA-Z_][\w]*)::([a-zA-Z_][\w]*)";
 /// for a given package.
 ///
 /// This helps us when we fail to detect any module name with 0x0 in the Manifest file,
-pub(crate) fn find_module_name_for_package(path: &PackagePath) -> Result<PackageName> {
+pub(crate) fn find_module_name_for_package(path: &PackagePath) -> Result<Option<PackageName>> {
     let mut files = Vec::new();
     find_files(
         &mut files,
@@ -55,15 +57,28 @@ pub(crate) fn find_module_name_for_package(path: &PackagePath) -> Result<Package
         }
     }
 
+    debug!(
+        "Parsed source for finding module names for package. Names are: {:?}",
+        names
+    );
+
     if names.len() > 1 {
-        bail!("Multiple module names found in the package.");
+        return Ok(None);
     }
 
     let Some(name) = names.iter().next() else {
-        bail!("No module names found in the package.");
+        return Ok(None);
     };
 
-    PackageName::new(name.as_str())
+    Ok(Some(PackageName::new(name.as_str())?))
+}
+
+// Safely parses address for both the 0x and non prefixed hex format.
+fn parse_address_literal(address_str: &str) -> Result<AccountAddress, AccountAddressParseError> {
+    if !address_str.starts_with("0x") {
+        return AccountAddress::from_hex(address_str);
+    }
+    AccountAddress::from_hex_literal(address_str)
 }
 
 /// Find all files matching the extension in a given path.
@@ -78,10 +93,10 @@ fn find_files(files: &mut Vec<PathBuf>, dir: &Path, extension: &str, max_depth: 
 
             if let Ok(metadata) = entry.metadata() {
                 if metadata.is_file() {
-                    if let Some(ext) = path.extension() {
-                        if ext == extension {
-                            files.push(path);
-                        }
+                    if let Some(ext) = path.extension()
+                        && ext == extension
+                    {
+                        files.push(path);
                     }
                 } else if metadata.is_dir() {
                     find_files(files, &path, extension, max_depth - 1);
@@ -103,7 +118,14 @@ fn parse_module_names(contents: &str) -> Result<HashSet<String>> {
         set.insert(cap[1].to_string());
     }
 
-    Ok(set)
+    Ok(set
+        .into_iter()
+        .filter(|name| !is_address_like(name.as_str()))
+        .collect())
+}
+
+fn is_address_like(name: &str) -> bool {
+    (name.starts_with("0x") || name.starts_with("0X")) && AccountAddress::from_hex(name).is_ok()
 }
 
 /// Returns a copy of `source` with all the comments removed.
@@ -205,7 +227,7 @@ mod tests {
                 }
                 */
                 /// module aa::bb {
-                /// 
+                ///
                 /// }
                 module works::perfectly {}
             ",
@@ -248,8 +270,22 @@ mod tests {
             ),
             (
                 r"
-                module a::/* this is odd but 
+                module a::/* this is odd but
                 it works */b {} // module bb::aa {}
+                ",
+                set(vec!["a"]),
+            ),
+            (
+                r"
+                module 0x0::a {}
+                module 0X0::b {}
+                ",
+                set(vec![]),
+            ),
+            (
+                r"
+                module 0x0::a {}
+                module a::b {}
                 ",
                 set(vec!["a"]),
             ),

@@ -459,6 +459,11 @@ type Checkpoint {
 	The Base64 serialized BCS bytes of CheckpointSummary for this checkpoint.
 	"""
 	bcs: Base64
+	"""
+	A commitment by the committee on the artifacts of the checkpoint.
+	e.g., object checkpoint states
+	"""
+	artifactsDigest: String
 }
 
 type CheckpointConnection {
@@ -835,6 +840,13 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 	supply: BigInt
 }
 
+type CoinRegistryCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
 """
 Same as AddressOwner, but the object is versioned by consensus.
 """
@@ -865,6 +877,65 @@ type ConsensusCommitPrologueTransaction {
 	transaction).
 	"""
 	consensusCommitDigest: String
+}
+
+"""
+The transaction accpeted a consensus object as input, but its execution was cancelled.
+"""
+type ConsensusObjectCancelled {
+	"""
+	ID of the consensus object.
+	"""
+	address: SuiAddress!
+	"""
+	The assigned consensus object version. It is a special version indicating transaction cancellation reason.
+	"""
+	version: UInt53!
+}
+
+"""
+The transaction accepted a consensus object as input, but only to read it.
+"""
+type ConsensusObjectRead {
+	"""
+	ID of the object being read.
+	"""
+	address: SuiAddress!
+	"""
+	Version of the object being read.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the object's contents at this version, encoded as a Base58
+	string.
+	"""
+	digest: String!
+	"""
+	The object at this version.  May not be available due to pruning.
+	"""
+	object: Object
+}
+
+"""
+The transaction accepted a consensus object as input, but its consensus stream ended before the
+transaction executed. This can happen for ConsensusAddressOwner objects where the stream ends
+but the object itself is not deleted.
+"""
+type ConsensusObjectStreamEnded {
+	"""
+	ID of the consensus object.
+	"""
+	address: SuiAddress!
+	"""
+	The version of the consensus object that was assigned to this transaction during by consensus,
+	during sequencing.
+	"""
+	version: UInt53!
+	"""
+	Whether this transaction intended to use this consensus object mutably or not. See
+	`SharedInput.mutable` for further details.
+	"""
+	mutable: Boolean!
 }
 
 """
@@ -919,6 +990,13 @@ type DisplayEntry {
 	An error string describing why the template could not be rendered.
 	"""
 	error: String
+}
+
+type DisplayRegistryCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
 }
 
 enum DomainFormat {
@@ -1046,7 +1124,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | StoreExecutionTimeObservationsTransaction | AccumulatorRootCreateTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | StoreExecutionTimeObservationsTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction | DisplayRegistryCreateTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
@@ -3637,7 +3715,7 @@ A Move object that's shared.
 type SharedInput {
 	address: SuiAddress!
 	"""
-	The version that this this object was shared at.
+	The version at which this object was shared.​
 	"""
 	initialSharedVersion: UInt53!
 	"""
@@ -3648,64 +3726,6 @@ type SharedInput {
 	respect to each other.
 	"""
 	mutable: Boolean!
-}
-
-"""
-The transaction accpeted a shared object as input, but its execution was cancelled.
-"""
-type SharedObjectCancelled {
-	"""
-	ID of the shared object.
-	"""
-	address: SuiAddress!
-	"""
-	The assigned shared object version. It is a special version indicating transaction cancellation reason.
-	"""
-	version: UInt53!
-}
-
-"""
-The transaction accepted a shared object as input, but it was deleted before the transaction
-executed.
-"""
-type SharedObjectDelete {
-	"""
-	ID of the shared object.
-	"""
-	address: SuiAddress!
-	"""
-	The version of the shared object that was assigned to this transaction during by consensus,
-	during sequencing.
-	"""
-	version: UInt53!
-	"""
-	Whether this transaction intended to use this shared object mutably or not. See
-	`SharedInput.mutable` for further details.
-	"""
-	mutable: Boolean!
-}
-
-"""
-The transaction accepted a shared object as input, but only to read it.
-"""
-type SharedObjectRead {
-	"""
-	ID of the object being read.
-	"""
-	address: SuiAddress!
-	"""
-	Version of the object being read.
-	"""
-	version: UInt53!
-	"""
-	32-byte hash that identifies the object's contents at this version, encoded as a Base58
-	string.
-	"""
-	digest: String!
-	"""
-	The object at this version.  May not be available due to pruning.
-	"""
-	object: Object
 }
 
 """
@@ -3983,7 +4003,7 @@ type StorageFund {
 	The portion of the storage fund that will never be refunded through storage rebates.
 	
 	The system maintains an invariant that the sum of all storage fees into the storage fund is
-	equal to the sum of of all storage rebates out, the total storage rebates remaining, and the
+	equal to the sum of all storage rebates out, the total storage rebates remaining, and the
 	non-refundable balance.
 	"""
 	nonRefundableBalance: BigInt
@@ -4326,9 +4346,9 @@ type TransactionBlockEffects {
 	"""
 	gasEffects: GasEffects
 	"""
-	Shared objects that are referenced by but not changed by this transaction.
+	Consensus objects that are referenced by but not changed by this transaction.
 	"""
-	unchangedSharedObjects(first: Int, after: String, last: Int, before: String): UnchangedSharedObjectConnection!
+	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection!
 	"""
 	The effect this transaction had on objects on-chain.
 	"""
@@ -4526,14 +4546,14 @@ but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 scalar UInt53
 
 """
-Details pertaining to shared objects that are referenced by but not changed by a transaction.
+Details pertaining to consensus objects that are referenced by but not changed by a transaction.
 This information is considered part of the effects, because although the transaction specifies
-the shared object as input, consensus must schedule it and pick the version that is actually
+the consensus object as input, consensus must schedule it and pick the version that is actually
 used.
 """
-union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete | SharedObjectCancelled
+union UnchangedConsensusObject = ConsensusObjectRead | ConsensusObjectStreamEnded | ConsensusObjectCancelled
 
-type UnchangedSharedObjectConnection {
+type UnchangedConsensusObjectConnection {
 	"""
 	Information to aid in pagination.
 	"""
@@ -4541,21 +4561,21 @@ type UnchangedSharedObjectConnection {
 	"""
 	A list of edges.
 	"""
-	edges: [UnchangedSharedObjectEdge!]!
+	edges: [UnchangedConsensusObjectEdge!]!
 	"""
 	A list of nodes.
 	"""
-	nodes: [UnchangedSharedObject!]!
+	nodes: [UnchangedConsensusObject!]!
 }
 
 """
 An edge in a connection.
 """
-type UnchangedSharedObjectEdge {
+type UnchangedConsensusObjectEdge {
 	"""
 	The item at the end of the edge
 	"""
-	node: UnchangedSharedObject!
+	node: UnchangedConsensusObject!
 	"""
 	A cursor for use in pagination
 	"""

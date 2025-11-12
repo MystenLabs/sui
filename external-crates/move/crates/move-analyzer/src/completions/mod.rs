@@ -11,7 +11,7 @@ use crate::{
     },
     context::Context,
     symbols::{
-        self, Symbols, compilation::PrecomputedPkgInfo, cursor::CursorContext,
+        self, Symbols, compilation::CachedPackages, cursor::CursorContext,
         runner::SymbolicatorRunner,
     },
 };
@@ -19,7 +19,7 @@ use lsp_server::{Message, Request, Response};
 use lsp_types::{CompletionItem, CompletionItemKind, CompletionParams, Position};
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    editions::Edition,
+    editions::{Edition, Flavor},
     linters::LintLevel,
     parser::{
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
@@ -32,8 +32,8 @@ use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
 
 use std::{
-    collections::{BTreeMap, HashSet},
-    path::{Path, PathBuf},
+    collections::HashSet,
+    path::Path,
     sync::{Arc, Mutex},
 };
 use vfs::VfsPath;
@@ -82,8 +82,9 @@ pub fn on_completion_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<CachedPackages>>,
     implicit_deps: Dependencies,
+    flavor: Option<Flavor>,
 ) {
     eprintln!("handling completion request");
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
@@ -109,6 +110,7 @@ pub fn on_completion_request(
         &path,
         pos,
         implicit_deps,
+        flavor,
         context.auto_imports,
     )
     .unwrap_or_default();
@@ -128,10 +130,11 @@ pub fn on_completion_request(
 fn completions(
     context: &Context,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<CachedPackages>>,
     path: &Path,
     pos: Position,
     implicit_deps: Dependencies,
+    flavor: Option<Flavor>,
     auto_import: bool,
 ) -> Option<Vec<CompletionItem>> {
     let Some(pkg_path) = SymbolicatorRunner::root_dir(path) else {
@@ -147,6 +150,7 @@ fn completions(
         path,
         pos,
         implicit_deps,
+        flavor,
         auto_import,
     ))
 }
@@ -156,10 +160,11 @@ fn completions(
 pub fn compute_completions(
     current_symbols: &Symbols,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<CachedPackages>>,
     path: &Path,
     pos: Position,
     implicit_deps: Dependencies,
+    flavor: Option<Flavor>,
     auto_import: bool,
 ) -> Vec<CompletionItem> {
     compute_completions_new_symbols(
@@ -168,6 +173,7 @@ pub fn compute_completions(
         path,
         pos,
         implicit_deps,
+        flavor,
         auto_import,
     )
     .unwrap_or_else(|| compute_completions_with_symbols(current_symbols, path, pos, auto_import))
@@ -178,10 +184,11 @@ pub fn compute_completions(
 /// view of the code (returns `None` if the symbols could not be re-computed).
 fn compute_completions_new_symbols(
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<CachedPackages>>,
     path: &Path,
     cursor_position: Position,
     implicit_deps: Dependencies,
+    flavor: Option<Flavor>,
     auto_import: bool,
 ) -> Option<Vec<CompletionItem>> {
     let Some(pkg_path) = SymbolicatorRunner::root_dir(path) else {
@@ -194,10 +201,10 @@ fn compute_completions_new_symbols(
         pkg_dependencies,
         ide_files_root,
         &pkg_path,
-        Some(vec![path.to_path_buf()]),
         LintLevel::None,
         cursor_info,
         implicit_deps,
+        flavor,
     )
     .ok()?;
     let symbols = symbols?;

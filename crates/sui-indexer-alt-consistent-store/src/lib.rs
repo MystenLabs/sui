@@ -36,14 +36,14 @@ use db::config::DbConfig;
 use handlers::{balances::Balances, object_by_owner::ObjectByOwner, object_by_type::ObjectByType};
 use indexer::Indexer;
 use prometheus::Registry;
-use rpc::{state::State, RpcArgs, RpcService};
+use rpc::{RpcArgs, RpcService, state::State};
 use schema::Schema;
 use sui_indexer_alt_consistent_api::proto::{
     self, rpc::consistent::v1alpha::consistent_service_server::ConsistentServiceServer,
 };
 use sui_indexer_alt_framework::{
-    ingestion::ClientArgs, pipeline::sequential::SequentialConfig, pipeline::CommitterConfig,
-    IndexerArgs,
+    IndexerArgs, ingestion::ClientArgs, pipeline::CommitterConfig,
+    pipeline::sequential::SequentialConfig,
 };
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -51,8 +51,10 @@ use tokio_util::sync::CancellationToken;
 pub mod args;
 pub mod config;
 mod db;
-mod handlers;
+pub(crate) mod handlers;
 mod indexer;
+mod metrics;
+pub mod restore;
 mod rpc;
 pub(crate) mod schema;
 mod store;
@@ -112,6 +114,7 @@ pub async fn start_service(
     };
 
     let rpc = RpcService::new(rpc_args, version, registry, cancel.child_token())
+        .await?
         .register_encoded_file_descriptor_set(proto::rpc::consistent::v1alpha::FILE_DESCRIPTOR_SET)
         .add_service(ConsistentServiceServer::new(state.clone()));
 

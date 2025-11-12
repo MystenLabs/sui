@@ -1,7 +1,7 @@
 [package]
 name = "sui-transactional-test-runner"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
 description = "Move framework for Sui platform"
 license = "Apache-2.0"
@@ -14,6 +14,7 @@ workspace = true
 anyhow.workspace = true
 bcs.workspace = true
 bimap.workspace = true
+bincode = { version = "2.0.1", features = ["serde"] }
 clap.workspace = true
 eyre.workspace = true
 http.workspace = true
@@ -28,8 +29,10 @@ serde_json.workspace = true
 futures.workspace = true
 criterion.workspace = true
 tracing.workspace = true
+winnow.workspace = true
 
 fastcrypto.workspace = true
+fastcrypto-zkp.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-command-line-common.workspace = true

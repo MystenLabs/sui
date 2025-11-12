@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+
 use super::{SuiSystemState, SuiSystemStateTrait};
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::committee::{CommitteeWithNetworkMetadata, NetworkMetadata};
 use crate::crypto::NetworkPublicKey;
 use crate::dynamic_field::get_dynamic_field_from_store;
-use crate::error::SuiError;
+use crate::error::{SuiError, SuiErrorKind};
 use crate::id::ID;
 use crate::multiaddr::Multiaddr;
 use crate::storage::ObjectStore;
@@ -213,6 +215,18 @@ impl SuiSystemStateSummary {
             })
             .collect();
         CommitteeWithNetworkMetadata::new(self.epoch, validators)
+    }
+
+    pub fn get_committee_authority_names_to_hostnames(&self) -> HashMap<AuthorityName, String> {
+        self.active_validators
+            .iter()
+            .map(|validator| {
+                let name = AuthorityName::from_bytes(&validator.protocol_pubkey_bytes).unwrap();
+                let hostname = validator.name.clone();
+
+                (name, hostname)
+            })
+            .collect()
     }
 }
 
@@ -455,7 +469,7 @@ where
         &ID::new(pool_id),
     )
     .map_err(|err| {
-        SuiError::SuiSystemStateReadError(format!(
+        SuiErrorKind::SuiSystemStateReadError(format!(
             "Failed to load candidate address from pool mappings: {:?}",
             err
         ))

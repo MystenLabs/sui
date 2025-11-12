@@ -97,6 +97,26 @@ fun test_object_swap() {
     id.delete();
 }
 
+#[test, expected_failure(abort_code = EWrongValue)]
+/// The `value` is swapped with another instance of the type `T`.
+fun test_borrow_swap() {
+    let ctx = &mut sui::tx_context::dummy();
+    let mut ref_1 = new(Test { id: object::new(ctx) }, ctx);
+    let mut ref_2 = new(Test { id: object::new(ctx) }, ctx);
+
+    let (v_1, b_1) = ref_1.borrow();
+    let (v_2, b_2) = ref_2.borrow();
+
+    ref_1.put_back(v_1, b_2);
+    ref_2.put_back(v_2, b_1);
+
+    let Test { id } = ref_1.destroy();
+    id.delete();
+
+    let Test { id } = ref_2.destroy();
+    id.delete();
+}
+
 #[test, expected_failure(abort_code = EWrongBorrow)]
 /// The both `borrow` and `value` are swapped with another `Referent`.
 fun test_borrow_fail() {

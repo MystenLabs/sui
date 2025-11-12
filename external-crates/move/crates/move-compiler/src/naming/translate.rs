@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    FullyCompiledProgram, debug_display, diag,
+    PreCompiledProgramInfo, debug_display, diag,
     diagnostics::{
         self, Diagnostic, DiagnosticReporter, Diagnostics,
         codes::{self, *},
@@ -18,6 +18,7 @@ use crate::{
     naming::{
         ast::{self as N, BlockLabel, NominalBlockUsage, TParamID},
         fake_natives,
+        resolvable_module::ResolvableModule,
         syntax_methods::resolve_syntax_attributes,
     },
     parser::ast::{
@@ -34,7 +35,7 @@ use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map},
     sync::Arc,
 };
 
@@ -403,11 +404,12 @@ impl std::fmt::Display for ResolvedModuleMember {
 
 pub type ModuleMembers = BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>>;
 
-pub fn build_member_map(
+/// Generic function to build resolved members from a module-like structure
+fn resolved_members(
     env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
-    prog: &E::Program,
-) -> ModuleMembers {
+    mident: ModuleIdent,
+    module: &dyn ResolvableModule,
+) -> BTreeMap<Symbol, ResolvedModuleMember> {
     // NB: This checks if the element is present, and doesn't replace it if so. This is congruent
     // with how top-level definitions are handled for alias resolution, where a new definition will
     // not overwrite the previous one.
@@ -423,99 +425,115 @@ pub fn build_member_map(
     }
 
     use ResolvedModuleMember as M;
-    let all_modules = prog
-        .modules
-        .key_cloned_iter()
-        .chain(pre_compiled_lib.iter().flat_map(|pre_compiled| {
-            pre_compiled
-                .expansion
-                .modules
-                .key_cloned_iter()
-                .filter(|(mident, _m)| !prog.modules.contains_key(mident))
-        }));
-    let mut all_members = BTreeMap::new();
-    for (mident, mdef) in all_modules {
-        let mut members = BTreeMap::new();
-        for (name, sdef) in mdef.structs.key_cloned_iter() {
-            let tyarg_arity = sdef.type_parameters.len();
-            let field_info = match &sdef.fields {
-                E::StructFields::Positional(fields) => FieldInfo::Positional(fields.len()),
-                E::StructFields::Named(f) => {
-                    FieldInfo::Named(f.key_cloned_iter().map(|(k, _)| k).collect())
-                }
-                E::StructFields::Native(_) => FieldInfo::Empty,
-            };
-            let struct_def = ResolvedStruct {
+    let mut resolved_members = BTreeMap::new();
+
+    // Handle structs
+    for (name, tyarg_arity, field_info, decl_loc) in module.structs() {
+        let resolved_struct = ResolvedStruct {
+            mident,
+            name,
+            decl_loc,
+            tyarg_arity,
+            field_info,
+        };
+        add_or_error!(
+            resolved_members,
+            name,
+            M::Datatype(ResolvedDatatype::Struct(Box::new(resolved_struct)))
+        );
+    }
+
+    // Handle enums
+    for (enum_name, tyarg_arity, decl_loc, variants_vec) in module.enums() {
+        let mut variants = UniqueMap::new();
+        for (vname, field_info, variant_loc) in variants_vec {
+            let resolved_variant = ResolvedVariant {
                 mident,
-                name,
-                decl_loc: name.loc(),
+                enum_name,
                 tyarg_arity,
+                name: vname,
+                decl_loc: variant_loc,
                 field_info,
             };
-            assert!(
-                members
-                    .insert(
-                        name.value(),
-                        M::Datatype(ResolvedDatatype::Struct(Box::new(struct_def)))
-                    )
-                    .is_none()
-            )
+            let _ = variants.add(vname, resolved_variant);
         }
-        for (enum_name, edef) in mdef.enums.key_cloned_iter() {
-            let tyarg_arity = edef.type_parameters.len();
-            let variants = edef.variants.clone().map(|name, v| {
-                let field_info = match &v.fields {
-                    E::VariantFields::Named(fields) => {
-                        FieldInfo::Named(fields.key_cloned_iter().map(|(k, _)| k).collect())
-                    }
-                    E::VariantFields::Positional(tys) => FieldInfo::Positional(tys.len()),
-                    E::VariantFields::Empty => FieldInfo::Empty,
-                };
-                ResolvedVariant {
-                    mident,
-                    enum_name,
-                    tyarg_arity,
-                    name,
-                    decl_loc: v.loc,
-                    field_info,
-                }
-            });
-            let decl_loc = edef.loc;
-            let enum_def = ResolvedEnum {
-                mident,
-                name: enum_name,
-                decl_loc,
-                tyarg_arity,
-                variants,
-            };
-            add_or_error!(
-                members,
-                enum_name,
-                M::Datatype(ResolvedDatatype::Enum(Box::new(enum_def)))
-            );
-        }
-        // Functions and constants are shadowed by datatypes that share their names.
-        for (name, fun) in mdef.functions.key_cloned_iter() {
-            let tyarg_arity = fun.signature.type_parameters.len();
-            let arity = fun.signature.parameters.len();
-            let fun_def = ResolvedModuleFunction {
-                mident,
-                name,
-                tyarg_arity,
-                arity,
-            };
-            add_or_error!(members, name, M::Function(Box::new(fun_def)));
-        }
-        for (name, _) in mdef.constants.key_cloned_iter() {
-            let const_def = ResolvedConstant {
-                mident,
-                name,
-                decl_loc: name.loc(),
-            };
-            add_or_error!(members, name, M::Constant(Box::new(const_def)));
-        }
-        assert!(all_members.insert(mident, members).is_none());
+        let resolved_enum = ResolvedEnum {
+            mident,
+            name: enum_name,
+            decl_loc,
+            tyarg_arity,
+            variants,
+        };
+
+        add_or_error!(
+            resolved_members,
+            enum_name,
+            M::Datatype(ResolvedDatatype::Enum(Box::new(resolved_enum)))
+        );
     }
+
+    // Handle functions
+    for (name, tyarg_arity, arity) in module.functions() {
+        let fun_def = ResolvedModuleFunction {
+            mident,
+            name,
+            tyarg_arity,
+            arity,
+        };
+        add_or_error!(resolved_members, name, M::Function(Box::new(fun_def)));
+    }
+
+    // Handle constants
+    for (name, decl_loc) in module.constants() {
+        let const_def = ResolvedConstant {
+            mident,
+            name,
+            decl_loc,
+        };
+        add_or_error!(resolved_members, name, M::Constant(Box::new(const_def)));
+    }
+
+    resolved_members
+}
+
+pub fn build_member_map(
+    env: &CompilationEnv,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
+    prog: &E::Program,
+) -> ModuleMembers {
+    // Create chained iterator of (ModuleIdent, &dyn ResolvableModule)
+    let prog_modules = prog
+        .modules
+        .key_cloned_iter()
+        .map(|(mident, mdef)| (mident, mdef as &dyn ResolvableModule));
+
+    let precompiled_modules = pre_compiled_lib.as_ref().into_iter().flat_map(|lib| {
+        lib.iter().filter_map(|(mident, minfo)| {
+            if !prog.modules.contains_key(mident) {
+                Some((*mident, &minfo.info as &dyn ResolvableModule))
+            } else {
+                None
+            }
+        })
+    });
+
+    let all_modules = prog_modules.chain(precompiled_modules);
+
+    let mut all_members = BTreeMap::new();
+    for (mident, module) in all_modules {
+        let members = resolved_members(env, mident, module);
+        // Apply error checking for duplicate names (functions and constants are shadowed by datatypes)
+        let mut checked_members = BTreeMap::new();
+        for (name, member) in members {
+            if let btree_map::Entry::Vacant(e) = checked_members.entry(name) {
+                e.insert(member);
+            } else {
+                assert!(env.has_errors());
+            }
+        }
+        assert!(all_members.insert(mident, checked_members).is_none());
+    }
+
     all_members
 }
 
@@ -567,10 +585,29 @@ macro_rules! resolve_from_module_access {
     }};
 }
 
+/// Like `resolve_from_module_access`, but does not produce diagnostics (or enforce they exist) in
+/// failure cases. This is because errors previously meant that expansion had errors, but here
+/// expansion may not have reported errors when failing to look up standard library bindings. We
+/// use this to continue ommitting those errors. when further resolving standard library bindings.
+macro_rules! resolve_from_module_access_without_diags {
+    ($context:expr, $loc:expr, $mident:expr, $name:expr, $expected_pat:pat, $rhs:expr, $expected_kind:expr) => {{
+        match $context.resolve_module_access_inner(
+            &Some($expected_kind),
+            $loc,
+            $mident,
+            $name,
+            /* report_errors */ false,
+        ) {
+            Some($expected_pat) => $rhs,
+            Some(_) | None => None,
+        }
+    }};
+}
+
 impl OuterContext {
     fn new(
         compilation_env: &CompilationEnv,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
         prog: &E::Program,
     ) -> Self {
         use ResolvedType as RT;
@@ -664,14 +701,28 @@ impl<'outer, 'env> Context<'outer, 'env> {
         m: &ModuleIdent,
         n: &Name,
     ) -> Option<ResolvedModuleMember> {
+        self.resolve_module_access_inner(kind, loc, m, n, /* report_errors */ true)
+    }
+
+    fn resolve_module_access_inner(
+        &mut self,
+        kind: &Option<ErrorKind>,
+        loc: Loc,
+        m: &ModuleIdent,
+        n: &Name,
+        report_errors: bool,
+    ) -> Option<ResolvedModuleMember> {
         let Some(members) = self.outer.module_members.get(m) else {
-            self.add_diag(make_unbound_module_error(self, m.loc, m));
+            if report_errors {
+                self.add_diag(make_unbound_module_error(self, m.loc, m))
+            };
             return None;
         };
         let result = members.get(&n.value);
-        if result.is_none() {
-            let diag = make_unbound_module_member_error(self, kind, loc, *m, n.value);
-            self.add_diag(diag);
+        if result.is_none() && report_errors {
+            self.add_diag(make_unbound_module_member_error(
+                self, kind, loc, *m, n.value,
+            ))
         }
         result.map(|inner| {
             let mut result = inner.clone();
@@ -705,6 +756,41 @@ impl<'outer, 'env> Context<'outer, 'env> {
         n: &Name,
     ) -> Option<Box<ResolvedModuleFunction>> {
         resolve_from_module_access!(
+            self,
+            loc,
+            m,
+            n,
+            ResolvedModuleMember::Function(fun),
+            Some(fun),
+            ErrorKind::Function
+        )
+    }
+
+    fn resolve_stdlib_type(
+        &mut self,
+        loc: Loc,
+        m: &ModuleIdent,
+        n: &Name,
+        error_kind: ErrorKind,
+    ) -> Option<Box<ResolvedDatatype>> {
+        resolve_from_module_access_without_diags!(
+            self,
+            loc,
+            m,
+            n,
+            ResolvedModuleMember::Datatype(module_type),
+            Some(Box::new(module_type)),
+            error_kind
+        )
+    }
+
+    fn resolve_stdlib_function(
+        &mut self,
+        loc: Loc,
+        m: &ModuleIdent,
+        n: &Name,
+    ) -> Option<Box<ResolvedModuleFunction>> {
+        resolve_from_module_access_without_diags!(
             self,
             loc,
             m,
@@ -1658,7 +1744,7 @@ fn arity_string(arity: usize) -> &'static str {
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: E::Program,
 ) -> N::Program {
     let outer_context = OuterContext::new(compilation_env, pre_compiled_lib.clone(), &prog);
@@ -1696,10 +1782,12 @@ fn module(
         loc,
         warning_filter,
         package_name,
+        named_address_map,
         attributes,
         target_kind,
         use_funs: euse_funs,
         friends: efriends,
+        stdlib_definitions: estdlib_definitions,
         structs: estructs,
         enums: eenums,
         functions: efunctions,
@@ -1710,6 +1798,7 @@ fn module(
     let mut use_funs = use_funs(context, euse_funs);
     let mut syntax_methods = N::SyntaxMethods::new();
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
+    let stdlib_definitions = resolve_stdlib_definitions(context, estdlib_definitions);
     let struct_names = estructs
         .key_cloned_iter()
         .map(|(k, _)| k)
@@ -1767,11 +1856,13 @@ fn module(
         loc,
         warning_filter,
         package_name,
+        named_address_map,
         attributes,
         target_kind,
         use_funs,
         syntax_methods,
         friends,
+        stdlib_definitions,
         structs,
         enums,
         constants,
@@ -2029,6 +2120,75 @@ fn friend(context: &mut Context, mident: ModuleIdent, friend: E::Friend) -> Opti
 }
 
 //**************************************************************************************************
+// Std Library Definitions
+//**************************************************************************************************
+
+fn resolve_stdlib_definitions(
+    context: &mut Context,
+    estdlib_definitions: E::StdlibDefinitions,
+) -> N::StdlibDefinitions {
+    let cur_diag_reporter = std::mem::replace(
+        &mut context.reporter,
+        context.env.dummy_diagnostic_reporter(),
+    );
+
+    let E::StdlibDefinitions { functions, types } = estdlib_definitions;
+
+    let functions = functions
+        .into_iter()
+        .filter_map(|(name, path)| resolve_stdlib_function(context, path).map(|fun| (name, fun)))
+        .collect::<BTreeMap<_, _>>();
+
+    let types = types
+        .into_iter()
+        .filter_map(|(name, path)| resolve_stdlib_type(context, path).map(|ty| (name, ty)))
+        .collect::<BTreeMap<_, _>>();
+
+    let _ = std::mem::replace(&mut context.reporter, cur_diag_reporter);
+
+    N::StdlibDefinitions { functions, types }
+}
+
+fn resolve_stdlib_function(
+    context: &mut Context,
+    ma: E::ModuleAccess_,
+) -> Option<(ModuleIdent, FunctionName)> {
+    let E::ModuleAccess_::ModuleAccess(m, n) = ma else {
+        return None;
+    };
+    let Some(resolved_function) = context.resolve_stdlib_function(m.loc, &m, &n) else {
+        return None;
+    };
+    Some((resolved_function.mident, resolved_function.name))
+}
+
+fn resolve_stdlib_type(context: &mut Context, ma: E::ModuleAccess_) -> Option<N::Type> {
+    use N::{Type_ as NT, TypeName_ as NN};
+
+    let E::ModuleAccess_::ModuleAccess(m, n) = ma else {
+        return None;
+    };
+    let Some(mt) = context.resolve_stdlib_type(m.loc, &m, &n, ErrorKind::Type) else {
+        return None;
+    };
+    let (decl_loc, tn, arity) = match *mt {
+        ResolvedDatatype::Struct(stype) => {
+            let tn = sp(stype.decl_loc, NN::ModuleType(stype.mident, stype.name));
+            let arity = stype.tyarg_arity;
+            (stype.decl_loc, tn, arity)
+        }
+        ResolvedDatatype::Enum(etype) => {
+            let tn = sp(etype.decl_loc, NN::ModuleType(etype.mident, etype.name));
+            let arity = etype.tyarg_arity;
+            (etype.decl_loc, tn, arity)
+        }
+    };
+    assert!(arity == 0, "Cannot resolve stdlib types with arguments");
+    let tys = vec![];
+    Some(sp(decl_loc, NT::Apply(None, tn, tys)))
+}
+
+//**************************************************************************************************
 // Functions
 //**************************************************************************************************
 
@@ -2122,28 +2282,28 @@ fn function_signature(
                 check_mut_underscore(context, Some(mut_));
                 mut_ = Mutability::Imm;
             };
-            if param.is_syntax_identifier() {
-                if let Mutability::Mut(mutloc) = mut_ {
-                    let msg = format!(
-                        "Invalid 'mut' parameter. \
+            if param.is_syntax_identifier()
+                && let Mutability::Mut(mutloc) = mut_
+            {
+                let msg = format!(
+                    "Invalid 'mut' parameter. \
                         '{}' parameters cannot be declared as mutable",
-                        MACRO_MODIFIER
-                    );
-                    let mut diag = diag!(NameResolution::InvalidMacroParameter, (mutloc, msg));
-                    diag.add_note(ASSIGN_SYNTAX_IDENTIFIER_NOTE);
-                    context.add_diag(diag);
-                    mut_ = Mutability::Imm;
-                }
+                    MACRO_MODIFIER
+                );
+                let mut diag = diag!(NameResolution::InvalidMacroParameter, (mutloc, msg));
+                diag.add_note(ASSIGN_SYNTAX_IDENTIFIER_NOTE);
+                context.add_diag(diag);
+                mut_ = Mutability::Imm;
             }
-            if let Err((param, prev_loc)) = declared.add(param, ()) {
-                if !is_underscore {
-                    let msg = format!("Duplicate parameter with name '{}'", param);
-                    context.add_diag(diag!(
-                        Declarations::DuplicateItem,
-                        (param.loc(), msg),
-                        (prev_loc, "Previously declared here"),
-                    ))
-                }
+            if let Err((param, prev_loc)) = declared.add(param, ())
+                && !is_underscore
+            {
+                let msg = format!("Duplicate parameter with name '{}'", param);
+                context.add_diag(diag!(
+                    Declarations::DuplicateItem,
+                    (param.loc(), msg),
+                    (prev_loc, "Previously declared here"),
+                ))
             }
             let is_parameter = true;
             let nparam = context.declare_local(is_parameter, param.0);

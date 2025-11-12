@@ -4,10 +4,10 @@
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::{ExpectedFailureType, Workload, WorkloadBuilder};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN,
 };
+use crate::workloads::workload::{ExpectedFailureType, Workload, WorkloadBuilder};
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
@@ -17,7 +17,7 @@ use std::time::Duration;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectRef, SuiAddress};
-use sui_types::crypto::{get_key_pair, AccountKeyPair};
+use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::gas_coin::MIST_PER_SUI;
 use sui_types::transaction::Transaction;
 use tracing::{error, warn};

@@ -1,20 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 
-use rand::seq::SliceRandom as _;
-use sui_types::base_types::AuthorityName;
+use sui_types::{base_types::AuthorityName, messages_grpc::TxType};
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
     safe_client::SafeClient,
     status_aggregator::StatusAggregator,
     transaction_driver::error::{
-        aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
-        TransactionRequestError,
+        AggregatedEffectsDigests, TransactionDriverError, TransactionRequestError,
+        aggregate_request_errors,
     },
+    validator_client_monitor::ValidatorClientMonitor,
 };
+
+/// Select validators with latencies within 2% of the lowest latency.
+const SELECT_LATENCY_DELTA: f64 = 0.02;
 
 /// Provides the next target validator to retry operations,
 /// and gathers the errors along with the operations.
@@ -23,26 +26,47 @@ use crate::{
 /// 1. Retry against all validators until the operation succeeds.
 /// 2. If non‑retriable errors from a quorum of validators are returned, the operation should fail permanently.
 ///
+/// When an `allowed_validators` is provided, only the validators in the list will be used to submit the transaction to.
+/// When the allowed validator list is empty, any validator can be used an then the validators are selected based on their scores.
+///
 /// This component helps to manager this retry pattern.
 pub(crate) struct RequestRetrier<A: Clone> {
-    remaining_clients: Vec<(AuthorityName, Arc<SafeClient<A>>)>,
-    non_retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
-    retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
+    ranked_clients: VecDeque<(AuthorityName, Arc<SafeClient<A>>)>,
+    pub(crate) non_retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
+    pub(crate) retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
 }
 
 impl<A: Clone> RequestRetrier<A> {
-    pub(crate) fn new(auth_agg: &Arc<AuthorityAggregator<A>>) -> Self {
-        // TODO(fastpath): select and order targets based on performance metrics.
-        let mut remaining_clients = auth_agg
-            .authority_clients
-            .iter()
-            .map(|(name, client)| (*name, client.clone()))
-            .collect::<Vec<_>>();
-        remaining_clients.shuffle(&mut rand::thread_rng());
+    pub(crate) fn new(
+        auth_agg: &Arc<AuthorityAggregator<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
+        tx_type: TxType,
+        allowed_validators: Vec<String>,
+    ) -> Self {
+        let ranked_validators = client_monitor.select_shuffled_preferred_validators(
+            &auth_agg.committee,
+            tx_type,
+            SELECT_LATENCY_DELTA,
+        );
+        let ranked_clients = ranked_validators
+            .into_iter()
+            .filter(|name| {
+                let display_name = auth_agg.get_display_name(name);
+                allowed_validators.is_empty() || allowed_validators.contains(&display_name)
+            })
+            .filter_map(|name| {
+                // There is not guarantee that the `name` are in the `auth_agg.authority_clients` if those are coming from the list
+                // of `allowed_validators`, as the provided `auth_agg` might have been updated with a new committee that doesn't contain the validator in question.
+                auth_agg
+                    .authority_clients
+                    .get(&name)
+                    .map(|client| (name, client.clone()))
+            })
+            .collect::<VecDeque<_>>();
         let non_retriable_errors_aggregator = StatusAggregator::new(auth_agg.committee.clone());
         let retriable_errors_aggregator = StatusAggregator::new(auth_agg.committee.clone());
         Self {
-            remaining_clients,
+            ranked_clients,
             non_retriable_errors_aggregator,
             retriable_errors_aggregator,
         }
@@ -52,7 +76,7 @@ impl<A: Clone> RequestRetrier<A> {
     pub(crate) fn next_target(
         &mut self,
     ) -> Result<(AuthorityName, Arc<SafeClient<A>>), TransactionDriverError> {
-        if let Some((name, client)) = self.remaining_clients.pop() {
+        if let Some((name, client)) = self.ranked_clients.pop_front() {
             return Ok((name, client));
         };
 
@@ -60,7 +84,7 @@ impl<A: Clone> RequestRetrier<A> {
             .non_retriable_errors_aggregator
             .reached_validity_threshold()
         {
-            Err(TransactionDriverError::InvalidTransaction {
+            Err(TransactionDriverError::RejectedByValidators {
                 submission_non_retriable_errors: aggregate_request_errors(
                     self.non_retriable_errors_aggregator.status_by_authority(),
                 ),
@@ -101,7 +125,7 @@ impl<A: Clone> RequestRetrier<A> {
                 .non_retriable_errors_aggregator
                 .reached_validity_threshold()
             {
-                return Err(TransactionDriverError::InvalidTransaction {
+                return Err(TransactionDriverError::RejectedByValidators {
                     submission_non_retriable_errors: aggregate_request_errors(
                         self.non_retriable_errors_aggregator.status_by_authority(),
                     ),
@@ -118,13 +142,9 @@ impl<A: Clone> RequestRetrier<A> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, sync::Mutex, time::Duration};
-
-    use fastcrypto::traits::KeyPair as _;
     use sui_types::{
-        committee::Committee,
-        crypto::{get_key_pair, AuthorityKeyPair},
-        error::{SuiError, UserInputError},
+        base_types::ConciseableName,
+        error::{SuiErrorKind, UserInputError},
     };
 
     use crate::{
@@ -134,43 +154,91 @@ mod tests {
 
     use super::*;
 
-    fn get_authority_aggregator(committee_size: usize) -> AuthorityAggregator<MockAuthorityApi> {
-        let count = Arc::new(Mutex::new(0));
-        let mut authorities = BTreeMap::new();
-        let mut clients = BTreeMap::new();
-        for _ in 0..committee_size {
-            let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-            let name: AuthorityName = sec.public().into();
-            authorities.insert(name, 1);
-            clients.insert(
-                name,
-                MockAuthorityApi::new(Duration::from_millis(100), count.clone()),
-            );
-        }
-
-        let (committee, _keypairs) = Committee::new_simple_test_committee_of_size(committee_size);
-        let timeouts_config = TimeoutConfig {
-            serial_authority_request_interval: Duration::from_millis(50),
-            ..Default::default()
-        };
-        AuthorityAggregatorBuilder::from_committee(committee)
+    pub(crate) fn get_authority_aggregator(
+        committee_size: usize,
+    ) -> AuthorityAggregator<MockAuthorityApi> {
+        let timeouts_config = TimeoutConfig::default();
+        AuthorityAggregatorBuilder::from_committee_size(committee_size)
             .with_timeouts_config(timeouts_config)
-            .build_custom_clients(clients)
+            .build_mock_authority_aggregator()
     }
 
     #[tokio::test]
     async fn test_next_target() {
         let auth_agg = Arc::new(get_authority_aggregator(4));
-        let mut retrier = RequestRetrier::new(&auth_agg);
+        let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+        let mut retrier =
+            RequestRetrier::new(&auth_agg, &client_monitor, TxType::SingleWriter, vec![]);
 
-        for _ in 0..4 {
+        for name in auth_agg.committee.names() {
             retrier.next_target().unwrap();
+            retrier
+                .add_error(
+                    *name,
+                    TransactionRequestError::TimedOutSubmittingTransaction,
+                )
+                .unwrap();
         }
 
         let Err(error) = retrier.next_target() else {
             panic!("Expected an error");
         };
-        assert!(error.is_retriable());
+        assert!(error.is_submission_retriable(), "{}", error);
+    }
+
+    #[tokio::test]
+    async fn test_allowed_validators() {
+        use sui_types::crypto::{AuthorityKeyPair, KeypairTraits, get_key_pair};
+
+        let auth_agg = Arc::new(get_authority_aggregator(4));
+        let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+
+        // Create validators that don't exist in the auth_agg
+        let (_, key_pair1): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, key_pair2): (_, AuthorityKeyPair) = get_key_pair();
+        let unknown_validator1: AuthorityName = key_pair1.public().into();
+        let unknown_validator2: AuthorityName = key_pair2.public().into();
+
+        // Mix of unknown validators and one known validator
+        let authorities: Vec<_> = auth_agg.committee.names().copied().collect();
+
+        println!("Case 1. Mix of unknown validators and one known validator");
+        {
+            let allowed_validators = vec![
+                unknown_validator1.concise().to_string(),
+                unknown_validator2.concise().to_string(),
+                authorities[0].concise().to_string(), // This one exists in auth_agg
+            ];
+
+            let retrier = RequestRetrier::new(
+                &auth_agg,
+                &client_monitor,
+                TxType::SingleWriter,
+                allowed_validators,
+            );
+
+            // Should only have 1 remaining client (the known validator)
+            assert_eq!(retrier.ranked_clients.len(), 1);
+            assert_eq!(retrier.ranked_clients[0].0, authorities[0]);
+        }
+
+        println!("Case 2. Only unknown validators are provided");
+        {
+            let allowed_validators = vec![
+                unknown_validator1.concise().to_string(),
+                unknown_validator2.concise().to_string(),
+            ];
+
+            let retrier = RequestRetrier::new(
+                &auth_agg,
+                &client_monitor,
+                TxType::SingleWriter,
+                allowed_validators,
+            );
+
+            // Should have no remaining clients since none of the allowed validators exist
+            assert_eq!(retrier.ranked_clients.len(), 0);
+        }
     }
 
     #[tokio::test]
@@ -180,7 +248,9 @@ mod tests {
 
         // Add retriable errors.
         {
-            let mut retrier = RequestRetrier::new(&auth_agg);
+            let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+            let mut retrier =
+                RequestRetrier::new(&auth_agg, &client_monitor, TxType::SingleWriter, vec![]);
 
             // 25% stake.
             retrier
@@ -215,7 +285,9 @@ mod tests {
 
         // Add mix of retriable and non-retriable errors.
         {
-            let mut retrier = RequestRetrier::new(&auth_agg);
+            let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+            let mut retrier =
+                RequestRetrier::new(&auth_agg, &client_monitor, TxType::SingleWriter, vec![]);
 
             // 25% stake retriable error.
             retrier
@@ -228,22 +300,28 @@ mod tests {
             retrier
                 .add_error(
                     authorities[1],
-                    TransactionRequestError::RejectedAtValidator(SuiError::UserInputError {
-                        error: UserInputError::EmptyCommandInput,
-                    }),
+                    TransactionRequestError::RejectedAtValidator(
+                        SuiErrorKind::UserInputError {
+                            error: UserInputError::EmptyCommandInput,
+                        }
+                        .into(),
+                    ),
                 )
                 .unwrap();
             // 50% stake non-retriable error. Above validity threshold.
             let aggregated_error = retrier
                 .add_error(
                     authorities[2],
-                    TransactionRequestError::RejectedAtValidator(SuiError::UserInputError {
-                        error: UserInputError::EmptyCommandInput,
-                    }),
+                    TransactionRequestError::RejectedAtValidator(
+                        SuiErrorKind::UserInputError {
+                            error: UserInputError::EmptyCommandInput,
+                        }
+                        .into(),
+                    ),
                 )
                 .unwrap_err();
             // The aggregated error is non-retriable.
-            assert!(!aggregated_error.is_retriable());
+            assert!(!aggregated_error.is_submission_retriable());
         }
     }
 }

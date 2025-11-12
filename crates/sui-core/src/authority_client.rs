@@ -29,18 +29,28 @@ use sui_network::tonic::transport::Channel;
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
     HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-    RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse, SystemStateRequest,
-    TransactionInfoRequest, TransactionInfoResponse,
+    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawValidatorHealthRequest,
+    RawWaitForEffectsRequest, SubmitTxRequest, SubmitTxResponse, SystemStateRequest,
+    TransactionInfoRequest, TransactionInfoResponse, ValidatorHealthRequest,
+    ValidatorHealthResponse, WaitForEffectsRequest, WaitForEffectsResponse,
 };
 
 #[async_trait]
 pub trait AuthorityAPI {
+    /// Submits a transaction to validators for sequencing and execution.
     async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: SubmitTxRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError>;
+    ) -> Result<SubmitTxResponse, SuiError>;
+
+    /// Waits for effects of a transaction that has been submitted to the network
+    /// through the `submit_transaction` API.
+    async fn wait_for_effects(
+        &self,
+        request: WaitForEffectsRequest,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<WaitForEffectsResponse, SuiError>;
 
     // TODO(fastpath): Add a soft bundle path for mfp which will return the list of consensus positions
 
@@ -72,14 +82,6 @@ pub trait AuthorityAPI {
         client_addr: Option<SocketAddr>,
     ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError>;
 
-    /// Wait for effects of a transaction that has been submitted to the network
-    /// through the `submit_transaction` API.
-    async fn wait_for_effects(
-        &self,
-        request: RawWaitForEffectsRequest,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError>;
-
     /// Handle Object information requests for this account.
     async fn handle_object_info_request(
         &self,
@@ -108,6 +110,12 @@ pub trait AuthorityAPI {
         &self,
         request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError>;
+
+    /// Get validator health metrics (for latency measurement)
+    async fn validator_health(
+        &self,
+        request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError>;
 }
 
 #[derive(Clone)]
@@ -155,8 +163,12 @@ impl NetworkAuthorityClient {
         }
     }
 
-    fn client(&self) -> SuiResult<ValidatorClient<Channel>> {
+    pub(crate) fn client(&self) -> SuiResult<ValidatorClient<Channel>> {
         self.client.clone()
+    }
+
+    pub fn get_client_for_testing(&self) -> SuiResult<ValidatorClient<Channel>> {
+        self.client()
     }
 }
 
@@ -165,17 +177,35 @@ impl AuthorityAPI for NetworkAuthorityClient {
     /// Submits a transaction to the Sui network for certification and execution.
     async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: SubmitTxRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<RawSubmitTxResponse, SuiError> {
-        let mut request = request.into_request();
+    ) -> Result<SubmitTxResponse, SuiError> {
+        let mut request = request.into_raw()?.into_request();
         insert_metadata(&mut request, client_addr);
 
         self.client()?
             .submit_transaction(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::<SuiError>::into)?
+            .try_into()
+    }
+
+    async fn wait_for_effects(
+        &self,
+        request: WaitForEffectsRequest,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<WaitForEffectsResponse, SuiError> {
+        let raw_request: RawWaitForEffectsRequest = request.try_into()?;
+        let mut request = raw_request.into_request();
+        insert_metadata(&mut request, client_addr);
+
+        self.client()?
+            .wait_for_effects(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::<SuiError>::into)?
+            .try_into()
     }
 
     /// Initiate a new transfer to a Sui or Primary account.
@@ -246,21 +276,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
         response.map_err(Into::into)
     }
 
-    async fn wait_for_effects(
-        &self,
-        request: RawWaitForEffectsRequest,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<RawWaitForEffectsResponse, SuiError> {
-        let mut request = request.into_request();
-        insert_metadata(&mut request, client_addr);
-
-        self.client()?
-            .wait_for_effects(request)
-            .await
-            .map(tonic::Response::into_inner)
-            .map_err(Into::into)
-    }
-
     async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
@@ -318,6 +333,20 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
     }
+
+    async fn validator_health(
+        &self,
+        request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
+        let raw_request: RawValidatorHealthRequest = request.try_into()?;
+
+        self.client()?
+            .validator_health(raw_request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::<SuiError>::into)?
+            .try_into()
+    }
 }
 
 pub fn make_network_authority_clients_with_network_config(
@@ -369,6 +398,8 @@ pub fn make_authority_clients_with_timeout_config(
     let mut network_config = mysten_network::config::Config::new();
     network_config.connect_timeout = Some(connect_timeout);
     network_config.request_timeout = Some(request_timeout);
+    network_config.http2_keepalive_interval = Some(connect_timeout);
+    network_config.http2_keepalive_timeout = Some(connect_timeout);
     make_network_authority_clients_with_network_config(committee, &network_config)
 }
 

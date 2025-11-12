@@ -4,7 +4,7 @@
 use anyhow::anyhow;
 use camino::Utf8Path;
 use clap::Parser;
-use nexlint::{prelude::*, NexLintContext};
+use nexlint::{NexLintContext, prelude::*};
 use nexlint_lints::{
     content::*,
     package::*,
@@ -164,10 +164,10 @@ pub fn handle_lint_results_exclude_external_crate_checks(
     // TODO: handle skipped results
     let mut errs = false;
     for (source, message) in &results.messages {
-        if let LintKind::Content(path) = source.kind() {
-            if ignore_funcs.iter().any(|func| func(source, path)) {
-                continue;
-            }
+        if let LintKind::Content(path) = source.kind()
+            && ignore_funcs.iter().any(|func| func(source, path))
+        {
+            continue;
         }
         println!(
             "[{}] [{}] [{}]: {}\n",

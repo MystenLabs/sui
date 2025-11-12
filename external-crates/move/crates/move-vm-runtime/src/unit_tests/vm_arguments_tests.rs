@@ -143,7 +143,9 @@ impl RemoteStore {
     fn add_module(&mut self, compiled_module: CompiledModule) {
         let id = compiled_module.self_id();
         let mut bytes = vec![];
-        compiled_module.serialize(&mut bytes).unwrap();
+        compiled_module
+            .serialize_with_version(compiled_module.version(), &mut bytes)
+            .unwrap();
         self.modules.insert(id, bytes);
     }
 }

@@ -6,26 +6,23 @@ use crate::authority::authority_per_epoch_store::{
 };
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::BuilderCheckpointSummary;
-use crate::consensus_handler::SequencedConsensusTransactionKind;
 use crate::epoch::randomness::SINGLETON_KEY;
 use dashmap::DashMap;
 use fastcrypto_tbls::{dkg_v1, nodes::PartyId};
-use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use moka::policy::EvictionPolicy;
 use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use parking_lot::Mutex;
-use std::collections::{hash_map, BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque, hash_map};
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, SequenceNumber};
 use sui_types::crypto::RandomnessRound;
 use sui_types::error::SuiResult;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
-use sui_types::messages_consensus::{
-    AuthorityIndex, ConsensusTransaction, ConsensusTransactionKind,
-};
+use sui_types::messages_consensus::AuthorityIndex;
 use sui_types::{
     base_types::{ConsensusObjectSequenceKey, ObjectID},
     digests::TransactionDigest,
@@ -33,8 +30,8 @@ use sui_types::{
     signature::GenericSignature,
 };
 use tracing::{debug, info};
-use typed_store::rocks::DBBatch;
 use typed_store::Map;
+use typed_store::rocks::DBBatch;
 
 use crate::{
     authority::{
@@ -42,7 +39,7 @@ use crate::{
         epoch_start_configuration::{EpochStartConfigTrait, EpochStartConfiguration},
         shared_object_congestion_tracker::CongestionPerObjectDebt,
     },
-    checkpoints::{CheckpointHeight, PendingCheckpointV2},
+    checkpoints::{CheckpointHeight, PendingCheckpoint},
     consensus_handler::{SequencedConsensusTransactionKey, VerifiedSequencedConsensusTransaction},
     epoch::{
         randomness::{VersionedProcessedMessage, VersionedUsedProcessedMessages},
@@ -68,11 +65,13 @@ pub(crate) struct ConsensusCommitOutput {
     // TODO: If we delay committing consensus output until after all deferrals have been loaded,
     // we can move deferred_txns to the ConsensusOutputCache and save disk bandwidth.
     deferred_txns: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>,
+    // TODO(commit-handler-rewrite): remove the original once we no longer need to support the old consensus handler
+    deferred_txns_v2: Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)>,
     // deferred txns that have been loaded and can be removed
     deleted_deferred_txns: BTreeSet<DeferralKey>,
 
     // checkpoint state
-    pending_checkpoints: Vec<PendingCheckpointV2>,
+    pending_checkpoints: Vec<PendingCheckpoint>,
 
     // random beacon state
     next_randomness_round: Option<(RandomnessRound, TimestampMs)>,
@@ -108,6 +107,10 @@ impl ConsensusCommitOutput {
         self.deleted_deferred_txns.iter().cloned()
     }
 
+    pub fn has_deferred_transactions(&self) -> bool {
+        !self.deferred_txns.is_empty() || !self.deferred_txns_v2.is_empty()
+    }
+
     fn get_randomness_last_round_timestamp(&self) -> Option<TimestampMs> {
         self.next_randomness_round.as_ref().map(|(_, ts)| *ts)
     }
@@ -119,7 +122,7 @@ impl ConsensusCommitOutput {
     fn get_pending_checkpoints(
         &self,
         last: Option<CheckpointHeight>,
-    ) -> impl Iterator<Item = &PendingCheckpointV2> {
+    ) -> impl Iterator<Item = &PendingCheckpoint> {
         self.pending_checkpoints.iter().filter(move |cp| {
             if let Some(last) = last {
                 cp.height() > last
@@ -172,6 +175,12 @@ impl ConsensusCommitOutput {
         self.consensus_messages_processed.insert(key);
     }
 
+    pub fn get_consensus_messages_processed(
+        &self,
+    ) -> impl Iterator<Item = &SequencedConsensusTransactionKey> {
+        self.consensus_messages_processed.iter()
+    }
+
     pub fn set_next_shared_object_versions(
         &mut self,
         next_versions: HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
@@ -183,9 +192,9 @@ impl ConsensusCommitOutput {
     pub fn defer_transactions(
         &mut self,
         key: DeferralKey,
-        transactions: Vec<VerifiedSequencedConsensusTransaction>,
+        transactions: Vec<VerifiedExecutableTransaction>,
     ) {
-        self.deferred_txns.push((key, transactions));
+        self.deferred_txns_v2.push((key, transactions));
     }
 
     pub fn delete_loaded_deferred_transactions(&mut self, deferral_keys: &[DeferralKey]) {
@@ -193,7 +202,7 @@ impl ConsensusCommitOutput {
             .extend(deferral_keys.iter().cloned());
     }
 
-    pub fn insert_pending_checkpoint(&mut self, checkpoint: PendingCheckpointV2) {
+    pub fn insert_pending_checkpoint(&mut self, checkpoint: PendingCheckpoint) {
         self.pending_checkpoints.push(checkpoint);
     }
 
@@ -281,8 +290,25 @@ impl ConsensusCommitOutput {
             batch.insert_batch(&tables.next_shared_object_versions_v2, next_versions)?;
         }
 
-        batch.delete_batch(&tables.deferred_transactions, self.deleted_deferred_txns)?;
-        batch.insert_batch(&tables.deferred_transactions, self.deferred_txns)?;
+        batch.delete_batch(
+            &tables.deferred_transactions_v2,
+            &self.deleted_deferred_txns,
+        )?;
+
+        batch.insert_batch(
+            &tables.deferred_transactions_v2,
+            self.deferred_txns_v2.into_iter().map(|(key, txs)| {
+                (
+                    key,
+                    txs.into_iter()
+                        .map(|tx| {
+                            let tx: TrustedExecutableTransaction = tx.serializable();
+                            tx
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            }),
+        )?;
 
         if let Some((round, commit_timestamp)) = self.next_randomness_round {
             batch.insert_batch(&tables.randomness_next_round, [(SINGLETON_KEY, round)])?;
@@ -362,11 +388,12 @@ impl ConsensusCommitOutput {
 pub(crate) struct ConsensusOutputCache {
     // deferred transactions is only used by consensus handler so there should never be lock contention
     // - hence no need for a DashMap.
-    pub(super) deferred_transactions:
-        Mutex<BTreeMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>>>,
+    pub(crate) deferred_transactions_v2:
+        Mutex<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransaction>>>,
+
     // user_signatures_for_checkpoints is written to by consensus handler and read from by checkpoint builder
     // The critical sections are small in both cases so a DashMap is probably not helpful.
-    pub(super) user_signatures_for_checkpoints:
+    pub(crate) user_signatures_for_checkpoints:
         Mutex<HashMap<TransactionDigest, Vec<GenericSignature>>>,
 
     executed_in_epoch: RwLock<DashMap<TransactionDigest, ()>>,
@@ -378,8 +405,8 @@ impl ConsensusOutputCache {
         epoch_start_configuration: &EpochStartConfiguration,
         tables: &AuthorityEpochTables,
     ) -> Self {
-        let deferred_transactions = tables
-            .get_all_deferred_transactions()
+        let deferred_transactions_v2 = tables
+            .get_all_deferred_transactions_v2()
             .expect("load deferred transactions cannot fail");
 
         assert!(
@@ -390,7 +417,7 @@ impl ConsensusOutputCache {
         let executed_in_epoch_cache_capacity = 50_000;
 
         Self {
-            deferred_transactions: Mutex::new(deferred_transactions),
+            deferred_transactions_v2: Mutex::new(deferred_transactions_v2),
             user_signatures_for_checkpoints: Default::default(),
             executed_in_epoch: RwLock::new(DashMap::with_shard_amount(2048)),
             executed_in_epoch_cache: MokaCache::builder(8)
@@ -431,20 +458,6 @@ impl ConsensusOutputCache {
         for tx_digest in tx_digests {
             executed_in_epoch.remove(tx_digest);
         }
-    }
-
-    pub fn remove_reverted_transaction(&self, tx_digest: &TransactionDigest) {
-        // reverted transactions are not guaranteed to have been executed
-        self.executed_in_epoch.read().remove(tx_digest);
-    }
-
-    /// At reconfig time, all checkpointed transactions must have been removed from self.executed_in_epoch
-    pub fn get_uncheckpointed_transactions(&self) -> Vec<TransactionDigest> {
-        self.executed_in_epoch
-            .write() // exclusive lock to ensure consistent view
-            .iter()
-            .map(|e| *e.key())
-            .collect()
     }
 }
 
@@ -501,7 +514,7 @@ impl ConsensusOutputQuarantine {
 // There are only two sources! ConsensusHandler and CheckpointBuilder.
 impl ConsensusOutputQuarantine {
     // Push all data gathered from a consensus commit into the quarantine.
-    pub(super) fn push_consensus_output(
+    pub(crate) fn push_consensus_output(
         &mut self,
         output: ConsensusCommitOutput,
         epoch_store: &AuthorityPerEpochStore,
@@ -612,7 +625,12 @@ impl ConsensusOutputQuarantine {
                 .checkpoint_height
                 .expect("non-genesis checkpoint must have height");
             if let Some(highest) = highest_committed_height {
-                assert!(checkpoint_height > highest);
+                assert!(
+                    checkpoint_height >= highest,
+                    "current checkpoint height {} must be no less than highest committed height {}",
+                    checkpoint_height,
+                    highest
+                );
             }
 
             highest_committed_height = Some(checkpoint_height);
@@ -791,7 +809,7 @@ impl ConsensusOutputQuarantine {
     pub(super) fn get_pending_checkpoints(
         &self,
         last: Option<CheckpointHeight>,
-    ) -> Vec<(CheckpointHeight, PendingCheckpointV2)> {
+    ) -> Vec<(CheckpointHeight, PendingCheckpoint)> {
         let mut checkpoints = Vec::new();
         for output in &self.output_queue {
             checkpoints.extend(
@@ -874,12 +892,12 @@ impl ConsensusOutputQuarantine {
             .next()
     }
 
-    pub(super) fn load_initial_object_debts(
+    pub(crate) fn load_initial_object_debts(
         &self,
         epoch_store: &AuthorityPerEpochStore,
         current_round: Round,
         for_randomness: bool,
-        transactions: &[VerifiedSequencedConsensusTransaction],
+        transactions: &[VerifiedExecutableTransaction],
     ) -> SuiResult<impl IntoIterator<Item = (ObjectID, u64)>> {
         let protocol_config = epoch_store.protocol_config();
         let tables = epoch_store.tables()?;
@@ -903,18 +921,7 @@ impl ConsensusOutputQuarantine {
         };
         let mut shared_input_object_ids: Vec<_> = transactions
             .iter()
-            .filter_map(|tx| {
-                if let SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                    kind: ConsensusTransactionKind::CertifiedTransaction(tx),
-                    ..
-                }) = &tx.0.transaction
-                {
-                    Some(tx.shared_input_objects().map(|obj| obj.id))
-                } else {
-                    None
-                }
-            })
-            .flatten()
+            .flat_map(|tx| tx.shared_input_objects().map(|obj| obj.id))
             .collect();
         shared_input_object_ids.sort();
         shared_input_object_ids.dedup();

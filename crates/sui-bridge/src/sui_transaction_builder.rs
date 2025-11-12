@@ -9,13 +9,13 @@ use sui_types::bridge::{
     BRIDGE_EXECUTE_SYSTEM_MESSAGE_FUNCTION_NAME, BRIDGE_MESSAGE_MODULE_NAME, BRIDGE_MODULE_NAME,
 };
 use sui_types::transaction::CallArg;
+use sui_types::{BRIDGE_PACKAGE_ID, Identifier};
 use sui_types::{
+    TypeTag,
     base_types::{ObjectRef, SuiAddress},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{ObjectArg, TransactionData},
-    TypeTag,
 };
-use sui_types::{Identifier, BRIDGE_PACKAGE_ID};
 
 use crate::{
     error::{BridgeError, BridgeResult},
@@ -199,10 +199,12 @@ fn build_token_bridge_approve_transaction(
             BRIDGE_PACKAGE_ID,
             sui_types::bridge::BRIDGE_MODULE_NAME.to_owned(),
             ident_str!("claim_and_transfer_token").to_owned(),
-            vec![sui_token_type_tags
-                .get(&token_type)
-                .ok_or(BridgeError::UnknownTokenId(token_type))?
-                .clone()],
+            vec![
+                sui_token_type_tags
+                    .get(&token_type)
+                    .ok_or(BridgeError::UnknownTokenId(token_type))?
+                    .clone(),
+            ],
             vec![arg_bridge, arg_clock, source_chain, seq_num],
         );
     }
@@ -635,8 +637,8 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
     use sui_types::bridge::{BridgeChainId, TOKEN_ID_BTC, TOKEN_ID_USDC};
-    use sui_types::crypto::get_key_pair;
     use sui_types::crypto::ToFromBytes;
+    use sui_types::crypto::get_key_pair;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_build_sui_transaction_for_token_transfer() {
@@ -828,10 +830,9 @@ mod tests {
             nonce: 0,
             chain_id: BridgeChainId::SuiCustom,
             blocklist_type: BlocklistType::Blocklist,
-            members_to_update: vec![BridgeAuthorityPublicKeyBytes::from_bytes(
-                &victim.bridge_pubkey_bytes,
-            )
-            .unwrap()],
+            members_to_update: vec![
+                BridgeAuthorityPublicKeyBytes::from_bytes(&victim.bridge_pubkey_bytes).unwrap(),
+            ],
         });
         // `approve_action_with_validator_secrets` covers transaction building
         approve_action_with_validator_secrets(
@@ -857,10 +858,9 @@ mod tests {
             nonce: 1,
             chain_id: BridgeChainId::SuiCustom,
             blocklist_type: BlocklistType::Unblocklist,
-            members_to_update: vec![BridgeAuthorityPublicKeyBytes::from_bytes(
-                &victim.bridge_pubkey_bytes,
-            )
-            .unwrap()],
+            members_to_update: vec![
+                BridgeAuthorityPublicKeyBytes::from_bytes(&victim.bridge_pubkey_bytes).unwrap(),
+            ],
         });
         // `approve_action_with_validator_secrets` covers transaction building
         approve_action_with_validator_secrets(

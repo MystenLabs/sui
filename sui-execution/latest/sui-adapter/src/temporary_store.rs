@@ -11,13 +11,14 @@ use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::error::ExecutionErrorKind;
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
 };
-use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::layout_resolver::LayoutResolver;
+use sui_types::object::Data;
 use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::{
@@ -31,7 +32,7 @@ use sui_types::{
     storage::{BackingPackageStore, ChildObjectResolver, ParentSync, Storage},
     transaction::InputObjects,
 };
-use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, is_system_package};
+use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
 
 pub struct TemporaryStore<'backing> {
     // The backing store for retrieving Move packages onchain.
@@ -42,10 +43,17 @@ pub struct TemporaryStore<'backing> {
     store: &'backing dyn BackingStore,
     tx_digest: TransactionDigest,
     input_objects: BTreeMap<ObjectID, Object>,
+
+    /// Store the original versions of the non-exclusive write inputs, in order to detect
+    /// mutations (which are illegal, but not prevented by the type system).
+    non_exclusive_input_original_versions: BTreeMap<ObjectID, Object>,
+
     stream_ended_consensus_objects: BTreeMap<ObjectID, SequenceNumber /* start_version */>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
-    mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>, // Inputs that are mutable
+    /// Inputs that will be mutated by the transaction. Does not include NonExclusiveWrite inputs,
+    /// which can be taken as `&mut T` but cannot be directly mutated.
+    mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
     execution_results: ExecutionResultsV2,
     /// Objects that were loaded during execution (dynamic fields + received objects).
     loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
@@ -60,6 +68,11 @@ pub struct TemporaryStore<'backing> {
     /// The set of objects that we may receive during execution. Not guaranteed to receive all, or
     /// any of the objects referenced in this set.
     receiving_objects: Vec<ObjectRef>,
+
+    /// The set of all generated object IDs from the object runtime during the transaction. This includes any
+    /// created-and-then-deleted objects in addition to any `new_ids` which contains only the set
+    /// of created (but not deleted) IDs in the transaction.
+    generated_runtime_ids: BTreeSet<ObjectID>,
 
     // TODO: Now that we track epoch here, there are a few places we don't need to pass it around.
     /// The current epoch.
@@ -81,7 +94,9 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
     ) -> Self {
-        let mutable_input_refs = input_objects.mutable_inputs();
+        let mutable_input_refs = input_objects.exclusive_mutable_inputs();
+        let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
+
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
         let stream_ended_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
@@ -106,6 +121,7 @@ impl<'backing> TemporaryStore<'backing> {
             store,
             tx_digest,
             input_objects: objects,
+            non_exclusive_input_original_versions,
             stream_ended_consensus_objects,
             lamport_timestamp,
             mutable_input_refs,
@@ -115,6 +131,7 @@ impl<'backing> TemporaryStore<'backing> {
             wrapped_object_containers: BTreeMap::new(),
             runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
             receiving_objects,
+            generated_runtime_ids: BTreeSet::new(),
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
         }
@@ -154,7 +171,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_runtime_objects: self.loaded_runtime_objects,
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,
-            binary_config: to_binary_config(self.protocol_config),
+            binary_config: self.protocol_config.binary_config(None),
         }
     }
 
@@ -163,6 +180,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// sequence number. This is required to achieve safety.
     pub(crate) fn ensure_active_inputs_mutated(&mut self) {
         let mut to_be_updated = vec![];
+        // Note: we do not mutate input objects if they are non-exclusive write
         for id in self.mutable_input_refs.keys() {
             if !self.execution_results.modified_objects.contains(id) {
                 // We cannot update here but have to push to `to_be_updated` and update later
@@ -206,7 +224,7 @@ impl<'backing> TemporaryStore<'backing> {
                      write,
                  }| {
                     (
-                        accumulator_obj,
+                        *accumulator_obj.inner(),
                         EffectsObjectChange::new_from_accumulator_write(write),
                     )
                 },
@@ -441,6 +459,19 @@ impl<'backing> TemporaryStore<'backing> {
             .extend(wrapped_object_containers);
     }
 
+    pub fn save_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>) {
+        #[cfg(debug_assertions)]
+        {
+            for id in &self.generated_runtime_ids {
+                assert!(!generated_ids.contains(id))
+            }
+            for id in &generated_ids {
+                assert!(!self.generated_runtime_ids.contains(id));
+            }
+        }
+        self.generated_runtime_ids.extend(generated_ids);
+    }
+
     pub fn estimate_effects_size_upperbound(&self) -> usize {
         TransactionEffects::estimate_effects_size_upperbound_v2(
             self.execution_results.written_objects.len(),
@@ -480,6 +511,11 @@ impl<'backing> TemporaryStore<'backing> {
         assert_eq!(system_state_wrapper.storage_rebate, 0);
         system_state_wrapper.storage_rebate = unmetered_storage_rebate;
         self.mutate_input_object(system_state_wrapper);
+    }
+
+    /// Add an accumulator event to the execution results
+    pub fn add_accumulator_event(&mut self, event: AccumulatorEvent) {
+        self.execution_results.accumulator_events.push(event);
     }
 
     /// Given an object ID, if it's not modified, returns None.
@@ -533,26 +569,30 @@ impl TemporaryStore<'_> {
     pub fn check_ownership_invariants(
         &self,
         sender: &SuiAddress,
+        sponsor: &Option<SuiAddress>,
         gas_charger: &mut GasCharger,
         mutable_inputs: &HashSet<ObjectID>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
         let gas_objs: HashSet<&ObjectID> = gas_charger.gas_coins().iter().map(|g| &g.0).collect();
+        let gas_owner = sponsor.as_ref().unwrap_or(sender);
+
         // mark input objects as authenticated
         let mut authenticated_for_mutation: HashSet<_> = self
             .input_objects
             .iter()
             .filter_map(|(id, obj)| {
-                if gas_objs.contains(id) {
-                    // gas could be owned by either the sender (common case) or sponsor
-                    // (if this is a sponsored tx, which we do not know inside this function).
-                    // Either way, no object ownership chain should be rooted in a gas object
-                    // thus, consider object authenticated, but don't add it to authenticated_objs
-                    return None;
-                }
                 match &obj.owner {
                     Owner::AddressOwner(a) => {
-                        assert!(sender == a, "Input object must be owned by sender");
+                        if gas_objs.contains(id) {
+                            // gas object must be owned by sender or sponsor
+                            assert!(
+                                a == gas_owner,
+                                "Gas object must be owned by sender or sponsor"
+                            );
+                        } else {
+                            assert!(sender == a, "Input object must be owned by sender");
+                        }
                         Some(id)
                     }
                     Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => Some(id),
@@ -582,56 +622,75 @@ impl TemporaryStore<'_> {
                 mutable_inputs.contains(id)
             })
             .copied()
+            // Add any object IDs generated in the object runtime during execution to the
+            // authenticated set (i.e., new (non-package) objects, and possibly ephemeral UIDs).
+            .chain(self.generated_runtime_ids.iter().copied())
             .collect();
 
-        // check all modified objects are authenticated (excluding gas objects)
+        // Add sender and sponsor (if present) to authenticated set
+        authenticated_for_mutation.insert((*sender).into());
+        if let Some(sponsor) = sponsor {
+            authenticated_for_mutation.insert((*sponsor).into());
+        }
+
+        // check all modified objects are authenticated
         let mut objects_to_authenticate = self
             .execution_results
             .modified_objects
             .iter()
-            .filter(|id| !gas_objs.contains(id))
             .copied()
             .collect::<Vec<_>>();
-        // Map from an ObjectID to the ObjectID that covers it.
+
         while let Some(to_authenticate) = objects_to_authenticate.pop() {
             if authenticated_for_mutation.contains(&to_authenticate) {
-                // object has been authenticated
+                // object has already been authenticated
                 continue;
             }
-            let wrapped_parent = self.wrapped_object_containers.get(&to_authenticate);
-            let parent = if let Some(container_id) = wrapped_parent {
-                // If the object is wrapped, then the container must be authenticated.
-                // For example, the ID is for a wrapped table or bag.
+
+            let parent = if let Some(container_id) =
+                self.wrapped_object_containers.get(&to_authenticate)
+            {
+                // It's a wrapped object, so check that the container is authenticated
                 *container_id
             } else {
+                // It's non-wrapped, so check the owner -- we can load the object from the
+                // store.
                 let Some(old_obj) = self.store.get_object(&to_authenticate) else {
                     panic!(
-                        "
-                        Failed to load object {to_authenticate:?}. \n\
-                        If it cannot be loaded, \
-                        we would expect it to be in the wrapped object map: {:?}",
+                        "Failed to load object {to_authenticate:?}.\n \
+                         If it cannot be loaded, we would expect it to be in the wrapped object map: {:#?}",
                         &self.wrapped_object_containers
                     )
                 };
+
                 match &old_obj.owner {
+                    // We mutated a dynamic field, we can continue to trace this back to verify
+                    // proper ownership.
                     Owner::ObjectOwner(parent) => ObjectID::from(*parent),
-                    Owner::AddressOwner(parent) => {
+                    // We mutated an address owned or sequenced address owned object -- one of two cases apply:
+                    // 1) the object is owned by an object or address in the authenticated set,
+                    // 2) the object is owned by some other address, in which case we should
+                    //    continue to trace this back.
+                    Owner::AddressOwner(parent)
+                    | Owner::ConsensusAddressOwner { owner: parent, .. } => {
                         // For Receiving<_> objects, the address owner is actually an object.
                         // If it was actually an address, we should have caught it as an input and
                         // it would already have been in authenticated_for_mutation
                         ObjectID::from(*parent)
                     }
-                    owner @ Owner::Shared { .. } | owner @ Owner::ConsensusAddressOwner { .. } => {
+                    // We mutated a shared object -- we checked if this object was in the
+                    // authenticated set at the top of this loop and it wasn't so this is a failure.
+                    owner @ Owner::Shared { .. } => {
                         panic!(
                             "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
-                        Potentially covering objects in: {authenticated_for_mutation:#?}",
-                        )
+                             Potentially covering objects in: {authenticated_for_mutation:#?}"
+                        );
                     }
                     Owner::Immutable => {
                         assert!(
                             is_epoch_change,
                             "Immutable objects cannot be written, except for \
-                            Sui Framework/Move stdlib upgrades at epoch change boundaries"
+                             Sui Framework/Move stdlib upgrades at epoch change boundaries"
                         );
                         // Note: this assumes that the only immutable objects an epoch change
                         // tx can update are system packages,
@@ -644,7 +703,8 @@ impl TemporaryStore<'_> {
                     }
                 }
             };
-            // we now assume the object is authenticated and must check the parent
+
+            // we now assume the object is authenticated and check the parent
             authenticated_for_mutation.insert(to_authenticate);
             objects_to_authenticate.push(parent);
         }
@@ -913,8 +973,8 @@ impl TemporaryStore<'_> {
     /// by `check_sui_conserved` above:
     ///
     /// * all SUI in input objects (including coins etc in the Move part of an object) should flow
-    ///    either to an output object, or be burned as part of computation fees or non-refundable
-    ///    storage rebate
+    ///   either to an output object, or be burned as part of computation fees or non-refundable
+    ///   storage rebate
     ///
     /// This function is intended to be called *after* we have charged for gas + applied the
     /// storage rebate to the gas object, but *before* we have updated object versions. The
@@ -930,6 +990,13 @@ impl TemporaryStore<'_> {
         let mut total_input_sui = 0;
         // total amount of SUI in output objects, including both coins and storage rebates
         let mut total_output_sui = 0;
+
+        // settlement input/output sui is used by the settlement transactions to account for
+        // Sui that has been gathered from the accumulator writes of transactions which it is
+        // settling.
+        total_input_sui += self.execution_results.settlement_input_sui;
+        total_output_sui += self.execution_results.settlement_output_sui;
+
         for (id, input, output) in self.get_modified_objects() {
             if let Some(input) = input {
                 total_input_sui += self.get_input_sui(&id, input.version, layout_resolver)?;
@@ -1018,6 +1085,42 @@ impl ChildObjectResolver for TemporaryStore<'_> {
     }
 }
 
+/// Compares the owner and payload of an object.
+/// This is used to detect illegal writes to non-exclusive write objects.
+fn was_object_mutated(object: &Object, original: &Object) -> bool {
+    let data_equal = match (&object.data, &original.data) {
+        (Data::Move(a), Data::Move(b)) => a.contents_and_type_equal(b),
+        // We don't have a use for package content-equality, so we remain as strict as
+        // possible for now.
+        (Data::Package(a), Data::Package(b)) => a == b,
+        _ => false,
+    };
+
+    let owner_equal = match (&object.owner, &original.owner) {
+        // We don't compare initial shared versions, because re-shared objects do not have the
+        // correct initial shared version at this point in time, and this field is not something
+        // that can be modified by a single transaction anyway.
+        (Owner::Shared { .. }, Owner::Shared { .. }) => true,
+        (
+            Owner::ConsensusAddressOwner { owner: a, .. },
+            Owner::ConsensusAddressOwner { owner: b, .. },
+        ) => a == b,
+        (Owner::AddressOwner(a), Owner::AddressOwner(b)) => a == b,
+        (Owner::Immutable, Owner::Immutable) => true,
+        (Owner::ObjectOwner(a), Owner::ObjectOwner(b)) => a == b,
+
+        // Keep the left hand side of the match exhaustive to catch future
+        // changes to Owner
+        (Owner::AddressOwner(_), _)
+        | (Owner::Immutable, _)
+        | (Owner::ObjectOwner(_), _)
+        | (Owner::Shared { .. }, _)
+        | (Owner::ConsensusAddressOwner { .. }, _) => false,
+    };
+
+    !data_equal || !owner_equal
+}
+
 impl Storage for TemporaryStore<'_> {
     fn reset(&mut self) {
         self.drop_writes();
@@ -1028,13 +1131,42 @@ impl Storage for TemporaryStore<'_> {
     }
 
     /// Take execution results v2, and translate it back to be compatible with effects v1.
-    fn record_execution_results(&mut self, results: ExecutionResults) {
-        let ExecutionResults::V2(results) = results else {
+    fn record_execution_results(
+        &mut self,
+        results: ExecutionResults,
+    ) -> Result<(), ExecutionError> {
+        let ExecutionResults::V2(mut results) = results else {
             panic!("ExecutionResults::V2 expected in sui-execution v1 and above");
         };
+
+        // for all non-exclusive write inputs, remove them from written objects
+        let mut to_remove = Vec::new();
+        for (id, original) in &self.non_exclusive_input_original_versions {
+            // Object must be present in `written_objects` and identical
+            if results
+                .written_objects
+                .get(id)
+                .map(|obj| was_object_mutated(obj, original))
+                .unwrap_or(true)
+            {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::NonExclusiveWriteInputObjectModified { id: *id },
+                    "Non-exclusive write input object has been modified or deleted",
+                ));
+            }
+            to_remove.push(*id);
+        }
+
+        for id in to_remove {
+            results.written_objects.remove(&id);
+            results.modified_objects.remove(&id);
+        }
+
         // It's important to merge instead of override results because it's
         // possible to execute PT more than once during tx execution.
         self.execution_results.merge_results(results);
+
+        Ok(())
     }
 
     fn save_loaded_runtime_objects(
@@ -1051,9 +1183,12 @@ impl Storage for TemporaryStore<'_> {
         TemporaryStore::save_wrapped_object_containers(self, wrapped_object_containers)
     }
 
-    fn check_coin_deny_list(&self, written_objects: &BTreeMap<ObjectID, Object>) -> DenyListResult {
+    fn check_coin_deny_list(
+        &self,
+        receiving_funds_type_and_owners: BTreeMap<TypeTag, BTreeSet<SuiAddress>>,
+    ) -> DenyListResult {
         let result = check_coin_deny_list_v2_during_execution(
-            written_objects,
+            receiving_funds_type_and_owners,
             self.cur_epoch,
             self.store.as_object_store(),
         );
@@ -1067,6 +1202,10 @@ impl Storage for TemporaryStore<'_> {
                 .insert(SUI_DENY_LIST_OBJECT_ID);
         }
         result
+    }
+
+    fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>) {
+        TemporaryStore::save_generated_object_ids(self, generated_ids)
     }
 }
 
@@ -1083,20 +1222,19 @@ impl BackingPackageStore for TemporaryStore<'_> {
         } else {
             self.store.get_package_object(package_id).inspect(|obj| {
                 // Track object but leave unchanged
-                if let Some(v) = obj {
-                    if !self
+                if let Some(v) = obj
+                    && !self
                         .runtime_packages_loaded_from_db
                         .read()
                         .contains_key(package_id)
-                    {
-                        // TODO: Can this lock ever block execution?
-                        // TODO: Another way to avoid the cost of maintaining this map is to not
-                        // enable it in normal runs, and if a fork is detected, rerun it with a flag
-                        // turned on and start populating this field.
-                        self.runtime_packages_loaded_from_db
-                            .write()
-                            .insert(*package_id, v.clone());
-                    }
+                {
+                    // TODO: Can this lock ever block execution?
+                    // TODO: Another way to avoid the cost of maintaining this map is to not
+                    // enable it in normal runs, and if a fork is detected, rerun it with a flag
+                    // turned on and start populating this field.
+                    self.runtime_packages_loaded_from_db
+                        .write()
+                        .insert(*package_id, v.clone());
                 }
             })
         }

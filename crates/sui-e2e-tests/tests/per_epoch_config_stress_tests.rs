@@ -13,7 +13,7 @@ use sui_macros::sim_test;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
+use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability, TransactionData};
 use sui_types::{SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -66,7 +66,7 @@ async fn run_thread<F, Fut>(
     loop {
         let gas = test_env.get_latest_object_ref(&gas_id).await;
         let tx_data = tx_creation_func(test_env.clone(), gas).await;
-        let tx = test_env.test_cluster.sign_transaction(&tx_data);
+        let tx = test_env.test_cluster.sign_transaction(&tx_data).await;
         let Ok(effects) = test_env
             .test_cluster
             .wallet
@@ -112,7 +112,7 @@ async fn create_deny_tx(test_env: Arc<TestEnv>, gas: ObjectRef) -> TransactionDa
                 CallArg::Object(ObjectArg::SharedObject {
                     id: SUI_DENY_LIST_OBJECT_ID,
                     initial_shared_version: test_env.deny_list_object_init_version,
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(
                     test_env.get_latest_object_ref(&test_env.deny_cap_id).await,

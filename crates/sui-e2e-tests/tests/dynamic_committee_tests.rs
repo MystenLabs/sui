@@ -4,7 +4,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use move_core_types::ident_str;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -14,21 +14,21 @@ use sui_macros::*;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
-    base_types::SequenceNumber,
-    effects::{TransactionEffects, TransactionEffectsAPI},
-};
-use sui_types::{
+    SUI_SYSTEM_PACKAGE_ID,
     base_types::{ObjectDigest, ObjectID, ObjectRef, SuiAddress},
     governance::StakedSui,
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ObjectStore,
     sui_system_state::{
-        sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary},
         SuiSystemStateTrait,
+        sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary},
     },
     transaction::{Argument, Command, ObjectArg, ProgrammableTransaction},
-    SUI_SYSTEM_PACKAGE_ID,
+};
+use sui_types::{
+    base_types::SequenceNumber,
+    effects::{TransactionEffects, TransactionEffectsAPI},
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tracing::info;
@@ -142,11 +142,15 @@ impl StressTestRunner {
             .await
             .unwrap()
             .unwrap();
-        let transaction = self.test_cluster.wallet.sign_transaction(
-            &TestTransactionBuilder::new(sender, gas_object, rgp)
-                .programmable(pt)
-                .build(),
-        );
+        let transaction = self
+            .test_cluster
+            .wallet
+            .sign_transaction(
+                &TestTransactionBuilder::new(sender, gas_object, rgp)
+                    .programmable(pt)
+                    .build(),
+            )
+            .await;
         let (effects, _) = self
             .test_cluster
             .execute_transaction_return_raw_effects(transaction)
@@ -190,8 +194,8 @@ impl StressTestRunner {
             println!(">> {struct_tag} TOTAL_SUI: {total_sui}");
         }
 
-        println!("SHARED:");
-        for kind in effects.input_shared_objects() {
+        println!("CONSENSUS:");
+        for kind in effects.input_consensus_objects() {
             let (obj_id, version) = kind.id_and_version();
             let object = state
                 .get_object_store()

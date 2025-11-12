@@ -294,11 +294,11 @@ struct JsonRpcService<S>(S);
 impl<S, RequestBody> tower::Service<http::Request<RequestBody>> for JsonRpcService<S>
 where
     S: tower::Service<
-        http::Request<RequestBody>,
-        Error = BoxError,
-        Response = http::Response<jsonrpsee::server::HttpBody>,
-        Future: Send + 'static,
-    >,
+            http::Request<RequestBody>,
+            Error = BoxError,
+            Response = http::Response<jsonrpsee::server::HttpBody>,
+            Future: Send + 'static,
+        >,
 {
     type Response = http::Response<jsonrpsee::server::HttpBody>;
     type Error = std::convert::Infallible;

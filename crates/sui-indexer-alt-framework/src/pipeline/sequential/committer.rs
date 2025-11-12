@@ -7,15 +7,15 @@ use scoped_futures::ScopedFutureExt;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
-    time::{interval, MissedTickBehavior},
+    time::{MissedTickBehavior, interval},
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::{
-    metrics::IndexerMetrics,
-    pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
-    store::{CommitterWatermark, Connection, TransactionalStore},
+    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
+    pipeline::{IndexedCheckpoint, WARN_PENDING_WATERMARKS, logging::WatermarkLogger},
+    store::{Connection, TransactionalStore},
 };
 
 use super::{Handler, SequentialConfig};
@@ -39,8 +39,9 @@ use super::{Handler, SequentialConfig};
 ///
 /// The task can be shutdown using its `cancel` token or if either of its channels are closed.
 pub(super) fn committer<H>(
+    handler: Arc<H>,
     config: SequentialConfig,
-    watermark: Option<CommitterWatermark>,
+    mut next_checkpoint: u64,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     store: H::Store,
@@ -70,27 +71,29 @@ where
         let mut batch = H::Batch::default();
         let mut batch_rows = 0;
         let mut batch_checkpoints = 0;
-
-        // The task keeps track of the highest (inclusive) checkpoint it has added to the batch,
-        // and whether that batch needs to be written out. By extension it also knows the next
-        // checkpoint to expect and add to the batch.
-        let (mut watermark, mut next_checkpoint) = if let Some(watermark) = watermark {
-            let next = watermark.checkpoint_hi_inclusive + 1;
-            (watermark, next)
-        } else {
-            (CommitterWatermark::default(), 0)
-        };
+        // The task keeps track of the highest (inclusive) checkpoint it has added to the batch
+        // through `next_checkpoint`, and whether that batch needs to be written out. By extension
+        // it also knows the next checkpoint to expect and add to the batch. In case of db txn
+        // failures, we need to know the watermark update that failed, cached to this variable. in
+        // case of db txn failures.
+        let mut watermark = None;
 
         // The committer task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
-        let mut logger = WatermarkLogger::new("sequential_committer", &watermark);
+        let mut logger = WatermarkLogger::new("sequential_committer");
+
+        let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
+            &metrics.watermarked_checkpoint_timestamp_lag,
+            &metrics.latest_watermarked_checkpoint_timestamp_lag_ms,
+            &metrics.watermark_checkpoint_in_db,
+        );
 
         // Data for checkpoint that haven't been written yet. Note that `pending_rows` includes
         // rows in `batch`.
         let mut pending: BTreeMap<u64, IndexedCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
-        info!(pipeline = H::NAME, ?watermark, "Starting committer");
+        info!(pipeline = H::NAME, "Starting committer");
 
         loop {
             tokio::select! {
@@ -130,6 +133,7 @@ where
                     // writes by combining rows, but we will limit the number of checkpoints we try
                     // and batch together as a way to impose some limit on the size of the batch
                     // (and therefore the length of the write transaction).
+                    // docs::#batch  (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                     while batch_checkpoints < H::MAX_BATCH_CHECKPOINTS {
                         if !can_process_pending(next_checkpoint, checkpoint_lag, &pending) {
                             break;
@@ -148,8 +152,8 @@ where
                                 let indexed = entry.remove();
                                 batch_rows += indexed.len();
                                 batch_checkpoints += 1;
-                                H::batch(&mut batch, indexed.values);
-                                watermark = indexed.watermark;
+                                handler.batch(&mut batch, indexed.values.into_iter());
+                                watermark = Some(indexed.watermark);
                                 next_checkpoint += 1;
                             }
 
@@ -166,6 +170,7 @@ where
                             }
                         }
                     }
+                    // docs::/#batch
 
                     let elapsed = guard.stop_and_record();
                     debug!(
@@ -179,11 +184,16 @@ where
                     // If there is no new data to commit, we can skip the rest of the process. Note
                     // that we cannot use batch_rows for the check, since it is possible that there
                     // are empty checkpoints with no new rows added, but the watermark still needs
-                    // to be updated.
+                    // to be updated. Conversely, if there is no watermark to be updated, we know
+                    // there is no data to write out.
                     if batch_checkpoints == 0 {
                         assert_eq!(batch_rows, 0);
                         continue;
                     }
+
+                    let Some(watermark) = watermark else {
+                        continue;
+                    };
 
                     metrics
                         .collector_batch_size
@@ -223,7 +233,7 @@ where
                     let affected = store.transaction(|conn| {
                         async {
                             conn.set_committer_watermark(H::NAME, watermark).await?;
-                            H::commit(&batch, conn).await
+                            handler.commit(&batch, conn).await
                         }.scope_boxed()
                     }).await;
 
@@ -263,6 +273,11 @@ where
                     );
 
                     logger.log::<H>(&watermark, elapsed);
+
+                    checkpoint_lag_reporter.report_lag(
+                        watermark.checkpoint_hi_inclusive,
+                        watermark.timestamp_ms_hi_inclusive
+                    );
 
                     metrics
                         .total_committer_batches_succeeded
@@ -304,10 +319,12 @@ where
                         .with_label_values(&[H::NAME])
                         .set(watermark.timestamp_ms_hi_inclusive as i64);
 
+                    // docs::#send (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                     // Ignore the result -- the ingestion service will close this channel
                     // once it is done, but there may still be checkpoints buffered that need
                     // processing.
-                    let _ = tx.send((H::NAME, watermark.checkpoint_hi_inclusive));
+                    let _ = tx.send((H::NAME, watermark.checkpoint_hi_inclusive + 1));
+                    // docs::/#send
 
                     let _ = std::mem::take(&mut batch);
                     pending_rows -= batch_rows;
@@ -351,7 +368,7 @@ where
             }
         }
 
-        info!(pipeline = H::NAME, ?watermark, "Stopping committer");
+        info!(pipeline = H::NAME, "Stopping committer");
     })
 }
 
@@ -379,14 +396,15 @@ fn can_process_pending<T>(
 #[cfg(test)]
 mod tests {
     use crate::{
+        mocks::store::{MockConnection, MockStore},
         pipeline::{CommitterConfig, Processor},
-        testing::mock_store::{MockConnection, MockStore},
     };
 
     use super::*;
+    use async_trait::async_trait;
     use prometheus::Registry;
     use std::{sync::Arc, time::Duration};
-    use sui_types::full_checkpoint_content::CheckpointData;
+    use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
 
@@ -394,27 +412,29 @@ mod tests {
     #[derive(Default)]
     struct TestHandler;
 
+    #[async_trait]
     impl Processor for TestHandler {
         const NAME: &'static str = "test";
         type Value = u64;
 
-        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(&self, _checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![])
         }
     }
 
-    #[async_trait::async_trait]
+    #[async_trait]
     impl super::Handler for TestHandler {
         type Store = MockStore;
         type Batch = Vec<u64>;
         const MAX_BATCH_CHECKPOINTS: usize = 3; // Using small max value for testing.
         const MIN_EAGER_ROWS: usize = 4; // Using small eager value for testing.
 
-        fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+        fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
             batch.extend(values);
         }
 
         async fn commit<'a>(
+            &self,
             batch: &Self::Batch,
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
@@ -429,28 +449,28 @@ mod tests {
     struct TestSetup {
         store: MockStore,
         checkpoint_tx: mpsc::Sender<IndexedCheckpoint<TestHandler>>,
-        watermark_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
+        commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
         committer_handle: JoinHandle<()>,
     }
 
-    fn setup_test(
-        initial_watermark: Option<CommitterWatermark>,
-        config: SequentialConfig,
-        store: MockStore,
-    ) -> TestSetup {
+    /// Emulates adding a sequential pipeline to the indexer. The next_checkpoint is the checkpoint
+    /// for the indexer to ingest from.
+    fn setup_test(next_checkpoint: u64, config: SequentialConfig, store: MockStore) -> TestSetup {
         let metrics = IndexerMetrics::new(None, &Registry::default());
         let cancel = CancellationToken::new();
 
         let (checkpoint_tx, checkpoint_rx) = mpsc::channel(10);
         #[allow(clippy::disallowed_methods)]
-        let (watermark_tx, watermark_rx) = mpsc::unbounded_channel();
+        let (commit_hi_tx, commit_hi_rx) = mpsc::unbounded_channel();
 
         let store_clone = store.clone();
+        let handler = Arc::new(TestHandler);
         let committer_handle = committer(
+            handler,
             config,
-            initial_watermark,
+            next_checkpoint,
             checkpoint_rx,
-            watermark_tx,
+            commit_hi_tx,
             store_clone,
             metrics,
             cancel,
@@ -459,7 +479,7 @@ mod tests {
         TestSetup {
             store,
             checkpoint_tx,
-            watermark_rx,
+            commit_hi_rx,
             committer_handle,
         }
     }
@@ -484,13 +504,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_processes_sequential_checkpoints() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig::default(),
             checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+        let mut setup = setup_test(0, config, MockStore::default());
 
         // Send checkpoints in order
         for i in 0..3 {
@@ -505,15 +523,60 @@ mod tests {
 
         // Verify watermark was updated
         {
-            let watermark = setup.store.watermarks.lock().unwrap();
+            let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
             assert_eq!(watermark.checkpoint_hi_inclusive, 2);
             assert_eq!(watermark.tx_hi, 2);
         }
 
-        // Verify watermark was sent to ingestion
-        let watermark = setup.watermark_rx.recv().await.unwrap();
-        assert_eq!(watermark.0, "test", "Pipeline name should be 'test'");
-        assert_eq!(watermark.1, 2, "Watermark should be at checkpoint 2");
+        // Verify commit_hi was sent to ingestion
+        let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
+        assert_eq!(commit_hi.0, "test", "Pipeline name should be 'test'");
+        assert_eq!(commit_hi.1, 3, "commit_hi should be 3 (checkpoint 2 + 1)");
+
+        // Clean up
+        drop(setup.checkpoint_tx);
+        let _ = setup.committer_handle.await;
+    }
+
+    /// Configure the MockStore with no watermark, and emulate `first_checkpoint` by passing the
+    /// `initial_watermark` into the setup.
+    #[tokio::test]
+    async fn test_committer_processes_sequential_checkpoints_with_initial_watermark() {
+        let config = SequentialConfig::default();
+        let mut setup = setup_test(5, config, MockStore::default());
+
+        // Verify watermark hasn't progressed
+        let watermark = setup.store.watermark(TestHandler::NAME);
+        assert!(watermark.is_none());
+
+        // Send checkpoints in order
+        for i in 0..5 {
+            send_checkpoint(&mut setup, i).await;
+        }
+
+        // Wait for processing
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // Verify watermark hasn't progressed
+        let watermark = setup.store.watermark(TestHandler::NAME);
+        assert!(watermark.is_none());
+
+        for i in 5..8 {
+            send_checkpoint(&mut setup, i).await;
+        }
+
+        // Wait for processing
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // Verify data was written in order
+        assert_eq!(setup.store.get_sequential_data(), vec![5, 6, 7]);
+
+        // Verify watermark was updated
+        {
+            let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
+            assert_eq!(watermark.checkpoint_hi_inclusive, 7);
+            assert_eq!(watermark.tx_hi, 7);
+        }
 
         // Clean up
         drop(setup.checkpoint_tx);
@@ -522,13 +585,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_processes_out_of_order_checkpoints() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig::default(),
             checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+        let mut setup = setup_test(0, config, MockStore::default());
 
         // Send checkpoints out of order
         for i in [1, 0, 2] {
@@ -543,15 +604,15 @@ mod tests {
 
         // Verify watermark was updated
         {
-            let watermark = setup.store.watermarks.lock().unwrap();
+            let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
             assert_eq!(watermark.checkpoint_hi_inclusive, 2);
             assert_eq!(watermark.tx_hi, 2);
         }
 
-        // Verify watermark was sent to ingestion
-        let watermark = setup.watermark_rx.recv().await.unwrap();
-        assert_eq!(watermark.0, "test", "Pipeline name should be 'test'");
-        assert_eq!(watermark.1, 2, "Watermark should be at checkpoint 2");
+        // Verify commit_hi was sent to ingestion
+        let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
+        assert_eq!(commit_hi.0, "test", "Pipeline name should be 'test'");
+        assert_eq!(commit_hi.1, 3, "commit_hi should be 3 (checkpoint 2 + 1)");
 
         // Clean up
         drop(setup.checkpoint_tx);
@@ -560,13 +621,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_commit_up_to_max_batch_checkpoints() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig::default(),
             checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+        let mut setup = setup_test(0, config, MockStore::default());
 
         // Send checkpoints up to MAX_BATCH_CHECKPOINTS
         for i in 0..4 {
@@ -576,17 +635,17 @@ mod tests {
         // Wait for processing
         tokio::time::sleep(Duration::from_millis(200)).await;
 
-        // Verify watermarks are sent for each batch
-        let watermark1 = setup.watermark_rx.recv().await.unwrap();
+        // Verify commit_hi values are sent for each batch
+        let commit_hi1 = setup.commit_hi_rx.recv().await.unwrap();
         assert_eq!(
-            watermark1.1, 2,
-            "First watermark should be at checkpoint 2 (highest processed of first batch)"
+            commit_hi1.1, 3,
+            "First commit_hi should be 3 (checkpoint 2 + 1, highest processed of first batch)"
         );
 
-        let watermark2 = setup.watermark_rx.recv().await.unwrap();
+        let commit_hi2 = setup.commit_hi_rx.recv().await.unwrap();
         assert_eq!(
-            watermark2.1, 3,
-            "Second watermark should be at checkpoint 3 (highest processed of second batch)"
+            commit_hi2.1, 4,
+            "Second commit_hi should be 4 (checkpoint 3 + 1, highest processed of second batch)"
         );
 
         // Verify data is written in order across batches
@@ -599,13 +658,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_does_not_commit_until_checkpoint_lag() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig::default(),
             checkpoint_lag: 1, // Only commit checkpoints that are at least 1 behind
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+        let mut setup = setup_test(0, config, MockStore::default());
 
         // Send checkpoints 0-2
         for i in 0..3 {
@@ -617,8 +674,8 @@ mod tests {
 
         // Verify only checkpoints 0 and 1 are written (since checkpoint 2 is not lagged enough)
         assert_eq!(setup.store.get_sequential_data(), vec![0, 1]);
-        let watermark = setup.watermark_rx.recv().await.unwrap();
-        assert_eq!(watermark.1, 1, "Watermark should be at checkpoint 1");
+        let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
+        assert_eq!(commit_hi.1, 2, "commit_hi should be 2 (checkpoint 1 + 1)");
 
         // Send checkpoint 3 to exceed the checkpoint_lag for checkpoint 2
         send_checkpoint(&mut setup, 3).await;
@@ -628,8 +685,8 @@ mod tests {
 
         // Verify checkpoint 2 is now written
         assert_eq!(setup.store.get_sequential_data(), vec![0, 1, 2]);
-        let watermark = setup.watermark_rx.recv().await.unwrap();
-        assert_eq!(watermark.1, 2, "Watermark should be at checkpoint 2");
+        let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
+        assert_eq!(commit_hi.1, 3, "commit_hi should be 3 (checkpoint 2 + 1)");
 
         // Clean up
         drop(setup.checkpoint_tx);
@@ -638,8 +695,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_commits_eagerly() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig {
                 collect_interval_ms: 4_000, // Long polling to test eager commit
@@ -647,7 +702,7 @@ mod tests {
             },
             checkpoint_lag: 0, // Zero checkpoint lag to not block the eager logic
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+        let mut setup = setup_test(0, config, MockStore::default());
 
         // Wait for initial poll to be over
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -676,8 +731,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_cannot_commit_eagerly_due_to_checkpoint_lag() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig {
                 collect_interval_ms: 4_000, // Long polling to test eager commit
@@ -685,7 +738,7 @@ mod tests {
             },
             checkpoint_lag: 4, // High checkpoint lag to block eager commits
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default());
+        let mut setup = setup_test(0, config, MockStore::default());
 
         // Wait for initial poll to be over
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -717,8 +770,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_retries_on_transaction_failure() {
-        // Setup with no initial watermark
-        let initial_watermark = None;
         let config = SequentialConfig {
             committer: CommitterConfig {
                 collect_interval_ms: 1_000, // Long polling to test retry logic
@@ -730,10 +781,10 @@ mod tests {
         // Create store with transaction failure configuration
         let store = MockStore::default().with_transaction_failures(1); // Will fail once before succeeding
 
-        let mut setup = setup_test(initial_watermark, config, store);
+        let mut setup = setup_test(10, config, store);
 
         // Send a checkpoint
-        send_checkpoint(&mut setup, 0).await;
+        send_checkpoint(&mut setup, 10).await;
 
         // Wait for initial poll to be over
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -745,12 +796,15 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1_200)).await;
 
         // Verify data is written after retries complete on next polling
-        assert_eq!(setup.store.get_sequential_data(), vec![0]);
+        assert_eq!(setup.store.get_sequential_data(), vec![10]);
 
-        // Verify watermark is updated
-        let watermark = setup.watermark_rx.recv().await.unwrap();
-        assert_eq!(watermark.0, "test", "Pipeline name should be 'test'");
-        assert_eq!(watermark.1, 0, "Watermark should be at checkpoint 0");
+        // Verify commit_hi is updated
+        let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
+        assert_eq!(commit_hi.0, "test", "Pipeline name should be 'test'");
+        assert_eq!(
+            commit_hi.1, 11,
+            "commit_hi should be 11 (checkpoint 10 + 1)"
+        );
 
         // Clean up
         drop(setup.checkpoint_tx);

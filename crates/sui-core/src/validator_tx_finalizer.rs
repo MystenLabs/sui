@@ -8,14 +8,14 @@ use crate::execution_cache::TransactionCacheRead;
 use arc_swap::ArcSwap;
 use mysten_metrics::LATENCY_SEC_BUCKETS;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
-    Registry,
+    Histogram, IntCounter, Registry, register_histogram_with_registry,
+    register_int_counter_with_registry,
 };
 use std::cmp::min;
 use std::ops::Add;
+use std::sync::Arc;
 #[cfg(any(msim, test))]
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
-use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{AuthorityName, TransactionDigest};
 use sui_types::transaction::VerifiedSignedTransaction;
@@ -289,17 +289,17 @@ mod tests {
     use std::iter;
     use std::net::SocketAddr;
     use std::num::NonZeroUsize;
+    use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
     use std::sync::atomic::Ordering::Relaxed;
-    use std::sync::Arc;
     use sui_macros::sim_test;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress, TransactionDigest};
     use sui_types::committee::{CommitteeTrait, StakeUnit};
-    use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
+    use sui_types::crypto::{AccountKeyPair, get_account_key_pair};
     use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
-    use sui_types::error::SuiError;
+    use sui_types::error::{SuiError, SuiErrorKind};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::messages_checkpoint::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
@@ -307,9 +307,10 @@ mod tests {
     use sui_types::messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-        RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
-        SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
+        SubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        ValidatorHealthRequest, ValidatorHealthResponse, WaitForEffectsRequest,
+        WaitForEffectsResponse,
     };
     use sui_types::object::Object;
     use sui_types::sui_system_state::SuiSystemState;
@@ -329,10 +330,18 @@ mod tests {
     impl AuthorityAPI for MockAuthorityClient {
         async fn submit_transaction(
             &self,
-            _request: RawSubmitTxRequest,
+            _request: SubmitTxRequest,
             _client_addr: Option<SocketAddr>,
-        ) -> Result<RawSubmitTxResponse, SuiError> {
+        ) -> Result<SubmitTxResponse, SuiError> {
             unimplemented!();
+        }
+
+        async fn wait_for_effects(
+            &self,
+            _request: WaitForEffectsRequest,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<WaitForEffectsResponse, SuiError> {
+            unimplemented!()
         }
 
         async fn handle_transaction(
@@ -341,7 +350,7 @@ mod tests {
             _client_addr: Option<SocketAddr>,
         ) -> Result<HandleTransactionResponse, SuiError> {
             if self.inject_fault.load(Relaxed) {
-                return Err(SuiError::TimeoutError);
+                return Err(SuiErrorKind::TimeoutError.into());
             }
             let epoch_store = self.authority.epoch_store_for_testing();
             self.authority
@@ -367,7 +376,8 @@ mod tests {
                     ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                     &epoch_store,
                 )
-                .await?;
+                .await
+                .unwrap();
             let events = if effects.events_digest().is_some() {
                 self.authority
                     .get_transaction_events(effects.transaction_digest())?
@@ -390,14 +400,6 @@ mod tests {
             _request: HandleCertificateRequestV3,
             _client_addr: Option<SocketAddr>,
         ) -> Result<HandleCertificateResponseV3, SuiError> {
-            unimplemented!()
-        }
-
-        async fn wait_for_effects(
-            &self,
-            _request: RawWaitForEffectsRequest,
-            _client_addr: Option<SocketAddr>,
-        ) -> Result<RawWaitForEffectsResponse, SuiError> {
             unimplemented!()
         }
 
@@ -442,6 +444,17 @@ mod tests {
             _request: SystemStateRequest,
         ) -> Result<SuiSystemState, SuiError> {
             unimplemented!()
+        }
+
+        async fn validator_health(
+            &self,
+            _request: ValidatorHealthRequest,
+        ) -> Result<ValidatorHealthResponse, SuiError> {
+            Ok(ValidatorHealthResponse {
+                last_committed_leader_round: 1000,
+                last_locally_built_checkpoint: 500,
+                ..Default::default()
+            })
         }
     }
 

@@ -3,8 +3,8 @@
 
 use super::ClientError;
 use async_graphql::{Response, ServerError, Value};
-use reqwest::header::{HeaderMap, HeaderName};
 use reqwest::Response as ReqwestResponse;
+use reqwest::header::{HeaderMap, HeaderName};
 use serde_json::json;
 use std::{collections::BTreeMap, net::SocketAddr};
 use sui_graphql_rpc_headers::VERSION_HEADER;

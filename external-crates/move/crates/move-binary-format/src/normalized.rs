@@ -211,20 +211,25 @@ pub struct FieldRef<S: Hash + Eq> {
     pub instantiation: Signature<S>,
 }
 
-// Functions can reference external modules. We don't track the exact type parameters and the like
-// since we know they can't change, or don't matter since:
-// * Either we allow compatible upgrades in which case the changing of the call parameters/types
-//   doesn't matter since this will align with the callee signature, and that callee must go through
-//   the compatibility checker for any upgrades.
-// * We are in an inclusion scenario. In which case either:
-//   - The callee is in the same package as this call, in which case the callee couldn't have changed; or
-//   - The callee was in a different package and therefore public, and therefore the API of that
-//   function must not have changed by compatibility rules.
+// Functions can reference external modules.
+// We track the module, function name, type arguments, parameters, and return types. Note though
+// that the parameters and return types are not used for equivalence checking since either (a) they
+// cannot change or (b) it does not matter:
+// (a) We are in an inclusion scenario. In which case either:
+//     - The callee is in the same package as this call, in which case the callee couldn't have
+//       changed; or
+//     - The callee was in a different package and therefore public, and therefore the API of that
+//       function must not have changed by compatibility rules.
+// (b) We are in a mode allowing compatible upgrades in which case the changing of the call
+//     parameters/types doesn't matter since this will align with the callee signature, and that
+//     callee must go through the compatibility checker for any upgrades.
 #[derive(Clone, Debug)]
 pub struct FunctionRef<S> {
     pub module: ModuleId<S>,
     pub function: S,
     pub type_arguments: Signature<S>,
+    pub parameters: Signature<S>,
+    pub return_: Signature<S>,
 }
 
 /// Normalized version of a `VariantRef` and `VariantInstantiationHandle`.
@@ -746,6 +751,11 @@ impl<S: Hash + Eq> Module<S> {
             && map_keyed_equivalent(functions, &other.functions, |f1, f2| f1.equivalent(f2))
             && vec_ordered_equivalent(constants, &other.constants, |c1, c2| c1.equivalent(c2))
     }
+
+    #[cfg(test)]
+    pub(crate) fn extend_table_signatures(&mut self, signatures: Vec<Signature<S>>) {
+        self.tables.signatures.extend(signatures);
+    }
 }
 
 impl<S> Constant<S> {
@@ -1204,10 +1214,14 @@ impl<S: Hash + Eq> FunctionRef<S> {
         let type_arguments = type_arguments
             .map(|idx| tables.signatures[idx.0 as usize].clone())
             .unwrap_or_else(|| tables.empty_signature.clone());
+        let parameters = tables.signatures[function_handle.parameters.0 as usize].clone();
+        let return_ = tables.signatures[function_handle.return_.0 as usize].clone();
         Self {
             module,
             function,
             type_arguments,
+            parameters,
+            return_,
         }
     }
 
@@ -1227,11 +1241,15 @@ impl<S: Hash + Eq> FunctionRef<S> {
         )
     }
 
+    /// Equivalence, but excludes parameter types and return types.
+    /// See the comment on `FunctionRef` for an explanation.
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
             module,
             function,
             type_arguments,
+            parameters: _,
+            return_: _,
         } = self;
         module == &other.module
             && function == &other.function
@@ -1854,6 +1872,12 @@ fn signature_to_single_type<S: Hash + Eq>(
     tables.signatures[sig_idx.0 as usize][0].clone()
 }
 
+impl<S: std::fmt::Display> std::fmt::Display for ModuleId<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "0x{}::{}", self.address.short_str_lossless(), self.name)
+    }
+}
+
 impl<S: std::fmt::Display> std::fmt::Display for Type<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -2048,5 +2072,100 @@ impl StringPool for ArcPool {
 
     fn as_ident_str<'a>(&'a self, s: &'a Self::String) -> &'a IdentStr {
         s.0.as_ident_str()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_bytecode_vec<S: Hash + Eq>(codes: Vec<Bytecode<S>>) -> Vec<Bytecode<S>> {
+        codes
+    }
+
+    #[test]
+    fn test_get_successors_ret_and_abort() {
+        let code: Vec<Bytecode<Identifier>> =
+            make_bytecode_vec(vec![Bytecode::Ret, Bytecode::Abort]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // Ret and Abort should have no successors
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![]);
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![]);
+    }
+
+    #[test]
+    fn test_get_successors_branch() {
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![
+            Bytecode::LdU8(42),
+            Bytecode::Branch(2),
+            Bytecode::LdU8(42),
+            Bytecode::Ret,
+        ]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // Branch should only have the branch target as successor
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![2]);
+    }
+
+    #[test]
+    fn test_get_successors_conditional_branch() {
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![
+            Bytecode::BrTrue(2),
+            Bytecode::BrFalse(2),
+            Bytecode::Ret,
+        ]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // Conditional branch should have both the branch target and next instruction as successors
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![1, 2]);
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![2]);
+    }
+
+    #[test]
+    fn test_get_successors_variant_switch() {
+        let jt = Rc::new(VariantJumpTable {
+            enum_: Rc::new(Enum {
+                defining_module: ModuleId {
+                    address: AccountAddress::ZERO,
+                    name: Identifier::new("E").unwrap(),
+                },
+                name: Identifier::new("E").unwrap(),
+                abilities: AbilitySet::EMPTY,
+                type_parameters: vec![],
+                variants: IndexMap::new(),
+            }),
+            jump_table: JumpTableInner::Full(vec![1, 2]),
+        });
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![
+            Bytecode::VariantSwitch(jt.clone()),
+            Bytecode::Ret,
+            Bytecode::Ret,
+        ]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![jt];
+
+        // VariantSwitch should have all jump table offsets as successors
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![1, 2]);
+    }
+
+    #[test]
+    fn test_get_successors_fallthrough() {
+        let code: Vec<Bytecode<Identifier>> =
+            make_bytecode_vec(vec![Bytecode::LdU8(42), Bytecode::LdU8(43), Bytecode::Ret]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+
+        // LdU8 is not a branch, so successor is next instruction
+        assert_eq!(Bytecode::get_successors(0, &code, &jump_tables), vec![1]);
+        assert_eq!(Bytecode::get_successors(1, &code, &jump_tables), vec![2]);
+        assert_eq!(Bytecode::get_successors(2, &code, &jump_tables), vec![]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Program counter out of bounds")]
+    fn test_get_successors_out_of_bounds() {
+        let code: Vec<Bytecode<Identifier>> = make_bytecode_vec(vec![Bytecode::Ret]);
+        let jump_tables: Vec<Rc<VariantJumpTable<Identifier>>> = vec![];
+        // pc out of bounds should panic
+        Bytecode::get_successors(10, &code, &jump_tables);
     }
 }

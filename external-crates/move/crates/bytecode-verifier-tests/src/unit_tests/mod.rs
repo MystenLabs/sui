@@ -47,12 +47,16 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             max_back_edges_per_module: None,
 
             max_constant_vector_len: Some(DEFAULT_MAX_CONSTANT_VECTOR_LEN),
-            max_idenfitier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
+            max_identifier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
             disallow_self_identifier: true,
             allow_receiving_object_id: true,
             reject_mutable_random_on_entry_functions: true,
             bytecode_version: VERSION_MAX,
             max_variants_in_enum: Some(DEFAULT_MAX_VARIANTS),
+            additional_borrow_checks: true,
+            better_loader_errors: true,
+            private_generics_verifier_v2: false,
+            sanity_check_with_regex_reference_safety: Some(2_200_000),
         },
         MeterConfig::old_default(),
     )

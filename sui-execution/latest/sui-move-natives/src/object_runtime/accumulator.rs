@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::account_address::AccountAddress;
-use sui_types::{base_types::ObjectID, effects::AccumulatorOperation, TypeTag};
+use sui_types::{TypeTag, base_types::ObjectID, effects::AccumulatorOperation};
 
 #[derive(Debug)]
 pub enum MoveAccumulatorAction {
@@ -22,6 +22,8 @@ impl MoveAccumulatorAction {
 #[derive(Debug)]
 pub enum MoveAccumulatorValue {
     U64(u64),
+    // commit the nth event emitted by the transaction to an event stream
+    EventRef(u64),
 }
 
 #[derive(Debug)]

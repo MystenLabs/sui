@@ -13,8 +13,8 @@ use fastcrypto::{
     encoding::{Encoding, Hex},
     error::FastCryptoError,
     secp256k1::{
-        recoverable::Secp256k1RecoverableSignature, Secp256k1KeyPair, Secp256k1PublicKey,
-        Secp256k1PublicKeyAsBytes,
+        Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1PublicKeyAsBytes,
+        recoverable::Secp256k1RecoverableSignature,
     },
     traits::{RecoverableSigner, ToFromBytes, VerifyRecoverable},
 };
@@ -79,7 +79,7 @@ pub struct ConciseBridgeAuthorityPublicKeyBytesRef<'a>(&'a BridgeAuthorityPublic
 
 impl Debug for ConciseBridgeAuthorityPublicKeyBytesRef<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let s = Hex::encode(self.0 .0 .0.get(0..4).ok_or(std::fmt::Error)?);
+        let s = Hex::encode(self.0.0.0.get(0..4).ok_or(std::fmt::Error)?);
         write!(f, "k#{}..", s)
     }
 }
@@ -92,7 +92,7 @@ impl Display for ConciseBridgeAuthorityPublicKeyBytesRef<'_> {
 
 impl AsRef<[u8]> for BridgeAuthorityPublicKeyBytes {
     fn as_ref(&self) -> &[u8] {
-        self.0 .0.as_ref()
+        self.0.0.as_ref()
     }
 }
 
@@ -118,7 +118,9 @@ pub struct BridgeAuthoritySignInfo {
 
 impl BridgeAuthoritySignInfo {
     pub fn new(msg: &BridgeAction, secret: &BridgeAuthorityKeyPair) -> Self {
-        let msg_bytes = msg.to_bytes();
+        let msg_bytes = msg
+            .to_bytes()
+            .expect("Message encoding should not fail for valid actions");
         Self {
             authority_pub_key: secret.public().clone(),
             signature: secret.sign_recoverable_with_hash::<Keccak256>(&msg_bytes),
@@ -134,7 +136,9 @@ impl BridgeAuthoritySignInfo {
         }
 
         // 2. verify signature
-        let msg_bytes = msg.to_bytes();
+        let msg_bytes = msg.to_bytes().map_err(|e| {
+            BridgeError::Generic(format!("Failed to encode message for verification: {}", e))
+        })?;
 
         self.authority_pub_key
             .verify_recoverable_with_hash::<Keccak256>(&msg_bytes, &self.signature)

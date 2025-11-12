@@ -5,27 +5,23 @@ use std::{
     error::Error,
     path::Path,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
 
 use anyhow::Context;
-use prometheus::Registry;
-use reqwest::{header::HeaderName, Client};
-use serde_json::{json, Value};
+use reqwest::{Client, header::HeaderName};
+use serde_json::{Value, json};
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, Merge, PipelineLayer, PrunerLayer};
-use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
-use sui_indexer_alt_e2e_tests::OffchainCluster;
-use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
-use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
-use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
+use sui_indexer_alt_e2e_tests::{OffchainCluster, OffchainClusterConfig};
+use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_transactional_test_runner::{
     create_adapter,
     offchain_state::{OffchainStateReader, TestResponse},
     run_tasks_with_adapter,
-    test_adapter::{OffChainConfig, SuiTestAdapter, PRE_COMPILED},
+    test_adapter::{OffChainConfig, PRE_COMPILED, SuiTestAdapter},
 };
 use tokio::join;
 use tokio_util::sync::CancellationToken;
@@ -60,7 +56,9 @@ impl OffchainStateReader for OffchainReader {
     }
 
     async fn wait_for_pruned_checkpoint(&self, _: u64, _: Duration) {
-        unimplemented!("Waiting for pruned checkpoints is not supported in these tests (add it if you need it)");
+        unimplemented!(
+            "Waiting for pruned checkpoints is not supported in these tests (add it if you need it)"
+        );
     }
 
     async fn execute_graphql(
@@ -134,18 +132,9 @@ impl OffchainStateReader for OffchainReader {
 }
 
 async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
-    let cancel = CancellationToken::new();
-    let registry = Registry::new();
-
-    let indexer_args = IndexerArgs::default();
-    let consistent_indexer_args = IndexerArgs::default();
-
     let client_args = ClientArgs {
         local_ingestion_path: Some(config.data_ingestion_path.clone()),
-        remote_store_url: None,
-        rpc_api_url: None,
-        rpc_username: None,
-        rpc_password: None,
+        ..Default::default()
     };
 
     // The test config includes every pipeline, we configure its consistent range using the
@@ -172,21 +161,15 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
         })
         .expect("Failed to create indexer config");
 
-    let consistent_store_config = ConsistentConfig::for_test();
-    let jsonrpc_config = JsonRpcConfig::default();
-    let graphql_config = GraphQlConfig::default();
-
     Arc::new(
         OffchainCluster::new(
-            indexer_args,
-            consistent_indexer_args,
             client_args,
-            indexer_config,
-            consistent_store_config,
-            jsonrpc_config,
-            graphql_config,
-            &registry,
-            cancel,
+            OffchainClusterConfig {
+                indexer_config,
+                ..Default::default()
+            },
+            &prometheus::Registry::new(),
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create off-chain cluster"),

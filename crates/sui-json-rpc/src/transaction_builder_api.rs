@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use fastcrypto::encoding::Base64;
-use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+use jsonrpsee::core::RpcResult;
 use move_core_types::language_storage::StructTag;
 
 use sui_core::authority::AuthorityState;
@@ -23,8 +23,8 @@ use sui_types::base_types::ObjectInfo;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::sui_serde::BigInt;
 
-use crate::authority_state::StateRead;
 use crate::SuiRpcModule;
+use crate::authority_state::StateRead;
 
 pub struct TransactionBuilderApi(TransactionBuilder);
 

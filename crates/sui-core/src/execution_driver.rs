@@ -7,9 +7,9 @@ use mysten_common::{fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
 use sui_macros::fail_point_async;
-use sui_types::error::SuiError;
-use tokio::sync::{mpsc::UnboundedReceiver, oneshot, Semaphore};
-use tracing::{error_span, info, trace, warn, Instrument};
+use sui_types::execution::ExecutionOutput;
+use tokio::sync::{Semaphore, mpsc::UnboundedReceiver, oneshot};
+use tracing::{Instrument, error_span, info, trace, warn};
 
 use crate::authority::AuthorityState;
 use crate::execution_scheduler::PendingCertificate;
@@ -49,7 +49,7 @@ pub async fn execution_process(
                     _executing_guard = pending_cert.executing_guard;
                 } else {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
-                    // has been dropped by TransactionManager.
+                    // has been dropped by ExecutionScheduler.
                     info!("No more certificate will be received. Exiting executor ...");
                     return;
                 };
@@ -122,19 +122,26 @@ pub async fn execution_process(
                 execution_env,
                 &epoch_store_clone,
             ).await {
-                Err(SuiError::ValidatorHaltedAtEpochEnd) => {
-                    warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
-                    return;
+                ExecutionOutput::Success(_) => {
+                    authority
+                        .metrics
+                        .execution_driver_executed_transactions
+                        .inc();
                 }
-                Err(e) => {
+                ExecutionOutput::EpochEnded => {
+                    warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
+                }
+                ExecutionOutput::Fatal(e) => {
                     fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
                 }
-                _ => (),
+                ExecutionOutput::RetryLater => {
+                    // Transaction will be retried later and auto-rescheduled, so we ignore it here
+                    authority
+                        .metrics
+                        .execution_driver_paused_transactions
+                        .inc();
+                }
             }
-            authority
-                .metrics
-                .execution_driver_executed_transactions
-                .inc();
         }.instrument(error_span!("execution_driver", tx_digest = ?digest))));
     }
 }

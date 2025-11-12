@@ -9,8 +9,8 @@ use fastcrypto::traits::{EncodeDecodeBase64, KeyPair};
 use fastcrypto_zkp::bn254::utils::get_proof;
 use fastcrypto_zkp::bn254::utils::{gen_address_seed, get_salt};
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 use regex::Regex;
 use reqwest::Client;
 use serde_json::json;
@@ -38,10 +38,10 @@ pub fn read_cli_line() -> Result<String, anyhow::Error> {
     let full_url = s.trim_end().to_string();
     let mut parsed_token = "";
     let re = Regex::new(r"id_token=([^&]+)").unwrap();
-    if let Some(captures) = re.captures(&full_url) {
-        if let Some(id_token) = captures.get(1) {
-            parsed_token = id_token.as_str();
-        }
+    if let Some(captures) = re.captures(&full_url)
+        && let Some(id_token) = captures.get(1)
+    {
+        parsed_token = id_token.as_str();
     }
     Ok(parsed_token.to_string())
 }
@@ -110,7 +110,7 @@ pub async fn perform_zk_login_test_tx(
     )?;
 
     let sender = if test_multisig {
-        keystore.import(None, skp1)?;
+        keystore.import(None, skp1).await?;
         println!("Use multisig address as sender");
         SuiAddress::from(&multisig_pk)
     } else {
@@ -155,18 +155,24 @@ pub async fn perform_zk_login_test_tx(
     let final_sig = if test_multisig {
         let sig = if sign_with_sk {
             // Create a generic sig from the traditional keypair
-            GenericSignature::Signature(keystore.sign_secure(
-                &ephemeral_key_identifier,
-                &txb_res,
-                Intent::sui_transaction(),
-            )?)
+            GenericSignature::Signature(
+                keystore
+                    .sign_secure(
+                        &ephemeral_key_identifier,
+                        &txb_res,
+                        Intent::sui_transaction(),
+                    )
+                    .await?,
+            )
         } else {
             // Sign transaction with the ephemeral key
-            let signature = keystore.sign_secure(
-                &ephemeral_key_identifier,
-                &txb_res,
-                Intent::sui_transaction(),
-            )?;
+            let signature = keystore
+                .sign_secure(
+                    &ephemeral_key_identifier,
+                    &txb_res,
+                    Intent::sui_transaction(),
+                )
+                .await?;
 
             GenericSignature::from(ZkLoginAuthenticator::new(
                 zk_login_inputs,
@@ -180,11 +186,13 @@ pub async fn perform_zk_login_test_tx(
         multisig
     } else {
         // Sign transaction with the ephemeral key
-        let signature = keystore.sign_secure(
-            &ephemeral_key_identifier,
-            &txb_res,
-            Intent::sui_transaction(),
-        )?;
+        let signature = keystore
+            .sign_secure(
+                &ephemeral_key_identifier,
+                &txb_res,
+                Intent::sui_transaction(),
+            )
+            .await?;
 
         let single_sig = GenericSignature::from(ZkLoginAuthenticator::new(
             zk_login_inputs,

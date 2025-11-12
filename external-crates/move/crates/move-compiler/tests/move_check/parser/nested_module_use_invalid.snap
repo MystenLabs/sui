@@ -9,17 +9,17 @@ error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/parser/nested_module_use_invalid.move:18:59
    │
 18 │     use 0x42::{a::{A, Self as q, foo as bar}, b::{Self as q, B, baz as bar}};
-   │                               -                           ^ Duplicate module alias 'q'. Module aliases must be unique within a given namespace
+   │                               -                           ^ Duplicate alias 'q'. Module aliases must be unique within a given namespace
    │                               │                            
-   │                               Alias previously defined here
+   │                               Module member or alias previously defined here
 
 error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/parser/nested_module_use_invalid.move:18:72
    │
 18 │     use 0x42::{a::{A, Self as q, foo as bar}, b::{Self as q, B, baz as bar}};
-   │                                         ---                            ^^^ Duplicate module member or alias 'bar'. Top level names in a namespace must be unique
+   │                                         ---                            ^^^ Duplicate module member 'bar'. Top level names in a namespace must be unique
    │                                         │                               
-   │                                         Alias previously defined here
+   │                                         Module member or alias previously defined here
 
 error[E03003]: unbound module member
    ┌─ tests/move_check/parser/nested_module_use_invalid.move:21:20

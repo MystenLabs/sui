@@ -3,7 +3,7 @@
 
 use crate::DBMetrics;
 use bincode::Options;
-use prometheus::Registry;
+use prometheus::{HistogramTimer, Registry};
 use serde::de::DeserializeOwned;
 use std::env;
 use std::path::Path;
@@ -14,9 +14,9 @@ use tidehunter::iterators::db_iterator::DbIterator;
 use tidehunter::key_shape::{KeyShape, KeySpace};
 use tidehunter::metrics::Metrics;
 pub use tidehunter::{
+    Decision, IndexWalPosition, WalPosition,
     key_shape::{KeyIndexing, KeyShapeBuilder, KeySpaceConfig, KeyType},
     minibytes::Bytes,
-    IndexWalPosition, WalPosition,
 };
 use typed_store_error::TypedStoreError;
 
@@ -81,6 +81,14 @@ fn thdb_config() -> Config {
     }
 }
 
+pub fn default_mutex_count() -> usize {
+    1024
+}
+
+pub fn default_value_cache_size() -> usize {
+    2000
+}
+
 pub(crate) fn apply_range_bounds(
     iterator: &mut DbIterator,
     lower_bound: Option<Vec<u8>>,
@@ -96,12 +104,13 @@ pub(crate) fn apply_range_bounds(
 
 pub(crate) fn transform_th_iterator<'a, K, V>(
     iterator: impl Iterator<
-            Item = Result<
-                (tidehunter::minibytes::Bytes, tidehunter::minibytes::Bytes),
-                tidehunter::db::DbError,
-            >,
-        > + 'a,
+        Item = Result<
+            (tidehunter::minibytes::Bytes, tidehunter::minibytes::Bytes),
+            tidehunter::db::DbError,
+        >,
+    > + 'a,
     prefix: &'a Option<Vec<u8>>,
+    timer: HistogramTimer,
 ) -> impl Iterator<Item = Result<(K, V), TypedStoreError>> + 'a
 where
     K: DeserializeOwned,
@@ -113,6 +122,7 @@ where
     iterator.map(move |item| {
         item.map_err(|e| TypedStoreError::RocksDBError(format!("tidehunter error {:?}", e)))
             .and_then(|(raw_key, raw_value)| {
+                let _timer = &timer;
                 let key = match prefix {
                     Some(prefix) => {
                         let mut buffer = Vec::with_capacity(raw_key.len() + prefix.len());

@@ -3,10 +3,10 @@
 
 use moka::ops::compute::Op;
 use moka::sync::Cache;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use sui_types::base_types::ObjectID;
-use sui_types::effects::{InputSharedObject, TransactionEffects, TransactionEffectsAPI};
+use sui_types::effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI};
 use sui_types::execution_status::CongestedObjects;
 use sui_types::messages_checkpoint::{CheckpointTimestamp, VerifiedCheckpoint};
 use sui_types::transaction::{TransactionData, TransactionDataAPI};
@@ -94,14 +94,14 @@ impl CongestionTracker {
                 cleared_events.push((
                     gas_price,
                     effect
-                        .input_shared_objects()
+                        .input_consensus_objects()
                         .into_iter()
                         .filter_map(|object| match object {
-                            InputSharedObject::Mutate((id, _, _)) => Some(id),
-                            InputSharedObject::Cancelled(_, _)
-                            | InputSharedObject::ReadOnly(_)
-                            | InputSharedObject::ReadConsensusStreamEnded(_, _)
-                            | InputSharedObject::MutateConsensusStreamEnded(_, _) => None,
+                            InputConsensusObject::Mutate((id, _, _)) => Some(id),
+                            InputConsensusObject::Cancelled(_, _)
+                            | InputConsensusObject::ReadOnly(_)
+                            | InputConsensusObject::ReadConsensusStreamEnded(_, _)
+                            | InputConsensusObject::MutateConsensusStreamEnded(_, _) => None,
                         })
                         .collect::<Vec<_>>(),
                 ));
@@ -122,7 +122,7 @@ impl CongestionTracker {
             transaction
                 .shared_input_objects()
                 .into_iter()
-                .filter(|id| id.mutable)
+                .filter(|id| id.is_accessed_exclusively())
                 .map(|id| id.id),
         )
     }

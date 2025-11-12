@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{self, Context as _};
-use async_graphql::{Context, Object};
+use async_graphql::Object;
 use fastcrypto::encoding::{Base64, Encoding};
-use sui_indexer_alt_reader::package_resolver::PackageResolver;
-use sui_package_resolver::CleverError;
+use std::fmt::Write;
+use sui_package_resolver::{CleverError, ErrorConstants};
 use sui_types::{
     execution_status::{
         ExecutionFailureStatus, ExecutionStatus as NativeExecutionStatus, MoveLocation,
@@ -14,20 +13,290 @@ use sui_types::{
 };
 use tokio::sync::OnceCell;
 
-use crate::{api::scalars::big_int::BigInt, error::RpcError};
+use crate::{
+    api::{
+        scalars::big_int::BigInt,
+        types::{move_function::MoveFunction, move_module::MoveModule, move_package::MovePackage},
+    },
+    error::RpcError,
+    scope::Scope,
+};
 
-/// Resolves the runtime module ID in Move aborts to the storage package ID.
+#[derive(Clone)]
+pub(crate) struct ExecutionError {
+    native: ExecutionFailureStatus,
+    command: Option<usize>,
+    clever: OnceCell<Option<CleverError>>,
+    scope: Scope,
+}
+
+/// Represents execution error information for failed transactions.
+#[Object]
+impl ExecutionError {
+    /// The error code of the Move abort, populated if this transaction failed with a Move abort.
+    ///
+    /// Returns the explicit code if the abort used `code` annotation (e.g., `abort(ERR, code = 5)` returns 5), otherwise returns the raw abort code containing encoded error information.
+    async fn abort_code(&self) -> Option<BigInt> {
+        // Note: This uses full CleverError resolution rather than ErrorBitset bit manipulation for
+        // abort code extraction. While ErrorBitset would be faster for isolated queries, we use
+        // CleverError for consistency and to amortize the expensive resolution cost across multiple
+        // fields (identifier, constant, etc.) that are commonly queried together in GraphQL.
+
+        let ExecutionFailureStatus::MoveAbort(_, raw_code) = &self.native else {
+            return None;
+        };
+
+        // Use clever error code if available, otherwise fall back to raw code
+        Some(BigInt::from(
+            self.clever_error()
+                .await
+                .as_ref()
+                .and_then(|err| err.error_code)
+                .map_or(*raw_code, |code| code as u64),
+        ))
+    }
+
+    /// The source line number for the abort. Only populated for clever errors.
+    async fn source_line_number(&self) -> Option<u64> {
+        Some(self.clever_error().await.as_ref()?.source_line_number as u64)
+    }
+
+    /// The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
+    async fn instruction_offset(&self) -> Result<Option<u16>, RpcError> {
+        match &self.native {
+            ExecutionFailureStatus::MoveAbort(location, _) => Ok(Some(location.instruction)),
+            ExecutionFailureStatus::MovePrimitiveRuntimeError(location_opt) => {
+                Ok(location_opt.0.as_ref().map(|loc| loc.instruction))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// The error's name. Only populated for clever errors.
+    async fn identifier(&self) -> Option<String> {
+        match &self.clever_error().await.as_ref()?.error_info {
+            ErrorConstants::None => None,
+            ErrorConstants::Rendered { identifier, .. } => Some(identifier.clone()),
+            ErrorConstants::Raw { identifier, .. } => Some(identifier.clone()),
+        }
+    }
+
+    /// An associated constant for the error. Only populated for clever errors.
+    ///
+    /// Constants are returned as human-readable strings when possible. Complex types are returned as Base64-encoded bytes.
+    async fn constant(&self) -> Option<String> {
+        match &self.clever_error().await.as_ref()?.error_info {
+            ErrorConstants::None => None,
+            ErrorConstants::Rendered { constant, .. } => Some(constant.clone()),
+            ErrorConstants::Raw { bytes, .. } => Some(Base64::encode(bytes)),
+        }
+    }
+
+    /// The module that the abort originated from. Only populated for Move aborts and primitive runtime errors.
+    async fn module(&self) -> Option<MoveModule> {
+        let location = match &self.native {
+            ExecutionFailureStatus::MoveAbort(location, _) => Some(location),
+            ExecutionFailureStatus::MovePrimitiveRuntimeError(location_opt) => {
+                location_opt.0.as_ref()
+            }
+            _ => None,
+        }?;
+
+        // location.module is already the correct storage package ID thanks to resolve_module_id_for_move_abort
+        let package =
+            MovePackage::with_address(self.scope.clone(), (*location.module.address()).into());
+        let module_name = location.module.name().to_string();
+
+        Some(MoveModule::with_fq_name(package, module_name))
+    }
+
+    /// The function that the abort originated from. Only populated for Move aborts and primitive runtime errors that have function name information.
+    async fn function(&self) -> Option<MoveFunction> {
+        let location = match &self.native {
+            ExecutionFailureStatus::MoveAbort(location, _) => Some(location),
+            ExecutionFailureStatus::MovePrimitiveRuntimeError(location_opt) => {
+                location_opt.0.as_ref()
+            }
+            _ => None,
+        }?;
+
+        let function_name = location.function_name.as_ref()?;
+
+        // Create the module using the already-resolved module ID
+        let package =
+            MovePackage::with_address(self.scope.clone(), (*location.module.address()).into());
+        let module_name = location.module.name().to_string();
+        let module = MoveModule::with_fq_name(package, module_name);
+
+        Some(MoveFunction::with_fq_name(module, function_name.clone()))
+    }
+
+    /// Human readable explanation of why the transaction failed.
+    ///
+    /// For Move aborts, the error message will be resolved to a human-readable form if possible, otherwise it will fall back to displaying the abort code and location.
+    async fn message(&self) -> Result<String, RpcError> {
+        self.format_error_message().await.map_err(|e| {
+            anyhow::Error::from(e)
+                .context("Failed to format error message")
+                .into()
+        })
+    }
+}
+
+impl ExecutionError {
+    /// Factory method to create ExecutionError from execution failure status.
+    pub(crate) async fn from_execution_status(
+        scope: &Scope,
+        status: &NativeExecutionStatus,
+        programmable_tx: Option<&ProgrammableTransaction>,
+    ) -> Result<Option<Self>, RpcError> {
+        let NativeExecutionStatus::Failure { error, command } = status else {
+            return Ok(None);
+        };
+
+        // Clone the error so we can modify it in-place
+        let mut native_error: ExecutionFailureStatus = error.clone();
+
+        // Resolve the module ID for Move aborts to ensure we use the correct package version
+        // when resolving clever errors later. This is only necessary before version 48.
+        resolve_module_id_for_move_abort(scope, &mut native_error, *command, programmable_tx)
+            .await?;
+
+        Ok(Some(Self {
+            native: native_error,
+            command: *command,
+            clever: OnceCell::new(),
+            scope: scope.clone(),
+        }))
+    }
+
+    /// Helper method to get the clever error, using OnceCell for lazy initialization.
+    /// Returns the resolved clever error if available, or None if resolution fails.
+    ///
+    /// Since protocol version 48, the Sui protocol layer automatically resolves module ID, which makes
+    /// clever error resolution available. Before version 48, this will return None.
+    async fn clever_error(&self) -> &Option<CleverError> {
+        let ExecutionFailureStatus::MoveAbort(location, raw_code) = &self.native else {
+            // Not a Move abort, no clever error possible
+            static NONE: Option<CleverError> = None;
+            return &NONE;
+        };
+
+        self.clever
+            .get_or_init(|| async {
+                self.scope
+                    .package_resolver()
+                    .resolve_clever_error(location.module.clone(), *raw_code)
+                    .await
+            })
+            .await
+    }
+
+    /// Formats the error message with sophisticated logic.
+    ///
+    /// Handles command context, Move abort details, and clever error information.
+    async fn format_error_message(&self) -> Result<String, std::fmt::Error> {
+        match self.command {
+            None => {
+                // No command context, just return the error string
+                Ok(self.native.to_string())
+            }
+            Some(command) => {
+                // Add command context with ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
+                let command = command + 1;
+                let suffix = match command % 10 {
+                    1 if command % 100 != 11 => "st",
+                    2 if command % 100 != 12 => "nd",
+                    3 if command % 100 != 13 => "rd",
+                    _ => "th",
+                };
+
+                let mut msg = String::new();
+                write!(msg, "Error in {command}{suffix} command, ")?;
+
+                // Handle Move aborts with detailed formatting. Otherwise, just append the error.
+                let ExecutionFailureStatus::MoveAbort(loc, code) = &self.native else {
+                    write!(msg, "{}", self.native)?;
+                    return Ok(msg);
+                };
+
+                // Format Move abort with module and function info
+                write!(msg, "from '{}", loc.module.to_canonical_display(true))?;
+                if let Some(fname) = &loc.function_name {
+                    write!(msg, "::{}'", fname)?;
+                } else {
+                    write!(msg, "'")?;
+                }
+
+                // Try to get clever error information
+                let Some(CleverError {
+                    source_line_number,
+                    error_info,
+                    error_code,
+                    ..
+                }) = self.clever_error().await.as_ref()
+                else {
+                    // No clever error, show basic abort info
+                    write!(
+                        msg,
+                        " (instruction {}), abort code: {code}",
+                        loc.instruction
+                    )?;
+                    return Ok(msg);
+                };
+
+                // Format with clever error details
+                let error_code_str = match error_code {
+                    Some(code) => format!("(code = {code})"),
+                    _ => String::new(),
+                };
+
+                match error_info {
+                    ErrorConstants::Rendered {
+                        identifier,
+                        constant,
+                    } => {
+                        write!(
+                            msg,
+                            " (line {source_line_number}), abort{error_code_str} '{identifier}': {constant}"
+                        )?;
+                    }
+                    ErrorConstants::Raw { identifier, bytes } => {
+                        let const_str = Base64::encode(bytes);
+                        write!(
+                            msg,
+                            " (line {source_line_number}), abort{error_code_str} '{identifier}': {const_str}"
+                        )?;
+                    }
+                    ErrorConstants::None => {
+                        write!(
+                            msg,
+                            " (line {source_line_number}){}",
+                            match error_code {
+                                Some(code) => format!(" abort(code = {code})"),
+                                _ => String::new(),
+                            }
+                        )?;
+                    }
+                }
+
+                Ok(msg)
+            }
+        }
+    }
+}
+
+/// Resolves runtime module ID to storage package ID for Move aborts.
 ///
-/// This is necessary because when a Move abort occurs, the error contains the runtime
-/// module ID, but to resolve clever errors we need the storage package ID where the
-/// module actually lives. This is especially important for upgraded packages where
-/// the runtime module ID might differ from the storage package ID.
+/// Only needed for protocol versions before v48. Starting with v48, the Move VM
+/// automatically resolves abort locations to storage IDs, so `resolve_module_id` will
+/// return LinkageNotFound (expected) and this function becomes a no-op.
 async fn resolve_module_id_for_move_abort(
-    ctx: &Context<'_>,
+    scope: &Scope,
     native_error: &mut ExecutionFailureStatus,
     command: Option<usize>,
     programmable_tx: Option<&ProgrammableTransaction>,
-) -> Result<(), RpcError> {
+) -> Result<(), anyhow::Error> {
     use sui_types::execution_status::MoveLocationOpt;
     use sui_types::transaction::Command;
 
@@ -53,143 +322,28 @@ async fn resolve_module_id_for_move_abort(
         return Ok(());
     };
 
-    let resolver: &PackageResolver = ctx.data()?;
     let module_new = module.clone();
 
-    // Resolve runtime module ID to storage package ID
-    *module = resolver
+    // Try to resolve runtime module ID to storage package ID
+    // Only ignore LinkageNotFound errors (expected for protocol v48+)
+    // Treat all other errors as internal errors
+    match scope
+        .package_resolver()
         .resolve_module_id(module_new, ptb_call.package.into())
         .await
-        .context("Error resolving Move location")?;
-
-    Ok(())
-}
-
-#[derive(Clone)]
-pub(crate) struct ExecutionError {
-    native: ExecutionFailureStatus,
-    clever: OnceCell<Option<CleverError>>,
-}
-
-/// Represents execution error information for failed transactions.
-#[Object]
-impl ExecutionError {
-    /// The error code of the Move abort, populated if this transaction failed with a Move abort.
-    ///
-    /// Returns the explicit code if the abort used `code` annotation (e.g., `abort(ERR, code = 5)` returns 5), otherwise returns the raw abort code containing encoded error information.
-    async fn abort_code(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
-        let ExecutionFailureStatus::MoveAbort(_, raw_code) = &self.native else {
-            return Ok(None);
-        };
-
-        let clever_error = self.clever_error(ctx).await?;
-
-        // Use clever error code if available, otherwise fall back to raw code
-        Ok(Some(BigInt::from(
-            clever_error
-                .as_ref()
-                .and_then(|err| err.error_code)
-                .map_or(*raw_code, |code| code as u64),
-        )))
-    }
-
-    /// The source line number for the abort. Only populated for clever errors.
-    async fn source_line_number(&self, ctx: &Context<'_>) -> Result<Option<u64>, RpcError> {
-        let Some(clever_error) = self.clever_error(ctx).await? else {
-            return Ok(None);
-        };
-
-        Ok(Some(clever_error.source_line_number as u64))
-    }
-
-    /// The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
-    async fn instruction_offset(&self) -> Result<Option<u16>, RpcError> {
-        match &self.native {
-            ExecutionFailureStatus::MoveAbort(location, _) => Ok(Some(location.instruction)),
-            ExecutionFailureStatus::MovePrimitiveRuntimeError(location_opt) => {
-                Ok(location_opt.0.as_ref().map(|loc| loc.instruction))
-            }
-            _ => Ok(None),
+    {
+        Ok(resolved_module) => {
+            *module = resolved_module;
+        }
+        Err(sui_package_resolver::error::Error::LinkageNotFound(_)) => {
+            // Expected for protocol v48+, ignore
+        }
+        Err(e) => {
+            return Err(
+                anyhow::Error::from(e).context("Failed to resolve module ID for execution error")
+            );
         }
     }
 
-    /// The error's name. Only populated for clever errors.
-    async fn identifier(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
-        use sui_package_resolver::ErrorConstants;
-
-        let Some(clever_error) = self.clever_error(ctx).await? else {
-            return Ok(None);
-        };
-
-        Ok(match &clever_error.error_info {
-            ErrorConstants::None => None,
-            ErrorConstants::Rendered { identifier, .. } => Some(identifier.clone()),
-            ErrorConstants::Raw { identifier, .. } => Some(identifier.clone()),
-        })
-    }
-
-    /// An associated constant for the error. Only populated for clever errors.
-    ///
-    /// Constants are returned as human-readable strings when possible. Complex types are returned as Base64-encoded bytes.
-    async fn constant(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
-        use sui_package_resolver::ErrorConstants;
-
-        let Some(clever_error) = self.clever_error(ctx).await? else {
-            return Ok(None);
-        };
-
-        let constant = match &clever_error.error_info {
-            ErrorConstants::None => None,
-            ErrorConstants::Rendered { constant, .. } => Some(constant.clone()),
-            ErrorConstants::Raw { bytes, .. } => Some(Base64::encode(bytes)),
-        };
-
-        Ok(constant)
-    }
-}
-
-impl ExecutionError {
-    /// Factory method to create ExecutionError from execution failure status.
-    /// Resolves module ID in-place for Move aborts.
-    pub(crate) async fn from_execution_status(
-        ctx: &Context<'_>,
-        status: &NativeExecutionStatus,
-        programmable_tx: Option<&ProgrammableTransaction>,
-    ) -> Result<Option<Self>, RpcError> {
-        let NativeExecutionStatus::Failure { error, command } = status else {
-            return Ok(None);
-        };
-
-        // Clone the error so we can modify it in-place
-        let mut native_error: ExecutionFailureStatus = error.clone();
-
-        // Resolve the module ID for Move aborts to ensure we use the correct package version
-        // when resolving clever errors later. This is critical for package upgrades.
-        resolve_module_id_for_move_abort(ctx, &mut native_error, *command, programmable_tx).await?;
-
-        Ok(Some(Self {
-            native: native_error,
-            clever: OnceCell::new(),
-        }))
-    }
-
-    /// Helper method to get the clever error, using OnceCell for lazy initialization.
-    /// Returns the resolved clever error if available, or None if resolution fails.
-    async fn clever_error(&self, ctx: &Context<'_>) -> Result<&Option<CleverError>, RpcError> {
-        let ExecutionFailureStatus::MoveAbort(location, raw_code) = &self.native else {
-            // Not a Move abort, no clever error possible
-            static NONE: Option<CleverError> = None;
-            return Ok(&NONE);
-        };
-
-        self.clever
-            .get_or_try_init(|| async {
-                let resolver: &PackageResolver = ctx.data()?;
-                let result = resolver
-                    .resolve_clever_error(location.module.clone(), *raw_code)
-                    .await;
-                Ok(result)
-            })
-            .await
-    }
+    Ok(())
 }

@@ -7,11 +7,13 @@ use crate::{
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
-    programmable_transactions as legacy_ptb, sp,
+    programmable_transactions::{self as legacy_ptb},
+    sp,
     static_programmable_transactions::{
         env::Env,
         execution::values::{Local, Locals, Value},
         linkage::resolved_linkage::{ResolvedLinkage, RootedLinkage},
+        loading::ast::ObjectMutability,
         typing::ast::{self as T, Type},
     },
 };
@@ -47,11 +49,9 @@ use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, TxContext},
     error::{ExecutionError, ExecutionErrorKind},
     execution::ExecutionResults,
-    execution_config_utils::to_binary_config,
     metrics::LimitsMetrics,
     move_package::{MovePackage, UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::{MoveObject, Object, Owner},
-    storage::PackageObject,
 };
 use sui_verifier::INIT_FN_NAME;
 use tracing::instrument;
@@ -96,7 +96,7 @@ pub struct CtxValue(Value);
 #[derive(Clone, Debug)]
 pub struct InputObjectMetadata {
     pub id: ObjectID,
-    pub is_mutable_input: bool,
+    pub mutability: ObjectMutability,
     pub owner: Owner,
     pub version: SequenceNumber,
     pub type_: Type,
@@ -162,7 +162,7 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
 impl Locations {
     /// NOTE! This does not charge gas and should not be used directly. It is exposed for
     /// dev-inspect
-    fn resolve(&mut self, location: T::Location) -> Result<ResolvedLocation, ExecutionError> {
+    fn resolve(&mut self, location: T::Location) -> Result<ResolvedLocation<'_>, ExecutionError> {
         Ok(match location {
             T::Location::TxContext => ResolvedLocation::Local(self.tx_context_value.local(0)?),
             T::Location::GasCoin => {
@@ -222,7 +222,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         for object_input in object_inputs {
             let (i, m, v) = load_object_arg(gas_charger, env, &mut input_object_map, object_input)?;
             input_object_metadata.push((i, m));
-            object_values.push(v);
+            object_values.push(Some(v));
         }
         let object_inputs = Locals::new(object_values)?;
         let pure_inputs = Locals::new_invalid(pure_input_metadata.len())?;
@@ -235,10 +235,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                     env,
                     &mut input_object_map,
                     gas_coin,
-                    true,
+                    ObjectMutability::Mutable,
                     ty,
                 )?;
-                let mut gas_locals = Locals::new([gas_value])?;
+                let mut gas_locals = Locals::new([Some(gas_value)])?;
                 let gas_local = gas_locals.local(0)?;
                 let gas_ref = gas_local.borrow()?;
                 // We have already checked that the gas balance is enough to cover the gas budget
@@ -257,7 +257,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             tx_context.clone(),
         );
 
-        let tx_context_value = Locals::new(vec![Value::tx_context(tx_context.borrow().digest())?])?;
+        let tx_context_value = Locals::new(vec![Some(Value::new_tx_context(
+            tx_context.borrow().digest(),
+        )?)])?;
         Ok(Self {
             env,
             metrics,
@@ -307,14 +309,17 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         for (metadata, value_opt) in object_inputs.into_iter().chain(gas) {
             let InputObjectMetadata {
                 id,
-                is_mutable_input,
+                mutability,
                 owner,
                 version,
                 type_,
             } = metadata;
-            // We are only interested in mutable inputs.
-            if !is_mutable_input {
-                continue;
+            match mutability {
+                ObjectMutability::Immutable => continue,
+                // It is illegal to mutate NonExclusiveWrites, but they are passed as &mut T,
+                // so we need to treat them as mutable here. After execution, we check if they
+                // have been mutated, and abort the tx if they have.
+                ObjectMutability::NonExclusiveWrite | ObjectMutability::Mutable => (),
             }
             loaded_runtime_objects.insert(
                 id,
@@ -360,6 +365,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             mut created_object_ids,
             deleted_object_ids,
             accumulator_events,
+            settlement_input_sui,
+            settlement_output_sui,
         } = object_runtime.finish()?;
         assert_invariant!(
             remaining_events.is_empty(),
@@ -403,46 +410,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             written_objects.insert(id, package_obj);
         }
 
-        // Before finishing, ensure that any shared object taken by value by the transaction is either:
-        // 1. Mutated (and still has a shared ownership); or
-        // 2. Deleted.
-        // Otherwise, the shared object operation is not allowed and we fail the transaction.
-        for id in &by_value_shared_objects {
-            // If it's been written it must have been reshared so must still have an ownership
-            // of `Shared`.
-            if let Some(obj) = written_objects.get(id) {
-                if !obj.is_shared() {
-                    return Err(ExecutionError::new(
-                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                        Some(
-                            format!(
-                                "Shared object operation on {} not allowed: \
-                                 cannot be frozen, transferred, or wrapped",
-                                id
-                            )
-                            .into(),
-                        ),
-                    ));
-                }
-            } else {
-                // If it's not in the written objects, the object must have been deleted. Otherwise
-                // it's an error.
-                if !deleted_object_ids.contains(id) {
-                    return Err(ExecutionError::new(
-                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                        Some(
-                            format!(
-                                "Shared object operation on {} not allowed: \
-                                     shared objects used by value must be re-shared if not deleted",
-                                id
-                            )
-                            .into(),
-                        ),
-                    ));
-                }
-            }
-        }
-
         legacy_ptb::context::finish(
             env.protocol_config,
             env.state_view,
@@ -456,10 +423,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             deleted_object_ids,
             user_events,
             accumulator_events,
+            settlement_input_sui,
+            settlement_output_sui,
         )
     }
 
-    pub fn object_runtime(&self) -> Result<&ObjectRuntime, ExecutionError> {
+    pub fn object_runtime(&self) -> Result<&ObjectRuntime<'_>, ExecutionError> {
         self.native_extensions
             .get::<ObjectRuntime>()
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))
@@ -576,10 +545,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         args.into_iter().map(|arg| self.argument(arg)).collect()
     }
 
-    pub fn result(&mut self, result: Vec<CtxValue>) -> Result<(), ExecutionError> {
+    pub fn result(&mut self, result: Vec<Option<CtxValue>>) -> Result<(), ExecutionError> {
         self.locations
             .results
-            .push(Locals::new(result.into_iter().map(|v| v.0))?);
+            .push(Locals::new(result.into_iter().map(|v| v.map(|v| v.0)))?);
         Ok(())
     }
 
@@ -703,7 +672,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             self.gas_charger.charge_publish_package(total_bytes)?
         }
 
-        let binary_config = to_binary_config(self.env.protocol_config);
+        let binary_config = self.env.protocol_config.binary_config(None);
         let modules = module_bytes
             .iter()
             .map(|b| {
@@ -715,15 +684,64 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(modules)
     }
 
-    fn fetch_package(&mut self, dependency_id: &ObjectID) -> Result<PackageObject, ExecutionError> {
-        legacy_ptb::execution::fetch_package(&self.env.state_view, dependency_id)
+    fn fetch_package(
+        &mut self,
+        dependency_id: &ObjectID,
+    ) -> Result<Rc<MovePackage>, ExecutionError> {
+        let [fetched_package] = self.fetch_packages(&[*dependency_id])?.try_into().map_err(
+            |_| {
+                make_invariant_violation!(
+                    "We should always fetch a single package for each object or return a dependency error."
+                )
+            },
+        )?;
+        Ok(fetched_package)
     }
 
     fn fetch_packages(
         &mut self,
         dependency_ids: &[ObjectID],
-    ) -> Result<Vec<PackageObject>, ExecutionError> {
-        legacy_ptb::execution::fetch_packages(&self.env.state_view, dependency_ids)
+    ) -> Result<Vec<Rc<MovePackage>>, ExecutionError> {
+        let mut fetched = vec![];
+        let mut missing = vec![];
+
+        for id in dependency_ids {
+            match self.env.linkable_store.get_package(id) {
+                Err(e) => {
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::PublishUpgradeMissingDependency,
+                        e,
+                    ));
+                }
+                Ok(Some(inner)) => {
+                    fetched.push(inner);
+                }
+                Ok(None) => {
+                    missing.push(*id);
+                }
+            }
+        }
+
+        if missing.is_empty() {
+            assert_invariant!(
+                fetched.len() == dependency_ids.len(),
+                "all dependencies should be fetched"
+            );
+            Ok(fetched)
+        } else {
+            let msg = format!(
+                "Missing dependencies: {}",
+                missing
+                    .into_iter()
+                    .map(|dep| format!("{}", dep))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::PublishUpgradeMissingDependency,
+                msg,
+            ))
+        }
     }
 
     fn publish_and_verify_modules(
@@ -795,11 +813,15 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 "init function should have at most 2 parameters"
             );
             let has_otw = fparameters.0.len() == 2;
-            let tx_context = CtxValue(Value::tx_context(self.tx_context.borrow().digest())?);
+            let tx_context = self
+                .location(UsageKind::Borrow, T::Location::TxContext)
+                .map_err(|e| {
+                    make_invariant_violation!("Failed to get tx context for init function: {}", e)
+                })?;
             let args = if has_otw {
-                vec![CtxValue(Value::one_time_witness()?), tx_context]
+                vec![CtxValue(Value::one_time_witness()?), CtxValue(tx_context)]
             } else {
-                vec![tx_context]
+                vec![CtxValue(tx_context)]
             };
             let return_values = self.execute_function_bypass_visibility(
                 &module.self_id(),
@@ -849,7 +871,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let package = Rc::new(MovePackage::new_initial(
             &modules,
             self.env.protocol_config,
-            dependencies.iter().map(|p| p.move_package()),
+            dependencies.iter().map(|p| p.as_ref()),
         )?);
         let package_id = package.id();
 
@@ -882,9 +904,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         linkage: ResolvedLinkage,
     ) -> Result<ObjectID, ExecutionError> {
         // Check that this package ID points to a package and get the package we're upgrading.
-        let current_package = self.fetch_package(&current_package_id)?;
+        let current_move_package = self.fetch_package(&current_package_id)?;
 
-        let runtime_id = current_package.move_package().original_package_id();
+        let runtime_id = current_move_package.original_package_id();
         adapter::substitute_package_id(&mut modules, runtime_id)?;
 
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
@@ -894,12 +916,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let storage_id = self.tx_context.borrow_mut().fresh_id();
 
         let dependencies = self.fetch_packages(dep_ids)?;
-        let current_move_package = current_package.move_package();
         let package = current_move_package.new_upgraded(
             storage_id,
             &modules,
             self.env.protocol_config,
-            dependencies.iter().map(|p| p.move_package()),
+            dependencies.iter().map(|p| p.as_ref()),
         )?;
 
         let linkage = RootedLinkage::new_for_publication(storage_id, runtime_id, linkage);
@@ -907,7 +928,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
         legacy_ptb::execution::check_compatibility(
             self.env.protocol_config,
-            current_package.move_package(),
+            current_move_package.as_ref(),
             &modules,
             upgrade_ticket_policy,
         )?;
@@ -915,8 +936,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         if self.env.protocol_config.check_for_init_during_upgrade() {
             // find newly added modules to the package,
             // and error if they have init functions
-            let current_module_names: BTreeSet<&str> = current_package
-                .move_package()
+            let current_module_names: BTreeSet<&str> = current_move_package
                 .serialized_module_map()
                 .keys()
                 .map(|s| s.as_str())
@@ -1151,9 +1171,9 @@ fn load_object_arg(
     input: T::ObjectInput,
 ) -> Result<(T::InputIndex, InputObjectMetadata, Value), ExecutionError> {
     let id = input.arg.id();
-    let is_mutable_input = input.arg.is_mutable();
+    let mutability = input.arg.mutability();
     let (metadata, value) =
-        load_object_arg_impl(meter, env, input_object_map, id, is_mutable_input, input.ty)?;
+        load_object_arg_impl(meter, env, input_object_map, id, mutability, input.ty)?;
     Ok((input.original_input_index, metadata, value))
 }
 
@@ -1162,7 +1182,7 @@ fn load_object_arg_impl(
     env: &Env,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     id: ObjectID,
-    is_mutable_input: bool,
+    mutability: ObjectMutability,
     ty: T::Type,
 ) -> Result<(InputObjectMetadata, Value), ExecutionError> {
     let obj = env.read_object(&id)?;
@@ -1170,7 +1190,7 @@ fn load_object_arg_impl(
     let version = obj.version();
     let object_metadata = InputObjectMetadata {
         id,
-        is_mutable_input,
+        mutability,
         owner: owner.clone(),
         version,
         type_: ty.clone(),
@@ -1242,7 +1262,7 @@ fn refund_max_gas_budget<OType>(
     };
     // replace with dummy value
     let value = std::mem::replace(value_ref, VMValue::u8(0));
-    let mut locals = Locals::new([value.into()])?;
+    let mut locals = Locals::new([Some(value.into())])?;
     let mut local = locals.local(0)?;
     let coin_value = local.borrow()?.coin_ref_value()?;
     let additional = gas_charger.gas_budget();

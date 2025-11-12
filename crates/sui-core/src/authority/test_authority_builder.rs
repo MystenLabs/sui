@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::ExecutionEnv;
 use super::backpressure::BackpressureManager;
 use super::epoch_start_configuration::EpochFlag;
-use super::ExecutionEnv;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store_pruner::ObjectsCompactionFilter;
+use crate::authority::authority_store_pruner::{ObjectsCompactionFilter, PrunerWatermarks};
 use crate::authority::authority_store_tables::{
     AuthorityPerpetualTables, AuthorityPerpetualTablesOptions, AuthorityPrunerTables,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::submitted_transaction_cache::SubmittedTransactionCacheMetrics;
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
@@ -26,6 +27,7 @@ use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use std::path::PathBuf;
 use std::sync::Arc;
+use sui_config::ExecutionCacheConfig;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
 use sui_config::node::AuthorityOverloadConfig;
@@ -33,7 +35,6 @@ use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
 use sui_config::transaction_deny_config::TransactionDenyConfig;
-use sui_config::ExecutionCacheConfig;
 use sui_macros::nondeterministic;
 use sui_network::randomness;
 use sui_protocol_config::{Chain, ProtocolConfig};
@@ -107,10 +108,11 @@ impl<'a> TestAuthorityBuilder<'a> {
     pub fn with_reference_gas_price(mut self, reference_gas_price: u64) -> Self {
         // If genesis is already set then setting rgp is meaningless since it will be overwritten.
         assert!(self.genesis.is_none());
-        assert!(self
-            .reference_gas_price
-            .replace(reference_gas_price)
-            .is_none());
+        assert!(
+            self.reference_gas_price
+                .replace(reference_gas_price)
+                .is_none()
+        );
         self
     }
 
@@ -221,6 +223,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
                     &path.join("store"),
                     Some(perpetual_tables_options),
+                    None,
                 ));
                 // unwrap ok - for testing only.
                 AuthorityStore::open_with_committee_for_testing(
@@ -256,7 +259,9 @@ impl<'a> TestAuthorityBuilder<'a> {
         .unwrap();
         let expensive_safety_checks = self.expensive_safety_checks.unwrap_or_default();
 
-        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+        let pruner_watermarks = Arc::new(PrunerWatermarks::default());
+        let checkpoint_store =
+            CheckpointStore::new(&path.join("checkpoints"), pruner_watermarks.clone());
         let backpressure_manager =
             BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
 
@@ -290,6 +295,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .get_highest_executed_checkpoint_seq_number()
                 .unwrap()
                 .unwrap_or(0),
+            Arc::new(SubmittedTransactionCacheMetrics::new(&registry)),
         )
         .expect("failed to create authority per epoch store");
         let committee_store = Arc::new(CommitteeStore::new(
@@ -327,7 +333,8 @@ impl<'a> TestAuthorityBuilder<'a> {
                     &checkpoint_store,
                     &epoch_store,
                     &cache_traits.backing_package_store,
-                    None,
+                    pruner_watermarks.checkpoint_id.clone(),
+                    sui_config::RpcConfig::default(),
                 )
                 .await,
             ))
@@ -374,6 +381,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             pruner_db,
             policy_config,
             firewall_config,
+            Arc::new(PrunerWatermarks::default()),
         )
         .await;
 

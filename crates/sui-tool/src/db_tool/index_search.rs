@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::{path::PathBuf, str::FromStr};
 use sui_types::digests::TransactionDigest;
 use typed_store::rocks::{DBMap, MetricConf};
@@ -13,8 +13,8 @@ use move_core_types::language_storage::ModuleId;
 use std::fmt::Debug;
 use sui_core::jsonrpc_index::IndexStoreTables;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress, TxSequenceNumber},
     Identifier,
+    base_types::{ObjectID, SuiAddress, TxSequenceNumber},
 };
 
 #[derive(Clone, Debug)]

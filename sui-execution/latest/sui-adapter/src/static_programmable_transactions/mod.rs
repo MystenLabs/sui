@@ -2,9 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_store::cached_package_store::CachedPackageStore, execution_mode::ExecutionMode,
-    execution_value::ExecutionState, gas_charger::GasCharger,
-    static_programmable_transactions::env::Env,
+    data_store::cached_package_store::CachedPackageStore,
+    execution_mode::ExecutionMode,
+    execution_value::ExecutionState,
+    gas_charger::GasCharger,
+    static_programmable_transactions::{
+        env::Env, linkage::analysis::LinkageAnalyzer, metering::translation_meter,
+    },
 };
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::move_vm::MoveVM;
@@ -22,6 +26,7 @@ pub mod env;
 pub mod execution;
 pub mod linkage;
 pub mod loading;
+pub mod metering;
 pub mod spanned;
 pub mod typing;
 
@@ -37,22 +42,23 @@ pub fn execute<Mode: ExecutionMode>(
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
     let package_store = CachedPackageStore::new(Box::new(package_store));
-    let linkage_analysis = linkage::analysis::linkage_analysis_for_protocol_config::<Mode>(
-        protocol_config,
-        &txn,
-        &package_store,
-    )
-    .map_err(|e| (e, vec![]))?;
+    let linkage_analysis =
+        LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e, vec![]))?;
 
     let mut env = Env::new(
         protocol_config,
         vm,
         state_view,
         &package_store,
-        linkage_analysis.as_ref(),
+        &linkage_analysis,
     );
-    let txn = loading::translate::transaction(&env, txn).map_err(|e| (e, vec![]))?;
-    let txn = typing::translate_and_verify::<Mode>(&env, txn).map_err(|e| (e, vec![]))?;
+    let mut translation_meter =
+        translation_meter::TranslationMeter::new(protocol_config, gas_charger);
+
+    let txn = loading::translate::transaction(&mut translation_meter, &env, txn)
+        .map_err(|e| (e, vec![]))?;
+    let txn = typing::translate_and_verify::<Mode>(&mut translation_meter, &env, txn)
+        .map_err(|e| (e, vec![]))?;
     execution::interpreter::execute::<Mode>(
         &mut env,
         metrics,

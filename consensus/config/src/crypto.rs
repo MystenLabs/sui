@@ -36,7 +36,7 @@ impl NetworkPublicKey {
     }
 
     pub fn to_bytes(&self) -> [u8; 32] {
-        self.0 .0.to_bytes()
+        self.0.0.to_bytes()
     }
 }
 

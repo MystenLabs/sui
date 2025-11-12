@@ -98,9 +98,9 @@ public struct TransactionEffects has drop {
     /// The objects deleted this transaction
     deleted: vector<ID>,
     /// The objects transferred to an account this transaction
-    transferred_to_account: VecMap<ID /* owner */, address>,
+    transferred_to_account: VecMap<ID, /* owner */ address>,
     /// The objects transferred to an object this transaction
-    transferred_to_object: VecMap<ID /* owner */, ID>,
+    transferred_to_object: VecMap<ID, /* owner */ ID>,
     /// The objects shared this transaction
     shared: vector<ID>,
     /// The objects frozen this transaction
@@ -238,6 +238,21 @@ public fun begin_with_context(ctx_builder: TxContextBuilder): Scenario {
     }
 }
 
+/// Creates and shares system objects, allowing `Random`, `Clock`, `DenyList`
+/// and other "native" objects, so they are available in the inventory.
+///
+/// NOTE: make sure to update this call when adding new system objects.
+public fun create_system_objects(scenario: &mut Scenario) {
+    let sender = scenario.ctx().sender();
+
+    // Force publishing as system - 0x0.
+    scenario.next_tx(@0x0);
+    sui::clock::create_for_testing(scenario.ctx()).share_for_testing();
+    sui::random::create_for_testing(scenario.ctx());
+    sui::deny_list::create_for_testing(scenario.ctx());
+    scenario.next_tx(sender);
+}
+
 /// Advance the scenario to a new transaction where `sender` is the transaction sender
 /// All objects transferred will be moved into the inventories of the account or the global
 /// inventory. In other words, in order to access an object with one of the various "take"
@@ -334,12 +349,10 @@ public fun later_epoch(
 /// Advance the scenario to a future `epoch`. Will abort if the `epoch` is in the past.
 public fun skip_to_epoch(scenario: &mut Scenario, epoch: u64) {
     assert!(epoch >= scenario.ctx.epoch());
-    (epoch - scenario.ctx.epoch()).do!(
-        |_| {
-            scenario.ctx.increment_epoch_number();
-            end_transaction()
-        },
-    )
+    (epoch - scenario.ctx.epoch()).do!(|_| {
+        scenario.ctx.increment_epoch_number();
+        end_transaction()
+    })
 }
 
 /// Ends the test scenario

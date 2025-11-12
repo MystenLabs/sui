@@ -4,12 +4,11 @@
 use std::collections::BTreeMap;
 
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
-    digests::TransactionDigest,
-    transaction::Reservation,
+    accumulator_root::AccumulatorObjId, base_types::SequenceNumber, digests::TransactionDigest,
 };
 
 mod balance_read;
+mod eager_scheduler;
 mod naive_scheduler;
 pub(crate) mod scheduler;
 #[cfg(test)]
@@ -28,10 +27,12 @@ pub(crate) enum ScheduleStatus {
     /// This transaction should result in an execution failure without actually executing it, similar to
     /// how transaction cancellation works.
     InsufficientBalance,
-    /// The accumulator version for this transaction has already been executed/settled.
-    /// The caller should stop the scheduling of this transaction.
-    /// This happens when the transaction can be executed through checkpoint executor.
-    AlreadyExecuted,
+    /// We can skip scheduling this transaction, due to one of the following reasons:
+    /// 1. The accumulator version for this transaction has already been settled.
+    /// 2. We are observing some account objects bumping to the next version, indicating
+    ///    that the withdraw transactions in this commit have already been executed and are
+    ///    being settled.
+    SkipSchedule,
 }
 
 /// The result of scheduling the withdraw reservations for a transaction.
@@ -43,20 +44,19 @@ pub(crate) struct ScheduleResult {
 
 /// Details regarding a balance settlement, generated when a settlement transaction has been executed
 /// and committed to the writeback cache.
+#[derive(Debug, Clone)]
 pub struct BalanceSettlement {
-    /// The accumulator version at which the settlement was committed.
-    /// i.e. the root accumulator object is now at this version after the settlement.
-    pub accumulator_version: SequenceNumber,
+    // After this settlement, the accumulator object will be at this version.
+    // This means that all transactions that read `next_accumulator_version - 1`
+    // are settled as part of this settlement.
+    pub next_accumulator_version: SequenceNumber,
     /// The balance changes for each account object ID.
-    /// This is currently unused because the naive scheduler
-    /// always load the latest balance during scheduling.
-    #[allow(unused)]
-    pub balance_changes: BTreeMap<ObjectID, i128>,
+    pub balance_changes: BTreeMap<AccumulatorObjId, i128>,
 }
 
 /// Details regarding all balance withdraw reservations in a transaction.
 #[derive(Clone, Debug)]
 pub(crate) struct TxBalanceWithdraw {
     pub tx_digest: TransactionDigest,
-    pub reservations: BTreeMap<ObjectID, Reservation>,
+    pub reservations: BTreeMap<AccumulatorObjId, u64>,
 }

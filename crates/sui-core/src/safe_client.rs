@@ -4,11 +4,10 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::transaction_driver::{ExecutedData, SubmitTxResponse, WaitForEffectsResponse};
 use prometheus::core::GenericCounter;
 use prometheus::{
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry, Histogram,
-    HistogramVec, IntCounterVec, Registry,
+    Histogram, HistogramVec, IntCounterVec, Registry, register_histogram_vec_with_registry,
+    register_int_counter_vec_with_registry,
 };
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -20,16 +19,18 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-    ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest, RawWaitForEffectsRequest,
-    SystemStateRequest, TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
+    ExecutedData, HandleCertificateRequestV3, HandleCertificateResponseV2,
+    HandleCertificateResponseV3, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
+    SubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionStatus,
+    ValidatorHealthRequest, ValidatorHealthResponse, VerifiedObjectInfoResponse,
+    WaitForEffectsRequest, WaitForEffectsResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
-    error::{SuiError, SuiResult},
+    error::{SuiError, SuiErrorKind, SuiResult},
     transaction::*,
 };
 use tap::TapFallible;
@@ -189,7 +190,7 @@ impl<C: Clone> SafeClient<C> {
     fn get_committee(&self, epoch_id: &EpochId) -> SuiResult<Arc<Committee>> {
         self.committee_store
             .get_committee(epoch_id)?
-            .ok_or(SuiError::MissingCommitteeAtEpoch(*epoch_id))
+            .ok_or(SuiErrorKind::MissingCommitteeAtEpoch(*epoch_id).into())
     }
 
     fn check_signed_effects_plain(
@@ -201,30 +202,33 @@ impl<C: Clone> SafeClient<C> {
         // Check it has the right signer
         fp_ensure!(
             signed_effects.auth_sig().authority == self.address,
-            SuiError::ByzantineAuthoritySuspicion {
+            SuiErrorKind::ByzantineAuthoritySuspicion {
                 authority: self.address,
                 reason: format!(
                     "Unexpected validator address in the signed effects signature: {:?}",
                     signed_effects.auth_sig().authority
                 ),
             }
+            .into()
         );
         // Checks it concerns the right tx
         fp_ensure!(
             signed_effects.data().transaction_digest() == digest,
-            SuiError::ByzantineAuthoritySuspicion {
+            SuiErrorKind::ByzantineAuthoritySuspicion {
                 authority: self.address,
                 reason: "Unexpected tx digest in the signed effects".to_string()
             }
+            .into()
         );
         // check that the effects digest is correct.
         if let Some(effects_digest) = expected_effects_digest {
             fp_ensure!(
                 signed_effects.digest() == effects_digest,
-                SuiError::ByzantineAuthoritySuspicion {
+                SuiErrorKind::ByzantineAuthoritySuspicion {
                     authority: self.address,
                     reason: "Effects digest does not match with expected digest".to_string()
                 }
+                .into()
             );
         }
         self.get_committee(&signed_effects.epoch())?;
@@ -239,10 +243,11 @@ impl<C: Clone> SafeClient<C> {
     ) -> SuiResult<PlainTransactionInfoResponse> {
         fp_ensure!(
             digest == transaction.digest(),
-            SuiError::ByzantineAuthoritySuspicion {
+            SuiErrorKind::ByzantineAuthoritySuspicion {
                 authority: self.address,
                 reason: "Signed transaction digest does not match with expected digest".to_string()
             }
+            .into()
         );
         match status {
             TransactionStatus::Signed(signed) => {
@@ -261,7 +266,7 @@ impl<C: Clone> SafeClient<C> {
                             cert,
                         );
                         ct.verify_committee_sigs_only(&committee).map_err(|e| {
-                            SuiError::FailedToVerifyTxCertWithExecutedEffects {
+                            SuiErrorKind::FailedToVerifyTxCertWithExecutedEffects {
                                 validator_name: self.address,
                                 error: e.to_string(),
                             }
@@ -295,10 +300,11 @@ impl<C: Clone> SafeClient<C> {
 
         fp_ensure!(
             request.object_id == object.id(),
-            SuiError::ByzantineAuthoritySuspicion {
+            SuiErrorKind::ByzantineAuthoritySuspicion {
                 authority: self.address,
                 reason: "Object id mismatch in the response".to_string()
             }
+            .into()
         );
 
         Ok(VerifiedObjectInfoResponse { object })
@@ -316,35 +322,32 @@ where
     /// Submit a transaction for certification and execution.
     pub async fn submit_transaction(
         &self,
-        request: RawSubmitTxRequest,
+        request: SubmitTxRequest,
         client_addr: Option<SocketAddr>,
     ) -> Result<SubmitTxResponse, SuiError> {
         let _timer = self.metrics.handle_certificate_latency.start_timer();
-        let response = self
-            .authority_client
+        self.authority_client
             .submit_transaction(request, client_addr)
-            .await?;
-        response.try_into()
+            .await
     }
 
     /// Wait for effects of a transaction that has been submitted to the network
     /// through the `submit_transaction` API.
     pub async fn wait_for_effects(
         &self,
-        request: RawWaitForEffectsRequest,
+        request: WaitForEffectsRequest,
         client_addr: Option<SocketAddr>,
     ) -> Result<WaitForEffectsResponse, SuiError> {
         let _timer = self.metrics.handle_certificate_latency.start_timer();
-        let response = self
+        let wait_for_effects_resp = self
             .authority_client
             .wait_for_effects(request, client_addr)
             .await?;
 
-        let wait_for_effects_resp = WaitForEffectsResponse::try_from(response)?;
-
         match &wait_for_effects_resp {
             WaitForEffectsResponse::Executed {
                 effects_digest: _,
+                fast_path: _,
                 details: Some(details),
             } => {
                 self.verify_executed_data((**details).clone())?;
@@ -422,11 +425,12 @@ where
             (None, None) | (None, Some(_)) => Ok(()),
             (Some(events), None) => {
                 if !events.data.is_empty() {
-                    Err(SuiError::ByzantineAuthoritySuspicion {
+                    Err(SuiErrorKind::ByzantineAuthoritySuspicion {
                         authority: self.address,
                         reason: "Returned events but no event digest present in effects"
                             .to_string(),
-                    })
+                    }
+                    .into())
                 } else {
                     Ok(())
                 }
@@ -434,10 +438,11 @@ where
             (Some(events), Some(events_digest)) => {
                 fp_ensure!(
                     &events.digest() == events_digest,
-                    SuiError::ByzantineAuthoritySuspicion {
+                    SuiErrorKind::ByzantineAuthoritySuspicion {
                         authority: self.address,
                         reason: "Returned events don't match events digest in effects".to_string(),
                     }
+                    .into()
                 );
                 Ok(())
             }
@@ -457,10 +462,11 @@ where
                     .get(&object_ref.0)
                     .is_none_or(|expect| &object_ref != expect)
                 {
-                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                    return Err(SuiErrorKind::ByzantineAuthoritySuspicion {
                         authority: self.address,
                         reason: "Returned object that wasn't present in effects".to_string(),
-                    });
+                    }
+                    .into());
                 }
             }
         }
@@ -586,6 +592,7 @@ where
     }
 
     /// Handle Transaction information requests for a given digest.
+    /// Only used for testing.
     #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
     pub async fn handle_transaction_info_request(
         &self,
@@ -694,5 +701,14 @@ where
         self.authority_client
             .handle_system_state_object(SystemStateRequest { _unused: false })
             .await
+    }
+
+    /// Handle validator health check requests (for latency measurement)
+    #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
+    pub async fn validator_health(
+        &self,
+        request: ValidatorHealthRequest,
+    ) -> Result<ValidatorHealthResponse, SuiError> {
+        self.authority_client.validator_health(request).await
     }
 }

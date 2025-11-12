@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::error::Result;
 use super::ObjectStore;
-use crate::balance_change::{derive_balance_changes, BalanceChange};
+use super::error::Result;
+use crate::balance_change::{BalanceChange, derive_balance_changes};
 use crate::base_types::{EpochId, ObjectID, ObjectType, SequenceNumber, SuiAddress};
 use crate::committee::Committee;
 use crate::digests::{
@@ -11,25 +11,26 @@ use crate::digests::{
 };
 use crate::dynamic_field::DynamicFieldType;
 use crate::effects::{TransactionEffects, TransactionEvents};
-use crate::full_checkpoint_content::CheckpointData;
+use crate::full_checkpoint_content::{Checkpoint, ExecutedTransaction, ObjectSet};
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
 };
 use crate::object::Object;
-use crate::storage::{get_transaction_input_objects, get_transaction_output_objects};
+use crate::storage::ObjectKey;
 use crate::transaction::{TransactionData, VerifiedTransaction};
 use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use typed_store_error::TypedStoreError;
 
 pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
 pub type PackageVersionsIterator<'a> =
     Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
+pub type AuthenticatedEventRecord = (u64, u32, u32, crate::event::Event);
 
 pub trait ReadStore: ObjectStore {
     //
@@ -138,6 +139,16 @@ pub trait ReadStore: ObjectStore {
             .collect()
     }
 
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<Vec<ObjectKey>>;
+
+    fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<CheckpointSequenceNumber>;
+
     //
     // Extra Checkpoint fetching apis
     //
@@ -158,16 +169,15 @@ pub trait ReadStore: ObjectStore {
         &self,
         checkpoint: VerifiedCheckpoint,
         checkpoint_contents: CheckpointContents,
-    ) -> anyhow::Result<CheckpointData> {
+    ) -> anyhow::Result<Checkpoint> {
         use crate::effects::TransactionEffectsAPI;
-        use crate::full_checkpoint_content::CheckpointTransaction;
         use std::collections::HashMap;
 
         let transaction_digests = checkpoint_contents
             .iter()
             .map(|execution_digests| execution_digests.transaction)
             .collect::<Vec<_>>();
-        let transactions = self
+        let txns = self
             .multi_get_transactions(&transaction_digests)
             .into_iter()
             .map(|maybe_transaction| {
@@ -186,7 +196,7 @@ pub trait ReadStore: ObjectStore {
             .flat_map(|fx| fx.events_digest().map(|_| fx.transaction_digest()).copied())
             .collect::<Vec<_>>();
 
-        let events = self
+        let mut events = self
             .multi_get_events(&event_tx_digests)
             .into_iter()
             .zip(event_tx_digests)
@@ -197,33 +207,60 @@ pub trait ReadStore: ObjectStore {
             })
             .collect::<anyhow::Result<HashMap<_, _>>>()?;
 
-        let mut full_transactions = Vec::with_capacity(transactions.len());
-        for (tx, fx) in transactions.into_iter().zip(effects) {
+        let mut transactions = Vec::with_capacity(txns.len());
+        for (tx, fx) in txns.into_iter().zip(effects) {
             let events = fx.events_digest().map(|_event_digest| {
                 events
-                    .get(fx.transaction_digest())
-                    .cloned()
+                    .remove(fx.transaction_digest())
                     .expect("event was already checked to be present")
             });
 
-            let input_objects = get_transaction_input_objects(&self, &fx)?;
-            let output_objects = get_transaction_output_objects(&self, &fx)?;
-
-            let full_transaction = CheckpointTransaction {
-                transaction: (*tx).clone().into(),
-                effects: fx,
+            let transaction = ExecutedTransaction {
+                transaction: tx.transaction_data().clone(),
+                signatures: tx.tx_signatures().to_vec(),
+                effects: fx.clone(),
                 events,
-                input_objects,
-                output_objects,
+                unchanged_loaded_runtime_objects: self
+                    .get_unchanged_loaded_runtime_objects(tx.digest())
+                    //TODO Do we throw an error or just stub in an empty vector?
+                    .unwrap_or_default(),
             };
-
-            full_transactions.push(full_transaction);
+            transactions.push(transaction);
         }
 
-        let checkpoint_data = CheckpointData {
-            checkpoint_summary: checkpoint.into(),
-            checkpoint_contents,
-            transactions: full_transactions,
+        let object_set = {
+            let refs = transactions
+                .iter()
+                .flat_map(|tx| {
+                    crate::storage::get_transaction_object_set(
+                        &tx.transaction,
+                        &tx.effects,
+                        &tx.unchanged_loaded_runtime_objects,
+                    )
+                })
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+
+            let objects = self.multi_get_objects_by_key(&refs);
+
+            let mut object_set = ObjectSet::default();
+            for (idx, object) in objects.into_iter().enumerate() {
+                object_set.insert(object.ok_or_else(|| {
+                    crate::storage::error::Error::custom(format!(
+                        "unabled to load object {:?}",
+                        refs[idx]
+                    ))
+                })?);
+            }
+            object_set
+        };
+
+        let checkpoint_data = Checkpoint {
+            summary: checkpoint.into(),
+            contents: checkpoint_contents,
+            transactions,
+            object_set,
         };
 
         Ok(checkpoint_data)
@@ -317,6 +354,20 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
         (*self).multi_get_events(event_digests)
     }
 
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<Vec<ObjectKey>> {
+        (*self).get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<CheckpointSequenceNumber> {
+        (*self).get_transaction_checkpoint(digest)
+    }
+
     fn get_full_checkpoint_contents(
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
@@ -329,7 +380,7 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
         &self,
         checkpoint: VerifiedCheckpoint,
         checkpoint_contents: CheckpointContents,
-    ) -> anyhow::Result<CheckpointData> {
+    ) -> anyhow::Result<Checkpoint> {
         (*self).get_checkpoint_data(checkpoint, checkpoint_contents)
     }
 }
@@ -421,6 +472,20 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
         (**self).multi_get_events(event_digests)
     }
 
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<Vec<ObjectKey>> {
+        (**self).get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<CheckpointSequenceNumber> {
+        (**self).get_transaction_checkpoint(digest)
+    }
+
     fn get_full_checkpoint_contents(
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
@@ -433,7 +498,7 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
         &self,
         checkpoint: VerifiedCheckpoint,
         checkpoint_contents: CheckpointContents,
-    ) -> anyhow::Result<CheckpointData> {
+    ) -> anyhow::Result<Checkpoint> {
         (**self).get_checkpoint_data(checkpoint, checkpoint_contents)
     }
 }
@@ -525,6 +590,20 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
         (**self).multi_get_events(event_digests)
     }
 
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<Vec<ObjectKey>> {
+        (**self).get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<CheckpointSequenceNumber> {
+        (**self).get_transaction_checkpoint(digest)
+    }
+
     fn get_full_checkpoint_contents(
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
@@ -537,7 +616,7 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
         &self,
         checkpoint: VerifiedCheckpoint,
         checkpoint_contents: CheckpointContents,
-    ) -> anyhow::Result<CheckpointData> {
+    ) -> anyhow::Result<Checkpoint> {
         (**self).get_checkpoint_data(checkpoint, checkpoint_contents)
     }
 }
@@ -600,7 +679,7 @@ pub trait RpcIndexes: Send + Sync {
     fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>>;
 
     fn get_balance(&self, owner: &SuiAddress, coin_type: &StructTag)
-        -> Result<Option<BalanceInfo>>;
+    -> Result<Option<BalanceInfo>>;
 
     fn balance_iter(
         &self,
@@ -613,6 +692,19 @@ pub trait RpcIndexes: Send + Sync {
         original_id: ObjectID,
         cursor: Option<u64>,
     ) -> Result<PackageVersionsIterator<'_>>;
+
+    fn get_highest_indexed_checkpoint_seq_number(&self)
+    -> Result<Option<CheckpointSequenceNumber>>;
+
+    fn authenticated_event_iter(
+        &self,
+        stream_id: SuiAddress,
+        start_checkpoint: u64,
+        start_transaction_idx: Option<u32>,
+        start_event_idx: Option<u32>,
+        end_checkpoint: u64,
+        limit: u32,
+    ) -> Result<Box<dyn Iterator<Item = Result<AuthenticatedEventRecord, TypedStoreError>> + '_>>;
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

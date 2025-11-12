@@ -7,20 +7,20 @@
 use std::cmp::{max, min};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use bincode::Options;
 use itertools::Itertools;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use parking_lot::ArcMutexGuard;
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
-    IntCounterVec, Registry,
+    IntCounter, IntCounterVec, Registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry,
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use typed_store::rocksdb::compaction_filter::Decision;
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use typed_store::TypedStoreError;
+use typed_store::rocksdb::compaction_filter::Decision;
 
 use sui_json_rpc_types::{SuiObjectDataFilter, TransactionFilter};
 use sui_storage::mutex_table::MutexTable;
@@ -32,18 +32,18 @@ use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
 use sui_types::effects::TransactionEvents;
-use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::inner_temporary_store::TxCoins;
 use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
 use sui_types::storage::error::Error as StorageError;
 use tracing::{debug, info, instrument, trace};
+use typed_store::DBMapUtils;
 use typed_store::rocks::{
-    default_db_options, read_size_from_env, DBBatch, DBMap, DBMapTableConfigMap, DBOptions,
-    MetricConf,
+    DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, default_db_options,
+    read_size_from_env,
 };
 use typed_store::traits::Map;
-use typed_store::DBMapUtils;
 
 type OwnedMutexGuard<T> = ArcMutexGuard<parking_lot::RawMutex, T>;
 
@@ -204,7 +204,7 @@ pub struct IndexStoreTables {
     ///
     /// A few uses for this singleton:
     /// - determining if the DB has been initialized (as some tables could still be empty post
-    ///     initialization)
+    ///   initialization)
     /// - version of each column family and their respective initialization status
     meta: DBMap<(), MetadataInfo>,
 
@@ -899,7 +899,7 @@ impl IndexStore {
         let cursor = if let Some(cursor) = cursor {
             Some(
                 self.get_transaction_seq(&cursor)?
-                    .ok_or(SuiError::TransactionNotFound { digest: cursor })?,
+                    .ok_or(SuiErrorKind::TransactionNotFound { digest: cursor })?,
             )
         } else {
             None
@@ -926,9 +926,10 @@ impl IndexStore {
             }
             // NOTE: filter via checkpoint sequence number is implemented in
             // `get_transactions` of authority.rs.
-            Some(_) => Err(SuiError::UserInputError {
+            Some(_) => Err(SuiErrorKind::UserInputError {
                 error: UserInputError::Unsupported(format!("{:?}", filter)),
-            }),
+            }
+            .into()),
             None => {
                 if reverse {
                     let iter = self
@@ -1080,20 +1081,22 @@ impl IndexStore {
     ) -> SuiResult<Vec<TransactionDigest>> {
         // If we are passed a function with no module return a UserInputError
         if function.is_some() && module.is_none() {
-            return Err(SuiError::UserInputError {
+            return Err(SuiErrorKind::UserInputError {
                 error: UserInputError::MoveFunctionInputError(
                     "Cannot supply function without supplying module".to_string(),
                 ),
-            });
+            }
+            .into());
         }
 
         // We cannot have a cursor without filling out the other keys.
         if cursor.is_some() && (module.is_none() || function.is_none()) {
-            return Err(SuiError::UserInputError {
+            return Err(SuiErrorKind::UserInputError {
                 error: UserInputError::MoveFunctionInputError(
                     "Cannot supply cursor without supplying module and function".to_string(),
                 ),
-            });
+            }
+            .into());
         }
 
         let cursor_val = cursor.unwrap_or(if reverse {
@@ -1102,7 +1105,7 @@ impl IndexStore {
             TxSequenceNumber::MIN
         });
 
-        let max_string = "Z".repeat(self.max_type_length.try_into().unwrap());
+        let max_string = "z".repeat(self.max_type_length.try_into().unwrap());
         let module_val = module.clone().unwrap_or(if reverse {
             max_string.clone()
         } else {
@@ -1229,7 +1232,7 @@ impl IndexStore {
     ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
         let seq = self
             .get_transaction_seq(digest)?
-            .ok_or(SuiError::TransactionNotFound { digest: *digest })?;
+            .ok_or(SuiErrorKind::TransactionNotFound { digest: *digest })?;
         Ok(if descending {
             self.tables
                 .event_order
@@ -1453,7 +1456,7 @@ impl IndexStore {
             .safe_iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
             // skip an extra b/c the cursor is exclusive
             .skip(usize::from(cursor.is_some()))
-            .take_while(move |result| result.is_err() || (result.as_ref().unwrap().0 .0 == object))
+            .take_while(move |result| result.is_err() || (result.as_ref().unwrap().0.0 == object))
             .map_ok(|((_, c), object_info)| (c, object_info)))
     }
 
@@ -1468,7 +1471,7 @@ impl IndexStore {
         let dynamic_field_id =
             dynamic_field::derive_dynamic_field_id(object, &name_type, name_bcs_bytes).map_err(
                 |e| {
-                    SuiError::Unknown(format!(
+                    SuiErrorKind::Unknown(format!(
                         "Unable to generate dynamic field id. Got error: {e:?}"
                     ))
                 },
@@ -1495,7 +1498,7 @@ impl IndexStore {
             name_bcs_bytes,
         )
         .map_err(|e| {
-            SuiError::Unknown(format!(
+            SuiErrorKind::Unknown(format!(
                 "Unable to generate dynamic field id. Got error: {e:?}"
             ))
         })?;
@@ -1653,7 +1656,7 @@ impl IndexStore {
         if force_disable_cache {
             Self::get_balance_from_db(metrics_cloned, coin_index_cloned, owner, cloned_coin_type)
                 .map_err(|e| {
-                SuiError::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
+                SuiErrorKind::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
             })?;
         }
 
@@ -1668,10 +1671,10 @@ impl IndexStore {
         }
         // cache miss, lookup in all balance cache
         let all_balance = self.caches.all_balances.get(&owner.clone());
-        if let Some(Ok(all_balance)) = all_balance {
-            if let Some(balance) = all_balance.get(&coin_type) {
-                return Ok(*balance);
-            }
+        if let Some(Ok(all_balance)) = all_balance
+            && let Some(balance) = all_balance.get(&coin_type)
+        {
+            return Ok(*balance);
         }
         let cloned_coin_type = coin_type.clone();
         let metrics_cloned = self.metrics.clone();
@@ -1686,7 +1689,8 @@ impl IndexStore {
                     cloned_coin_type,
                 )
                 .map_err(|e| {
-                    SuiError::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
+                    SuiErrorKind::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
+                        .into()
                 })
             })
     }
@@ -1707,7 +1711,10 @@ impl IndexStore {
         if force_disable_cache {
             Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner).map_err(
                 |e| {
-                    SuiError::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
+                    SuiErrorKind::ExecutionError(format!(
+                        "Failed to read all balance from DB: {:?}",
+                        e
+                    ))
                 },
             )?;
         }
@@ -1717,7 +1724,8 @@ impl IndexStore {
         let coin_index_cloned = self.tables.coin_index_2.clone();
         self.caches.all_balances.get_with(owner, move || {
             Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner).map_err(|e| {
-                SuiError::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
+                SuiErrorKind::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
+                    .into()
             })
         })
     }
@@ -1764,7 +1772,7 @@ impl IndexStore {
             }
             let coin_type =
                 TypeTag::Struct(Box::new(parse_sui_struct_tag(&coin_type).map_err(|e| {
-                    SuiError::ExecutionError(format!(
+                    SuiErrorKind::ExecutionError(format!(
                         "Failed to parse event sender address: {:?}",
                         e
                     ))
@@ -1999,5 +2007,77 @@ mod tests {
         assert_eq!(balance.num_coins, 7);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_transaction_by_move_function() {
+        use sui_types::base_types::ObjectID;
+        use typed_store::Map;
+
+        let index_store = IndexStore::new(temp_dir(), &Registry::default(), Some(128), false);
+        let db = &index_store.tables.transactions_by_move_function;
+        db.insert(
+            &(
+                ObjectID::new([1; 32]),
+                "mod".to_string(),
+                "f".to_string(),
+                0,
+            ),
+            &[0; 32].into(),
+        )
+        .unwrap();
+        db.insert(
+            &(
+                ObjectID::new([1; 32]),
+                "mod".to_string(),
+                "Z".repeat(128),
+                0,
+            ),
+            &[1; 32].into(),
+        )
+        .unwrap();
+        db.insert(
+            &(
+                ObjectID::new([1; 32]),
+                "mod".to_string(),
+                "f".repeat(128),
+                0,
+            ),
+            &[2; 32].into(),
+        )
+        .unwrap();
+        db.insert(
+            &(
+                ObjectID::new([1; 32]),
+                "mod".to_string(),
+                "z".repeat(128),
+                0,
+            ),
+            &[3; 32].into(),
+        )
+        .unwrap();
+
+        let mut v = index_store
+            .get_transactions_by_move_function(
+                ObjectID::new([1; 32]),
+                Some("mod".to_string()),
+                None,
+                None,
+                None,
+                false,
+            )
+            .unwrap();
+        let v_rev = index_store
+            .get_transactions_by_move_function(
+                ObjectID::new([1; 32]),
+                Some("mod".to_string()),
+                None,
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+        v.reverse();
+        assert_eq!(v, v_rev);
     }
 }

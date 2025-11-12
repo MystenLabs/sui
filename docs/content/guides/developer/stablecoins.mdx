@@ -2,6 +2,9 @@
 title: Stablecoins on Sui
 sidebar_label: Stablecoins
 description: Stablecoins are a type of cryptocurrency that are designed to maintain a stable value relative to a fiat currency or a basket of assets. 
+keywords: [ stablecoins, USDT, tether, agora, USDC, USD coin, AUSD, ondo USDY, USDY, using stablecoins, stablecoins in ptbs, ptbs, programmable transaction blocks, stablecoins in programmable transaction blocks ]
+pagination_prev: null
+draft: true
 ---
 
 Stablecoins are a type of cryptocurrency that are designed to maintain a stable value relative to a fiat currency or a basket of assets. They are widely used for trading, lending, and as a store of value. 
@@ -40,12 +43,19 @@ USDY is a fully collateralized US dollar stablecoin issued by Ondo Finance, allo
 ## How to use USDC on Sui {#usdc-guide}
 
 :::info
-While this example uses USDC, the same principles can be applied to any asset on Sui that uses the [Sui Coin standard](../../standards/coin.mdx).
+While this example uses USDC, the same principles can be applied to any asset on Sui that uses the [Sui Currency Standard](/standards/currency.mdx).
 :::
 
-### Prerequisites
 
-- Make sure you have some USDC tokens. Get Testnet tokens from Circle's [faucet](https://faucet.circle.com/).
+<Tabs className="tabsHeadingCentered--small--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] [Install the latest version of Sui](/guides/developer/getting-started/sui-install).
+
+- [x] Make sure you have some USDC tokens. Get Testnet tokens from Circle's [faucet](https://faucet.circle.com/).
+
+</TabItem>
+</Tabs>
 
 ### USDC stablecoin source code
 
@@ -61,7 +71,7 @@ usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "pack
 
 After importing the module, your Move package should look like the following:
 
-{@inject: examples/move/usdc_usage/Move.toml}
+<ImportContent source="examples/move/usdc_usage/Move.toml" mode="code" />
 
 :::warning
 The `usdc` package uses a specific version of the `sui` package, which causes a version conflict with the `Sui` package in the Sui framework. You can override the version of the `Sui` package in your `Move.toml` file to use a different version. Add the `override = true` flag to the `Sui` package in your `Move.toml` file.
@@ -69,7 +79,7 @@ The `usdc` package uses a specific version of the `sui` package, which causes a 
 
 ### Using USDC in Move
 
-USDC uses the [Sui Coin standard](../../standards/coin.mdx) and can be used just like any other coin type in the Sui framework.
+USDC uses the [Sui Currency Standard](/standards/currency.mdx) and can be used just like any other coin type in the Sui framework.
 
 After importing the `usdc` package, you can use the `USDC` type.
 
@@ -79,11 +89,11 @@ use usdc::usdc::USDC;
 
 Then use the `USDC` type just as you would use the `SUI` type when accepting a `Coin<SUI>` parameter.
 
-{@inject: examples/move/usdc_usage/sources/example.move#fun=buy_sword_with_usdc}
+<ImportContent source="examples/move/usdc_usage/sources/example.move" mode="code" fun="buy_sword_with_usdc" />
 
 The following example demonstrates how to use the USDC stablecoin in a Move package and how it relates to using the `SUI` type as well as any generic coin types.
 
-{@inject: examples/move/usdc_usage/sources/example.move}
+<ImportContent source="examples/move/usdc_usage/sources/example.move" mode="code" />
 
 ### Using USDC in PTBs
 
@@ -131,6 +141,6 @@ tx.transferObjects([usdcCoin], recipientAddress);
 
 ## Related links
 
-- [Regulated Coin and Deny List](./coin/regulated.mdx): Create a regulated coin and add or remove names from the deny list.
-- [Loyalty Token](./coin/loyalty.mdx): Create a token to reward user loyalty.
-- [In-Game Token](./coin/in-game-token.mdx): Create tokens that can be used only within a mobile game.
+<RelatedLink to="/guides/developer/coin/regulated.mdx" />
+<RelatedLink to="/guides/developer/coin/loyalty.mdx" />
+<RelatedLink to="/guides/developer/coin/in-game-token.mdx" />

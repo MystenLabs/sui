@@ -6,7 +6,7 @@ use parking_lot::RwLock;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::base_types::ObjectID;
-use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
 use sui_types::storage::{ObjectStore, PackageObject};
 
 pub struct PackageObjectCache {
@@ -50,11 +50,12 @@ impl PackageObjectCache {
                 self.cache.write().push(*package_id, p.clone());
                 Ok(Some(p))
             } else {
-                Err(SuiError::UserInputError {
+                Err(SuiErrorKind::UserInputError {
                     error: UserInputError::MoveObjectAsPackage {
                         object_id: *package_id,
                     },
-                })
+                }
+                .into())
             }
         } else {
             Ok(None)
@@ -72,7 +73,7 @@ impl PackageObjectCache {
                 self.cache.write().push(package_id, PackageObject::new(p));
             }
             // It's possible that a package is not found if it's newly added system package ID
-            // that hasn't got created yet. This should be very very rare though.
+            // that hasn't got created yet. This should be very rare though.
         }
     }
 }

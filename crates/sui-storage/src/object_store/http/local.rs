@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::object_store::util::path_to_filesystem;
 use crate::object_store::ObjectStoreGetExt;
-use anyhow::{anyhow, Context, Result};
+use crate::object_store::util::path_to_filesystem;
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use bytes::Bytes;
 use object_store::path::Path;

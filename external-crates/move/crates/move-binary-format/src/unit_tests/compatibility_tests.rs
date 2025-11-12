@@ -45,7 +45,7 @@ impl Permutation {
     }
 }
 
-fn mk_module(pool: &mut RcPool, vis: u8) -> NormalizedModule {
+pub(super) fn mk_module(pool: &mut RcPool, vis: u8) -> NormalizedModule {
     mk_module_entry(pool, vis, false)
 }
 
@@ -54,7 +54,7 @@ fn max_version(mut module: NormalizedModule) -> NormalizedModule {
     module
 }
 
-fn mk_module_entry(pool: &mut RcPool, vis: u8, is_entry: bool) -> NormalizedModule {
+pub(super) fn mk_module_entry(pool: &mut RcPool, vis: u8, is_entry: bool) -> NormalizedModule {
     let (visibility, is_entry) = if vis == Visibility::DEPRECATED_SCRIPT {
         (Visibility::Public, true)
     } else {
@@ -141,7 +141,11 @@ fn mk_module_entry(pool: &mut RcPool, vis: u8, is_entry: bool) -> NormalizedModu
     NormalizedModule::new(pool, &m, /* include code */ true)
 }
 
-fn mk_module_plus_code(pool: &mut RcPool, vis: u8, code: Vec<Bytecode>) -> NormalizedModule {
+pub(super) fn mk_module_plus_code(
+    pool: &mut RcPool,
+    vis: u8,
+    code: Vec<Bytecode>,
+) -> NormalizedModule {
     mk_module_plus_code_perm(pool, vis, code, Permutation::new(vec![]))
 }
 

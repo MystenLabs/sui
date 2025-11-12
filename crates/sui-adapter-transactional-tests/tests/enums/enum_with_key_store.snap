@@ -14,32 +14,32 @@ Error: INVALID TEST. Unknown object, object(1,0)
 
 task 3, line 92:
 //# run test::f::transfer
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000
 
 task 4, line 94:
 //# run test::f::share
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000
 
 task 5, line 96:
 //# run test::f::public_transfer
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000
 
 task 6, line 98:
 //# run test::f::public_share
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000
 
 task 7, line 100:
 //# run test::f::freezer
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000
 
 task 8, line 102:
 //# run test::f::public_freezer
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000
 
 task 9, line 104:
 //# run test::f::add_df
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000
 
 task 10, line 106:
 //# run test::f::add_dof
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+Error: Error checking transaction input objects: Dependent package not found on-chain: 0x0000000000000000000000000000000000000000000000000000000000000000

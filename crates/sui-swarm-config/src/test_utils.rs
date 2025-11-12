@@ -130,12 +130,10 @@ impl CommitteeFixture {
             })
             .collect();
 
-        let checkpoint = CertifiedCheckpointSummary::new(checkpoint, signatures, self.committee())
+        CertifiedCheckpointSummary::new(checkpoint, signatures, self.committee())
             .unwrap()
             .try_into_verified(self.committee())
-            .unwrap();
-
-        checkpoint
+            .unwrap()
     }
 
     pub fn make_random_checkpoints(

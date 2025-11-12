@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{
+    NativesCostTable, abstract_size, get_extension, get_extension_mut,
+    object_runtime::ObjectRuntime,
+};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::StructTag,
@@ -17,7 +20,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::{base_types::MoveObjectType, TypeTag};
+use sui_types::{TypeTag, base_types::MoveObjectType};
 use tracing::{error, instrument};
 
 const E_BCS_SERIALIZATION_FAILURE: u64 = 2;
@@ -40,9 +43,7 @@ pub fn read_setting_impl(
     let ConfigReadSettingImplCostParams {
         config_read_setting_impl_cost_base,
         config_read_setting_impl_cost_per_byte,
-    } = context
-        .extensions_mut()
-        .get::<NativesCostTable>()?
+    } = get_extension!(context, NativesCostTable)?
         .config_read_setting_impl_cost_params
         .clone();
 
@@ -74,7 +75,7 @@ pub fn read_setting_impl(
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Sui verifier guarantees this is a struct".to_string()),
-            )
+            );
         }
     };
     let Some(field_setting_layout) = context.type_to_type_layout(&field_setting_ty)? else {
@@ -83,7 +84,7 @@ pub fn read_setting_impl(
             E_BCS_SERIALIZATION_FAILURE,
         ));
     };
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
 
     let read_value_opt = consistent_value_before_current_epoch(
         object_runtime,
@@ -97,9 +98,11 @@ pub fn read_setting_impl(
         current_epoch,
     )?;
 
+    let size = abstract_size(object_runtime.protocol_config, &read_value_opt);
+
     native_charge_gas_early_exit!(
         context,
-        config_read_setting_impl_cost_per_byte * u64::from(read_value_opt.legacy_size()).into()
+        config_read_setting_impl_cost_per_byte * u64::from(size).into()
     );
 
     Ok(NativeResult::ok(

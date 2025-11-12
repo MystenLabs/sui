@@ -1,0 +1,7 @@
+{
+  "tabWidth": 4,
+  "useTabs": false,
+  "printWidth": 100,
+  "useModuleLabel": true,
+  "autoGroupImports": "module"
+}

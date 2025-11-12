@@ -4,32 +4,36 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{concurrent::Handler, Processor},
-    postgres::{Connection, Db},
-    types::{base_types::SuiAddress, full_checkpoint_content::CheckpointData},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
+    types::{base_types::SuiAddress, full_checkpoint_content::Checkpoint},
 };
 use sui_indexer_alt_schema::{packages::StoredPackage, schema::kv_packages};
+use sui_types::transaction::TransactionDataAPI;
 
 pub(crate) struct KvPackages;
 
+#[async_trait]
 impl Processor for KvPackages {
     const NAME: &'static str = "kv_packages";
 
     type Value = StoredPackage;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
-            checkpoint_summary,
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint {
+            summary,
+
             transactions,
             ..
         } = checkpoint.as_ref();
 
-        let cp_sequence_number = checkpoint_summary.sequence_number as i64;
+        let cp_sequence_number = summary.sequence_number as i64;
         let mut values = vec![];
         for tx in transactions {
-            for obj in &tx.output_objects {
+            for obj in tx.output_objects(&checkpoint.object_set) {
                 let Some(package) = obj.data.try_as_package() else {
                     continue;
                 };
@@ -38,7 +42,7 @@ impl Processor for KvPackages {
                     package_id: obj.id().to_vec(),
                     original_id: package.original_package_id().to_vec(),
                     package_version: obj.version().value() as i64,
-                    is_system_package: tx.transaction.sender_address() == SuiAddress::ZERO,
+                    is_system_package: tx.transaction.sender() == SuiAddress::ZERO,
                     serialized_object: bcs::to_bytes(obj).with_context(|| {
                         format!("Error serializing package object {}", obj.id())
                     })?,
@@ -51,10 +55,8 @@ impl Processor for KvPackages {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for KvPackages {
-    type Store = Db;
-
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(kv_packages::table)
             .values(values)

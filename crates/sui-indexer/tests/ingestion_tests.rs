@@ -5,6 +5,7 @@ use std::sync::Arc;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
+use simulacrum::AdvanceEpochConfig;
 use simulacrum::Simulacrum;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::handlers::TransactionObjectChangesToCommit;
@@ -21,10 +22,10 @@ use sui_indexer::types::EventIndex;
 use sui_indexer::types::IndexedDeletedObject;
 use sui_indexer::types::IndexedObject;
 use sui_indexer::types::TxIndex;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GasCoin;
-use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use tempfile::tempdir;
 
 #[tokio::test]
@@ -320,7 +321,10 @@ pub async fn test_epoch_boundary() -> Result<(), IndexerError> {
     assert!(err.is_none());
 
     sim.create_checkpoint(); // checkpoint 1
-    sim.advance_epoch(true); // checkpoint 2 and epoch 1
+    sim.advance_epoch(AdvanceEpochConfig {
+        create_random_state: true,
+        ..Default::default()
+    }); // checkpoint 2 and epoch 1
 
     let (transaction, _) = sim.transfer_txn(transfer_recipient);
     let (_, err) = sim.execute_transaction(transaction.clone()).unwrap();

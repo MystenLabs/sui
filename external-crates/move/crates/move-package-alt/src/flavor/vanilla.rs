@@ -27,11 +27,21 @@ pub fn default_environment() -> Environment {
 #[derive(Debug)]
 pub struct Vanilla;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum VanillaDep {}
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct PublishedMetadata {
+    #[serde(default)]
+    build_config: Option<SavedBuildConfig>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SavedBuildConfig {
+    edition: String,
+    flavor: String,
+}
 
 impl MoveFlavor for Vanilla {
-    type PublishedMetadata = ();
+    type PublishedMetadata = PublishedMetadata;
     type PackageMetadata = ();
     type AddressInfo = ();
 
@@ -45,7 +55,15 @@ impl MoveFlavor for Vanilla {
         envs
     }
 
-    fn implicit_deps(environment: EnvironmentID) -> BTreeMap<PackageName, ReplacementDependency> {
+    fn system_dependencies(
+        _environment: EnvironmentID,
+    ) -> BTreeMap<PackageName, ReplacementDependency> {
         empty().collect()
+    }
+
+    fn default_system_dependencies(
+        environment: EnvironmentID,
+    ) -> BTreeMap<PackageName, ReplacementDependency> {
+        Self::system_dependencies(environment)
     }
 }

@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use anemo_tower::callback::{MakeCallbackHandler, ResponseHandler};
 use prometheus::{
+    HistogramTimer, HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry,
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, HistogramTimer,
-    HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use tracing::warn;
 
@@ -18,7 +18,6 @@ pub(crate) struct NetworkMetrics {
     pub(crate) outbound: Arc<NetworkRouteMetrics>,
     #[cfg_attr(msim, allow(dead_code))]
     pub(crate) tcp_connection_metrics: Arc<TcpConnectionMetrics>,
-    pub(crate) quinn_connection_metrics: Arc<QuinnConnectionMetrics>,
 }
 
 impl NetworkMetrics {
@@ -34,7 +33,6 @@ impl NetworkMetrics {
             inbound: Arc::new(NetworkRouteMetrics::new("", "inbound", registry)),
             outbound: Arc::new(NetworkRouteMetrics::new("", "outbound", registry)),
             tcp_connection_metrics: Arc::new(TcpConnectionMetrics::new(registry)),
-            quinn_connection_metrics: Arc::new(QuinnConnectionMetrics::new("", registry)),
         }
     }
 }

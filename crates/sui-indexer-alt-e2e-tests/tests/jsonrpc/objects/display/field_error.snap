@@ -32,7 +32,7 @@ Response: {
   "id": 0,
   "error": {
     "code": -32603,
-    "message": "Internal Error: Failed to get object 0x8c0c0304b38b5dee3a28b62f1c981d9e173ab7deec1ff448bbc76ff6aa9c390a at latest version: Failed to deserialize object content: Failure serializing object in the requested format: \"Deserialized value too large\""
+    "message": "Internal Error: Failed to get object 0x8c0c0304b38b5dee3a28b62f1c981d9e173ab7deec1ff448bbc76ff6aa9c390a at latest version: Failed to deserialize object content: Failure serializing object in the requested format: Deserialized value too large"
   }
 }
 

@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/extensions/empty_extension.move:4:1
+  │
+4 │ extend module a::test_extend_module {}
+  │ ^^^^^^
+  │ │
+  │ Unexpected 'extend'
+  │ Expected a module member: 'use', 'friend', 'const', 'fun', 'struct', or 'enum'

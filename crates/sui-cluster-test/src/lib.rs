@@ -4,7 +4,7 @@ use crate::faucet::{FaucetClient, FaucetClientFactory};
 use async_trait::async_trait;
 use cluster::{Cluster, ClusterFactory};
 use config::ClusterTestOpt;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, stream::FuturesUnordered};
 use helper::ObjectChecker;
 use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder};
@@ -152,7 +152,7 @@ impl TestContext {
         txn_data: TransactionData,
         desc: &str,
     ) -> SuiTransactionBlockResponse {
-        let signature = self.get_context().sign(&txn_data, desc);
+        let signature = self.get_context().sign(&txn_data, desc).await;
         let resp = self
             .get_fullnode_client()
             .quorum_driver_api()

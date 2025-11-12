@@ -276,6 +276,7 @@ pub fn ast_value_to_ide_string(sp!(_, val): &Value) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
+        V::InferredString(vec) => format!("\"{}\"", String::from_utf8_lossy(vec)),
     }
 }
 
@@ -317,18 +318,18 @@ pub fn mod_ident_to_ide_string(
                 }
                 // try stripping both package and module if this conversion
                 // is for a datatype, oherwise try only stripping package
-                if let Some(datatype_name) = datatype_name_opt {
-                    if implicit_members.iter().any(
+                if let Some(datatype_name) = datatype_name_opt
+                    && implicit_members.iter().any(
                         |(implicit_mod_name, implicit_datatype_name, _)| {
                             mod_ident.module.value() == *implicit_mod_name
                                 && datatype_name == implicit_datatype_name
                         },
-                    ) {
-                        // strip both package and module (whether its meant to be
-                        // part of access chain or not, if there is not module,
-                        // there should be no `::` at the end)
-                        return (true, "".to_string());
-                    }
+                    )
+                {
+                    // strip both package and module (whether its meant to be
+                    // part of access chain or not, if there is not module,
+                    // there should be no `::` at the end)
+                    return (true, "".to_string());
                 }
                 if implicit_modules
                     .iter()

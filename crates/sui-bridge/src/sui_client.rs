@@ -18,6 +18,9 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
+use sui_types::BRIDGE_PACKAGE_ID;
+use sui_types::SUI_BRIDGE_OBJECT_ID;
+use sui_types::TypeTag;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
 use sui_types::bridge::BridgeSummary;
@@ -32,16 +35,14 @@ use sui_types::transaction::CallArg;
 use sui_types::transaction::Command;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::ProgrammableTransaction;
+use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionKind;
-use sui_types::TypeTag;
-use sui_types::BRIDGE_PACKAGE_ID;
-use sui_types::SUI_BRIDGE_OBJECT_ID;
 use sui_types::{
+    Identifier,
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
     event::EventID,
-    Identifier,
 };
 use tokio::sync::OnceCell;
 use tracing::{error, warn};
@@ -53,6 +54,7 @@ use crate::metrics::BridgeMetrics;
 use crate::retry_with_max_elapsed_time;
 use crate::types::BridgeActionStatus;
 use crate::types::ParsedTokenTransferMessage;
+use crate::types::SuiEvents;
 use crate::types::{BridgeAction, BridgeAuthority, BridgeCommittee};
 
 pub struct SuiClient<P> {
@@ -137,11 +139,13 @@ where
         let events = self.inner.query_events(filter.clone(), cursor).await?;
 
         // Safeguard check that all events are emitted from requested package and module
-        assert!(events
-            .data
-            .iter()
-            .all(|event| event.type_.address.as_ref() == package.as_ref()
-                && event.type_.module == module));
+        assert!(
+            events
+                .data
+                .iter()
+                .all(|event| event.type_.address.as_ref() == package.as_ref()
+                    && event.type_.module == module)
+        );
         Ok(events)
     }
 
@@ -155,6 +159,7 @@ where
     ) -> BridgeResult<BridgeAction> {
         let events = self.inner.get_events_by_tx_digest(*tx_digest).await?;
         let event = events
+            .events
             .get(event_idx as usize)
             .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
         if event.type_.address.as_ref() != BRIDGE_PACKAGE_ID.as_ref() {
@@ -394,7 +399,7 @@ pub trait SuiClientInner: Send + Sync {
     async fn get_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,
-    ) -> Result<Vec<SuiEvent>, Self::Error>;
+    ) -> Result<SuiEvents, Self::Error>;
 
     async fn get_chain_identifier(&self) -> Result<String, Self::Error>;
 
@@ -455,8 +460,23 @@ impl SuiClientInner for SuiSdkClient {
     async fn get_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,
-    ) -> Result<Vec<SuiEvent>, Self::Error> {
-        self.event_api().get_events(tx_digest).await
+    ) -> Result<SuiEvents, Self::Error> {
+        let resp = self
+            .read_api()
+            .get_transaction_with_options(
+                tx_digest,
+                SuiTransactionBlockResponseOptions::new().with_events(),
+            )
+            .await?;
+        Ok(SuiEvents {
+            transaction_digest: resp.digest,
+            checkpoint: resp.checkpoint,
+            timestamp_ms: resp.timestamp_ms,
+            events: resp
+                .events
+                .ok_or_else(|| sui_sdk::error::Error::DataError("missing events".into()))?
+                .data,
+        })
     }
 
     async fn get_chain_identifier(&self) -> Result<String, Self::Error> {
@@ -481,7 +501,7 @@ impl SuiClientInner for SuiSdkClient {
         Ok(ObjectArg::SharedObject {
             id: SUI_BRIDGE_OBJECT_ID,
             initial_shared_version: SequenceNumber::from_u64(initial_shared_version),
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         })
     }
 
@@ -663,7 +683,7 @@ mod tests {
     use sui_types::crypto::get_key_pair;
 
     use super::*;
-    use crate::events::{init_all_struct_tags, SuiToEthTokenBridgeV1};
+    use crate::events::{SuiToEthTokenBridgeV1, init_all_struct_tags};
 
     #[tokio::test]
     async fn get_bridge_action_by_tx_digest_and_event_idx_maybe() {

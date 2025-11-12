@@ -1,22 +1,36 @@
-ARG SUI_TOOLS_IMAGE_TAG
+FROM rust:1.90-bullseye AS builder
+ARG PROFILE=release
+ARG GIT_REVISION
+ENV GIT_REVISION=$GIT_REVISION
+WORKDIR "$WORKDIR/sui"
+RUN apt-get update && apt-get install -y cmake clang libpq5 libpq-dev
 
-FROM mysten/sui-tools:$SUI_TOOLS_IMAGE_TAG
+COPY Cargo.toml Cargo.lock ./
+COPY consensus consensus
+COPY crates crates
+COPY sui-execution sui-execution
+COPY external-crates external-crates
 
-ARG SUI_TOOLS_IMAGE_TAG
+RUN cargo build --profile ${PROFILE} --bin stress
 
-RUN apt-get update && apt-get -y --no-install-recommends install wget=1.21-1+deb11u1 \
+FROM rust:1.90-bullseye
+ARG PROFILE=release
+ARG GIT_REVISION
+COPY --from=builder /sui/target/${PROFILE}/stress /usr/local/bin
+WORKDIR "$WORKDIR/sui"
+
+RUN apt-get update && apt-get -y --no-install-recommends install wget \
         iputils-ping netcat procps bind9-host bind9-dnsutils curl iproute2 git ca-certificates awscli
 
-# stress needs access to examples/move/basics
 RUN git clone https://github.com/MystenLabs/sui.git ; \
         cd sui ; \
-        git checkout $SUI_TOOLS_IMAGE_TAG ; \
+        git checkout $GIT_REVISION ; \
         cd .. ; \
         mv sui/* .
+        
+RUN mkdir -p /docker/stress
+RUN cp docker/stress/entrypoint.sh /docker/stress/entrypoint.sh
+RUN chmod +x /docker/stress/entrypoint.sh
+RUN echo ${GIT_REVISION:-$GIT_REVISION} > /var/run/sui_commit
 
-ARG SUI_TOOLS_IMAGE_TAG
-RUN echo $SUI_TOOLS_IMAGE_TAG > /var/run/sui_commit
-
-COPY ./entrypoint.sh .
-
-CMD ["./entrypoint.sh"]
+CMD ["/docker/stress/entrypoint.sh"]

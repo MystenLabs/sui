@@ -1,0 +1,56 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+package sui.rpc.alpha;
+
+import "google/protobuf/empty.proto";
+import "sui/rpc/v2/event.proto";
+
+// EventService provides paginated access to authenticated events per stream.
+service EventService {
+  // Returns authenticated events for a given event stream ID.
+  rpc ListAuthenticatedEvents(ListAuthenticatedEventsRequest) returns (ListAuthenticatedEventsResponse);
+}
+
+// Request authenticated events for a stream starting from a checkpoint.
+message ListAuthenticatedEventsRequest {
+  // Required. Stream identifier (Sui address) of the event stream.
+  optional string stream_id = 1;
+
+  // Inclusive start checkpoint. Must not yet be pruned. (default: 0)
+  optional uint64 start_checkpoint = 2;
+
+  // Number of events to return per page (default: 1000, max: 1000)
+  optional uint32 page_size = 3;
+
+  // Page token for pagination. Use the next_page_token from previous response.
+  optional bytes page_token = 4;
+}
+
+// Response containing events and metadata.
+message ListAuthenticatedEventsResponse {
+  repeated AuthenticatedEvent events = 1;
+  // The highest indexed checkpoint.
+  optional uint64 highest_indexed_checkpoint = 2;
+  // Token for fetching the next page of results. Contains event key index range. Empty if no more pages.
+  optional bytes next_page_token = 3;
+}
+
+// Single authenticated Move event entry.
+message AuthenticatedEvent {
+  // The checkpoint sequence number where this event was recorded.
+  optional uint64 checkpoint = 1;
+
+  // Index of the transaction within the checkpoint where the event was emitted.
+  optional uint32 transaction_idx = 2;
+
+  // Index of the event within the transaction's event list.
+  optional uint32 event_idx = 3;
+
+  // The event payload.
+  optional sui.rpc.v2.Event event = 4;
+
+  // The stream identifier (owner address) for which this event is authenticated.
+  optional string stream_id = 5;
+}

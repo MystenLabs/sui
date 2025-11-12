@@ -4,11 +4,16 @@ version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "sui-indexer-alt"
 path = "src/main.rs"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(msim)',
+] }
 
 [dependencies]
 anyhow.workspace = true
@@ -38,6 +43,7 @@ sui-indexer-alt-framework = { workspace = true, features = ["postgres"] }
 sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-schema.workspace = true
 sui-protocol-config.workspace = true
+sui-types.workspace = true
 sui-synthetic-ingestion = { workspace = true, optional = true }
 
 [dev-dependencies]

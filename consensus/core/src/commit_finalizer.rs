@@ -9,20 +9,20 @@ use std::{
 use consensus_config::Stake;
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
 use mysten_metrics::{
-    monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    monitored_mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
     monitored_scope, spawn_logged_monitored_task,
 };
 use parking_lot::RwLock;
 use tokio::task::JoinSet;
 
 use crate::{
+    BlockAPI, CommitIndex, CommittedSubDag, VerifiedBlock,
     commit::DEFAULT_WAVE_LENGTH,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction_certifier::TransactionCertifier,
-    BlockAPI, CommitIndex, CommittedSubDag, VerifiedBlock,
 };
 
 /// For transaction T committed at leader round R, when a new leader at round >= R + INDIRECT_REJECT_DEPTH
@@ -72,8 +72,11 @@ pub struct CommitFinalizer {
     transaction_certifier: TransactionCertifier,
     commit_sender: UnboundedSender<CommittedSubDag>,
 
+    // Last commit index processed by CommitFinalizer.
     last_processed_commit: Option<CommitIndex>,
+    // Commits pending finalization.
     pending_commits: VecDeque<CommitState>,
+    // Blocks in the pending commits.
     blocks: Arc<RwLock<BTreeMap<BlockRef, RwLock<BlockState>>>>,
 }
 
@@ -110,15 +113,21 @@ impl CommitFinalizer {
 
     async fn run(mut self, mut receiver: UnboundedReceiver<CommittedSubDag>) {
         while let Some(committed_sub_dag) = receiver.recv().await {
-            let finalized_commits = if self.context.protocol_config.mysticeti_fastpath() {
+            let already_finalized = !self.context.protocol_config.mysticeti_fastpath()
+                || committed_sub_dag.recovered_rejected_transactions;
+            let finalized_commits = if !already_finalized {
                 self.process_commit(committed_sub_dag).await
             } else {
                 vec![committed_sub_dag]
             };
             if !finalized_commits.is_empty() {
+                // Transaction certifier state should be GC'ed as soon as new commits are finalized.
+                // But this is done outside of process_commit(), because during recovery process_commit()
+                // is not called to finalize commits, but GC still needs to run.
+                self.try_update_gc_round(finalized_commits.last().unwrap().leader.round);
                 let mut dag_state = self.dag_state.write();
-                if self.context.protocol_config.mysticeti_fastpath() {
-                    // Records commits that have been finalized and their rejected transactions.
+                if !already_finalized {
+                    // Records rejected transactions in newly finalized commits.
                     for commit in &finalized_commits {
                         dag_state.add_finalized_commit(
                             commit.commit_ref,
@@ -190,7 +199,7 @@ impl CommitFinalizer {
             // -  This commit is remote.
             // -  And the latest commit is less than 3 (WAVE_LENGTH) rounds above this commit.
             // In this case, this commit's leader certificate is not guaranteed to be in local DAG.
-            if !commit_state.commit.local_dag_has_finalization_blocks {
+            if !commit_state.commit.decided_with_local_blocks {
                 let last_commit_state = self.pending_commits.back().unwrap();
                 if commit_state.commit.leader.round + DEFAULT_WAVE_LENGTH
                     > last_commit_state.commit.leader.round
@@ -219,7 +228,7 @@ impl CommitFinalizer {
             // This is because the last commit may have been directly finalized, but its previous commits
             // may not have been directly finalized.
             self.link_blocks_in_last_commit();
-            self.append_direct_ancestors_in_last_commit();
+            self.append_origin_descendants_from_last_commit();
             // Try to indirectly finalize a prefix of the buffered commits.
             // If only one commit remains, it cannot be indirectly finalized because there is no commit afterwards,
             // so it is excluded.
@@ -244,16 +253,6 @@ impl CommitFinalizer {
                     .inc_by(indirect_finalized_commits.len() as u64);
                 finalized_commits.extend(indirect_finalized_commits);
             }
-        }
-
-        // GC TransactionCertifier state only with finalized commits, to ensure unfinalized transactions
-        // can access their reject votes from TransactionCertifier.
-        if let Some(last_commit) = finalized_commits.last() {
-            let gc_round = self
-                .dag_state
-                .read()
-                .calculate_gc_round(last_commit.leader.round);
-            self.transaction_certifier.run_gc(gc_round);
         }
 
         self.context
@@ -285,6 +284,11 @@ impl CommitFinalizer {
                 .finalizer_transaction_status
                 .with_label_values(&["direct_finalize"])
                 .inc_by((num_transactions - reject_votes.len()) as u64);
+            let hostname = &self.context.committee.authority(block_ref.author).hostname;
+            metrics
+                .finalizer_reject_votes
+                .with_label_values(&[hostname])
+                .inc_by(reject_votes.len() as u64);
             // If a transaction_index does not exist in reject_votes, the transaction has no reject votes.
             // So it is finalized and does not need to be added to pending_transactions.
             for (transaction_index, stake) in reject_votes {
@@ -341,35 +345,58 @@ impl CommitFinalizer {
         }
     }
 
-    // Every block and its transactions are only voted by its immediate children (reverse of ancestor) blocks.
-    // Children of children blocks should not vote on the voted block. And their votes should be ignored.
-    // So after visiting a block when collecting votes, all of the visited block's direct ancestors do not need to be visited.
-    fn append_direct_ancestors_in_last_commit(&mut self) {
+    /// To save bandwidth, blocks do not include explicit accept votes on transactions.
+    /// Reject votes are included only the first time the block containing the voted-on
+    /// transaction is linked in a block. Other first time linked transactions, when
+    /// not rejected, are assumed to be accepted. This vote compression rule must also be
+    /// applied during vote aggregation.
+    ///
+    /// Transactions in a block can only be voted on by its immediate descendants.
+    /// A block is an **immediate descendant** if it can only link directly to the voted-on
+    /// block, without any intermediate blocks from its own authority. Votes from
+    /// non-immediate descendants are ignored.
+    ///
+    /// This rule implies the following optimization is possible: after collecting votes from a block,
+    /// we can skip collecting votes from its **origin descendants** (descendant blocks from the
+    /// same authority), because their votes would be ignored anyway.
+    ///
+    /// This function updates the set of origin descendants for all pending blocks using blocks
+    /// from the last commit.
+    fn append_origin_descendants_from_last_commit(&mut self) {
         let commit_state = self
             .pending_commits
             .back_mut()
             .unwrap_or_else(|| panic!("No pending commit."));
-        let mut blocks = commit_state.commit.blocks.clone();
-        blocks.sort_by_key(|b| b.round());
+        let mut committed_blocks = commit_state.commit.blocks.clone();
+        committed_blocks.sort_by_key(|b| b.round());
         let blocks_map = self.blocks.read();
-        for block in blocks {
-            let block_ref = block.reference();
+        for committed_block in committed_blocks {
+            let committed_block_ref = committed_block.reference();
+            // Each block must have at least one ancestor.
             // Block verification ensures the first ancestor is from the block's own authority.
             // Also, block verification ensures each authority appears at most once among ancestors.
-            let mut direct_ancestor = *blocks_map
-                .get(&block_ref)
+            let mut origin_ancestor_ref = *blocks_map
+                .get(&committed_block_ref)
                 .unwrap()
                 .read()
                 .block
                 .ancestors()
                 .first()
                 .unwrap();
-            while direct_ancestor.author == block_ref.author {
-                let Some(ancestor_block) = blocks_map.get(&direct_ancestor) else {
+            while origin_ancestor_ref.author == committed_block_ref.author {
+                let Some(origin_ancestor_block) = blocks_map.get(&origin_ancestor_ref) else {
                     break;
                 };
-                ancestor_block.write().direct_ancestors.push(block_ref);
-                direct_ancestor = *ancestor_block.read().block.ancestors().first().unwrap();
+                origin_ancestor_block
+                    .write()
+                    .origin_descendants
+                    .push(committed_block_ref);
+                origin_ancestor_ref = *origin_ancestor_block
+                    .read()
+                    .block
+                    .ancestors()
+                    .first()
+                    .unwrap();
             }
         }
     }
@@ -568,46 +595,53 @@ impl CommitFinalizer {
             .read()
             .children
             .clone();
+        // Blocks that have been visited.
         let mut visited = BTreeSet::new();
+        // Blocks where votes and origin descendants should be ignored for processing.
+        let mut ignored = BTreeSet::new();
         // Traverse children blocks breadth-first and accumulate accept votes for pending transactions.
         while let Some(curr_block_ref) = to_visit_blocks.pop_first() {
             if !visited.insert(curr_block_ref) {
                 continue;
             }
-            // Gets the reject votes from current block to the pending block.
             let curr_block_state = blocks_map.get(&curr_block_ref).unwrap_or_else(|| panic!("Block {curr_block_ref} is either incorrectly gc'ed or failed to be recovered after crash.")).read();
-            // All other direct ancestors of current block do not vote on the same block.
-            // Consider this case: block B is a direct ancestor of block A (from the same authority),
-            // and both blocks A and B link to another block C. Only B's implicit and explicit transaction votes
-            // on C are considered. None of A's implicit or explicit transaction votes on C are considered.
-            visited.extend(curr_block_state.direct_ancestors.iter());
-            // Get reject votes from current block to the pending block.
-            let curr_block_reject_votes = curr_block_state
-                .reject_votes
-                .get(&pending_block_ref)
-                .cloned()
-                .unwrap_or_default();
-            // Because of lifetime, first collect finalized transactions, and then remove them from accept_votes.
-            let mut newly_finalized = vec![];
-            for (index, stake) in &mut accept_votes {
-                // Skip if the transaction has been rejected by the current block.
-                if curr_block_reject_votes.contains(index) {
-                    continue;
+            // Ignore info from the block if its direct ancestor has been processed.
+            if ignored.insert(curr_block_ref) {
+                // Skip collecting votes from origin descendants of current block.
+                // Votes from origin descendants of current block do not count for this transactions.
+                // Consider this case: block B is an origin descendant of block A (from the same authority),
+                // and both blocks A and B link to another block C.
+                // Only B's implicit and explicit transaction votes on C are considered.
+                // None of A's implicit or explicit transaction votes on C should be considered.
+                ignored.extend(curr_block_state.origin_descendants.iter());
+                // Get reject votes from current block to the pending block.
+                let curr_block_reject_votes = curr_block_state
+                    .reject_votes
+                    .get(&pending_block_ref)
+                    .cloned()
+                    .unwrap_or_default();
+                // Because of lifetime, first collect finalized transactions, and then remove them from accept_votes.
+                let mut newly_finalized = vec![];
+                for (index, stake) in &mut accept_votes {
+                    // Skip if the transaction has been rejected by the current block.
+                    if curr_block_reject_votes.contains(index) {
+                        continue;
+                    }
+                    // Skip if the total stake has not reached quorum.
+                    if !stake.add(curr_block_ref.author, &context.committee) {
+                        continue;
+                    }
+                    newly_finalized.push(*index);
+                    finalized_transactions.push(*index);
                 }
-                // Skip if the total stake has not reached quorum.
-                if !stake.add(curr_block_ref.author, &context.committee) {
-                    continue;
+                // There is no need to aggregate additional votes for already finalized transactions.
+                for index in newly_finalized {
+                    accept_votes.remove(&index);
                 }
-                newly_finalized.push(*index);
-                finalized_transactions.push(*index);
-            }
-            // There is no need to aggregate additional votes for finalized transactions.
-            for index in newly_finalized {
-                accept_votes.remove(&index);
-            }
-            // End traversing if all blocks and requested transactions have reached quorum.
-            if accept_votes.is_empty() {
-                break;
+                // End traversing if all blocks and requested transactions have reached quorum.
+                if accept_votes.is_empty() {
+                    break;
+                }
             }
             // Add additional children blocks to visit.
             to_visit_blocks.extend(
@@ -661,6 +695,16 @@ impl CommitFinalizer {
         }
 
         finalized_commits
+    }
+
+    fn try_update_gc_round(&mut self, last_finalized_commit_round: Round) {
+        // GC TransactionCertifier state only with finalized commits, to ensure unfinalized transactions
+        // can access their reject votes from TransactionCertifier.
+        let gc_round = self
+            .dag_state
+            .read()
+            .calculate_gc_round(last_finalized_commit_round);
+        self.transaction_certifier.run_gc(gc_round);
     }
 
     #[cfg(test)]
@@ -724,8 +768,8 @@ struct BlockState {
     children: BTreeSet<BlockRef>,
     // Reject votes casted by this block, and by linked ancestors from the same authority.
     reject_votes: BTreeMap<BlockRef, BTreeSet<TransactionIndex>>,
-    // Direct ancestors of this block.
-    direct_ancestors: Vec<BlockRef>,
+    // Other committed blocks that are origin descendants of this block.
+    origin_descendants: Vec<BlockRef>,
 }
 
 impl BlockState {
@@ -735,14 +779,14 @@ impl BlockState {
             .iter()
             .map(|v| (v.block_ref, v.rejects.clone().into_iter().collect()))
             .collect();
-        // With at most 4 pending commits and assume 2 direct ancestors per commit,
-        // there will be at most 8 direct ancestors.
-        let direct_ancestors = Vec::with_capacity(8);
+        // With at most 4 pending commits and assume 2 origin descendants per commit,
+        // there will be at most 8 origin descendants.
+        let origin_descendants = Vec::with_capacity(8);
         Self {
             block,
             children: BTreeSet::new(),
             reject_votes,
-            direct_ancestors,
+            origin_descendants,
         }
     }
 }
@@ -753,8 +797,9 @@ mod tests {
     use parking_lot::RwLock;
 
     use crate::{
-        block::BlockTransactionVotes, dag_state::DagState, linearizer::Linearizer,
-        storage::mem_store::MemStore, test_dag_builder::DagBuilder, TestBlock, VerifiedBlock,
+        TestBlock, VerifiedBlock, block::BlockTransactionVotes, block_verifier::NoopBlockVerifier,
+        dag_state::DagState, linearizer::Linearizer, storage::mem_store::MemStore,
+        test_dag_builder::DagBuilder,
     };
 
     use super::*;
@@ -785,8 +830,12 @@ mod tests {
         let linearizer = Linearizer::new(context.clone(), dag_state.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let (commit_sender, _commit_receiver) = unbounded_channel("consensus_commit_output");
         let commit_finalizer = CommitFinalizer::new(
             context.clone(),
@@ -1191,7 +1240,7 @@ mod tests {
             let mut committed_sub_dags = fixture.linearizer.handle_commit(vec![leader]);
             assert_eq!(committed_sub_dags.len(), 1);
             let mut remote_commit = committed_sub_dags.pop().unwrap();
-            remote_commit.local_dag_has_finalization_blocks = local;
+            remote_commit.decided_with_local_blocks = local;
             // Process the remote commit.
             fixture
                 .commit_finalizer

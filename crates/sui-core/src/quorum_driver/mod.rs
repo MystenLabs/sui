@@ -13,14 +13,14 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::{Committee, EpochId};
-use sui_types::messages_grpc::HandleCertificateRequestV3;
+use sui_types::messages_grpc::{HandleCertificateRequestV3, TxType};
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequestV3, QuorumDriverEffectsQueueResult, QuorumDriverError,
     QuorumDriverResponse, QuorumDriverResult,
 };
 use tap::TapFallible;
 use tokio::sync::Semaphore;
-use tokio::time::{sleep_until, Instant};
+use tokio::time::{Instant, sleep_until};
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
@@ -32,12 +32,10 @@ use crate::authority_aggregator::{
 };
 use crate::authority_client::AuthorityAPI;
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
-use mysten_metrics::{
-    spawn_monitored_task, GaugeGuard, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX,
-};
+use mysten_metrics::{GaugeGuard, spawn_monitored_task};
 use std::fmt::Write;
 use sui_macros::fail_point;
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::transaction::{CertifiedTransaction, Transaction};
 
 use self::reconfig_observer::ReconfigObserver;
@@ -134,8 +132,11 @@ impl<A: Clone> QuorumDriver<A> {
                         .observe(task.retry_times as f64);
                 }
             })
-            .map_err(|e| SuiError::QuorumDriverCommunicationError {
-                error: e.to_string(),
+            .map_err(|e| {
+                SuiErrorKind::QuorumDriverCommunicationError {
+                    error: e.to_string(),
+                }
+                .into()
             })
     }
 
@@ -246,7 +247,7 @@ where
     pub async fn submit_transaction(
         &self,
         request: ExecuteTransactionRequestV3,
-    ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
+    ) -> SuiResult<Registration<'_, TransactionDigest, QuorumDriverResult>> {
         let tx_digest = request.transaction.digest();
         debug!(?tx_digest, "Received transaction execution request.");
         self.metrics.total_requests.inc();
@@ -513,7 +514,7 @@ where
     pub async fn submit_transaction(
         &self,
         request: ExecuteTransactionRequestV3,
-    ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
+    ) -> SuiResult<Registration<'_, TransactionDigest, QuorumDriverResult>> {
         self.quorum_driver.submit_transaction(request).await
     }
 
@@ -596,7 +597,11 @@ where
         } = task;
         let transaction = &request.transaction;
         let tx_digest = *transaction.digest();
-        let is_single_writer_tx = !transaction.is_consensus_tx();
+        let tx_type = if transaction.is_consensus_tx() {
+            TxType::SharedObject
+        } else {
+            TxType::SingleWriter
+        };
 
         let timer = Instant::now();
         let (tx_cert, newly_formed) = match tx_cert {
@@ -679,17 +684,13 @@ where
             quorum_driver
                 .metrics
                 .settlement_finality_latency
-                .with_label_values(&[if is_single_writer_tx {
-                    TX_TYPE_SINGLE_WRITER_TX
-                } else {
-                    TX_TYPE_SHARED_OBJ_TX
-                }])
+                .with_label_values(&[tx_type.as_str()])
                 .observe(settlement_finality_latency);
             let is_out_of_expected_range =
                 settlement_finality_latency >= 8.0 || settlement_finality_latency <= 0.1;
             debug!(
                 ?tx_digest,
-                ?is_single_writer_tx,
+                ?tx_type,
                 ?is_out_of_expected_range,
                 "QuorumDriver settlement finality latency: {:.3} seconds",
                 settlement_finality_latency

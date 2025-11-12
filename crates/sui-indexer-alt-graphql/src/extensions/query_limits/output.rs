@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{
-    parser::types::ExecutableDocument, registry::Registry, ServerResult, Value, Variables,
+    ServerResult, Value, Variables, parser::types::ExecutableDocument, registry::Registry,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::pagination::{is_connection, PaginationConfig};
+use crate::pagination::{PaginationConfig, is_connection};
 
 use super::{
+    QueryLimitsConfig,
     error::{Error, ErrorKind},
     visitor::{Driver, FieldDriver, Visitor},
-    QueryLimitsConfig,
 };
 
 /// How many output nodes are estimated to be output from this query.
@@ -76,8 +76,8 @@ impl<'r> OutputNodeRule<'r, '_> {
             return Ok(None);
         }
 
-        let first = self.size_arg(driver, "first")?;
-        let last = self.size_arg(driver, "last")?;
+        let first = self.size_arg(driver, "first");
+        let last = self.size_arg(driver, "last");
 
         let type_ = driver.parent_type().name();
         let name = driver.meta_field().name.as_str();
@@ -102,12 +102,12 @@ impl<'r> OutputNodeRule<'r, '_> {
 
     /// Look for an argument on the current field with the name `name`, and assume that it is a
     /// numeric argument. If the argument is not present, or is not a number, returns `None`.
-    fn size_arg(&self, driver: &FieldDriver<'_, 'r>, name: &str) -> Result<Option<u64>, Error> {
-        let Some(Value::Number(num)) = driver.resolve_arg(name)? else {
-            return Ok(None);
+    fn size_arg(&self, driver: &FieldDriver<'_, 'r>, name: &str) -> Option<u64> {
+        let Value::Number(num) = driver.resolve_arg(name)? else {
+            return None;
         };
 
-        Ok(num.as_u64())
+        num.as_u64()
     }
 
     /// Returns the number of keys that will be fetched by the current field, assuming it is a
@@ -118,7 +118,7 @@ impl<'r> OutputNodeRule<'r, '_> {
             return Ok(None);
         }
 
-        if let Ok(Some(Value::List(vs))) = driver.resolve_arg("keys") {
+        if let Some(Value::List(vs)) = driver.resolve_arg("keys") {
             let keys = vs.len();
             let limit = self.budget.pagination_config.max_multi_get_size();
             if keys > limit as usize {
@@ -177,7 +177,7 @@ impl<'r> Visitor<'r> for OutputNodeRule<'r, '_> {
     }
 }
 
-/// Test that the the query does not produce an excessively large output by estimating the number
+/// Test that the query does not produce an excessively large output by estimating the number
 /// of output nodes it will produce before executing it.
 ///
 /// This check must be done after the input limit check, because it relies on the query depth being

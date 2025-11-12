@@ -13,7 +13,7 @@ expression: "results.join(\"\\n\")"
 │ transfer-objects │ [result.0] @0x6 │
 ╰──────────────────┴─────────────────╯
  === BUILT PTB === 
-Input 0: SharedObject(mutable: true)
+Input 0: SharedObject(mutability: Mutable)
 Input 1: Pure([232, 3, 0, 0, 0, 0, 0, 0])
 Input 2: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6])
 Command 0: SplitCoins(Input(0)Input(1))

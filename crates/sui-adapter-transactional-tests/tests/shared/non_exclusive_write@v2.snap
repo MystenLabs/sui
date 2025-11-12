@@ -1,0 +1,154 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 19 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 9-58:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8854000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 60:
+//# run a::m::create --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 62-64:
+//# view-object 2,0
+Owner: Shared( 2 )
+Version: 2
+Contents: a::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    val: 0u64,
+}
+
+task 4, lines 65-67:
+//# run a::m::add_dynamic_field --sender A --args nonexclusive(2,0)
+created: object(4,0)
+mutated: object(0,0)
+unchanged_shared: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2454800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 68-70:
+//# view-object 2,0
+Owner: Shared( 2 )
+Version: 2
+Contents: a::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    val: 0u64,
+}
+
+task 6, lines 71-74:
+//# run a::m::remove_and_transfer --sender A --args object(2,0)
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::remove_child_object (function index 13) at offset 0, Abort Code: 1
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 13, instruction: 0, function_name: Some("remove_child_object") }, 1) at command Some(0)
+
+task 7, line 75:
+//# run a::m::remove_and_transfer --sender A --args object(2,0)
+created: object(7,0)
+mutated: object(0,0), object(2,0)
+deleted: object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 3556800,  storage_rebate: 3701808, non_refundable_storage_fee: 37392
+
+task 8, line 77:
+//# view-object 2,0
+Owner: Shared( 2 )
+Version: 5
+Contents: a::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    val: 0u64,
+}
+
+task 9, lines 79-81:
+//# view-object 6,0
+Error: task 9, lines 79-79
+//# view-object 6,0
+. Unbound fake id 6,0
+
+task 10, line 82:
+//# run a::m::mutate --sender A --args nonexclusive(2,0)
+Error: Transaction Effects Status: Non-exclusive write input object fake(2,0) has been modified
+Debug of error: NonExclusiveWriteInputObjectModified { id: fake(2,0) } at command None
+
+task 11, lines 84-86:
+//# view-object 2,0
+Owner: Shared( 2 )
+Version: 5
+Contents: a::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    val: 0u64,
+}
+
+task 12, line 87:
+//# run a::m::mutate --sender A --args object(2,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
+
+task 13, lines 89-91:
+//# view-object 2,0
+Owner: Shared( 2 )
+Version: 7
+Contents: a::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    val: 1u64,
+}
+
+task 14, lines 92-94:
+//# run a::m::by_value_without_mutation --sender A --args nonexclusive(2,0)
+mutated: object(0,0)
+unchanged_shared: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 15, lines 95-97:
+//# run a::m::by_value_without_mutation_wrapped --sender A --args nonexclusive(2,0)
+mutated: object(0,0)
+unchanged_shared: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16, lines 98-100:
+//# run a::m::by_value_with_mutation --sender A --args nonexclusive(2,0)
+Error: Transaction Effects Status: Non-exclusive write input object fake(2,0) has been modified
+Debug of error: NonExclusiveWriteInputObjectModified { id: fake(2,0) } at command None
+
+task 17, line 101:
+//# run a::m::by_value_delete --sender A --args nonexclusive(2,0)
+Error: Transaction Effects Status: Non-exclusive write input object fake(2,0) has been modified
+Debug of error: NonExclusiveWriteInputObjectModified { id: fake(2,0) } at command None
+
+task 18, line 103:
+//# view-object 2,0
+Owner: Shared( 2 )
+Version: 7
+Contents: a::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    val: 1u64,
+}

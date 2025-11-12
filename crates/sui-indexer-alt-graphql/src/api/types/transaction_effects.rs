@@ -4,11 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{
-    connection::{Connection, CursorType, Edge},
-    dataloader::DataLoader,
-    Context, Enum, Object,
-};
+use async_graphql::{Context, Enum, Object, connection::Connection, dataloader::DataLoader};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
     kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
@@ -16,9 +12,14 @@ use sui_indexer_alt_reader::{
     tx_balance_changes::TxBalanceChangeKey,
 };
 use sui_indexer_alt_schema::transactions::BalanceChange as NativeBalanceChange;
+use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_types::{
-    digests::TransactionDigest, effects::TransactionEffectsAPI,
-    execution_status::ExecutionStatus as NativeExecutionStatus, transaction::TransactionDataAPI,
+    digests::TransactionDigest,
+    effects::TransactionEffectsAPI,
+    execution_status::ExecutionStatus as NativeExecutionStatus,
+    object::Object as NativeObject,
+    signature::GenericSignature,
+    transaction::{TransactionData, TransactionDataAPI},
 };
 
 use crate::{
@@ -39,6 +40,7 @@ use super::{
     gas_effects::GasEffects,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
+    unchanged_consensus_object::UnchangedConsensusObject,
 };
 
 /// The execution status of this transaction: success or failure.
@@ -65,6 +67,8 @@ pub(crate) struct EffectsContents {
 type CObjectChange = JsonCursor<usize>;
 type CEvent = JsonCursor<usize>;
 type CBalanceChange = JsonCursor<usize>;
+type CUnchangedConsensusObject = JsonCursor<usize>;
+type CDependency = JsonCursor<usize>;
 
 /// The results of executing a transaction.
 #[Object]
@@ -95,7 +99,9 @@ impl EffectsContents {
             return None;
         };
 
-        Checkpoint::with_sequence_number(self.scope.clone(), content.cp_sequence_number())
+        content
+            .cp_sequence_number()
+            .and_then(|cp| Checkpoint::with_sequence_number(self.scope.clone(), Some(cp)))
     }
 
     /// Whether the transaction executed successfully or not.
@@ -124,7 +130,7 @@ impl EffectsContents {
     }
 
     /// Rich execution error information for failed transactions.
-    async fn execution_error(&self, ctx: &Context<'_>) -> Result<Option<ExecutionError>, RpcError> {
+    async fn execution_error(&self) -> Result<Option<ExecutionError>, RpcError> {
         let Some(content) = &self.contents else {
             return Ok(None);
         };
@@ -141,7 +147,7 @@ impl EffectsContents {
                 _ => None,
             });
 
-        ExecutionError::from_execution_status(ctx, status, programmable_tx.as_ref()).await
+        ExecutionError::from_execution_status(&self.scope, status, programmable_tx.as_ref()).await
     }
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.
@@ -184,26 +190,19 @@ impl EffectsContents {
         let page = Page::from_params(limits, first, after, last, before)?;
 
         let events = content.events()?;
-        let cursors = page.paginate_indices(events.len());
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
+        page.paginate_indices(events.len(), |i| {
+            let transaction_digest = content.digest()?;
+            let timestamp_ms = content.timestamp_ms();
 
-        let transaction_digest = content.digest()?;
-        let timestamp_ms = content.timestamp_ms();
-
-        for edge in cursors.edges {
-            let event = Event {
+            Ok(Event {
                 scope: self.scope.clone(),
-                native: events[*edge.cursor].clone(),
+                native: events[i].clone(),
                 transaction_digest,
-                sequence_number: *edge.cursor as u64,
+                sequence_number: i as u64,
                 timestamp_ms,
-            };
-
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), event));
-        }
-
-        Ok(Some(conn))
+            })
+        })
+        .map(Some)
     }
 
     /// The effect this transaction had on the balances (sum of coin values per coin type) of addresses and objects.
@@ -242,19 +241,13 @@ impl EffectsContents {
         let limits = pagination.limits("TransactionEffects", "balanceChanges");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let cursors = page.paginate_indices(balance_changes.len());
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-
-        for edge in cursors.edges {
-            let balance_change = BalanceChange {
+        page.paginate_indices(balance_changes.len(), |i| {
+            Ok(BalanceChange {
                 scope: self.scope.clone(),
-                stored: balance_changes[*edge.cursor].clone(),
-            };
-            conn.edges
-                .push(Edge::new(edge.cursor.encode_cursor(), balance_change));
-        }
-
-        Ok(Some(conn))
+                stored: balance_changes[i].clone(),
+            })
+        })
+        .map(Some)
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
@@ -283,7 +276,7 @@ impl EffectsContents {
         after: Option<CObjectChange>,
         last: Option<u64>,
         before: Option<CObjectChange>,
-    ) -> Result<Option<Connection<CObjectChange, ObjectChange>>, RpcError> {
+    ) -> Result<Option<Connection<String, ObjectChange>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("TransactionEffects", "objectChanges");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -293,19 +286,13 @@ impl EffectsContents {
         };
 
         let object_changes = content.effects()?.object_changes();
-        let cursors = page.paginate_indices(object_changes.len());
-
-        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
-        for edge in cursors.edges {
-            let object_change = ObjectChange {
+        page.paginate_indices(object_changes.len(), |i| {
+            Ok(ObjectChange {
                 scope: self.scope.clone(),
-                native: object_changes[*edge.cursor].clone(),
-            };
-
-            conn.edges.push(Edge::new(edge.cursor, object_change))
-        }
-
-        Ok(Some(conn))
+                native: object_changes[i].clone(),
+            })
+        })
+        .map(Some)
     }
 
     /// Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
@@ -317,9 +304,121 @@ impl EffectsContents {
         let effects = content.effects()?;
         Ok(Some(GasEffects::from_effects(self.scope.clone(), &effects)))
     }
+
+    /// The unchanged consensus-managed objects that were referenced by this transaction.
+    async fn unchanged_consensus_objects(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CUnchangedConsensusObject>,
+        last: Option<u64>,
+        before: Option<CUnchangedConsensusObject>,
+    ) -> Result<Option<Connection<String, UnchangedConsensusObject>>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("TransactionEffects", "unchangedConsensusObjects");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let epoch = content.effects()?.executed_epoch();
+        let unchanged_consensus_objects = content.effects()?.unchanged_consensus_objects();
+        page.paginate_indices(unchanged_consensus_objects.len(), |i| {
+            Ok(UnchangedConsensusObject::from_native(
+                self.scope.clone(),
+                unchanged_consensus_objects[i].clone(),
+                epoch,
+            ))
+        })
+        .map(Some)
+    }
+
+    /// Transactions whose outputs this transaction depends upon.
+    async fn dependencies(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CDependency>,
+        last: Option<u64>,
+        before: Option<CDependency>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("TransactionEffects", "dependencies");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        let dependencies = effects.dependencies();
+        page.paginate_indices(dependencies.len(), |i| {
+            Ok(Transaction::with_id(self.scope.clone(), dependencies[i]))
+        })
+        .map(Some)
+    }
 }
 
 impl TransactionEffects {
+    /// Create a new TransactionEffects from an ExecutedTransaction.
+    fn from_executed_transaction(
+        scope: Scope,
+        executed_transaction: &ExecutedTransaction,
+        transaction_data: TransactionData,
+        signatures: Vec<GenericSignature>,
+    ) -> Result<Self, RpcError> {
+        let contents = NativeTransactionContents::from_executed_transaction(
+            executed_transaction,
+            transaction_data,
+            signatures,
+        )
+        .context("Failed to create TransactionContents from ExecutedTransaction")?;
+
+        let objects = extract_objects_from_executed_transaction(executed_transaction);
+        let digest = contents
+            .digest()
+            .context("Failed to get digest from transaction contents")?;
+        let scope = scope.with_execution_output(objects);
+
+        Ok(Self {
+            digest,
+            contents: EffectsContents {
+                scope,
+                contents: Some(Arc::new(contents)),
+            },
+        })
+    }
+
+    /// Create a new TransactionEffects from a gRPC ExecuteTransactionResponse.
+    pub(crate) fn from_execution_response(
+        scope: Scope,
+        response: sui_rpc::proto::sui::rpc::v2::ExecuteTransactionResponse,
+        transaction_data: TransactionData,
+        signatures: Vec<GenericSignature>,
+    ) -> Result<Self, RpcError> {
+        let executed_transaction = response
+            .transaction
+            .as_ref()
+            .context("ExecuteTransactionResponse should have transaction")?;
+
+        Self::from_executed_transaction(scope, executed_transaction, transaction_data, signatures)
+    }
+
+    /// Create a new TransactionEffects from a gRPC SimulateTransactionResponse.
+    pub(crate) fn from_simulation_response(
+        scope: Scope,
+        response: sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse,
+        transaction_data: TransactionData,
+    ) -> Result<Self, RpcError> {
+        let executed_transaction = response
+            .transaction
+            .as_ref()
+            .context("SimulateTransactionResponse should have transaction")?;
+
+        Self::from_executed_transaction(scope, executed_transaction, transaction_data, vec![])
+    }
+
     /// Load the effects from the store, and return it fully inflated (with contents already
     /// fetched). Returns `None` if the effects do not exist (either never existed or were pruned
     /// from the store).
@@ -362,6 +461,9 @@ impl EffectsContents {
         if self.contents.is_some() {
             return Ok(self.clone());
         }
+        let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
+            return Ok(self.clone());
+        };
 
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(transaction) = kv_loader
@@ -372,8 +474,11 @@ impl EffectsContents {
             return Ok(self.clone());
         };
 
-        // Discard the loaded result if we are viewing it at a checkpoint before it existed.
-        if transaction.cp_sequence_number() > self.scope.checkpoint_viewed_at() {
+        let cp_num = transaction
+            .cp_sequence_number()
+            .context("Fetched transaction should have checkpoint sequence number")?;
+
+        if cp_num > checkpoint_viewed_at {
             return Ok(self.clone());
         }
 
@@ -393,4 +498,17 @@ impl From<Transaction> for TransactionEffects {
             contents: EffectsContents { scope, contents },
         }
     }
+}
+
+/// Extract input and output object contents from an ExecutedTransaction.
+fn extract_objects_from_executed_transaction(
+    executed_transaction: &ExecutedTransaction,
+) -> Vec<NativeObject> {
+    executed_transaction
+        .objects()
+        .objects()
+        .iter()
+        .filter_map(|obj| obj.bcs.as_ref())
+        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"))
+        .collect()
 }

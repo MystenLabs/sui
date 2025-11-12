@@ -1,7 +1,12 @@
 use std::{fmt::Debug, fmt::Display, path::PathBuf};
 
-use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+use move_core_types::{
+    account_address::{AccountAddress, AccountAddressParseError},
+    identifier::Identifier,
+};
 use serde::{Deserialize, Serialize};
+
+use crate::errors::fmt_truncated;
 
 use super::EnvironmentID;
 
@@ -14,8 +19,8 @@ pub type PackageName = Identifier;
 // schema data structures of being a plain old object)
 #[derive(Debug, Clone)]
 pub struct Environment {
-    name: EnvironmentName,
-    id: EnvironmentID,
+    pub name: EnvironmentName,
+    pub id: EnvironmentID,
 }
 
 impl Environment {
@@ -39,7 +44,7 @@ pub struct PublishedID(pub AccountAddress);
 pub struct OriginalID(pub AccountAddress);
 
 /// A pair of published-at and original-id; appears in various places
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct PublishAddresses {
     pub published_at: PublishedID,
@@ -77,6 +82,22 @@ impl From<u16> for PublishedID {
     }
 }
 
+impl TryFrom<&str> for PublishedID {
+    type Error = AccountAddressParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(Self(AccountAddress::from_hex(value)?))
+    }
+}
+
+impl TryFrom<&str> for OriginalID {
+    type Error = AccountAddressParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(Self(AccountAddress::from_hex(value)?))
+    }
+}
+
 impl TryFrom<bool> for ConstTrue {
     type Error = &'static str;
 
@@ -89,7 +110,7 @@ impl TryFrom<bool> for ConstTrue {
 }
 
 impl From<ConstTrue> for bool {
-    fn from(value: ConstTrue) -> Self {
+    fn from(_: ConstTrue) -> Self {
         true
     }
 }
@@ -118,6 +139,18 @@ impl Serialize for PublishedID {
         S: serde::Serializer,
     {
         ser_account(&self.0, serializer)
+    }
+}
+
+impl PublishedID {
+    pub fn truncated(&self) -> String {
+        fmt_truncated(self.0.to_canonical_string(true), 4, 4)
+    }
+}
+
+impl OriginalID {
+    pub fn truncated(&self) -> String {
+        fmt_truncated(self.0.to_canonical_string(true), 4, 4)
     }
 }
 

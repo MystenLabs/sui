@@ -9,8 +9,8 @@ use proc_macro2::Ident;
 use quote::quote;
 use syn::Type::{self};
 use syn::{
-    parse_macro_input, AngleBracketedGenericArguments, Attribute, Generics, ItemStruct, Lit, Meta,
-    PathArguments,
+    AngleBracketedGenericArguments, Attribute, Generics, ItemStruct, Lit, Meta, PathArguments,
+    parse_macro_input,
 };
 
 // This is used as default when none is specified
@@ -131,24 +131,32 @@ fn get_options_override_function(attr: &Attribute) -> syn::Result<String> {
         _ => {
             return Err(syn::Error::new_spanned(
                 meta,
-                format!("Expected function name in format `#[{DB_OPTIONS_CUSTOM_FUNCTION} = {{function_name}}]`"),
-            ))
+                format!(
+                    "Expected function name in format `#[{DB_OPTIONS_CUSTOM_FUNCTION} = {{function_name}}]`"
+                ),
+            ));
         }
     };
 
     if !val.path.is_ident(DB_OPTIONS_CUSTOM_FUNCTION) {
         return Err(syn::Error::new_spanned(
             meta,
-            format!("Expected function name in format `#[{DB_OPTIONS_CUSTOM_FUNCTION} = {{function_name}}]`"),
+            format!(
+                "Expected function name in format `#[{DB_OPTIONS_CUSTOM_FUNCTION} = {{function_name}}]`"
+            ),
         ));
     }
 
     let fn_name = match val.lit {
         Lit::Str(fn_name) => fn_name,
-        _ => return Err(syn::Error::new_spanned(
-            meta,
-            format!("Expected function name in format `#[{DB_OPTIONS_CUSTOM_FUNCTION} = {{function_name}}]`"),
-        ))
+        _ => {
+            return Err(syn::Error::new_spanned(
+                meta,
+                format!(
+                    "Expected function name in format `#[{DB_OPTIONS_CUSTOM_FUNCTION} = {{function_name}}]`"
+                ),
+            ));
+        }
     };
     Ok(fn_name.value())
 }

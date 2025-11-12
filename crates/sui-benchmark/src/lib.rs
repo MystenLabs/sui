@@ -5,7 +5,6 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use anyhow::bail;
 use async_trait::async_trait;
-use embedded_reconfig_observer::EmbeddedReconfigObserver;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use prometheus::Registry;
 use rand::Rng;
@@ -14,21 +13,21 @@ use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::NetworkAuthorityClient,
     quorum_driver::{
-        reconfig_observer::ReconfigObserver, QuorumDriver, QuorumDriverHandler,
-        QuorumDriverHandlerBuilder, QuorumDriverMetrics,
+        QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
+        reconfig_observer::ReconfigObserver,
     },
     transaction_driver::{
-        choose_transaction_driver_percentage, SubmitTransactionOptions, SubmitTxRequest,
-        TransactionDriver, TransactionDriverMetrics,
+        SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics,
+        choose_transaction_driver_percentage,
     },
+    validator_client_monitor::ValidatorClientMetrics,
 };
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
+use sui_protocol_config::ProtocolConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::gas::GasCostSummary;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::EffectsFinalityInfo;
 use sui_types::quorum_driver_types::FinalizedEffects;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
@@ -48,8 +47,15 @@ use sui_types::{
     sui_system_state::SuiSystemStateTrait,
 };
 use sui_types::{
+    digests::ChainIdentifier, gas::GasCostSummary, transaction::SharedObjectMutability,
+};
+use sui_types::{
     effects::{TransactionEffectsAPI, TransactionEvents},
     execution_status::ExecutionFailureStatus,
+};
+use sui_types::{
+    messages_grpc::SubmitTxRequest,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
@@ -59,7 +65,6 @@ use crate::drivers::bench_driver::ClientType;
 pub mod bank;
 pub mod benchmark_setup;
 pub mod drivers;
-pub mod embedded_reconfig_observer;
 pub mod fullnode_reconfig_observer;
 pub mod in_memory_wallet;
 pub mod options;
@@ -272,20 +277,13 @@ impl LocalValidatorAggregatorProxy {
     pub async fn from_genesis(
         genesis: &Genesis,
         registry: &Registry,
-        reconfig_fullnode_rpc_url: Option<&str>,
-        transaction_driver_percentage: Option<u8>,
+        reconfig_fullnode_rpc_url: &str,
     ) -> Self {
         let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
             .with_registry(registry)
             .build_network_clients();
         let committee = genesis.committee().unwrap();
-
-        let td_percentage = if let Some(tx_driver_percentage) = transaction_driver_percentage {
-            tx_driver_percentage
-        } else {
-            choose_transaction_driver_percentage()
-        };
-
+        let td_percentage = choose_transaction_driver_percentage(None);
         Self::new_impl(
             aggregator,
             registry,
@@ -300,7 +298,7 @@ impl LocalValidatorAggregatorProxy {
     async fn new_impl(
         aggregator: AuthorityAggregator<NetworkAuthorityClient>,
         registry: &Registry,
-        reconfig_fullnode_rpc_url: Option<&str>,
+        reconfig_fullnode_rpc_url: &str,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
         committee: Committee,
         td_percentage: u8,
@@ -310,7 +308,7 @@ impl LocalValidatorAggregatorProxy {
         let (aggregator, reconfig_observer): (
             Arc<_>,
             Arc<dyn ReconfigObserver<NetworkAuthorityClient> + Sync + Send>,
-        ) = if let Some(reconfig_fullnode_rpc_url) = reconfig_fullnode_rpc_url {
+        ) = {
             info!(
                 "Using FullNodeReconfigObserver: {:?}",
                 reconfig_fullnode_rpc_url
@@ -326,22 +324,23 @@ impl LocalValidatorAggregatorProxy {
                 .await,
             );
             (Arc::new(aggregator), reconfig_observer)
-        } else {
-            info!("Using EmbeddedReconfigObserver");
-            let reconfig_observer = Arc::new(EmbeddedReconfigObserver::new());
-            // Get the latest committee from config observer
-            let aggregator = reconfig_observer
-                .get_committee(Arc::new(aggregator))
-                .await
-                .expect("Failed to get latest committee");
-            (aggregator, reconfig_observer)
         };
+
         let qd_handler_builder =
             QuorumDriverHandlerBuilder::new(aggregator.clone(), quorum_driver_metrics.clone())
                 .with_reconfig_observer(reconfig_observer.clone());
         let qd_handler = qd_handler_builder.start();
         let qd = qd_handler.clone_quorum_driver();
-        let td = TransactionDriver::new(aggregator, reconfig_observer, transaction_driver_metrics);
+        let client_metrics = Arc::new(ValidatorClientMetrics::new(registry));
+
+        // For benchmark, pass None to use default validator client monitor config
+        let td = TransactionDriver::new(
+            aggregator,
+            reconfig_observer,
+            transaction_driver_metrics,
+            None,
+            client_metrics,
+        );
         Self {
             _qd_handler: qd_handler,
             qd,
@@ -357,10 +356,9 @@ impl LocalValidatorAggregatorProxy {
         let response = self
             .td
             .drive_transaction(
-                SubmitTxRequest {
-                    transaction: tx.clone(),
-                },
+                SubmitTxRequest::new_transaction(tx.clone()),
                 SubmitTransactionOptions::default(),
+                Some(Duration::from_secs(60)),
             )
             .await?;
         Ok(ExecutionEffects::FinalizedTransactionEffects(
@@ -518,27 +516,44 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
 pub struct FullNodeProxy {
     sui_client: SuiClient,
+
+    // Committee and protocol config are initialized on startup and not updated on epoch changes.
     committee: Arc<Committee>,
+    protocol_config: Arc<ProtocolConfig>,
 }
 
 impl FullNodeProxy {
     pub async fn from_url(http_url: &str) -> Result<Self, anyhow::Error> {
+        let http_url = if http_url.starts_with("http://") || http_url.starts_with("https://") {
+            http_url.to_string()
+        } else {
+            format!("http://{http_url}")
+        };
+
         // Each request times out after 60s (default value)
         let sui_client = SuiClientBuilder::default()
             .max_concurrent_requests(500_000)
             .build(http_url)
             .await?;
 
-        let resp = sui_client.read_api().get_committee_info(None).await?;
-        let epoch = resp.epoch;
-        let committee_vec = resp.validators;
-        let committee_map = BTreeMap::from_iter(committee_vec.into_iter());
-        let committee =
-            Committee::new_for_testing_with_normalized_voting_power(epoch, committee_map);
+        let committee = {
+            let resp = sui_client.read_api().get_committee_info(None).await?;
+            let epoch = resp.epoch;
+            let committee_map = resp.validators.into_iter().collect();
+            Committee::new(epoch, committee_map)
+        };
+
+        let protocol_config = {
+            let resp = sui_client.read_api().get_protocol_config(None).await?;
+            // Basically set by the SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE env var.
+            let chain = ChainIdentifier::default().chain();
+            ProtocolConfig::get_for_version(resp.protocol_version, chain)
+        };
 
         Ok(Self {
             sui_client,
             committee: Arc::new(committee),
+            protocol_config: Arc::new(protocol_config),
         })
     }
 }
@@ -553,7 +568,7 @@ impl ValidatorProxy for FullNodeProxy {
             .await?;
 
         if let Some(sui_object) = response.data {
-            sui_object.try_into()
+            sui_object.try_into_object(&self.protocol_config)
         } else if let Some(error) = response.error {
             bail!("Error getting object {:?}: {}", object_id, error)
         } else {
@@ -595,9 +610,12 @@ impl ValidatorProxy for FullNodeProxy {
         for object in objects {
             let o = object.data;
             if let Some(o) = o {
-                let temp: Object = o.clone().try_into()?;
+                let temp: Object = o.clone().try_into_object(&self.protocol_config)?;
                 let gas_coin = GasCoin::try_from(&temp)?;
-                values_objects.push((gas_coin.value(), o.clone().try_into()?));
+                values_objects.push((
+                    gas_coin.value(),
+                    o.clone().try_into_object(&self.protocol_config)?,
+                ));
             }
         }
 
@@ -616,7 +634,6 @@ impl ValidatorProxy for FullNodeProxy {
         &self,
         tx: Transaction,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
-        // TODO(fastpath): Add support for TransactionDriver
         let tx_digest = *tx.digest();
         let mut retry_cnt = 0;
         while retry_cnt < 10 {
@@ -641,11 +658,16 @@ impl ValidatorProxy for FullNodeProxy {
                     );
                 }
                 Err(err) => {
+                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
                     warn!(
                         ?tx_digest,
-                        retry_cnt, "Transaction failed with err: {:?}", err
+                        retry_cnt,
+                        "Transaction failed with err: {:?}. Sleeping for {:?} ...",
+                        err,
+                        delay,
                     );
                     retry_cnt += 1;
+                    sleep(delay).await;
                 }
             }
         }
@@ -670,6 +692,7 @@ impl ValidatorProxy for FullNodeProxy {
         Box::new(Self {
             sui_client: self.sui_client.clone(),
             committee: self.clone_committee(),
+            protocol_config: self.protocol_config.clone(),
         })
     }
 
@@ -687,7 +710,7 @@ impl ValidatorProxy for FullNodeProxy {
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum BenchMoveCallArg {
     Pure(Vec<u8>),
-    Shared((ObjectID, SequenceNumber, bool)),
+    Shared((ObjectID, SequenceNumber, SharedObjectMutability)),
     ImmOrOwnedObject(ObjectRef),
     ImmOrOwnedObjectVec(Vec<ObjectRef>),
     SharedObjectVec(Vec<(ObjectID, SequenceNumber, bool)>),
@@ -757,15 +780,15 @@ impl From<CallArg> for BenchMoveCallArg {
                 ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
-                    mutable,
-                } => BenchMoveCallArg::Shared((id, initial_shared_version, mutable)),
+                    mutability,
+                } => BenchMoveCallArg::Shared((id, initial_shared_version, mutability)),
                 ObjectArg::Receiving(_) => {
                     unimplemented!("Receiving is not supported for benchmarks")
                 }
             },
-            CallArg::BalanceWithdraw(_) => {
-                // TODO(address-balances): Support BalanceWithdraw in benchmarks.
-                todo!("BalanceWithdraw is not supported for benchmarks")
+            CallArg::FundsWithdrawal(_) => {
+                // TODO(address-balances): Support FundsWithdrawal in benchmarks.
+                todo!("FundsWithdrawal is not supported for benchmarks")
             }
         }
     }
@@ -781,11 +804,11 @@ pub fn convert_move_call_args(
             BenchMoveCallArg::Pure(bytes) => {
                 pt_builder.input(CallArg::Pure(bytes.clone())).unwrap()
             }
-            BenchMoveCallArg::Shared((id, initial_shared_version, mutable)) => pt_builder
+            BenchMoveCallArg::Shared((id, initial_shared_version, mutability)) => pt_builder
                 .input(CallArg::Object(ObjectArg::SharedObject {
                     id: *id,
                     initial_shared_version: *initial_shared_version,
-                    mutable: *mutable,
+                    mutability: *mutability,
                 }))
                 .unwrap(),
             BenchMoveCallArg::ImmOrOwnedObject(obj_ref) => {
@@ -802,7 +825,11 @@ pub fn convert_move_call_args(
                             |(id, initial_shared_version, mutable)| ObjectArg::SharedObject {
                                 id: *id,
                                 initial_shared_version: *initial_shared_version,
-                                mutable: *mutable,
+                                mutability: if *mutable {
+                                    SharedObjectMutability::Mutable
+                                } else {
+                                    SharedObjectMutability::Immutable
+                                },
                             },
                         ),
                 )

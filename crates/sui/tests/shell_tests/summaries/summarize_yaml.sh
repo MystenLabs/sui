@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 sui move summary --path data/move_package -o yaml
-ls -1 data/move_package/package_summaries
-ls -1 data/move_package/package_summaries/move_package
-ls -1 data/move_package/package_summaries/sui
-ls -1 data/move_package/package_summaries/std
+ls -1 data/move_package/package_summaries | LC_ALL=C sort -f
+ls -1 data/move_package/package_summaries/move_package | LC_ALL=C sort -f
+ls -1 data/move_package/package_summaries/sui | LC_ALL=C sort -f
+ls -1 data/move_package/package_summaries/std | LC_ALL=C sort -d
 # NB: No root_package_metadata for source packages as these are not generated w.r.t. a specific network.
 cat data/move_package/package_summaries/root_package_metadata.yaml
 # This will contain the address mapping for the package from the literal value

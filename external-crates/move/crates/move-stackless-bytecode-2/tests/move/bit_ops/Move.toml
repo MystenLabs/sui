@@ -1,0 +1,6 @@
+[package]
+name = "BitOps"
+edition = "2024.beta"
+
+[addresses]
+bit_ops = "0x0"

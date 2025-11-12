@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use move_binary_format::file_format::AbilitySet;
-use move_core_types::identifier::IdentStr;
+use move_core_types::u256::U256;
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 use sui_types::{
@@ -10,6 +12,7 @@ use sui_types::{
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     execution_status::CommandArgumentError,
+    funds_accumulator::Withdrawal,
     object::Owner,
     storage::{BackingPackageStore, ChildObjectResolver, StorageView},
     transfer::Receiving,
@@ -49,6 +52,13 @@ where
 }
 
 #[derive(Clone, Debug)]
+pub enum Mutability {
+    Mutable,
+    Immutable,
+    NonExclusiveWrite,
+}
+
+#[derive(Clone, Debug)]
 pub enum InputObjectMetadata {
     Receiving {
         id: ObjectID,
@@ -56,7 +66,7 @@ pub enum InputObjectMetadata {
     },
     InputObject {
         id: ObjectID,
-        is_mutable_input: bool,
+        mutability: Mutability,
         owner: Owner,
         version: SequenceNumber,
     },
@@ -70,12 +80,8 @@ pub enum UsageKind {
 }
 
 #[derive(Clone, Copy)]
-pub enum CommandKind<'a> {
-    MoveCall {
-        package: ObjectID,
-        module: &'a IdentStr,
-        function: &'a IdentStr,
-    },
+pub enum CommandKind {
+    MoveCall,
     MakeMoveVec,
     TransferObjects,
     SplitCoins,
@@ -98,6 +104,7 @@ pub struct ResultValue {
     /// a "move" of the value.
     pub last_usage_kind: Option<UsageKind>,
     pub value: Option<Value>,
+    pub shared_object_ids: BTreeSet<ObjectID>,
 }
 
 #[derive(Debug, Clone)]
@@ -159,9 +166,18 @@ impl InputObjectMetadata {
 
 impl InputValue {
     pub fn new_object(object_metadata: InputObjectMetadata, value: ObjectValue) -> Self {
+        let mut inner = ResultValue::new(Value::Object(value));
+        if let InputObjectMetadata::InputObject {
+            id,
+            owner: Owner::Shared { .. },
+            ..
+        } = &object_metadata
+        {
+            inner.shared_object_ids.insert(*id);
+        }
         InputValue {
             object_metadata: Some(object_metadata),
-            inner: ResultValue::new(Value::Object(value)),
+            inner,
         }
     }
 
@@ -179,13 +195,17 @@ impl InputValue {
         }
     }
 
-    // TODO(address-balances): Populate withdraw reservation information.
-    pub fn new_balance_withdraw() -> Self {
+    pub fn withdrawal(withdrawal_ty: RawValueType, owner: SuiAddress, limit: U256) -> Self {
+        let value = Value::Raw(
+            withdrawal_ty,
+            bcs::to_bytes(&Withdrawal::new(owner, limit)).unwrap(),
+        );
         InputValue {
             object_metadata: None,
             inner: ResultValue {
                 last_usage_kind: None,
-                value: None,
+                value: Some(value),
+                shared_object_ids: BTreeSet::new(),
             },
         }
     }
@@ -196,6 +216,7 @@ impl ResultValue {
         Self {
             last_usage_kind: None,
             value: Some(value),
+            shared_object_ids: BTreeSet::new(),
         }
     }
 }

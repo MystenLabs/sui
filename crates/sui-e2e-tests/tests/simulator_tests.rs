@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::{
-    stream::{FuturesOrdered, FuturesUnordered},
     StreamExt,
+    stream::{FuturesOrdered, FuturesUnordered},
 };
 use rand::{
+    Rng,
     distributions::{Distribution, Uniform},
     rngs::OsRng,
-    Rng,
 };
 use std::collections::{HashMap, HashSet};
 use sui_test_transaction_builder::make_transfer_sui_transaction;
-use tokio::time::{sleep, Duration, Instant};
+use tokio::time::{Duration, Instant, sleep};
 use tracing::{debug, trace};
 
 use sui_macros::*;
@@ -41,9 +41,9 @@ async fn test_futures_ordered() {
 
     while (futures.next().await).is_some() {
         // mix rng state as futures finish
-        OsRng.gen::<u32>();
+        OsRng.r#gen::<u32>();
     }
-    debug!("final rng state: {}", OsRng.gen::<u32>());
+    debug!("final rng state: {}", OsRng.r#gen::<u32>());
 }
 
 #[sim_test(check_determinism)]
@@ -55,10 +55,10 @@ async fn test_futures_unordered() {
     while let Some(i) = futures.next().await {
         // mix rng state depending on the order futures finish in
         for _ in 0..i {
-            OsRng.gen::<u32>();
+            OsRng.r#gen::<u32>();
         }
     }
-    debug!("final rng state: {}", OsRng.gen::<u32>());
+    debug!("final rng state: {}", OsRng.r#gen::<u32>());
 }
 
 #[sim_test(check_determinism)]
@@ -71,15 +71,15 @@ async fn test_select_unbiased() {
 
             Some(i) = f1.next() => {
                 for _ in 0..i {
-                    OsRng.gen::<u32>();
+                    OsRng.r#gen::<u32>();
                 }
             }
 
             Some(i) = f2.next() => {
                 for _ in 0..i {
                     // mix differently when f2 yields.
-                    OsRng.gen::<u32>();
-                    OsRng.gen::<u32>();
+                    OsRng.r#gen::<u32>();
+                    OsRng.r#gen::<u32>();
                 }
             }
 
@@ -89,7 +89,7 @@ async fn test_select_unbiased() {
 
     assert!(f1.is_empty());
     assert!(f2.is_empty());
-    debug!("final rng state: {}", OsRng.gen::<u32>());
+    debug!("final rng state: {}", OsRng.r#gen::<u32>());
 }
 
 #[sim_test(check_determinism)]
@@ -108,17 +108,17 @@ async fn test_hash_collections() {
     // so that if iteration order changes, we get different results.
     for (i, _) in map.iter().take(500) {
         for _ in 0..*i {
-            OsRng.gen::<u32>();
+            OsRng.r#gen::<u32>();
         }
     }
 
     for i in set.iter().take(500) {
         for _ in 0..*i {
-            OsRng.gen::<u32>();
+            OsRng.r#gen::<u32>();
         }
     }
 
-    debug!("final rng state: {}", OsRng.gen::<u32>());
+    debug!("final rng state: {}", OsRng.r#gen::<u32>());
 }
 
 // Test that starting up a network + fullnode, and sending one transaction through that network is

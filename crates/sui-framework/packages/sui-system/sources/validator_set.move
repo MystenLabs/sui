@@ -1205,7 +1205,7 @@ fun compute_adjusted_reward_distribution(
     let mut adjusted_storage_fund_reward_amounts = vector[];
 
     let length = validators.length();
-    let num_unslashed_validators = length - individual_staking_reward_adjustments.size();
+    let num_unslashed_validators = length - individual_staking_reward_adjustments.length();
 
     length.do!(|i| {
         let validator = &validators[i];
@@ -1384,6 +1384,11 @@ public(package) fun active_validator_addresses(self: &ValidatorSet): vector<addr
 
 macro fun mul_div($a: u64, $b: u64, $c: u64): u64 {
     (($a as u128) * ($b as u128) / ($c as u128)) as u64
+}
+
+#[test_only]
+public(package) fun inactive_validator_by_pool_id(self: &ValidatorSet, pool_id: ID): &Validator {
+    self.inactive_validators[pool_id].get_inner_validator_ref()
 }
 
 #[test_only]

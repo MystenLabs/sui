@@ -1,0 +1,7 @@
+[package]
+name = "enums"
+edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+
+
+[addresses]
+enums = "0x42"

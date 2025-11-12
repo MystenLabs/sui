@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 
 use crate::{
     block::{BlockAPI, Slot, TestBlock, Transaction, VerifiedBlock},
-    commit::{DecidedLeader, DEFAULT_WAVE_LENGTH},
+    commit::{DEFAULT_WAVE_LENGTH, DecidedLeader},
     context::Context,
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
@@ -166,7 +166,7 @@ async fn direct_commit_late_call() {
     for (i, leader_block) in sequence.iter().enumerate() {
         // First sequenced leader should be in round 1.
         let leader_round = i as u32 + 1;
-        if let DecidedLeader::Commit(ref block, _direct) = leader_block {
+        if let DecidedLeader::Commit(block, _direct) = leader_block {
             assert_eq!(block.round(), leader_round);
             assert_eq!(block.author(), committer.get_leaders(leader_round)[0]);
         } else {

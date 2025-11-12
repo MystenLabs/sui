@@ -14,26 +14,26 @@ use sui_node::SuiNodeHandle;
 use sui_protocol_config::ProtocolVersion;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_swarm_config::genesis_config::{
-    AccountConfig, ValidatorGenesisConfig, ValidatorGenesisConfigBuilder, DEFAULT_GAS_AMOUNT,
+    AccountConfig, DEFAULT_GAS_AMOUNT, ValidatorGenesisConfig, ValidatorGenesisConfigBuilder,
 };
-use sui_test_transaction_builder::{make_transfer_sui_transaction, TestTransactionBuilder};
+use sui_test_transaction_builder::{TestTransactionBuilder, make_transfer_sui_transaction};
+use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
-use sui_types::error::SuiError;
+use sui_types::error::SuiErrorKind;
 use sui_types::governance::{
     VALIDATOR_LOW_POWER_PHASE_1, VALIDATOR_MIN_POWER_PHASE_1, VALIDATOR_VERY_LOW_POWER_PHASE_1,
 };
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{
-    get_validator_from_table, sui_system_state_summary::get_validator_by_pool_id,
-    SuiSystemStateTrait,
+    SuiSystemStateTrait, get_validator_from_table,
+    sui_system_state_summary::get_validator_by_pool_id,
 };
 use sui_types::transaction::{
     Command, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
 };
-use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::time::sleep;
 
@@ -69,19 +69,21 @@ async fn test_transaction_expiration() {
     // Expired transaction returns an error
     let mut expired_data = data.clone();
     *expired_data.expiration_mut_for_testing() = TransactionExpiration::Epoch(0);
-    let expired_transaction = test_cluster.wallet.sign_transaction(&expired_data);
+    let expired_transaction = test_cluster.wallet.sign_transaction(&expired_data).await;
     let result = test_cluster
         .wallet
         .execute_transaction_may_fail(expired_transaction)
         .await;
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains(&SuiError::TransactionExpired.to_string()));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains(&SuiErrorKind::TransactionExpired.to_string())
+    );
 
     // Non expired transaction signed without issue
     *data.expiration_mut_for_testing() = TransactionExpiration::Epoch(10);
-    let transaction = test_cluster.wallet.sign_transaction(&data);
+    let transaction = test_cluster.wallet.sign_transaction(&data).await;
     test_cluster
         .wallet
         .execute_transaction_may_fail(transaction)
@@ -100,21 +102,27 @@ async fn reconfig_with_revert_end_to_end_test() {
 
     // gas1 transaction is committed
     let gas1 = gas_objects.pop().unwrap();
-    let tx = test_cluster.wallet.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas1, rgp)
-            .transfer_sui(None, sender)
-            .build(),
-    );
+    let tx = test_cluster
+        .wallet
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas1, rgp)
+                .transfer_sui(None, sender)
+                .build(),
+        )
+        .await;
     let effects1 = test_cluster.execute_transaction(tx).await;
     assert_eq!(0, effects1.effects.unwrap().executed_epoch());
 
     // gas2 transaction is (most likely) reverted
     let gas2 = gas_objects.pop().unwrap();
-    let tx = test_cluster.wallet.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas2, rgp)
-            .transfer_sui(None, sender)
-            .build(),
-    );
+    let tx = test_cluster
+        .wallet
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas2, rgp)
+                .transfer_sui(None, sender)
+                .build(),
+        )
+        .await;
     let net = test_cluster
         .fullnode_handle
         .sui_node
@@ -304,16 +312,14 @@ async fn test_expired_locks() {
     let gas_object = accounts_and_objs[0].1[0];
 
     let transfer_sui = |amount| {
-        test_cluster.wallet.sign_transaction(
-            &TestTransactionBuilder::new(sender, gas_object, gas_price)
-                .transfer_sui(Some(amount), receiver)
-                .build(),
-        )
+        TestTransactionBuilder::new(sender, gas_object, gas_price)
+            .transfer_sui(Some(amount), receiver)
+            .build()
     };
 
-    let t1 = transfer_sui(1);
+    let t1 = test_cluster.wallet.sign_transaction(&transfer_sui(1)).await;
     // attempt to equivocate
-    let t2 = transfer_sui(2);
+    let t2 = test_cluster.wallet.sign_transaction(&transfer_sui(2)).await;
 
     for (idx, validator) in test_cluster.all_validator_handles().into_iter().enumerate() {
         let state = validator.state();
@@ -559,9 +565,10 @@ async fn test_inactive_validator_pool_read() {
 
     // Check that this node is no longer a validator.
     validator.with(|node| {
-        assert!(node
-            .state()
-            .is_fullnode(&node.state().epoch_store_for_testing()));
+        assert!(
+            node.state()
+                .is_fullnode(&node.state().epoch_store_for_testing())
+        );
     });
 
     // Check that the validator that just left now shows up in the inactive_validators,
@@ -640,9 +647,10 @@ async fn test_reconfig_with_committee_change_basic() {
     test_cluster.wait_for_epoch_all_nodes(1).await;
 
     new_validator_handle.with(|node| {
-        assert!(node
-            .state()
-            .is_validator(&node.state().epoch_store_for_testing()));
+        assert!(
+            node.state()
+                .is_validator(&node.state().epoch_store_for_testing())
+        );
     });
 
     execute_remove_validator_tx(&test_cluster, &new_validator_handle).await;
@@ -660,6 +668,19 @@ async fn test_reconfig_with_committee_change_basic() {
 
 #[sim_test]
 async fn test_protocol_upgrade_to_sip_39_enabled_version() {
+    let _guard =
+        sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            // The new consensus handler requires these flags, and they are irrelevant to the test
+            config.set_ignore_execution_time_observations_after_certs_closed_for_testing(true);
+            config.set_record_time_estimate_processed_for_testing(true);
+            config.set_prepend_prologue_tx_in_consensus_commit_in_checkpoints_for_testing(true);
+            config.set_consensus_checkpoint_signature_key_includes_digest_for_testing(true);
+            config.set_cancel_for_failed_dkg_early_for_testing(true);
+            config.set_use_mfp_txns_in_load_initial_object_debts_for_testing(true);
+            config.set_authority_capabilities_v2_for_testing(true);
+            config
+        });
+
     let initial_num_validators = 10;
     let new_validator = ValidatorGenesisConfigBuilder::new().build(&mut OsRng);
 
@@ -1310,7 +1331,7 @@ async fn execute_add_stake_transaction(
         .build();
 
     let response = test_cluster
-        .execute_transaction(test_cluster.wallet.sign_transaction(&tx))
+        .execute_transaction(test_cluster.wallet.sign_transaction(&tx).await)
         .await;
 
     response
@@ -1354,12 +1375,14 @@ async fn execute_add_validator_transactions(
     )
     .await;
 
-    assert!(try_request_add_validator(test_cluster, new_validator)
-        .await
-        .unwrap()
-        .0
-        .status()
-        .is_ok());
+    assert!(
+        try_request_add_validator(test_cluster, new_validator)
+            .await
+            .unwrap()
+            .0
+            .status()
+            .is_ok()
+    );
 
     // Check that we can get the pending validator from 0x5.
     test_cluster.fullnode_handle.sui_node.with(|node| {
