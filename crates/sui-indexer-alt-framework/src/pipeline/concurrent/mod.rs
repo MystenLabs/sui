@@ -68,6 +68,24 @@ pub trait Handler: Processor {
     /// checkpoints -- the size of these pipeline's batches will be dominated by watermark updates.
     const MAX_WATERMARK_UPDATES: usize = 10_000;
 
+    /// Runtime-configurable minimum eager rows threshold. Defaults to the const value.
+    /// Override this method to provide runtime configuration from e.g. a config file.
+    fn min_eager_rows(&self) -> usize {
+        Self::MIN_EAGER_ROWS
+    }
+
+    /// Runtime-configurable maximum pending rows threshold. Defaults to the const value.
+    /// Override this method to provide runtime configuration from e.g. a config file.
+    fn max_pending_rows(&self) -> usize {
+        Self::MAX_PENDING_ROWS
+    }
+
+    /// Runtime-configurable maximum watermark updates threshold. Defaults to the const value.
+    /// Override this method to provide runtime configuration from e.g. a config file.
+    fn max_watermark_updates(&self) -> usize {
+        Self::MAX_WATERMARK_UPDATES
+    }
+
     /// Add values from the iterator to the batch. The implementation may take all, some, or none
     /// of the values from the iterator by calling `.next()`.
     ///

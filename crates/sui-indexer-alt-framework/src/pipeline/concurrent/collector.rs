@@ -113,7 +113,7 @@ pub(super) fn collector<H: Handler + 'static>(
                             break;
                         };
 
-                        if watermark.len() >= H::MAX_WATERMARK_UPDATES {
+                        if watermark.len() >= handler.max_watermark_updates() {
                             break;
                         }
 
@@ -180,7 +180,7 @@ pub(super) fn collector<H: Handler + 'static>(
                 }
 
                 // docs::#collector (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                Some(indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
+                Some(indexed) = rx.recv(), if pending_rows < handler.max_pending_rows() => {
                     metrics
                         .total_collector_rows_received
                         .with_label_values(&[H::NAME])
@@ -193,7 +193,7 @@ pub(super) fn collector<H: Handler + 'static>(
                     pending_rows += indexed.len();
                     pending.insert(indexed.checkpoint(), indexed.into());
 
-                    if pending_rows >= H::MIN_EAGER_ROWS {
+                    if pending_rows >= handler.min_eager_rows() {
                         poll.reset_immediately()
                     }
                 }
