@@ -685,8 +685,11 @@ function splitTraceFileLines(decompressed: Uint8Array): string[] {
  * @returns decompressed trace file content as a string.
  */
 async function decompressTraceFile(traceFilePath: string): Promise<string[]> {
+    // Read as Buffer then view it as a Uint8Array for fzstd which expects Uint8Array
     const buf = fs.readFileSync(traceFilePath);
-    const decompressed = await decompress(buf);
+    const u8 = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+    // fzstd.decompress is synchronous, no need to await
+    const decompressed = decompress(u8);
     return splitTraceFileLines(decompressed);
 }
 
