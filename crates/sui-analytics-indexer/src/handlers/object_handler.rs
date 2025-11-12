@@ -15,7 +15,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::object::Object;
 
-use crate::TaskConfig;
+use crate::PipelineConfig;
 use crate::handlers::{
     ObjectStatusTracker, get_is_consensus, get_move_struct, get_owner_address, get_owner_type,
     initial_shared_version,
@@ -27,14 +27,14 @@ use crate::tables::{ObjectEntry, ObjectStatus};
 pub struct ObjectHandler {
     package_cache: Arc<PackageCache>,
     package_filter: Option<ObjectID>,
-    config: TaskConfig,
+    config: PipelineConfig,
 }
 
 impl ObjectHandler {
     pub fn new(
         package_cache: Arc<PackageCache>,
         package_filter: &Option<String>,
-        config: TaskConfig,
+        config: PipelineConfig,
     ) -> Self {
         Self {
             package_cache,
@@ -294,7 +294,7 @@ impl Handler for ObjectHandler {
         batch.update_last_checkpoint(first.checkpoint);
 
         // Write first value and remaining values
-        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref())) {
+        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref()), crate::FileType::Object) {
             tracing::error!("Failed to write rows to ParquetBatch: {}", e);
             return BatchStatus::Pending;
         }
