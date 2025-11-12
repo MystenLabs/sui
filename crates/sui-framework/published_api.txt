@@ -4369,6 +4369,9 @@ notional_value
 register_foreign_token
 	public(package) fun
 	0xb::treasury
+register_foreign_token_v2
+	public(package) fun
+	0xb::treasury
 add_new_token
 	public(package) fun
 	0xb::treasury
@@ -4715,6 +4718,9 @@ update_node_url
 	public fun
 	0xb::bridge
 register_foreign_token
+	public fun
+	0xb::bridge
+register_foreign_token_v2
 	public fun
 	0xb::bridge
 send_token
