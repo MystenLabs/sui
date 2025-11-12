@@ -11,15 +11,17 @@ use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_object_store::ObjectStore;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use crate::FileType;
+use crate::TaskConfig;
+use crate::parquet::ParquetBatch;
 use crate::tables::MovePackageEntry;
-use crate::writers::AnalyticsWriter;
 
-pub struct PackageHandler;
+pub struct PackageHandler {
+    config: TaskConfig,
+}
 
 impl PackageHandler {
-    pub fn new() -> Self {
-        Self
+    pub fn new(config: TaskConfig) -> Self {
+        Self { config }
     }
 }
 
@@ -65,23 +67,40 @@ impl Processor for PackageHandler {
 #[async_trait]
 impl Handler for PackageHandler {
     type Store = ObjectStore;
-    type Batch = Vec<MovePackageEntry>;
+    type Batch = ParquetBatch<MovePackageEntry>;
 
-    const MIN_EAGER_ROWS: usize = 100_000;
-    const MAX_PENDING_ROWS: usize = 500_000;
+    const MIN_EAGER_ROWS: usize = usize::MAX;
+    const MAX_PENDING_ROWS: usize = usize::MAX;
+
+    fn min_eager_rows(&self) -> usize {
+        self.config.max_row_count
+    }
+
+    fn max_pending_rows(&self) -> usize {
+        self.config.max_row_count * 5
+    }
 
     fn batch(
         &self,
         batch: &mut Self::Batch,
         values: &mut std::vec::IntoIter<Self::Value>,
     ) -> BatchStatus {
-        batch.extend(values);
+        // Get first value to extract epoch and checkpoint
+        let Some(first) = values.next() else {
+            return BatchStatus::Pending;
+        };
 
-        if batch.len() >= Self::MIN_EAGER_ROWS {
-            BatchStatus::Ready
-        } else {
-            BatchStatus::Pending
+        batch.set_epoch(first.epoch);
+        batch.update_last_checkpoint(first.checkpoint);
+
+        // Write first value and remaining values
+        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref())) {
+            tracing::error!("Failed to write rows to ParquetBatch: {}", e);
+            return BatchStatus::Pending;
         }
+
+        // Let framework decide when to flush based on min_eager_rows()
+        BatchStatus::Pending
     }
 
     async fn commit<'a>(
@@ -89,47 +108,18 @@ impl Handler for PackageHandler {
         batch: &Self::Batch,
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> Result<usize> {
-        if batch.is_empty() {
+        let Some(file_path) = batch.current_file_path() else {
             return Ok(0);
-        }
+        };
 
-        let first_checkpoint = batch.first().unwrap().checkpoint;
-        let last_checkpoint = batch.last().unwrap().checkpoint;
-        let epoch = batch.first().unwrap().epoch;
-
-        use crate::parquet::ParquetWriter;
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new()?;
-        let mut writer: ParquetWriter =
-            ParquetWriter::new(temp_dir.path(), FileType::MovePackage, first_checkpoint)?;
-
-        let rows: Vec<MovePackageEntry> = batch.to_vec();
-        AnalyticsWriter::<MovePackageEntry>::write(&mut writer, Box::new(rows.into_iter()))?;
-        AnalyticsWriter::<MovePackageEntry>::flush(&mut writer, last_checkpoint + 1)?;
-
-        let file_path = FileType::MovePackage.file_path(
-            crate::FileFormat::PARQUET,
-            epoch,
-            first_checkpoint..(last_checkpoint + 1),
-        );
-
-        let local_file = temp_dir
-            .path()
-            .join(FileType::MovePackage.dir_prefix().as_ref())
-            .join(format!("epoch_{}", epoch))
-            .join(format!(
-                "{}_{}.parquet",
-                first_checkpoint,
-                last_checkpoint + 1
-            ));
-
-        let file_bytes = tokio::fs::read(&local_file).await?;
+        let row_count = batch.row_count()?;
+        let file_bytes = tokio::fs::read(file_path).await?;
+        let object_path = batch.object_store_path();
 
         conn.object_store()
-            .put(&file_path, file_bytes.into())
+            .put(&object_path, file_bytes.into())
             .await?;
 
-        Ok(batch.len())
+        Ok(row_count)
     }
 }

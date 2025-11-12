@@ -12,19 +12,23 @@ use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_object_store::ObjectStore;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use crate::FileType;
+use crate::TaskConfig;
 use crate::handlers::{get_move_struct, parse_struct};
 use crate::package_store::PackageCache;
+use crate::parquet::ParquetBatch;
 use crate::tables::WrappedObjectEntry;
-use crate::writers::AnalyticsWriter;
 
 pub struct WrappedObjectHandler {
     package_cache: Arc<PackageCache>,
+    config: TaskConfig,
 }
 
 impl WrappedObjectHandler {
-    pub fn new(package_cache: Arc<PackageCache>) -> Self {
-        Self { package_cache }
+    pub fn new(package_cache: Arc<PackageCache>, config: TaskConfig) -> Self {
+        Self {
+            package_cache,
+            config,
+        }
     }
 }
 
@@ -106,23 +110,40 @@ impl Processor for WrappedObjectHandler {
 #[async_trait]
 impl Handler for WrappedObjectHandler {
     type Store = ObjectStore;
-    type Batch = Vec<WrappedObjectEntry>;
+    type Batch = ParquetBatch<WrappedObjectEntry>;
 
-    const MIN_EAGER_ROWS: usize = 100_000;
-    const MAX_PENDING_ROWS: usize = 500_000;
+    const MIN_EAGER_ROWS: usize = usize::MAX;
+    const MAX_PENDING_ROWS: usize = usize::MAX;
+
+    fn min_eager_rows(&self) -> usize {
+        self.config.max_row_count
+    }
+
+    fn max_pending_rows(&self) -> usize {
+        self.config.max_row_count * 5
+    }
 
     fn batch(
         &self,
         batch: &mut Self::Batch,
         values: &mut std::vec::IntoIter<Self::Value>,
     ) -> BatchStatus {
-        batch.extend(values);
+        // Get first value to extract epoch and checkpoint
+        let Some(first) = values.next() else {
+            return BatchStatus::Pending;
+        };
 
-        if batch.len() >= Self::MIN_EAGER_ROWS {
-            BatchStatus::Ready
-        } else {
-            BatchStatus::Pending
+        batch.set_epoch(first.epoch);
+        batch.update_last_checkpoint(first.checkpoint);
+
+        // Write first value and remaining values
+        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref())) {
+            tracing::error!("Failed to write rows to ParquetBatch: {}", e);
+            return BatchStatus::Pending;
         }
+
+        // Let framework decide when to flush based on min_eager_rows()
+        BatchStatus::Pending
     }
 
     async fn commit<'a>(
@@ -130,47 +151,18 @@ impl Handler for WrappedObjectHandler {
         batch: &Self::Batch,
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> Result<usize> {
-        if batch.is_empty() {
+        let Some(file_path) = batch.current_file_path() else {
             return Ok(0);
-        }
+        };
 
-        let first_checkpoint = batch.first().unwrap().checkpoint;
-        let last_checkpoint = batch.last().unwrap().checkpoint;
-        let epoch = batch.first().unwrap().epoch;
-
-        use crate::parquet::ParquetWriter;
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new()?;
-        let mut writer: ParquetWriter =
-            ParquetWriter::new(temp_dir.path(), FileType::WrappedObject, first_checkpoint)?;
-
-        let rows: Vec<WrappedObjectEntry> = batch.to_vec();
-        AnalyticsWriter::<WrappedObjectEntry>::write(&mut writer, Box::new(rows.into_iter()))?;
-        AnalyticsWriter::<WrappedObjectEntry>::flush(&mut writer, last_checkpoint + 1)?;
-
-        let file_path = FileType::WrappedObject.file_path(
-            crate::FileFormat::PARQUET,
-            epoch,
-            first_checkpoint..(last_checkpoint + 1),
-        );
-
-        let local_file = temp_dir
-            .path()
-            .join(FileType::WrappedObject.dir_prefix().as_ref())
-            .join(format!("epoch_{}", epoch))
-            .join(format!(
-                "{}_{}.parquet",
-                first_checkpoint,
-                last_checkpoint + 1
-            ));
-
-        let file_bytes = tokio::fs::read(&local_file).await?;
+        let row_count = batch.row_count()?;
+        let file_bytes = tokio::fs::read(file_path).await?;
+        let object_path = batch.object_store_path();
 
         conn.object_store()
-            .put(&file_path, file_bytes.into())
+            .put(&object_path, file_bytes.into())
             .await?;
 
-        Ok(batch.len())
+        Ok(row_count)
     }
 }

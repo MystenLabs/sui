@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{AnalyticsWriter, FileFormat, FileType, ParquetSchema, ParquetValue};
+use crate::{FileFormat, FileType, ParquetSchema, ParquetValue};
 use anyhow::{Result, anyhow};
 use arrow_array::{
     ArrayRef, RecordBatch,
@@ -91,8 +91,12 @@ impl ParquetWriter {
     }
 }
 
-impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
-    fn write(&mut self, rows: Box<dyn Iterator<Item = S> + Send + Sync>) -> Result<()> {
+impl ParquetWriter {
+    /// Persist given rows into a file
+    pub fn write<S: Serialize + ParquetSchema>(
+        &mut self,
+        rows: Box<dyn Iterator<Item = S> + Send + Sync>,
+    ) -> Result<()> {
         // Make the iterator peekable
         let mut row_iter = rows.peekable();
 
@@ -148,7 +152,11 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         Ok(())
     }
 
-    fn flush(&mut self, end_checkpoint_seq_num: u64) -> Result<bool> {
+    /// Flush the current file
+    pub fn flush<S: Serialize + ParquetSchema>(
+        &mut self,
+        end_checkpoint_seq_num: u64,
+    ) -> Result<bool> {
         // Nothing to flush if builders aren't initialized or are empty
         if self.builders.is_empty()
             || self
@@ -178,7 +186,8 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         Ok(true)
     }
 
-    fn reset(&mut self, epoch_num: EpochId, start_checkpoint_seq_num: u64) -> Result<()> {
+    /// Reset internal state with given epoch and checkpoint sequence number
+    pub fn reset(&mut self, epoch_num: EpochId, start_checkpoint_seq_num: u64) -> Result<()> {
         self.epoch = epoch_num;
         self.checkpoint_range = start_checkpoint_seq_num..u64::MAX;
         self.builders.clear();
@@ -186,7 +195,8 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         Ok(())
     }
 
-    fn rows(&self) -> Result<usize> {
+    /// Number of rows accumulated since last flush
+    pub fn rows(&self) -> Result<usize> {
         Ok(self.row_count)
     }
 }
