@@ -1291,7 +1291,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
 
     let package_id = owned_obj_ids
         .into_iter()
-        .find(|OwnedObjectRef { owner, .. }| owner == &Owner::Immutable)
+        .find(|OwnedObjectRef { owner, .. }| *owner == Owner::Immutable)
         .expect("Must find published package ID")
         .reference;
 
@@ -1411,7 +1411,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
 
     let package_id = owned_obj_ids
         .into_iter()
-        .find(|OwnedObjectRef { owner, .. }| owner == &Owner::Immutable)
+        .find(|OwnedObjectRef { owner, .. }| *owner == Owner::Immutable)
         .expect("Must find published package ID")
         .reference;
 
@@ -1551,7 +1551,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
 
     let package_id = owned_obj_ids
         .into_iter()
-        .find(|OwnedObjectRef { owner, .. }| owner == &Owner::Immutable)
+        .find(|OwnedObjectRef { owner, .. }| *owner == Owner::Immutable)
         .expect("Must find published package ID")
         .reference;
 
@@ -1691,7 +1691,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
 
     let package_id = owned_obj_ids
         .into_iter()
-        .find(|OwnedObjectRef { owner, .. }| owner == &Owner::Immutable)
+        .find(|OwnedObjectRef { owner, .. }| *owner == Owner::Immutable)
         .expect("Must find published package ID")
         .reference;
 
