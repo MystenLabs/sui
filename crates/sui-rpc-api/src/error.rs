@@ -65,8 +65,15 @@ impl From<RpcError> for tonic::Status {
 
 impl From<sui_types::storage::error::Error> for RpcError {
     fn from(value: sui_types::storage::error::Error) -> Self {
+        use sui_types::storage::error::Kind;
+
+        let code = match value.kind() {
+            Kind::Missing => Code::NotFound,
+            _ => Code::Internal,
+        };
+
         Self {
-            code: Code::Internal,
+            code,
             message: Some(value.to_string()),
             details: None,
         }
