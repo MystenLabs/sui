@@ -1,38 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use async_graphql::{Context, Object};
 use std::{collections::BTreeSet, sync::Arc};
 
-use crate::{error::RpcError, scope::Scope, task::watermark::Watermarks};
+use crate::{
+    error::{RpcError, feature_unavailable},
+    scope::Scope,
+    task::watermark::Watermarks,
+};
 
 use super::checkpoint::Checkpoint;
-
-#[derive(thiserror::Error, Debug, Clone)]
-pub(crate) enum Error {
-    #[error("{feature}")]
-    PipelineUnavailable { feature: &'static str },
-}
-
-impl Error {
-    pub(crate) fn pipeline_unavailable(pipeline: &str) -> Self {
-        let feature = match pipeline {
-            "tx_affected_addresses" => "filtering transactions by affected address",
-            "tx_calls" => "filtering transactions by function calls",
-            "tx_affected_objects" => "filtering transactions by affected object",
-            "tx_kinds" => "filtering transactions by kind",
-            "tx_balance_changes" => "querying transaction balance changes",
-            "tx_digests" => "querying transactions",
-            "ev_struct_inst" => "querying events by type",
-            "ev_emit_mod" => "querying events by emitting module",
-            "obj_versions" => "querying object versions",
-            "cp_sequence_numbers" => "querying checkpoints",
-            "consistent" => "consistent queries across objects and balances",
-            _ => "unknown feature",
-        };
-        Self::PipelineUnavailable { feature }
-    }
-}
 
 /// Identifies a GraphQL query component that is used to determine the range of checkpoints for which data is available (for data that can be tied to a particular checkpoint).
 ///
@@ -109,11 +88,32 @@ impl AvailableRangeKey {
             if let Some(wm) = watermarks.pipeline_lo_watermark(pipeline) {
                 first_checkpoint = first_checkpoint.max(wm.checkpoint());
             } else {
-                return Err(Error::pipeline_unavailable(pipeline).into());
+                return Err(pipeline_unavailable(pipeline));
             }
         }
 
         Ok(first_checkpoint)
+    }
+}
+
+/// Return the appropriate error for the query or filter if the pipeline is not available.
+/// Certain queryies or filters are not available if the pipeline supporting them is not configured.
+pub(crate) fn pipeline_unavailable(pipeline: &str) -> RpcError {
+    match pipeline {
+        "consistent" => feature_unavailable("consistent queries across objects and balances"),
+        "cp_sequence_numbers" => feature_unavailable("querying checkpoints"),
+        "ev_emit_mod" => feature_unavailable("querying events by emitting module"),
+        "ev_struct_inst" => feature_unavailable("querying events by type"),
+        "obj_versions" => feature_unavailable("querying object versions"),
+        "tx_affected_addresses" => {
+            feature_unavailable("filtering transactions by affected address")
+        }
+        "tx_affected_objects" => feature_unavailable("filtering transactions by affected object"),
+        "tx_balance_changes" => feature_unavailable("querying transaction balance changes"),
+        "tx_calls" => feature_unavailable("filtering transactions by function calls"),
+        "tx_digests" => feature_unavailable("querying transactions"),
+        "tx_kinds" => feature_unavailable("filtering transactions by kind"),
+        _ => anyhow!("unrecognized pipeline name: {}", pipeline).into(),
     }
 }
 
@@ -175,7 +175,7 @@ macro_rules! collect_pipelines {
                 )*
                 map
             });
-    };
+        };
 }
 
 macro_rules! delegate {
@@ -495,14 +495,17 @@ mod field_piplines_tests {
         }
     }
 
-    /// Calls collect_pipeline on types, fields, and filters in the schema registry and
-    /// stores the input and output in a snapshot for regression testing and auditing.
+    /// Calls collect_pipeline on types, fields, and filters in the schema registry to
+    /// 1. store a snapshot of the input and output pipelines for regression testing and auditing.
+    /// 2. validate pipelines in the collect_pipelines macro innovation are mapped to a feature in pipeline_unavailable.
+    ///
     /// If a filter does not result in a different set of pipelines from the unfiltered case,
     /// it is not included in the snapshot.
     fn registry_collect_pipelines_snapshot(registry: &Registry) {
         const PAGINATION_ARGS: &[&str] = &["first", "after", "last", "before"];
 
         let mut output = String::new();
+        let mut all_pipelines = BTreeSet::new();
 
         for (type_name, meta_type) in registry.types.iter() {
             let (MetaType::Object { fields, .. } | MetaType::Interface { fields, .. }) = meta_type
@@ -532,6 +535,7 @@ mod field_piplines_tests {
                     })
                     .collect();
 
+                // Call collect_pipelines with no filters to get the unfiltered pipelines.
                 let mut unfiltered_pipelines = BTreeSet::new();
                 super::collect_pipelines(
                     type_name,
@@ -542,7 +546,9 @@ mod field_piplines_tests {
                 let unfiltered_output_str =
                     formatted_output_str(type_name, field_name, &unfiltered_pipelines, None);
                 output.push_str(&unfiltered_output_str);
+                all_pipelines.extend(unfiltered_pipelines.iter().cloned());
 
+                // Call collect_pipelines with each filter to get the filtered pipelines.
                 for filter_field in filter_fields.iter().map(Some) {
                     let filters = filter_field.iter().copied().map(String::from).collect();
                     let mut pipelines = BTreeSet::new();
@@ -551,8 +557,19 @@ mod field_piplines_tests {
                         formatted_output_str(type_name, field_name, &pipelines, filter_field);
                     if unfiltered_pipelines != pipelines {
                         output.push_str(&output_str);
+                        all_pipelines.extend(pipelines.iter().cloned());
                     }
                 }
+            }
+        }
+        // Validate all pipelines have feature mappings.
+        for pipeline in all_pipelines {
+            let result = super::pipeline_unavailable(pipeline.as_str());
+            if let RpcError::InternalError(err) = result {
+                panic!(
+                    "Pipeline '{}' does not have a feature mapping in pipeline_unavailable: {}",
+                    pipeline, err
+                );
             }
         }
         insta::assert_snapshot!(output);

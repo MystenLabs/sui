@@ -171,7 +171,9 @@ async fn test_available_range_pipeline_unavailable() {
     .await;
 
     // Should get an error about the feature not being available
-    let errors = response["errors"].as_array().expect("Expected errors array");
+    let errors = response["errors"]
+        .as_array()
+        .expect("Expected errors array");
     assert!(!errors.is_empty(), "Expected an error but got none");
 
     let error = &errors[0];

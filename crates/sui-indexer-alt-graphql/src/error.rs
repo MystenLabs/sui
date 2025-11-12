@@ -157,13 +157,6 @@ impl<E: std::error::Error> From<bcs::Error> for RpcError<E> {
     }
 }
 
-impl<E: std::error::Error> From<crate::api::types::available_range::Error> for RpcError<E> {
-    fn from(err: crate::api::types::available_range::Error) -> Self {
-        let crate::api::types::available_range::Error::PipelineUnavailable { feature } = err;
-        RpcError::FeatureUnavailable { what: feature }
-    }
-}
-
 /// Signal an error that is the user's fault.
 pub(crate) fn bad_user_input<E: std::error::Error>(err: E) -> RpcError<E> {
     RpcError::BadUserInput(Arc::new(err))
