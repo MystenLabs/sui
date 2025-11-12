@@ -13,6 +13,7 @@ pub mod migrate;
 pub mod new;
 pub mod summary;
 pub mod unit_test;
+pub mod update_deps;
 
 #[derive(Parser)]
 pub enum Command {
@@ -23,6 +24,7 @@ pub enum Command {
     New(new::New),
     Test(unit_test::Test),
     Summary(summary::Summary),
+    UpdateDeps(update_deps::UpdateDeps),
 }
 
 // Additional per-command metadata that can be passed from other commands (e.g., the Sui CLI) that
@@ -63,5 +65,6 @@ pub async fn execute_move_command(
 
             Ok(())
         }
+        Command::UpdateDeps(c) => c.execute(package_path, build_config).await,
     }
 }

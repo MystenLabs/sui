@@ -32,15 +32,13 @@ use move_bytecode_verifier_meter::Scope;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
 };
-// use move_package::source_package::parsed_manifest::Dependencies;
+use move_package_alt::schema::ModeName;
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{Value, json};
 use sui_config::verifier_signing_config::VerifierSigningConfig;
-// use sui_move::manage_package::resolve_lock_file_path;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
-// use sui_source_validation::ValidationMode;
 
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
@@ -53,7 +51,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
-use sui_move_build::{CompiledPackage, PackageDependencies};
+use sui_move_build::{CompiledPackage, PackageDependencies, find_environment};
 use sui_package_management::LockCommand;
 use sui_sdk::{
     SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
@@ -98,10 +96,7 @@ use tabled::{
 
 use move_package_alt::{
     package::RootPackage,
-    schema::{
-        Environment, EnvironmentID, EnvironmentName, ModeName, OriginalID, Publication,
-        PublishAddresses, PublishedID,
-    },
+    schema::{OriginalID, Publication, PublishAddresses, PublishedID},
 };
 use move_symbol_pool::Symbol;
 use sui_keys::key_derive;
@@ -3558,81 +3553,8 @@ pub async fn load_root_pkg_for_publish_upgrade(
     build_config: &MoveBuildConfig,
     path: &Path,
 ) -> anyhow::Result<RootPackage<SuiFlavor>> {
-    let envs = RootPackage::<SuiFlavor>::environments(path)?;
-    if let Some(ref env) = build_config.environment {
-        let Some(env_id) = envs.get(env) else {
-            bail!("Could not find an environment named {env} in this package's manifest");
-        };
-
-        if chain_id != env_id {
-            bail!(
-                "The chain id of the active environment in the CLI does not match the chain id {env_id} for {env} environment in the manifest"
-            );
-        }
-
-        let env = Environment::new(env.to_string(), env_id.to_string());
-
-        return Ok(RootPackage::<SuiFlavor>::load(path, env, build_config.mode_set()).await?);
-    }
-
-    // we found the active env in the manifest's environments
-    if let Some(env_chain_id) = envs.get(&active_env) {
-        if env_chain_id != chain_id {
-            bail!(
-                "Error: Environment `{active_env}` has chain ID `{chain_id}` in your CLI \
-                environment, but `Move.toml` expects `{active_env}` to have chain ID \
-                `{env_chain_id}`; this may indicate that `{active_env}` has been wiped or that you \
-                have a misconfigured CLI environment."
-            );
-        }
-
-        let env = Environment::new(active_env, chain_id.to_string());
-        return Ok(RootPackage::<SuiFlavor>::load(path, env, build_config.mode_set()).await?);
-    }
-
-    // no environment is passed, let's find out the current CLI environment and if it has a
-    // chain-id that is in the environments list
-    let matching_chain_ids: BTreeMap<EnvironmentName, EnvironmentID> =
-        envs.into_iter().filter(|p| p.1 == chain_id).collect();
-
-    if matching_chain_ids.len() == 1 {
-        let (env_name, chain_id) = matching_chain_ids
-            .first_key_value()
-            .expect("Should have a first key pair value");
-
-        eprintln!(
-            "Note: `Move.toml` does not define an `{active_env}` environment; building for `{env_name}` instead"
-        );
-        let env = Environment::new(env_name.to_string(), chain_id.to_string());
-        return Ok(RootPackage::<SuiFlavor>::load(path, env, build_config.mode_set()).await?);
-    }
-
-    if matching_chain_ids.len() > 1 {
-        let mut s = String::new();
-        for e in matching_chain_ids.keys() {
-            s.push_str(&format!("--build-env {e}"))
-        }
-        bail!(
-            "Found several environments defined in Move.toml with chain-id `{chain_id}`. Please pass one of the following: \n\t{s}"
-        );
-    }
-
-    // ephemeral case, no environment found with that name, we error
-    bail!(
-        "Your active environment `{active_env}` is not present in `Move.toml`, so you cannot \
-        publish to `{active_env}`.
-
-    - If you want to create a temporary publication on `{active_env}` and record the addresses \
-       in a local file, use the `test-publish` command instead.
-
-        sui client test-publish --help
-
-    - If you want to publish to `{active_env}` and record the addresses in the shared \
-    `Publications.toml` file, you will need to add the following to `Move.toml`:
-
-        [environments]
-        {active_env} = \"{chain_id}\""
-    );
+    let env = find_environment(Some(chain_id), Some(active_env), build_config, path)?;
+    Ok(RootPackage::<SuiFlavor>::load(path, env, build_config.mode_set()).await?)
 }
 
 async fn load_root_pkg_for_test_publish(
@@ -3654,53 +3576,6 @@ async fn load_root_pkg_for_test_publish(
         modes,
     )
     .await?)
-}
-
-pub fn find_environment(
-    env_name: Option<String>,
-    chain_id: String,
-    envs: BTreeMap<EnvironmentName, EnvironmentID>,
-) -> anyhow::Result<Environment> {
-    // find by env name
-    if let Some(ref env) = env_name {
-        let Some(env_id) = envs.get(env) else {
-            bail!("Could not find an environment named {env} in this package's manifest");
-        };
-
-        if &chain_id != env_id {
-            bail!(
-                "The chain id of the active environment in the CLI does not match the chain id {env_id} for {env} environment in the manifest"
-            );
-        }
-
-        return Ok(Environment::new(env.to_string(), env_id.to_string()));
-    }
-
-    // find by chain id
-    // if there's multiple chain ids in the envs table, error and ask user to pick one of them
-    let filtered_env_ids: BTreeMap<_, _> = envs
-        .into_iter()
-        .filter(|(_, env_id)| env_id == &chain_id)
-        .collect();
-    if filtered_env_ids.len() > 1 {
-        bail!(
-            "Found multiple environments with the same chain id in the manifest: {:?}. Please pick one and pass it via the -e flag",
-            filtered_env_ids
-        );
-    }
-
-    // TODO improve error message
-    if filtered_env_ids.is_empty() {
-        bail!(
-            "Did not find any environment in the manifest that has the same chain id as the active environment in the CLI"
-        );
-    }
-
-    let env = filtered_env_ids
-        .first_key_value()
-        .map(|e| Environment::new(e.0.to_string(), e.1.to_string()))
-        .ok_or_else(|| anyhow::anyhow!("Could not extract environment"))?;
-    Ok(env)
 }
 
 /// Return the update publication data, without writing it to lockfile
