@@ -151,7 +151,7 @@ pub(super) fn collector<H: Handler + 'static>(
                             break;
                         };
 
-                        if watermark.len() >= H::MAX_WATERMARK_UPDATES {
+                        if watermark.len() >= handler.max_watermark_updates() {
                             break;
                         }
 
@@ -218,7 +218,7 @@ pub(super) fn collector<H: Handler + 'static>(
                 }
 
                 // docs::#collector (see docs/content/guides/developer/advanced/custom-indexer.mdx)
-                Some(mut indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
+                Some(mut indexed) = rx.recv(), if pending_rows < handler.max_pending_rows() => {
                     // Clear the values of outdated checkpoints, so that we don't commit data to the
                     // store, but can still advance watermarks.
                     if indexed.checkpoint() < atomic_reader_lo.load(Ordering::Relaxed) {
@@ -240,7 +240,7 @@ pub(super) fn collector<H: Handler + 'static>(
                     pending_rows += indexed.len();
                     pending.insert(indexed.checkpoint(), indexed.into());
 
-                    if pending_rows >= H::MIN_EAGER_ROWS {
+                    if pending_rows >= handler.min_eager_rows() {
                         poll.reset_immediately()
                     }
                 }
