@@ -19,7 +19,6 @@ use sui_types::base_types::EpochId;
 use sui_types::dynamic_field::DynamicFieldType;
 
 use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
-use crate::writers::AnalyticsWriter;
 
 pub mod analytics_metrics;
 pub mod errors;
@@ -27,7 +26,6 @@ mod handlers;
 pub mod package_store;
 pub mod parquet;
 pub mod tables;
-mod writers;
 
 const EPOCH_DIR_PREFIX: &str = "epoch_";
 const CHECKPOINT_DIR_PREFIX: &str = "checkpoints";
@@ -219,348 +217,6 @@ impl TaskConfig {
     }
 }
 
-// Old implementation commented out - depends on removed AnalyticsProcessor
-/*
-pub struct TaskContext {
-    pub config: TaskConfig,
-    pub job_config: Arc<JobConfig>,
-    pub checkpoint_dir: Arc<TempDir>,
-    pub metrics: AnalyticsMetrics,
-    pub lazy_package_cache: Arc<Mutex<LazyPackageCache>>,
-}
-
-impl TaskContext {
-    pub fn checkpoint_dir_path(&self) -> &std::path::Path {
-        self.checkpoint_dir.path()
-    }
-
-    pub fn task_name(&self) -> &str {
-        &self.config.task_name
-    }
-
-    pub async fn create_analytics_processor(self) -> Result<Processor> {
-        match &self.config.file_type {
-            FileType::Checkpoint => {
-                self.create_processor_for_handler(Box::new(CheckpointHandler::new()))
-                    .await
-            }
-            FileType::Object => {
-                let package_id_filter = self.config.package_id_filter.clone();
-                let package_cache = self
-                    .lazy_package_cache
-                    .lock()
-                    .unwrap()
-                    .initialize_or_get_cache();
-                let metrics = self.metrics.clone();
-                self.create_processor_for_handler(Box::new(ObjectHandler::new(
-                    package_cache,
-                    &package_id_filter,
-                    metrics,
-                )))
-                .await
-            }
-            FileType::Transaction => {
-                self.create_processor_for_handler(Box::new(TransactionHandler::new()))
-                    .await
-            }
-            FileType::TransactionBCS => {
-                self.create_processor_for_handler(Box::new(TransactionBCSHandler::new()))
-                    .await
-            }
-            FileType::Event => {
-                let package_cache = self
-                    .lazy_package_cache
-                    .lock()
-                    .unwrap()
-                    .initialize_or_get_cache();
-                self.create_processor_for_handler(Box::new(EventHandler::new(package_cache)))
-                    .await
-            }
-            FileType::TransactionObjects => {
-                self.create_processor_for_handler(Box::new(TransactionObjectsHandler::new()))
-                    .await
-            }
-            FileType::MoveCall => {
-                self.create_processor_for_handler(Box::new(MoveCallHandler::new()))
-                    .await
-            }
-            FileType::MovePackage => {
-                self.create_processor_for_handler(Box::new(PackageHandler::new()))
-                    .await
-            }
-            FileType::MovePackageBCS => {
-                self.create_processor_for_handler(Box::new(PackageBCSHandler::new()))
-                    .await
-            }
-            FileType::DynamicField => {
-                let package_cache = self
-                    .lazy_package_cache
-                    .lock()
-                    .unwrap()
-                    .initialize_or_get_cache();
-                self.create_processor_for_handler(Box::new(DynamicFieldHandler::new(package_cache)))
-                    .await
-            }
-            FileType::WrappedObject => {
-                let package_cache = self
-                    .lazy_package_cache
-                    .lock()
-                    .unwrap()
-                    .initialize_or_get_cache();
-                let metrics = self.metrics.clone();
-                self.create_processor_for_handler(Box::new(WrappedObjectHandler::new(
-                    package_cache,
-                    metrics,
-                )))
-                .await
-            }
-        }
-    }
-
-    async fn create_processor_for_handler<
-        T: Serialize + Clone + ParquetSchema + Send + Sync + 'static,
-    >(
-        self,
-        handler: Box<dyn AnalyticsHandler<T>>,
-    ) -> Result<Processor> {
-        let starting_checkpoint_seq_num = self.get_starting_checkpoint_seq_num().await?;
-        let writer = self.make_writer::<T>(starting_checkpoint_seq_num)?;
-        let max_checkpoint_reader = self.make_max_checkpoint_reader().await?;
-        Processor::new::<T>(
-            handler,
-            writer,
-            max_checkpoint_reader,
-            starting_checkpoint_seq_num,
-            self,
-        )
-        .await
-    }
-
-    async fn get_starting_checkpoint_seq_num(&self) -> Result<u64> {
-        let remote_latest = read_store_for_checkpoint(
-            &self.job_config.remote_store_config,
-            self.config.file_type,
-            self.config.remote_store_path_prefix()?.as_ref(),
-        )
-        .await?;
-
-        Ok(self
-            .config
-            .starting_checkpoint_seq_num
-            .map_or(remote_latest, |start| start.max(remote_latest)))
-    }
-
-    fn make_writer<S: Serialize + ParquetSchema>(
-        &self,
-        starting_checkpoint_seq_num: u64,
-    ) -> Result<Box<dyn AnalyticsWriter<S>>> {
-        Ok(match self.config.file_format {
-            FileFormat::CSV => Box::new(CSVWriter::new(
-                self.checkpoint_dir_path(),
-                self.config.file_type,
-                starting_checkpoint_seq_num,
-            )?),
-            FileFormat::PARQUET => Box::new(ParquetWriter::new(
-                self.checkpoint_dir_path(),
-                self.config.file_type,
-                starting_checkpoint_seq_num,
-            )?),
-        })
-    }
-
-    async fn make_max_checkpoint_reader(&self) -> Result<Box<dyn MaxCheckpointReader>> {
-        let res: Box<dyn MaxCheckpointReader> = if self.config.report_bq_max_table_checkpoint {
-            Box::new(
-                BQMaxCheckpointReader::new(
-                    self.job_config
-                        .bq_service_account_key_file
-                        .as_ref()
-                        .ok_or(anyhow!("Missing gcp key file"))?,
-                    self.job_config
-                        .bq_project_id
-                        .as_ref()
-                        .ok_or(anyhow!("Missing big query project id"))?,
-                    self.job_config
-                        .bq_dataset_id
-                        .as_ref()
-                        .ok_or(anyhow!("Missing big query dataset id"))?,
-                    self.config
-                        .bq_table_id
-                        .as_ref()
-                        .ok_or(anyhow!("Missing big query table id"))?,
-                    self.config
-                        .bq_checkpoint_col_id
-                        .as_ref()
-                        .ok_or(anyhow!("Missing big query checkpoint col id"))?,
-                )
-                .await?,
-            )
-        } else if self.config.report_sf_max_table_checkpoint {
-            Box::new(
-                SnowflakeMaxCheckpointReader::new(
-                    self.job_config
-                        .sf_account_identifier
-                        .as_ref()
-                        .ok_or(anyhow!("Missing sf account identifier"))?,
-                    self.job_config
-                        .sf_warehouse
-                        .as_ref()
-                        .ok_or(anyhow!("Missing sf warehouse"))?,
-                    self.job_config
-                        .sf_database
-                        .as_ref()
-                        .ok_or(anyhow!("Missing sf database"))?,
-                    self.job_config
-                        .sf_schema
-                        .as_ref()
-                        .ok_or(anyhow!("Missing sf schema"))?,
-                    self.job_config
-                        .sf_username
-                        .as_ref()
-                        .ok_or(anyhow!("Missing sf username"))?,
-                    self.job_config
-                        .sf_role
-                        .as_ref()
-                        .ok_or(anyhow!("Missing sf role"))?,
-                    &load_password(
-                        self.job_config
-                            .sf_password_file
-                            .as_ref()
-                            .ok_or(anyhow!("Missing sf password"))?,
-                    )?,
-                    self.config
-                        .sf_table_id
-                        .as_ref()
-                        .ok_or(anyhow!("Missing sf table id"))?,
-                    self.config
-                        .sf_checkpoint_col_id
-                        .as_ref()
-                        .ok_or(anyhow!("Missing sf checkpoint col id"))?,
-                )
-                .await?,
-            )
-        } else {
-            Box::new(NoOpCheckpointReader {})
-        };
-        Ok(res)
-    }
-}
-
-#[async_trait::async_trait]
-pub trait MaxCheckpointReader: Send + Sync + 'static {
-    async fn max_checkpoint(&self) -> Result<i64>;
-}
-
-struct SnowflakeMaxCheckpointReader {
-    query: String,
-    api: SnowflakeApi,
-}
-
-impl SnowflakeMaxCheckpointReader {
-    pub async fn new(
-        account_identifier: &str,
-        warehouse: &str,
-        database: &str,
-        schema: &str,
-        user: &str,
-        role: &str,
-        passwd: &str,
-        table_id: &str,
-        col_id: &str,
-    ) -> anyhow::Result<Self> {
-        let api = SnowflakeApi::with_password_auth(
-            account_identifier,
-            Some(warehouse),
-            Some(database),
-            Some(schema),
-            user,
-            Some(role),
-            passwd,
-        )
-        .expect("Failed to build sf api client");
-        Ok(SnowflakeMaxCheckpointReader {
-            query: format!("SELECT max({}) from {}", col_id, table_id),
-            api,
-        })
-    }
-}
-
-#[async_trait::async_trait]
-impl MaxCheckpointReader for SnowflakeMaxCheckpointReader {
-    async fn max_checkpoint(&self) -> Result<i64> {
-        let res = self.api.exec(&self.query).await?;
-        match res {
-            QueryResult::Arrow(a) => {
-                if let Some(record_batch) = a.first() {
-                    let col = record_batch.column(0);
-                    let col_array = col
-                        .as_any()
-                        .downcast_ref::<Int32Array>()
-                        .expect("Failed to downcast arrow column");
-                    Ok(col_array.value(0) as i64)
-                } else {
-                    Ok(-1)
-                }
-            }
-            QueryResult::Json(_j) => Err(anyhow!("Unexpected query result")),
-            QueryResult::Empty => Err(anyhow!("Unexpected query result")),
-        }
-    }
-}
-
-struct BQMaxCheckpointReader {
-    query: String,
-    project_id: String,
-    client: Client,
-}
-
-impl BQMaxCheckpointReader {
-    pub async fn new(
-        key_path: &str,
-        project_id: &str,
-        dataset_id: &str,
-        table_id: &str,
-        col_id: &str,
-    ) -> anyhow::Result<Self> {
-        Ok(BQMaxCheckpointReader {
-            query: format!(
-                "SELECT max({}) from `{}.{}.{}`",
-                col_id, project_id, dataset_id, table_id
-            ),
-            client: Client::from_service_account_key_file(key_path).await?,
-            project_id: project_id.to_string(),
-        })
-    }
-}
-
-#[async_trait::async_trait]
-impl MaxCheckpointReader for BQMaxCheckpointReader {
-    async fn max_checkpoint(&self) -> Result<i64> {
-        let result = self
-            .client
-            .job()
-            .query(&self.project_id, QueryRequest::new(&self.query))
-            .await?;
-        let mut result_set = ResultSet::new_from_query_response(result);
-        if result_set.next_row() {
-            let max_checkpoint = result_set.get_i64(0)?.ok_or(anyhow!("No rows returned"))?;
-            Ok(max_checkpoint)
-        } else {
-            Ok(-1)
-        }
-    }
-}
-
-struct NoOpCheckpointReader;
-
-#[async_trait::async_trait]
-impl MaxCheckpointReader for NoOpCheckpointReader {
-    async fn max_checkpoint(&self) -> Result<i64> {
-        Ok(-1)
-    }
-}
-*/
-
 #[derive(
     Copy,
     Clone,
@@ -741,6 +397,8 @@ pub trait ParquetSchema {
     fn schema() -> Vec<String>;
 
     fn get_column(&self, idx: usize) -> ParquetValue;
+
+    fn file_type() -> FileType;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -760,104 +418,6 @@ impl FileMetadata {
         )
     }
 }
-
-// Old Processor implementation commented out - depends on removed AnalyticsProcessor
-/*
-pub struct Processor {
-    pub processor: Box<dyn Worker<Result = ()>>,
-    pub starting_checkpoint_seq_num: CheckpointSequenceNumber,
-    pub task_name: String,
-    pub file_type: FileType,
-}
-
-#[async_trait::async_trait]
-impl Worker for Processor {
-    type Result = ();
-
-    #[inline]
-    async fn process_checkpoint_arc(&self, checkpoint_data: &Arc<CheckpointData>) -> Result<()> {
-        self.processor.process_checkpoint_arc(checkpoint_data).await
-    }
-}
-
-impl Processor {
-    pub async fn new<S: Serialize + ParquetSchema + Send + Sync + 'static>(
-        handler: Box<dyn AnalyticsHandler<S>>,
-        writer: Box<dyn AnalyticsWriter<S>>,
-        max_checkpoint_reader: Box<dyn MaxCheckpointReader>,
-        starting_checkpoint_seq_num: CheckpointSequenceNumber,
-        task: TaskContext,
-    ) -> Result<Self> {
-        let task_name = task.config.task_name.clone();
-        let file_type = task.config.file_type;
-        let processor = Box::new(
-            AnalyticsProcessor::new(
-                handler,
-                writer,
-                max_checkpoint_reader,
-                starting_checkpoint_seq_num,
-                task,
-            )
-            .await?,
-        );
-
-        Ok(Processor {
-            processor,
-            starting_checkpoint_seq_num,
-            task_name,
-            file_type,
-        })
-    }
-
-    pub fn last_committed_checkpoint(&self) -> Option<u64> {
-        Some(self.starting_checkpoint_seq_num.saturating_sub(1)).filter(|x| *x > 0)
-    }
-}
-
-pub async fn read_store_for_checkpoint(
-    remote_store_config: &ObjectStoreConfig,
-    file_type: FileType,
-    dir_prefix: Option<&Path>,
-) -> Result<CheckpointSequenceNumber> {
-    let remote_object_store = remote_store_config.make()?;
-    let remote_store_is_empty = remote_object_store
-        .list_with_delimiter(None)
-        .await
-        .expect("Failed to read remote analytics store")
-        .common_prefixes
-        .is_empty();
-    info!("Remote store is empty: {remote_store_is_empty}");
-    let file_type_prefix = file_type.dir_prefix();
-    let prefix = join_paths(dir_prefix, &file_type_prefix);
-    let epoch_dirs = find_all_dirs_with_epoch_prefix(&remote_object_store, Some(&prefix)).await?;
-    let epoch = epoch_dirs.last_key_value().map(|(k, _v)| *k).unwrap_or(0);
-    let epoch_prefix = prefix.child(format!("epoch_{}", epoch));
-    let checkpoints =
-        find_all_files_with_epoch_prefix(&remote_object_store, Some(&epoch_prefix)).await?;
-    let next_checkpoint_seq_num = checkpoints
-        .iter()
-        .max_by(|x, y| x.end.cmp(&y.end))
-        .map(|r| r.end)
-        .unwrap_or(0);
-    Ok(next_checkpoint_seq_num)
-}
-
-pub fn join_paths(base: Option<&Path>, child: &Path) -> Path {
-    base.map(|p| {
-        let mut out_path = p.clone();
-        for part in child.parts() {
-            out_path = out_path.child(part)
-        }
-        out_path
-    })
-    .unwrap_or(child.clone())
-}
-
-fn load_password(path: &str) -> anyhow::Result<String> {
-    let contents = fs::read_to_string(std::path::Path::new(path))?;
-    Ok(contents.trim().to_string())
-}
-*/
 
 // New framework-based indexer implementation
 pub mod indexer_alt {
@@ -945,14 +505,10 @@ pub mod indexer_alt {
         let store = ObjectStore::new(object_store, None);
 
         // Create package cache for handlers that need it
-        let package_cache = if needs_package_cache(&config.job_config.task_configs) {
-            Some(Arc::new(PackageCache::new(
-                &config.job_config.package_cache_path,
-                &config.job_config.rest_url,
-            )))
-        } else {
-            None
-        };
+        let package_cache = Arc::new(PackageCache::new(
+            &config.job_config.package_cache_path,
+            &config.job_config.rest_url,
+        ));
 
         // Create the indexer args from config
         let indexer_args = sui_indexer_alt_framework::IndexerArgs {
@@ -1006,7 +562,7 @@ pub mod indexer_alt {
             register_pipeline_for_task(
                 &mut indexer,
                 task_config,
-                package_cache.clone(),
+                Some(package_cache.clone()),
                 concurrent_config.clone(),
             )
             .await?;
@@ -1018,18 +574,6 @@ pub mod indexer_alt {
         Ok(handle)
     }
 
-    fn needs_package_cache(task_configs: &[TaskConfig]) -> bool {
-        task_configs.iter().any(|t| {
-            matches!(
-                t.file_type,
-                FileType::Event
-                    | FileType::Object
-                    | FileType::DynamicField
-                    | FileType::WrappedObject
-            )
-        })
-    }
-
     async fn register_pipeline_for_task(
         indexer: &mut Indexer<ObjectStore>,
         task_config: &TaskConfig,
@@ -1039,17 +583,17 @@ pub mod indexer_alt {
         match task_config.file_type {
             FileType::Checkpoint => {
                 indexer
-                    .concurrent_pipeline(CheckpointHandler::new(), config)
+                    .concurrent_pipeline(CheckpointHandler::new(task_config.clone()), config)
                     .await?;
             }
             FileType::Transaction => {
                 indexer
-                    .concurrent_pipeline(TransactionHandler::new(), config)
+                    .concurrent_pipeline(TransactionHandler::new(task_config.clone()), config)
                     .await?;
             }
             FileType::TransactionBCS => {
                 indexer
-                    .concurrent_pipeline(TransactionBCSHandler::new(), config)
+                    .concurrent_pipeline(TransactionBCSHandler::new(task_config.clone()), config)
                     .await?;
             }
             FileType::Event => {
@@ -1057,12 +601,12 @@ pub mod indexer_alt {
                     .clone()
                     .ok_or_else(|| anyhow!("Package cache required for Event handler"))?;
                 indexer
-                    .concurrent_pipeline(EventHandler::new(cache), config)
+                    .concurrent_pipeline(EventHandler::new(cache, task_config.clone()), config)
                     .await?;
             }
             FileType::MoveCall => {
                 indexer
-                    .concurrent_pipeline(MoveCallHandler::new(), config)
+                    .concurrent_pipeline(MoveCallHandler::new(task_config.clone()), config)
                     .await?;
             }
             FileType::Object => {
@@ -1071,7 +615,11 @@ pub mod indexer_alt {
                     .ok_or_else(|| anyhow!("Package cache required for Object handler"))?;
                 indexer
                     .concurrent_pipeline(
-                        ObjectHandler::new(cache, &task_config.package_id_filter),
+                        ObjectHandler::new(
+                            cache,
+                            &task_config.package_id_filter,
+                            task_config.clone(),
+                        ),
                         config,
                     )
                     .await?;
@@ -1081,22 +629,28 @@ pub mod indexer_alt {
                     .clone()
                     .ok_or_else(|| anyhow!("Package cache required for DynamicField handler"))?;
                 indexer
-                    .concurrent_pipeline(DynamicFieldHandler::new(cache), config)
+                    .concurrent_pipeline(
+                        DynamicFieldHandler::new(cache, task_config.clone()),
+                        config,
+                    )
                     .await?;
             }
             FileType::TransactionObjects => {
                 indexer
-                    .concurrent_pipeline(TransactionObjectsHandler::new(), config)
+                    .concurrent_pipeline(
+                        TransactionObjectsHandler::new(task_config.clone()),
+                        config,
+                    )
                     .await?;
             }
             FileType::MovePackage => {
                 indexer
-                    .concurrent_pipeline(PackageHandler::new(), config)
+                    .concurrent_pipeline(PackageHandler::new(task_config.clone()), config)
                     .await?;
             }
             FileType::MovePackageBCS => {
                 indexer
-                    .concurrent_pipeline(PackageBCSHandler::new(), config)
+                    .concurrent_pipeline(PackageBCSHandler::new(task_config.clone()), config)
                     .await?;
             }
             FileType::WrappedObject => {
@@ -1104,7 +658,10 @@ pub mod indexer_alt {
                     .clone()
                     .ok_or_else(|| anyhow!("Package cache required for WrappedObject handler"))?;
                 indexer
-                    .concurrent_pipeline(WrappedObjectHandler::new(cache), config)
+                    .concurrent_pipeline(
+                        WrappedObjectHandler::new(cache, task_config.clone()),
+                        config,
+                    )
                     .await?;
             }
         }

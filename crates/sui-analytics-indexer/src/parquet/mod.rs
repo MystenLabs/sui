@@ -4,5 +4,5 @@
 pub mod batch;
 pub mod writer;
 
-pub use batch::{ParquetBatch, ParquetBatchConfig};
+pub use batch::ParquetBatch;
 pub use writer::ParquetWriter;

@@ -36,6 +36,22 @@ pub fn schema_derive(input: TokenStream) -> TokenStream {
     let schema_tokens: proc_macro2::TokenStream = schema.parse().unwrap();
     let getter_implementation_tokens: proc_macro2::TokenStream =
         getter_implementation.parse().unwrap();
+
+    let file_type_impl = match struct_name.to_string().as_str() {
+        "CheckpointEntry" => quote! { FileType::Checkpoint },
+        "TransactionEntry" => quote! { FileType::Transaction },
+        "TransactionBCSEntry" => quote! { FileType::TransactionBCS },
+        "EventEntry" => quote! { FileType::Event },
+        "ObjectEntry" => quote! { FileType::Object },
+        "TransactionObjectEntry" => quote! { FileType::TransactionObjects },
+        "MoveCallEntry" => quote! { FileType::MoveCall },
+        "MovePackageEntry" => quote! { FileType::MovePackage },
+        "PackageBCSEntry" => quote! { FileType::MovePackageBCS },
+        "DynamicFieldEntry" => quote! { FileType::DynamicField },
+        "WrappedObjectEntry" => quote! { FileType::WrappedObject },
+        _ => panic!("Unknown entry type for ParquetSchema: {}", struct_name),
+    };
+
     quote! {
         impl ParquetSchema for #struct_name {
             fn schema() -> Vec<String> {
@@ -45,6 +61,10 @@ pub fn schema_derive(input: TokenStream) -> TokenStream {
             fn get_column(&self, idx: usize) -> ParquetValue {
                 #getter_implementation_tokens
                 panic!("not supported column {:?}", idx);
+            }
+
+            fn file_type() -> FileType {
+                #file_type_impl
             }
         }
     }
