@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::error::FormatError;
+use crate::v2::error::FormatError;
 
 /// Limits that the parser enforces while parsing potentially multiple Display formats.
 #[derive(Clone)]
