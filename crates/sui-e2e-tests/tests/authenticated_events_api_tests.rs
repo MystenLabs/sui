@@ -30,7 +30,7 @@ use sui_types::digests::{Digest, ObjectDigest};
 use sui_types::dynamic_field::{DynamicFieldKey, Field};
 use sui_types::object::Object;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::TransactionData;
+use sui_types::transaction::{Argument, Command, TransactionData, TransactionKind};
 use sui_types::{MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS};
 use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -301,20 +301,19 @@ async fn verify_events_with_stream_head(
         events.iter().fold(BTreeMap::new(), |mut map, event| {
             let commitment = convert_grpc_event_to_commitment(event)
                 .expect("should convert event to commitment");
-            map.entry(commitment.checkpoint_seq)
-                .or_default()
-                .push(commitment);
+            let checkpoint = commitment.checkpoint_seq;
+            map.entry(checkpoint).or_default().push(commitment);
             map
         });
 
-    let checkpoints_with_events: Vec<Vec<EventCommitment>> = events_by_checkpoint
+    let commits_with_events: Vec<Vec<EventCommitment>> = events_by_checkpoint
         .iter()
         .filter(|(cp, _)| **cp > first_event_checkpoint)
         .map(|(_cp, events)| events.clone())
         .collect();
 
     let calculated_stream_head =
-        apply_stream_updates(&first_stream_head.value, checkpoints_with_events);
+        apply_stream_updates(&first_stream_head.value, commits_with_events);
 
     assert_eq!(
         calculated_stream_head.num_events, last_stream_head.value.num_events,
@@ -847,6 +846,107 @@ async fn authenticated_events_disabled_test() {
             .message()
             .contains("Authenticated events indexing is disabled")
     );
+}
+
+#[sim_test]
+async fn authenticated_events_multiple_commits_per_checkpoint() {
+    let _guard: sui_protocol_config::OverrideGuard =
+        ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+            cfg.enable_authenticated_event_streams_for_testing();
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        });
+
+    let rpc_config = create_rpc_config_with_authenticated_events();
+
+    let test_cluster = TestClusterBuilder::new()
+        .disable_fullnode_pruning()
+        .with_rpc_config(rpc_config)
+        .build()
+        .await;
+
+    let package_id = publish_test_package(&test_cluster).await;
+    let sender = test_cluster.wallet.config.keystore.addresses()[0];
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let chain_id = test_cluster.get_chain_identifier();
+
+    let gas_for_deposit = test_cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(sender)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let mut deposit_builder = ProgrammableTransactionBuilder::new();
+    let deposit_amount = deposit_builder.pure(6_000_000_000_000u64).unwrap();
+    let recipient_arg = deposit_builder.pure(sender).unwrap();
+    let coin =
+        deposit_builder.command(Command::SplitCoins(Argument::GasCoin, vec![deposit_amount]));
+    let Argument::Result(coin_idx) = coin else {
+        panic!("coin is not a result");
+    };
+    let coin = Argument::NestedResult(coin_idx, 0);
+    deposit_builder.programmable_move_call(
+        sui_types::SUI_FRAMEWORK_PACKAGE_ID,
+        move_core_types::identifier::Identifier::new("coin").unwrap(),
+        move_core_types::identifier::Identifier::new("send_funds").unwrap(),
+        vec!["0x2::sui::SUI".parse().unwrap()],
+        vec![coin, recipient_arg],
+    );
+    let deposit_tx = TransactionData::new(
+        TransactionKind::ProgrammableTransaction(deposit_builder.finish()),
+        sender,
+        gas_for_deposit,
+        10_000_000,
+        rgp,
+    );
+    test_cluster.sign_and_execute_transaction(&deposit_tx).await;
+
+    let tx_data_vec: Vec<_> = (0..2000)
+        .map(|i| {
+            let mut ptb = ProgrammableTransactionBuilder::new();
+            let val = ptb.pure(i as u64).unwrap();
+            ptb.programmable_move_call(
+                package_id,
+                move_core_types::identifier::Identifier::new("events").unwrap(),
+                move_core_types::identifier::Identifier::new("emit").unwrap(),
+                vec![],
+                vec![val],
+            );
+
+            sui_types::transaction::TransactionData::V1(sui_types::transaction::TransactionDataV1 {
+                kind: sui_types::transaction::TransactionKind::ProgrammableTransaction(
+                    ptb.finish(),
+                ),
+                sender,
+                gas_data: sui_types::transaction::GasData {
+                    payment: vec![],
+                    owner: sender,
+                    price: rgp,
+                    budget: 50_000_000_000,
+                },
+                expiration: sui_types::transaction::TransactionExpiration::ValidDuring {
+                    min_epoch: Some(0),
+                    max_epoch: Some(0),
+                    min_timestamp_seconds: None,
+                    max_timestamp_seconds: None,
+                    chain: chain_id,
+                    nonce: i,
+                },
+            })
+        })
+        .collect();
+
+    let tasks: Vec<_> = tx_data_vec
+        .iter()
+        .map(|tx_data| test_cluster.sign_and_execute_transaction(tx_data))
+        .collect();
+    futures::future::join_all(tasks).await;
+
+    let all_events =
+        list_authenticated_events(test_cluster.rpc_url(), &package_id.to_string(), 0, None).await;
+
+    dbg!(&all_events);
 }
 
 #[sim_test]
