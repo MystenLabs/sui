@@ -14,9 +14,22 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
 
-use crate::PipelineConfig;
 use crate::parquet::ParquetBatch;
 use crate::tables::CheckpointEntry;
+use crate::{FileType, PipelineConfig};
+
+pub struct CheckpointBatch {
+    pub inner: ParquetBatch<CheckpointEntry>,
+}
+
+impl Default for CheckpointBatch {
+    fn default() -> Self {
+        Self {
+            inner: ParquetBatch::new(FileType::Checkpoint, 0)
+                .expect("Failed to create ParquetBatch"),
+        }
+    }
+}
 
 pub struct CheckpointHandler {
     config: PipelineConfig,
@@ -43,10 +56,8 @@ impl Processor for CheckpointHandler {
 #[async_trait]
 impl Handler for CheckpointHandler {
     type Store = ObjectStore;
-    type Batch = ParquetBatch<CheckpointEntry>;
+    type Batch = CheckpointBatch;
 
-    const MIN_EAGER_ROWS: usize = usize::MAX;
-    const MAX_PENDING_ROWS: usize = usize::MAX;
 
     fn min_eager_rows(&self) -> usize {
         self.config.max_row_count
@@ -66,11 +77,14 @@ impl Handler for CheckpointHandler {
             return BatchStatus::Pending;
         };
 
-        batch.set_epoch(first.epoch);
-        batch.update_last_checkpoint(first.sequence_number);
+        batch.inner.set_epoch(first.epoch);
+        batch.inner.update_last_checkpoint(first.sequence_number);
 
         // Write first value and remaining values
-        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref()), crate::FileType::Checkpoint) {
+        if let Err(e) = batch
+            .inner
+            .write_rows(std::iter::once(first).chain(values.by_ref()))
+        {
             tracing::error!("Failed to write rows to ParquetBatch: {}", e);
             return BatchStatus::Pending;
         }
@@ -84,13 +98,13 @@ impl Handler for CheckpointHandler {
         batch: &Self::Batch,
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> Result<usize> {
-        let Some(file_path) = batch.current_file_path() else {
+        let Some(file_path) = batch.inner.current_file_path() else {
             return Ok(0);
         };
 
-        let row_count = batch.row_count()?;
+        let row_count = batch.inner.row_count()?;
         let file_bytes = tokio::fs::read(file_path).await?;
-        let object_path = batch.object_store_path();
+        let object_path = batch.inner.object_store_path();
 
         conn.object_store()
             .put(&object_path, file_bytes.into())
