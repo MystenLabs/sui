@@ -15,18 +15,18 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use crate::TaskConfig;
+use crate::PipelineConfig;
 use crate::package_store::PackageCache;
 use crate::parquet::ParquetBatch;
 use crate::tables::EventEntry;
 
 pub struct EventHandler {
     package_cache: Arc<PackageCache>,
-    config: TaskConfig,
+    config: PipelineConfig,
 }
 
 impl EventHandler {
-    pub fn new(package_cache: Arc<PackageCache>, config: TaskConfig) -> Self {
+    pub fn new(package_cache: Arc<PackageCache>, config: PipelineConfig) -> Self {
         Self {
             package_cache,
             config,
@@ -125,7 +125,7 @@ impl Handler for EventHandler {
         batch.update_last_checkpoint(first.checkpoint);
 
         // Write first value and remaining values
-        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref())) {
+        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref()), crate::FileType::Event) {
             tracing::error!("Failed to write rows to ParquetBatch: {}", e);
             return BatchStatus::Pending;
         }

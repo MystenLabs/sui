@@ -24,18 +24,18 @@ use sui_types::object::bounded_visitor::BoundedVisitor;
 use tap::tap::TapFallible;
 use tracing::warn;
 
-use crate::TaskConfig;
+use crate::PipelineConfig;
 use crate::package_store::PackageCache;
 use crate::parquet::ParquetBatch;
 use crate::tables::DynamicFieldEntry;
 
 pub struct DynamicFieldHandler {
     package_cache: Arc<PackageCache>,
-    config: TaskConfig,
+    config: PipelineConfig,
 }
 
 impl DynamicFieldHandler {
-    pub fn new(package_cache: Arc<PackageCache>, config: TaskConfig) -> Self {
+    pub fn new(package_cache: Arc<PackageCache>, config: PipelineConfig) -> Self {
         Self {
             package_cache,
             config,
@@ -203,7 +203,7 @@ impl Handler for DynamicFieldHandler {
         batch.update_last_checkpoint(first.checkpoint);
 
         // Write first value and remaining values
-        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref())) {
+        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref()), crate::FileType::DynamicField) {
             tracing::error!("Failed to write rows to ParquetBatch: {}", e);
             return BatchStatus::Pending;
         }

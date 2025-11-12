@@ -17,16 +17,16 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
 use tracing::error;
 
-use crate::TaskConfig;
+use crate::PipelineConfig;
 use crate::parquet::ParquetBatch;
 use crate::tables::TransactionEntry;
 
 pub struct TransactionHandler {
-    config: TaskConfig,
+    config: PipelineConfig,
 }
 
 impl TransactionHandler {
-    pub fn new(config: TaskConfig) -> Self {
+    pub fn new(config: PipelineConfig) -> Self {
         Self { config }
     }
 }
@@ -221,7 +221,7 @@ impl Handler for TransactionHandler {
         batch.update_last_checkpoint(first.checkpoint);
 
         // Write first value and remaining values
-        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref())) {
+        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref()), crate::FileType::Transaction) {
             tracing::error!("Failed to write rows to ParquetBatch: {}", e);
             return BatchStatus::Pending;
         }

@@ -159,22 +159,22 @@ pub struct JobConfig {
     pub sf_role: Option<String>,
     pub sf_password_file: Option<String>,
 
-    // This is private to enforce using the TaskContext struct
+    // This is private to enforce using the PipelineConfig struct
     #[serde(rename = "tasks")]
-    task_configs: Vec<TaskConfig>,
+    pipeline_configs: Vec<PipelineConfig>,
 }
 
 impl JobConfig {
-    // Convenience method to get task configs for compatibility
-    pub fn task_configs(&self) -> &[TaskConfig] {
-        &self.task_configs
+    // Convenience method to get pipeline configs
+    pub fn pipeline_configs(&self) -> &[PipelineConfig] {
+        &self.pipeline_configs
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskConfig {
-    /// Name of the task. Must be unique per process. Used to identify tasks in the Progress Store.
-    pub task_name: String,
+pub struct PipelineConfig {
+    /// Name of the pipeline. Must be unique per process. Used to identify pipelines in the Progress Store.
+    pub pipeline_name: String,
     /// Type of data to write i.e. checkpoint, object, transaction, etc
     pub file_type: FileType,
     /// File format to store data in i.e. csv, parquet, etc
@@ -208,7 +208,7 @@ pub struct TaskConfig {
     pub package_id_filter: Option<String>,
 }
 
-impl TaskConfig {
+impl PipelineConfig {
     pub fn remote_store_path_prefix(&self) -> Result<Option<Path>> {
         self.remote_store_path_prefix
             .as_ref()
@@ -397,8 +397,6 @@ pub trait ParquetSchema {
     fn schema() -> Vec<String>;
 
     fn get_column(&self, idx: usize) -> ParquetValue;
-
-    fn file_type() -> FileType;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -477,7 +475,7 @@ pub mod indexer_alt {
                     sf_username: None,
                     sf_role: None,
                     sf_password_file: None,
-                    task_configs: vec![],
+                    pipeline_configs: vec![],
                 },
                 write_concurrency: 10,
                 watermark_interval: Duration::from_secs(60),
@@ -553,15 +551,15 @@ pub mod indexer_alt {
         .await?;
 
         // Register pipelines for each enabled file type
-        for task_config in &config.job_config.task_configs {
+        for pipeline_config in &config.job_config.pipeline_configs {
             info!(
-                "Registering pipeline for task: {} with file type: {:?}",
-                task_config.task_name, task_config.file_type
+                "Registering pipeline: {} with file type: {:?}",
+                pipeline_config.pipeline_name, pipeline_config.file_type
             );
 
-            register_pipeline_for_task(
+            register_pipeline(
                 &mut indexer,
-                task_config,
+                pipeline_config,
                 Some(package_cache.clone()),
                 concurrent_config.clone(),
             )
@@ -574,26 +572,26 @@ pub mod indexer_alt {
         Ok(handle)
     }
 
-    async fn register_pipeline_for_task(
+    async fn register_pipeline(
         indexer: &mut Indexer<ObjectStore>,
-        task_config: &TaskConfig,
+        pipeline_config: &PipelineConfig,
         package_cache: Option<Arc<PackageCache>>,
         config: ConcurrentConfig,
     ) -> Result<()> {
-        match task_config.file_type {
+        match pipeline_config.file_type {
             FileType::Checkpoint => {
                 indexer
-                    .concurrent_pipeline(CheckpointHandler::new(task_config.clone()), config)
+                    .concurrent_pipeline(CheckpointHandler::new(pipeline_config.clone()), config)
                     .await?;
             }
             FileType::Transaction => {
                 indexer
-                    .concurrent_pipeline(TransactionHandler::new(task_config.clone()), config)
+                    .concurrent_pipeline(TransactionHandler::new(pipeline_config.clone()), config)
                     .await?;
             }
             FileType::TransactionBCS => {
                 indexer
-                    .concurrent_pipeline(TransactionBCSHandler::new(task_config.clone()), config)
+                    .concurrent_pipeline(TransactionBCSHandler::new(pipeline_config.clone()), config)
                     .await?;
             }
             FileType::Event => {
@@ -601,12 +599,12 @@ pub mod indexer_alt {
                     .clone()
                     .ok_or_else(|| anyhow!("Package cache required for Event handler"))?;
                 indexer
-                    .concurrent_pipeline(EventHandler::new(cache, task_config.clone()), config)
+                    .concurrent_pipeline(EventHandler::new(cache, pipeline_config.clone()), config)
                     .await?;
             }
             FileType::MoveCall => {
                 indexer
-                    .concurrent_pipeline(MoveCallHandler::new(task_config.clone()), config)
+                    .concurrent_pipeline(MoveCallHandler::new(pipeline_config.clone()), config)
                     .await?;
             }
             FileType::Object => {
@@ -617,8 +615,8 @@ pub mod indexer_alt {
                     .concurrent_pipeline(
                         ObjectHandler::new(
                             cache,
-                            &task_config.package_id_filter,
-                            task_config.clone(),
+                            &pipeline_config.package_id_filter,
+                            pipeline_config.clone(),
                         ),
                         config,
                     )
@@ -630,7 +628,7 @@ pub mod indexer_alt {
                     .ok_or_else(|| anyhow!("Package cache required for DynamicField handler"))?;
                 indexer
                     .concurrent_pipeline(
-                        DynamicFieldHandler::new(cache, task_config.clone()),
+                        DynamicFieldHandler::new(cache, pipeline_config.clone()),
                         config,
                     )
                     .await?;
@@ -638,19 +636,19 @@ pub mod indexer_alt {
             FileType::TransactionObjects => {
                 indexer
                     .concurrent_pipeline(
-                        TransactionObjectsHandler::new(task_config.clone()),
+                        TransactionObjectsHandler::new(pipeline_config.clone()),
                         config,
                     )
                     .await?;
             }
             FileType::MovePackage => {
                 indexer
-                    .concurrent_pipeline(PackageHandler::new(task_config.clone()), config)
+                    .concurrent_pipeline(PackageHandler::new(pipeline_config.clone()), config)
                     .await?;
             }
             FileType::MovePackageBCS => {
                 indexer
-                    .concurrent_pipeline(PackageBCSHandler::new(task_config.clone()), config)
+                    .concurrent_pipeline(PackageBCSHandler::new(pipeline_config.clone()), config)
                     .await?;
             }
             FileType::WrappedObject => {
@@ -659,7 +657,7 @@ pub mod indexer_alt {
                     .ok_or_else(|| anyhow!("Package cache required for WrappedObject handler"))?;
                 indexer
                     .concurrent_pipeline(
-                        WrappedObjectHandler::new(cache, task_config.clone()),
+                        WrappedObjectHandler::new(cache, pipeline_config.clone()),
                         config,
                     )
                     .await?;

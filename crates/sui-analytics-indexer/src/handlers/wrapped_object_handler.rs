@@ -12,7 +12,7 @@ use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_object_store::ObjectStore;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use crate::TaskConfig;
+use crate::PipelineConfig;
 use crate::handlers::{get_move_struct, parse_struct};
 use crate::package_store::PackageCache;
 use crate::parquet::ParquetBatch;
@@ -20,11 +20,11 @@ use crate::tables::WrappedObjectEntry;
 
 pub struct WrappedObjectHandler {
     package_cache: Arc<PackageCache>,
-    config: TaskConfig,
+    config: PipelineConfig,
 }
 
 impl WrappedObjectHandler {
-    pub fn new(package_cache: Arc<PackageCache>, config: TaskConfig) -> Self {
+    pub fn new(package_cache: Arc<PackageCache>, config: PipelineConfig) -> Self {
         Self {
             package_cache,
             config,
@@ -137,7 +137,7 @@ impl Handler for WrappedObjectHandler {
         batch.update_last_checkpoint(first.checkpoint);
 
         // Write first value and remaining values
-        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref())) {
+        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref()), crate::FileType::WrappedObject) {
             tracing::error!("Failed to write rows to ParquetBatch: {}", e);
             return BatchStatus::Pending;
         }

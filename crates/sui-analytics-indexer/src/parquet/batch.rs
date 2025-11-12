@@ -13,9 +13,9 @@ use crate::{FileFormat, FileType, ParquetSchema};
 
 /// Batch type for accumulating Parquet rows and managing file lifecycle
 pub struct ParquetBatch<S: Serialize + ParquetSchema> {
-    writer: ParquetWriter,
+    writer: Option<ParquetWriter>,
     temp_dir: TempDir,
-    file_type: FileType,
+    file_type: Option<FileType>,
     current_file_path: Option<PathBuf>,
     current_epoch: EpochId,
     checkpoint_range_start: u64,
@@ -29,9 +29,9 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
         let writer = ParquetWriter::new(temp_dir.path(), file_type, start_checkpoint)?;
 
         Ok(Self {
-            writer,
+            writer: Some(writer),
             temp_dir,
-            file_type,
+            file_type: Some(file_type),
             current_file_path: None,
             current_epoch: 0,
             checkpoint_range_start: start_checkpoint,
@@ -40,19 +40,37 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
         })
     }
 
-    /// Write rows directly to the ParquetWriter
-    pub fn write_rows<I>(&mut self, rows: I) -> Result<()>
+    /// Write rows directly to the ParquetWriter, lazily creating it if needed
+    pub fn write_rows<I>(&mut self, rows: I, file_type: FileType) -> Result<()>
     where
         I: Iterator<Item = S>,
         S: Send + Sync + 'static,
     {
         let collected: Vec<S> = rows.collect();
-        self.writer.write(Box::new(collected.into_iter()))
+
+        // Lazy-initialize writer if not already created
+        if self.writer.is_none() {
+            self.file_type = Some(file_type);
+            let writer = ParquetWriter::new(
+                self.temp_dir.path(),
+                file_type,
+                self.checkpoint_range_start,
+            )?;
+            self.writer = Some(writer);
+        }
+
+        self.writer
+            .as_mut()
+            .unwrap()
+            .write(Box::new(collected.into_iter()))
     }
 
     /// Get current row count
     pub fn row_count(&self) -> Result<usize> {
-        self.writer.rows()
+        self.writer
+            .as_ref()
+            .map(|w| w.rows())
+            .unwrap_or(Ok(0))
     }
 
     /// Update the last checkpoint seen (for tracking the range)
@@ -68,8 +86,16 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
     /// Flush accumulated rows to a Parquet file in the temp directory
     /// Returns the file path if successful
     pub fn flush(&mut self) -> Result<Option<PathBuf>> {
+        let Some(writer) = self.writer.as_mut() else {
+            return Ok(None);
+        };
+
+        let Some(file_type) = self.file_type else {
+            return Ok(None);
+        };
+
         let end_checkpoint = self.last_checkpoint + 1;
-        if !self.writer.flush::<S>(end_checkpoint)? {
+        if !writer.flush::<S>(end_checkpoint)? {
             return Ok(None);
         }
 
@@ -85,7 +111,7 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
         let file_path = self
             .temp_dir
             .path()
-            .join(self.file_type.dir_prefix().as_ref())
+            .join(file_type.dir_prefix().as_ref())
             .join(epoch_dir)
             .join(&file_name);
 
@@ -103,8 +129,10 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
     /// Get the object store path for the current file
     pub fn object_store_path(&self) -> ObjectPath {
         let checkpoint_range = self.checkpoint_range_start..(self.last_checkpoint + 1);
-        self.file_type
-            .file_path(FileFormat::PARQUET, self.current_epoch, checkpoint_range)
+        let file_type = self
+            .file_type
+            .expect("file_type must be set before calling object_store_path");
+        file_type.file_path(FileFormat::PARQUET, self.current_epoch, checkpoint_range)
     }
 
     /// Get the current file path for uploading
@@ -114,7 +142,9 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
 
     /// Reset the batch after successful upload
     pub fn reset(&mut self, start_checkpoint: u64) -> Result<()> {
-        self.writer.reset(self.current_epoch, start_checkpoint)?;
+        if let Some(writer) = self.writer.as_mut() {
+            writer.reset(self.current_epoch, start_checkpoint)?;
+        }
         self.current_file_path = None;
         self.checkpoint_range_start = start_checkpoint;
         self.last_checkpoint = start_checkpoint;
@@ -124,6 +154,15 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
 
 impl<S: Serialize + ParquetSchema + 'static> Default for ParquetBatch<S> {
     fn default() -> Self {
-        Self::new(S::file_type(), 0).expect("Failed to create default ParquetBatch")
+        Self {
+            writer: None,
+            temp_dir: TempDir::new().expect("Failed to create temp dir"),
+            file_type: None,
+            current_file_path: None,
+            current_epoch: 0,
+            checkpoint_range_start: 0,
+            last_checkpoint: 0,
+            _phantom: std::marker::PhantomData,
+        }
     }
 }
