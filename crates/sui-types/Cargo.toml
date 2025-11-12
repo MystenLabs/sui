@@ -93,6 +93,7 @@ rustls-pemfile.workspace = true
 [dev-dependencies]
 base64.workspace = true
 bincode.workspace = true
+cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
 criterion.workspace = true
 proptest.workspace = true
 proptest-derive.workspace = true
