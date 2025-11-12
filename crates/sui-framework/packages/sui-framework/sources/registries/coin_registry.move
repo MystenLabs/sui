@@ -435,7 +435,7 @@ public fun update_from_legacy_metadata<T>(currency: &mut Currency<T>, legacy: &C
 }
 
 #[deprecated(note = b"Method disabled")]
-public fun delete_migrated_legacy_metadata<T>(_: &mut Currency<T>, _: CoinMetadata<T>) {
+public fun delete_migrated_legacy_metadata<T>(_: &mut Currency<T>, __: CoinMetadata<T>) {
     abort EDeletionNotSupported
 }
 
