@@ -1,0 +1,34 @@
+### NEAR, Sui, and Aptos Staking Yields Comparison (November 2025)
+
+Staking yields on these Layer 1 protocols vary based on network participation, inflation, and validator performance. NEAR offers the highest potential (up to 22% via locked staking), driven by high rewards for long-term locks, while Sui and Aptos prioritize stability with lower but consistent 3-7% APYs. Data reflects current estimates; actual yields fluctuate with epochs and demand. All are delegated staking with low entry barriers (no fixed minimum like ETH).
+
+| Protocol | Avg APY Range | Key Features | Risks & Notes | Citation |
+|----------|---------------|--------------|---------------|----------|
+| **NEAR** | 13-22% | Locked staking up to 22% (e.g., Figment); daily rewards; 13% on Coinbase. High inflation (7%) boosts yields. | High volatility from locks (illiquid); slashing ~1-2%. Best for long-term holders. | <grok:render card_id="b757a3" card_type="citation_card" type="render_inline_citation">
+<argument name="citation_id">5</argument>
+</grok:render><grok:render card_id="17f82b" card_type="citation_card" type="render_inline_citation">
+<argument name="citation_id">6</argument>
+</grok:render><grok:render card_id="a56337" card_type="citation_card" type="render_inline_citation">
+<argument name="citation_id">9</argument>
+</grok:render> |
+| **Sui** | 2-5.3% | 3% on Kraken; max 5.3% via pools; 1.85% on Stakely. Focuses on validator security over high rewards. | Low yields due to low inflation (5%); slashing <1%. Suited for conservative, long-term staking. | <grok:render card_id="a7f903" card_type="citation_card" type="render_inline_citation">
+<argument name="citation_id">0</argument>
+</grok:render><grok:render card_id="4768c6" card_type="citation_card" type="render_inline_citation">
+<argument name="citation_id">1</argument>
+</grok:render><grok:render card_id="4f554d" card_type="citation_card" type="render_inline_citation">
+<argument name="citation_id">2</argument>
+</grok:render> |
+| **Aptos** | 5-8% | 5.7% on Bitget; up to 7.1% on platforms; 5-8% annual average. Daily distributions, no max limits. | Moderate inflation (4.5%); slashing ~1%; regulatory focus on compliance. Ideal for balanced risk/reward. | <grok:render card_id="9acddd" card_type="citation_card" type="render_inline_citation">
+<argument name="citation_id">10</argument>
+</grok:render><grok:render card_id="127247" card_type="citation_card" type="render_inline_citation">
+<argument name="citation_id">11</argument>
+</grok:render><grok:render card_id="7a2060" card_type="citation_card" type="render_inline_citation">
+<argument name="citation_id">12</argument>
+</grok:render> |
+
+#### Quick Analysis
+- **Highest Yield**: NEAR (for aggressive stakers; lock for 22%).
+- **Most Stable**: Aptos (5-8%, with strong compliance).
+- **Entry**: All ~$0.01/tx fees; unbonding 1-3 days. Leverage via DeFi (e.g., Pendle PTs) boosts to 20-50%, but adds liquidation risk.
+
+For Godslayer sims: 3x NEAR staking yields ~45% APY. Which to flux?
