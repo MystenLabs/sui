@@ -591,7 +591,10 @@ pub mod indexer_alt {
             }
             FileType::TransactionBCS => {
                 indexer
-                    .concurrent_pipeline(TransactionBCSHandler::new(pipeline_config.clone()), config)
+                    .concurrent_pipeline(
+                        TransactionBCSHandler::new(pipeline_config.clone()),
+                        config,
+                    )
                     .await?;
             }
             FileType::Event => {

@@ -15,7 +15,6 @@ use sui_types::base_types::ObjectID;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::object::Object;
 
-use crate::PipelineConfig;
 use crate::handlers::{
     ObjectStatusTracker, get_is_consensus, get_move_struct, get_owner_address, get_owner_type,
     initial_shared_version,
@@ -23,6 +22,19 @@ use crate::handlers::{
 use crate::package_store::PackageCache;
 use crate::parquet::ParquetBatch;
 use crate::tables::{ObjectEntry, ObjectStatus};
+use crate::{FileType, PipelineConfig};
+
+pub struct ObjectBatch {
+    pub inner: ParquetBatch<ObjectEntry>,
+}
+
+impl Default for ObjectBatch {
+    fn default() -> Self {
+        Self {
+            inner: ParquetBatch::new(FileType::Object, 0).expect("Failed to create ParquetBatch"),
+        }
+    }
+}
 
 pub struct ObjectHandler {
     package_cache: Arc<PackageCache>,
@@ -267,10 +279,8 @@ impl Processor for ObjectHandler {
 #[async_trait]
 impl Handler for ObjectHandler {
     type Store = ObjectStore;
-    type Batch = ParquetBatch<ObjectEntry>;
+    type Batch = ObjectBatch;
 
-    const MIN_EAGER_ROWS: usize = usize::MAX;
-    const MAX_PENDING_ROWS: usize = usize::MAX;
 
     fn min_eager_rows(&self) -> usize {
         self.config.max_row_count
@@ -290,11 +300,14 @@ impl Handler for ObjectHandler {
             return BatchStatus::Pending;
         };
 
-        batch.set_epoch(first.epoch);
-        batch.update_last_checkpoint(first.checkpoint);
+        batch.inner.set_epoch(first.epoch);
+        batch.inner.update_last_checkpoint(first.checkpoint);
 
         // Write first value and remaining values
-        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref()), crate::FileType::Object) {
+        if let Err(e) = batch
+            .inner
+            .write_rows(std::iter::once(first).chain(values.by_ref()))
+        {
             tracing::error!("Failed to write rows to ParquetBatch: {}", e);
             return BatchStatus::Pending;
         }
@@ -308,13 +321,13 @@ impl Handler for ObjectHandler {
         batch: &Self::Batch,
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> Result<usize> {
-        let Some(file_path) = batch.current_file_path() else {
+        let Some(file_path) = batch.inner.current_file_path() else {
             return Ok(0);
         };
 
-        let row_count = batch.row_count()?;
+        let row_count = batch.inner.row_count()?;
         let file_bytes = tokio::fs::read(file_path).await?;
-        let object_path = batch.object_store_path();
+        let object_path = batch.inner.object_store_path();
 
         conn.object_store()
             .put(&object_path, file_bytes.into())

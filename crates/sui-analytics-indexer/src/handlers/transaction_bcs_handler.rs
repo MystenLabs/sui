@@ -13,9 +13,22 @@ use sui_indexer_alt_object_store::ObjectStore;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use crate::PipelineConfig;
 use crate::parquet::ParquetBatch;
 use crate::tables::TransactionBCSEntry;
+use crate::{FileType, PipelineConfig};
+
+pub struct TransactionBCSBatch {
+    pub inner: ParquetBatch<TransactionBCSEntry>,
+}
+
+impl Default for TransactionBCSBatch {
+    fn default() -> Self {
+        Self {
+            inner: ParquetBatch::new(FileType::TransactionBCS, 0)
+                .expect("Failed to create ParquetBatch"),
+        }
+    }
+}
 
 pub struct TransactionBCSHandler {
     config: PipelineConfig,
@@ -63,10 +76,8 @@ impl Processor for TransactionBCSHandler {
 #[async_trait]
 impl Handler for TransactionBCSHandler {
     type Store = ObjectStore;
-    type Batch = ParquetBatch<TransactionBCSEntry>;
+    type Batch = TransactionBCSBatch;
 
-    const MIN_EAGER_ROWS: usize = usize::MAX;
-    const MAX_PENDING_ROWS: usize = usize::MAX;
 
     fn min_eager_rows(&self) -> usize {
         self.config.max_row_count
@@ -86,11 +97,14 @@ impl Handler for TransactionBCSHandler {
             return BatchStatus::Pending;
         };
 
-        batch.set_epoch(first.epoch);
-        batch.update_last_checkpoint(first.checkpoint);
+        batch.inner.set_epoch(first.epoch);
+        batch.inner.update_last_checkpoint(first.checkpoint);
 
         // Write first value and remaining values
-        if let Err(e) = batch.write_rows(std::iter::once(first).chain(values.by_ref()), crate::FileType::TransactionBCS) {
+        if let Err(e) = batch
+            .inner
+            .write_rows(std::iter::once(first).chain(values.by_ref()))
+        {
             tracing::error!("Failed to write rows to ParquetBatch: {}", e);
             return BatchStatus::Pending;
         }
@@ -104,13 +118,13 @@ impl Handler for TransactionBCSHandler {
         batch: &Self::Batch,
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> Result<usize> {
-        let Some(file_path) = batch.current_file_path() else {
+        let Some(file_path) = batch.inner.current_file_path() else {
             return Ok(0);
         };
 
-        let row_count = batch.row_count()?;
+        let row_count = batch.inner.row_count()?;
         let file_bytes = tokio::fs::read(file_path).await?;
-        let object_path = batch.object_store_path();
+        let object_path = batch.inner.object_store_path();
 
         conn.object_store()
             .put(&object_path, file_bytes.into())
