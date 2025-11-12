@@ -1,0 +1,213 @@
+### Overview
+Based on your request, I'll assume "God's Slayer 2.0" is a blockchain-based game built on NEAR Protocol, leveraging its modular architecture (e.g., sharded execution via Nightshade, composable smart contracts in Rust compiled to WASM, and integration with BOS for frontend components). NEAR's modularity allows for scalable, upgradable contracts where game logic (e.g., slaying "gods" as bosses, player stats, rewards) can be broken into separate modules like player management, battle mechanics, and token/NFT rewards.
+
+I'll provide a starter Rust smart contract for the core game logic:
+- **Players** register and have stats (health, power).
+- **Gods** are predefined bosses with fixed stats.
+- **Slay action**: Players attempt to defeat a god, with simple probabilistic combat (upgradeable for complexity).
+- **Rewards**: Successful slays mint a basic reward token (extendable to NEAR's Fungible Token standard).
+- Modular design: Separated into traits for easy extension (e.g., add multiplayer or NFTs via separate contracts).
+
+This is deployable on NEAR testnet/mainnet. To deploy:
+1. Install Rust and `near-cli`.
+2. `cargo near build --release`.
+3. `near deploy <account>.near ./target/wasm32-unknown-unknown/release/gods_slayer.wasm`.
+
+For frontend, use NEAR's BOS components (React/TS) to call these methods—let me know if you need that code too.
+
+### Cargo.toml Dependencies
+Add these to your `Cargo.toml`:
+```toml
+[package]
+name = "gods_slayer"
+version = "2.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+near-sdk = "4.1.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+overflow-checks = true
+panic = "abort"
+```
+
+### src/lib.rs - Main Smart Contract
+```rust
+use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::{env, near_bindgen, AccountId, Balance, Promise, PromiseResult};
+use near_sdk::json_types::U128;
+use std::collections::HashMap;
+
+// Constants
+const GOD_HEALTH: u32 = 1000;
+const GOD_POWER: u32 = 50;
+const REWARD_AMOUNT: Balance = 100_000_000_000_000_000_000_000; // 1 NEAR in yoctoNEAR
+
+// Player stats
+#[derive(BorshSerialize, BorshDeserialize, Clone)]
+pub struct Player {
+    pub health: u32,
+    pub power: u32,
+    pub slays: u32,
+}
+
+// God entity (simple, fixed for v2.0; modularize for dynamic gods later)
+#[derive(BorshSerialize, BorshDeserialize, Clone)]
+pub struct God {
+    pub name: String,
+    pub health: u32,
+    pub power: u32,
+}
+
+// Core game state
+#[near_bindgen]
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct GodsSlayer {
+    pub players: HashMap<AccountId, Player>,
+    pub gods: Vec<God>,
+    pub total_slays: u64,
+}
+
+impl Default for GodsSlayer {
+    fn default() -> Self {
+        Self {
+            players: HashMap::new(),
+            gods: vec![
+                God { name: "Zeus".to_string(), health: GOD_HEALTH, power: GOD_POWER },
+                God { name: "Odin".to_string(), health: GOD_HEALTH + 200, power: GOD_POWER + 10 },
+                // Add more gods modularly
+            ],
+            total_slays: 0,
+        }
+    }
+}
+
+#[near_bindgen]
+impl GodsSlayer {
+    // Register a new player (modular: extend with NFT minting)
+    #[payable]
+    pub fn register_player(&mut self, initial_health: u32, initial_power: u32) -> Player {
+        let player_id = env::predecessor_account_id();
+        let player = Player {
+            health: initial_health,
+            power: initial_power,
+            slays: 0,
+        };
+        self.players.insert(player_id.clone(), player.clone());
+        env::log_str(&format!("Player {} registered with health {} and power {}", player_id, initial_health, initial_power));
+        player
+    }
+
+    // View player stats
+    pub fn get_player(&self, account_id: AccountId) -> Option<Player> {
+        self.players.get(&account_id).cloned()
+    }
+
+    // View gods (modular: filter by difficulty)
+    pub fn get_gods(&self) -> Vec<God> {
+        self.gods.clone()
+    }
+
+    // Slay a god: Simple combat (player_power vs god_power, probabilistic win)
+    // Modular: Call external battle contract for complex logic
+    pub fn slay_god(&mut self, god_index: u32) -> Promise {
+        let player_id = env::predecessor_account_id();
+        let mut player = self.players.get(&player_id).expect("Player not registered");
+        let god = &self.gods[god_index as usize];
+
+        // Simple combat: Win if player_power > god_power + random factor (use env::random_seed for fairness)
+        let random_factor: u32 = u32::from_le_bytes(
+            env::random_seed().as_slice()[..4].try_into().unwrap()
+        ) % 100;
+        let win_threshold = god.power + random_factor;
+        let wins = player.power > win_threshold;
+
+        if wins {
+            player.slays += 1;
+            self.total_slays += 1;
+            self.players.insert(player_id.clone(), player.clone());
+
+            // Reward: Transfer NEAR (extend to FT contract)
+            Promise::new(player_id.clone()).transfer(REWARD_AMOUNT)
+                .then(
+                    Promise::new(env::current_account_id()).callback_no_args(
+                        Self::on_reward_transferred_callback,
+                        vec![player_id.into_bytes()].into()
+                    )
+                )
+        } else {
+            // Lose: Reduce health (game over if <=0)
+            player.health = player.health.saturating_sub(god.power / 10);
+            self.players.insert(player_id, player);
+            env::log_str("Slay failed! Health reduced.");
+            Promise::new(player_id).transfer(0u128.into()) // No reward
+        }
+    }
+
+    // Callback for reward (modular: log events, update leaderboards)
+    #[private]
+    pub fn on_reward_transferred_callback(&mut self, #[callback_result] result: PromiseResult, player_id_bytes: Vec<u8>) {
+        match result {
+            PromiseResult::Successful(_) => {
+                let player_id = String::from_utf8(player_id_bytes).unwrap();
+                env::log_str(&format!("Reward sent to {}", player_id));
+            }
+            _ => env::panic_str("Reward transfer failed"),
+        }
+    }
+
+    // Admin: Add new god (modular governance via DAO)
+    pub fn add_god(&mut self, name: String, health: u32, power: u32) {
+        let caller = env::predecessor_account_id();
+        assert_eq!(caller, env::current_account_id(), "Only owner can add gods");
+        self.gods.push(God { name, health, power });
+    }
+}
+
+// Tests (run with `cargo test`)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use near_sdk::test_utils::{accounts, VMContextBuilder};
+    use near_sdk::{testing_env, MockedBlockchain};
+
+    fn get_context(predecessor: AccountId) -> VMContextBuilder {
+        let mut builder = VMContextBuilder::new();
+        builder.predecessor_account_id(predecessor);
+        builder
+    }
+
+    #[test]
+    fn test_register_player() {
+        let mut context = get_context(accounts(0).into());
+        testing_env!(context.build());
+        let mut contract = GodsSlayer::default();
+        contract.register_player(100, 50);
+        let player = contract.get_player(accounts(0).into()).unwrap();
+        assert_eq!(player.health, 100);
+        assert_eq!(player.power, 50);
+    }
+
+    #[test]
+    #[should_panic(expected = "Player not registered")]
+    fn test_slay_without_register() {
+        let mut context = get_context(accounts(0).into());
+        testing_env!(context.build());
+        let mut contract = GodsSlayer::default();
+        contract.slay_god(0);
+    }
+}
+```
+
+### Next Steps
+- **Extend Modularity**: Implement traits for battle (e.g., `trait BattleModule`) and rewards (integrate with NEP-141 FT or NEP-171 NFT standards).
+- **Security**: Add access controls, randomness via oracles (e.g., Chainlink on NEAR).
+- **Frontend**: Use `@near/widget` for BOS components to display gods/players and call `slay_god`.
+- **Upgrades**: Use NEAR's upgradable contracts for v2.1.
+
+What specific part do you want to expand (e.g., multiplayer battles, NFT gods, or JS frontend)? Or share more details on the game mechanics!
