@@ -511,7 +511,7 @@ fun new_currency_is_shared() {
     currency.delete_metadata_cap(metadata_cap);
     test_scenario::return_shared(currency);
 
-    destroy(registry);
+    destroy(registry);g
     destroy(t_cap);
 
     test.end();
