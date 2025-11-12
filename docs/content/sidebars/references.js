@@ -149,8 +149,8 @@ const references = [
 				type: 'category',
 				label: 'Packages',
 				items: [
-					'references/package-managers/move-package-manager',
 					'references/package-managers/package-manager-migration',
+					'references/package-managers/manifest-reference',
 				],
 			},
 			{
