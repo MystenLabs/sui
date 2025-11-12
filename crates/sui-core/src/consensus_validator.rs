@@ -154,7 +154,7 @@ impl SuiTxValidator {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip_all, fields(block_ref = ?block_ref))]
+    #[instrument(level = "debug", skip_all, fields(block_ref))]
     fn vote_transactions(
         &self,
         block_ref: &BlockRef,
