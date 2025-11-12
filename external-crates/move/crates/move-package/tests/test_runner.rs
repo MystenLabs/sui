@@ -2,11 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, bail};
-use move_command_line_common::testing::{
-    add_update_baseline_fix, format_diff, read_env_update_baseline, insta_assert
-};
-use move_compiler::Flags;
+use anyhow::bail;
+use move_command_line_common::testing::insta_assert;
 use move_package::{
     BuildConfig,
     compilation::{build_plan::BuildPlan, compiled_package::CompiledPackageInfo},
@@ -114,18 +111,6 @@ impl Test<'_> {
                     .compile(&mut progress, |compile| compile)?;
                 scrub_compiled_package(&mut pkg.compiled_package_info);
                 format!("{:#?}\n", pkg.compiled_package_info)
-            }
-
-            "modeled" => {
-                ModelBuilder::create(
-                    resolved_package?,
-                    ModelConfig {
-                        all_files_as_targets: false,
-                        target_filter: None,
-                    },
-                )
-                .build_model(Flags::empty())?;
-                "Built model\n".to_string()
             }
 
             "resolved" => {

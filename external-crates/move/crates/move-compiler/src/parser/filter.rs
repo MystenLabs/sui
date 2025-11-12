@@ -199,6 +199,7 @@ fn filter_module<T: FilterContext>(
         is_spec_module,
         members,
         definition_mode,
+        is_extension,
     } = module_def;
 
     let new_members: Vec<_> = members
@@ -215,6 +216,7 @@ fn filter_module<T: FilterContext>(
         is_spec_module,
         members: new_members,
         definition_mode,
+        is_extension,
     })
 }
 
