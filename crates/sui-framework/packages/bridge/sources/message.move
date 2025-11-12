@@ -19,6 +19,7 @@ const EInvalidMessageType: u64 = 3;
 const EInvalidEmergencyOpType: u64 = 4;
 const EInvalidPayloadLength: u64 = 5;
 const EMustBeTokenMessage: u64 = 6;
+const EInvalidMessageVersion: u64 = 7;
 
 // Emergency Op types
 const PAUSE: u8 = 0;
@@ -48,6 +49,15 @@ public struct TokenTransferPayload has drop {
     target_address: vector<u8>,
     token_type: u8,
     amount: u64,
+}
+
+public struct TokenTransferPayloadV2 has drop {
+    sender_address: vector<u8>,
+    target_chain: u8,
+    target_address: vector<u8>,
+    token_type: u8,
+    amount: u64,
+    timestamp_ms: u64,
 }
 
 public struct EmergencyOp has drop {
@@ -99,6 +109,7 @@ public struct ParsedTokenTransferMessage has drop {
 // Therefore their length can be represented by a single byte.
 // See `create_token_bridge_message` for the actual encoding rule.
 public fun extract_token_bridge_payload(message: &BridgeMessage): TokenTransferPayload {
+    assert!(message.message_version() == 1, EInvalidMessageVersion);
     let mut bcs = bcs::new(message.payload);
     let sender_address = bcs.peel_vec_u8();
     let target_chain = bcs.peel_u8();
@@ -108,12 +119,7 @@ public fun extract_token_bridge_payload(message: &BridgeMessage): TokenTransferP
 
     chain_ids::assert_valid_chain_id(target_chain);
 
-    if (message.message_version() == 2) {
-        let _timestamp = peel_u64_be(&mut bcs);
-        assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
-    } else {
-        assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
-    };
+    assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
 
     TokenTransferPayload {
         sender_address,
@@ -128,18 +134,38 @@ public fun extract_token_bridge_payload(message: &BridgeMessage): TokenTransferP
 // `sender_address` and `target_address` are no longer than 255 bytes.
 // Therefore their length can be represented by a single byte.
 // See `create_token_bridge_message` for the actual encoding rule.
-public fun extract_token_bridge_payload_v2_timestamp(message: &BridgeMessage): u64 {
-    let mut bcs = bcs::new(message.payload);
-    let _sender_address = bcs.peel_vec_u8();
-    let _target_chain = bcs.peel_u8();
-    let _target_address = bcs.peel_vec_u8();
-    let _token_type = bcs.peel_u8();
-    let _amount = peel_u64_be(&mut bcs);
-    let timestamp = peel_u64_be(&mut bcs);
+public fun extract_token_bridge_payload_v2(message: &BridgeMessage): TokenTransferPayloadV2 {
+    assert!(message.message_version() == 2, EInvalidMessageVersion);
 
+    let mut bcs = bcs::new(message.payload);
+    let sender_address = bcs.peel_vec_u8();
+    let target_chain = bcs.peel_u8();
+    let target_address = bcs.peel_vec_u8();
+    let token_type = bcs.peel_u8();
+    let amount = peel_u64_be(&mut bcs);
+
+    chain_ids::assert_valid_chain_id(target_chain);
+    let timestamp_ms = peel_u64_be(&mut bcs);
     assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
 
-    timestamp
+    TokenTransferPayloadV2 {
+        sender_address,
+        target_chain,
+        target_address,
+        token_type,
+        amount,
+        timestamp_ms,
+    }
+}
+
+public(package) fun to_token_payload_v1(self: &TokenTransferPayloadV2): TokenTransferPayload {
+    TokenTransferPayload {
+        sender_address: self.sender_address,
+        target_chain: self.target_chain,
+        target_address: self.target_address,
+        token_type: self.token_type,
+        amount: self.amount,
+    }
 }
 
 /// Emergency op payload is just a single byte
@@ -214,9 +240,7 @@ public fun extract_add_tokens_on_sui(message: &BridgeMessage): AddTokenOnSui {
     let mut n = 0;
     let mut token_type_names = vector[];
     while (n < token_type_names_bytes.length()) {
-        token_type_names.push_back(
-            ascii::string(*token_type_names_bytes.borrow(n)),
-        );
+        token_type_names.push_back(ascii::string(*token_type_names_bytes.borrow(n)));
         n = n + 1;
     };
     assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
@@ -529,6 +553,10 @@ public fun token_type(self: &TokenTransferPayload): u8 {
 
 public fun token_amount(self: &TokenTransferPayload): u64 {
     self.amount
+}
+
+public fun timestamp_ms(self: &TokenTransferPayloadV2): u64 {
+    self.timestamp_ms
 }
 
 // EmergencyOpPayload getters

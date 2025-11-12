@@ -190,8 +190,6 @@ pub struct EthToSuiTokenBridgeV1 {
     pub eth_address: EthAddress,
     pub token_id: u8,
     pub sui_adjusted_amount: u64,
-    #[serde(default)]
-    pub block_timestamp: Option<u64>,
 }
 
 impl TryFrom<&TokensDepositedFilter> for EthToSuiTokenBridgeV1 {
@@ -205,7 +203,6 @@ impl TryFrom<&TokensDepositedFilter> for EthToSuiTokenBridgeV1 {
             eth_address: event.sender_address,
             token_id: event.token_id,
             sui_adjusted_amount: event.sui_adjusted_amount,
-            block_timestamp: None,
         })
     }
 }
