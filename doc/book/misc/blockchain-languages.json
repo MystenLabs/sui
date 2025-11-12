@@ -1,0 +1,102 @@
+{
+  "languages": [
+    {
+      "name": "Move",
+      "aliases": ["move"],
+      "description": "Smart contract language for Aptos and Sui blockchains",
+      "blockchain": ["Aptos", "Sui"],
+      "file": "move.js",
+      "extensions": [".move"],
+      "enabled": true
+    },
+    {
+      "name": "Solidity",
+      "aliases": ["solidity", "sol"],
+      "description": "Smart contract language for Ethereum and EVM-compatible blockchains",
+      "blockchain": ["Ethereum", "EVM"],
+      "file": "solidity.js",
+      "extensions": [".sol"],
+      "enabled": true
+    },
+    {
+      "name": "Vyper",
+      "aliases": ["vyper", "vy"],
+      "description": "Python-style smart contract language for Ethereum",
+      "blockchain": ["Ethereum"],
+      "file": "vyper.js",
+      "extensions": [".vy"],
+      "enabled": true
+    },
+    {
+      "name": "Rust",
+      "aliases": ["rust", "rs"],
+      "description": "Systems programming language used for Solana and NEAR smart contracts",
+      "blockchain": ["Solana", "NEAR"],
+      "file": "builtin",
+      "extensions": [".rs"],
+      "enabled": true,
+      "note": "Built-in HighlightJS support"
+    },
+    {
+      "name": "Cairo",
+      "aliases": ["cairo"],
+      "description": "Smart contract language for StarkNet",
+      "blockchain": ["StarkNet"],
+      "file": "cairo.js",
+      "extensions": [".cairo"],
+      "enabled": true
+    },
+    {
+      "name": "Ink!",
+      "aliases": ["ink"],
+      "description": "Rust-based smart contract language for Polkadot and Substrate",
+      "blockchain": ["Polkadot", "Substrate"],
+      "file": "ink.js",
+      "extensions": [".rs"],
+      "enabled": true
+    },
+    {
+      "name": "Clarity",
+      "aliases": ["clarity", "clar"],
+      "description": "Decidable smart contract language for Stacks (Bitcoin L2)",
+      "blockchain": ["Stacks", "Bitcoin L2"],
+      "file": "clarity.js",
+      "extensions": [".clar"],
+      "enabled": true
+    },
+    {
+      "name": "Motoko",
+      "aliases": ["motoko", "mo"],
+      "description": "Actor-based smart contract language for DFINITY Internet Computer",
+      "blockchain": ["DFINITY", "ICP"],
+      "file": "motoko.js",
+      "extensions": [".mo"],
+      "enabled": true
+    },
+    {
+      "name": "Haskell",
+      "aliases": ["haskell", "hs"],
+      "description": "Functional programming language used for Cardano smart contracts (Plutus)",
+      "blockchain": ["Cardano"],
+      "file": "builtin",
+      "extensions": [".hs"],
+      "enabled": true,
+      "note": "Built-in HighlightJS support, used for Plutus smart contracts"
+    },
+    {
+      "name": "Go",
+      "aliases": ["go", "golang"],
+      "description": "Programming language used for Cosmos SDK blockchain development",
+      "blockchain": ["Cosmos SDK"],
+      "file": "builtin",
+      "extensions": [".go"],
+      "enabled": true,
+      "note": "Built-in HighlightJS support"
+    }
+  ],
+  "metadata": {
+    "version": "1.0.0",
+    "last_updated": "2025-11-12",
+    "description": "Configuration file for blockchain programming language support in Sui documentation"
+  }
+}

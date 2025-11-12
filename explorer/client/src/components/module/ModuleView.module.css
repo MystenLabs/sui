@@ -12,7 +12,12 @@ section .codeview {
 }
 
 .moduletitle {
-    @apply text-sm font-semibold pt-2 pb-2;
+    @apply text-sm font-semibold pt-2 pb-2 flex items-center justify-between;
+}
+
+.languageBadge {
+    @apply text-xs font-normal px-2 py-1 rounded bg-sui-grey-40 text-sui-grey-100 ml-2;
+    text-transform: uppercase;
 }
 
 .module {
