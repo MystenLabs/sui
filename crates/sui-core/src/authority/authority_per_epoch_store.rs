@@ -1251,6 +1251,14 @@ impl AuthorityPerEpochStore {
         self.randomness_reporter.get().cloned()
     }
 
+    pub async fn randomness_signature_broadcast_receiver(
+        &self,
+    ) -> Option<tokio::sync::broadcast::Receiver<(u64, Vec<u8>)>> {
+        let randomness_manager = self.randomness_manager.get()?;
+        let randomness_manager = randomness_manager.lock().await;
+        Some(randomness_manager.network_handle_signature_receiver())
+    }
+
     pub async fn set_randomness_manager(
         &self,
         mut randomness_manager: RandomnessManager,

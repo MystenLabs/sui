@@ -71,6 +71,8 @@ impl ConsensusAuthority {
         boot_counter: u64,
         // For observer nodes, specifies which validator to connect to. None means connect to first validator.
         target_validator_index: Option<AuthorityIndex>,
+        // Optional randomness signature broadcast receiver for streaming signatures to observers
+        randomness_signature_receiver: Option<tokio::sync::broadcast::Receiver<(u64, Vec<u8>)>>,
     ) -> Self {
         match network_type {
             ConsensusNetwork::Anemo => {
@@ -88,6 +90,7 @@ impl ConsensusAuthority {
                     registry,
                     boot_counter,
                     target_validator_index,
+                    randomness_signature_receiver,
                 )
                 .await;
                 Self::WithAnemo(authority)
@@ -107,6 +110,7 @@ impl ConsensusAuthority {
                     registry,
                     boot_counter,
                     target_validator_index,
+                    randomness_signature_receiver,
                 )
                 .await;
                 Self::WithTonic(authority)
@@ -188,6 +192,8 @@ where
         boot_counter: u64,
         // For observer nodes, specifies which validator to connect to. None means connect to first validator.
         target_validator_index: Option<AuthorityIndex>,
+        // Optional randomness signature broadcast receiver for streaming signatures to observers
+        randomness_signature_receiver: Option<tokio::sync::broadcast::Receiver<(u64, Vec<u8>)>>,
     ) -> Self {
         // For observers, use a sentinel value (AuthorityIndex::MAX) since Context requires own_index
         let own_index = own_index.unwrap_or(AuthorityIndex::MAX);
@@ -435,6 +441,7 @@ where
             transaction_certifier,
             dag_state.clone(),
             store,
+            randomness_signature_receiver,
         ));
 
         let subscriber = if N::Client::SUPPORT_STREAMING {
@@ -607,6 +614,7 @@ mod tests {
             commit_consumer,
             registry,
             0,
+            None,
             None,
         )
         .await;
@@ -1104,6 +1112,7 @@ mod tests {
             commit_consumer,
             registry,
             boot_counter,
+            None,
             None,
         )
         .await;

@@ -250,6 +250,8 @@ pub(crate) struct ExtendedSerializedBlock {
     pub(crate) block: Bytes,
     // Serialized BlockRefs that are excluded from the blocks ancestors.
     pub(crate) excluded_ancestors: Vec<Vec<u8>>,
+    // Optional randomness signatures (round, BCS-serialized signature) sent to observers
+    pub(crate) randomness_signatures: Vec<(u64, Vec<u8>)>,
 }
 
 impl From<ExtendedBlock> for ExtendedSerializedBlock {
@@ -267,6 +269,7 @@ impl From<ExtendedBlock> for ExtendedSerializedBlock {
                     }
                 })
                 .collect(),
+            randomness_signatures: vec![],
         }
     }
 }

@@ -14,7 +14,7 @@ use anemo::codegen::InboundRequestLayer;
 use anemo_tower::{auth::RequireAuthorizationLayer, inflight_limit};
 use sui_config::p2p::RandomnessConfig;
 use sui_types::{base_types::AuthorityName, committee::EpochId, crypto::RandomnessRound};
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 
 /// Randomness Service Builder.
 pub struct Builder {
@@ -22,6 +22,7 @@ pub struct Builder {
     config: Option<RandomnessConfig>,
     metrics: Option<Metrics>,
     randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
+    randomness_signature_broadcast_tx: broadcast::Sender<(RandomnessRound, Vec<u8>)>,
 }
 
 impl Builder {
@@ -29,11 +30,16 @@ impl Builder {
         name: AuthorityName,
         randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
     ) -> Self {
+        // Create broadcast channel for randomness signatures
+        // Channel capacity of 100 allows observers to lag temporarily without missing signatures
+        let (randomness_signature_broadcast_tx, _) = broadcast::channel(100);
+
         Self {
             name,
             config: None,
             metrics: None,
             randomness_tx,
+            randomness_signature_broadcast_tx,
         }
     }
 
@@ -53,6 +59,7 @@ impl Builder {
             config,
             metrics,
             randomness_tx,
+            randomness_signature_broadcast_tx,
         } = self;
         let config = config.unwrap_or_default();
         let metrics = metrics.unwrap_or_else(Metrics::disabled);
@@ -60,6 +67,7 @@ impl Builder {
         let mailbox_sender = sender.downgrade();
         let handle = Handle {
             sender: sender.clone(),
+            randomness_signature_broadcast_tx: randomness_signature_broadcast_tx.clone(),
         };
         let server = Server {
             sender: sender.downgrade(),
@@ -86,6 +94,7 @@ impl Builder {
                 allowed_peers,
                 metrics,
                 randomness_tx,
+                randomness_signature_broadcast_tx,
             },
             router,
         )
@@ -102,6 +111,7 @@ pub struct UnstartedRandomness {
     pub(super) allowed_peers: AllowedPeersUpdatable,
     pub(super) metrics: Metrics,
     pub(super) randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
+    pub(super) randomness_signature_broadcast_tx: broadcast::Sender<(RandomnessRound, Vec<u8>)>,
 }
 
 impl UnstartedRandomness {
@@ -115,6 +125,7 @@ impl UnstartedRandomness {
             allowed_peers,
             metrics,
             randomness_tx,
+            randomness_signature_broadcast_tx,
         } = self;
         (
             RandomnessEventLoop {
@@ -127,6 +138,7 @@ impl UnstartedRandomness {
                 allowed_peers_set: HashSet::new(),
                 metrics,
                 randomness_tx,
+                randomness_signature_broadcast_tx,
 
                 epoch: 0,
                 authority_info: Arc::new(HashMap::new()),

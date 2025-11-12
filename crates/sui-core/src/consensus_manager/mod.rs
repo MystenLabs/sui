@@ -281,6 +281,9 @@ impl ConsensusManager {
             None
         };
 
+        // Get randomness signature broadcast receiver if randomness is enabled
+        let randomness_signature_receiver = epoch_store.randomness_signature_broadcast_receiver().await;
+
         let authority = ConsensusAuthority::start(
             network_type,
             epoch_store.epoch_start_config().epoch_start_timestamp_ms(),
@@ -296,6 +299,7 @@ impl ConsensusManager {
             registry.clone(),
             *boot_counter,
             target_validator_index,
+            randomness_signature_receiver,
         )
         .await;
         let client = authority.transaction_client();

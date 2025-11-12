@@ -56,6 +56,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     dag_state: Arc<RwLock<DagState>>,
     store: Arc<dyn Store>,
     round_tracker: Arc<RwLock<PeerRoundTracker>>,
+    rx_randomness_signature_broadcast: Option<broadcast::Receiver<(u64, Vec<u8>)>>,
 }
 
 impl<C: CoreThreadDispatcher> AuthorityService<C> {
@@ -71,6 +72,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         transaction_certifier: TransactionCertifier,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
+        rx_randomness_signature_broadcast: Option<broadcast::Receiver<(u64, Vec<u8>)>>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(
             context.clone(),
@@ -89,6 +91,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             dag_state,
             store,
             round_tracker,
+            rx_randomness_signature_broadcast,
         }
     }
 
@@ -302,11 +305,45 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         Ok(())
     }
 
+    fn collect_available_randomness_signatures(&self) -> Vec<(u64, Vec<u8>)> {
+        let Some(rx) = &self.rx_randomness_signature_broadcast else {
+            return vec![];
+        };
+
+        let mut signatures = Vec::new();
+        let mut rx = rx.resubscribe();
+
+        const MAX_SIGNATURES_TO_COLLECT: usize = 10;
+
+        while signatures.len() < MAX_SIGNATURES_TO_COLLECT {
+            match rx.try_recv() {
+                Ok(sig) => signatures.push(sig),
+                Err(broadcast::error::TryRecvError::Empty) => break,
+                Err(broadcast::error::TryRecvError::Lagged(_)) => continue,
+                Err(broadcast::error::TryRecvError::Closed) => break,
+            }
+        }
+
+        signatures
+    }
+
     async fn handle_send_block_for_observer(
         &self,
         peer: AuthorityIndex,
         serialized_block: ExtendedSerializedBlock,
     ) -> ConsensusResult<()> {
+        // Log any received randomness signatures
+        if !serialized_block.randomness_signatures.is_empty() {
+            debug!(
+                "Observer received {} randomness signature(s) from peer {}",
+                serialized_block.randomness_signatures.len(),
+                peer
+            );
+            for (round, sig_bytes) in &serialized_block.randomness_signatures {
+                debug!("  Randomness signature for round {}: {} bytes", round, sig_bytes.len());
+            }
+        }
+
         // TODO: dedup block verifications, here and with fetched blocks.
         let signed_block: SignedBlock =
             bcs::from_bytes(&serialized_block.block).map_err(ConsensusError::MalformedBlock)?;
@@ -450,10 +487,12 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 // Sort blocks by round to maintain causal order
                 all_blocks.sort_by_key(|block| block.round());
 
-                Box::pin(stream::iter(all_blocks.into_iter().map(|block| {
+                let randomness_signatures = self.collect_available_randomness_signatures();
+                Box::pin(stream::iter(all_blocks.into_iter().map(move |block| {
                     ExtendedSerializedBlock {
                         block: block.serialized().clone(),
                         excluded_ancestors: vec![],
+                        randomness_signatures: randomness_signatures.clone(),
                     }
                 })))
             } else {
@@ -467,6 +506,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                         .map(|block| ExtendedSerializedBlock {
                             block: block.serialized().clone(),
                             excluded_ancestors: vec![],
+                        randomness_signatures: vec![],
                         }),
                 ))
             };
@@ -479,12 +519,32 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                     self.rx_accepted_blocks_broadcast.resubscribe(),
                     self.subscription_counter.clone(),
                 );
-                Box::pin(accepted_blocks_stream.map(|block| {
+                let mut rx_randomness = self.rx_randomness_signature_broadcast.as_ref().map(|rx| rx.resubscribe());
+                Box::pin(accepted_blocks_stream.map(move |block| {
                     let block_ref = block.reference();
                     info!("Broadcasting now accepted block {block_ref} to observer");
+
+                    let randomness_signatures = if let Some(rx) = &mut rx_randomness {
+                        let mut signatures = Vec::new();
+                        const MAX_SIGNATURES_TO_COLLECT: usize = 10;
+
+                        while signatures.len() < MAX_SIGNATURES_TO_COLLECT {
+                            match rx.try_recv() {
+                                Ok(sig) => signatures.push(sig),
+                                Err(broadcast::error::TryRecvError::Empty) => break,
+                                Err(broadcast::error::TryRecvError::Lagged(_)) => continue,
+                                Err(broadcast::error::TryRecvError::Closed) => break,
+                            }
+                        }
+                        signatures
+                    } else {
+                        vec![]
+                    };
+
                     ExtendedSerializedBlock {
                         block: block.serialized().clone(),
                         excluded_ancestors: vec![],
+                        randomness_signatures,
                     }
                 }))
             } else {
@@ -1197,6 +1257,7 @@ mod tests {
             transaction_certifier,
             dag_state,
             store,
+            None,
         ));
 
         // Test delaying blocks with time drift.
@@ -1212,6 +1273,7 @@ mod tests {
         let serialized = ExtendedSerializedBlock {
             block: input_block.serialized().clone(),
             excluded_ancestors: vec![],
+                        randomness_signatures: vec![],
         };
 
         tokio::spawn(async move {

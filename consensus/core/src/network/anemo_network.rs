@@ -140,6 +140,7 @@ impl NetworkClient for AnemoClient {
         let mut client = self.get_client(peer, timeout).await?;
         let request = SendBlockRequest {
             block: block.serialized().clone(),
+            randomness_signatures: None,
         };
         client
             .send_block(anemo::Request::new(request).with_timeout(timeout))
@@ -303,6 +304,7 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
         let block = ExtendedSerializedBlock {
             block,
             excluded_ancestors: vec![],
+            randomness_signatures: vec![],
         };
         self.service
             .handle_send_block(index, block)
@@ -752,6 +754,11 @@ impl ResponseHandler for MetricsResponseCallback {
 pub(crate) struct SendBlockRequest {
     // Serialized SignedBlock.
     block: Bytes,
+    // Optional randomness signatures completed recently.
+    // Vec of (RandomnessRound, BCS-serialized RandomnessSignature).
+    // This allows observers to learn about completed randomness rounds.
+    #[serde(default)]
+    randomness_signatures: Option<Vec<(u64, Vec<u8>)>>,
 }
 
 #[derive(Clone, Serialize, Deserialize, prost::Message)]

@@ -543,7 +543,7 @@ impl RandomnessManager {
                     // Create a minimal DKG output for observer
                     // Observers need DkgStatus::Successful to create randomness placeholders,
                     // but they don't have shares since they don't generate randomness
-                    let info = RandomnessManager::randomness_dkg_info_from_committee(&committee);
+                    let info = RandomnessManager::randomness_dkg_info_from_committee(committee);
                     let nodes_vec: Vec<nodes::Node<EncG>> = info
                         .iter()
                         .map(|(id, _, pk, stake)| nodes::Node::<EncG> {
@@ -850,6 +850,29 @@ impl RandomnessManager {
             network_handle: self.network_handle.clone(),
             highest_completed_round: self.highest_completed_round.clone(),
         }
+    }
+
+    /// Returns a broadcast receiver for randomness signatures.
+    /// This is used to allow consensus to receive completed randomness signatures for streaming to observers.
+    /// The RandomnessRound values are converted to u64 for consumption by the consensus layer.
+    pub fn network_handle_signature_receiver(&self) -> tokio::sync::broadcast::Receiver<(u64, Vec<u8>)> {
+        let mut rx = self.network_handle.subscribe_to_randomness_signatures();
+        let (tx, new_rx) = tokio::sync::broadcast::channel(100);
+
+        // Spawn a task to convert RandomnessRound to u64
+        tokio::spawn(async move {
+            loop {
+                match rx.recv().await {
+                    Ok((round, sig_bytes)) => {
+                        let _ = tx.send((round.0, sig_bytes));
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                }
+            }
+        });
+
+        new_rx
     }
 
     fn epoch_store(&self) -> SuiResult<Arc<AuthorityPerEpochStore>> {

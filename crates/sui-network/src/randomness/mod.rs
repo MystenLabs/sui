@@ -68,6 +68,7 @@ pub struct SendSignaturesRequest {
 #[derive(Clone, Debug)]
 pub struct Handle {
     sender: mpsc::Sender<RandomnessMessage>,
+    randomness_signature_broadcast_tx: tokio::sync::broadcast::Sender<(RandomnessRound, Vec<u8>)>,
 }
 
 impl Handle {
@@ -104,6 +105,12 @@ impl Handle {
         self.sender
             .try_send(RandomnessMessage::CompleteRound(epoch, round))
             .expect("RandomnessEventLoop mailbox should not overflow or be closed")
+    }
+
+    /// Subscribe to receive completed randomness signatures.
+    /// Returns a broadcast receiver that will receive (RandomnessRound, BCS-serialized RandomnessSignature) tuples.
+    pub fn subscribe_to_randomness_signatures(&self) -> tokio::sync::broadcast::Receiver<(RandomnessRound, Vec<u8>)> {
+        self.randomness_signature_broadcast_tx.subscribe()
     }
 
     /// Admin interface handler: generates partial signatures for the given round at the
@@ -157,6 +164,7 @@ impl Handle {
     // For testing.
     pub fn new_stub() -> Self {
         let (sender, mut receiver) = mpsc::channel(1);
+        let (randomness_signature_broadcast_tx, _) = tokio::sync::broadcast::channel(100);
         // Keep receiver open until all senders are closed.
         tokio::spawn(async move {
             loop {
@@ -169,7 +177,7 @@ impl Handle {
                 }
             }
         });
-        Self { sender }
+        Self { sender, randomness_signature_broadcast_tx }
     }
 }
 
@@ -216,6 +224,7 @@ struct RandomnessEventLoop {
     allowed_peers_set: HashSet<PeerId>,
     metrics: Metrics,
     randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
+    randomness_signature_broadcast_tx: tokio::sync::broadcast::Sender<(RandomnessRound, Vec<u8>)>,
 
     epoch: EpochId,
     authority_info: Arc<HashMap<AuthorityName, (PeerId, PartyId)>>,
@@ -769,8 +778,12 @@ impl RandomnessEventLoop {
 
         let sig_bytes = bcs::to_bytes(&sig).expect("signature serialization should not fail");
         self.randomness_tx
-            .try_send((epoch, round, sig_bytes))
+            .try_send((epoch, round, sig_bytes.clone()))
             .expect("RandomnessRoundReceiver mailbox should not overflow or be closed");
+
+        // Broadcast the completed randomness signature to observers
+        // Using `send()` instead of `try_send()` is best-effort - if no receivers are listening, it will just drop the message
+        let _ = self.randomness_signature_broadcast_tx.send((round, sig_bytes));
     }
 
     fn maybe_ignore_byzantine_peer(&mut self, epoch: EpochId, peer_id: PeerId) {

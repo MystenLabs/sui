@@ -126,6 +126,7 @@ impl NetworkClient for TonicClient {
         let mut client = self.get_client(peer, timeout).await?;
         let mut request = Request::new(SendBlockRequest {
             block: block.serialized().clone(),
+            randomness_signatures: vec![],
         });
         request.set_timeout(timeout);
         client
@@ -159,6 +160,9 @@ impl NetworkClient for TonicClient {
                     Ok(response) => Some(ExtendedSerializedBlock {
                         block: response.block,
                         excluded_ancestors: response.excluded_ancestors,
+                        randomness_signatures: response.randomness_signatures.into_iter()
+                            .map(|e| (e.round, e.signature.into()))
+                            .collect(),
                     }),
                     Err(e) => {
                         debug!("Network error received from {}: {e:?}", peer);
@@ -423,6 +427,9 @@ impl ObserverClient {
                     Ok(response) => Some(ExtendedSerializedBlock {
                         block: response.block,
                         excluded_ancestors: response.excluded_ancestors,
+                        randomness_signatures: response.randomness_signatures.into_iter()
+                            .map(|e| (e.round, e.signature.into()))
+                            .collect(),
                     }),
                     Err(e) => {
                         debug!("Network error from validator {}: {e:?}", peer);
@@ -856,6 +863,7 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         let block = ExtendedSerializedBlock {
             block,
             excluded_ancestors: vec![],
+            randomness_signatures: vec![],
         };
         self.service
             .handle_send_block(peer_index, block)
@@ -904,6 +912,13 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
                 Ok(SubscribeBlocksResponse {
                     block: block.block,
                     excluded_ancestors: block.excluded_ancestors,
+                    randomness_signatures: block.randomness_signatures
+                        .into_iter()
+                        .map(|(round, signature)| RandomnessSignatureEntry {
+                            round,
+                            signature: signature.into(),
+                        })
+                        .collect(),
                 })
             });
 
@@ -1128,6 +1143,13 @@ impl<S: NetworkService> ObserverConsensusService for ObserverServiceProxy<S> {
                 Ok(SubscribeBlocksResponse {
                     block: block.block,
                     excluded_ancestors: block.excluded_ancestors,
+                    randomness_signatures: block.randomness_signatures
+                        .into_iter()
+                        .map(|(round, signature)| RandomnessSignatureEntry {
+                            round,
+                            signature: signature.into(),
+                        })
+                        .collect(),
                 })
             });
 
@@ -1764,6 +1786,19 @@ pub(crate) struct SendBlockRequest {
     // Serialized SignedBlock.
     #[prost(bytes = "bytes", tag = "1")]
     block: Bytes,
+    // Optional randomness signatures completed recently.
+    // Vec of (RandomnessRound, BCS-serialized RandomnessSignature).
+    // This allows observers to learn about completed randomness rounds.
+    #[prost(message, repeated, tag = "2")]
+    randomness_signatures: Vec<RandomnessSignatureEntry>,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct RandomnessSignatureEntry {
+    #[prost(uint64, tag = "1")]
+    round: u64,
+    #[prost(bytes = "bytes", tag = "2")]
+    signature: Bytes,
 }
 
 #[derive(Clone, prost::Message)]
@@ -1782,6 +1817,10 @@ pub(crate) struct SubscribeBlocksResponse {
     // Serialized BlockRefs that are excluded from the blocks ancestors.
     #[prost(bytes = "vec", repeated, tag = "2")]
     excluded_ancestors: Vec<Vec<u8>>,
+    // Optional randomness signatures completed recently.
+    // This allows observers to learn about completed randomness rounds.
+    #[prost(message, repeated, tag = "3")]
+    randomness_signatures: Vec<RandomnessSignatureEntry>,
 }
 
 #[derive(Clone, prost::Message)]
