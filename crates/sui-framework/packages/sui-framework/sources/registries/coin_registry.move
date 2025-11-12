@@ -492,7 +492,14 @@ public fun borrow_legacy_metadata<T>(
     assert!(!currency.is_migrated(), EBorrowLegacyMetadata);
 
     let legacy = if (df::exists_(&currency.id, LegacyMetadataKey())) {
-        df::remove(&mut currency.id, LegacyMetadataKey())
+        let mut cm = df::remove(&mut currency.id, LegacyMetadataKey());
+        cm.update_coin_metadata(
+            currency.name,
+            currency.symbol.to_ascii(),
+            currency.description,
+            currency.icon_url.to_ascii(),
+        );
+        cm
     } else {
         currency.to_legacy_metadata(ctx)
     };
@@ -505,14 +512,23 @@ public fun borrow_legacy_metadata<T>(
 /// Note to self: Borrow requirement prevents deletion through this method.
 public fun return_borrowed_legacy_metadata<T>(
     currency: &mut Currency<T>,
-    metadata: CoinMetadata<T>,
+    mut legacy: CoinMetadata<T>,
     borrow: Borrow<T>,
     _ctx: &mut TxContext,
 ) {
     assert!(!currency.is_migrated(), EBorrowLegacyMetadata);
 
     let Borrow {} = borrow;
-    df::add(&mut currency.id, LegacyMetadataKey(), metadata);
+
+    // Always store up to date value.
+    legacy.update_coin_metadata(
+        currency.name,
+        currency.symbol.to_ascii(),
+        currency.description,
+        currency.icon_url.to_ascii(),
+    );
+
+    df::add(&mut currency.id, LegacyMetadataKey(), legacy);
 }
 
 // === Public getters  ===
