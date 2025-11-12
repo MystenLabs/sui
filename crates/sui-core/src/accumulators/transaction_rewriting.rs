@@ -3,6 +3,8 @@
 
 use std::collections::BTreeMap;
 
+use sui_execution::Executor;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::base_types::SuiAddress;
 use sui_types::coin::{
@@ -10,25 +12,45 @@ use sui_types::coin::{
 };
 use sui_types::coin_reservation::{self, CoinReservationResolverTrait};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::storage::BackingStore;
 use sui_types::transaction::{
     Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
     TransactionKind, WithdrawalTypeArg,
 };
 
 pub fn rewrite_transaction_for_coin_reservations(
+    protocol_config: &ProtocolConfig,
+    store: &dyn BackingStore,
+    executor: &dyn Executor,
     coin_reservation_resolver: &dyn CoinReservationResolverTrait,
     sender: SuiAddress,
     transaction_kind: TransactionKind,
-) -> TransactionKind {
+    epoch_id: u64,
+) -> (
+    TransactionKind,
+    usize, // new offset of the first user-supplied command
+) {
+    let Some(live_inputs) =
+        executor.find_live_inputs(protocol_config, store, &transaction_kind, epoch_id)
+    else {
+        return (transaction_kind, 0);
+    };
+
     match transaction_kind {
-        TransactionKind::ProgrammableTransaction(pt) => TransactionKind::ProgrammableTransaction(
-            rewrite_programmable_transaction_for_coin_reservations(
-                coin_reservation_resolver,
-                sender,
-                pt,
-            ),
-        ),
-        _ => transaction_kind,
+        TransactionKind::ProgrammableTransaction(pt) => {
+            let (pt, num_coin_creation_commands) =
+                rewrite_programmable_transaction_for_coin_reservations(
+                    coin_reservation_resolver,
+                    sender,
+                    pt,
+                    &live_inputs,
+                );
+            (
+                TransactionKind::ProgrammableTransaction(pt),
+                num_coin_creation_commands,
+            )
+        }
+        _ => (transaction_kind, 0),
     }
 }
 
@@ -36,7 +58,8 @@ fn rewrite_programmable_transaction_for_coin_reservations(
     coin_reservation_resolver: &dyn CoinReservationResolverTrait,
     sender: SuiAddress,
     pt: ProgrammableTransaction,
-) -> ProgrammableTransaction {
+    live_inputs: &[bool],
+) -> (ProgrammableTransaction, usize) {
     // TODO:
     // - For each input in ProgrammableTransaction
     //   - check if it is a coin reservation with `coin_reservation::is_coin_reservation_digest`
@@ -45,8 +68,14 @@ fn rewrite_programmable_transaction_for_coin_reservations(
 
     let mut builder = ProgrammableTransactionBuilder::new();
 
+    // map from original input index to the result value that replaces it
     let mut rewritten_inputs = BTreeMap::new();
     let mut ephemeral_coins = Vec::new();
+
+    // Early exit when no coin reservations are used
+    if pt.coin_reservation_obj_refs().count() == 0 {
+        return (pt, 0);
+    }
 
     for (index, input) in pt.inputs.into_iter().enumerate() {
         let index: u16 = index.try_into().expect("too many inputs");
@@ -77,7 +106,7 @@ fn rewrite_programmable_transaction_for_coin_reservations(
                         arguments: vec![withdraw_arg],
                     })));
 
-                ephemeral_coins.push((balance_type_input, coin_result));
+                ephemeral_coins.push((index, balance_type_input, coin_result));
 
                 // any command that refers to the coin reservation should now refer to the ephemeral coin
                 rewritten_inputs.insert(index, coin_result);
@@ -91,11 +120,15 @@ fn rewrite_programmable_transaction_for_coin_reservations(
     // how much we need to offset any result arguments by
     // both expects are safe because we reject any transaction where
     // num_commands + coin_reservation_obj_refs.len() * 2 > u16::MAX
-    let num_commands: u16 = builder
+    let num_coin_creation_commands: u16 = builder
         .num_commands()
         .try_into()
         .expect("too many commands");
-    let offset_result = |result: u16| result.checked_add(num_commands).expect("too many commands");
+    let offset_result = |result: u16| {
+        result
+            .checked_add(num_coin_creation_commands)
+            .expect("too many commands")
+    };
 
     let fixup_arg = |arg: Argument| match arg {
         Argument::Result(result) => Argument::Result(offset_result(result)),
@@ -160,16 +193,25 @@ fn rewrite_programmable_transaction_for_coin_reservations(
         .pure(sender)
         .expect("SuiAddress cannot fail to serialize");
 
-    // now add a command to send all ephemeral coins back to the sender
-    for (balance_type_input, coin_result) in ephemeral_coins {
-        builder.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
-            package: SUI_FRAMEWORK_PACKAGE_ID,
-            module: COIN_MODULE_NAME.to_string(),
-            function: COIN_SEND_FUNDS_FUNCTION_NAME.to_string(),
-            type_arguments: vec![balance_type_input],
-            arguments: vec![coin_result, sender_arg],
-        })));
+    // now add a command to send all ephemeral coins that are live at the end of
+    // the transaction back to the sender
+    for (original_index, balance_type_input, coin_result) in ephemeral_coins {
+        if live_inputs[original_index as usize] {
+            builder.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package: SUI_FRAMEWORK_PACKAGE_ID,
+                module: COIN_MODULE_NAME.to_string(),
+                function: COIN_SEND_FUNDS_FUNCTION_NAME.to_string(),
+                type_arguments: vec![balance_type_input],
+                arguments: vec![coin_result, sender_arg],
+            })));
+        }
     }
 
-    builder.finish()
+    let ret = builder.finish();
+
+    if !rewritten_inputs.is_empty() {
+        dbg!(&ret);
+    }
+
+    (ret, num_coin_creation_commands as usize)
 }

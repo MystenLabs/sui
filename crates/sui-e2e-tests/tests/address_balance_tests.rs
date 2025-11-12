@@ -2442,22 +2442,59 @@ async fn test_coin_reservation() {
         .unwrap();
 
         let recipient = SuiAddress::random_for_testing_only();
-        let res =
-            try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender, recipient, gas)
-                .await
-                .unwrap();
-        assert!(res.effects.unwrap().status().is_ok());
 
-        // ensure the balance arrived at the recipient
+        let gas = {
+            let res = try_coin_reservation_tx(
+                &mut test_cluster,
+                coin_reservation,
+                sender,
+                recipient,
+                gas,
+            )
+            .await
+            .unwrap();
+            assert!(res.effects.as_ref().unwrap().status().is_ok());
+            res.effects.unwrap().gas_object().reference.to_object_ref()
+        };
+
+        // do the same but split the coin first
+        let _gas = {
+            let res = try_coin_reservation_tx_with_split(
+                &mut test_cluster,
+                coin_reservation,
+                sender,
+                recipient,
+                gas,
+                Some(50),
+            )
+            .await
+            .unwrap();
+            assert!(res.effects.as_ref().unwrap().status().is_ok());
+            res.effects.unwrap().gas_object().reference.to_object_ref()
+        };
+
+        // ensure both balances arrived at the recipient
         let recipient_balance = test_cluster
             .fullnode_handle
             .rpc_client
             .get_balance(recipient, Some("0x2::sui::SUI".to_string()))
             .await
             .unwrap();
-        assert_eq!(recipient_balance.total_balance, 100);
+        assert_eq!(recipient_balance.total_balance, 150);
     }
 }
+
+// TODO: test cases for backward compat layer
+// - tx paying gas with coin reservation
+// - gas smashing transaction with no commands
+// - transaction with no commands, but non-gas coin reservations
+// - transaction using GAS_COIN CallArg
+// - add money to a fake coin
+// - deduct money from a fake coin
+// - transfer a fake coin away (with deduct/add money)
+// - transfer a fake coin to oneself (with deduct/add money)
+// - wrap a fake coin
+// - wrong ChainID
 
 async fn try_coin_reservation_tx(
     test_cluster: &mut TestCluster,
@@ -2465,6 +2502,18 @@ async fn try_coin_reservation_tx(
     sender: SuiAddress,
     recipient: SuiAddress,
     gas: ObjectRef,
+) -> anyhow::Result<SuiTransactionBlockResponse> {
+    try_coin_reservation_tx_with_split(test_cluster, coin_reservation, sender, recipient, gas, None)
+        .await
+}
+
+async fn try_coin_reservation_tx_with_split(
+    test_cluster: &mut TestCluster,
+    coin_reservation: ObjectRef,
+    sender: SuiAddress,
+    recipient: SuiAddress,
+    gas: ObjectRef,
+    split_amount: Option<u64>,
 ) -> anyhow::Result<SuiTransactionBlockResponse> {
     let rgp = test_cluster.get_reference_gas_price().await;
     // transfer the coin reservation obj ref back to a regular coin
@@ -2475,10 +2524,20 @@ async fn try_coin_reservation_tx(
         .unwrap();
 
     let recipient_arg = builder.pure(recipient).unwrap();
-    builder.command(Command::TransferObjects(vec![coin_res_arg], recipient_arg));
+
+    let xfer_arg = if let Some(split_amount) = split_amount {
+        let amount = builder.pure(split_amount).unwrap();
+        builder.command(Command::SplitCoins(coin_res_arg, vec![amount]))
+    } else {
+        coin_res_arg
+    };
+
+    builder.command(Command::TransferObjects(vec![xfer_arg], recipient_arg));
 
     let tx = TransactionKind::ProgrammableTransaction(builder.finish());
     let tx = TransactionData::new(tx, sender, gas, 10000000, rgp);
+
+    dbg!(&tx);
 
     let signed_tx = test_cluster.wallet.sign_transaction(&tx).await;
     test_cluster

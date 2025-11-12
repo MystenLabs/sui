@@ -64,6 +64,7 @@ use std::{
 };
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
+use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::coin_reservation;
@@ -2001,6 +2002,81 @@ impl AuthorityState {
         );
     }
 
+    /// Helper function that handles transaction rewriting for coin reservations and executes
+    /// the transaction to effects. Returns the execution results along with the command offset
+    /// used for rewriting failure command indices.
+    fn execute_transaction_with_rewriting(
+        &self,
+        executor: &dyn Executor,
+        store: &dyn BackingStore,
+        sender: SuiAddress,
+        kind: TransactionKind,
+        input_objects: CheckedInputObjects,
+        gas_data: GasData,
+        gas_status: SuiGasStatus,
+        signer: SuiAddress,
+        tx_digest: TransactionDigest,
+        protocol_config: &ProtocolConfig,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<(), ExecutionError>,
+    ) {
+        let (kind, user_command_offset) = rewrite_transaction_for_coin_reservations(
+            protocol_config,
+            store,
+            executor,
+            &self.coin_reservation_resolver,
+            sender,
+            kind,
+            *epoch_id,
+        );
+
+        let (inner_temp_store, gas_status, mut effects, timings, execution_error) = executor
+            .execute_transaction_to_effects(
+                store,
+                protocol_config,
+                self.metrics.limits_metrics.clone(),
+                enable_expensive_checks,
+                execution_params,
+                epoch_id,
+                epoch_timestamp_ms,
+                input_objects,
+                gas_data,
+                gas_status,
+                kind,
+                signer,
+                tx_digest,
+                &mut None,
+            );
+
+        dbg!(&user_command_offset);
+        let timings = timings.into_iter().skip(user_command_offset).collect();
+        effects.rewrite_failure_command_index(user_command_offset);
+        let execution_error = execution_error.map_err(|e| {
+            if let Some(idx) = e.command() {
+                let new_error_offset = idx.saturating_sub(user_command_offset);
+                e.with_command_index(new_error_offset)
+            } else {
+                e
+            }
+        });
+
+        (
+            inner_temp_store,
+            gas_status,
+            effects,
+            timings,
+            execution_error,
+        )
+    }
+
     /// execute_certificate validates the transaction input, and executes the certificate,
     /// returning transaction outputs.
     ///
@@ -2068,42 +2144,31 @@ impl AuthorityState {
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
-        let num_commands_original = kind.num_commands();
-        let kind = rewrite_transaction_for_coin_reservations(
-            &self.coin_reservation_resolver,
-            sender,
-            kind,
-        );
-        let command_offset = kind.num_commands().saturating_sub(num_commands_original);
-
         #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
-            epoch_store.executor().execute_transaction_to_effects(
+        let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
+            .execute_transaction_with_rewriting(
+                &**epoch_store.executor(),
                 &tracking_store,
+                sender,
+                kind,
+                input_objects,
+                gas_data,
+                gas_status,
+                signer,
+                tx_digest,
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
+                &epoch_store.epoch_start_config().epoch_data().epoch_id(),
+                epoch_store
+                    .epoch_start_config()
+                    .epoch_data()
+                    .epoch_start_timestamp(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
                 // cyclic dependency w/ sui-adapter
                 self.config
                     .expensive_safety_check_config
                     .enable_deep_per_tx_sui_conservation_check(),
                 execution_params,
-                &epoch_store.epoch_start_config().epoch_data().epoch_id(),
-                epoch_store
-                    .epoch_start_config()
-                    .epoch_data()
-                    .epoch_start_timestamp(),
-                input_objects,
-                gas_data,
-                gas_status,
-                kind,
-                signer,
-                tx_digest,
-                &mut None,
             );
-
-        let timings = timings.into_iter().skip(command_offset).collect();
-        effects.rewrite_failure_command_index(command_offset);
 
         if let Some(expected_effects_digest) = expected_effects_digest
             && effects.digest() != expected_effects_digest
@@ -2391,36 +2456,26 @@ impl AuthorityState {
             None => ExecutionOrEarlyError::Ok(()),
         };
 
-        let num_commands_original = kind.num_commands();
-        let kind = rewrite_transaction_for_coin_reservations(
-            &self.coin_reservation_resolver,
-            transaction.sender(),
-            kind,
-        );
-        let command_offset = kind.num_commands().saturating_sub(num_commands_original);
-
-        let (inner_temp_store, _, mut effects, _timings, execution_error) = executor
-            .execute_transaction_to_effects(
+        let (inner_temp_store, _, effects, _timings, execution_error) = self
+            .execute_transaction_with_rewriting(
+                executor.as_ref(),
                 self.get_backing_store().as_ref(),
+                transaction.sender(),
+                kind,
+                checked_input_objects,
+                gas_data,
+                gas_status,
+                signer,
+                transaction_digest,
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
-                expensive_checks,
-                execution_params,
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
                 epoch_store
                     .epoch_start_config()
                     .epoch_data()
                     .epoch_start_timestamp(),
-                checked_input_objects,
-                gas_data,
-                gas_status,
-                kind,
-                signer,
-                transaction_digest,
-                &mut None,
+                expensive_checks,
+                execution_params,
             );
-
-        effects.rewrite_failure_command_index(command_offset);
 
         let tx_digest = *effects.transaction_digest();
 
