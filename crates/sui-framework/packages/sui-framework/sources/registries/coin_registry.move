@@ -58,8 +58,7 @@ const ENotOneTimeWitness: vector<u8> = b"Type is expected to be OTW";
 #[error(code = 14)]
 const EBorrowLegacyMetadata: vector<u8> = b"Cannot borrow legacy metadata for migrated currency";
 #[error(code = 15)]
-const ECannotUpdateThroughBorrowing: vector<u8> =
-    b"Cannot update Currency through borrowed CoinMetadata";
+const EDuplicateBorrow: vector<u8> = b"Attempt to return duplicate borrowed CoinMetadata";
 
 /// Incremental identifier for regulated coin versions in the deny list.
 /// We start from `0` in the new system, which aligns with the state of `DenyCapV2`.
@@ -330,6 +329,22 @@ public fun finalize<T>(builder: CurrencyInitializer<T>, ctx: &mut TxContext): Me
     metadata_cap
 }
 
+#[allow(lint(share_owned))]
+/// Does the same as `finalize`, but also deletes the `MetadataCap` after finalization.
+public fun finalize_and_delete_metadata_cap<T>(
+    builder: CurrencyInitializer<T>,
+    ctx: &mut TxContext,
+) {
+    let is_otw = builder.is_otw;
+    let (mut currency, metadata_cap) = finalize_impl!(builder, ctx);
+
+    currency.delete_metadata_cap(metadata_cap);
+
+    // Either share directly (`new_currency` scenario), or transfer as TTO to `CoinRegistry`.
+    if (is_otw) transfer::transfer(currency, object::sui_coin_registry_address())
+    else transfer::share_object(currency);
+}
+
 /// The second step in the "otw" initialization of coin metadata, that takes in
 /// the `Currency<T>` that was transferred from init, and transforms it in to a
 /// "derived address" shared object.
@@ -437,7 +452,6 @@ public fun migrate_legacy_metadata<T>(
 /// the `MetadataCap` is claimed, updates can only be made through `set_*` functions.
 public fun update_from_legacy_metadata<T>(currency: &mut Currency<T>, legacy: &CoinMetadata<T>) {
     assert!(!currency.is_metadata_cap_claimed(), ECannotUpdateManagedMetadata);
-    assert!(currency.is_migrated(), ECannotUpdateThroughBorrowing);
 
     currency.name = legacy.get_name();
     currency.symbol = legacy.get_symbol().to_string();
@@ -489,20 +503,21 @@ public fun borrow_legacy_metadata<T>(
     currency: &mut Currency<T>,
     ctx: &mut TxContext,
 ): (CoinMetadata<T>, Borrow<T>) {
-    assert!(!currency.is_migrated(), EBorrowLegacyMetadata);
+    assert!(!currency.is_migrated_from_legacy(), EBorrowLegacyMetadata);
 
-    let legacy = if (df::exists_(&currency.id, LegacyMetadataKey())) {
-        let mut cm = df::remove(&mut currency.id, LegacyMetadataKey());
-        cm.update_coin_metadata(
-            currency.name,
-            currency.symbol.to_ascii(),
-            currency.description,
-            currency.icon_url.to_ascii(),
-        );
-        cm
-    } else {
-        currency.to_legacy_metadata(ctx)
+    if (!df::exists_(&currency.id, LegacyMetadataKey())) {
+        let legacy = currency.to_legacy_metadata(ctx);
+        df::add(&mut currency.id, LegacyMetadataKey(), legacy);
     };
+
+    let mut legacy = df::remove<_, CoinMetadata<T>>(&mut currency.id, LegacyMetadataKey());
+
+    legacy.update_coin_metadata(
+        currency.name,
+        currency.symbol.to_ascii(),
+        currency.description,
+        currency.icon_url.to_ascii(),
+    );
 
     (legacy, Borrow {})
 }
@@ -516,7 +531,7 @@ public fun return_borrowed_legacy_metadata<T>(
     borrow: Borrow<T>,
     _ctx: &mut TxContext,
 ) {
-    assert!(!currency.is_migrated(), EBorrowLegacyMetadata);
+    assert!(!df::exists_(&currency.id, LegacyMetadataKey()), EDuplicateBorrow);
 
     let Borrow {} = borrow;
 
@@ -628,8 +643,8 @@ public fun exists<T>(registry: &CoinRegistry): bool {
 }
 
 /// Whether the currency is migrated from legacy.
-fun is_migrated<T>(currency: &Currency<T>): bool {
-    currency.extra_fields.contains(&NEW_CURRENCY_MARKER.to_string())
+fun is_migrated_from_legacy<T>(currency: &Currency<T>): bool {
+    !currency.extra_fields.contains(&NEW_CURRENCY_MARKER.to_string())
 }
 
 /// Create a new legacy `CoinMetadata` from a `Currency`.
