@@ -1,0 +1,233 @@
+// SPDX-License-Identifier: Apache-2.0
+module 0xOmega::omega {
+
+    use std::vector;
+    use std::signer;
+    use std::string;
+    use sui::object;
+    use sui::tx_context;
+    use sui::transfer;
+    use sui::event;
+
+    //
+    // Errors
+    //
+    const E_NOT_OWNER: u64 = 1;
+    const E_NOT_ADMIN: u64 = 2;
+    const E_EMPTY_VALIDATORS: u64 = 3;
+    const E_INDEX_OOB: u64 = 4;
+
+    //
+    // Indexable (lightweight) events - must be copy + drop friendly for event::emit
+    //
+    /// Fired when validators rotate (indexed by new_leader)
+    struct ValidatorRotationEvent has copy, drop {
+        new_leader: address,
+        rotation_index: u64,
+        ts: u64,
+    }
+
+    /// Fired when a simulation is recorded (indexed by attacker/target)
+    struct SimulationSummaryEvent has copy, drop {
+        attacker: address,
+        target: address,
+        severity: u8,
+        record_id: u64,
+    }
+
+    //
+    // Heavy (storied) simulation record kept inside Omega. This is NOT emitted directly,
+    // because Move events require `copy+drop` types; instead we emit a small summary event
+    // and store the rich record on-chain for on-chain audits.
+    //
+    struct SimulationRecord has store {
+        id: u64,
+        attacker: address,
+        target: address,
+        severity: u8,
+        description: string::String,
+        ts: u64,
+    }
+
+    //
+    // The Omega shared object
+    //
+    public struct Omega has key {
+        id: object::UID,
+        owner: address,
+        admins: vector<address>,
+        validators: vector<address>,
+        rotation_index: u64,
+        last_rotation_ts: u64,
+        sim_counter: u64,
+        simulations: vector<SimulationRecord>,
+    }
+
+    //
+    // Helpers
+    //
+    fun is_owner(obj: &Omega, addr: address): bool {
+        obj.owner == addr
+    }
+
+    fun is_admin(obj: &Omega, addr: address): bool {
+        let admins_ref = &obj.admins;
+        let len = vector::length(admins_ref);
+        let mut i = 0;
+        while (i < len) {
+            if (*vector::borrow(admins_ref, i) == addr) {
+                return true;
+            };
+            i = i + 1;
+        };
+        false
+    }
+
+    //
+    // Initialization (create & share Omega as a shared object)
+    // - Anyone can call `init` once (typical pattern: called by deployer / init tx).
+    //
+    public entry fun init(owner_signer: &signer, ctx: &mut tx_context::TxContext) {
+        let owner_addr = signer::address_of(owner_signer);
+
+        let omega = Omega {
+            id: object::new(ctx),
+            owner: owner_addr,
+            admins: vector::empty<address>(),
+            validators: vector::empty<address>(),
+            rotation_index: 0u64,
+            last_rotation_ts: 0u64,
+            sim_counter: 0u64,
+            simulations: vector::empty<SimulationRecord>(),
+        };
+
+        // Make Omega a shared object so multiple actors can call into it.
+        transfer::share_object(omega);
+    }
+
+    //
+    // Admin management (owner-only)
+    //
+    public entry fun add_admin(omega: &mut Omega, caller: &signer, admin: address) {
+        let caller_addr = signer::address_of(caller);
+        assert!(is_owner(omega, caller_addr), E_NOT_OWNER);
+        vector::push_back(&mut omega.admins, admin);
+    }
+
+    public entry fun remove_admin(omega: &mut Omega, caller: &signer, index: u64) {
+        let caller_addr = signer::address_of(caller);
+        assert!(is_owner(omega, caller_addr), E_NOT_OWNER);
+        let len = vector::length(&omega.admins);
+        assert!(index < len, E_INDEX_OOB);
+
+        // simple remove by swapping last into index
+        let last = vector::pop_back(&mut omega.admins);
+        if (index < vector::length(&omega.admins)) {
+            // we popped one element already; place `last` into `index`
+            *vector::borrow_mut(&mut omega.admins, index) = last;
+        } // if it was last index, nothing else required
+    }
+
+    //
+    // Validator registry (admin-only)
+    //
+    public entry fun register_validator(omega: &mut Omega, caller: &signer, validator: address) {
+        let caller_addr = signer::address_of(caller);
+        assert!(is_admin(omega, caller_addr), E_NOT_ADMIN);
+        vector::push_back(&mut omega.validators, validator);
+    }
+
+    public entry fun remove_validator(omega: &mut Omega, caller: &signer, index: u64) {
+        let caller_addr = signer::address_of(caller);
+        assert!(is_admin(omega, caller_addr), E_NOT_ADMIN);
+        let len = vector::length(&omega.validators);
+        assert!(index < len, E_INDEX_OOB);
+        let last = vector::pop_back(&mut omega.validators);
+        if (index < vector::length(&omega.validators)) {
+            *vector::borrow_mut(&mut omega.validators, index) = last;
+        }
+    }
+
+    //
+    // Simple rotation primitive: rotate leader pointer (admin-only)
+    // - emits ValidatorRotationEvent with the new leader.
+    //
+    public entry fun rotate_validators(omega: &mut Omega, caller: &signer, ts: u64) {
+        let caller_addr = signer::address_of(caller);
+        assert!(is_admin(omega, caller_addr), E_NOT_ADMIN);
+        let len = vector::length(&omega.validators);
+        assert!(len > 0, E_EMPTY_VALIDATORS);
+
+        // advance rotation index
+        omega.rotation_index = (omega.rotation_index + 1) % (len as u64);
+
+        // new leader index
+        let leader_index = (omega.rotation_index % (len as u64)) as u64;
+        let leader_addr = *vector::borrow(&omega.validators, (leader_index) as u64);
+
+        // update timestamp
+        omega.last_rotation_ts = ts;
+
+        // emit a lightweight event for off-chain watchers
+        let ev = ValidatorRotationEvent {
+            new_leader: leader_addr,
+            rotation_index: omega.rotation_index,
+            ts,
+        };
+        event::emit(ev);
+    }
+
+    //
+    // Run a "red-team" simulation (admin-only)
+    // - This stores a rich SimulationRecord inside Omega (for audits).
+    // - It emits a small SimulationSummaryEvent to make the activity indexable by off-chain indexers.
+    //
+    public entry fun run_simulation(
+        omega: &mut Omega,
+        caller: &signer,
+        attacker: address,
+        target: address,
+        severity: u8,
+        description: string::String,
+        ts: u64
+    ) {
+        let caller_addr = signer::address_of(caller);
+        assert!(is_admin(omega, caller_addr), E_NOT_ADMIN);
+
+        // create record id and record
+        let rec_id = omega.sim_counter;
+        omega.sim_counter = omega.sim_counter + 1;
+
+        let record = SimulationRecord {
+            id: rec_id,
+            attacker,
+            target,
+            severity,
+            description,
+            ts,
+        };
+
+        vector::push_back(&mut omega.simulations, record);
+
+        // Emit a compact summary event for indexers & watchers
+        let ev = SimulationSummaryEvent {
+            attacker,
+            target,
+            severity,
+            record_id: rec_id,
+        };
+        event::emit(ev);
+    }
+
+    //
+    // Read helpers (immutable functions)
+    //
+    public fun get_validator_count(omega: &Omega): u64 {
+        vector::length(&omega.validators) as u64
+    }
+
+    public fun get_simulation_count(omega: &Omega): u64 {
+        omega.sim_counter
+    }
+
+}
