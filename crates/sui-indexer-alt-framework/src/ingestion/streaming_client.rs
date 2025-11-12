@@ -109,6 +109,31 @@ pub mod test_utils {
                 checkpoints: Arc::new(Mutex::new(checkpoint_range.into_iter().map(Ok).collect())),
             }
         }
+
+        /// Insert an error at the back of the queue.
+        pub fn insert_error(&mut self) {
+            self.checkpoints
+                .lock()
+                .unwrap()
+                .push(Err(Error::StreamingError(anyhow::anyhow!(
+                    "Mock streaming error"
+                ))));
+        }
+
+        /// Insert a checkpoint at the back of the queue.
+        pub fn insert_checkpoint(&mut self, sequence_number: u64) {
+            self.insert_checkpoint_range([sequence_number])
+        }
+
+        pub fn insert_checkpoint_range<I>(&mut self, checkpoint_range: I)
+        where
+            I: IntoIterator<Item = u64>,
+        {
+            let mut checkpoints = self.checkpoints.lock().unwrap();
+            for sequence_number in checkpoint_range {
+                checkpoints.push(Ok(sequence_number));
+            }
+        }
     }
 
     #[async_trait]
