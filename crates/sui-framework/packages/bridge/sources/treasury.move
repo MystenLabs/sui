@@ -130,7 +130,7 @@ public(package) fun register_foreign_token_v2<T>(
     currency: &Currency<T>,
 ) {
     // Make sure TreasuryCap has not been minted before.
-    assert!(coin::total_supply(&tc) == 0, ETokenSupplyNonZero);
+    assert!(&tc.total_supply() == 0, ETokenSupplyNonZero);
     let type_name = type_name::with_defining_ids<T>();
     let address_bytes = hex::decode(
         ascii::into_bytes(type_name::address_string(&type_name)),
@@ -138,10 +138,7 @@ public(package) fun register_foreign_token_v2<T>(
     let coin_address = address::from_bytes(address_bytes);
     // Make sure upgrade cap is for the Coin package
     // FIXME: add test
-    assert!(
-        object::id_to_address(&package::upgrade_package(&uc)) == coin_address,
-        EInvalidUpgradeCap,
-    );
+    assert!(&uc.upgrade_package().id_to_address() == coin_address, EInvalidUpgradeCap);
     let registration = ForeignTokenRegistration {
         type_name,
         uc,

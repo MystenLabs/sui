@@ -15,6 +15,7 @@ title: Module `bridge::treasury`
 -  [Function `decimal_multiplier`](#bridge_treasury_decimal_multiplier)
 -  [Function `notional_value`](#bridge_treasury_notional_value)
 -  [Function `register_foreign_token`](#bridge_treasury_register_foreign_token)
+-  [Function `register_foreign_token_v2`](#bridge_treasury_register_foreign_token_v2)
 -  [Function `add_new_token`](#bridge_treasury_add_new_token)
 -  [Function `create`](#bridge_treasury_create)
 -  [Function `burn`](#bridge_treasury_burn)
@@ -39,8 +40,10 @@ title: Module `bridge::treasury`
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
 <b>use</b> <a href="../sui/bcs.md#sui_bcs">sui::bcs</a>;
 <b>use</b> <a href="../sui/coin.md#sui_coin">sui::coin</a>;
+<b>use</b> <a href="../sui/coin_registry.md#sui_coin_registry">sui::coin_registry</a>;
 <b>use</b> <a href="../sui/config.md#sui_config">sui::config</a>;
 <b>use</b> <a href="../sui/deny_list.md#sui_deny_list">sui::deny_list</a>;
+<b>use</b> <a href="../sui/derived_object.md#sui_derived_object">sui::derived_object</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
@@ -433,7 +436,9 @@ title: Module `bridge::treasury`
     // Make sure TreasuryCap <b>has</b> not been minted before.
     <b>assert</b>!(coin::total_supply(&tc) == 0, <a href="../bridge/treasury.md#bridge_treasury_ETokenSupplyNonZero">ETokenSupplyNonZero</a>);
     <b>let</b> type_name = type_name::with_defining_ids&lt;T&gt;();
-    <b>let</b> address_bytes = hex::decode(ascii::into_bytes(type_name::address_string(&type_name)));
+    <b>let</b> address_bytes = hex::decode(
+        ascii::into_bytes(type_name::address_string(&type_name)),
+    );
     <b>let</b> coin_address = address::from_bytes(address_bytes);
     // Make sure upgrade cap is <b>for</b> the Coin package
     // FIXME: add test
@@ -451,6 +456,56 @@ title: Module `bridge::treasury`
     event::emit(<a href="../bridge/treasury.md#bridge_treasury_TokenRegistrationEvent">TokenRegistrationEvent</a> {
         type_name,
         decimal: coin::get_decimals(metadata),
+        native_token: <b>false</b>,
+    });
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="bridge_treasury_register_foreign_token_v2"></a>
+
+## Function `register_foreign_token_v2`
+
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../bridge/treasury.md#bridge_treasury_register_foreign_token_v2">register_foreign_token_v2</a>&lt;T&gt;(self: &<b>mut</b> <a href="../bridge/treasury.md#bridge_treasury_BridgeTreasury">bridge::treasury::BridgeTreasury</a>, tc: <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, uc: <a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, currency: &<a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../bridge/treasury.md#bridge_treasury_register_foreign_token_v2">register_foreign_token_v2</a>&lt;T&gt;(
+    self: &<b>mut</b> <a href="../bridge/treasury.md#bridge_treasury_BridgeTreasury">BridgeTreasury</a>,
+    tc: TreasuryCap&lt;T&gt;,
+    uc: UpgradeCap,
+    currency: &Currency&lt;T&gt;,
+) {
+    // Make sure TreasuryCap <b>has</b> not been minted before.
+    <b>assert</b>!(&tc.total_supply() == 0, <a href="../bridge/treasury.md#bridge_treasury_ETokenSupplyNonZero">ETokenSupplyNonZero</a>);
+    <b>let</b> type_name = type_name::with_defining_ids&lt;T&gt;();
+    <b>let</b> address_bytes = hex::decode(
+        ascii::into_bytes(type_name::address_string(&type_name)),
+    );
+    <b>let</b> coin_address = address::from_bytes(address_bytes);
+    // Make sure upgrade cap is <b>for</b> the Coin package
+    // FIXME: add test
+    <b>assert</b>!(&uc.upgrade_package().id_to_address() == coin_address, <a href="../bridge/treasury.md#bridge_treasury_EInvalidUpgradeCap">EInvalidUpgradeCap</a>);
+    <b>let</b> registration = <a href="../bridge/treasury.md#bridge_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a> {
+        type_name,
+        uc,
+        decimal: currency.decimals(),
+    };
+    self.waiting_room.add(type_name::into_string(type_name), registration);
+    self.treasuries.add(type_name, tc);
+    event::emit(<a href="../bridge/treasury.md#bridge_treasury_TokenRegistrationEvent">TokenRegistrationEvent</a> {
+        type_name,
+        decimal: currency.decimals(),
         native_token: <b>false</b>,
     });
 }
