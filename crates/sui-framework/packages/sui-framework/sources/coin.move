@@ -531,6 +531,24 @@ public(package) fun allow_global_pause<T>(cap: &DenyCapV2<T>): bool {
     cap.allow_global_pause
 }
 
+public(package) fun new_coin_metadata<T>(
+    decimals: u8,
+    name: string::String,
+    symbol: ascii::String,
+    description: string::String,
+    icon_url: ascii::String,
+    ctx: &mut TxContext,
+): CoinMetadata<T> {
+    CoinMetadata {
+        id: object::new(ctx),
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url: option::some(url::new_unsafe(icon_url)),
+    }
+}
+
 // === Test-only code ===
 
 #[test_only]
