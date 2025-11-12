@@ -186,7 +186,7 @@ impl<S: Store> Indexer<S> {
 
     /// The ingestion client used by the indexer to fetch checkpoints.
     pub fn ingestion_client(&self) -> &IngestionClient {
-        self.ingestion_service.client()
+        self.ingestion_service.ingestion_client()
     }
 
     /// The indexer's metrics.
