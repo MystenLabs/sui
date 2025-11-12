@@ -63,8 +63,31 @@ jobs:
         uses: './.github/actions/diffs'
         id: diff
 
-  test:
+  rustfmt:
     needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    runs-on: [ ubuntu-latest ]
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - run: rustup component add rustfmt
+      - run: cargo fmt --check
+
+  clippy:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    runs-on: [ ubuntu-ghcloud ]
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - run: rustup component add clippy
+      - name: cargo clippy
+        run: cargo xclippy -D warnings
+
+  test:
+    needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
     env:
