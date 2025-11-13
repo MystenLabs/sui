@@ -1,45 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::parquet::ParquetBatch;
-use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
-use crate::{ParquetSchema, Pipeline};
+use std::collections::{BTreeMap, BTreeSet};
+
 use anyhow::{Result, anyhow};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::{StructTag, TypeTag};
-use serde::Serialize;
-use std::collections::{BTreeMap, BTreeSet};
 use sui_package_resolver::{PackageStore, Resolver};
-use sui_types::base_types::{EpochId, ObjectID};
-use sui_types::effects::TransactionEffects;
-use sui_types::effects::TransactionEffectsAPI;
+use sui_types::base_types::ObjectID;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::object::{Object, Owner};
-use sui_types::transaction::TransactionData;
-use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::{TransactionData, TransactionDataAPI};
 
-/// Trait for entry types that provide analytics metadata
-pub trait AnalyticsMetadata {
-    const FILE_TYPE: Pipeline;
+use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
 
-    fn get_epoch(&self) -> EpochId;
-    fn get_checkpoint_sequence_number(&self) -> u64;
-}
-
-/// Generic batch struct that works for all entry types
-pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + ParquetSchema> {
-    pub inner: ParquetBatch<T>,
-}
-
-impl<T: AnalyticsMetadata + Serialize + ParquetSchema + 'static> Default for AnalyticsBatch<T> {
-    fn default() -> Self {
-        Self {
-            inner: ParquetBatch::new(T::FILE_TYPE.dir_prefix().as_ref().to_string(), 0)
-                .expect("Failed to create ParquetBatch"),
-        }
-    }
-}
-
+pub mod analytics_handler;
 pub mod checkpoint_handler;
 pub mod df_handler;
 pub mod event_handler;
@@ -51,6 +27,9 @@ pub mod transaction_bcs_handler;
 pub mod transaction_handler;
 pub mod transaction_objects_handler;
 pub mod wrapped_object_handler;
+
+pub use analytics_handler::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata};
+
 const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
     "0x1::string::String",
     "0x1::ascii::String",
@@ -58,53 +37,22 @@ const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
     "0x2::object::ID",
 ];
 
-fn initial_shared_version(object: &Object) -> Option<u64> {
-    match object.owner {
-        Owner::Shared {
-            initial_shared_version,
-        } => Some(initial_shared_version.value()),
-        _ => None,
-    }
+#[derive(Debug, Default)]
+pub struct WrappedStruct {
+    object_id: Option<ObjectID>,
+    struct_tag: Option<StructTag>,
 }
 
-fn get_owner_type(object: &Object) -> OwnerType {
-    match object.owner {
-        Owner::AddressOwner(_) => OwnerType::AddressOwner,
-        Owner::ObjectOwner(_) => OwnerType::ObjectOwner,
-        Owner::Shared { .. } => OwnerType::Shared,
-        Owner::Immutable => OwnerType::Immutable,
-        Owner::ConsensusAddressOwner { .. } => OwnerType::AddressOwner,
-    }
-}
-
-fn get_owner_address(object: &Object) -> Option<String> {
-    match object.owner {
-        Owner::AddressOwner(address) => Some(address.to_string()),
-        Owner::ObjectOwner(address) => Some(address.to_string()),
-        Owner::Shared { .. } => None,
-        Owner::Immutable => None,
-        Owner::ConsensusAddressOwner { owner, .. } => Some(owner.to_string()),
-    }
-}
-
-fn get_is_consensus(object: &Object) -> bool {
-    match object.owner {
-        Owner::AddressOwner(_) => false,
-        Owner::ObjectOwner(_) => false,
-        Owner::Shared { .. } => true,
-        Owner::Immutable => false,
-        Owner::ConsensusAddressOwner { .. } => true,
-    }
-}
-
-// Helper class to track input object kind.
-// Build sets of object ids for input, shared input and gas coin objects as defined
-// in the transaction data.
-// Input objects include coins and shared.
 struct InputObjectTracker {
     shared: BTreeSet<ObjectID>,
     coins: BTreeSet<ObjectID>,
     input: BTreeSet<ObjectID>,
+}
+
+struct ObjectStatusTracker {
+    created: BTreeSet<ObjectID>,
+    mutated: BTreeSet<ObjectID>,
+    deleted: BTreeSet<ObjectID>,
 }
 
 impl InputObjectTracker {
@@ -139,15 +87,6 @@ impl InputObjectTracker {
             None
         }
     }
-}
-
-// Helper class to track object status.
-// Build sets of object ids for created, mutated and deleted objects as reported
-// in the transaction effects.
-struct ObjectStatusTracker {
-    created: BTreeSet<ObjectID>,
-    mutated: BTreeSet<ObjectID>,
-    deleted: BTreeSet<ObjectID>,
 }
 
 impl ObjectStatusTracker {
@@ -188,6 +127,45 @@ impl ObjectStatusTracker {
     }
 }
 
+fn initial_shared_version(object: &Object) -> Option<u64> {
+    match object.owner {
+        Owner::Shared {
+            initial_shared_version,
+        } => Some(initial_shared_version.value()),
+        _ => None,
+    }
+}
+
+fn get_owner_type(object: &Object) -> OwnerType {
+    match object.owner {
+        Owner::AddressOwner(_) => OwnerType::AddressOwner,
+        Owner::ObjectOwner(_) => OwnerType::ObjectOwner,
+        Owner::Shared { .. } => OwnerType::Shared,
+        Owner::Immutable => OwnerType::Immutable,
+        Owner::ConsensusAddressOwner { .. } => OwnerType::AddressOwner,
+    }
+}
+
+fn get_owner_address(object: &Object) -> Option<String> {
+    match object.owner {
+        Owner::AddressOwner(address) => Some(address.to_string()),
+        Owner::ObjectOwner(address) => Some(address.to_string()),
+        Owner::Shared { .. } => None,
+        Owner::Immutable => None,
+        Owner::ConsensusAddressOwner { owner, .. } => Some(owner.to_string()),
+    }
+}
+
+fn get_is_consensus(object: &Object) -> bool {
+    match object.owner {
+        Owner::AddressOwner(_) => false,
+        Owner::ObjectOwner(_) => false,
+        Owner::Shared { .. } => true,
+        Owner::Immutable => false,
+        Owner::ConsensusAddressOwner { .. } => true,
+    }
+}
+
 async fn get_move_struct<T: PackageStore>(
     struct_tag: &StructTag,
     contents: &[u8],
@@ -203,12 +181,6 @@ async fn get_move_struct<T: PackageStore>(
         _ => Err(anyhow!("Object is not a move struct")),
     }?;
     Ok(move_struct)
-}
-
-#[derive(Debug, Default)]
-pub struct WrappedStruct {
-    object_id: Option<ObjectID>,
-    struct_tag: Option<StructTag>,
 }
 
 fn parse_struct(

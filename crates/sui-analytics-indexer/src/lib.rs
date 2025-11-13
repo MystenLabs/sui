@@ -3,12 +3,12 @@
 
 use std::ops::Range;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
-use once_cell::sync::Lazy;
 use package_store::PackageCache;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
@@ -44,135 +44,7 @@ pub mod parquet;
 pub mod tables;
 
 // Re-export handler traits and generic batch struct for public API
-pub use handlers::{AnalyticsBatch, AnalyticsMetadata};
-
-use async_trait::async_trait;
-use std::marker::PhantomData;
-use std::sync::Arc;
-
-/// Generic wrapper that implements Handler for any Processor with analytics batching
-pub struct AnalyticsHandler<P, B> {
-    processor: P,
-    config: PipelineConfig,
-    _batch: PhantomData<B>,
-}
-
-impl<P, B> AnalyticsHandler<P, B> {
-    pub fn new(processor: P, config: PipelineConfig) -> Self {
-        Self {
-            processor,
-            config,
-            _batch: PhantomData,
-        }
-    }
-}
-
-// Implement Processor by delegating to inner processor
-#[async_trait]
-impl<P, B> sui_indexer_alt_framework::pipeline::Processor for AnalyticsHandler<P, B>
-where
-    P: sui_indexer_alt_framework::pipeline::Processor + Send + Sync,
-    P::Value: Send + Sync,
-    B: Send + Sync + 'static,
-{
-    const NAME: &'static str = P::NAME;
-    const FANOUT: usize = P::FANOUT;
-    type Value = P::Value;
-
-    async fn process(
-        &self,
-        checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
-    ) -> Result<Vec<Self::Value>> {
-        self.processor.process(checkpoint).await
-    }
-}
-
-// Implement Handler with shared batching logic
-#[async_trait]
-impl<P> sui_indexer_alt_framework::pipeline::concurrent::Handler
-    for AnalyticsHandler<P, AnalyticsBatch<P::Value>>
-where
-    P: sui_indexer_alt_framework::pipeline::Processor + Send + Sync,
-    P::Value: AnalyticsMetadata + Serialize + ParquetSchema + Send + Sync,
-{
-    type Store = sui_indexer_alt_object_store::ObjectStore;
-    type Batch = AnalyticsBatch<P::Value>;
-
-    fn min_eager_rows(&self) -> usize {
-        self.config.max_row_count
-    }
-
-    fn max_pending_rows(&self) -> usize {
-        self.config.max_row_count * 5
-    }
-
-    fn batch(
-        &self,
-        batch: &mut Self::Batch,
-        values: &mut std::vec::IntoIter<Self::Value>,
-    ) -> sui_indexer_alt_framework::pipeline::concurrent::BatchStatus {
-        let Some(first) = values.next() else {
-            return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending;
-        };
-
-        let epoch = first.get_epoch();
-        let checkpoint = first.get_checkpoint_sequence_number();
-
-        batch.inner.set_epoch(epoch);
-        batch.inner.update_last_checkpoint(checkpoint);
-
-        if let Err(e) = batch
-            .inner
-            .write_rows(std::iter::once(first).chain(values.by_ref()))
-        {
-            tracing::error!("Failed to write rows to ParquetBatch: {}", e);
-            return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending;
-        }
-
-        sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending
-    }
-
-    async fn commit<'a>(
-        &self,
-        batch: &Self::Batch,
-        conn: &mut <Self::Store as sui_indexer_alt_framework::store::Store>::Connection<'a>,
-    ) -> Result<usize> {
-        let Some(file_path) = batch.inner.current_file_path() else {
-            return Ok(0);
-        };
-
-        let row_count = batch.inner.row_count()?;
-        let file_bytes = tokio::fs::read(file_path).await?;
-        let object_path = batch.inner.object_store_path();
-
-        conn.object_store()
-            .put(&object_path, file_bytes.into())
-            .await?;
-
-        Ok(row_count)
-    }
-}
-
-const TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME: &str = "TRANSACTION_CONCURRENCY_LIMIT";
-const DEFAULT_TRANSACTION_CONCURRENCY_LIMIT: usize = 64;
-pub static TRANSACTION_CONCURRENCY_LIMIT: Lazy<usize> = Lazy::new(|| {
-    let async_transactions_opt = std::env::var(TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME)
-        .ok()
-        .and_then(|s| s.parse().ok());
-    if let Some(async_transactions) = async_transactions_opt {
-        info!(
-            "Using custom value for '{}' max checkpoints in progress: {}",
-            TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME, async_transactions
-        );
-        async_transactions
-    } else {
-        info!(
-            "Using default value for '{}' -- max checkpoints in progress: {}",
-            TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME, DEFAULT_TRANSACTION_CONCURRENCY_LIMIT
-        );
-        DEFAULT_TRANSACTION_CONCURRENCY_LIMIT
-    }
-});
+pub use handlers::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata};
 
 fn default_client_metric_host() -> String {
     "127.0.0.1".to_string()
@@ -613,23 +485,6 @@ pub mod indexer_alt {
     use sui_indexer_alt_framework::{Indexer, ingestion::IngestionConfig};
     use sui_indexer_alt_object_store::ObjectStore;
     use tokio_util::sync::CancellationToken;
-
-    // Import all the handlers and processors
-    use crate::handlers::checkpoint_handler::{CheckpointHandler, CheckpointProcessor};
-    use crate::handlers::df_handler::{DynamicFieldHandler, DynamicFieldProcessor};
-    use crate::handlers::event_handler::{EventHandler, EventProcessor};
-    use crate::handlers::move_call_handler::{MoveCallHandler, MoveCallProcessor};
-    use crate::handlers::object_handler::{ObjectHandler, ObjectProcessor};
-    use crate::handlers::package_bcs_handler::{PackageBCSHandler, PackageBCSProcessor};
-    use crate::handlers::package_handler::{PackageHandler, PackageProcessor};
-    use crate::handlers::transaction_bcs_handler::{
-        TransactionBCSHandler, TransactionBCSProcessor,
-    };
-    use crate::handlers::transaction_handler::{TransactionHandler, TransactionProcessor};
-    use crate::handlers::transaction_objects_handler::{
-        TransactionObjectsHandler, TransactionObjectsProcessor,
-    };
-    use crate::handlers::wrapped_object_handler::{WrappedObjectHandler, WrappedObjectProcessor};
 
     pub struct AnalyticsIndexerConfig {
         pub job_config: JobConfig,
