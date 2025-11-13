@@ -26,6 +26,8 @@ pub use sui_field_count::FieldCount;
 pub use sui_indexer_alt_framework_store_traits as store;
 pub use sui_types as types;
 
+use crate::metrics::IngestionMetrics;
+
 #[cfg(feature = "cluster")]
 pub mod cluster;
 pub mod ingestion;
@@ -155,7 +157,8 @@ impl<S: Store> Indexer<S> {
         let ingestion_service = IngestionService::new(
             client_args,
             ingestion_config,
-            metrics.clone(),
+            metrics_prefix,
+            registry,
             cancel.clone(),
         )?;
 
@@ -190,8 +193,13 @@ impl<S: Store> Indexer<S> {
     }
 
     /// The indexer's metrics.
-    pub fn metrics(&self) -> &Arc<IndexerMetrics> {
+    pub fn indexer_metrics(&self) -> &Arc<IndexerMetrics> {
         &self.metrics
+    }
+
+    /// The ingestion service's metrics.
+    pub fn ingestion_metrics(&self) -> &Arc<IngestionMetrics> {
+        self.ingestion_service.metrics()
     }
 
     /// The pipelines that this indexer will run.
@@ -887,16 +895,17 @@ mod tests {
             .sequential_pipeline::<MockHandler>(MockHandler, SequentialConfig::default())
             .await;
 
-        let metrics = indexer.metrics().clone();
+        let ingestion_metrics = indexer.ingestion_metrics().clone();
+        let indexer_metrics = indexer.indexer_metrics().clone();
 
         indexer.run().await.unwrap().await.unwrap();
 
         assert_eq!(
-            metrics.total_ingested_checkpoints.get(),
+            ingestion_metrics.total_ingested_checkpoints.get(),
             num_ingested_checkpoints
         );
         assert_eq!(
-            metrics
+            indexer_metrics
                 .total_watermarks_out_of_order
                 .get_metric_with_label_values(&["test_processor"])
                 .unwrap()
@@ -968,16 +977,17 @@ mod tests {
             .concurrent_pipeline::<MockHandler>(MockHandler, ConcurrentConfig::default())
             .await;
 
-        let metrics = indexer.metrics().clone();
+        let ingestion_metrics = indexer.ingestion_metrics().clone();
+        let indexer_metrics = indexer.indexer_metrics().clone();
 
         indexer.run().await.unwrap().await.unwrap();
 
         assert_eq!(
-            metrics.total_ingested_checkpoints.get(),
+            ingestion_metrics.total_ingested_checkpoints.get(),
             num_ingested_checkpoints
         );
         assert_eq!(
-            metrics
+            indexer_metrics
                 .total_watermarks_out_of_order
                 .get_metric_with_label_values(&["test_processor"])
                 .unwrap()

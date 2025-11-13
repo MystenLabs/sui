@@ -14,7 +14,7 @@ use tracing::{debug, error, info, warn};
 use super::{IngestionConfig, ingestion_client::IngestionClient};
 use crate::{
     ingestion::{error::Error, streaming_client::CheckpointStreamingClient},
-    metrics::IndexerMetrics,
+    metrics::IngestionMetrics,
     task::TrySpawnStreamExt,
     types::full_checkpoint_content::Checkpoint,
 };
@@ -42,7 +42,7 @@ pub(super) fn broadcaster<R, S>(
     client: IngestionClient,
     mut commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
-    metrics: Arc<IndexerMetrics>,
+    metrics: Arc<IngestionMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()>
 where
@@ -262,7 +262,7 @@ async fn setup_streaming_task<S>(
     config: &IngestionConfig,
     subscribers: &Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
     ingest_hi_watch_rx: &watch::Receiver<Option<u64>>,
-    metrics: &Arc<IndexerMetrics>,
+    metrics: &Arc<IngestionMetrics>,
     cancel: &CancellationToken,
 ) -> (JoinHandle<u64>, u64)
 where
@@ -343,7 +343,7 @@ async fn stream_and_broadcast_range(
     mut stream: impl Stream<Item = Result<Checkpoint, Error>> + std::marker::Unpin,
     subscribers: Arc<Vec<mpsc::Sender<Arc<Checkpoint>>>>,
     mut ingest_hi_rx: watch::Receiver<Option<u64>>,
-    metrics: Arc<IndexerMetrics>,
+    metrics: Arc<IngestionMetrics>,
     cancel: CancellationToken,
 ) -> u64 {
     while lo < hi {
@@ -435,10 +435,10 @@ mod tests {
     use crate::ingestion::ingestion_client::FetchData;
     use crate::ingestion::streaming_client::test_utils::MockStreamingClient;
     use crate::ingestion::{IngestionConfig, test_utils::test_checkpoint_data};
-    use crate::metrics::tests::test_metrics;
+    use crate::metrics::tests::test_ingestion_metrics;
 
     /// Create a mock IngestionClient for tests
-    fn mock_client(metrics: Arc<IndexerMetrics>) -> IngestionClient {
+    fn mock_client(metrics: Arc<IngestionMetrics>) -> IngestionClient {
         use crate::ingestion::ingestion_client::{FetchError, IngestionClientTrait};
         use async_trait::async_trait;
 
@@ -514,7 +514,7 @@ mod tests {
         let cancel = CancellationToken::new();
 
         let cps = 0..5;
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster::<_, MockStreamingClient>(
             cps,
             None,
@@ -542,7 +542,7 @@ mod tests {
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
         let cancel = CancellationToken::new();
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster::<_, MockStreamingClient>(
             0..,
             None,
@@ -570,7 +570,7 @@ mod tests {
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(1);
         let cancel = CancellationToken::new();
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster::<_, MockStreamingClient>(
             0..,
             None,
@@ -601,7 +601,7 @@ mod tests {
         let mut config = test_config();
         config.checkpoint_buffer_size = 0; // No buffer
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster::<_, MockStreamingClient>(
             0..,
             Some(4),
@@ -635,7 +635,7 @@ mod tests {
         let mut config = test_config();
         config.checkpoint_buffer_size = 2; // Buffer of 2
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster::<_, MockStreamingClient>(
             0..,
             Some(2),
@@ -669,7 +669,7 @@ mod tests {
         let mut config = test_config();
         config.checkpoint_buffer_size = 0; // No buffer
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster::<_, MockStreamingClient>(
             0..,
             Some(2),
@@ -716,7 +716,7 @@ mod tests {
         config.checkpoint_buffer_size = 0; // No buffer
 
         let cps = 0..10;
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster::<_, MockStreamingClient>(
             cps,
             Some(2),
@@ -769,7 +769,7 @@ mod tests {
         let (subscriber_tx2, mut subscriber_rx2) = mpsc::channel(1);
         let cancel = CancellationToken::new();
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster::<_, MockStreamingClient>(
             0..,
             None,
@@ -811,7 +811,7 @@ mod tests {
         let mut config = test_config();
         config.checkpoint_buffer_size = 0; // No buffer
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster::<_, MockStreamingClient>(
             1000..1010,
             Some(1005),
@@ -858,7 +858,7 @@ mod tests {
         // Create a mock streaming service with checkpoints 0..5
         let streaming_client = MockStreamingClient::new(0..5);
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster(
             0..5, // Bounded range
             None,
@@ -893,7 +893,7 @@ mod tests {
         // This simulates streaming being ahead of ingestion
         let streaming_client = MockStreamingClient::new(49..60);
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster(
             0..60,
             None,
@@ -932,7 +932,7 @@ mod tests {
         // Streaming starts at checkpoint 100, but we only want 0..30.
         let streaming_client = MockStreamingClient::new(100..110);
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster(
             0..30,
             None,
@@ -969,7 +969,7 @@ mod tests {
         // Streaming starts at checkpoint 0 but indexing starts at 30.
         let streaming_client = MockStreamingClient::new(0..100);
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster(
             30..100,
             None,
@@ -1011,7 +1011,7 @@ mod tests {
         streaming_client.insert_checkpoint(4); // Behind watermark
         streaming_client.insert_checkpoint_range(15..20);
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster(
             0..20,
             None,
@@ -1050,7 +1050,7 @@ mod tests {
         let mut streaming_client = MockStreamingClient::new(0..3);
         streaming_client.insert_checkpoint_range(6..10); // Gap: skips checkpoints 3 - 5
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster(
             0..10,
             None,
@@ -1096,7 +1096,7 @@ mod tests {
             ..test_config()
         };
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster(
             0..20,
             Some(5), // initial watermark to trigger backpressure
@@ -1148,7 +1148,7 @@ mod tests {
         streaming_client.insert_error(); // Error after 5 checkpoints
         streaming_client.insert_checkpoint_range(10..15);
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster(
             0..15,
             None,
@@ -1194,7 +1194,7 @@ mod tests {
         streaming_client.insert_error(); // Error at checkpoint 10
         streaming_client.insert_checkpoint_range(10..20);
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster(
             0..20,
             None,
@@ -1231,7 +1231,7 @@ mod tests {
         // Streaming service that fails to start
         let streaming_service = MockStreamingClient::new(0..20).fail_connection_times(1);
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let config = IngestionConfig {
             streaming_backoff_initial_batch_size: 5,
             ..test_config()
@@ -1278,7 +1278,7 @@ mod tests {
         streaming_client.insert_error(); // Fail peek
         streaming_client.insert_checkpoint_range(0..20);
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
         let config = IngestionConfig {
             streaming_backoff_initial_batch_size: 5,
             ..test_config()
@@ -1324,7 +1324,7 @@ mod tests {
         // Streaming client where connection always fails (never recovers)
         let streaming_client = MockStreamingClient::new(0..50).fail_connection_times(usize::MAX);
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
 
         let h_broadcaster = broadcaster(
             0..50,
@@ -1368,7 +1368,7 @@ mod tests {
         streaming_client.insert_error(); // Then fail peek
         streaming_client.insert_checkpoint_range(40..50); // Complete the rest
 
-        let metrics = test_metrics();
+        let metrics = test_ingestion_metrics();
 
         let h_broadcaster = broadcaster(
             0..50,

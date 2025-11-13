@@ -15,10 +15,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use url::Url;
 
-use crate::postgres::{Db, DbArgs};
 use crate::{
-    Indexer, IndexerArgs, IndexerMetrics, Result,
+    Indexer, IndexerArgs, Result,
     ingestion::{ClientArgs, IngestionConfig},
+    metrics::{IndexerMetrics, IngestionMetrics},
+    postgres::{Db, DbArgs},
 };
 
 /// Bundle of arguments for setting up an indexer cluster (an Indexer and its associated Metrics
@@ -185,8 +186,14 @@ impl IndexerCluster {
 
     /// Access to the indexer's metrics. This can be cloned before a call to [Self::run], to retain
     /// shared access to the underlying metrics.
-    pub fn metrics(&self) -> &Arc<IndexerMetrics> {
-        self.indexer.metrics()
+    pub fn indexer_metrics(&self) -> &Arc<IndexerMetrics> {
+        self.indexer.indexer_metrics()
+    }
+
+    /// Access to the ingestion service's metrics. This can be cloned before a call to [Self::run],
+    /// to retain shared access to the underlying metrics.
+    pub fn ingestion_metrics(&self) -> &Arc<IngestionMetrics> {
+        self.indexer.ingestion_metrics()
     }
 
     /// This token controls stopping the indexer and metrics service. Clone it before calling
@@ -372,7 +379,8 @@ mod tests {
             .await
             .unwrap();
 
-        let metrics = indexer.metrics().clone();
+        let ingestion_metrics = indexer.ingestion_metrics().clone();
+        let indexer_metrics = indexer.indexer_metrics().clone();
 
         // Run the indexer until it signals completion. We have configured it to stop after
         // ingesting 10 checkpoints, so it should shut itself down.
@@ -394,15 +402,15 @@ mod tests {
             }
         }
 
-        // Check that metrics were updated.
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 10);
-        assert_eq!(metrics.total_ingested_transactions.get(), 20);
-        assert_eq!(metrics.latest_ingested_checkpoint.get(), 9);
+        // Check that ingestion metrics were updated.
+        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 10);
+        assert_eq!(ingestion_metrics.total_ingested_transactions.get(), 20);
+        assert_eq!(ingestion_metrics.latest_ingested_checkpoint.get(), 9);
 
         macro_rules! assert_pipeline_metric {
             ($name:ident, $value:expr) => {
                 assert_eq!(
-                    metrics
+                    indexer_metrics
                         .$name
                         .get_metric_with_label_values(&["tx_counts"])
                         .unwrap()
