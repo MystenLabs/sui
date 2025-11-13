@@ -12,7 +12,7 @@ serde = { version = "1.0.140", features = ["derive"] }
 serde_json = "1.0.80"
 signature = "1.5.0"
 camino = "1.0.9"
-base64ct = "1"
+base64ct = "1.5"
 tokio = { version = "1.20.1", features = ["full"] }
 async-trait = "0.1.53"
 serde_with = { version = "1.14.0", features = ["hex"] }
@@ -58,7 +58,7 @@ jemalloc-ctl = "^0.5"
 [dev-dependencies]
 tempfile = "3.3.0"
 futures = "0.3.21"
-jsonrpsee = { git = "https://github.com/patrickkuo/jsonrpsee", features = ["full"] , rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa"}
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", features = ["full"] , rev = "4a7d72523f4d8aa211be0728ddb039459b122d0d"}
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}
 test-utils = { path = "../test-utils" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
