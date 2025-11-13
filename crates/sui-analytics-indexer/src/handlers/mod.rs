@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ParquetSchema;
 use crate::parquet::ParquetBatch;
 use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
+use crate::{FileType, ParquetSchema};
 use anyhow::{Result, anyhow};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::{StructTag, TypeTag};
@@ -18,18 +18,25 @@ use sui_types::object::{Object, Owner};
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionDataAPI;
 
-/// Trait for entry types that provide checkpoint metadata
-pub trait CheckpointMetadata {
+/// Trait for entry types that provide analytics metadata
+pub trait AnalyticsMetadata {
+    const FILE_TYPE: FileType;
+
     fn get_epoch(&self) -> EpochId;
     fn get_checkpoint_sequence_number(&self) -> u64;
 }
 
-/// Trait for batch types that wrap ParquetBatch
-pub trait AnalyticsBatch: Default + Send + Sync {
-    type Entry: CheckpointMetadata + Serialize + ParquetSchema + Send + Sync;
+/// Generic batch struct that works for all entry types
+pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + ParquetSchema> {
+    pub inner: ParquetBatch<T>,
+}
 
-    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry>;
-    fn inner(&self) -> &ParquetBatch<Self::Entry>;
+impl<T: AnalyticsMetadata + Serialize + ParquetSchema + 'static> Default for AnalyticsBatch<T> {
+    fn default() -> Self {
+        Self {
+            inner: ParquetBatch::new(T::FILE_TYPE, 0).expect("Failed to create ParquetBatch"),
+        }
+    }
 }
 
 pub mod checkpoint_handler;

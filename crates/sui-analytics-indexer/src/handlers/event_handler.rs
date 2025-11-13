@@ -14,27 +14,14 @@ use sui_types::event::Event;
 use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::package_store::PackageCache;
-use crate::parquet::ParquetBatch;
 use crate::tables::EventEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
-
-pub struct EventBatch {
-    pub inner: ParquetBatch<EventEntry>,
-}
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
 
 pub struct EventProcessor {
     package_cache: Arc<PackageCache>,
 }
 
-pub type EventHandler = AnalyticsHandler<EventProcessor, EventBatch>;
-
-impl Default for EventBatch {
-    fn default() -> Self {
-        Self {
-            inner: ParquetBatch::new(FileType::Event, 0).expect("Failed to create ParquetBatch"),
-        }
-    }
-}
+pub type EventHandler = AnalyticsHandler<EventProcessor, AnalyticsBatch<EventEntry>>;
 
 impl EventProcessor {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
@@ -42,25 +29,15 @@ impl EventProcessor {
     }
 }
 
-impl CheckpointMetadata for EventEntry {
+impl AnalyticsMetadata for EventEntry {
+    const FILE_TYPE: FileType = FileType::Event;
+
     fn get_epoch(&self) -> EpochId {
         self.epoch
     }
 
     fn get_checkpoint_sequence_number(&self) -> u64 {
         self.checkpoint
-    }
-}
-
-impl AnalyticsBatch for EventBatch {
-    type Entry = EventEntry;
-
-    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
-        &mut self.inner
-    }
-
-    fn inner(&self) -> &ParquetBatch<Self::Entry> {
-        &self.inner
     }
 }
 

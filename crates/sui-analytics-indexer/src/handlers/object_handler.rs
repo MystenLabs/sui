@@ -17,28 +17,15 @@ use crate::handlers::{
     initial_shared_version,
 };
 use crate::package_store::PackageCache;
-use crate::parquet::ParquetBatch;
 use crate::tables::{ObjectEntry, ObjectStatus};
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
-
-pub struct ObjectBatch {
-    pub inner: ParquetBatch<ObjectEntry>,
-}
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
 
 pub struct ObjectProcessor {
     package_cache: Arc<PackageCache>,
     package_filter: Option<ObjectID>,
 }
 
-pub type ObjectHandler = AnalyticsHandler<ObjectProcessor, ObjectBatch>;
-
-impl Default for ObjectBatch {
-    fn default() -> Self {
-        Self {
-            inner: ParquetBatch::new(FileType::Object, 0).expect("Failed to create ParquetBatch"),
-        }
-    }
-}
+pub type ObjectHandler = AnalyticsHandler<ObjectProcessor, AnalyticsBatch<ObjectEntry>>;
 
 impl ObjectProcessor {
     pub fn new(package_cache: Arc<PackageCache>, package_filter: &Option<String>) -> Self {
@@ -202,25 +189,15 @@ impl ObjectProcessor {
     }
 }
 
-impl CheckpointMetadata for ObjectEntry {
+impl AnalyticsMetadata for ObjectEntry {
+    const FILE_TYPE: FileType = FileType::Object;
+
     fn get_epoch(&self) -> EpochId {
         self.epoch
     }
 
     fn get_checkpoint_sequence_number(&self) -> u64 {
         self.checkpoint
-    }
-}
-
-impl AnalyticsBatch for ObjectBatch {
-    type Entry = ObjectEntry;
-
-    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
-        &mut self.inner
-    }
-
-    fn inner(&self) -> &ParquetBatch<Self::Entry> {
-        &self.inner
     }
 }
 

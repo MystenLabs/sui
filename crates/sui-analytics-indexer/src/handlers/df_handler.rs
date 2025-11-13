@@ -22,54 +22,23 @@ use tap::tap::TapFallible;
 use tracing::warn;
 
 use crate::package_store::PackageCache;
-use crate::parquet::ParquetBatch;
 use crate::tables::DynamicFieldEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
-
-pub struct DynamicFieldBatch {
-    pub inner: ParquetBatch<DynamicFieldEntry>,
-}
-
-impl Default for DynamicFieldBatch {
-    fn default() -> Self {
-        Self {
-            inner: ParquetBatch::new(FileType::DynamicField, 0)
-                .expect("Failed to create ParquetBatch"),
-        }
-    }
-}
-
-impl CheckpointMetadata for DynamicFieldEntry {
-    fn get_epoch(&self) -> EpochId {
-        self.epoch
-    }
-
-    fn get_checkpoint_sequence_number(&self) -> u64 {
-        self.checkpoint
-    }
-}
-
-impl AnalyticsBatch for DynamicFieldBatch {
-    type Entry = DynamicFieldEntry;
-
-    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
-        &mut self.inner
-    }
-
-    fn inner(&self) -> &ParquetBatch<Self::Entry> {
-        &self.inner
-    }
-}
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
 
 pub struct DynamicFieldProcessor {
     package_cache: Arc<PackageCache>,
 }
 
+pub type DynamicFieldHandler =
+    AnalyticsHandler<DynamicFieldProcessor, AnalyticsBatch<DynamicFieldEntry>>;
+
 impl DynamicFieldProcessor {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
         Self { package_cache }
     }
+}
 
+impl DynamicFieldProcessor {
     async fn process_dynamic_field(
         &self,
         epoch: u64,
@@ -201,4 +170,14 @@ impl Processor for DynamicFieldProcessor {
     }
 }
 
-pub type DynamicFieldHandler = AnalyticsHandler<DynamicFieldProcessor, DynamicFieldBatch>;
+impl AnalyticsMetadata for DynamicFieldEntry {
+    const FILE_TYPE: FileType = FileType::DynamicField;
+
+    fn get_epoch(&self) -> EpochId {
+        self.epoch
+    }
+
+    fn get_checkpoint_sequence_number(&self) -> u64 {
+        self.checkpoint
+    }
+}

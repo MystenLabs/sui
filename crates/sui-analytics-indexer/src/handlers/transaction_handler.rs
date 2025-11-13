@@ -15,46 +15,23 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
 use tracing::error;
 
-use crate::parquet::ParquetBatch;
 use crate::tables::TransactionEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
-
-pub struct TransactionBatch {
-    pub inner: ParquetBatch<TransactionEntry>,
-}
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
 
 pub struct TransactionProcessor;
 
-pub type TransactionHandler = AnalyticsHandler<TransactionProcessor, TransactionBatch>;
+pub type TransactionHandler =
+    AnalyticsHandler<TransactionProcessor, AnalyticsBatch<TransactionEntry>>;
 
-impl Default for TransactionBatch {
-    fn default() -> Self {
-        Self {
-            inner: ParquetBatch::new(FileType::Transaction, 0)
-                .expect("Failed to create ParquetBatch"),
-        }
-    }
-}
+impl AnalyticsMetadata for TransactionEntry {
+    const FILE_TYPE: FileType = FileType::Transaction;
 
-impl CheckpointMetadata for TransactionEntry {
     fn get_epoch(&self) -> EpochId {
         self.epoch
     }
 
     fn get_checkpoint_sequence_number(&self) -> u64 {
         self.checkpoint
-    }
-}
-
-impl AnalyticsBatch for TransactionBatch {
-    type Entry = TransactionEntry;
-
-    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
-        &mut self.inner
-    }
-
-    fn inner(&self) -> &ParquetBatch<Self::Entry> {
-        &self.inner
     }
 }
 

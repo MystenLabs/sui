@@ -10,46 +10,22 @@ use sui_indexer_alt_framework::pipeline::Processor;
 use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use crate::parquet::ParquetBatch;
 use crate::tables::PackageBCSEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
-
-pub struct PackageBCSBatch {
-    pub inner: ParquetBatch<PackageBCSEntry>,
-}
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
 
 pub struct PackageBCSProcessor;
 
-pub type PackageBCSHandler = AnalyticsHandler<PackageBCSProcessor, PackageBCSBatch>;
+pub type PackageBCSHandler = AnalyticsHandler<PackageBCSProcessor, AnalyticsBatch<PackageBCSEntry>>;
 
-impl Default for PackageBCSBatch {
-    fn default() -> Self {
-        Self {
-            inner: ParquetBatch::new(FileType::MovePackageBCS, 0)
-                .expect("Failed to create ParquetBatch"),
-        }
-    }
-}
+impl AnalyticsMetadata for PackageBCSEntry {
+    const FILE_TYPE: FileType = FileType::MovePackageBCS;
 
-impl CheckpointMetadata for PackageBCSEntry {
     fn get_epoch(&self) -> EpochId {
         self.epoch
     }
 
     fn get_checkpoint_sequence_number(&self) -> u64 {
         self.checkpoint
-    }
-}
-
-impl AnalyticsBatch for PackageBCSBatch {
-    type Entry = PackageBCSEntry;
-
-    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
-        &mut self.inner
-    }
-
-    fn inner(&self) -> &ParquetBatch<Self::Entry> {
-        &self.inner
     }
 }
 

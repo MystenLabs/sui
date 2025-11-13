@@ -12,46 +12,22 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
 
-use crate::parquet::ParquetBatch;
 use crate::tables::CheckpointEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
-
-pub struct CheckpointBatch {
-    pub inner: ParquetBatch<CheckpointEntry>,
-}
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
 
 pub struct CheckpointProcessor;
 
-pub type CheckpointHandler = AnalyticsHandler<CheckpointProcessor, CheckpointBatch>;
+pub type CheckpointHandler = AnalyticsHandler<CheckpointProcessor, AnalyticsBatch<CheckpointEntry>>;
 
-impl Default for CheckpointBatch {
-    fn default() -> Self {
-        Self {
-            inner: ParquetBatch::new(FileType::Checkpoint, 0)
-                .expect("Failed to create ParquetBatch"),
-        }
-    }
-}
+impl AnalyticsMetadata for CheckpointEntry {
+    const FILE_TYPE: FileType = FileType::Checkpoint;
 
-impl CheckpointMetadata for CheckpointEntry {
     fn get_epoch(&self) -> EpochId {
         self.epoch
     }
 
     fn get_checkpoint_sequence_number(&self) -> u64 {
         self.sequence_number
-    }
-}
-
-impl AnalyticsBatch for CheckpointBatch {
-    type Entry = CheckpointEntry;
-
-    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
-        &mut self.inner
-    }
-
-    fn inner(&self) -> &ParquetBatch<Self::Entry> {
-        &self.inner
     }
 }
 
