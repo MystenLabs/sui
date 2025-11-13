@@ -10,7 +10,10 @@ use std::{collections::BTreeMap, fmt::Debug};
 
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::schema::{EnvironmentID, EnvironmentName, PackageName, ReplacementDependency};
+use crate::schema::{
+    EnvironmentID, EnvironmentName, LockfileDependencyInfo, PackageName, ReplacementDependency,
+    SystemDepName,
+};
 use indexmap::IndexMap;
 
 /// A [MoveFlavor] is used to parameterize the package management system. It defines the types and
@@ -39,12 +42,10 @@ pub trait MoveFlavor: Debug + Send + Sync {
     fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID>;
 
     /// Return ALL the system dependencies for the requested environment.
-    fn system_dependencies(
-        environment: EnvironmentID,
-    ) -> BTreeMap<PackageName, ReplacementDependency>;
+    fn system_deps(environment: &EnvironmentID) -> BTreeMap<SystemDepName, LockfileDependencyInfo>;
 
     /// Return the default system dependencies for the requested environment.
-    fn default_system_dependencies(
-        environment: EnvironmentID,
+    fn implicit_dependencies(
+        environment: &EnvironmentID,
     ) -> BTreeMap<PackageName, ReplacementDependency>;
 }

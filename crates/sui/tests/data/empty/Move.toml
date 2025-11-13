@@ -2,4 +2,4 @@
 name = "Examples"
 edition = "2024.beta"
 version = "0.0.1"
-system-dependencies = []
+implicit-dependencies = false

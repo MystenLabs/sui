@@ -1,8 +1,7 @@
 [package]
 name = "h"
 edition = "2024"
-system-dependencies = []
+implicit-dependencies = false
 
 [dependencies]
 g = { local = "../G" }
-

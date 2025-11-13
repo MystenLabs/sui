@@ -1,7 +1,7 @@
 [package]
 name = "test_functions"
 edition = "2024.beta"
-system-dependencies = []
+implicit-dependencies = false
 
 [dependencies]
 sui = { local = "../system-packages/sui-framework" }

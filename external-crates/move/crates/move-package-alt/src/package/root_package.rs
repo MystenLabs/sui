@@ -698,19 +698,19 @@ pkg_b = { local = "../pkg_b" }"#,
         [pinned._test_env.bar]
         source = { local = "../bar" }
         use_environment = "_test_env"
-        manifest_digest = "1A967BADB8DF0A7E8361E9C717FACDE2D033EE8E6BF76EB39E4B1CCFFBECE4D0"
+        manifest_digest = "E69CA9DE06150FC37FE789482FE162AE599A82BC7D338D85278BD833C798CDFF"
         deps = {}
 
         [pinned._test_env.baz]
         source = { local = "../baz" }
         use_environment = "_test_env"
-        manifest_digest = "8FA88B998DC19B944880451C9F7D8C1138B6692FE69D52721B3699365E18277C"
+        manifest_digest = "10B026AA812EF147C303FB0B260D43E106F3CBEE296B65164AA6B495AA0DACD7"
         deps = { bar = "bar" }
 
         [pinned._test_env.example]
         source = { root = true }
         use_environment = "_test_env"
-        manifest_digest = "DFA595418D331CD6EF17F3A520A878AC3B419AC25118A8E831C52F1768BC054E"
+        manifest_digest = "97AC0983C39F3534D8812FB5AB3C4309DC44D394977354E43C3817C6AA259126"
         deps = { baz = "baz" }
         "###);
     }

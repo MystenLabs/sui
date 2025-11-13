@@ -2,9 +2,8 @@
 name = "test_functions"
 edition = "2024.beta"
 # turn off system deps
-system-dependencies = []
+implicit-dependencies = false
 
 [dependencies]
 sui = { local = "../system-packages/sui-framework" }
 std = { local = "../system-packages/move-stdlib" }
-

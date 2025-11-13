@@ -5,12 +5,13 @@
 //! Defines the [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports no
 //! flavor-specific resolvers and stores no additional metadata in the lockfile.
 
-use std::{collections::BTreeMap, iter::empty};
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
 use crate::schema::{
-    Environment, EnvironmentID, EnvironmentName, PackageName, ReplacementDependency,
+    Environment, EnvironmentID, EnvironmentName, LockfileDependencyInfo, PackageName,
+    ReplacementDependency,
 };
 
 use super::MoveFlavor;
@@ -56,15 +57,13 @@ impl MoveFlavor for Vanilla {
         envs
     }
 
-    fn system_dependencies(
-        _environment: EnvironmentID,
-    ) -> BTreeMap<PackageName, ReplacementDependency> {
-        empty().collect()
+    fn system_deps(_environment: &EnvironmentID) -> BTreeMap<String, LockfileDependencyInfo> {
+        BTreeMap::new()
     }
 
-    fn default_system_dependencies(
-        environment: EnvironmentID,
+    fn implicit_dependencies(
+        _environment: &EnvironmentID,
     ) -> BTreeMap<PackageName, ReplacementDependency> {
-        Self::system_dependencies(environment)
+        BTreeMap::new()
     }
 }

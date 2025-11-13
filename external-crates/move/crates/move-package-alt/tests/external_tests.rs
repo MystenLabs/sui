@@ -64,13 +64,13 @@ async fn external_basic() {
     [pinned._test_env.b]
     source = { local = "../b" }
     use_environment = "_test_env"
-    manifest_digest = "5156452C4476363CC074610570FFF43AB6B812D5F2FFA7C334DFBED3B61CF3E7"
+    manifest_digest = "FB922B447DCD582523559CD2608A1EF051D78C7EED6ED5784C55FA32436C9172"
     deps = {}
 
     [pinned._test_env.root]
     source = { root = true }
     use_environment = "_test_env"
-    manifest_digest = "25B62530CD7C5644C57F80B2F06B47D5E18850031A32E8A232E18D1D91108E13"
+    manifest_digest = "7CAB4376B9A716D8F138F1FC74EA1FC4DDA597D37BDEBC6BDB2CA1BAB0A8EEE8"
     deps = { a = "a" }
     "###);
 }
@@ -115,19 +115,19 @@ async fn external_multiple_resolvers() {
     [pinned._test_env.res_1]
     source = { local = "../res_1" }
     use_environment = "_test_env"
-    manifest_digest = "0E8A303BC2C478158D8C6D2A19689B03303CC833C34370CFBE0E7870EC2724A5"
+    manifest_digest = "22022C699ED02B6B84FC5829310FAF2840A3E8227CAA2710936C10C7F2A25039"
     deps = {}
 
     [pinned._test_env.res_2]
     source = { local = "../res_2" }
     use_environment = "_test_env"
-    manifest_digest = "E4A4BA4557499A6571FFD0BC07AA50B19DD0A9A2D96B834037320D27006B82F2"
+    manifest_digest = "327F77CA8B4089678146783D1FA5DAD5EF020052F5F55916519E2DACECA34347"
     deps = {}
 
     [pinned._test_env.root]
     source = { root = true }
     use_environment = "_test_env"
-    manifest_digest = "25B62530CD7C5644C57F80B2F06B47D5E18850031A32E8A232E18D1D91108E13"
+    manifest_digest = "7CAB4376B9A716D8F138F1FC74EA1FC4DDA597D37BDEBC6BDB2CA1BAB0A8EEE8"
     deps = { a = "a" }
     "###);
 }

@@ -2,7 +2,7 @@
 name = "F"
 version = "0.0.1"
 edition = "2024.beta"
-implicit-deps = false
+implicit-dependencies = false
 
 [addresses]
 f = "0xf1"

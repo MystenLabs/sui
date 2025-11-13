@@ -7,14 +7,14 @@ use std::{fmt, path::PathBuf};
 use path_clean::PathClean;
 
 use crate::{
-    dependency::{ResolvedDependency, resolve::Resolved},
-    errors::{FileHandle, PackageResult, fmt_truncated},
+    dependency::{ResolvedDependency, combine::Combined, resolve::Resolved},
+    errors::{FileHandle, PackageError, PackageResult, fmt_truncated},
     flavor::MoveFlavor,
     git::{GitCache, GitError, GitTree},
     package::paths::PackagePath,
     schema::{
         EnvironmentID, EnvironmentName, LocalDepInfo, LockfileDependencyInfo, LockfileGitDepInfo,
-        ManifestGitDependency, ModeName, OnChainDepInfo, PackageName, Pin, RootDepInfo,
+        ManifestGitDependency, ModeName, OnChainDepInfo, PackageName, RootDepInfo,
     },
 };
 
@@ -64,11 +64,13 @@ impl PinnedDependencyInfo {
         deps: Vec<CombinedDependency>,
         environment_id: &EnvironmentID,
     ) -> PackageResult<Vec<PinnedDependencyInfo>> {
+        // replace all system dependencies using the flavor
+        let (non_system_deps, mut result) = Self::replace_system_deps::<F>(deps, environment_id)?;
+
         // resolution - replace all externally resolved dependencies with internal dependencies
-        let deps = ResolvedDependency::resolve(deps, environment_id).await?;
+        let deps = ResolvedDependency::resolve::<F>(non_system_deps, environment_id).await?;
 
         // pinning - fix git shas and normalize local deps
-        let mut result: Vec<PinnedDependencyInfo> = Vec::new();
         for dep in deps.into_iter() {
             let transformed = match dep.0.dep_info {
                 Resolved::Local(ref loc) => loc.clone().pin(parent)?,
@@ -81,6 +83,44 @@ impl PinnedDependencyInfo {
         }
 
         Ok(result)
+    }
+
+    /// partition `deps` into the system dependencies and the non-system dependencies; replace all
+    /// the system dependencies using `F`
+    fn replace_system_deps<F: MoveFlavor>(
+        deps: Vec<CombinedDependency>,
+        environment_id: &EnvironmentID,
+    ) -> PackageResult<(Vec<CombinedDependency>, Vec<PinnedDependencyInfo>)> {
+        let all_system_deps = F::system_deps(environment_id);
+        let valid_list = move_compiler::format_oxford_list!(
+            "and",
+            "{}",
+            all_system_deps.keys().collect::<Vec<&String>>()
+        );
+
+        let mut system_deps: Vec<PinnedDependencyInfo> = Vec::new();
+        let mut non_system_deps: Vec<CombinedDependency> = Vec::new();
+
+        for dep in deps.into_iter() {
+            if let Combined::System(sys) = &dep.0.dep_info {
+                let lockfile_dep =
+                    all_system_deps
+                        .get(&sys.system)
+                        .ok_or(PackageError::InvalidSystemDep {
+                            dep: sys.system.clone(),
+                            valid: valid_list.to_string(),
+                        })?;
+                let file = dep.0.containing_file;
+                let pinned_dep = PinnedDependencyInfo(dep.0.map(|_| {
+                    Pinned::from_lockfile(file, lockfile_dep)
+                        .expect("system dependencies are valid pins")
+                }));
+                system_deps.push(pinned_dep);
+            } else {
+                non_system_deps.push(dep);
+            }
+        }
+        Ok((non_system_deps, system_deps))
     }
 
     /// The name for the dependency
@@ -145,8 +185,11 @@ impl Pinned {
     /// We do not set the `rename-from` field, since when we are creating the pinned dependency we
     /// don't yet know what the rename-from field  should be. The caller is responsible for calling
     /// [Self::with_rename_from] if they need to establish the rename-from check invariant.
-    pub fn from_lockfile(containing_file: FileHandle, pin: &Pin) -> PackageResult<Self> {
-        match &pin.source {
+    pub fn from_lockfile(
+        containing_file: FileHandle,
+        pin: &LockfileDependencyInfo,
+    ) -> PackageResult<Self> {
+        match &pin {
             LockfileDependencyInfo::Local(loc) => Ok(Pinned::Local(PinnedLocalDependency {
                 absolute_path_to_package: containing_file
                     .path()
