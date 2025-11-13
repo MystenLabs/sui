@@ -5,13 +5,11 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use core::panic;
 use fastcrypto::traits::ToFromBytes;
-use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::str::from_utf8;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_json_rpc_api::BridgeReadApiClient;
-use sui_json_rpc_types::{BcsEvent, DevInspectResults};
+use sui_json_rpc_types::BcsEvent;
 use sui_json_rpc_types::{EventFilter, Page, SuiEvent};
 use sui_json_rpc_types::{
     EventPage, SuiObjectDataOptions, SuiTransactionBlockResponse,
@@ -39,20 +37,10 @@ use sui_types::collection_types::LinkedTableNode;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
-use sui_types::transaction::Argument;
-use sui_types::transaction::CallArg;
-use sui_types::transaction::Command;
 use sui_types::transaction::ObjectArg;
-use sui_types::transaction::ProgrammableTransaction;
 use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::Transaction;
-use sui_types::transaction::TransactionKind;
-use sui_types::{
-    Identifier,
-    base_types::{ObjectID, SuiAddress},
-    digests::TransactionDigest,
-    event::EventID,
-};
+use sui_types::{Identifier, base_types::ObjectID, digests::TransactionDigest, event::EventID};
 use tokio::sync::OnceCell;
 use tracing::{error, warn};
 
@@ -490,7 +478,7 @@ impl SuiClientInner for SuiSdkClient {
 
     async fn get_events_by_tx_digest(
         &self,
-        tx_digest: TransactionDigest,
+        _tx_digest: TransactionDigest,
     ) -> Result<SuiEvents, BridgeError> {
         unimplemented!("use gRPC implementation")
     }
@@ -517,18 +505,18 @@ impl SuiClientInner for SuiSdkClient {
 
     async fn get_token_transfer_action_onchain_status(
         &self,
-        bridge_object_arg: ObjectArg,
-        source_chain_id: u8,
-        seq_number: u64,
+        _bridge_object_arg: ObjectArg,
+        _source_chain_id: u8,
+        _seq_number: u64,
     ) -> Result<BridgeActionStatus, BridgeError> {
         unimplemented!("use gRPC implementation")
     }
 
     async fn get_token_transfer_action_onchain_signatures(
         &self,
-        bridge_object_arg: ObjectArg,
-        source_chain_id: u8,
-        seq_number: u64,
+        _bridge_object_arg: ObjectArg,
+        _source_chain_id: u8,
+        _seq_number: u64,
     ) -> Result<Option<Vec<Vec<u8>>>, BridgeError> {
         unimplemented!("use gRPC implementation")
     }
@@ -549,17 +537,17 @@ impl SuiClientInner for SuiSdkClient {
 
     async fn get_parsed_token_transfer_message(
         &self,
-        bridge_object_arg: ObjectArg,
-        source_chain_id: u8,
-        seq_number: u64,
+        _bridge_object_arg: ObjectArg,
+        _source_chain_id: u8,
+        _seq_number: u64,
     ) -> Result<Option<MoveTypeParsedTokenTransferMessage>, BridgeError> {
         unimplemented!("use gRPC implementation")
     }
 
     async fn get_bridge_record(
         &self,
-        source_chain_id: u8,
-        seq_number: u64,
+        _source_chain_id: u8,
+        _seq_number: u64,
     ) -> Result<Option<MoveTypeBridgeRecord>, BridgeError> {
         unimplemented!("use gRPC implementation")
     }
@@ -1025,6 +1013,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use std::str::FromStr;
     use sui_json_rpc_types::BcsEvent;
+    use sui_types::base_types::SuiAddress;
     use sui_types::bridge::{BridgeChainId, TOKEN_ID_SUI, TOKEN_ID_USDC};
     use sui_types::crypto::get_key_pair;
 
