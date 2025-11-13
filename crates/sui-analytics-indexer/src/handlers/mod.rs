@@ -3,7 +3,7 @@
 
 use crate::parquet::ParquetBatch;
 use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
-use crate::{FileType, ParquetSchema};
+use crate::{ParquetSchema, Pipeline};
 use anyhow::{Result, anyhow};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::{StructTag, TypeTag};
@@ -20,7 +20,7 @@ use sui_types::transaction::TransactionDataAPI;
 
 /// Trait for entry types that provide analytics metadata
 pub trait AnalyticsMetadata {
-    const FILE_TYPE: FileType;
+    const FILE_TYPE: Pipeline;
 
     fn get_epoch(&self) -> EpochId;
     fn get_checkpoint_sequence_number(&self) -> u64;
@@ -34,7 +34,8 @@ pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + ParquetSchema> {
 impl<T: AnalyticsMetadata + Serialize + ParquetSchema + 'static> Default for AnalyticsBatch<T> {
     fn default() -> Self {
         Self {
-            inner: ParquetBatch::new(T::FILE_TYPE, 0).expect("Failed to create ParquetBatch"),
+            inner: ParquetBatch::new(T::FILE_TYPE.dir_prefix().as_ref().to_string(), 0)
+                .expect("Failed to create ParquetBatch"),
         }
     }
 }

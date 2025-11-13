@@ -13,7 +13,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use crate::handlers::{get_move_struct, parse_struct};
 use crate::package_store::PackageCache;
 use crate::tables::WrappedObjectEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
 
 pub struct WrappedObjectProcessor {
     package_cache: Arc<PackageCache>,
@@ -29,7 +29,7 @@ impl WrappedObjectProcessor {
 }
 
 impl AnalyticsMetadata for WrappedObjectEntry {
-    const FILE_TYPE: FileType = FileType::WrappedObject;
+    const FILE_TYPE: Pipeline = Pipeline::WrappedObject;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

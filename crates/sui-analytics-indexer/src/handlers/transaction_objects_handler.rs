@@ -13,7 +13,7 @@ use sui_types::transaction::TransactionDataAPI;
 
 use crate::handlers::{InputObjectTracker, ObjectStatusTracker};
 use crate::tables::TransactionObjectEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
 
 pub struct TransactionObjectsProcessor;
 
@@ -21,7 +21,7 @@ pub type TransactionObjectsHandler =
     AnalyticsHandler<TransactionObjectsProcessor, AnalyticsBatch<TransactionObjectEntry>>;
 
 impl AnalyticsMetadata for TransactionObjectEntry {
-    const FILE_TYPE: FileType = FileType::TransactionObjects;
+    const FILE_TYPE: Pipeline = Pipeline::TransactionObjects;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

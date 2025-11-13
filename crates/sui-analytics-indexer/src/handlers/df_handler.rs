@@ -23,7 +23,7 @@ use tracing::warn;
 
 use crate::package_store::PackageCache;
 use crate::tables::DynamicFieldEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
 
 pub struct DynamicFieldProcessor {
     package_cache: Arc<PackageCache>,
@@ -171,7 +171,7 @@ impl Processor for DynamicFieldProcessor {
 }
 
 impl AnalyticsMetadata for DynamicFieldEntry {
-    const FILE_TYPE: FileType = FileType::DynamicField;
+    const FILE_TYPE: Pipeline = Pipeline::DynamicField;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

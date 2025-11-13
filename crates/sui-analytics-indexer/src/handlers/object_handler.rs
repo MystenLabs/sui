@@ -18,7 +18,7 @@ use crate::handlers::{
 };
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
 
 pub struct ObjectProcessor {
     package_cache: Arc<PackageCache>,
@@ -190,7 +190,7 @@ impl ObjectProcessor {
 }
 
 impl AnalyticsMetadata for ObjectEntry {
-    const FILE_TYPE: FileType = FileType::Object;
+    const FILE_TYPE: Pipeline = Pipeline::Object;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

@@ -18,7 +18,23 @@ use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_types::base_types::EpochId;
 use sui_types::dynamic_field::DynamicFieldType;
 
+use crate::handlers::checkpoint_handler::{CheckpointHandler, CheckpointProcessor};
+use crate::handlers::df_handler::{DynamicFieldHandler, DynamicFieldProcessor};
+use crate::handlers::event_handler::{EventHandler, EventProcessor};
+use crate::handlers::move_call_handler::{MoveCallHandler, MoveCallProcessor};
+use crate::handlers::object_handler::{ObjectHandler, ObjectProcessor};
+use crate::handlers::package_bcs_handler::{PackageBCSHandler, PackageBCSProcessor};
+use crate::handlers::package_handler::{PackageHandler, PackageProcessor};
+use crate::handlers::transaction_bcs_handler::{TransactionBCSHandler, TransactionBCSProcessor};
+use crate::handlers::transaction_handler::{TransactionHandler, TransactionProcessor};
+use crate::handlers::transaction_objects_handler::{
+    TransactionObjectsHandler, TransactionObjectsProcessor,
+};
+use crate::handlers::wrapped_object_handler::{WrappedObjectHandler, WrappedObjectProcessor};
 use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
+use sui_indexer_alt_framework::Indexer;
+use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_indexer_alt_object_store::ObjectStore;
 
 pub mod analytics_metrics;
 pub mod errors;
@@ -138,19 +154,6 @@ where
 }
 
 const EPOCH_DIR_PREFIX: &str = "epoch_";
-const CHECKPOINT_DIR_PREFIX: &str = "checkpoints";
-const OBJECT_DIR_PREFIX: &str = "objects";
-const TRANSACTION_DIR_PREFIX: &str = "transactions";
-const TRANSACTION_BCS_DIR_PREFIX: &str = "transaction_bcs";
-const EVENT_DIR_PREFIX: &str = "events";
-const TRANSACTION_OBJECT_DIR_PREFIX: &str = "transaction_objects";
-const MOVE_CALL_PREFIX: &str = "move_call";
-const MOVE_PACKAGE_PREFIX: &str = "move_package";
-const PACKAGE_BCS_DIR_PREFIX: &str = "move_package_bcs";
-const DYNAMIC_FIELD_PREFIX: &str = "dynamic_field";
-
-const WRAPPED_OBJECT_PREFIX: &str = "wrapped_object";
-
 const TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME: &str = "TRANSACTION_CONCURRENCY_LIMIT";
 const DEFAULT_TRANSACTION_CONCURRENCY_LIMIT: usize = 64;
 pub static TRANSACTION_CONCURRENCY_LIMIT: Lazy<usize> = Lazy::new(|| {
@@ -286,7 +289,7 @@ pub struct PipelineConfig {
     /// Name of the pipeline. Must be unique per process. Used to identify pipelines in the Progress Store.
     pub pipeline_name: String,
     /// Type of data to write i.e. checkpoint, object, transaction, etc
-    pub file_type: FileType,
+    pub pipeline: Pipeline,
     /// File format to store data in i.e. csv, parquet, etc
     #[serde(default = "default_file_format")]
     pub file_format: FileFormat,
@@ -368,7 +371,7 @@ impl FileFormat {
     EnumIter,
 )]
 #[repr(u8)]
-pub enum FileType {
+pub enum Pipeline {
     Checkpoint = 0,
     Object,
     Transaction,
@@ -382,20 +385,37 @@ pub enum FileType {
     WrappedObject,
 }
 
-impl FileType {
-    pub fn dir_prefix(&self) -> Path {
+/// Construct an object store file path from directory prefix and metadata
+pub(crate) fn construct_file_path(
+    dir_prefix: &str,
+    file_format: FileFormat,
+    epoch_num: EpochId,
+    checkpoint_range: Range<u64>,
+) -> Path {
+    Path::from(dir_prefix)
+        .child(format!("{}{}", EPOCH_DIR_PREFIX, epoch_num))
+        .child(format!(
+            "{}_{}.{}",
+            checkpoint_range.start,
+            checkpoint_range.end,
+            file_format.file_suffix()
+        ))
+}
+
+impl Pipeline {
+    pub(crate) fn dir_prefix(&self) -> Path {
         match self {
-            FileType::Checkpoint => Path::from(CHECKPOINT_DIR_PREFIX),
-            FileType::Transaction => Path::from(TRANSACTION_DIR_PREFIX),
-            FileType::TransactionBCS => Path::from(TRANSACTION_BCS_DIR_PREFIX),
-            FileType::TransactionObjects => Path::from(TRANSACTION_OBJECT_DIR_PREFIX),
-            FileType::Object => Path::from(OBJECT_DIR_PREFIX),
-            FileType::Event => Path::from(EVENT_DIR_PREFIX),
-            FileType::MoveCall => Path::from(MOVE_CALL_PREFIX),
-            FileType::MovePackage => Path::from(MOVE_PACKAGE_PREFIX),
-            FileType::MovePackageBCS => Path::from(PACKAGE_BCS_DIR_PREFIX),
-            FileType::DynamicField => Path::from(DYNAMIC_FIELD_PREFIX),
-            FileType::WrappedObject => Path::from(WRAPPED_OBJECT_PREFIX),
+            Pipeline::Checkpoint => Path::from("checkpoints"),
+            Pipeline::Transaction => Path::from("transactions"),
+            Pipeline::TransactionBCS => Path::from("transaction_bcs"),
+            Pipeline::TransactionObjects => Path::from("transaction_objects"),
+            Pipeline::Object => Path::from("objects"),
+            Pipeline::Event => Path::from("events"),
+            Pipeline::MoveCall => Path::from("move_call"),
+            Pipeline::MovePackage => Path::from("move_package"),
+            Pipeline::MovePackageBCS => Path::from("move_package_bcs"),
+            Pipeline::DynamicField => Path::from("dynamic_field"),
+            Pipeline::WrappedObject => Path::from("wrapped_object"),
         }
     }
 
@@ -405,14 +425,139 @@ impl FileType {
         epoch_num: EpochId,
         checkpoint_range: Range<u64>,
     ) -> Path {
-        self.dir_prefix()
-            .child(format!("{}{}", EPOCH_DIR_PREFIX, epoch_num))
-            .child(format!(
-                "{}_{}.{}",
-                checkpoint_range.start,
-                checkpoint_range.end,
-                file_format.file_suffix()
-            ))
+        construct_file_path(
+            self.dir_prefix().as_ref(),
+            file_format,
+            epoch_num,
+            checkpoint_range,
+        )
+    }
+
+    pub async fn register_handler(
+        &self,
+        indexer: &mut Indexer<ObjectStore>,
+        pipeline_config: &PipelineConfig,
+        package_cache: Option<Arc<PackageCache>>,
+        config: ConcurrentConfig,
+    ) -> Result<()> {
+        match self {
+            Pipeline::Checkpoint => {
+                indexer
+                    .concurrent_pipeline(
+                        CheckpointHandler::new(CheckpointProcessor, pipeline_config.clone()),
+                        config,
+                    )
+                    .await?;
+            }
+            Pipeline::Transaction => {
+                indexer
+                    .concurrent_pipeline(
+                        TransactionHandler::new(TransactionProcessor, pipeline_config.clone()),
+                        config,
+                    )
+                    .await?;
+            }
+            Pipeline::TransactionBCS => {
+                indexer
+                    .concurrent_pipeline(
+                        TransactionBCSHandler::new(
+                            TransactionBCSProcessor,
+                            pipeline_config.clone(),
+                        ),
+                        config,
+                    )
+                    .await?;
+            }
+            Pipeline::Event => {
+                let cache = package_cache
+                    .clone()
+                    .ok_or_else(|| anyhow!("Package cache required for Event handler"))?;
+                indexer
+                    .concurrent_pipeline(
+                        EventHandler::new(EventProcessor::new(cache), pipeline_config.clone()),
+                        config,
+                    )
+                    .await?;
+            }
+            Pipeline::MoveCall => {
+                indexer
+                    .concurrent_pipeline(
+                        MoveCallHandler::new(MoveCallProcessor, pipeline_config.clone()),
+                        config,
+                    )
+                    .await?;
+            }
+            Pipeline::Object => {
+                let cache = package_cache
+                    .clone()
+                    .ok_or_else(|| anyhow!("Package cache required for Object handler"))?;
+                indexer
+                    .concurrent_pipeline(
+                        ObjectHandler::new(
+                            ObjectProcessor::new(cache, &pipeline_config.package_id_filter),
+                            pipeline_config.clone(),
+                        ),
+                        config,
+                    )
+                    .await?;
+            }
+            Pipeline::DynamicField => {
+                let cache = package_cache
+                    .clone()
+                    .ok_or_else(|| anyhow!("Package cache required for DynamicField handler"))?;
+                indexer
+                    .concurrent_pipeline(
+                        DynamicFieldHandler::new(
+                            DynamicFieldProcessor::new(cache),
+                            pipeline_config.clone(),
+                        ),
+                        config,
+                    )
+                    .await?;
+            }
+            Pipeline::TransactionObjects => {
+                indexer
+                    .concurrent_pipeline(
+                        TransactionObjectsHandler::new(
+                            TransactionObjectsProcessor,
+                            pipeline_config.clone(),
+                        ),
+                        config,
+                    )
+                    .await?;
+            }
+            Pipeline::MovePackage => {
+                indexer
+                    .concurrent_pipeline(
+                        PackageHandler::new(PackageProcessor, pipeline_config.clone()),
+                        config,
+                    )
+                    .await?;
+            }
+            Pipeline::MovePackageBCS => {
+                indexer
+                    .concurrent_pipeline(
+                        PackageBCSHandler::new(PackageBCSProcessor, pipeline_config.clone()),
+                        config,
+                    )
+                    .await?;
+            }
+            Pipeline::WrappedObject => {
+                let cache = package_cache
+                    .clone()
+                    .ok_or_else(|| anyhow!("Package cache required for WrappedObject handler"))?;
+                indexer
+                    .concurrent_pipeline(
+                        WrappedObjectHandler::new(
+                            WrappedObjectProcessor::new(cache),
+                            pipeline_config.clone(),
+                        ),
+                        config,
+                    )
+                    .await?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -511,7 +656,7 @@ pub trait ParquetSchema {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct FileMetadata {
-    pub file_type: FileType,
+    pub pipeline: Pipeline,
     pub file_format: FileFormat,
     pub epoch_num: u64,
     pub checkpoint_seq_range: Range<u64>,
@@ -519,7 +664,7 @@ pub struct FileMetadata {
 
 impl FileMetadata {
     pub fn file_path(&self) -> Path {
-        self.file_type.file_path(
+        self.pipeline.file_path(
             self.file_format,
             self.epoch_num,
             self.checkpoint_seq_range.clone(),
@@ -668,7 +813,7 @@ pub mod indexer_alt {
         for pipeline_config in &config.job_config.pipeline_configs {
             info!(
                 "Registering pipeline: {} with file type: {:?}",
-                pipeline_config.pipeline_name, pipeline_config.file_type
+                pipeline_config.pipeline_name, pipeline_config.pipeline
             );
 
             register_pipeline(
@@ -692,124 +837,10 @@ pub mod indexer_alt {
         package_cache: Option<Arc<PackageCache>>,
         config: ConcurrentConfig,
     ) -> Result<()> {
-        match pipeline_config.file_type {
-            FileType::Checkpoint => {
-                indexer
-                    .concurrent_pipeline(
-                        CheckpointHandler::new(CheckpointProcessor, pipeline_config.clone()),
-                        config,
-                    )
-                    .await?;
-            }
-            FileType::Transaction => {
-                indexer
-                    .concurrent_pipeline(
-                        TransactionHandler::new(TransactionProcessor, pipeline_config.clone()),
-                        config,
-                    )
-                    .await?;
-            }
-            FileType::TransactionBCS => {
-                indexer
-                    .concurrent_pipeline(
-                        TransactionBCSHandler::new(
-                            TransactionBCSProcessor,
-                            pipeline_config.clone(),
-                        ),
-                        config,
-                    )
-                    .await?;
-            }
-            FileType::Event => {
-                let cache = package_cache
-                    .clone()
-                    .ok_or_else(|| anyhow!("Package cache required for Event handler"))?;
-                indexer
-                    .concurrent_pipeline(
-                        EventHandler::new(EventProcessor::new(cache), pipeline_config.clone()),
-                        config,
-                    )
-                    .await?;
-            }
-            FileType::MoveCall => {
-                indexer
-                    .concurrent_pipeline(
-                        MoveCallHandler::new(MoveCallProcessor, pipeline_config.clone()),
-                        config,
-                    )
-                    .await?;
-            }
-            FileType::Object => {
-                let cache = package_cache
-                    .clone()
-                    .ok_or_else(|| anyhow!("Package cache required for Object handler"))?;
-                indexer
-                    .concurrent_pipeline(
-                        ObjectHandler::new(
-                            ObjectProcessor::new(cache, &pipeline_config.package_id_filter),
-                            pipeline_config.clone(),
-                        ),
-                        config,
-                    )
-                    .await?;
-            }
-            FileType::DynamicField => {
-                let cache = package_cache
-                    .clone()
-                    .ok_or_else(|| anyhow!("Package cache required for DynamicField handler"))?;
-                indexer
-                    .concurrent_pipeline(
-                        DynamicFieldHandler::new(
-                            DynamicFieldProcessor::new(cache),
-                            pipeline_config.clone(),
-                        ),
-                        config,
-                    )
-                    .await?;
-            }
-            FileType::TransactionObjects => {
-                indexer
-                    .concurrent_pipeline(
-                        TransactionObjectsHandler::new(
-                            TransactionObjectsProcessor,
-                            pipeline_config.clone(),
-                        ),
-                        config,
-                    )
-                    .await?;
-            }
-            FileType::MovePackage => {
-                indexer
-                    .concurrent_pipeline(
-                        PackageHandler::new(PackageProcessor, pipeline_config.clone()),
-                        config,
-                    )
-                    .await?;
-            }
-            FileType::MovePackageBCS => {
-                indexer
-                    .concurrent_pipeline(
-                        PackageBCSHandler::new(PackageBCSProcessor, pipeline_config.clone()),
-                        config,
-                    )
-                    .await?;
-            }
-            FileType::WrappedObject => {
-                let cache = package_cache
-                    .clone()
-                    .ok_or_else(|| anyhow!("Package cache required for WrappedObject handler"))?;
-                indexer
-                    .concurrent_pipeline(
-                        WrappedObjectHandler::new(
-                            WrappedObjectProcessor::new(cache),
-                            pipeline_config.clone(),
-                        ),
-                        config,
-                    )
-                    .await?;
-            }
-        }
-        Ok(())
+        pipeline_config
+            .pipeline
+            .register_handler(indexer, pipeline_config, package_cache, config)
+            .await
     }
 
     async fn create_object_store_from_config(

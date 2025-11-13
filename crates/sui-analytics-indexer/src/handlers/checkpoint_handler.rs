@@ -13,14 +13,14 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::tables::CheckpointEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
 
 pub struct CheckpointProcessor;
 
 pub type CheckpointHandler = AnalyticsHandler<CheckpointProcessor, AnalyticsBatch<CheckpointEntry>>;
 
 impl AnalyticsMetadata for CheckpointEntry {
-    const FILE_TYPE: FileType = FileType::Checkpoint;
+    const FILE_TYPE: Pipeline = Pipeline::Checkpoint;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch
