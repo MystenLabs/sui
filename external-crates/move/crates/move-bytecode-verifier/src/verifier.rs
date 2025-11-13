@@ -103,7 +103,7 @@ pub fn verify_module_with_config_metered_up_to_code_units<'env>(
     ability_cache: &mut AbilityCache<'env>,
     meter: &mut (impl Meter + ?Sized),
 ) -> VMResult<()> {
-    BoundsChecker::verify_module(module).map_err(|e| {
+    BoundsChecker::verify_module(module, config.deprecate_global_storage_ops).map_err(|e| {
         // We can't point the error at the module, because if bounds-checking
         // failed, we cannot safely index into module's handle to itself.
         e.finish(Location::Undefined)
@@ -111,7 +111,7 @@ pub fn verify_module_with_config_metered_up_to_code_units<'env>(
     LimitsVerifier::verify_module(config, module)?;
     DuplicationChecker::verify_module(module)?;
     SignatureChecker::verify_module(module, ability_cache, meter)?;
-    InstructionConsistency::verify_module(module)?;
+    InstructionConsistency::verify_module(config, module)?;
     constants::verify_module(module)?;
     friends::verify_module(module)?;
     ability_field_requirements::verify_module(module, ability_cache, meter)?;
