@@ -12,14 +12,14 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::tables::MoveCallEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
 
 pub struct MoveCallProcessor;
 
 pub type MoveCallHandler = AnalyticsHandler<MoveCallProcessor, AnalyticsBatch<MoveCallEntry>>;
 
 impl AnalyticsMetadata for MoveCallEntry {
-    const FILE_TYPE: FileType = FileType::MoveCall;
+    const FILE_TYPE: Pipeline = Pipeline::MoveCall;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

@@ -11,14 +11,14 @@ use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::tables::PackageBCSEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
 
 pub struct PackageBCSProcessor;
 
 pub type PackageBCSHandler = AnalyticsHandler<PackageBCSProcessor, AnalyticsBatch<PackageBCSEntry>>;
 
 impl AnalyticsMetadata for PackageBCSEntry {
-    const FILE_TYPE: FileType = FileType::MovePackageBCS;
+    const FILE_TYPE: Pipeline = Pipeline::MovePackageBCS;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{FileFormat, FileType, ParquetSchema, ParquetValue};
+use crate::{FileFormat, ParquetSchema, ParquetValue};
 use anyhow::{Result, anyhow};
 use arrow_array::{
     ArrayRef, RecordBatch,
@@ -51,7 +51,7 @@ impl ColumnBuilder {
 // Save table entries to parquet files.
 pub struct ParquetWriter {
     root_dir_path: PathBuf,
-    file_type: FileType,
+    dir_prefix: String,
     epoch: EpochId,
     checkpoint_range: Range<u64>,
     builders: Vec<ColumnBuilder>,
@@ -61,12 +61,12 @@ pub struct ParquetWriter {
 impl ParquetWriter {
     pub fn new(
         root_dir_path: &Path,
-        file_type: FileType,
+        dir_prefix: String,
         start_checkpoint_seq_num: u64,
     ) -> Result<Self> {
         Ok(Self {
             root_dir_path: root_dir_path.to_path_buf(),
-            file_type,
+            dir_prefix,
             epoch: 0,
             checkpoint_range: start_checkpoint_seq_num..u64::MAX,
             builders: vec![],
@@ -75,14 +75,13 @@ impl ParquetWriter {
     }
 
     fn file(&self) -> Result<File> {
-        let file_path = path_to_filesystem(
-            self.root_dir_path.clone(),
-            &self.file_type.file_path(
-                FileFormat::PARQUET,
-                self.epoch,
-                self.checkpoint_range.clone(),
-            ),
-        )?;
+        let object_path = crate::construct_file_path(
+            &self.dir_prefix,
+            FileFormat::PARQUET,
+            self.epoch,
+            self.checkpoint_range.clone(),
+        );
+        let file_path = path_to_filesystem(self.root_dir_path.clone(), &object_path)?;
         create_dir_all(file_path.parent().ok_or(anyhow!("Bad directory path"))?)?;
         if file_path.exists() {
             remove_file(&file_path)?;

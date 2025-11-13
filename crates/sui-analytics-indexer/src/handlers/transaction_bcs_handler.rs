@@ -12,7 +12,7 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::tables::TransactionBCSEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
 
 pub struct TransactionBCSProcessor;
 
@@ -20,7 +20,7 @@ pub type TransactionBCSHandler =
     AnalyticsHandler<TransactionBCSProcessor, AnalyticsBatch<TransactionBCSEntry>>;
 
 impl AnalyticsMetadata for TransactionBCSEntry {
-    const FILE_TYPE: FileType = FileType::TransactionBCS;
+    const FILE_TYPE: Pipeline = Pipeline::TransactionBCS;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

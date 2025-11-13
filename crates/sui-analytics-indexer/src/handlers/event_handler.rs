@@ -15,7 +15,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::package_store::PackageCache;
 use crate::tables::EventEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
 
 pub struct EventProcessor {
     package_cache: Arc<PackageCache>,
@@ -30,7 +30,7 @@ impl EventProcessor {
 }
 
 impl AnalyticsMetadata for EventEntry {
-    const FILE_TYPE: FileType = FileType::Event;
+    const FILE_TYPE: Pipeline = Pipeline::Event;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

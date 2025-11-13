@@ -9,13 +9,13 @@ use sui_types::base_types::EpochId;
 use tempfile::TempDir;
 
 use crate::parquet::writer::ParquetWriter;
-use crate::{FileFormat, FileType, ParquetSchema};
+use crate::{FileFormat, ParquetSchema};
 
 /// Batch type for accumulating Parquet rows and managing file lifecycle
 pub struct ParquetBatch<S: Serialize + ParquetSchema> {
     writer: ParquetWriter,
     temp_dir: TempDir,
-    file_type: FileType,
+    dir_prefix: String,
     current_file_path: Option<PathBuf>,
     current_epoch: EpochId,
     checkpoint_range_start: u64,
@@ -24,14 +24,14 @@ pub struct ParquetBatch<S: Serialize + ParquetSchema> {
 }
 
 impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
-    pub fn new(file_type: FileType, start_checkpoint: u64) -> Result<Self> {
+    pub fn new(dir_prefix: String, start_checkpoint: u64) -> Result<Self> {
         let temp_dir = TempDir::new()?;
-        let writer = ParquetWriter::new(temp_dir.path(), file_type, start_checkpoint)?;
+        let writer = ParquetWriter::new(temp_dir.path(), dir_prefix.clone(), start_checkpoint)?;
 
         Ok(Self {
             writer,
             temp_dir,
-            file_type,
+            dir_prefix,
             current_file_path: None,
             current_epoch: 0,
             checkpoint_range_start: start_checkpoint,
@@ -85,7 +85,7 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
         let file_path = self
             .temp_dir
             .path()
-            .join(self.file_type.dir_prefix().as_ref())
+            .join(self.dir_prefix.as_str())
             .join(epoch_dir)
             .join(&file_name);
 
@@ -103,8 +103,12 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
     /// Get the object store path for the current file
     pub fn object_store_path(&self) -> ObjectPath {
         let checkpoint_range = self.checkpoint_range_start..(self.last_checkpoint + 1);
-        self.file_type
-            .file_path(FileFormat::PARQUET, self.current_epoch, checkpoint_range)
+        crate::construct_file_path(
+            &self.dir_prefix,
+            FileFormat::PARQUET,
+            self.current_epoch,
+            checkpoint_range,
+        )
     }
 
     /// Get the current file path for uploading
