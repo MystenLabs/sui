@@ -8,8 +8,8 @@ use std::path::PathBuf;
 use sui_types::base_types::EpochId;
 use tempfile::TempDir;
 
+use crate::ParquetSchema;
 use crate::parquet::writer::ParquetWriter;
-use crate::{FileFormat, ParquetSchema};
 
 /// Batch type for accumulating Parquet rows and managing file lifecycle
 pub struct ParquetBatch<S: Serialize + ParquetSchema> {
@@ -75,19 +75,9 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
 
         // Build the file path where ParquetWriter wrote the file
         let checkpoint_range = self.checkpoint_range_start..end_checkpoint;
-        let file_name = format!(
-            "{}_{}.{}",
-            checkpoint_range.start,
-            checkpoint_range.end,
-            FileFormat::PARQUET.file_suffix()
-        );
-        let epoch_dir = format!("epoch_{}", self.current_epoch);
-        let file_path = self
-            .temp_dir
-            .path()
-            .join(self.dir_prefix.as_str())
-            .join(epoch_dir)
-            .join(&file_name);
+        let relative_path =
+            crate::construct_file_path(&self.dir_prefix, self.current_epoch, checkpoint_range);
+        let file_path = self.temp_dir.path().join(relative_path);
 
         if !file_path.exists() {
             return Err(anyhow!(
@@ -103,11 +93,13 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
     /// Get the object store path for the current file
     pub fn object_store_path(&self) -> ObjectPath {
         let checkpoint_range = self.checkpoint_range_start..(self.last_checkpoint + 1);
-        crate::construct_file_path(
-            &self.dir_prefix,
-            FileFormat::PARQUET,
-            self.current_epoch,
-            checkpoint_range,
+        let path_buf =
+            crate::construct_file_path(&self.dir_prefix, self.current_epoch, checkpoint_range);
+        // Convert PathBuf to ObjectPath (always uses forward slashes)
+        ObjectPath::from_iter(
+            path_buf
+                .components()
+                .map(|c| c.as_os_str().to_str().expect("path should be valid UTF-8")),
         )
     }
 
