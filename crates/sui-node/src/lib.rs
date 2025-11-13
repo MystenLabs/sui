@@ -909,7 +909,9 @@ impl SuiNode {
         let validator_components = match config.node_type() {
             sui_config::NodeType::Validator => {
                 if !state.is_validator(&epoch_store) {
-                    return Err(anyhow!("Node is configured as Validator but not in committee"));
+                    return Err(anyhow!(
+                        "Node is configured as Validator but not in committee"
+                    ));
                 }
                 let (components, _) = futures::join!(
                     Self::construct_validator_components(
@@ -934,7 +936,8 @@ impl SuiNode {
                 components.consensus_adapter.submit_recovered(&epoch_store);
 
                 // Start the gRPC server
-                components.validator_server_handle = components.validator_server_handle.start().await;
+                components.validator_server_handle =
+                    components.validator_server_handle.start().await;
 
                 Some(ConsensusComponents::Validator(components))
             }
@@ -1034,9 +1037,7 @@ impl SuiNode {
             Some(ConsensusComponents::Observer(_)) => {
                 Err(SuiError::from("Node is an observer, not a validator"))
             }
-            None => {
-                Err(SuiError::from("Node is not a validator"))
-            }
+            None => Err(SuiError::from("Node is not a validator")),
         }
     }
 
@@ -1456,7 +1457,9 @@ impl SuiNode {
 
         // Observer nodes don't build their own checkpoints - they only consume certified checkpoints
         // from validators via state sync. Use CheckpointServiceNoop to skip checkpoint building.
-        let checkpoint_service_wrapper = Arc::new(CheckpointServiceWrapper::Noop(Arc::new(CheckpointServiceNoop {})));
+        let checkpoint_service_wrapper = Arc::new(CheckpointServiceWrapper::Noop(Arc::new(
+            CheckpointServiceNoop {},
+        )));
 
         let low_scoring_authorities = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
 
@@ -1561,7 +1564,8 @@ impl SuiNode {
             checkpoint_metrics.clone(),
         );
 
-        let checkpoint_service_wrapper = Arc::new(CheckpointServiceWrapper::Full(checkpoint_service.clone()));
+        let checkpoint_service_wrapper =
+            Arc::new(CheckpointServiceWrapper::Full(checkpoint_service.clone()));
 
         // create a new map that gets injected into both the consensus handler and the consensus adapter
         // the consensus handler will write values forwarded from consensus, and the consensus adapter
@@ -1988,7 +1992,9 @@ impl SuiNode {
                 .set(cur_epoch_store.protocol_config().version.as_u64() as i64);
 
             // Advertise capabilities to committee, if we are a validator.
-            if let Some(ConsensusComponents::Validator(components)) = &*self.validator_components.lock().await {
+            if let Some(ConsensusComponents::Validator(components)) =
+                &*self.validator_components.lock().await
+            {
                 // TODO: without this sleep, the consensus message is not delivered reliably.
                 tokio::time::sleep(Duration::from_millis(1)).await;
 
@@ -2275,7 +2281,9 @@ impl SuiNode {
                     match self.config.node_type() {
                         sui_config::NodeType::Validator => {
                             if self.state.is_validator(&new_epoch_store) {
-                                info!("Promoting the node from fullnode to validator, starting grpc server");
+                                info!(
+                                    "Promoting the node from fullnode to validator, starting grpc server"
+                                );
 
                                 let mut components = Self::construct_validator_components(
                                     self.config.clone(),

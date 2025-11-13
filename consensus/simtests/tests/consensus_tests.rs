@@ -214,19 +214,28 @@ mod consensus_tests {
         let validator_commit_monitor = authorities[0].commit_consumer_monitor();
         let validator_commits = validator_commit_monitor.highest_handled_commit();
         tracing::info!("Validator handled {} commits", validator_commits);
-        assert!(validator_commits > 0, "Validators should have made progress");
+        assert!(
+            validator_commits > 0,
+            "Validators should have made progress"
+        );
 
         // Check observer status - observers don't automatically sync commits in the current implementation
         // They are passive nodes that can serve fetch_blocks/fetch_commits requests but don't
         // actively participate in consensus or automatically subscribe to commits
         let observer_commit_monitor = observer_node.commit_consumer_monitor();
         let observer_commits = observer_commit_monitor.highest_handled_commit();
-        tracing::info!("Observer handled {} commits (passive node)", observer_commits);
+        tracing::info!(
+            "Observer handled {} commits (passive node)",
+            observer_commits
+        );
         assert!(observer_commits > 0, "Validators should have made progress");
 
         // The main goal is to verify observer node doesn't panic during operation
         // Observer nodes in their current form are passive and don't automatically receive commits
-        assert!(observer_node.is_running(), "Observer should still be running");
+        assert!(
+            observer_node.is_running(),
+            "Observer should still be running"
+        );
 
         tracing::info!("Test completed successfully - observer node operated without panicking");
 

@@ -86,12 +86,19 @@ impl FullNodeHandle {
                     Ok(client) => break client,
                     Err(e) if retry_count < max_retries => {
                         retry_count += 1;
-                        tracing::debug!("Failed to connect to RPC at {}, attempt {}/{}: {}. Retrying...",
-                            rpc_url, retry_count, max_retries, e);
+                        tracing::debug!(
+                            "Failed to connect to RPC at {}, attempt {}/{}: {}. Retrying...",
+                            rpc_url,
+                            retry_count,
+                            max_retries,
+                            e
+                        );
                         tokio::time::sleep(Duration::from_millis(1000)).await;
                     }
-                    Err(e) => panic!("Failed to connect to RPC at {} after {} attempts: {}",
-                        rpc_url, max_retries, e),
+                    Err(e) => panic!(
+                        "Failed to connect to RPC at {} after {} attempts: {}",
+                        rpc_url, max_retries, e
+                    ),
                 }
             }
         };

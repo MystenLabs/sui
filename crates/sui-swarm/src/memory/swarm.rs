@@ -579,9 +579,10 @@ impl Swarm {
 
     /// Return an iterator over shared references of all Fullnodes.
     pub fn fullnodes(&self) -> impl Iterator<Item = &Node> {
-        self.nodes
-            .values()
-            .filter(|node| node.config().consensus_config.is_none() || node.config().consensus_config().unwrap().is_observer)
+        self.nodes.values().filter(|node| {
+            node.config().consensus_config.is_none()
+                || node.config().consensus_config().unwrap().is_observer
+        })
     }
 
     pub async fn spawn_new_node(&mut self, config: NodeConfig) -> SuiNodeHandle {

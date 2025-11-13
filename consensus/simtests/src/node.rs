@@ -17,13 +17,13 @@ use consensus_core::{
 use consensus_types::block::BlockTimestampMs;
 use mysten_metrics::monitored_mpsc::UnboundedReceiver;
 use mysten_metrics::monitored_mpsc::unbounded_channel;
+use mysten_network::Multiaddr;
 use parking_lot::Mutex;
 use prometheus::Registry;
+use rand::{SeedableRng as _, rngs::StdRng};
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
 use tempfile::TempDir;
 use tracing::{info, trace};
-use rand::{rngs::StdRng, SeedableRng as _};
-use mysten_network::Multiaddr;
 
 #[derive(Clone)]
 pub struct Config {
@@ -36,7 +36,7 @@ pub struct Config {
     pub clock_drift: BlockTimestampMs,
     pub protocol_config: ProtocolConfig,
     pub transaction_verifier: Arc<dyn TransactionVerifier>,
-    pub ip: Option<Multiaddr>
+    pub ip: Option<Multiaddr>,
 }
 
 pub struct AuthorityNode {
@@ -166,9 +166,9 @@ impl AuthorityNodeInner {
             to_socket_addr(ip).unwrap()
         } else {
             let authority = config.committee.authority(config.authority_index);
-             to_socket_addr(&authority.address).unwrap()
+            to_socket_addr(&authority.address).unwrap()
         };
-        
+
         let ip = match socket_addr {
             SocketAddr::V4(v4) => IpAddr::V4(*v4.ip()),
             _ => panic!("unsupported protocol"),
@@ -317,7 +317,11 @@ pub(crate) async fn make_authority(
     let authority = ConsensusAuthority::start(
         NetworkType::Tonic,
         0,
-        if is_observer { None } else { Some(authority_index) },
+        if is_observer {
+            None
+        } else {
+            Some(authority_index)
+        },
         committee,
         parameters,
         protocol_config,

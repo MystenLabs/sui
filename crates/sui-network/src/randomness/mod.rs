@@ -109,7 +109,9 @@ impl Handle {
 
     /// Subscribe to receive completed randomness signatures.
     /// Returns a broadcast receiver that will receive (RandomnessRound, BCS-serialized RandomnessSignature) tuples.
-    pub fn subscribe_to_randomness_signatures(&self) -> tokio::sync::broadcast::Receiver<(RandomnessRound, Vec<u8>)> {
+    pub fn subscribe_to_randomness_signatures(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<(RandomnessRound, Vec<u8>)> {
         self.randomness_signature_broadcast_tx.subscribe()
     }
 
@@ -177,7 +179,10 @@ impl Handle {
                 }
             }
         });
-        Self { sender, randomness_signature_broadcast_tx }
+        Self {
+            sender,
+            randomness_signature_broadcast_tx,
+        }
     }
 }
 
@@ -791,7 +796,9 @@ impl RandomnessEventLoop {
 
         // Broadcast the completed randomness signature to observers
         // Using `send()` instead of `try_send()` is best-effort - if no receivers are listening, it will just drop the message
-        let _ = self.randomness_signature_broadcast_tx.send((round, sig_bytes));
+        let _ = self
+            .randomness_signature_broadcast_tx
+            .send((round, sig_bytes));
     }
 
     fn maybe_ignore_byzantine_peer(&mut self, epoch: EpochId, peer_id: PeerId) {
