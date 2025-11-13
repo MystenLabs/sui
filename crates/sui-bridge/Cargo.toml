@@ -52,6 +52,8 @@ sui-metrics-push-client.workspace = true
 hex-literal = { version = "0.3.4", optional = true }
 test-cluster = { workspace = true, optional = true }
 sui-sdk-types.workspace = true
+sui-rpc.workspace = true
+tonic.workspace = true
 
 [dev-dependencies]
 sui-config.workspace = true

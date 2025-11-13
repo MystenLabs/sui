@@ -150,15 +150,13 @@ impl SuiMockClient {
 
 #[async_trait]
 impl SuiClientInner for SuiMockClient {
-    type Error = sui_sdk::error::Error;
-
     // Unwraps in this function: We assume the responses are pre-populated
     // by the test before calling into this function.
     async fn query_events(
         &self,
         query: EventFilter,
         cursor: Option<EventID>,
-    ) -> Result<EventPage, Self::Error> {
+    ) -> Result<EventPage, BridgeError> {
         let events = self.events.lock().unwrap();
         match query {
             EventFilter::MoveEventModule { package, module } => {
@@ -184,7 +182,7 @@ impl SuiClientInner for SuiMockClient {
     async fn get_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,
-    ) -> Result<SuiEvents, Self::Error> {
+    ) -> Result<SuiEvents, BridgeError> {
         let events = self.events_by_tx_digest.lock().unwrap();
 
         match events
@@ -198,29 +196,29 @@ impl SuiClientInner for SuiMockClient {
                 events: events.clone(),
             }),
             // sui_sdk::error::Error is not Clone
-            Err(_) => Err(sui_sdk::error::Error::DataError("".to_string())),
+            Err(_) => Err(sui_sdk::error::Error::DataError("".to_string()).into()),
         }
     }
 
-    async fn get_chain_identifier(&self) -> Result<String, Self::Error> {
+    async fn get_chain_identifier(&self) -> Result<String, BridgeError> {
         Ok(self.chain_identifier.clone())
     }
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, Self::Error> {
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, BridgeError> {
         Ok(self
             .latest_checkpoint_sequence_number
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, Self::Error> {
+    async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, BridgeError> {
         Ok(DUMMY_MUTALBE_BRIDGE_OBJECT_ARG)
     }
 
-    async fn get_reference_gas_price(&self) -> Result<u64, Self::Error> {
+    async fn get_reference_gas_price(&self) -> Result<u64, BridgeError> {
         Ok(1000)
     }
 
-    async fn get_bridge_summary(&self) -> Result<BridgeSummary, Self::Error> {
+    async fn get_bridge_summary(&self) -> Result<BridgeSummary, BridgeError> {
         Ok(BridgeSummary {
             bridge_version: 0,
             message_version: 0,
@@ -276,7 +274,7 @@ impl SuiClientInner for SuiMockClient {
         &self,
         _source_chain_id: u8,
         _seq_number: u64,
-    ) -> Result<MoveTypeBridgeRecord, BridgeError> {
+    ) -> Result<Option<MoveTypeBridgeRecord>, BridgeError> {
         todo!()
     }
 
