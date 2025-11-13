@@ -818,6 +818,7 @@ mod tests {
         name = "b"
         edition = "2024"
 
+
         [environments]
         _test_env = "_test_env_id"
 
@@ -833,6 +834,7 @@ mod tests {
         name = "c_name"
         edition = "2024"
         version = "v1.2.3"
+
         implicit-dependencies = false
 
         [environments]
@@ -890,6 +892,8 @@ mod tests {
         name = "Any"
         edition = "2024"
         published-at = 0x0000000000000000000000000000000000000000000000000000000000005555
+        implicit-dependencies = false
+
 
         [dependencies]
 
