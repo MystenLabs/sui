@@ -160,7 +160,6 @@ where
                             // Next pending checkpoint is in the past, ignore it to avoid double
                             // writes.
                             Ordering::Greater => {
-                                println!("Pipeline {} skipping out-of-order checkpoint {}, expecting {}", H::NAME, entry.key(), next_checkpoint);
                                 metrics
                                     .total_watermarks_out_of_order
                                     .with_label_values(&[H::NAME])

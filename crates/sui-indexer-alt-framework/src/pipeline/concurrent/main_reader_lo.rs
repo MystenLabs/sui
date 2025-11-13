@@ -1,8 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
+};
+
 use tokio::{
-    sync::watch,
+    sync::SetOnce,
     task::JoinHandle,
     time::{MissedTickBehavior, interval},
 };
@@ -11,33 +19,35 @@ use tracing::{info, warn};
 
 use crate::store::{Connection, Store};
 
-use super::{Handler, PrunerConfig};
+use super::Handler;
 
-/// Starts a task for a tasked pipeline to track the main reader lo.
-pub(super) fn main_reader_lo<H: Handler + 'static>(
-    reader_lo_tx: watch::Sender<Option<u64>>,
-    config: Option<PrunerConfig>,
+/// Starts a task for a tasked pipeline to track the main reader lo. This task is responsible for
+/// managing the watch channel so consumers know when the sender has been dropped and break
+/// accordingly. The existence of `reader_interval` indicates whether the indexer was tasked,
+/// necessitating this task, or not.
+pub(super) fn track_main_reader_lo<H: Handler + 'static>(
+    reader_lo: Arc<SetOnce<AtomicU64>>,
+    reader_interval: Option<Duration>,
     cancel: CancellationToken,
     store: H::Store,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        // Only start the task if channel is not already initialized.
-        if reader_lo_tx.borrow().is_some() {
+        if reader_lo.get().is_some() {
             info!(pipeline = H::NAME, "Skipping main reader lo task");
+            return;
+        }
+
+        let Some(reader_interval) = reader_interval else {
+            info!(
+                pipeline = H::NAME,
+                "Not a tasked indexer, skipping main reader lo task"
+            );
+            reader_lo.set(AtomicU64::new(0)).ok();
             return;
         };
 
-        // Keep the channel alive and set to 0, but stop the task as we don't need to track main
-        // `reader_lo`.
-        let Some(config) = config else {
-            // Set channel to 0 to indicate no pruning.
-            reader_lo_tx.send(Some(0)).ok();
-            info!(pipeline = H::NAME, "Skipping main reader lo task");
-            return;
-        };
+        let mut reader_interval = interval(reader_interval);
 
-        // Set the interval to half the provided interval to ensure we refresh the watermark read frequently enough.
-        let mut reader_interval = interval(config.interval() / 2);
         // If we miss ticks, skip them to ensure we have the latest watermark.
         reader_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
@@ -48,24 +58,30 @@ pub(super) fn main_reader_lo<H: Handler + 'static>(
                     break;
                 }
 
-                // Periodic refresh of the main reader watermark.
                 _ = reader_interval.tick() => {
                     match store.connect().await {
                         Ok(mut conn) => {
                             match conn.reader_watermark(H::NAME).await {
                                 Ok(watermark_opt) => {
-                                    // If the reader watermark is not found, we assume that pruning
-                                    // is not enabled, and checkpoints >= 0 are valid.
-                                    if reader_lo_tx.send(Some(watermark_opt.map_or(0, |wm| wm.reader_lo))).is_err() {
-                                        info!(pipeline = H::NAME, "Main reader lo receiver dropped, shutting down task");
-                                        break;
+                                    // If the reader watermark is not present (either because the
+                                    // watermark entry does not exist, or the reader watermark is
+                                    // not set), we assume that pruning is not enabled, and
+                                    // checkpoints >= 0 are valid.
+                                    let update = watermark_opt.map_or(0, |wm| wm.reader_lo);
+
+                                    let current = reader_lo.get();
+
+                                    if let Some(can_update) = current {
+                                        can_update.store(update, Ordering::Relaxed);
+                                    } else {
+                                        reader_lo.set(AtomicU64::new(update)).ok();
                                     }
                                 }
                                 Err(e) => {
                                     warn!(pipeline = H::NAME, "Failed to get reader watermark: {e}");
                                 }
                             }
-                        },
+                        }
                         Err(e) => {
                             warn!(pipeline = H::NAME, "Failed to connect to store: {e}");
                         }

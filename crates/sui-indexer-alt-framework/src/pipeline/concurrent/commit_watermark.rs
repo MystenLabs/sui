@@ -148,14 +148,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                     // must start at the lowest checkpoint across all pipelines, or because
                     // of a backfill, where the initial checkpoint has been overridden.
                     Ordering::Greater => {
-                        // Track how many we see to make sure it doesn't grow without
-                        // bound.
-                        println!(
-                            "Pipeline {} skipping out-of-order checkpoint watermark {}, expecting {}",
-                            H::NAME,
-                            pending.key(),
-                            next_checkpoint
-                        );
+                        // Track how many we see to make sure it doesn't grow without bound.
                         metrics
                             .total_watermarks_out_of_order
                             .with_label_values(&[H::NAME])
