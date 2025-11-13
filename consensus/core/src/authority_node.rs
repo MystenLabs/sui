@@ -17,7 +17,6 @@ use crate::{
     authority_service::AuthorityService,
     block_manager::BlockManager,
     block_verifier::SignedBlockVerifier,
-    broadcaster::Broadcaster,
     commit_observer::CommitObserver,
     commit_syncer::{CommitSyncer, CommitSyncerHandle},
     commit_vote_monitor::CommitVoteMonitor,
@@ -28,7 +27,7 @@ use crate::{
     leader_schedule::LeaderSchedule,
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{NetworkClient as _, NetworkManager, tonic_network::TonicManager},
+    network::{NetworkManager, tonic_network::TonicManager},
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::PeerRoundTracker,
@@ -127,10 +126,7 @@ where
     proposed_block_handler: JoinHandle<()>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
-    // Only one of broadcaster and subscriber gets created, depending on
-    // if streaming is supported.
-    broadcaster: Option<Broadcaster>,
-    subscriber: Option<Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>>,
+    subscriber: Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>,
     network_manager: N,
 }
 
@@ -209,18 +205,6 @@ where
 
         let mut network_manager = N::new(context.clone(), network_keypair);
         let network_client = network_manager.client();
-
-        // REQUIRED: Broadcaster must be created before Core, to start listening on the
-        // broadcast channel in order to not miss blocks and cause test failures.
-        let broadcaster = if N::Client::SUPPORT_STREAMING {
-            None
-        } else {
-            Some(Broadcaster::new(
-                context.clone(),
-                network_client.clone(),
-                &signals_receivers,
-            ))
-        };
 
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
         let store = Arc::new(RocksDBStore::new(store_path));
@@ -341,7 +325,7 @@ where
             store,
         ));
 
-        let subscriber = if N::Client::SUPPORT_STREAMING {
+        let subscriber = {
             let s = Subscriber::new(
                 context.clone(),
                 network_client,
@@ -353,9 +337,7 @@ where
                     s.subscribe(peer);
                 }
             }
-            Some(s)
-        } else {
-            None
+            s
         };
 
         network_manager.install_service(network_service).await;
@@ -375,7 +357,6 @@ where
             proposed_block_handler,
             leader_timeout_handle,
             core_thread_handle,
-            broadcaster,
             subscriber,
             network_manager,
         }
@@ -402,15 +383,9 @@ where
         self.proposed_block_handler.abort();
         self.leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
-        // When using streaming, all subscribers to broadcasted blocks stop after this.
         self.core_thread_handle.stop().await;
-        if let Some(mut broadcaster) = self.broadcaster.take() {
-            broadcaster.stop();
-        }
-        // Stop outgoing long lived streams before stopping network server.
-        if let Some(subscriber) = self.subscriber.take() {
-            subscriber.stop();
-        }
+        // Stop block subscriptions before stopping network server.
+        self.subscriber.stop();
         self.network_manager.stop().await;
 
         self.context

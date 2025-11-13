@@ -37,7 +37,6 @@ use super::{
 };
 use crate::{
     CommitIndex,
-    block::VerifiedBlock,
     commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
@@ -94,26 +93,6 @@ impl TonicClient {
 // TODO: make sure callsites do not send request to own index, and return error otherwise.
 #[async_trait]
 impl NetworkClient for TonicClient {
-    const SUPPORT_STREAMING: bool = true;
-
-    async fn send_block(
-        &self,
-        peer: AuthorityIndex,
-        block: &VerifiedBlock,
-        timeout: Duration,
-    ) -> ConsensusResult<()> {
-        let mut client = self.get_client(peer, timeout).await?;
-        let mut request = Request::new(SendBlockRequest {
-            block: block.serialized().clone(),
-        });
-        request.set_timeout(timeout);
-        client
-            .send_block(request)
-            .await
-            .map_err(|e| ConsensusError::NetworkRequest(format!("send_block failed: {e:?}")))?;
-        Ok(())
-    }
-
     async fn subscribe_blocks(
         &self,
         peer: AuthorityIndex,
@@ -324,6 +303,25 @@ impl NetworkClient for TonicClient {
         })?;
         let response = response.into_inner();
         Ok((response.highest_received, response.highest_accepted))
+    }
+
+    #[cfg(test)]
+    async fn send_block(
+        &self,
+        peer: AuthorityIndex,
+        block: &crate::VerifiedBlock,
+        timeout: Duration,
+    ) -> ConsensusResult<()> {
+        let mut client = self.get_client(peer, timeout).await?;
+        let mut request = Request::new(SendBlockRequest {
+            block: block.serialized().clone(),
+        });
+        request.set_timeout(timeout);
+        client
+            .send_block(request)
+            .await
+            .map_err(|e| ConsensusError::NetworkRequest(format!("send_block failed: {e:?}")))?;
+        Ok(())
     }
 }
 

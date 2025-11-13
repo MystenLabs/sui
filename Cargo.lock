@@ -2915,9 +2915,6 @@ dependencies = [
 name = "consensus-core"
 version = "0.1.0"
 dependencies = [
- "anemo",
- "anemo-build",
- "anemo-tower",
  "anyhow",
  "arc-swap",
  "async-trait",
@@ -8921,9 +8918,11 @@ version = "0.2.0"
 dependencies = [
  "anemo",
  "anemo-tower",
+ "anyhow",
  "async-stream",
  "bcs",
  "bytes",
+ "dashmap",
  "eyre",
  "fastcrypto",
  "futures",
@@ -8932,9 +8931,11 @@ dependencies = [
  "hyper-rustls 0.27.2",
  "hyper-util",
  "multiaddr",
+ "mysten-metrics",
  "once_cell",
  "pin-project-lite",
  "prometheus",
+ "quinn-proto",
  "rand 0.8.5",
  "rustls 0.23.25",
  "serde",

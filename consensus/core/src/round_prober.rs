@@ -312,8 +312,6 @@ mod test {
     #[async_trait]
     #[async_trait::async_trait]
     impl NetworkClient for FakeNetworkClient {
-        const SUPPORT_STREAMING: bool = true;
-
         async fn send_block(
             &self,
             _peer: AuthorityIndex,
