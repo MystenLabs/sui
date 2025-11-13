@@ -24,7 +24,7 @@ use tracing::warn;
 use crate::package_store::PackageCache;
 use crate::parquet::ParquetBatch;
 use crate::tables::DynamicFieldEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
 
 pub struct DynamicFieldBatch {
     pub inner: ParquetBatch<DynamicFieldEntry>,

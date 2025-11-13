@@ -11,7 +11,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::parquet::ParquetBatch;
 use crate::tables::MovePackageEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
 
 pub struct MovePackageBatch {
     pub inner: ParquetBatch<MovePackageEntry>,

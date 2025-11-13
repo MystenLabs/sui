@@ -13,7 +13,7 @@ use sui_types::transaction::TransactionDataAPI;
 
 use crate::parquet::ParquetBatch;
 use crate::tables::MoveCallEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
 
 pub struct MoveCallBatch {
     pub inner: ParquetBatch<MoveCallEntry>,

@@ -14,7 +14,7 @@ use sui_types::transaction::TransactionDataAPI;
 
 use crate::parquet::ParquetBatch;
 use crate::tables::CheckpointEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
 
 pub struct CheckpointBatch {
     pub inner: ParquetBatch<CheckpointEntry>,

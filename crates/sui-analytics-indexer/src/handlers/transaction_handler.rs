@@ -17,7 +17,7 @@ use tracing::error;
 
 use crate::parquet::ParquetBatch;
 use crate::tables::TransactionEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
 
 pub struct TransactionBatch {
     pub inner: ParquetBatch<TransactionEntry>,
