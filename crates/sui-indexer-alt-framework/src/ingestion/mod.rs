@@ -8,6 +8,7 @@
 
 use std::{sync::Arc, time::Duration};
 
+use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -16,7 +17,7 @@ use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::error::{Error, Result};
 use crate::ingestion::ingestion_client::{IngestionClient, IngestionClientArgs};
 use crate::ingestion::streaming_client::{GrpcStreamingClient, StreamingClientArgs};
-use crate::metrics::IndexerMetrics;
+use crate::metrics::IngestionMetrics;
 use crate::types::full_checkpoint_content::Checkpoint;
 
 mod broadcaster;
@@ -67,7 +68,7 @@ pub struct IngestionService {
     commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<Checkpoint>>>,
-    metrics: Arc<IndexerMetrics>,
+    metrics: Arc<IngestionMetrics>,
     cancel: CancellationToken,
 }
 
@@ -78,14 +79,23 @@ impl IngestionConfig {
 }
 
 impl IngestionService {
-    /// TODO: If we want to expose this as part of the framework, so people can run just an
-    /// ingestion service, we will need to split `IngestionMetrics` out from `IndexerMetrics`.
+    /// Create a new instance of the ingestion service, responsible for fetching checkpoints and
+    /// disseminating them to subscribers.
+    ///
+    /// - `args` specifies where to fetch checkpoints from.
+    /// - `config` specifies the various sizes and time limits for ingestion.
+    /// - `metrics_prefix` and `registry` are used to set up metrics for the service.
+    ///
+    /// After initialization, subscribers can be added using [Self::subscribe], and the service is
+    /// started with [Self::run], given a range of checkpoints to fetch (potentially unbounded).
     pub fn new(
         args: ClientArgs,
         config: IngestionConfig,
-        metrics: Arc<IndexerMetrics>,
+        metrics_prefix: Option<&str>,
+        registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self> {
+        let metrics = IngestionMetrics::new(metrics_prefix, registry);
         let ingestion_client = IngestionClient::new(args.ingestion, metrics.clone())?;
         let streaming_client = args.streaming.streaming_url.map(GrpcStreamingClient::new);
 
@@ -98,7 +108,7 @@ impl IngestionService {
             commit_hi_tx,
             commit_hi_rx,
             subscribers,
-            metrics: metrics.clone(),
+            metrics,
             cancel,
         })
     }
@@ -106,6 +116,11 @@ impl IngestionService {
     /// The ingestion client this service uses to fetch checkpoints.
     pub(crate) fn ingestion_client(&self) -> &IngestionClient {
         &self.ingestion_client
+    }
+
+    /// Access to the ingestion metrics.
+    pub(crate) fn metrics(&self) -> &Arc<IngestionMetrics> {
+        &self.metrics
     }
 
     /// Add a new subscription to the ingestion service. Note that the service is susceptible to
@@ -203,7 +218,6 @@ mod tests {
 
     use crate::ingestion::remote_client::tests::{respond_with, status};
     use crate::ingestion::test_utils::test_checkpoint_data;
-    use crate::metrics::tests::test_metrics;
 
     use super::*;
 
@@ -213,6 +227,7 @@ mod tests {
         ingest_concurrency: usize,
         cancel: CancellationToken,
     ) -> IngestionService {
+        let registry = Registry::new();
         IngestionService::new(
             ClientArgs {
                 ingestion: IngestionClientArgs {
@@ -226,7 +241,8 @@ mod tests {
                 ingest_concurrency,
                 ..Default::default()
             },
-            test_metrics(),
+            None,
+            &registry,
             cancel,
         )
         .unwrap()

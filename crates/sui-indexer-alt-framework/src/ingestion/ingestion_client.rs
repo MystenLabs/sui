@@ -21,7 +21,7 @@ use crate::ingestion::Result as IngestionResult;
 use crate::ingestion::local_client::LocalIngestionClient;
 use crate::ingestion::remote_client::RemoteIngestionClient;
 use crate::metrics::CheckpointLagMetricReporter;
-use crate::metrics::IndexerMetrics;
+use crate::metrics::IngestionMetrics;
 use crate::task::with_slow_future_monitor;
 use crate::types::full_checkpoint_content::{Checkpoint, CheckpointData};
 use async_trait::async_trait;
@@ -98,13 +98,13 @@ pub enum FetchData {
 pub struct IngestionClient {
     client: Arc<dyn IngestionClientTrait>,
     /// Wrap the metrics in an `Arc` to keep copies of the client cheap.
-    metrics: Arc<IndexerMetrics>,
+    metrics: Arc<IngestionMetrics>,
     checkpoint_lag_reporter: Arc<CheckpointLagMetricReporter>,
 }
 
 impl IngestionClient {
-    /// Construct a new ingestion client based on the provided arguments.
-    pub fn new(args: IngestionClientArgs, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
+    /// Construct a new ingestion client. Its source is determined by `args`.
+    pub fn new(args: IngestionClientArgs, metrics: Arc<IngestionMetrics>) -> IngestionResult<Self> {
         // TODO: Support stacking multiple ingestion clients for redundancy/failover.
         let client = if let Some(url) = args.remote_store_url.as_ref() {
             IngestionClient::new_remote(url.clone(), metrics.clone())?
@@ -124,31 +124,36 @@ impl IngestionClient {
         Ok(client)
     }
 
-    pub(crate) fn new_remote(url: Url, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
+    /// An ingestion client that fetches checkpoints from a remote store (an object store, over
+    /// HTTP).
+    pub fn new_remote(url: Url, metrics: Arc<IngestionMetrics>) -> IngestionResult<Self> {
         let client = Arc::new(RemoteIngestionClient::new(url)?);
         Ok(Self::new_impl(client, metrics))
     }
 
-    #[cfg(test)]
-    pub(crate) fn new_remote_with_timeout(
+    /// An ingestion client that fetches checkpoints from a remote store (an object store, over
+    /// HTTP), with a configured request timeout.
+    pub fn new_remote_with_timeout(
         url: Url,
         timeout: std::time::Duration,
-        metrics: Arc<IndexerMetrics>,
+        metrics: Arc<IngestionMetrics>,
     ) -> IngestionResult<Self> {
         let client = Arc::new(RemoteIngestionClient::new_with_timeout(url, timeout)?);
         Ok(Self::new_impl(client, metrics))
     }
 
-    pub(crate) fn new_local(path: PathBuf, metrics: Arc<IndexerMetrics>) -> Self {
+    /// An ingestion client that fetches checkpoints from a local directory.
+    pub fn new_local(path: PathBuf, metrics: Arc<IngestionMetrics>) -> Self {
         let client = Arc::new(LocalIngestionClient::new(path));
         Self::new_impl(client, metrics)
     }
 
-    pub(crate) fn new_rpc(
+    /// An ingestion client that fetches checkpoints from a fullnode, over gRPC.
+    pub fn new_rpc(
         url: Url,
         username: Option<String>,
         password: Option<String>,
-        metrics: Arc<IndexerMetrics>,
+        metrics: Arc<IngestionMetrics>,
     ) -> IngestionResult<Self> {
         let client = if let Some(username) = username {
             let mut headers = HeadersInterceptor::new();
@@ -165,7 +170,7 @@ impl IngestionClient {
 
     pub(crate) fn new_impl(
         client: Arc<dyn IngestionClientTrait>,
-        metrics: Arc<IndexerMetrics>,
+        metrics: Arc<IngestionMetrics>,
     ) -> Self {
         let checkpoint_lag_reporter = CheckpointLagMetricReporter::new(
             metrics.ingested_checkpoint_timestamp_lag.clone(),
@@ -376,7 +381,7 @@ mod tests {
 
     fn setup_test() -> (IngestionClient, Arc<MockIngestionClient>) {
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
-        let metrics = IndexerMetrics::new(None, &registry);
+        let metrics = IngestionMetrics::new(None, &registry);
         let mock_client = Arc::new(MockIngestionClient::default());
         let client = IngestionClient::new_impl(mock_client.clone(), metrics);
         (client, mock_client)

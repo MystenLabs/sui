@@ -43,7 +43,7 @@ impl IngestionClientTrait for LocalIngestionClient {
 pub(crate) mod tests {
     use crate::ingestion::ingestion_client::IngestionClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
-    use crate::metrics::tests::test_metrics;
+    use crate::metrics::tests::test_ingestion_metrics;
     use sui_storage::blob::{Blob, BlobEncoding};
 
     #[tokio::test]
@@ -55,7 +55,7 @@ pub(crate) mod tests {
             .await
             .unwrap();
 
-        let local_client = IngestionClient::new_local(tempdir, test_metrics());
+        let local_client = IngestionClient::new_local(tempdir, test_ingestion_metrics());
         let checkpoint = local_client.fetch(1).await.unwrap();
 
         // Convert checkpoint back to CheckpointData for serialization comparison
