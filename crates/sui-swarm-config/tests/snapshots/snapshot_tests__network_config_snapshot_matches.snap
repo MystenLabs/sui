@@ -79,6 +79,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -93,6 +94,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -241,6 +243,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -255,6 +258,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -403,6 +407,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -417,6 +422,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -565,6 +571,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -579,6 +586,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -727,6 +735,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -741,6 +750,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -889,6 +899,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -903,6 +914,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -1051,6 +1063,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -1065,6 +1078,7 @@ validator_configs:
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
