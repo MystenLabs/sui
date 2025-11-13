@@ -204,66 +204,7 @@ impl Processor for TransactionHandler {
     }
 }
 
-#[async_trait]
-impl Handler for TransactionHandler {
-    type Store = ObjectStore;
-    type Batch = TransactionBatch;
-
-
-    fn min_eager_rows(&self) -> usize {
-        self.config.max_row_count
-    }
-
-    fn max_pending_rows(&self) -> usize {
-        self.config.max_row_count * 5
-    }
-
-    fn batch(
-        &self,
-        batch: &mut Self::Batch,
-        values: &mut std::vec::IntoIter<Self::Value>,
-    ) -> BatchStatus {
-        // Get first value to extract epoch and checkpoint
-        let Some(first) = values.next() else {
-            return BatchStatus::Pending;
-        };
-
-        batch.inner.set_epoch(first.epoch);
-        batch.inner.update_last_checkpoint(first.checkpoint);
-
-        // Write first value and remaining values
-        if let Err(e) = batch
-            .inner
-            .write_rows(std::iter::once(first).chain(values.by_ref()))
-        {
-            tracing::error!("Failed to write rows to ParquetBatch: {}", e);
-            return BatchStatus::Pending;
-        }
-
-        // Let framework decide when to flush based on min_eager_rows()
-        BatchStatus::Pending
-    }
-
-    async fn commit<'a>(
-        &self,
-        batch: &Self::Batch,
-        conn: &mut <Self::Store as Store>::Connection<'a>,
-    ) -> Result<usize> {
-        let Some(file_path) = batch.inner.current_file_path() else {
-            return Ok(0);
-        };
-
-        let row_count = batch.inner.row_count()?;
-        let file_bytes = tokio::fs::read(file_path).await?;
-        let object_path = batch.inner.object_store_path();
-
-        conn.object_store()
-            .put(&object_path, file_bytes.into())
-            .await?;
-
-        Ok(row_count)
-    }
-}
+crate::impl_analytics_handler!(TransactionHandler, TransactionBatch, checkpoint);
 
 fn compute_transaction_positions(
     checkpoint_contents: &CheckpointContents,
