@@ -7,16 +7,14 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::{BatchStatus, Handler};
-use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_object_store::ObjectStore;
+use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::handlers::{get_move_struct, parse_struct};
 use crate::package_store::PackageCache;
 use crate::parquet::ParquetBatch;
 use crate::tables::WrappedObjectEntry;
-use crate::{FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
 
 pub struct WrappedObjectBatch {
     pub inner: ParquetBatch<WrappedObjectEntry>,
@@ -31,22 +29,40 @@ impl Default for WrappedObjectBatch {
     }
 }
 
-pub struct WrappedObjectHandler {
-    package_cache: Arc<PackageCache>,
-    config: PipelineConfig,
+impl CheckpointMetadata for WrappedObjectEntry {
+    fn get_epoch(&self) -> EpochId {
+        self.epoch
+    }
+
+    fn get_checkpoint_sequence_number(&self) -> u64 {
+        self.checkpoint
+    }
 }
 
-impl WrappedObjectHandler {
-    pub fn new(package_cache: Arc<PackageCache>, config: PipelineConfig) -> Self {
-        Self {
-            package_cache,
-            config,
-        }
+impl AnalyticsBatch for WrappedObjectBatch {
+    type Entry = WrappedObjectEntry;
+
+    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
+        &mut self.inner
+    }
+
+    fn inner(&self) -> &ParquetBatch<Self::Entry> {
+        &self.inner
+    }
+}
+
+pub struct WrappedObjectProcessor {
+    package_cache: Arc<PackageCache>,
+}
+
+impl WrappedObjectProcessor {
+    pub fn new(package_cache: Arc<PackageCache>) -> Self {
+        Self { package_cache }
     }
 }
 
 #[async_trait]
-impl Processor for WrappedObjectHandler {
+impl Processor for WrappedObjectProcessor {
     const NAME: &'static str = "wrapped_object";
     const FANOUT: usize = 10;
     type Value = WrappedObjectEntry;
@@ -120,4 +136,4 @@ impl Processor for WrappedObjectHandler {
     }
 }
 
-crate::impl_analytics_handler!(WrappedObjectHandler, WrappedObjectBatch, checkpoint);
+pub type WrappedObjectHandler = AnalyticsHandler<WrappedObjectProcessor, WrappedObjectBatch>;

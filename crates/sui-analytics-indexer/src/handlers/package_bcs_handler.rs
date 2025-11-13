@@ -7,14 +7,12 @@ use anyhow::Result;
 use async_trait::async_trait;
 use fastcrypto::encoding::{Base64, Encoding};
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::{BatchStatus, Handler};
-use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_object_store::ObjectStore;
+use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::parquet::ParquetBatch;
 use crate::tables::PackageBCSEntry;
-use crate::{FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
 
 pub struct PackageBCSBatch {
     pub inner: ParquetBatch<PackageBCSEntry>,
@@ -29,18 +27,32 @@ impl Default for PackageBCSBatch {
     }
 }
 
-pub struct PackageBCSHandler {
-    config: PipelineConfig,
-}
+impl CheckpointMetadata for PackageBCSEntry {
+    fn get_epoch(&self) -> EpochId {
+        self.epoch
+    }
 
-impl PackageBCSHandler {
-    pub fn new(config: PipelineConfig) -> Self {
-        Self { config }
+    fn get_checkpoint_sequence_number(&self) -> u64 {
+        self.checkpoint
     }
 }
 
+impl AnalyticsBatch for PackageBCSBatch {
+    type Entry = PackageBCSEntry;
+
+    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
+        &mut self.inner
+    }
+
+    fn inner(&self) -> &ParquetBatch<Self::Entry> {
+        &self.inner
+    }
+}
+
+pub struct PackageBCSProcessor;
+
 #[async_trait]
-impl Processor for PackageBCSHandler {
+impl Processor for PackageBCSProcessor {
     const NAME: &'static str = "move_package_bcs";
     const FANOUT: usize = 10;
     type Value = PackageBCSEntry;
@@ -71,4 +83,4 @@ impl Processor for PackageBCSHandler {
     }
 }
 
-crate::impl_analytics_handler!(PackageBCSHandler, PackageBCSBatch, checkpoint);
+pub type PackageBCSHandler = AnalyticsHandler<PackageBCSProcessor, PackageBCSBatch>;

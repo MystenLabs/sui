@@ -6,14 +6,12 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::{BatchStatus, Handler};
-use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_object_store::ObjectStore;
+use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::parquet::ParquetBatch;
 use crate::tables::MovePackageEntry;
-use crate::{FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
 
 pub struct MovePackageBatch {
     pub inner: ParquetBatch<MovePackageEntry>,
@@ -28,18 +26,32 @@ impl Default for MovePackageBatch {
     }
 }
 
-pub struct PackageHandler {
-    config: PipelineConfig,
-}
+impl CheckpointMetadata for MovePackageEntry {
+    fn get_epoch(&self) -> EpochId {
+        self.epoch
+    }
 
-impl PackageHandler {
-    pub fn new(config: PipelineConfig) -> Self {
-        Self { config }
+    fn get_checkpoint_sequence_number(&self) -> u64 {
+        self.checkpoint
     }
 }
 
+impl AnalyticsBatch for MovePackageBatch {
+    type Entry = MovePackageEntry;
+
+    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
+        &mut self.inner
+    }
+
+    fn inner(&self) -> &ParquetBatch<Self::Entry> {
+        &self.inner
+    }
+}
+
+pub struct PackageProcessor;
+
 #[async_trait]
-impl Processor for PackageHandler {
+impl Processor for PackageProcessor {
     const NAME: &'static str = "move_package";
     const FANOUT: usize = 10;
     type Value = MovePackageEntry;
@@ -77,4 +89,4 @@ impl Processor for PackageHandler {
     }
 }
 
-crate::impl_analytics_handler!(PackageHandler, MovePackageBatch, checkpoint);
+pub type PackageHandler = AnalyticsHandler<PackageProcessor, MovePackageBatch>;

@@ -6,12 +6,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::{BatchStatus, Handler};
-use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_object_store::ObjectStore;
 use sui_json_rpc_types::SuiMoveStruct;
 use sui_types::TypeTag;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::object::Object;
 
@@ -22,7 +19,7 @@ use crate::handlers::{
 use crate::package_store::PackageCache;
 use crate::parquet::ParquetBatch;
 use crate::tables::{ObjectEntry, ObjectStatus};
-use crate::{FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
 
 pub struct ObjectBatch {
     pub inner: ParquetBatch<ObjectEntry>,
@@ -36,24 +33,40 @@ impl Default for ObjectBatch {
     }
 }
 
-pub struct ObjectHandler {
-    package_cache: Arc<PackageCache>,
-    package_filter: Option<ObjectID>,
-    config: PipelineConfig,
+impl CheckpointMetadata for ObjectEntry {
+    fn get_epoch(&self) -> EpochId {
+        self.epoch
+    }
+
+    fn get_checkpoint_sequence_number(&self) -> u64 {
+        self.checkpoint
+    }
 }
 
-impl ObjectHandler {
-    pub fn new(
-        package_cache: Arc<PackageCache>,
-        package_filter: &Option<String>,
-        config: PipelineConfig,
-    ) -> Self {
+impl AnalyticsBatch for ObjectBatch {
+    type Entry = ObjectEntry;
+
+    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
+        &mut self.inner
+    }
+
+    fn inner(&self) -> &ParquetBatch<Self::Entry> {
+        &self.inner
+    }
+}
+
+pub struct ObjectProcessor {
+    package_cache: Arc<PackageCache>,
+    package_filter: Option<ObjectID>,
+}
+
+impl ObjectProcessor {
+    pub fn new(package_cache: Arc<PackageCache>, package_filter: &Option<String>) -> Self {
         Self {
             package_cache,
             package_filter: package_filter
                 .clone()
                 .map(|x| ObjectID::from_hex_literal(&x).unwrap()),
-            config,
         }
     }
 
@@ -210,7 +223,7 @@ impl ObjectHandler {
 }
 
 #[async_trait]
-impl Processor for ObjectHandler {
+impl Processor for ObjectProcessor {
     const NAME: &'static str = "object";
     const FANOUT: usize = 10;
     type Value = ObjectEntry;
@@ -276,4 +289,4 @@ impl Processor for ObjectHandler {
     }
 }
 
-crate::impl_analytics_handler!(ObjectHandler, ObjectBatch, checkpoint);
+pub type ObjectHandler = AnalyticsHandler<ObjectProcessor, ObjectBatch>;
