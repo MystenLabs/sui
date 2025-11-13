@@ -27,6 +27,19 @@ public entry fun delete_object(obj: TestObject) {
     object::delete(id);
 }
 
+public entry fun create_object_with_large_storage(
+    value: u64,
+    data: vector<u8>,
+    ctx: &mut TxContext,
+) {
+    let obj = TestObject {
+        id: object::new(ctx),
+        value,
+        data,
+    };
+    transfer::transfer(obj, tx_context::sender(ctx));
+}
+
 public entry fun abort_with_computation(should_abort: bool) {
     let mut i = 0;
     while (i < 100) {

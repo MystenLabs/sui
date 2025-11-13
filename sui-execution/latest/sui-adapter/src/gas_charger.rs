@@ -345,6 +345,13 @@ pub mod checked {
                 if is_insufficient_balance_error {
                     GasCostSummary::default()
                 } else {
+                    // cap storage cost to gas_budget
+                    if dont_charge_budget_on_storage_oog(self.gas_model_version) {
+                        self.handle_storage_and_rebate_v2(temporary_store, execution_result)
+                    } else {
+                        self.handle_storage_and_rebate_v1(temporary_store, execution_result)
+                    }
+
                     let cost_summary = self.gas_status.summary();
                     let net_change = cost_summary.net_gas_usage();
 
@@ -365,6 +372,7 @@ pub mod checked {
                     cost_summary
                 }
             } else if let Some(gas_object_id) = self.smashed_gas_coin {
+                // cap storage cost to gas_budget
                 if dont_charge_budget_on_storage_oog(self.gas_model_version) {
                     self.handle_storage_and_rebate_v2(temporary_store, execution_result)
                 } else {
