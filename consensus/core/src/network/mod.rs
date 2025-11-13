@@ -58,17 +58,6 @@ pub(crate) type BlockStream = Pin<Box<dyn Stream<Item = ExtendedSerializedBlock>
 /// - To bound server resources, server should implement own timeout for incoming requests.
 #[async_trait]
 pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
-    // Whether the network client streams blocks to subscribed peers.
-    const SUPPORT_STREAMING: bool;
-
-    /// Sends a serialized SignedBlock to a peer.
-    async fn send_block(
-        &self,
-        peer: AuthorityIndex,
-        block: &VerifiedBlock,
-        timeout: Duration,
-    ) -> ConsensusResult<()>;
-
     /// Subscribes to blocks from a peer after last_received round.
     async fn subscribe_blocks(
         &self,
@@ -117,6 +106,15 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
         peer: AuthorityIndex,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
+
+    /// Sends a serialized SignedBlock to a peer.
+    #[cfg(test)]
+    async fn send_block(
+        &self,
+        peer: AuthorityIndex,
+        block: &VerifiedBlock,
+        timeout: Duration,
+    ) -> ConsensusResult<()>;
 }
 
 /// Network service for handling requests from peers.

@@ -9,7 +9,6 @@ mod base_committer;
 mod block;
 mod block_manager;
 mod block_verifier;
-mod broadcaster;
 mod commit;
 mod commit_consumer;
 mod commit_finalizer;
