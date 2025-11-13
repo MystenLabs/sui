@@ -815,13 +815,27 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .epoch_start_timestamp_ms(),
             &consensus_commit,
         );
-        assert!(commit_info.round > last_committed_round);
 
-        // DONE(commit-handler-rewrite): already not needed
-
-        // DONE(commit-handler-rewrite): gather commit metadata
+        // DONE(commit-handler-rewrite): gather commit metadata (moved up for multi-leader dedup)
         let (timestamp, leader_author, commit_sub_dag_index) =
             self.gather_commit_metadata(&consensus_commit);
+
+        // With multi-leader support, we need >= instead of > since multiple leaders
+        // can commit in the same round from different authorities.
+        assert!(commit_info.round >= last_committed_round);
+
+        // Multi-leader deduplication: check if we've already processed this (round, authority)
+        let commit_key = (commit_info.round, leader_author);
+        if self.processed_commits.contains(&commit_key) {
+            warn!(
+                "Ignoring duplicate consensus output for round {} leader {} (v2 handler)",
+                commit_info.round, leader_author
+            );
+            return;
+        }
+        self.processed_commits.insert(commit_key);
+
+        // DONE(commit-handler-rewrite): already not needed
 
         info!(
             %consensus_commit,
