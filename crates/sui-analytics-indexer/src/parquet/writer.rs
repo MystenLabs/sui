@@ -8,9 +8,7 @@ use arrow_array::{
     builder::{ArrayBuilder, BooleanBuilder, GenericStringBuilder, Int64Builder, UInt64Builder},
 };
 use serde::Serialize;
-use std::fs::{File, create_dir_all, remove_file};
 use std::ops::Range;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::EpochId;
 
@@ -49,8 +47,6 @@ impl ColumnBuilder {
 
 // Save table entries to parquet files.
 pub struct ParquetWriter {
-    root_dir_path: PathBuf,
-    dir_prefix: String,
     epoch: EpochId,
     checkpoint_range: Range<u64>,
     builders: Vec<ColumnBuilder>,
@@ -58,30 +54,13 @@ pub struct ParquetWriter {
 }
 
 impl ParquetWriter {
-    pub fn new(
-        root_dir_path: &Path,
-        dir_prefix: String,
-        start_checkpoint_seq_num: u64,
-    ) -> Result<Self> {
+    pub fn new(start_checkpoint_seq_num: u64) -> Result<Self> {
         Ok(Self {
-            root_dir_path: root_dir_path.to_path_buf(),
-            dir_prefix,
             epoch: 0,
             checkpoint_range: start_checkpoint_seq_num..u64::MAX,
             builders: vec![],
             row_count: 0,
         })
-    }
-
-    fn file(&self) -> Result<File> {
-        let relative_path =
-            crate::construct_file_path(&self.dir_prefix, self.epoch, self.checkpoint_range.clone());
-        let file_path = self.root_dir_path.join(relative_path);
-        create_dir_all(file_path.parent().ok_or(anyhow!("Bad directory path"))?)?;
-        if file_path.exists() {
-            remove_file(&file_path)?;
-        }
-        Ok(File::create(&file_path)?)
     }
 }
 
@@ -146,11 +125,11 @@ impl ParquetWriter {
         Ok(())
     }
 
-    /// Flush the current file
+    /// Flush accumulated rows to an in-memory Parquet buffer
     pub fn flush<S: Serialize + ParquetSchema>(
         &mut self,
         end_checkpoint_seq_num: u64,
-    ) -> Result<bool> {
+    ) -> Result<Option<Vec<u8>>> {
         // Nothing to flush if builders aren't initialized or are empty
         if self.builders.is_empty()
             || self
@@ -158,7 +137,7 @@ impl ParquetWriter {
                 .iter_mut()
                 .all(|b| b.as_any_builder().is_empty())
         {
-            return Ok(false);
+            return Ok(None);
         }
 
         self.checkpoint_range.end = end_checkpoint_seq_num;
@@ -171,13 +150,17 @@ impl ParquetWriter {
 
         let batch = RecordBatch::try_from_iter(S::schema().iter().zip(arrays))?;
 
-        let propertiess = WriterProperties::builder()
+        let properties = WriterProperties::builder()
             .set_compression(Compression::SNAPPY)
             .build();
-        let mut writer = ArrowWriter::try_new(self.file()?, batch.schema(), Some(propertiess))?;
+
+        // Write to in-memory buffer
+        let mut buffer = Vec::new();
+        let mut writer = ArrowWriter::try_new(&mut buffer, batch.schema(), Some(properties))?;
         writer.write(&batch)?;
         writer.close()?;
-        Ok(true)
+
+        Ok(Some(buffer))
     }
 
     /// Reset internal state with given epoch and checkpoint sequence number
