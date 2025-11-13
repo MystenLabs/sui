@@ -19,6 +19,10 @@ pub struct MoveCallBatch {
     pub inner: ParquetBatch<MoveCallEntry>,
 }
 
+pub struct MoveCallProcessor;
+
+pub type MoveCallHandler = AnalyticsHandler<MoveCallProcessor, MoveCallBatch>;
+
 impl Default for MoveCallBatch {
     fn default() -> Self {
         Self {
@@ -27,7 +31,6 @@ impl Default for MoveCallBatch {
     }
 }
 
-// Implement traits for composition pattern
 impl CheckpointMetadata for MoveCallEntry {
     fn get_epoch(&self) -> EpochId {
         self.epoch
@@ -49,9 +52,6 @@ impl AnalyticsBatch for MoveCallBatch {
         &self.inner
     }
 }
-
-// The processor contains only processing logic, no config
-pub struct MoveCallProcessor;
 
 #[async_trait]
 impl Processor for MoveCallProcessor {
@@ -87,8 +87,3 @@ impl Processor for MoveCallProcessor {
         Ok(entries)
     }
 }
-
-// Type alias for backward compatibility
-pub type MoveCallHandler = AnalyticsHandler<MoveCallProcessor, MoveCallBatch>;
-
-// Constructor helper

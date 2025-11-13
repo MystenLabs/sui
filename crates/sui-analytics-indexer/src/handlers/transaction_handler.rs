@@ -23,6 +23,10 @@ pub struct TransactionBatch {
     pub inner: ParquetBatch<TransactionEntry>,
 }
 
+pub struct TransactionProcessor;
+
+pub type TransactionHandler = AnalyticsHandler<TransactionProcessor, TransactionBatch>;
+
 impl Default for TransactionBatch {
     fn default() -> Self {
         Self {
@@ -32,7 +36,6 @@ impl Default for TransactionBatch {
     }
 }
 
-// Implement traits for composition pattern
 impl CheckpointMetadata for TransactionEntry {
     fn get_epoch(&self) -> EpochId {
         self.epoch
@@ -54,9 +57,6 @@ impl AnalyticsBatch for TransactionBatch {
         &self.inner
     }
 }
-
-// The processor contains only processing logic, no config
-pub struct TransactionProcessor;
 
 #[async_trait]
 impl Processor for TransactionProcessor {
@@ -218,10 +218,6 @@ impl Processor for TransactionProcessor {
     }
 }
 
-// Type alias for backward compatibility
-pub type TransactionHandler = AnalyticsHandler<TransactionProcessor, TransactionBatch>;
-
-// Constructor helper
 fn compute_transaction_positions(
     checkpoint_contents: &CheckpointContents,
 ) -> HashMap<TransactionDigest, usize> {
