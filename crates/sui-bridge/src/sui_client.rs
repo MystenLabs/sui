@@ -22,9 +22,6 @@ use sui_rpc::proto::sui::rpc::v2::{
 };
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_sdk_types::Address;
-use sui_types::BRIDGE_PACKAGE_ID;
-use sui_types::SUI_BRIDGE_OBJECT_ID;
-use sui_types::TypeTag;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
 use sui_types::bridge::{
@@ -40,7 +37,10 @@ use sui_types::parse_sui_type_tag;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::Transaction;
-use sui_types::{Identifier, base_types::ObjectID, digests::TransactionDigest, event::EventID};
+use sui_types::TypeTag;
+use sui_types::BRIDGE_PACKAGE_ID;
+use sui_types::SUI_BRIDGE_OBJECT_ID;
+use sui_types::{base_types::ObjectID, digests::TransactionDigest, event::EventID, Identifier};
 use tokio::sync::OnceCell;
 use tracing::{error, warn};
 
@@ -150,13 +150,11 @@ where
         let events = self.inner.query_events(filter.clone(), cursor).await?;
 
         // Safeguard check that all events are emitted from requested package and module
-        assert!(
-            events
-                .data
-                .iter()
-                .all(|event| event.type_.address.as_ref() == package.as_ref()
-                    && event.type_.module == module)
-        );
+        assert!(events
+            .data
+            .iter()
+            .all(|event| event.type_.address.as_ref() == package.as_ref()
+                && event.type_.module == module));
         Ok(events)
     }
 
@@ -180,7 +178,7 @@ where
             .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
 
         bridge_event
-            .try_into_bridge_action(*tx_digest, event_idx)
+            .try_into_bridge_action()
             .ok_or(BridgeError::BridgeEventNotActionable)
     }
 
@@ -1001,6 +999,7 @@ impl SuiClientInner for SuiClientInternal {
 mod tests {
     use crate::crypto::BridgeAuthorityKeyPair;
     use crate::e2e_tests::test_utils::TestClusterWrapperBuilder;
+    use crate::types::SuiToEthTokenTransfer;
     use crate::{
         events::{EmittedSuiToEthTokenBridgeV1, MoveTokenDepositedEvent},
         sui_mock_client::SuiMockClient,
@@ -1008,7 +1007,6 @@ mod tests {
             approve_action_with_validator_secrets, bridge_token, get_test_eth_to_sui_bridge_action,
             get_test_sui_to_eth_bridge_action,
         },
-        types::SuiToEthBridgeAction,
     };
     use ethers::types::Address as EthAddress;
     use move_core_types::account_address::AccountAddress;
@@ -1020,7 +1018,7 @@ mod tests {
     use sui_types::crypto::get_key_pair;
 
     use super::*;
-    use crate::events::{SuiToEthTokenBridgeV1, init_all_struct_tags};
+    use crate::events::{init_all_struct_tags, SuiToEthTokenBridgeV1};
 
     #[tokio::test]
     async fn get_bridge_action_by_tx_digest_and_event_idx_maybe() {
@@ -1081,29 +1079,28 @@ mod tests {
                 sui_event_3.clone(),
             ],
         );
-        let expected_action_1 = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
-            sui_tx_digest: tx_digest,
-            sui_tx_event_index: 0,
-            sui_bridge_event: sanitized_event_1.clone(),
+        let expected_action = BridgeAction::SuiToEthTokenTransfer(SuiToEthTokenTransfer {
+            nonce: sanitized_event_1.nonce,
+            sui_chain_id: sanitized_event_1.sui_chain_id,
+            eth_chain_id: sanitized_event_1.eth_chain_id,
+            sui_address: sanitized_event_1.sui_address,
+            eth_address: sanitized_event_1.eth_address,
+            token_id: sanitized_event_1.token_id,
+            amount_adjusted: sanitized_event_1.amount_sui_adjusted,
         });
         assert_eq!(
             sui_client
                 .get_bridge_action_by_tx_digest_and_event_idx_maybe(&tx_digest, 0)
                 .await
                 .unwrap(),
-            expected_action_1,
+            expected_action,
         );
-        let expected_action_2 = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
-            sui_tx_digest: tx_digest,
-            sui_tx_event_index: 2,
-            sui_bridge_event: sanitized_event_1.clone(),
-        });
         assert_eq!(
             sui_client
                 .get_bridge_action_by_tx_digest_and_event_idx_maybe(&tx_digest, 2)
                 .await
                 .unwrap(),
-            expected_action_2,
+            expected_action,
         );
         assert!(matches!(
             sui_client

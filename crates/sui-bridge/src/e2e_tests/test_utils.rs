@@ -12,10 +12,10 @@ use crate::metrics::BridgeMetrics;
 use crate::server::BridgeNodePublicMetadata;
 use crate::sui_transaction_builder::build_add_tokens_on_sui_transaction;
 use crate::sui_transaction_builder::build_committee_register_transaction;
-use crate::types::BridgeCommitteeValiditySignInfo;
 use crate::types::CertifiedBridgeAction;
 use crate::types::VerifiedCertifiedBridgeAction;
-use crate::types::{BridgeAction, BridgeActionStatus, SuiToEthBridgeAction};
+use crate::types::{BridgeAction, BridgeActionStatus};
+use crate::types::{BridgeCommitteeValiditySignInfo, SuiToEthTokenTransfer};
 use crate::utils::EthSigner;
 use crate::utils::get_eth_signer_client;
 use crate::utils::publish_and_register_coins_return_add_coins_on_sui_action;
@@ -1293,7 +1293,7 @@ pub async fn initiate_bridge_sui_to_eth(
     token: ObjectRef,
     nonce: u64,
     sui_amount: u64,
-) -> Result<SuiToEthBridgeAction, anyhow::Error> {
+) -> Result<SuiToEthTokenTransfer, anyhow::Error> {
     let bridge_object_arg = bridge_test_cluster
         .bridge_client()
         .get_mutable_bridge_object_arg_must_succeed()
@@ -1329,14 +1329,14 @@ pub async fn initiate_bridge_sui_to_eth(
     };
 
     let sui_events = resp.events.unwrap().data;
-    let bridge_event = sui_events
+    let bridge_action = sui_events
         .iter()
         .filter_map(|e| {
             let sui_bridge_event = SuiBridgeEvent::try_from_sui_event(e).unwrap()?;
-            sui_bridge_event.try_into_bridge_action(e.id.tx_digest, e.id.event_seq as u16)
+            sui_bridge_event.try_into_bridge_action()
         })
         .find_map(|e| {
-            if let BridgeAction::SuiToEthBridgeAction(a) = e {
+            if let BridgeAction::SuiToEthTokenTransfer(a) = e {
                 Some(a)
             } else {
                 None
@@ -1344,22 +1344,19 @@ pub async fn initiate_bridge_sui_to_eth(
         })
         .unwrap();
     info!("Deposited Eth to move package");
-    assert_eq!(bridge_event.sui_bridge_event.nonce, nonce);
+    assert_eq!(bridge_action.nonce, nonce);
     assert_eq!(
-        bridge_event.sui_bridge_event.sui_chain_id,
+        bridge_action.sui_chain_id,
         bridge_test_cluster.sui_chain_id()
     );
     assert_eq!(
-        bridge_event.sui_bridge_event.eth_chain_id,
+        bridge_action.eth_chain_id,
         bridge_test_cluster.eth_chain_id()
     );
-    assert_eq!(bridge_event.sui_bridge_event.sui_address, sui_address);
-    assert_eq!(bridge_event.sui_bridge_event.eth_address, eth_address);
-    assert_eq!(bridge_event.sui_bridge_event.token_id, TOKEN_ID_ETH);
-    assert_eq!(
-        bridge_event.sui_bridge_event.amount_sui_adjusted,
-        sui_amount
-    );
+    assert_eq!(bridge_action.sui_address, sui_address);
+    assert_eq!(bridge_action.eth_address, eth_address);
+    assert_eq!(bridge_action.token_id, TOKEN_ID_ETH);
+    assert_eq!(bridge_action.amount_adjusted, sui_amount);
 
     // Wait for the bridge action to be approved
     wait_for_transfer_action_status(
@@ -1372,7 +1369,7 @@ pub async fn initiate_bridge_sui_to_eth(
     .unwrap();
     info!("Sui to Eth bridge transfer approved.");
 
-    Ok(bridge_event)
+    Ok(bridge_action)
 }
 
 async fn wait_for_transfer_action_status(
