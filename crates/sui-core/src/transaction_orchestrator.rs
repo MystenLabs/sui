@@ -337,7 +337,7 @@ where
                 if !self.validator_state.is_tx_already_executed(&tx_digest) {
                     self.metrics
                         .early_validation_rejections
-                        .with_label_values(&[e.as_ref()])
+                        .with_label_values(&[e.to_variant_name()])
                         .inc();
                     debug!(
                         error = ?e,
@@ -1100,8 +1100,8 @@ impl TransactionOrchestratorMetrics {
             .unwrap(),
             early_validation_rejections: register_int_counter_vec_with_registry!(
                 "tx_orchestrator_early_validation_rejections",
-                "Total number of transactions rejected during early validation before submission, by error type",
-                &["error_type"],
+                "Total number of transactions rejected during early validation before submission, by reason",
+                &["reason"],
                 registry,
             )
             .unwrap(),

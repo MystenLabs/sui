@@ -7,14 +7,17 @@ use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto_tbls::dkg_v1;
 use mysten_metrics::monitored_scope;
-use prometheus::{IntCounter, Registry, register_int_counter_with_registry};
+use prometheus::{
+    IntCounter, IntCounterVec, Registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry,
+};
 use sui_types::{
     error::{SuiError, SuiErrorKind, SuiResult},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
     transaction::Transaction,
 };
 use tap::TapFallible;
-use tracing::{info, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 use crate::{
     authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
@@ -154,7 +157,7 @@ impl SuiTxValidator {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip_all, fields(block_ref = ?block_ref))]
+    #[instrument(level = "debug", skip_all, fields(block_ref))]
     fn vote_transactions(
         &self,
         block_ref: &BlockRef,
@@ -171,9 +174,14 @@ impl SuiTxValidator {
                 continue;
             };
 
+            let tx_digest = *tx.digest();
             if let Err(error) = self.vote_transaction(&epoch_store, tx) {
+                debug!(?tx_digest, "Transaction rejected during voting: {error}");
+                self.metrics
+                    .transaction_reject_votes
+                    .with_label_values(&[error.to_variant_name()])
+                    .inc();
                 result.push(i as TransactionIndex);
-
                 // Cache the rejection vote reason (error) for the transaction
                 epoch_store.set_rejection_vote_reason(
                     ConsensusPosition {
@@ -260,20 +268,28 @@ impl TransactionVerifier for SuiTxValidator {
 pub struct SuiTxValidatorMetrics {
     certificate_signatures_verified: IntCounter,
     checkpoint_signatures_verified: IntCounter,
+    transaction_reject_votes: IntCounterVec,
 }
 
 impl SuiTxValidatorMetrics {
     pub fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
             certificate_signatures_verified: register_int_counter_with_registry!(
-                "certificate_signatures_verified",
+                "tx_validator_certificate_signatures_verified",
                 "Number of certificates verified in consensus batch verifier",
                 registry
             )
             .unwrap(),
             checkpoint_signatures_verified: register_int_counter_with_registry!(
-                "checkpoint_signatures_verified",
+                "tx_validator_checkpoint_signatures_verified",
                 "Number of checkpoint verified in consensus batch verifier",
+                registry
+            )
+            .unwrap(),
+            transaction_reject_votes: register_int_counter_vec_with_registry!(
+                "tx_validator_transaction_reject_votes",
+                "Number of reject transaction votes per reason",
+                &["reason"],
                 registry
             )
             .unwrap(),
