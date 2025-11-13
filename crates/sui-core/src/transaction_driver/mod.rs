@@ -142,7 +142,7 @@ where
 
             while let Some(result) = tasks.join_next().await {
                 if let Err(e) = result {
-                    tracing::info!("Error while driving ping transaction: {}", e);
+                    tracing::debug!("Error while driving ping transaction: {}", e);
                 }
             }
         }
@@ -204,7 +204,7 @@ where
                         );
                     }
                     Err(err) => {
-                        tracing::info!(
+                        tracing::debug!(
                             "Failed to get certified finalized effects for tx type {}, for ping transaction to validator {}: {}",
                             tx_type.as_str(),
                             display_name,
@@ -304,18 +304,22 @@ where
                                 .transaction_retries
                                 .with_label_values(&["failure", tx_type.as_str(), ping_label])
                                 .observe(attempts as f64);
+                            if request.transaction.is_some() {
+                                tracing::info!(
+                                    "Failed to finalize transaction with non-retriable error after {} attempts: {}",
+                                    attempts,
+                                    e
+                                );
+                            }
+                            return Err(e);
+                        }
+                        if request.transaction.is_some() {
                             tracing::info!(
-                                "Failed to finalize transaction with non-retriable error after {} attempts: {}",
+                                "Failed to finalize transaction (attempt {}): {}. Retrying ...",
                                 attempts,
                                 e
                             );
-                            return Err(e);
                         }
-                        tracing::info!(
-                            "Failed to finalize transaction (attempt {}): {}. Retrying ...",
-                            attempts,
-                            e
-                        );
                         // Buffer the latest retriable error to be returned in case of timeout
                         latest_retriable_error = Some(e);
                     }
@@ -350,11 +354,13 @@ where
                             attempts,
                             timeout: duration,
                         };
-                        tracing::info!(
-                            "Transaction timed out after {} attempts. Last error: {}",
-                            attempts,
-                            e
-                        );
+                        if request.transaction.is_some() {
+                            tracing::info!(
+                                "Transaction timed out after {} attempts. Last error: {}",
+                                attempts,
+                                e
+                            );
+                        }
                         Err(e)
                     })
             }
