@@ -4,8 +4,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        execution::interpreter::eval::control_flow_instruction,
-        jit::execution::ast::Bytecode,
+        execution::interpreter::eval::control_flow_instruction, jit::execution::ast::Bytecode,
     };
 
     #[test]
@@ -263,7 +262,18 @@ mod depth_tests {
         for ty in primitives {
             let type_name = format!("{:?}", ty);
             assert!(
-                matches!(ty, Type::Bool | Type::U8 | Type::U16 | Type::U32 | Type::U64 | Type::U128 | Type::U256 | Type::Address | Type::Signer),
+                matches!(
+                    ty,
+                    Type::Bool
+                        | Type::U8
+                        | Type::U16
+                        | Type::U32
+                        | Type::U64
+                        | Type::U128
+                        | Type::U256
+                        | Type::Address
+                        | Type::Signer
+                ),
                 "{} should be a primitive type",
                 type_name
             );
@@ -276,16 +286,25 @@ mod depth_tests {
         assert!(matches!(vec_u8, Type::Vector(_)), "Should be a vector type");
 
         let vec_vec_u8 = Type::Vector(Box::new(vec_u8));
-        assert!(matches!(vec_vec_u8, Type::Vector(_)), "Should be a nested vector type");
+        assert!(
+            matches!(vec_vec_u8, Type::Vector(_)),
+            "Should be a nested vector type"
+        );
     }
 
     #[test]
     fn test_reference_types_increase_depth() {
         let ref_u8 = Type::Reference(Box::new(Type::U8));
-        assert!(matches!(ref_u8, Type::Reference(_)), "Should be a reference type");
+        assert!(
+            matches!(ref_u8, Type::Reference(_)),
+            "Should be a reference type"
+        );
 
         let mut_ref_u8 = Type::MutableReference(Box::new(Type::U8));
-        assert!(matches!(mut_ref_u8, Type::MutableReference(_)), "Should be a mutable reference type");
+        assert!(
+            matches!(mut_ref_u8, Type::MutableReference(_)),
+            "Should be a mutable reference type"
+        );
     }
 }
 
@@ -314,7 +333,10 @@ mod value_stack_tests {
     #[test]
     fn test_value_creation_u64() {
         let val = Value::u64(1000000000);
-        assert!(matches!(val, Value::U64(1000000000)), "Should create U64 value");
+        assert!(
+            matches!(val, Value::U64(1000000000)),
+            "Should create U64 value"
+        );
     }
 
     #[test]
@@ -329,13 +351,19 @@ mod value_stack_tests {
     #[test]
     fn test_value_creation_bool_true() {
         let val = Value::bool(true);
-        assert!(matches!(val, Value::Bool(true)), "Should create Bool(true) value");
+        assert!(
+            matches!(val, Value::Bool(true)),
+            "Should create Bool(true) value"
+        );
     }
 
     #[test]
     fn test_value_creation_bool_false() {
         let val = Value::bool(false);
-        assert!(matches!(val, Value::Bool(false)), "Should create Bool(false) value");
+        assert!(
+            matches!(val, Value::Bool(false)),
+            "Should create Bool(false) value"
+        );
     }
 }
 
@@ -348,7 +376,10 @@ mod integer_value_tests {
         let a = IntegerValue::U8(10);
         let b = IntegerValue::U8(20);
         let result = a.add_checked(b).expect("Addition should succeed");
-        assert!(matches!(result, IntegerValue::U8(30)), "Should add U8 values");
+        assert!(
+            matches!(result, IntegerValue::U8(30)),
+            "Should add U8 values"
+        );
     }
 
     #[test]
@@ -364,7 +395,10 @@ mod integer_value_tests {
         let a = IntegerValue::U8(30);
         let b = IntegerValue::U8(10);
         let result = a.sub_checked(b).expect("Subtraction should succeed");
-        assert!(matches!(result, IntegerValue::U8(20)), "Should subtract U8 values");
+        assert!(
+            matches!(result, IntegerValue::U8(20)),
+            "Should subtract U8 values"
+        );
     }
 
     #[test]
@@ -372,7 +406,10 @@ mod integer_value_tests {
         let a = IntegerValue::U8(0);
         let b = IntegerValue::U8(1);
         let result = a.sub_checked(b);
-        assert!(result.is_err(), "U8 subtraction underflow should return error");
+        assert!(
+            result.is_err(),
+            "U8 subtraction underflow should return error"
+        );
     }
 
     #[test]
@@ -380,7 +417,10 @@ mod integer_value_tests {
         let a = IntegerValue::U8(10);
         let b = IntegerValue::U8(5);
         let result = a.mul_checked(b).expect("Multiplication should succeed");
-        assert!(matches!(result, IntegerValue::U8(50)), "Should multiply U8 values");
+        assert!(
+            matches!(result, IntegerValue::U8(50)),
+            "Should multiply U8 values"
+        );
     }
 
     #[test]
@@ -388,7 +428,10 @@ mod integer_value_tests {
         let a = IntegerValue::U8(255);
         let b = IntegerValue::U8(2);
         let result = a.mul_checked(b);
-        assert!(result.is_err(), "U8 multiplication overflow should return error");
+        assert!(
+            result.is_err(),
+            "U8 multiplication overflow should return error"
+        );
     }
 
     #[test]
@@ -396,7 +439,10 @@ mod integer_value_tests {
         let a = IntegerValue::U8(50);
         let b = IntegerValue::U8(5);
         let result = a.div_checked(b).expect("Division should succeed");
-        assert!(matches!(result, IntegerValue::U8(10)), "Should divide U8 values");
+        assert!(
+            matches!(result, IntegerValue::U8(10)),
+            "Should divide U8 values"
+        );
     }
 
     #[test]
@@ -412,7 +458,10 @@ mod integer_value_tests {
         let a = IntegerValue::U8(23);
         let b = IntegerValue::U8(5);
         let result = a.rem_checked(b).expect("Modulo should succeed");
-        assert!(matches!(result, IntegerValue::U8(3)), "Should compute remainder");
+        assert!(
+            matches!(result, IntegerValue::U8(3)),
+            "Should compute remainder"
+        );
     }
 
     #[test]
@@ -428,7 +477,10 @@ mod integer_value_tests {
         let a = IntegerValue::U8(0b1010);
         let b = IntegerValue::U8(0b0101);
         let result = a.bit_or(b).expect("BitOr should succeed");
-        assert!(matches!(result, IntegerValue::U8(0b1111)), "Should compute bitwise OR");
+        assert!(
+            matches!(result, IntegerValue::U8(0b1111)),
+            "Should compute bitwise OR"
+        );
     }
 
     #[test]
@@ -436,7 +488,10 @@ mod integer_value_tests {
         let a = IntegerValue::U8(0b1111);
         let b = IntegerValue::U8(0b1010);
         let result = a.bit_and(b).expect("BitAnd should succeed");
-        assert!(matches!(result, IntegerValue::U8(0b1010)), "Should compute bitwise AND");
+        assert!(
+            matches!(result, IntegerValue::U8(0b1010)),
+            "Should compute bitwise AND"
+        );
     }
 
     #[test]
@@ -444,7 +499,10 @@ mod integer_value_tests {
         let a = IntegerValue::U8(0b1111);
         let b = IntegerValue::U8(0b1010);
         let result = a.bit_xor(b).expect("BitXor should succeed");
-        assert!(matches!(result, IntegerValue::U8(0b0101)), "Should compute bitwise XOR");
+        assert!(
+            matches!(result, IntegerValue::U8(0b0101)),
+            "Should compute bitwise XOR"
+        );
     }
 
     #[test]
@@ -459,7 +517,10 @@ mod integer_value_tests {
         let a = IntegerValue::U8(255);
         let result = a.shl_checked(9);
         // Shifting by more than bit width should return error
-        assert!(result.is_err(), "Left shift by amount >= bit width should return error");
+        assert!(
+            result.is_err(),
+            "Left shift by amount >= bit width should return error"
+        );
     }
 
     #[test]
