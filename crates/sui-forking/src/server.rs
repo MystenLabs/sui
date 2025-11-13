@@ -8,6 +8,7 @@ use axum::{
 use simulacrum::{AdvanceEpochConfig, Simulacrum};
 use std::{
     net::SocketAddr,
+    path::PathBuf,
     sync::{
         Arc, RwLock,
         atomic::{AtomicUsize, Ordering},
@@ -17,7 +18,12 @@ use sui_types::transaction::Transaction;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-use crate::{rpc::start_rpc, types::*};
+use crate::{
+    consistent_store::{self, start_consistent_store},
+    indexer::{self, start_indexer},
+    rpc::start_rpc,
+    types::*,
+};
 
 pub struct AppState {
     pub simulacrum: Arc<RwLock<Simulacrum>>,
@@ -26,8 +32,10 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub async fn new() -> Self {
-        let simulacrum = Arc::new(RwLock::new(Simulacrum::new()));
+    pub async fn new(data_ingestion_path: PathBuf) -> Self {
+        let mut simulacrum = Simulacrum::new();
+        simulacrum.set_data_ingestion_path(data_ingestion_path);
+        let simulacrum = Arc::new(RwLock::new(simulacrum));
         let rpc = start_rpc(simulacrum.clone())
             .await
             .expect("Failed to start RPC server");
@@ -185,8 +193,17 @@ async fn execute_tx(
     }
 }
 
-pub async fn start_server(host: String, port: u16) -> Result<()> {
-    let state = Arc::new(AppState::new().await);
+/// Start the forking server
+pub async fn start_server(
+    host: String,
+    port: u16,
+    data_ingestion_path: PathBuf,
+    version: &'static str,
+) -> Result<()> {
+    // Start indexers
+    start_indexers(data_ingestion_path.clone(), version).await?;
+
+    let state = Arc::new(AppState::new(data_ingestion_path.clone()).await);
 
     let app = Router::new()
         .route("/health", get(health))
@@ -202,6 +219,30 @@ pub async fn start_server(host: String, port: u16) -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
+
+    Ok(())
+}
+
+/// Start the indexers: both the main indexer and the consistent store
+async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> Result<()> {
+    println!("Data ingestion path: {:?}", data_ingestion_path);
+    let registry = prometheus::Registry::new();
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let rocksdb_db_path = mysten_common::tempdir().unwrap().keep();
+    let db_url =
+        reqwest::Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt")
+            .unwrap();
+    let indexer_config = indexer::IndexerConfig::new(db_url, data_ingestion_path.clone());
+    let consistent_store_config = consistent_store::ConsistentStoreConfig::new(
+        rocksdb_db_path.clone(),
+        indexer_config.indexer_args.clone(),
+        indexer_config.client_args.clone(),
+        version,
+    );
+    info!("Starting indexer...");
+    start_indexer(indexer_config, &registry, cancel.clone()).await?;
+    info!("Starting consistent store...");
+    start_consistent_store(consistent_store_config, &registry, cancel.clone()).await?;
 
     Ok(())
 }

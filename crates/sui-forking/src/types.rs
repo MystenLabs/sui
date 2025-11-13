@@ -1,15 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AdvanceCheckpointRequest;
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AdvanceClockRequest {
     pub seconds: u64,
 }
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AdvanceEpochRequest;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecuteTxRequest {
@@ -39,4 +33,3 @@ pub struct ForkingStatus {
     pub epoch: u64,
     pub transaction_count: usize,
 }
-

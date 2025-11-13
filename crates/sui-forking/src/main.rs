@@ -1,5 +1,8 @@
 mod commands;
+mod consistent_store;
+mod indexer;
 mod rpc;
+mod seeds;
 mod server;
 mod types;
 
@@ -8,8 +11,27 @@ use clap::Parser;
 use tracing::info;
 
 use crate::commands::{Args, Commands};
+use crate::consistent_store::start_consistent_store;
 use crate::server::start_server;
 use crate::types::{AdvanceClockRequest, ApiResponse, ExecuteTxRequest, ForkingStatus};
+use indexer::{IndexerConfig, start_indexer};
+use std::env::temp_dir;
+use std::path::PathBuf;
+use sui_indexer_alt_consistent_store::config::ServiceConfig;
+use sui_pg_db::DbArgs;
+
+// Define the `GIT_REVISION` const
+bin_version::git_revision!();
+
+static VERSION: &str = const_str::concat!(
+    env!("CARGO_PKG_VERSION_MAJOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_MINOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_PATCH"),
+    "-",
+    GIT_REVISION
+);
 
 async fn send_command(url: &str, endpoint: &str, body: Option<serde_json::Value>) -> Result<()> {
     let client = reqwest::Client::new();
@@ -47,11 +69,8 @@ async fn main() -> Result<()> {
             checkpoint,
             port,
             network,
+            data_dir,
         } => {
-            info!(
-                "Starting forking server for {} at checkpoint {:?} at address {}:{}",
-                network, checkpoint, host, port
-            );
             let info = if let Some(c) = checkpoint {
                 format!(
                     "Starting forking server for {} at checkpoint {c} at address {}:{}",
@@ -63,8 +82,11 @@ async fn main() -> Result<()> {
                     network, host, port
                 )
             };
-            println!("{info}");
-            start_server(host, port).await?
+            // info!("{info}");
+            // println!("{info}");
+            info!("Starting forking server...");
+            let data_ingestion_path = mysten_common::tempdir().unwrap().keep();
+            start_server(host, port, data_ingestion_path, VERSION).await?
         }
         Commands::AdvanceCheckpoint { server_url } => {
             send_command(&server_url, "advance-checkpoint", None).await?
