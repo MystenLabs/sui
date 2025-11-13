@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{FileFormat, ParquetSchema, ParquetValue};
+use crate::{ParquetSchema, ParquetValue};
 use anyhow::{Result, anyhow};
 use arrow_array::{
     ArrayRef, RecordBatch,
@@ -12,7 +12,6 @@ use std::fs::{File, create_dir_all, remove_file};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use sui_storage::object_store::util::path_to_filesystem;
 use sui_types::base_types::EpochId;
 
 use parquet::arrow::ArrowWriter;
@@ -75,13 +74,9 @@ impl ParquetWriter {
     }
 
     fn file(&self) -> Result<File> {
-        let object_path = crate::construct_file_path(
-            &self.dir_prefix,
-            FileFormat::PARQUET,
-            self.epoch,
-            self.checkpoint_range.clone(),
-        );
-        let file_path = path_to_filesystem(self.root_dir_path.clone(), &object_path)?;
+        let relative_path =
+            crate::construct_file_path(&self.dir_prefix, self.epoch, self.checkpoint_range.clone());
+        let file_path = self.root_dir_path.join(relative_path);
         create_dir_all(file_path.parent().ok_or(anyhow!("Bad directory path"))?)?;
         if file_path.exists() {
             remove_file(&file_path)?;

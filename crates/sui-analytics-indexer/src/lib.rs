@@ -153,7 +153,6 @@ where
     }
 }
 
-const EPOCH_DIR_PREFIX: &str = "epoch_";
 const TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME: &str = "TRANSACTION_CONCURRENCY_LIMIT";
 const DEFAULT_TRANSACTION_CONCURRENCY_LIMIT: usize = 64;
 pub static TRANSACTION_CONCURRENCY_LIMIT: Lazy<usize> = Lazy::new(|| {
@@ -205,10 +204,6 @@ fn default_remote_store_timeout_secs() -> u64 {
 
 fn default_package_cache_path() -> PathBuf {
     PathBuf::from("/opt/sui/db/package_cache")
-}
-
-fn default_file_format() -> FileFormat {
-    FileFormat::CSV
 }
 
 fn default_checkpoint_interval() -> u64 {
@@ -290,9 +285,6 @@ pub struct PipelineConfig {
     pub pipeline_name: String,
     /// Type of data to write i.e. checkpoint, object, transaction, etc
     pub pipeline: Pipeline,
-    /// File format to store data in i.e. csv, parquet, etc
-    #[serde(default = "default_file_format")]
-    pub file_format: FileFormat,
     /// Number of checkpoints to process before uploading to the datastore.
     #[serde(default = "default_checkpoint_interval")]
     pub checkpoint_interval: u64,
@@ -344,33 +336,6 @@ impl PipelineConfig {
     EnumIter,
 )]
 #[repr(u8)]
-pub enum FileFormat {
-    CSV = 0,
-    PARQUET = 1,
-}
-
-impl FileFormat {
-    pub fn file_suffix(&self) -> &str {
-        match self {
-            FileFormat::CSV => "csv",
-            FileFormat::PARQUET => "parquet",
-        }
-    }
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Eq,
-    PartialEq,
-    Serialize,
-    Deserialize,
-    TryFromPrimitive,
-    IntoPrimitive,
-    EnumIter,
-)]
-#[repr(u8)]
 pub enum Pipeline {
     Checkpoint = 0,
     Object,
@@ -385,20 +350,17 @@ pub enum Pipeline {
     WrappedObject,
 }
 
-/// Construct an object store file path from directory prefix and metadata
+/// Construct a relative file path from directory prefix and metadata
 pub(crate) fn construct_file_path(
     dir_prefix: &str,
-    file_format: FileFormat,
     epoch_num: EpochId,
     checkpoint_range: Range<u64>,
-) -> Path {
-    Path::from(dir_prefix)
-        .child(format!("{}{}", EPOCH_DIR_PREFIX, epoch_num))
-        .child(format!(
-            "{}_{}.{}",
-            checkpoint_range.start,
-            checkpoint_range.end,
-            file_format.file_suffix()
+) -> PathBuf {
+    PathBuf::from(dir_prefix)
+        .join(format!("epoch_{}", epoch_num))
+        .join(format!(
+            "{}_{}.parquet",
+            checkpoint_range.start, checkpoint_range.end
         ))
 }
 
@@ -417,20 +379,6 @@ impl Pipeline {
             Pipeline::DynamicField => Path::from("dynamic_field"),
             Pipeline::WrappedObject => Path::from("wrapped_object"),
         }
-    }
-
-    pub fn file_path(
-        &self,
-        file_format: FileFormat,
-        epoch_num: EpochId,
-        checkpoint_range: Range<u64>,
-    ) -> Path {
-        construct_file_path(
-            self.dir_prefix().as_ref(),
-            file_format,
-            epoch_num,
-            checkpoint_range,
-        )
     }
 
     pub async fn register_handler(
@@ -652,24 +600,6 @@ pub trait ParquetSchema {
     fn schema() -> Vec<String>;
 
     fn get_column(&self, idx: usize) -> ParquetValue;
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-pub struct FileMetadata {
-    pub pipeline: Pipeline,
-    pub file_format: FileFormat,
-    pub epoch_num: u64,
-    pub checkpoint_seq_range: Range<u64>,
-}
-
-impl FileMetadata {
-    pub fn file_path(&self) -> Path {
-        self.pipeline.file_path(
-            self.file_format,
-            self.epoch_num,
-            self.checkpoint_seq_range.clone(),
-        )
-    }
 }
 
 // New framework-based indexer implementation
