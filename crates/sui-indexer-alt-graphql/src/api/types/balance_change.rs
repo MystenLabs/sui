@@ -6,7 +6,7 @@ use std::str::FromStr;
 use anyhow::Context as _;
 use async_graphql::Object;
 use sui_indexer_alt_schema::transactions::BalanceChange as StoredBalanceChange;
-use sui_types::{object::Owner as NativeOwner, TypeTag};
+use sui_types::{TypeTag, object::Owner as NativeOwner};
 
 use crate::{api::scalars::big_int::BigInt, error::RpcError, scope::Scope};
 

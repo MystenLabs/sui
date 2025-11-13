@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::TransactionDigest;
 use sui_types::coin::Coin;
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, SuiErrorKind};
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Data, MoveObject, Object, ObjectInner, Owner};
 use sui_types::storage::ObjectKey;
@@ -79,7 +79,7 @@ impl From<StoreObject> for StoreObjectWrapper {
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub enum StoreObjectV1 {
-    Value(StoreObjectValue),
+    Value(Box<StoreObjectValue>),
     Deleted,
     Wrapped,
 }
@@ -127,7 +127,7 @@ pub fn get_store_object(object: Object) -> StoreObjectWrapper {
         previous_transaction: object.previous_transaction,
         storage_rebate: object.storage_rebate,
     };
-    StoreObject::Value(store_object).into()
+    StoreObject::Value(Box::new(store_object)).into()
 }
 
 pub(crate) fn try_construct_object(
@@ -147,9 +147,10 @@ pub(crate) fn try_construct_object(
             )?)
         },
         _ => {
-            return Err(SuiError::Storage(
+            return Err(SuiErrorKind::Storage(
                 "corrupted field: inconsistent object representation".to_string(),
-            ))
+            )
+            .into());
         }
     };
 

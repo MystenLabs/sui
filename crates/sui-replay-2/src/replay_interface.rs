@@ -16,6 +16,7 @@
 //! A `DataStore` with reasonable defaults is provided for convenience (`data_store.rs`).
 //! Other styles of data stores are also provided in `data_stores` for different use cases.
 
+use anyhow::{Error, Result};
 use std::io::Write;
 use sui_types::{
     base_types::ObjectID, effects::TransactionEffects, object::Object,
@@ -46,7 +47,7 @@ pub trait TransactionStore {
     fn transaction_data_and_effects(
         &self,
         tx_digest: &str,
-    ) -> Result<Option<TransactionInfo>, anyhow::Error>;
+    ) -> Result<Option<TransactionInfo>, Error>;
 }
 
 /// Epoch data required to reaplay a transaction.
@@ -65,9 +66,9 @@ pub struct EpochData {
 /// and never hit a server.
 pub trait EpochStore {
     /// Return the `EpochData` for a given epoch.
-    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, anyhow::Error>;
+    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, Error>;
     /// Return the `ProtocolConfig` for a given epoch.
-    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, anyhow::Error>;
+    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, Error>;
 }
 
 /// Query for an object.
@@ -103,7 +104,7 @@ pub trait ObjectStore {
     /// Otherwise each tuple contains:
     /// - `Object`: The object data
     /// - `u64`: The actual version of the object
-    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, anyhow::Error>;
+    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error>;
 }
 
 // ============================================================================
@@ -125,7 +126,7 @@ pub trait SetupStore {
     /// When `chain_id` is `Some(chain_id)` the given data store should override
     /// the map from network to chain id if it has one.
     /// That is a meaningful operation only for the FileSystemStore.
-    fn setup(&self, chain_id: Option<String>) -> Result<Option<String>, anyhow::Error>;
+    fn setup(&self, chain_id: Option<String>) -> Result<Option<String>, Error>;
 }
 
 // ============================================================================
@@ -140,14 +141,14 @@ pub trait TransactionStoreWriter: TransactionStore {
         &self,
         tx_digest: &str,
         transaction_info: TransactionInfo,
-    ) -> Result<(), anyhow::Error>;
+    ) -> Result<(), Error>;
 }
 
 /// Write-back trait for epoch data.
 /// Allows storing epoch information.
 pub trait EpochStoreWriter: EpochStore {
     /// Store epoch data for a given epoch.
-    fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), anyhow::Error>;
+    fn write_epoch_info(&self, epoch: u64, epoch_data: EpochData) -> Result<(), Error>;
 }
 
 /// Write-back trait for object data.
@@ -166,7 +167,7 @@ pub trait ObjectStoreWriter: ObjectStore {
         key: &ObjectKey,
         object: Object,
         actual_version: u64,
-    ) -> Result<(), anyhow::Error>;
+    ) -> Result<(), Error>;
 }
 
 // ============================================================================
@@ -178,7 +179,7 @@ pub trait ObjectStoreWriter: ObjectStore {
 /// Implementors are free to print any relevant statistics or configuration details.
 /// The writer allows callers to decide where summaries go (stdout, file, buffers, etc.).
 pub trait StoreSummary {
-    fn summary<W: Write>(&self, writer: &mut W) -> anyhow::Result<()>;
+    fn summary<W: Write>(&self, writer: &mut W) -> Result<()>;
 }
 
 // ============================================================================

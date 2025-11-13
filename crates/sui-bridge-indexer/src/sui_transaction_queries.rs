@@ -6,8 +6,8 @@ use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
 use sui_json_rpc_types::TransactionFilter;
 use sui_sdk::SuiClient;
-use sui_types::digests::TransactionDigest;
 use sui_types::SUI_BRIDGE_OBJECT_ID;
+use sui_types::digests::TransactionDigest;
 
 use sui_bridge::retry_with_max_elapsed_time;
 use tracing::{error, info};

@@ -93,10 +93,10 @@ fn find_files(files: &mut Vec<PathBuf>, dir: &Path, extension: &str, max_depth: 
 
             if let Ok(metadata) = entry.metadata() {
                 if metadata.is_file() {
-                    if let Some(ext) = path.extension() {
-                        if ext == extension {
-                            files.push(path);
-                        }
+                    if let Some(ext) = path.extension()
+                        && ext == extension
+                    {
+                        files.push(path);
                     }
                 } else if metadata.is_dir() {
                     find_files(files, &path, extension, max_depth - 1);

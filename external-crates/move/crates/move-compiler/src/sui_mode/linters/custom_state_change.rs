@@ -149,40 +149,39 @@ impl SimpleAbsInt for CustomStateChangeVerifierAI {
         if let Some((_, _, fname)) = PRIVATE_OBJ_FUNCTIONS
             .iter()
             .find(|(addr, module, fun)| f.is(addr, module, fun))
+            && let Value::LocalObjWithStore(obj_addr_loc) = args[0]
         {
-            if let Value::LocalObjWithStore(obj_addr_loc) = args[0] {
-                let (op, action) = match *fname {
-                    TRANSFER_FUN => ("transfer", "transferred"),
-                    SHARE_FUN => ("share", "shared"),
-                    FREEZE_FUN => ("freeze", "frozen"),
-                    RECEIVE_FUN => ("receive", "received"),
-                    s => unimplemented!("Unexpected private obj function {s}"),
-                };
-                let msg = format!("Potential unintended implementation of a custom {op} function.");
-                let uid_msg = format!(
-                    "Instances of a type with a 'store' ability can be {action} using \
-                    the 'public_{fname}' function which often negates the intent \
-                    of enforcing a custom {op} policy"
-                );
-                let note_msg = format!(
-                    "A custom {op} policy for a given type is implemented through \
-                    calling the private '{fname}' function variant in the module defining this type"
-                );
-                let mut d = diag!(
-                    CUSTOM_STATE_CHANGE_DIAG,
-                    (self.fn_name_loc, msg),
-                    (f.name.loc(), uid_msg)
-                );
-                d.add_note(note_msg);
-                if obj_addr_loc != INVALID_LOC {
-                    let loc_msg = format!(
-                        "An instance of a module-private type with a \
+            let (op, action) = match *fname {
+                TRANSFER_FUN => ("transfer", "transferred"),
+                SHARE_FUN => ("share", "shared"),
+                FREEZE_FUN => ("freeze", "frozen"),
+                RECEIVE_FUN => ("receive", "received"),
+                s => unimplemented!("Unexpected private obj function {s}"),
+            };
+            let msg = format!("Potential unintended implementation of a custom {op} function.");
+            let uid_msg = format!(
+                "Instances of a type with a 'store' ability can be {action} using \
+                 the 'public_{fname}' function which often negates the intent \
+                 of enforcing a custom {op} policy"
+            );
+            let note_msg = format!(
+                "A custom {op} policy for a given type is implemented through \
+                 calling the private '{fname}' function variant in the module defining this type"
+            );
+            let mut d = diag!(
+                CUSTOM_STATE_CHANGE_DIAG,
+                (self.fn_name_loc, msg),
+                (f.name.loc(), uid_msg)
+            );
+            d.add_note(note_msg);
+            if obj_addr_loc != INVALID_LOC {
+                let loc_msg = format!(
+                    "An instance of a module-private type with a \
                         'store' ability to be {action} coming from here"
-                    );
-                    d.add_secondary_label((obj_addr_loc, loc_msg));
-                }
-                context.add_diag(d)
+                );
+                d.add_secondary_label((obj_addr_loc, loc_msg));
             }
+            context.add_diag(d)
         }
         Some(match &return_ty.value {
             Type_::Unit => vec![],
@@ -204,10 +203,10 @@ fn is_local_obj_with_store(sp!(_, st_): &SingleType, context: &CFGContext) -> bo
             // no store ability
             return false;
         }
-        if let TypeName_::ModuleType(mident, _) = tname {
-            if mident.value == context.module.value {
-                return true;
-            }
+        if let TypeName_::ModuleType(mident, _) = tname
+            && mident.value == context.module.value
+        {
+            return true;
         }
     }
     false

@@ -4,11 +4,11 @@
 use crate::types::*;
 use crate::{AppState, FaucetConfig, FaucetError, FaucetRequest};
 use axum::{
+    BoxError, Extension, Json, Router,
     error_handling::HandleErrorLayer,
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
-    BoxError, Extension, Json, Router,
 };
 use http::Method;
 use std::{

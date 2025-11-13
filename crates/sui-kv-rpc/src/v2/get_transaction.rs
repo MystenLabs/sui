@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::str::FromStr;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader, TransactionData};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
@@ -11,8 +12,8 @@ use sui_rpc::proto::sui::rpc::v2::{
     TransactionEffects, TransactionEvents, UserSignature,
 };
 use sui_rpc_api::{
-    proto::google::rpc::bad_request::FieldViolation, proto::timestamp_ms_to_proto, ErrorReason,
-    RpcError, TransactionNotFoundError,
+    ErrorReason, RpcError, TransactionNotFoundError,
+    proto::google::rpc::bad_request::FieldViolation, proto::timestamp_ms_to_proto,
 };
 use sui_types::base_types::TransactionDigest;
 
@@ -82,21 +83,21 @@ pub async fn batch_get_transactions(
         .iter()
         .map(|digest| TransactionDigest::from_str(digest))
         .collect::<Result<Vec<_>, _>>()?;
-    let transactions = client.get_transactions(&digests).await?;
-    let mut tx_iter = transactions.into_iter().peekable();
+    let response: HashMap<_, _> = client
+        .get_transactions(&digests)
+        .await?
+        .into_iter()
+        .map(|tx| (*tx.transaction.digest(), tx))
+        .collect();
+
     let transactions = digests
         .into_iter()
         .map(|digest| {
-            if let Some(tx) = tx_iter.peek() {
-                if tx.transaction.digest() == &digest {
-                    return match transaction_to_response(
-                        tx_iter.next().expect("invariant's checked above"),
-                        &read_mask,
-                    ) {
-                        Ok(tx) => GetTransactionResult::new_transaction(tx),
-                        Err(err) => GetTransactionResult::new_error(err.into_status_proto()),
-                    };
-                }
+            if let Some(tx) = response.get(&digest) {
+                return match transaction_to_response(tx.clone(), &read_mask) {
+                    Ok(tx) => GetTransactionResult::new_transaction(tx),
+                    Err(err) => GetTransactionResult::new_error(err.into_status_proto()),
+                };
             }
             let err: RpcError = TransactionNotFoundError(digest.into()).into();
             GetTransactionResult::new_error(err.into_status_proto())
@@ -142,14 +143,14 @@ fn transaction_to_response(
         message.effects = Some(effects);
     }
 
-    if let Some(submask) = mask.subtree(ExecutedTransaction::EVENTS_FIELD.name) {
-        if let Some(events) = source.events {
-            message.events = Some(TransactionEvents::merge_from(
-                sui_sdk_types::TransactionEvents::try_from(events)?,
-                &submask,
-            ));
-            // TODO: add support for JSON layout
-        }
+    if let Some(submask) = mask.subtree(ExecutedTransaction::EVENTS_FIELD.name)
+        && let Some(events) = source.events
+    {
+        message.events = Some(TransactionEvents::merge_from(
+            sui_sdk_types::TransactionEvents::try_from(events)?,
+            &submask,
+        ));
+        // TODO: add support for JSON layout
     }
     if mask.contains(ExecutedTransaction::CHECKPOINT_FIELD.name) {
         message.checkpoint = Some(source.checkpoint_number);

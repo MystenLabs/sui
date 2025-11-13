@@ -10,8 +10,8 @@ use sui_protocol_config::ProtocolConfig;
 use tempfile::TempDir;
 use tokio::time::Instant;
 
-use crate::metrics::test_metrics;
 use crate::metrics::Metrics;
+use crate::metrics::test_metrics;
 
 /// Context contains per-epoch configuration and metrics shared by all components
 /// of this authority.

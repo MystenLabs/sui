@@ -96,7 +96,7 @@ fn is_max(v: &[u8]) -> bool {
     v.iter().all(|&x| x == u8::MAX)
 }
 
-#[allow(clippy::assign_op_pattern)]
+#[allow(clippy::assign_op_pattern, clippy::manual_div_ceil)]
 #[test]
 fn test_helpers() {
     let v = vec![];

@@ -7,10 +7,10 @@ use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use arrow_array::{Array, Int32Array};
-use gcp_bigquery_client::model::query_request::QueryRequest;
 use gcp_bigquery_client::Client;
+use gcp_bigquery_client::model::query_request::QueryRequest;
 use handlers::package_bcs_handler::PackageBCSHandler;
 use handlers::transaction_bcs_handler::TransactionBCSHandler;
 use num_enum::IntoPrimitive;
@@ -36,6 +36,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::analytics_metrics::AnalyticsMetrics;
 use crate::analytics_processor::AnalyticsProcessor;
+use crate::handlers::AnalyticsHandler;
 use crate::handlers::checkpoint_handler::CheckpointHandler;
 use crate::handlers::df_handler::DynamicFieldHandler;
 use crate::handlers::event_handler::EventHandler;
@@ -45,11 +46,10 @@ use crate::handlers::package_handler::PackageHandler;
 use crate::handlers::transaction_handler::TransactionHandler;
 use crate::handlers::transaction_objects_handler::TransactionObjectsHandler;
 use crate::handlers::wrapped_object_handler::WrappedObjectHandler;
-use crate::handlers::AnalyticsHandler;
 use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
+use crate::writers::AnalyticsWriter;
 use crate::writers::csv_writer::CSVWriter;
 use crate::writers::parquet_writer::ParquetWriter;
-use crate::writers::AnalyticsWriter;
 use gcp_bigquery_client::model::query_response::ResultSet;
 
 pub mod analytics_metrics;

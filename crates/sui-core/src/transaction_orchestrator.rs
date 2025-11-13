@@ -10,30 +10,30 @@ finalized transactions locally, when possible.
 use std::net::SocketAddr;
 use std::ops::Deref;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use futures::future::{select, Either, Future};
-use futures::stream::{FuturesUnordered, StreamExt};
 use futures::FutureExt;
+use futures::future::{Either, Future, select};
+use futures::stream::{FuturesUnordered, StreamExt};
 use mysten_common::in_antithesis;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_metrics::{add_server_timing, spawn_logged_monitored_task, spawn_monitored_task};
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
+use mysten_metrics::{add_server_timing, spawn_logged_monitored_task, spawn_monitored_task};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, HistogramVec, IntCounter, Registry,
+    HistogramVec, IntCounter, IntCounterVec, Registry, register_histogram_vec_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use rand::Rng;
 use sui_config::NodeConfig;
 use sui_protocol_config::Chain;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
-use sui_types::base_types::{AuthorityName, TransactionDigest};
+use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_grpc::{SubmitTxRequest, TxType};
 use sui_types::quorum_driver_types::{
     EffectsFinalityInfo, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
@@ -43,21 +43,21 @@ use sui_types::quorum_driver_types::{
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{Transaction, TransactionData, VerifiedTransaction};
 use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChecks};
-use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
-use tokio::time::{sleep, timeout, Instant};
-use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
+use tokio::time::{Instant, sleep, timeout};
+use tracing::{Instrument, debug, error, error_span, info, instrument, warn};
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityState;
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
 use crate::transaction_driver::{
-    choose_transaction_driver_percentage, QuorumTransactionResponse, SubmitTransactionOptions,
-    TransactionDriver, TransactionDriverError, TransactionDriverMetrics,
+    QuorumTransactionResponse, SubmitTransactionOptions, TransactionDriver, TransactionDriverError,
+    TransactionDriverMetrics, choose_transaction_driver_percentage,
 };
 
 // How long to wait for local execution (including parents) before a timeout
@@ -78,7 +78,8 @@ pub struct TransactionOrchestrator<A: Clone> {
     metrics: Arc<TransactionOrchestratorMetrics>,
     transaction_driver: Option<Arc<TransactionDriver<A>>>,
     td_percentage: u8,
-    td_allowed_list: Vec<AuthorityName>,
+    td_allowed_submission_list: Vec<String>,
+    enable_early_validation: bool,
 }
 
 impl TransactionOrchestrator<NetworkAuthorityClient> {
@@ -167,19 +168,17 @@ where
             None
         };
 
-        let mut td_allowed_list = Vec::new();
-        for validator_name in &node_config.mfp_allowed_list {
-            for (name, display_name) in validators.validator_display_names.iter() {
-                if *display_name == *validator_name {
-                    td_allowed_list.push(*name);
-                    break;
-                }
-            }
-            warn!(
-                "Validator {} from mfp allowed list not found in current committee. Will skip.",
-                validator_name
-            );
-        }
+        let td_allowed_submission_list = node_config
+            .transaction_driver_config
+            .as_ref()
+            .map(|config| config.allowed_submission_validators.clone())
+            .unwrap_or_default();
+
+        let enable_early_validation = node_config
+            .transaction_driver_config
+            .as_ref()
+            .map(|config| config.enable_early_validation)
+            .unwrap_or(true);
 
         Self {
             quorum_driver_handler,
@@ -190,7 +189,8 @@ where
             metrics,
             transaction_driver,
             td_percentage,
-            td_allowed_list,
+            td_allowed_submission_list,
+            enable_early_validation,
         }
     }
 }
@@ -323,6 +323,34 @@ where
             .verify_transaction(request.transaction.clone())
             .map_err(QuorumDriverError::InvalidUserSignature)?;
         let tx_digest = *verified_transaction.digest();
+
+        // Early validation check against local state before submission to catch non-retriable errors
+        // TODO: Consider moving this check to TransactionDriver for per-retry validation
+        if self.enable_early_validation
+            && let Err(e) = self
+                .validator_state
+                .check_transaction_validity(&epoch_store, &verified_transaction)
+        {
+            let error_category = e.categorize();
+            if !error_category.is_submission_retriable() {
+                // Skip early validation rejection if transaction has already been executed (allows retries to return cached results)
+                if !self.validator_state.is_tx_already_executed(&tx_digest) {
+                    self.metrics
+                        .early_validation_rejections
+                        .with_label_values(&[e.to_variant_name()])
+                        .inc();
+                    debug!(
+                        error = ?e,
+                        "Transaction rejected during early validation"
+                    );
+
+                    return Err(QuorumDriverError::TransactionFailed {
+                        category: error_category,
+                        details: e.to_string(),
+                    });
+                }
+            }
+        }
 
         // Add transaction to WAL log.
         let is_new_transaction = self
@@ -670,7 +698,7 @@ where
                 SubmitTxRequest::new_transaction(request.transaction.clone()),
                 SubmitTransactionOptions {
                     forwarded_client_addr: client_addr,
-                    allowed_validators: self.td_allowed_list.clone(),
+                    allowed_validators: self.td_allowed_submission_list.clone(),
                 },
                 timeout_duration,
             )
@@ -792,7 +820,7 @@ where
                     LOCAL_EXECUTION_TIMEOUT
                 );
                 metrics.local_execution_timeout.inc();
-                Err(SuiError::TimeoutError)
+                Err(SuiErrorKind::TimeoutError.into())
             }
             Ok(_) => {
                 metrics.local_execution_success.inc();
@@ -868,10 +896,10 @@ where
         self.quorum_driver().authority_aggregator().load_full()
     }
 
-    fn update_metrics(
-        &'_ self,
+    fn update_metrics<'a>(
+        &'a self,
         transaction: &Transaction,
-    ) -> (impl Drop, &'_ GenericCounter<AtomicU64>) {
+    ) -> (impl Drop + use<A>, &'a GenericCounter<AtomicU64>) {
         let (in_flight, good_response) = if transaction.is_consensus_tx() {
             self.metrics.total_req_received_shared_object.inc();
             (
@@ -972,6 +1000,8 @@ pub struct TransactionOrchestratorMetrics {
 
     concurrent_execution: IntCounter,
 
+    early_validation_rejections: IntCounterVec,
+
     request_latency: HistogramVec,
     local_execution_latency: HistogramVec,
     settlement_finality_latency: HistogramVec,
@@ -1065,6 +1095,13 @@ impl TransactionOrchestratorMetrics {
             concurrent_execution: register_int_counter_with_registry!(
                 "tx_orchestrator_concurrent_execution",
                 "Total number of concurrent execution where effects are available locally finishing driving the transaction to finality",
+                registry,
+            )
+            .unwrap(),
+            early_validation_rejections: register_int_counter_vec_with_registry!(
+                "tx_orchestrator_early_validation_rejections",
+                "Total number of transactions rejected during early validation before submission, by reason",
+                &["reason"],
                 registry,
             )
             .unwrap(),

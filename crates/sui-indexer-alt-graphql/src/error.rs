@@ -197,8 +197,8 @@ pub(crate) fn upcast<E: std::error::Error>(err: RpcError) -> RpcError<E> {
 /// Add a code to the error, if one does not exist already in the error extensions.
 pub(crate) fn fill_error_code(ext: &mut Option<ErrorExtensionValues>, code: &str) {
     match ext {
-        Some(ref ext) if ext.get("code").is_some() => {}
-        Some(ref mut ext) => ext.set("code", code),
+        Some(ext) if ext.get("code").is_some() => {}
+        Some(ext) => ext.set("code", code),
         None => {
             let mut singleton = ErrorExtensionValues::default();
             singleton.set("code", code);

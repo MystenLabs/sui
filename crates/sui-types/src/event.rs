@@ -16,16 +16,17 @@ use move_core_types::language_storage::StructTag;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use serde_with::serde_as;
 use serde_with::Bytes;
+use serde_with::serde_as;
 
+use crate::SUI_SYSTEM_ADDRESS;
 use crate::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use crate::digests::Digest;
-use crate::error::{SuiError, SuiResult};
+use crate::error::SuiErrorKind;
+use crate::error::SuiResult;
 use crate::object::bounded_visitor::BoundedVisitor;
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
-use crate::SUI_SYSTEM_ADDRESS;
 
 /// A universal Sui event type encapsulating different types of events
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -132,9 +133,10 @@ impl Event {
         layout: MoveDatatypeLayout,
     ) -> SuiResult<MoveValue> {
         BoundedVisitor::deserialize_value(contents, &layout.into_layout()).map_err(|e| {
-            SuiError::ObjectSerializationError {
+            SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
             }
+            .into()
         })
     }
 

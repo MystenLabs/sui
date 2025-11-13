@@ -5,15 +5,15 @@ use std::{
     collections::BTreeSet,
     fmt::Debug,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     },
 };
 
 use async_trait::async_trait;
 use consensus_types::block::{BlockRef, Round};
 use mysten_metrics::{
-    monitored_mpsc::{channel, Receiver, Sender, WeakSender},
+    monitored_mpsc::{Receiver, Sender, WeakSender, channel},
     monitored_scope, spawn_logged_monitored_task,
 };
 use parking_lot::RwLock;
@@ -22,6 +22,7 @@ use tokio::sync::{oneshot, watch};
 use tracing::warn;
 
 use crate::{
+    BlockAPI as _,
     block::VerifiedBlock,
     commit::CertifiedCommits,
     context::Context,
@@ -29,7 +30,6 @@ use crate::{
     core_thread::CoreError::Shutdown,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    BlockAPI as _,
 };
 
 const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
@@ -62,7 +62,7 @@ pub enum CoreError {
 #[async_trait]
 pub trait CoreThreadDispatcher: Sync + Send + 'static {
     async fn add_blocks(&self, blocks: Vec<VerifiedBlock>)
-        -> Result<BTreeSet<BlockRef>, CoreError>;
+    -> Result<BTreeSet<BlockRef>, CoreError>;
 
     async fn check_block_refs(
         &self,
@@ -77,11 +77,6 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError>;
 
     async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError>;
-
-    /// Informs the core whether consumer of produced blocks exists.
-    /// This is only used by core to decide if it should propose new blocks.
-    /// It is not a guarantee that produced blocks will be accepted by peers.
-    fn set_subscriber_exists(&self, exists: bool) -> Result<(), CoreError>;
 
     /// Sets the estimated delay to propagate a block to a quorum of peers, in
     /// number of rounds.
@@ -109,7 +104,6 @@ impl CoreThreadHandle {
 struct CoreThread {
     core: Core,
     receiver: Receiver<CoreThreadCommand>,
-    rx_subscriber_exists: watch::Receiver<bool>,
     rx_propagation_delay: watch::Receiver<Round>,
     rx_last_known_proposed_round: watch::Receiver<Round>,
     context: Arc<Context>,
@@ -159,17 +153,6 @@ impl CoreThread {
                     self.core.set_last_known_proposed_round(round);
                     self.core.new_block(round + 1, true)?;
                 }
-                _ = self.rx_subscriber_exists.changed() => {
-                    let _scope = monitored_scope("CoreThread::loop::set_subscriber_exists");
-                    let should_propose_before = self.core.should_propose();
-                    let exists = *self.rx_subscriber_exists.borrow();
-                    self.core.set_subscriber_exists(exists);
-                    if !should_propose_before && self.core.should_propose() {
-                        // If core cannot propose before but can propose now, try to produce a new block to ensure liveness,
-                        // because block proposal could have been skipped.
-                        self.core.new_block(Round::MAX, true)?;
-                    }
-                }
                 _ = self.rx_propagation_delay.changed() => {
                     let _scope = monitored_scope("CoreThread::loop::set_propagation_delay");
                     let should_propose_before = self.core.should_propose();
@@ -194,7 +177,6 @@ impl CoreThread {
 pub(crate) struct ChannelCoreThreadDispatcher {
     context: Arc<Context>,
     sender: WeakSender<CoreThreadCommand>,
-    tx_subscriber_exists: Arc<watch::Sender<bool>>,
     tx_propagation_delay: Arc<watch::Sender<Round>>,
     tx_last_known_proposed_round: Arc<watch::Sender<Round>>,
     highest_received_rounds: Arc<Vec<AtomicU32>>,
@@ -209,29 +191,25 @@ impl ChannelCoreThreadDispatcher {
         // Initialize highest received rounds.
         let highest_received_rounds = {
             let dag_state = dag_state.read();
-            let highest_received_rounds = context
+
+            context
                 .committee
                 .authorities()
                 .map(|(index, _)| {
                     AtomicU32::new(dag_state.get_last_block_for_authority(index).round())
                 })
-                .collect();
-
-            highest_received_rounds
+                .collect()
         };
 
         let (sender, receiver) =
             channel("consensus_core_commands", CORE_THREAD_COMMANDS_CHANNEL_SIZE);
-        let (tx_subscriber_exists, mut rx_subscriber_exists) = watch::channel(false);
         let (tx_propagation_delay, mut rx_propagation_delay) = watch::channel(0);
         let (tx_last_known_proposed_round, mut rx_last_known_proposed_round) = watch::channel(0);
-        rx_subscriber_exists.mark_unchanged();
         rx_propagation_delay.mark_unchanged();
         rx_last_known_proposed_round.mark_unchanged();
         let core_thread = CoreThread {
             core,
             receiver,
-            rx_subscriber_exists,
             rx_propagation_delay,
             rx_last_known_proposed_round,
             context: context.clone(),
@@ -239,10 +217,10 @@ impl ChannelCoreThreadDispatcher {
 
         let join_handle = spawn_logged_monitored_task!(
             async move {
-                if let Err(err) = core_thread.run().await {
-                    if !matches!(err, ConsensusError::Shutdown) {
-                        panic!("Fatal error occurred: {err}");
-                    }
+                if let Err(err) = core_thread.run().await
+                    && !matches!(err, ConsensusError::Shutdown)
+                {
+                    panic!("Fatal error occurred: {err}");
                 }
             },
             "ConsensusCoreThread"
@@ -253,7 +231,6 @@ impl ChannelCoreThreadDispatcher {
         let dispatcher = ChannelCoreThreadDispatcher {
             context,
             sender: sender.downgrade(),
-            tx_subscriber_exists: Arc::new(tx_subscriber_exists),
             tx_propagation_delay: Arc::new(tx_propagation_delay),
             tx_last_known_proposed_round: Arc::new(tx_last_known_proposed_round),
             highest_received_rounds: Arc::new(highest_received_rounds),
@@ -267,13 +244,13 @@ impl ChannelCoreThreadDispatcher {
 
     async fn send(&self, command: CoreThreadCommand) {
         self.context.metrics.node_metrics.core_lock_enqueued.inc();
-        if let Some(sender) = self.sender.upgrade() {
-            if let Err(err) = sender.send(command).await {
-                warn!(
-                    "Couldn't send command to core thread, probably is shutting down: {}",
-                    err
-                );
-            }
+        if let Some(sender) = self.sender.upgrade()
+            && let Err(err) = sender.send(command).await
+        {
+            warn!(
+                "Couldn't send command to core thread, probably is shutting down: {}",
+                err
+            );
         }
     }
 }
@@ -343,12 +320,6 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
     fn set_propagation_delay(&self, propagation_delay: Round) -> Result<(), CoreError> {
         self.tx_propagation_delay
             .send(propagation_delay)
-            .map_err(|e| Shutdown(e.to_string()))
-    }
-
-    fn set_subscriber_exists(&self, exists: bool) -> Result<(), CoreError> {
-        self.tx_subscriber_exists
-            .send(exists)
             .map_err(|e| Shutdown(e.to_string()))
     }
 
@@ -433,10 +404,6 @@ impl CoreThreadDispatcher for MockCoreThreadDispatcher {
         Ok(result)
     }
 
-    fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
-        todo!()
-    }
-
     fn set_propagation_delay(&self, _propagation_delay: Round) -> Result<(), CoreError> {
         todo!();
     }
@@ -459,7 +426,9 @@ mod test {
 
     use super::*;
     use crate::{
+        CommitConsumerArgs,
         block_manager::BlockManager,
+        block_verifier::NoopBlockVerifier,
         commit_observer::CommitObserver,
         context::Context,
         core::CoreSignals,
@@ -469,7 +438,6 @@ mod test {
         storage::mem_store::MemStore,
         transaction::{TransactionClient, TransactionConsumer},
         transaction_certifier::TransactionCertifier,
-        CommitConsumerArgs,
     };
 
     #[tokio::test]
@@ -484,8 +452,12 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let _block_receiver = signal_receivers.block_broadcast_receiver();
         let (commit_consumer, _commit_receiver, _transaction_receiver) =
@@ -513,7 +485,6 @@ mod test {
             transaction_consumer,
             transaction_certifier,
             block_manager,
-            true,
             commit_observer,
             signals,
             Some(key_pairs.remove(context.own_index.value()).1),

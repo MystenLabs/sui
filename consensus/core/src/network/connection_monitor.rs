@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use anemo::{types::PeerEvent, PeerId};
+use anemo::{PeerId, types::PeerEvent};
 use dashmap::DashMap;
 use mysten_metrics::spawn_logged_monitored_task;
 use quinn_proto::ConnectionStats;

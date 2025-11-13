@@ -9,38 +9,38 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{ensure, Context};
+use anyhow::{Context, ensure};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use simulacrum::Simulacrum;
-use sui_indexer_alt::{config::IndexerConfig, setup_indexer, BootstrapGenesis};
+use sui_indexer_alt::{BootstrapGenesis, config::IndexerConfig, setup_indexer};
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
-    consistent_service_client::ConsistentServiceClient, AvailableRangeRequest,
+    AvailableRangeRequest, consistent_service_client::ConsistentServiceClient,
 };
 use sui_indexer_alt_consistent_store::{
     args::RpcArgs as ConsistentArgs, args::TlsArgs as ConsistentTlsArgs,
     config::ServiceConfig as ConsistentConfig, start_service as start_consistent_store,
 };
-use sui_indexer_alt_framework::{ingestion::ClientArgs, postgres::schema::watermarks, IndexerArgs};
+use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs, postgres::schema::watermarks};
 use sui_indexer_alt_graphql::{
-    config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
+    RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
 };
 use sui_indexer_alt_jsonrpc::{
-    config::RpcConfig as JsonRpcConfig, start_rpc as start_jsonrpc, NodeArgs as JsonRpcNodeArgs,
-    RpcArgs as JsonRpcArgs,
+    NodeArgs as JsonRpcNodeArgs, RpcArgs as JsonRpcArgs, config::RpcConfig as JsonRpcConfig,
+    start_rpc as start_jsonrpc,
 };
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
     fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
 };
 use sui_pg_db::{
-    temp::{get_available_port, TempDb},
     Db, DbArgs,
+    temp::{TempDb, get_available_port},
 };
 use sui_storage::blob::{Blob, BlobEncoding};
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::full_checkpoint_content::{Checkpoint, CheckpointData};
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
@@ -694,16 +694,16 @@ pub fn local_ingestion_client_args() -> (ClientArgs, TempDir) {
         .unwrap();
     let client_args = ClientArgs {
         local_ingestion_path: Some(temp_dir.path().to_owned()),
-        remote_store_url: None,
-        rpc_api_url: None,
-        rpc_username: None,
-        rpc_password: None,
+        ..Default::default()
     };
     (client_args, temp_dir)
 }
 
 /// Writes a checkpoint file to the given path.
-pub async fn write_checkpoint(path: &Path, checkpoint_data: CheckpointData) -> anyhow::Result<()> {
+pub async fn write_checkpoint(path: &Path, checkpoint: Checkpoint) -> anyhow::Result<()> {
+    // Convert to CheckpointData for serialization
+    // TODO: Change to proto format once we merge pull/24066
+    let checkpoint_data: CheckpointData = checkpoint.into();
     let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
     let file_path = path.join(file_name);
     let blob = Blob::encode(&checkpoint_data, BlobEncoding::Bcs)?;

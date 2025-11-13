@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use futures::future::try_join_all;
-use prettytable::{row, Table};
+use prettytable::{Table, row};
 use tokio::time::{self, Instant};
 
 use crate::{

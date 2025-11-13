@@ -11,12 +11,12 @@ use anyhow::Result;
 use arc_swap::ArcSwapOption;
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use consensus_core::{
-    to_socket_addr, Clock, CommitConsumerArgs, CommitConsumerMonitor, CommittedSubDag,
-    ConsensusAuthority, TransactionClient, TransactionVerifier,
+    Clock, CommitConsumerArgs, CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority,
+    NetworkType, TransactionClient, TransactionVerifier, to_socket_addr,
 };
 use consensus_types::block::BlockTimestampMs;
-use mysten_metrics::monitored_mpsc::unbounded_channel;
 use mysten_metrics::monitored_mpsc::UnboundedReceiver;
+use mysten_metrics::monitored_mpsc::unbounded_channel;
 use parking_lot::Mutex;
 use prometheus::Registry;
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
@@ -275,7 +275,7 @@ pub(crate) async fn make_authority(
         db_dir,
         committee,
         keypairs,
-        network_type,
+        network_type: _,
         boot_counter,
         protocol_config,
         clock_drift,
@@ -315,7 +315,7 @@ pub(crate) async fn make_authority(
     let commit_consumer_monitor = commit_consumer.monitor();
 
     let authority = ConsensusAuthority::start(
-        network_type,
+        NetworkType::Tonic,
         0,
         if is_observer { None } else { Some(authority_index) },
         committee,

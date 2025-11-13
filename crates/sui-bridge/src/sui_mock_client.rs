@@ -11,10 +11,11 @@ use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::{EventFilter, EventPage, SuiEvent};
+use sui_types::Identifier;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::bridge::{
-    BridgeCommitteeSummary, BridgeSummary, MoveTypeParsedTokenTransferMessage,
+    BridgeCommitteeSummary, BridgeSummary, MoveTypeBridgeRecord, MoveTypeParsedTokenTransferMessage,
 };
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
@@ -22,10 +23,9 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
-use sui_types::Identifier;
 
 use crate::sui_client::SuiClientInner;
-use crate::types::{BridgeAction, BridgeActionStatus, IsBridgePaused};
+use crate::types::{BridgeAction, BridgeActionStatus, IsBridgePaused, SuiEvents};
 
 /// Mock client used in test environments.
 #[allow(clippy::type_complexity)]
@@ -184,14 +184,19 @@ impl SuiClientInner for SuiMockClient {
     async fn get_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,
-    ) -> Result<Vec<SuiEvent>, Self::Error> {
+    ) -> Result<SuiEvents, Self::Error> {
         let events = self.events_by_tx_digest.lock().unwrap();
 
         match events
             .get(&tx_digest)
             .unwrap_or_else(|| panic!("No preset events found for tx_digest: {:?}", tx_digest))
         {
-            Ok(events) => Ok(events.clone()),
+            Ok(events) => Ok(SuiEvents {
+                transaction_digest: tx_digest,
+                checkpoint: None,
+                timestamp_ms: None,
+                events: events.clone(),
+            }),
             // sui_sdk::error::Error is not Clone
             Err(_) => Err(sui_sdk::error::Error::DataError("".to_string())),
         }
@@ -265,6 +270,14 @@ impl SuiClientInner for SuiMockClient {
         _seq_number: u64,
     ) -> Result<Option<MoveTypeParsedTokenTransferMessage>, BridgeError> {
         unimplemented!()
+    }
+
+    async fn get_bridge_record(
+        &self,
+        _source_chain_id: u8,
+        _seq_number: u64,
+    ) -> Result<MoveTypeBridgeRecord, BridgeError> {
+        todo!()
     }
 
     async fn execute_transaction_block_with_effects(

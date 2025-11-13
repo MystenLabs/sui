@@ -12,6 +12,7 @@ pub mod drop_safety;
 pub mod input_arguments;
 pub mod memory_safety;
 pub mod move_functions;
+pub mod private_entry_arguments;
 
 pub fn transaction<Mode: ExecutionMode>(
     env: &env::Env,
@@ -21,5 +22,6 @@ pub fn transaction<Mode: ExecutionMode>(
     move_functions::verify::<Mode>(env, &*ast)?;
     memory_safety::verify(env, &*ast)?;
     drop_safety::refine_and_verify::<Mode>(env, ast)?;
+    private_entry_arguments::verify::<Mode>(env, &*ast)?;
     Ok(())
 }

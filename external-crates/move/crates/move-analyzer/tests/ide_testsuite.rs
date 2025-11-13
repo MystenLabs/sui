@@ -24,7 +24,7 @@ use move_analyzer::{
     },
 };
 use move_command_line_common::testing::insta_assert;
-use move_compiler::linters::LintLevel;
+use move_compiler::{editions::Flavor, linters::LintLevel};
 use serde::{Deserialize, Serialize};
 use url::Url;
 use vfs::{MemoryFS, VfsPath};
@@ -129,7 +129,7 @@ impl UseDefTest {
         let Some(use_def) = uses.iter().nth(*use_ndx) else {
             writeln!(
                 output,
-                "ERROR: No use_line {use_ndx} in uses {uses:#?} for file {use_file}"
+                "ERROR: No symbol at index {use_ndx} in line {use_line} uses {uses:#?} for file {use_file}"
             )?;
             return Ok(());
         };
@@ -313,10 +313,11 @@ impl HintTest {
 
         writeln!(output, "-- test {test_idx} -------------------")?;
         let Some((hint, label_parts)) = inlay_hints.iter().find_map(|h| {
-            if h.position.line == lsp_line && h.position.character == lsp_col {
-                if let InlayHintLabel::LabelParts(parts) = &h.label {
-                    return Some((h, parts));
-                }
+            if h.position.line == lsp_line
+                && h.position.character == lsp_col
+                && let InlayHintLabel::LabelParts(parts) = &h.label
+            {
+                return Some((h, parts));
             }
             None
         }) else {
@@ -454,6 +455,7 @@ fn initial_symbols(
             project_path.as_path(),
             LintLevel::None,
             BTreeMap::new(),
+            Some(Flavor::Sui),
         )?;
         let compiled_pkg_info = compiled_pkg_info_opt.ok_or("PACKAGE COMPILATION FAILED")?;
         let symbols = compute_symbols(pkg_deps.clone(), compiled_pkg_info.clone(), None);

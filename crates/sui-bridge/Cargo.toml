@@ -4,7 +4,7 @@ version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 ethers = "2.0"
@@ -42,7 +42,6 @@ reqwest.workspace = true
 fastcrypto.workspace = true
 tap.workspace = true
 rand.workspace = true
-lru.workspace = true
 shared-crypto.workspace = true
 backoff.workspace = true
 mysten-common.workspace = true
@@ -52,6 +51,7 @@ sui-test-transaction-builder.workspace = true
 sui-metrics-push-client.workspace = true
 hex-literal = { version = "0.3.4", optional = true }
 test-cluster = { workspace = true, optional = true }
+sui-sdk-types.workspace = true
 
 [dev-dependencies]
 sui-config.workspace = true

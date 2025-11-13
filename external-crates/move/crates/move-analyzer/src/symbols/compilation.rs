@@ -156,9 +156,8 @@ pub struct SymbolsComputationData {
     /// Outermost definitions in a module (structs, consts, functions), keyed on a ModuleIdent
     /// string
     pub mod_outer_defs: BTreeMap<String, ModuleDefs>,
-    /// A UseDefMap for a given module (needs to be appropriately set before the module
-    /// processing starts) keyed on a ModuleIdent string
-    pub mod_use_defs: BTreeMap<String, UseDefMap>,
+    /// A UseDefMap for a given file
+    pub use_defs: BTreeMap<FileHash, UseDefMap>,
     /// Uses (references) for a definition at a given location
     pub references: BTreeMap<Loc, BTreeSet<UseLoc>>,
     /// Additional information about a definitions at a given location
@@ -243,7 +242,7 @@ impl SymbolsComputationData {
     pub fn new() -> Self {
         Self {
             mod_outer_defs: BTreeMap::new(),
-            mod_use_defs: BTreeMap::new(),
+            use_defs: BTreeMap::new(),
             references: BTreeMap::new(),
             def_info: BTreeMap::new(),
             mod_to_alias_lengths: BTreeMap::new(),
@@ -298,12 +297,13 @@ pub fn get_compiled_pkg(
     pkg_path: &Path,
     lint: LintLevel,
     implicit_deps: Dependencies,
+    flavor: Option<Flavor>,
 ) -> Result<(Option<CompiledPkgInfo>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     let cached_deps_exist = has_precompiled_deps(pkg_path, packages_info.clone());
     let build_config = move_package::BuildConfig {
         test_mode: true,
         install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-        default_flavor: Some(Flavor::Sui),
+        default_flavor: flavor,
         lint_flag: lint.into(),
         force_lock_file: cached_deps_exist,
         skip_fetch_latest_git_deps: cached_deps_exist,
@@ -738,15 +738,14 @@ fn merge_diagnostics_for_file(
 ) {
     // sadly, `Diagnostic` does not implement `Hash`, only `Eq`, so the check is rather costly...
     let ide_diags_for_file_opt = ide_diags.get_mut(file_path);
-    if ide_diags_for_file_opt.is_none() {
-        ide_diags.insert(file_path.clone(), diagnostics.clone());
-    } else {
-        let ide_diags_for_file = ide_diags_for_file_opt.unwrap();
+    if let Some(ide_diags_for_file) = ide_diags_for_file_opt {
         for d in diagnostics {
             if !ide_diags_for_file.contains(d) {
                 ide_diags_for_file.push(d.clone());
             }
         }
+    } else {
+        ide_diags.insert(file_path.clone(), diagnostics.clone());
     }
 }
 

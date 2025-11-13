@@ -11,8 +11,8 @@ use bincode::Options;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use once_cell::sync::Lazy;
 use prometheus::{
-    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
-    Registry,
+    IntCounter, IntGauge, Registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry,
 };
 #[cfg(tidehunter)]
 use serde::de::DeserializeOwned;
@@ -38,8 +38,8 @@ use sui_types::{
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
-use typed_store::rocksdb::compaction_filter::Decision;
 use typed_store::rocksdb::LiveFile;
+use typed_store::rocksdb::compaction_filter::Decision;
 use typed_store::{Map, TypedStoreError};
 
 static PERIODIC_PRUNING_TABLES: Lazy<BTreeSet<String>> = Lazy::new(|| {
@@ -310,6 +310,7 @@ impl AuthorityStorePruner {
         metrics
             .last_pruned_effects_checkpoint
             .set(checkpoint_number as i64);
+
         Ok(())
     }
 
@@ -364,6 +365,7 @@ impl AuthorityStorePruner {
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
         epoch_duration_ms: u64,
+        pruner_watermarks: &Arc<PrunerWatermarks>,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("PruneCheckpointsForEligibleEpochs");
         let pruned_checkpoint_number = checkpoint_store
@@ -381,17 +383,17 @@ impl AuthorityStorePruner {
                     .unwrap_or_default(),
             );
         }
-        if config.smooth {
-            if let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints {
-                max_eligible_checkpoint = Self::smoothed_max_eligible_checkpoint_number(
-                    checkpoint_store,
-                    max_eligible_checkpoint,
-                    pruned_checkpoint_number,
-                    epoch_id,
-                    epoch_duration_ms,
-                    num_epochs_to_retain,
-                )?;
-            }
+        if config.smooth
+            && let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints
+        {
+            max_eligible_checkpoint = Self::smoothed_max_eligible_checkpoint_number(
+                checkpoint_store,
+                max_eligible_checkpoint,
+                pruned_checkpoint_number,
+                epoch_id,
+                epoch_duration_ms,
+                num_epochs_to_retain,
+            )?;
         }
         debug!("Max eligible checkpoint {}", max_eligible_checkpoint);
         Self::prune_for_eligible_epochs(
@@ -405,10 +407,19 @@ impl AuthorityStorePruner {
                 .ok_or_else(|| anyhow!("config value not set"))?,
             pruned_checkpoint_number,
             max_eligible_checkpoint,
-            config,
+            config.clone(),
             metrics.clone(),
         )
-        .await
+        .await?;
+
+        if let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints() {
+            Self::update_pruning_watermarks(
+                checkpoint_store,
+                num_epochs_to_retain,
+                pruner_watermarks,
+            )?;
+        }
+        Ok(())
     }
 
     /// Prunes old object versions based on effects from all checkpoints from epochs eligible for pruning
@@ -561,14 +572,11 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
-    #[cfg(tidehunter)]
-    fn prune_th(
-        perpetual_db: &Arc<AuthorityPerpetualTables>,
+    fn update_pruning_watermarks(
         checkpoint_store: &Arc<CheckpointStore>,
         num_epochs_to_retain: u64,
-        pruning_watermark: Arc<PrunerWatermarks>,
-    ) -> anyhow::Result<()> {
-        // TODO: add support for checkpoints db pruning
+        pruning_watermark: &Arc<PrunerWatermarks>,
+    ) -> anyhow::Result<bool> {
         use std::sync::atomic::Ordering;
         let current_watermark = pruning_watermark.epoch_id.load(Ordering::Relaxed);
         let current_epoch_id = checkpoint_store
@@ -576,7 +584,7 @@ impl AuthorityStorePruner {
             .map(|c| c.epoch)
             .unwrap_or_default();
         if current_epoch_id < num_epochs_to_retain {
-            return Ok(());
+            return Ok(false);
         }
         let target_epoch_id = current_epoch_id - num_epochs_to_retain;
         let checkpoint_id =
@@ -584,8 +592,7 @@ impl AuthorityStorePruner {
 
         let new_watermark = target_epoch_id + 1;
         if current_watermark == new_watermark {
-            info!("skip relocation. Watermark hasn't changed");
-            return Ok(());
+            return Ok(false);
         }
         info!("relocation: setting epoch watermark to {}", new_watermark);
         pruning_watermark
@@ -599,6 +606,25 @@ impl AuthorityStorePruner {
             pruning_watermark
                 .checkpoint_id
                 .store(checkpoint_id, Ordering::Relaxed);
+        }
+        Ok(true)
+    }
+
+    #[cfg(tidehunter)]
+    fn prune_th(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        checkpoint_store: &Arc<CheckpointStore>,
+        num_epochs_to_retain: u64,
+        pruning_watermark: Arc<PrunerWatermarks>,
+    ) -> anyhow::Result<()> {
+        let watermark_updated = Self::update_pruning_watermarks(
+            checkpoint_store,
+            num_epochs_to_retain,
+            &pruning_watermark,
+        )?;
+        if !watermark_updated {
+            info!("skip relocation. Watermark hasn't changed");
+            return Ok(());
         }
         perpetual_db.objects.db.start_relocation()?;
         checkpoint_store.tables.watermarks.db.start_relocation()?;
@@ -629,10 +655,10 @@ impl AuthorityStorePruner {
             {
                 continue;
             }
-            if let Some(candidate) = &sst_file_for_compaction {
-                if candidate.size > sst_file.size {
-                    continue;
-                }
+            if let Some(candidate) = &sst_file_for_compaction
+                && candidate.size > sst_file.size
+            {
+                continue;
             }
             sst_file_for_compaction = Some(sst_file);
         }
@@ -695,7 +721,7 @@ impl AuthorityStorePruner {
         jsonrpc_index: Option<Arc<IndexStore>>,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
-        #[allow(unused_variables)] pruner_watermarks: Arc<PrunerWatermarks>,
+        pruner_watermarks: Arc<PrunerWatermarks>,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         debug!(
@@ -780,7 +806,7 @@ impl AuthorityStorePruner {
                             }
                         },
                         _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
-                            if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
+                            if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms, &pruner_watermarks).await {
                                 error!("Failed to prune checkpoints: {:?}", err);
                             }
                         },
@@ -811,7 +837,10 @@ impl AuthorityStorePruner {
     ) -> Self {
         if pruning_config.num_epochs_to_retain > 0 && pruning_config.num_epochs_to_retain < u64::MAX
         {
-            warn!("Using objects pruner with num_epochs_to_retain = {} can lead to performance issues", pruning_config.num_epochs_to_retain);
+            warn!(
+                "Using objects pruner with num_epochs_to_retain = {} can lead to performance issues",
+                pruning_config.num_epochs_to_retain
+            );
             if is_validator {
                 warn!("Resetting to aggressive pruner.");
                 pruning_config.num_epochs_to_retain = 0;
@@ -889,18 +918,18 @@ impl ObjectsCompactionFilter {
             .with_fixint_encoding()
             .deserialize(key)?;
         let object: StoreObjectWrapper = bcs::from_bytes(value)?;
-        if matches!(object.into_inner(), StoreObject::Value(_)) {
-            if let Some(db) = self.db.upgrade() {
-                match db.object_tombstones.get(&object_id)? {
-                    Some(gc_version) => {
-                        if version <= gc_version {
-                            self.metrics.key_removed.inc();
-                            return Ok(Decision::Remove);
-                        }
-                        self.metrics.key_kept.inc();
+        if matches!(object.into_inner(), StoreObject::Value(_))
+            && let Some(db) = self.db.upgrade()
+        {
+            match db.object_tombstones.get(&object_id)? {
+                Some(gc_version) => {
+                    if version <= gc_version {
+                        self.metrics.key_removed.inc();
+                        return Ok(Decision::Remove);
                     }
-                    None => self.metrics.key_not_found.inc(),
+                    self.metrics.key_kept.inc();
                 }
+                None => self.metrics.key_not_found.inc(),
             }
         }
         Ok(Decision::Keep)
@@ -949,7 +978,7 @@ mod tests {
     use crate::authority::authority_store_pruner::AuthorityStorePruningMetrics;
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
     use crate::authority::authority_store_types::{
-        get_store_object, StoreObject, StoreObjectWrapper,
+        StoreObject, StoreObjectWrapper, get_store_object,
     };
     use prometheus::Registry;
     use sui_types::base_types::ObjectDigest;
@@ -960,8 +989,8 @@ mod tests {
         object::Object,
         storage::ObjectKey,
     };
-    use typed_store::rocks::{default_db_options, DBMap, MetricConf, ReadWriteOptions};
     use typed_store::Map;
+    use typed_store::rocks::{DBMap, MetricConf, ReadWriteOptions, default_db_options};
 
     use super::AuthorityStorePruner;
 

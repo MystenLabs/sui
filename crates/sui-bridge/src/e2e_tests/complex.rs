@@ -4,7 +4,7 @@
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 
 use crate::e2e_tests::test_utils::{
-    initiate_bridge_eth_to_sui, initiate_bridge_sui_to_eth, BridgeTestClusterBuilder,
+    BridgeTestClusterBuilder, initiate_bridge_eth_to_sui, initiate_bridge_sui_to_eth,
 };
 use crate::sui_transaction_builder::build_sui_transaction;
 use crate::types::{BridgeAction, EmergencyAction};

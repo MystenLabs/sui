@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::anyhow;
-use backoff::{future::retry, ExponentialBackoff};
+use backoff::{ExponentialBackoff, future::retry};
 use chrono::{DateTime, Utc};
 use clap::*;
 use once_cell::sync::Lazy;
@@ -11,7 +11,7 @@ use std::io::Read;
 use std::time::Duration;
 use sui_metric_checker::query::{instant_query, range_query};
 use sui_metric_checker::{
-    fails_threshold_condition, timestamp_string_to_unix_seconds, Config, NowProvider, QueryType,
+    Config, NowProvider, QueryType, fails_threshold_condition, timestamp_string_to_unix_seconds,
 };
 
 #[derive(Parser)]

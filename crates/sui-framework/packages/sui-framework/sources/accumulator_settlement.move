@@ -19,6 +19,7 @@ use fun sui::accumulator_metadata::create_accumulator_metadata as AccumulatorRoo
 /// digest.
 #[allow(unused_function)]
 fun settlement_prologue(
+    _accumulator_root: &mut AccumulatorRoot,
     _epoch: u64,
     _checkpoint_height: u64,
     _idx: u64,
@@ -213,4 +214,25 @@ fun test_mmr_with_different_values() {
     assert!(mmr[0] == 0);
     assert!(mmr[1] == 0);
     assert!(mmr[2] != 0);
+}
+
+#[test]
+fun test_mmr_digest_compat_with_rust() {
+    let mut mmr = vector::empty();
+    let count = 8;
+
+    let mut i = 0;
+    while (i < count) {
+        let fixed_new_val = 50 + i;
+        add_to_mmr(fixed_new_val, &mut mmr);
+        i = i + 1;
+    };
+
+    assert!(vector::length(&mmr) == 4);
+    assert!(mmr[0] == 0);
+    assert!(mmr[1] == 0);
+    assert!(mmr[2] == 0);
+    assert!(
+        mmr[3] == 69725770072863840208899320192042305265295220676851872214494910464384102654361,
+    );
 }

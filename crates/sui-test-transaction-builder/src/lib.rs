@@ -10,8 +10,9 @@ use sui_sdk::rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
 };
 use sui_sdk::wallet_context::WalletContext;
+use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
-use sui_types::crypto::{get_key_pair, AccountKeyPair, Signature, Signer};
+use sui_types::crypto::{AccountKeyPair, Signature, Signer, get_key_pair};
 use sui_types::digests::TransactionDigest;
 use sui_types::multisig::{BitmapUnit, MultiSig, MultiSigPublicKey};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
@@ -19,12 +20,11 @@ use sui_types::object::Owner;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
-    CallArg, ObjectArg, ProgrammableTransaction, Transaction, TransactionData,
-    DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    CallArg, DEFAULT_VALIDATOR_GAS_PRICE, ObjectArg, ProgrammableTransaction,
+    SharedObjectMutability, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData,
 };
-use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
-use sui_types::{TypeTag, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{SUI_SYSTEM_PACKAGE_ID, TypeTag};
 
 pub struct TestTransactionBuilder {
     test_data: TestTransactionData,
@@ -104,7 +104,7 @@ impl TestTransactionBuilder {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: counter_id,
                 initial_shared_version: counter_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })],
         )
     }
@@ -122,7 +122,7 @@ impl TestTransactionBuilder {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: counter_id,
                 initial_shared_version: counter_initial_shared_version,
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             })],
         )
     }
@@ -140,7 +140,7 @@ impl TestTransactionBuilder {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: counter_id,
                 initial_shared_version: counter_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })],
         )
     }
@@ -194,7 +194,7 @@ impl TestTransactionBuilder {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_RANDOMNESS_STATE_OBJECT_ID,
                 initial_shared_version: randomness_initial_shared_version,
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             })],
         )
     }
@@ -469,6 +469,7 @@ impl TestTransactionBuilder {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum TestTransactionData {
     Move(MoveData),
     Transfer(TransferData),
@@ -487,6 +488,7 @@ struct MoveData {
     type_args: Vec<TypeTag>,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum PublishData {
     /// Path to source code directory and with_unpublished_deps.
     /// with_unpublished_deps indicates whether to publish unpublished dependencies in the same transaction or not.
@@ -761,7 +763,7 @@ pub async fn emit_new_random_u128(
     let random_call_arg = CallArg::Object(ObjectArg::SharedObject {
         id: SUI_RANDOMNESS_STATE_OBJECT_ID,
         initial_shared_version,
-        mutable: false,
+        mutability: SharedObjectMutability::Immutable,
     });
 
     let txn = context

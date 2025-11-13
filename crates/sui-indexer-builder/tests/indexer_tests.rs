@@ -3,11 +3,11 @@
 
 use crate::indexer_test_utils::{InMemoryPersistent, NoopDataMapper, TestDatasource};
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, IntCounterVec,
-    IntGaugeVec, Registry,
+    IntCounterVec, IntGaugeVec, Registry, register_int_counter_vec_with_registry,
+    register_int_gauge_vec_with_registry,
 };
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, IndexerBuilder};
-use sui_indexer_builder::{Task, LIVE_TASK_TARGET_CHECKPOINT};
+use sui_indexer_builder::{LIVE_TASK_TARGET_CHECKPOINT, Task};
 
 mod indexer_test_utils;
 

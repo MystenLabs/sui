@@ -7,7 +7,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::full_checkpoint_content::{
     Checkpoint, CheckpointData, ExecutedTransaction, ObjectSet,
 };
@@ -21,19 +21,21 @@ pub(crate) fn store_checkpoint_locally(
     let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
 
     std::fs::create_dir_all(path).map_err(|err| {
-        SuiError::FileIOError(format!(
+        SuiErrorKind::FileIOError(format!(
             "failed to save full checkpoint content locally {:?}",
             err
         ))
     })?;
 
     Blob::encode(&checkpoint_data, BlobEncoding::Bcs)
-        .map_err(|_| SuiError::TransactionSerializationError {
+        .map_err(|_| SuiErrorKind::TransactionSerializationError {
             error: "failed to serialize full checkpoint content".to_string(),
         }) // Map the first error
         .and_then(|blob| {
             std::fs::write(path.join(file_name), blob.to_bytes()).map_err(|_| {
-                SuiError::FileIOError("failed to save full checkpoint content locally".to_string())
+                SuiErrorKind::FileIOError(
+                    "failed to save full checkpoint content locally".to_string(),
+                )
             })
         })?;
 
@@ -58,7 +60,7 @@ pub(crate) fn load_checkpoint(
         .zip(event_tx_digests)
         .map(|(maybe_event, tx_digest)| {
             maybe_event
-                .ok_or(SuiError::TransactionEventsNotFound { digest: tx_digest })
+                .ok_or(SuiErrorKind::TransactionEventsNotFound { digest: tx_digest }.into())
                 .map(|event| (tx_digest, event))
         })
         .collect::<SuiResult<HashMap<_, _>>>()?;

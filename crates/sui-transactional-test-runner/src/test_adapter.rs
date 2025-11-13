@@ -5,9 +5,9 @@
 
 use crate::offchain_state::OffchainStateReader;
 use crate::simulator_persisted_store::PersistedStore;
+use crate::{TransactionalAdapter, ValidatorWithFullnode, cursor};
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
-use crate::{cursor, TransactionalAdapter, ValidatorWithFullnode};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
 use criterion::Criterion;
@@ -19,9 +19,9 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::error_bitset::ErrorBitset;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
+    Flags, PreCompiledProgramInfo,
     editions::{Edition, Flavor},
     shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
-    Flags, PreCompiledProgramInfo,
 };
 use move_core_types::ident_str;
 use move_core_types::parsing::address::ParsedAddress;
@@ -34,12 +34,12 @@ use move_symbol_pool::Symbol;
 use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
 use move_transactional_test_runner::tasks::TaskCommand;
 use move_transactional_test_runner::{
-    framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
+    framework::{CompiledState, MoveTestAdapter, compile_any, store_modules},
     tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
 };
 use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde::Deserialize;
 use serde_json::Value;
 use std::borrow::Cow;
@@ -52,14 +52,14 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use sui_core::authority::AuthorityState;
 use sui_core::authority::shared_object_version_manager::AssignedVersions;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
-use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_graphql_rpc::test_infra::cluster::{RetentionConfig, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionBlockResponse, SuiExecutionStatus,
+    DevInspectResults, DryRunTransactionBlockResponse, SuiAccumulatorOperation, SuiExecutionStatus,
     SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
 };
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -68,13 +68,16 @@ use sui_storage::{
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::KeyPairWrapper;
+use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{
-    get_authority_key_pair, AuthorityKeyPair, AuthorityPublicKeyBytes, RandomnessRound,
+    AuthorityKeyPair, AuthorityPublicKeyBytes, RandomnessRound, get_authority_key_pair,
 };
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest};
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::effects::{
+    AccumulatorOperation, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+};
 use sui_types::execution_status::ExecutionFailureStatus;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
@@ -86,29 +89,28 @@ use sui_types::storage::{ObjectStore, RpcStateReader};
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
-use sui_types::SUI_SYSTEM_ADDRESS;
+use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID};
+use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
+use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
-    crypto::{get_key_pair_from_rng, AccountKeyPair},
+    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
+    base_types::{ObjectID, ObjectRef, SUI_ADDRESS_LENGTH, SuiAddress},
+    crypto::{AccountKeyPair, get_key_pair_from_rng},
     event::Event,
     object::{self, Object},
     transaction::{Transaction, TransactionData, VerifiedTransaction},
-    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
+use sui_types::{
+    SUI_FRAMEWORK_PACKAGE_ID, programmable_transaction_builder::ProgrammableTransactionBuilder,
+};
+use sui_types::{SUI_SYSTEM_PACKAGE_ID, utils::to_sender_signed_transaction};
 use sui_types::{execution_status::ExecutionStatus, transaction::TransactionKind};
 use sui_types::{gas::GasCostSummary, object::GAS_VALUE_FOR_TESTING};
 use sui_types::{
     move_package::MovePackage,
     transaction::{Argument, CallArg, TransactionDataAPI, TransactionExpiration},
 };
-use sui_types::{
-    programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_PACKAGE_ID,
-};
-use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
-use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID};
-use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
-use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
-use tempfile::{tempdir, NamedTempFile};
+use tempfile::{NamedTempFile, tempdir};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum FakeID {
@@ -218,7 +220,7 @@ struct TxnSummary {
     wrapped: Vec<ObjectID>,
     unchanged_shared: Vec<ObjectID>,
     events: Vec<Event>,
-    accumulators_written: Vec<ObjectID>,
+    accumulators_written: Vec<(ObjectID, SuiAddress, TypeTag, AccumulatorOperation)>,
     gas_summary: GasCostSummary,
 }
 
@@ -241,6 +243,8 @@ impl AdapterInitConfig {
             rest_api_url,
             enable_accumulators,
             enable_authenticated_event_streams,
+            allow_references_in_ptbs,
+            enable_non_exclusive_writes,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -249,6 +253,17 @@ impl AdapterInitConfig {
             .unwrap_or_default();
 
         let mut protocol_config = if let Some(protocol_version) = protocol_version {
+            assert!(
+                protocol_version <= ProtocolVersion::max().as_u64(),
+                "Cannot set the protocol version to {}, since it is higher than the max version {}",
+                protocol_version,
+                ProtocolVersion::max().as_u64(),
+            );
+            assert!(
+                protocol_version != ProtocolVersion::max().as_u64(),
+                "Do not set the protocol version to the max {}. It can lead to unanticipated test changes once the max version is bumped. Instead, leave it unset to always use the max version.",
+                protocol_version,
+            );
             ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
         } else {
             ProtocolConfig::get_for_max_version_UNSAFE()
@@ -258,6 +273,12 @@ impl AdapterInitConfig {
         }
         if enable_authenticated_event_streams {
             protocol_config.enable_authenticated_event_streams_for_testing();
+        }
+        if allow_references_in_ptbs {
+            protocol_config.allow_references_in_ptbs_for_testing();
+        }
+        if enable_non_exclusive_writes {
+            protocol_config.enable_non_exclusive_writes_for_testing();
         }
         if let Some(enable) = shared_object_deletion {
             protocol_config.set_shared_object_deletion_for_testing(enable);
@@ -380,7 +401,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
             None => AdapterInitConfig::default(),
         };
-        let enabled_ptb_v2 = protocol_config.version >= ProtocolVersion::max()
+        let enabled_ptb_v2 = protocol_config.version == ProtocolVersion::max()
             && ENABLE_PTB_V2.get().copied().unwrap_or(false);
         protocol_config.set_enable_ptb_execution_v2_for_testing(enabled_ptb_v2);
 
@@ -593,8 +614,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             .try_as_package()
             .unwrap()
             .serialized_module_map()
-            .iter()
-            .map(|(_, published_module_bytes)| MaybeNamedCompiledModule {
+            .values()
+            .map(|published_module_bytes| MaybeNamedCompiledModule {
                 named_address: named_addr_opt,
                 module: CompiledModule::deserialize_with_defaults(published_module_bytes).unwrap(),
                 source_map: None,
@@ -660,9 +681,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     Ok(obj) => obj,
                 }
             }};
-            ($fake_id:ident) => {{
-                get_obj!($fake_id, None)
-            }};
+            ($fake_id:ident) => {{ get_obj!($fake_id, None) }};
         }
         match command {
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
@@ -842,7 +861,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 jwk_iss,
                 authenticator_obj_initial_shared_version,
             }) => {
-                use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+                use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
                 use sui_types::authenticator_state::ActiveJwk;
 
                 let current_epoch = self.get_latest_epoch_id()?;
@@ -882,7 +901,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     current_epoch, round
                 )))
             }
-            SuiSubcommand::ViewObject(ViewObjectCommand { id: fake_id }) => {
+            SuiSubcommand::ViewObject(ViewObjectCommand {
+                id: fake_id,
+                hide_contents,
+            }) => {
                 let obj = get_obj!(fake_id);
                 Ok(Some(match &obj.data {
                     object::Data::Move(move_obj) => {
@@ -891,12 +913,14 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                             BoundedVisitor::deserialize_struct(move_obj.contents(), &layout)
                                 .unwrap();
 
-                        self.stabilize_str(format!(
-                            "Owner: {}\nVersion: {}\nContents: {:#}",
-                            &obj.owner,
-                            obj.version().value(),
-                            move_struct
-                        ))
+                        let msg =
+                            format!("Owner: {}\nVersion: {}", &obj.owner, obj.version().value());
+                        let msg = if hide_contents {
+                            format!("{msg}\nType: {:#}", &move_struct.type_)
+                        } else {
+                            format!("{msg}\nContents: {move_struct:#}",)
+                        };
+                        self.stabilize_str(msg)
                     }
                     object::Data::Package(package) => {
                         let num_modules = package.serialized_module_map().len();
@@ -1268,8 +1292,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         let package = obj.data.try_as_package().map(|package| {
                             package
                                 .serialized_module_map()
-                                .iter()
-                                .map(|(_, published_module_bytes)| {
+                                .values()
+                                .map(|published_module_bytes| {
                                     let module = CompiledModule::deserialize_with_defaults(
                                         published_module_bytes,
                                     )
@@ -1295,6 +1319,12 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     SuiValue::Receiving(_, _) => bail!("receiving is not supported as an input"),
                     SuiValue::ImmShared(_, _) => {
                         bail!("read-only shared object is not supported as an input")
+                    }
+                    SuiValue::NonExclusiveWrite(_, _) => {
+                        bail!("non-exclusive write object is not supported as an input")
+                    }
+                    SuiValue::Withdraw(_, _) => {
+                        bail!("withdraw reservation is not supported as an input for set-address")
                     }
                 };
                 let value = NumericalAddress::new(value.into_bytes(), NumberFormat::Hex);
@@ -1780,10 +1810,17 @@ impl SuiTestAdapter {
             .collect();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|(id, _, _)| *id).collect();
 
-        let mut accumulators_written: Vec<_> = effects
-            .accumulator_events()
+        let accumulator_events = effects.accumulator_events();
+        let mut accumulators_written: Vec<_> = accumulator_events
             .iter()
-            .map(|event| *event.accumulator_obj.inner())
+            .map(|event| {
+                (
+                    *event.accumulator_obj.inner(),
+                    event.write.address.address,
+                    event.write.address.ty.clone(),
+                    event.write.operation.clone(),
+                )
+            })
             .collect();
 
         let gas_summary = effects.gas_cost_summary();
@@ -1792,12 +1829,21 @@ impl SuiTestAdapter {
         let mut might_need_fake_id: Vec<_> = created_ids
             .iter()
             .chain(unwrapped_ids.iter())
-            .chain(accumulators_written.iter())
             .copied()
             .collect();
 
         // Use a stable sort before assigning fake ids, so test output remains stable.
         might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id));
+
+        accumulators_written.sort_by_key(|(_, address, ty, _)| {
+            (
+                self.stabilize_str(format!("{}", address)),
+                self.stabilize_str(format!("{}", ty)),
+            )
+        });
+
+        might_need_fake_id.extend(accumulators_written.iter().map(|(id, _, _, _)| *id));
+
         for id in might_need_fake_id {
             self.enumerate_fake(id);
         }
@@ -1819,10 +1865,10 @@ impl SuiTestAdapter {
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unchanged_shared_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
-        accumulators_written.sort_by_key(|id| self.real_to_fake_object_id(id));
+        accumulators_written.sort_by_key(|(id, _, _, _)| self.real_to_fake_object_id(id));
 
         match effects.status() {
-            ExecutionStatus::Success { .. } => {
+            ExecutionStatus::Success => {
                 let events = self
                     .executor
                     .query_tx_events_asc(digest, *QUERY_MAX_RESULT_LIMIT)
@@ -1918,23 +1964,47 @@ impl SuiTestAdapter {
             .map(|o| o.object_id)
             .collect();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|o| o.object_id).collect();
-        let mut accumulators_written: Vec<_> = effects
-            .accumulator_events()
+        let accumulator_events = effects.accumulator_events();
+        let mut accumulators_written: Vec<_> = accumulator_events
             .iter()
-            .map(|event| event.accumulator_obj)
+            .map(|event| {
+                let operation = match event.operation {
+                    SuiAccumulatorOperation::Merge => AccumulatorOperation::Merge,
+                    SuiAccumulatorOperation::Split => AccumulatorOperation::Split,
+                };
+                (
+                    event.accumulator_obj,
+                    event.address,
+                    event
+                        .ty
+                        .clone()
+                        .try_into()
+                        .expect("Failed to parse accumulator type tag"),
+                    operation,
+                )
+            })
             .collect();
+
         let gas_summary = effects.gas_cost_summary();
 
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
             .iter()
             .chain(unwrapped_ids.iter())
-            .chain(accumulators_written.iter())
             .copied()
             .collect();
 
         // Use a stable sort before assigning fake ids, so test output remains stable.
         might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id));
+        accumulators_written.sort_by_key(|(_, address, ty, _)| {
+            (
+                self.stabilize_str(format!("{}", address)),
+                self.stabilize_str(format!("{}", ty)),
+            )
+        });
+
+        might_need_fake_id.extend(accumulators_written.iter().map(|(obj_id, _, _, _)| *obj_id));
+
         for id in might_need_fake_id {
             self.enumerate_fake(id);
         }
@@ -1949,7 +2019,7 @@ impl SuiTestAdapter {
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
-        accumulators_written.sort_by_key(|id| self.real_to_fake_object_id(id));
+        accumulators_written.sort_by_key(|(id, _, _, _)| self.real_to_fake_object_id(id));
 
         let events = events
             .data
@@ -2104,11 +2174,7 @@ impl SuiTestAdapter {
         out.push('\n');
         write!(out, "gas summary: {}", gas_summary).unwrap();
 
-        if out.is_empty() {
-            None
-        } else {
-            Some(out)
-        }
+        if out.is_empty() { None } else { Some(out) }
     }
 
     fn list_events(&self, events: &[Event], summarize: bool) -> String {
@@ -2122,32 +2188,47 @@ impl SuiTestAdapter {
             .join(", ")
     }
 
+    fn format_fake_id(&self, obj_id: &ObjectID) -> String {
+        match self.real_to_fake_object_id(obj_id) {
+            None => "object(_)".to_string(),
+            Some(FakeID::Known(id)) => {
+                let id: AccountAddress = id.into();
+                format!("0x{id:x}")
+            }
+            Some(fake) => format!("object({})", fake),
+        }
+    }
+
     fn list_objs(&self, objs: &[ObjectID], summarize: bool) -> String {
         if summarize {
             return format!("{}", objs.len());
         }
         objs.iter()
-            .map(
-                |id| /*id.to_string(), */match self.real_to_fake_object_id(id) {
-                                         None => "object(_)".to_string(),
-                                         Some(FakeID::Known(id)) => {
-                                             let id: AccountAddress = id.into();
-                                             format!("0x{id:x}")
-                                         }
-                                         Some(fake) => format!("object({})", fake),
-                                     },
-            )
+            .map(|id| self.format_fake_id(id))
             .collect::<Vec<_>>()
             .join(", ")
     }
 
-    fn list_accumulator_events(&self, accumulator_ids: &[ObjectID], summarize: bool) -> String {
+    fn list_accumulator_events(
+        &self,
+        accumulators: &[(ObjectID, SuiAddress, TypeTag, AccumulatorOperation)],
+        summarize: bool,
+    ) -> String {
         if summarize {
-            return format!("{}", accumulator_ids.len());
+            return format!("{}", accumulators.len());
         }
-        accumulator_ids
+        accumulators
             .iter()
-            .map(|id| self.stabilize_str(format!("{:?}", id)))
+            .map(|(obj_id, address, ty, operation)| {
+                let fake_id_str = self.format_fake_id(obj_id);
+                let address_str = self.stabilize_str(format!("{}", address));
+                let ty_str = self.stabilize_str(format!("{}", ty));
+                let op_str = match operation {
+                    AccumulatorOperation::Merge => "Merge",
+                    AccumulatorOperation::Split => "Split",
+                };
+                format!("({}, {}, {}, {})", fake_id_str, address_str, ty_str, op_str)
+            })
             .collect::<Vec<_>>()
             .join(", ")
     }
@@ -2461,7 +2542,7 @@ async fn init_val_fullnode_executor(
     let mut mk_account = || {
         let (address, key_pair) = get_key_pair_from_rng(&mut rng);
         let obj = Object::with_id_owner_gas_for_testing(
-            ObjectID::new(rng.gen()),
+            ObjectID::new(rng.r#gen()),
             address,
             GAS_FOR_TESTING,
         );
@@ -2810,5 +2891,12 @@ impl ReadStore for SuiTestAdapter {
         digest: &TransactionDigest,
     ) -> Option<Vec<sui_types::storage::ObjectKey>> {
         self.executor.get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<CheckpointSequenceNumber> {
+        self.executor.get_transaction_checkpoint(digest)
     }
 }

@@ -42,6 +42,16 @@ pub struct RpcConfig {
     /// Configuration for RPC index initialization and bulk loading
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index_initialization: Option<RpcIndexInitConfig>,
+
+    /// Enable indexing of authenticated events
+    ///
+    /// This controls whether authenticated events are indexed and whether the authenticated
+    /// events API endpoints are available. When disabled, authenticated events are not indexed
+    /// and API calls will return an unsupported error.
+    ///
+    /// Defaults to `false`, with authenticated events indexing and API disabled
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authenticated_events_indexing: Option<bool>,
 }
 
 impl RpcConfig {
@@ -64,6 +74,10 @@ impl RpcConfig {
 
     pub fn index_initialization_config(&self) -> Option<&RpcIndexInitConfig> {
         self.index_initialization.as_ref()
+    }
+
+    pub fn authenticated_events_indexing(&self) -> bool {
+        self.authenticated_events_indexing.unwrap_or(false)
     }
 }
 

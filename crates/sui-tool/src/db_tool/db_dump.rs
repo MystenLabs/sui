@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Ok};
+use anyhow::{Ok, anyhow};
 use clap::{Parser, ValueEnum};
 use comfy_table::{Cell, ContentArrangement, Row, Table};
 use prometheus::Registry;
@@ -13,8 +13,8 @@ use strum_macros::EnumString;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_pruner::{
-    AuthorityStorePruner, AuthorityStorePruningMetrics, PrunerWatermarks,
-    EPOCH_DURATION_MS_FOR_TESTING,
+    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
+    PrunerWatermarks,
 };
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::authority_store_types::{StoreData, StoreObject};
@@ -24,7 +24,7 @@ use sui_core::jsonrpc_index::IndexStoreTables;
 use sui_core::rpc_index::RpcIndexStore;
 use sui_types::base_types::{EpochId, ObjectID};
 use tracing::info;
-use typed_store::rocks::{default_db_options, MetricConf};
+use typed_store::rocks::{MetricConf, default_db_options};
 use typed_store::rocksdb::MultiThreaded;
 use typed_store::traits::{Map, TableSummary};
 
@@ -169,20 +169,20 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> anyhow::Result<(usize, usi
 
     for item in iter {
         let (key, value) = item?;
-        if let StoreObject::Value(store_object) = value.migrate().into_inner() {
-            if let StoreData::Move(object) = store_object.data {
-                if object_id != key.0 {
-                    for (k, cnt) in data.iter() {
-                        total_bytes += k.len() * cnt;
-                        duplicated_bytes += k.len() * (cnt - 1);
-                        total_count += cnt;
-                        duplicate_count += cnt - 1;
-                    }
-                    object_id = key.0;
-                    data.clear();
+        if let StoreObject::Value(store_object) = value.migrate().into_inner()
+            && let StoreData::Move(object) = store_object.data
+        {
+            if object_id != key.0 {
+                for (k, cnt) in data.iter() {
+                    total_bytes += k.len() * cnt;
+                    duplicated_bytes += k.len() * (cnt - 1);
+                    total_count += cnt;
+                    duplicate_count += cnt - 1;
                 }
-                *data.entry(object.contents().to_vec()).or_default() += 1;
+                object_id = key.0;
+                data.clear();
             }
+            *data.entry(object.contents().to_vec()).or_default() += 1;
         }
     }
     Ok((total_count, duplicate_count, total_bytes, duplicated_bytes))
@@ -252,6 +252,8 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         ..Default::default()
     };
     info!("Starting txns and effects pruning");
+    use sui_core::authority::authority_store_pruner::PrunerWatermarks;
+    let watermarks = std::sync::Arc::new(PrunerWatermarks::default());
     AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
@@ -260,6 +262,7 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         pruning_config,
         metrics,
         EPOCH_DURATION_MS_FOR_TESTING,
+        &watermarks,
     )
     .await?;
     Ok(())
@@ -314,7 +317,7 @@ mod test {
     use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 
-    use crate::db_tool::db_dump::{dump_table, list_tables, StoreName};
+    use crate::db_tool::db_dump::{StoreName, dump_table, list_tables};
 
     #[tokio::test]
     async fn db_dump_population() -> Result<(), anyhow::Error> {

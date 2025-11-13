@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use mysten_common::register_debug_fatal_handler;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use sui_macros::register_fail_point_arg;
 use sui_macros::sim_test;
@@ -51,7 +51,7 @@ async fn test_checkpoint_split_brain() {
     {
         // this test intentionally halts the network by causing a fork, so we cannot panic on
         // loss of liveness
-        use sui_core::authority::{init_checkpoint_timeout_config, CheckpointTimeoutConfig};
+        use sui_core::authority::{CheckpointTimeoutConfig, init_checkpoint_timeout_config};
         init_checkpoint_timeout_config(CheckpointTimeoutConfig {
             warning_timeout: Duration::from_secs(2),
             panic_timeout: None,
@@ -200,10 +200,12 @@ async fn test_checkpoint_fork_detection_storage() {
         let fork_seq = 42;
         let fork_digest = CheckpointDigest::random();
 
-        assert!(checkpoint_store
-            .get_checkpoint_fork_detected()
-            .unwrap()
-            .is_none());
+        assert!(
+            checkpoint_store
+                .get_checkpoint_fork_detected()
+                .unwrap()
+                .is_none()
+        );
 
         checkpoint_store
             .record_checkpoint_fork_detected(fork_seq, fork_digest)

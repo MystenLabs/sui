@@ -3,11 +3,11 @@
 
 use crate::traffic_controller::nodefw_client::{BlockAddress, BlockAddresses};
 use axum::{
+    Json, Router,
     extract::State,
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
-    Json, Router,
 };
 use std::time::{Duration, SystemTime};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};

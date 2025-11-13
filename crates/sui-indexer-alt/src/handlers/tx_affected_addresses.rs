@@ -9,37 +9,40 @@ use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use itertools::Itertools;
 use sui_indexer_alt_framework::{
-    pipeline::{concurrent::Handler, Processor},
-    postgres::{Connection, Db},
-    types::{full_checkpoint_content::CheckpointData, object::Owner},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
+    types::{full_checkpoint_content::Checkpoint, object::Owner},
 };
 use sui_indexer_alt_schema::{
     schema::tx_affected_addresses, transactions::StoredTxAffectedAddress,
 };
+use sui_types::transaction::TransactionDataAPI;
 
 use crate::handlers::cp_sequence_numbers::tx_interval;
+use async_trait::async_trait;
 
 pub(crate) struct TxAffectedAddresses;
 
+#[async_trait]
 impl Processor for TxAffectedAddresses {
     const NAME: &'static str = "tx_affected_addresses";
 
     type Value = StoredTxAffectedAddress;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint {
             transactions,
-            checkpoint_summary,
+            summary,
             ..
         } = checkpoint.as_ref();
 
         let mut values = Vec::new();
-        let first_tx = checkpoint_summary.network_total_transactions as usize - transactions.len();
+        let first_tx = summary.network_total_transactions as usize - transactions.len();
 
         for (i, tx) in transactions.iter().enumerate() {
             let tx_sequence_number = (first_tx + i) as i64;
-            let sender = tx.transaction.sender_address();
-            let payer = tx.transaction.gas_owner();
+            let sender = tx.transaction.sender();
+            let payer = tx.transaction.gas_data().owner;
             let recipients = tx.effects.all_changed_objects().into_iter().filter_map(
                 |(_object_ref, owner, _write_kind)| match owner {
                     Owner::AddressOwner(address) => Some(address),
@@ -63,10 +66,8 @@ impl Processor for TxAffectedAddresses {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for TxAffectedAddresses {
-    type Store = Db;
-
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
@@ -101,7 +102,7 @@ mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
+        Indexer, types::test_checkpoint_data_builder::TestCheckpointBuilder,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 
@@ -135,25 +136,25 @@ mod tests {
         let mut conn = indexer.store().connect().await.unwrap();
 
         // 0th checkpoint has 1 transaction
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = TxAffectedAddresses.process(&checkpoint).unwrap();
+        let values = TxAffectedAddresses.process(&checkpoint).await.unwrap();
         TxAffectedAddresses::commit(&values, &mut conn)
             .await
             .unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         // 1st checkpoint has 2 transactions
         builder = builder.start_transaction(0).finish_transaction();
         builder = builder.start_transaction(1).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = TxAffectedAddresses.process(&checkpoint).unwrap();
+        let values = TxAffectedAddresses.process(&checkpoint).await.unwrap();
         TxAffectedAddresses::commit(&values, &mut conn)
             .await
             .unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         // 2nd checkpoint has 4 transactions
@@ -162,11 +163,11 @@ mod tests {
         builder = builder.start_transaction(2).finish_transaction();
         builder = builder.start_transaction(3).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = TxAffectedAddresses.process(&checkpoint).unwrap();
+        let values = TxAffectedAddresses.process(&checkpoint).await.unwrap();
         TxAffectedAddresses::commit(&values, &mut conn)
             .await
             .unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         let fetched_results = get_all_tx_affected_addresses(&mut conn).await.unwrap();

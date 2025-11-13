@@ -17,14 +17,14 @@ use move_bytecode_source_map::utils::source_map_from_file;
 use move_command_line_common::{
     env::MOVE_HOME,
     files::{
-        extension_equals, find_filenames, DEBUG_INFO_EXTENSION, MOVE_COMPILED_EXTENSION,
-        MOVE_EXTENSION,
+        DEBUG_INFO_EXTENSION, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, extension_equals,
+        find_filenames,
     },
 };
 use move_compiler::{
     compiled_unit::NamedCompiledModule,
     editions::{Edition, Flavor},
-    shared::{files::FileName, NumericalAddress},
+    shared::{NumericalAddress, files::FileName},
 };
 use move_package::{
     compilation::{

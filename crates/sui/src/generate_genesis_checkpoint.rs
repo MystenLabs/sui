@@ -3,12 +3,12 @@
 
 use camino::Utf8PathBuf;
 use sui_config::local_ip_utils;
-use sui_genesis_builder::validator_info::ValidatorInfo;
 use sui_genesis_builder::Builder;
+use sui_genesis_builder::validator_info::ValidatorInfo;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
-    generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-    KeypairTraits, NetworkKeyPair,
+    AccountKeyPair, AuthorityKeyPair, KeypairTraits, NetworkKeyPair, generate_proof_of_possession,
+    get_key_pair_from_rng,
 };
 
 #[tokio::main]

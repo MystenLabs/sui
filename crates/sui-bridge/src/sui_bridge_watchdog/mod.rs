@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use mysten_metrics::spawn_logged_monitored_task;
 use tokio::time::Duration;
 use tokio::time::MissedTickBehavior;
-use tracing::{error_span, info, Instrument};
+use tracing::{Instrument, error_span, info};
 
 pub mod eth_bridge_status;
 pub mod eth_vault_balance;

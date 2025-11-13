@@ -7,8 +7,8 @@ use std::{
 };
 
 use super::{
-    auth::AllowedPeersUpdatable, metrics::Metrics, server::Server, Handle, RandomnessEventLoop,
-    RandomnessMessage, RandomnessServer,
+    Handle, RandomnessEventLoop, RandomnessMessage, RandomnessServer, auth::AllowedPeersUpdatable,
+    metrics::Metrics, server::Server,
 };
 use anemo::codegen::InboundRequestLayer;
 use anemo_tower::{auth::RequireAuthorizationLayer, inflight_limit};

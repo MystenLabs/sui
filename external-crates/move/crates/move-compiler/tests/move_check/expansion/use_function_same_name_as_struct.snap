@@ -31,6 +31,6 @@ error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/expansion/use_function_same_name_as_struct.move:15:22
    │
 14 │     struct Bar {}
-   │            --- Alias previously defined here
+   │            --- Module member or alias previously defined here
 15 │     use 0x2::X::u as Bar;
-   │                      ^^^ Duplicate module member or alias 'Bar'. Top level names in a namespace must be unique
+   │                      ^^^ Duplicate module member 'Bar'. Top level names in a namespace must be unique

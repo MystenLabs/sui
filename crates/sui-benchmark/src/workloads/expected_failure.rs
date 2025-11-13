@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::ExecutionEffects;
+use crate::ValidatorProxy;
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::{
-    ExpectedFailureType, WorkloadBuilder, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING,
-    STORAGE_COST_PER_COIN,
+    ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN,
+    WorkloadBuilder,
 };
 use crate::workloads::{Gas, GasCoinConfig, Workload, WorkloadBuilderInfo, WorkloadParams};
-use crate::ExecutionEffects;
-use crate::ValidatorProxy;
 use async_trait::async_trait;
 use rand::seq::IteratorRandom;
 use std::collections::HashMap;

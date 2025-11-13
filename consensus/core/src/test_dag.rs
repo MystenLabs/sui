@@ -6,10 +6,10 @@ use std::sync::Arc;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, BlockTimestampMs, Round};
 use parking_lot::RwLock;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 
 use crate::{
-    block::{genesis_blocks, TestBlock, VerifiedBlock},
+    block::{TestBlock, VerifiedBlock, genesis_blocks},
     context::Context,
     dag_state::DagState,
     test_dag_builder::DagBuilder,

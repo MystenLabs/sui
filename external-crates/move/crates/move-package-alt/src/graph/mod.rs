@@ -96,7 +96,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 
     /// Return all packages in the graph, indexed by their package ID
-    pub(crate) fn all_packages(&self) -> BTreeMap<&PackageID, PackageInfo<F>> {
+    pub(crate) fn all_packages(&self) -> BTreeMap<&PackageID, PackageInfo<'_, F>> {
         self.package_ids
             .iter()
             .map(|(id, node)| (id, self.package_info(*node)))
@@ -108,7 +108,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     // TODO: Do we want a way to access ALL packages and not the "de-duplicated" ones?
     // TODO: We probably want a deduplication function, and then we can just use `all_packages` for
     // this
-    pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
+    pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<'_, F>>> {
         Ok(self.linkage()?.values().cloned().collect())
     }
 

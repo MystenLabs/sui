@@ -3,10 +3,10 @@
 
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context as _};
+use anyhow::{Context as _, anyhow};
 use async_graphql::{
-    connection::{Connection, CursorType, Edge},
     Context, Enum, Object,
+    connection::{Connection, CursorType, Edge},
 };
 use move_binary_format::file_format::Visibility;
 use move_disassembler::disassembler::Disassembler;
@@ -17,7 +17,7 @@ use tokio::{join, sync::OnceCell};
 use crate::{
     api::scalars::{base64::Base64, cursor::JsonCursor},
     config::Limits,
-    error::{resource_exhausted, RpcError},
+    error::{RpcError, resource_exhausted},
     pagination::{Page, PaginationConfig},
 };
 

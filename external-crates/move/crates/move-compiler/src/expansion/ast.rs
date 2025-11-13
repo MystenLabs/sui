@@ -437,7 +437,9 @@ pub enum Exp_ {
 pub type Exp = Spanned<Exp_>;
 
 pub type Sequence = (UseFuns, VecDeque<SequenceItem>);
+
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum SequenceItem_ {
     Seq(Box<Exp>),
     Declare(LValueList, Option<Type>),
@@ -722,7 +724,7 @@ impl AbilitySet {
         self.0.is_subset(&other.0)
     }
 
-    pub fn iter(&self) -> AbilitySetIter {
+    pub fn iter(&self) -> AbilitySetIter<'_> {
         self.into_iter()
     }
 

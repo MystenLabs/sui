@@ -2282,28 +2282,28 @@ fn function_signature(
                 check_mut_underscore(context, Some(mut_));
                 mut_ = Mutability::Imm;
             };
-            if param.is_syntax_identifier() {
-                if let Mutability::Mut(mutloc) = mut_ {
-                    let msg = format!(
-                        "Invalid 'mut' parameter. \
+            if param.is_syntax_identifier()
+                && let Mutability::Mut(mutloc) = mut_
+            {
+                let msg = format!(
+                    "Invalid 'mut' parameter. \
                         '{}' parameters cannot be declared as mutable",
-                        MACRO_MODIFIER
-                    );
-                    let mut diag = diag!(NameResolution::InvalidMacroParameter, (mutloc, msg));
-                    diag.add_note(ASSIGN_SYNTAX_IDENTIFIER_NOTE);
-                    context.add_diag(diag);
-                    mut_ = Mutability::Imm;
-                }
+                    MACRO_MODIFIER
+                );
+                let mut diag = diag!(NameResolution::InvalidMacroParameter, (mutloc, msg));
+                diag.add_note(ASSIGN_SYNTAX_IDENTIFIER_NOTE);
+                context.add_diag(diag);
+                mut_ = Mutability::Imm;
             }
-            if let Err((param, prev_loc)) = declared.add(param, ()) {
-                if !is_underscore {
-                    let msg = format!("Duplicate parameter with name '{}'", param);
-                    context.add_diag(diag!(
-                        Declarations::DuplicateItem,
-                        (param.loc(), msg),
-                        (prev_loc, "Previously declared here"),
-                    ))
-                }
+            if let Err((param, prev_loc)) = declared.add(param, ())
+                && !is_underscore
+            {
+                let msg = format!("Duplicate parameter with name '{}'", param);
+                context.add_diag(diag!(
+                    Declarations::DuplicateItem,
+                    (param.loc(), msg),
+                    (prev_loc, "Previously declared here"),
+                ))
             }
             let is_parameter = true;
             let nparam = context.declare_local(is_parameter, param.0);

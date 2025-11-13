@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use crate::ValidatorProxy;
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::ValidatorProxy;
 use async_trait::async_trait;
 use prometheus::Registry;
 

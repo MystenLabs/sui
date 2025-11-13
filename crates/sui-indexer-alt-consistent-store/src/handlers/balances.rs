@@ -6,20 +6,21 @@ use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_framework::{
-    pipeline::{sequential, Processor},
+    pipeline::{Processor, sequential},
     types::{
+        TypeTag,
         base_types::SuiAddress,
         coin::Coin,
-        full_checkpoint_content::CheckpointData,
+        full_checkpoint_content::Checkpoint,
         object::{Object, Owner},
-        TypeTag,
     },
 };
 
 use crate::{
+    Schema,
+    restore::Restore,
     schema::balances::Key,
     store::{Connection, Store},
-    Schema,
 };
 
 use super::{checkpoint_input_objects, checkpoint_output_objects};
@@ -43,32 +44,13 @@ impl Delta {
     }
 }
 
+#[async_trait]
 impl Processor for Balances {
     const NAME: &'static str = "balances";
     type Value = Delta;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Delta>> {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Delta>> {
         let mut deltas = vec![];
-
-        fn delta(obj: &Object) -> anyhow::Result<Option<Delta>> {
-            // Balances are only tracked for address owners. Balances are combined for coins that
-            // are address-owned and consensus address-owned for the same address.
-            let &owner = match obj.owner() {
-                Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => owner,
-                Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => return Ok(None),
-            };
-
-            // Only track coins.
-            let Some((type_, balance)) = Coin::extract_balance_if_coin(obj)? else {
-                return Ok(None);
-            };
-
-            Ok(Some(Delta {
-                owner,
-                type_,
-                delta: balance as i128,
-            }))
-        }
 
         for (_, (i, _)) in checkpoint_input_objects(checkpoint)? {
             if let Some(d) = delta(i)? {
@@ -86,6 +68,27 @@ impl Processor for Balances {
     }
 }
 
+impl Restore<Schema> for Balances {
+    fn restore(
+        schema: &Schema,
+        object: &Object,
+        batch: &mut rocksdb::WriteBatch,
+    ) -> anyhow::Result<()> {
+        if let Some(d) = delta(object)? {
+            schema.balances.merge(
+                &Key {
+                    owner: d.owner,
+                    type_: d.type_,
+                },
+                d.delta,
+                batch,
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl sequential::Handler for Balances {
     type Store = Store<Schema>;
@@ -96,7 +99,7 @@ impl sequential::Handler for Balances {
 
     /// Values are not batched between checkpoints, but we can simplify the output for a single
     /// checkpoint by combining deltas for the same owner and type.
-    fn batch(batch: &mut Self::Batch, values: Vec<Delta>) {
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Delta>) {
         for value in values {
             batch
                 .entry(Key {
@@ -109,6 +112,7 @@ impl sequential::Handler for Balances {
     }
 
     async fn commit<'a>(
+        &self,
         batch: &Self::Batch,
         conn: &mut Connection<'a, Schema>,
     ) -> anyhow::Result<usize> {
@@ -119,4 +123,24 @@ impl sequential::Handler for Balances {
 
         Ok(batch.len())
     }
+}
+
+fn delta(obj: &Object) -> anyhow::Result<Option<Delta>> {
+    // Balances are only tracked for address owners. Balances are combined for coins that
+    // are address-owned and consensus address-owned for the same address.
+    let &owner = match obj.owner() {
+        Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => owner,
+        Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => return Ok(None),
+    };
+
+    // Only track coins.
+    let Some((type_, balance)) = Coin::extract_balance_if_coin(obj)? else {
+        return Ok(None);
+    };
+
+    Ok(Some(Delta {
+        owner,
+        type_,
+        delta: balance as i128,
+    }))
 }

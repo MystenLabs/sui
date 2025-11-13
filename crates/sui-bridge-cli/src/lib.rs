@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::abi::EthBridgeCommittee;
-use sui_bridge::abi::{eth_sui_bridge, EthSuiBridge};
+use sui_bridge::abi::{EthSuiBridge, eth_sui_bridge};
 use sui_bridge::crypto::BridgeAuthorityPublicKeyBytes;
 use sui_bridge::error::BridgeResult;
 use sui_bridge::sui_client::SuiBridgeClient;
@@ -28,18 +28,18 @@ use sui_bridge::types::{
     BlocklistType, EmergencyAction, EmergencyActionType, EvmContractUpgradeAction,
     LimitUpdateAction,
 };
-use sui_bridge::utils::{get_eth_signer_client, EthSigner};
+use sui_bridge::utils::{EthSigner, get_eth_signer_client};
 use sui_config::Config;
 use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_keys::keypair_file::read_key;
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectID, ObjectRef};
-use sui_types::bridge::{BridgeChainId, BRIDGE_MODULE_NAME};
+use sui_types::bridge::{BRIDGE_MODULE_NAME, BridgeChainId};
 use sui_types::crypto::{Signature, SuiKeyPair};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, Transaction, TransactionData};
-use sui_types::{TypeTag, BRIDGE_PACKAGE_ID};
+use sui_types::{BRIDGE_PACKAGE_ID, TypeTag};
 use tracing::info;
 
 pub const SEPOLIA_BRIDGE_PROXY_ADDR: &str = "0xAE68F87938439afEEDd6552B0E83D2CbC2473623";
@@ -433,19 +433,16 @@ impl LoadedBridgeCliConfig {
         } else {
             None
         };
-        let (eth_key, sui_key) = {
-            if eth_key.is_none() {
-                let sui_key = sui_key.unwrap();
+        let (eth_key, sui_key) = match (eth_key, sui_key) {
+            (None, Some(sui_key)) => {
                 if !matches!(sui_key, SuiKeyPair::Secp256k1(_)) {
                     return Err(anyhow!("Eth key must be an ECDSA key"));
                 }
                 (sui_key.copy(), sui_key)
-            } else if sui_key.is_none() {
-                let eth_key = eth_key.unwrap();
-                (eth_key.copy(), eth_key)
-            } else {
-                (eth_key.unwrap(), sui_key.unwrap())
             }
+            (Some(eth_key), None) => (eth_key.copy(), eth_key),
+            (Some(eth_key), Some(sui_key)) => (eth_key, sui_key),
+            (None, None) => unreachable!(),
         };
 
         let provider = Arc::new(
@@ -573,7 +570,8 @@ impl BridgeClientCommands {
                 let pending_tx = eth_tx.send().await.unwrap();
                 let tx_receipt = pending_tx.await.unwrap().unwrap();
                 info!(
-                    "Deposited {ether_amount} Ethers to {:?} (target chain {target_chain}). Receipt: {:?}", sui_recipient_address, tx_receipt,
+                    "Deposited {ether_amount} Ethers to {:?} (target chain {target_chain}). Receipt: {:?}",
+                    sui_recipient_address, tx_receipt,
                 );
                 Ok(())
             }

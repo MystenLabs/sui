@@ -13,21 +13,22 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
-use futures::{stream, Stream, StreamExt as _, TryStreamExt as _};
+use futures::{Stream, StreamExt as _, TryStreamExt as _, stream};
 use mysten_network::{
+    Multiaddr,
     callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
     multiaddr::Protocol,
-    Multiaddr,
 };
 use parking_lot::RwLock;
 use sui_http::ServerHandle;
 use sui_tls::AllowPublicKeys;
-use tokio_stream::{iter, Iter};
-use tonic::{codec::CompressionEncoding, Request, Response, Streaming};
+use tokio_stream::{Iter, iter};
+use tonic::{Request, Response, Streaming, codec::CompressionEncoding};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
 use tracing::{debug, error, info, trace, warn};
 
 use super::{
+    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
     metrics_layer::{MetricsCallbackMaker, MetricsResponseCallback, SizedRequest, SizedResponse},
     tonic_gen::{
         consensus_service_client::ConsensusServiceClient,
@@ -35,21 +36,21 @@ use super::{
         observer_consensus_service_client::ObserverConsensusServiceClient,
         observer_consensus_service_server::ObserverConsensusService,
     },
-    BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService, NodeId,
 };
 use crate::{
+    CommitIndex,
     block::VerifiedBlock,
     commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
     network::{
+        NodeId,
         tonic_gen::{
             consensus_service_server::ConsensusServiceServer,
             observer_consensus_service_server::ObserverConsensusServiceServer,
         },
         tonic_tls::certificate_server_name,
     },
-    CommitIndex,
 };
 
 /// Calculates throttle duration based on configuration.
@@ -99,15 +100,11 @@ impl TonicClient {
             .channel_pool
             .get_channel(self.network_keypair.clone(), peer, timeout)
             .await?;
-        let mut client = ConsensusServiceClient::new(channel)
+        let client = ConsensusServiceClient::new(channel)
             .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit);
-
-        if self.context.protocol_config.consensus_zstd_compression() {
-            client = client
-                .send_compressed(CompressionEncoding::Zstd)
-                .accept_compressed(CompressionEncoding::Zstd);
-        }
+            .max_decoding_message_size(config.message_size_limit)
+            .send_compressed(CompressionEncoding::Zstd)
+            .accept_compressed(CompressionEncoding::Zstd);
         Ok(client)
     }
 }
@@ -160,7 +157,9 @@ impl NetworkClient for TonicClient {
                     Ok(response) => Some(ExtendedSerializedBlock {
                         block: response.block,
                         excluded_ancestors: response.excluded_ancestors,
-                        randomness_signatures: response.randomness_signatures.into_iter()
+                        randomness_signatures: response
+                            .randomness_signatures
+                            .into_iter()
                             .map(|e| (e.round, e.signature.into()))
                             .collect(),
                     }),
@@ -427,7 +426,9 @@ impl ObserverClient {
                     Ok(response) => Some(ExtendedSerializedBlock {
                         block: response.block,
                         excluded_ancestors: response.excluded_ancestors,
-                        randomness_signatures: response.randomness_signatures.into_iter()
+                        randomness_signatures: response
+                            .randomness_signatures
+                            .into_iter()
                             .map(|e| (e.round, e.signature.into()))
                             .collect(),
                     }),
@@ -912,7 +913,8 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
                 Ok(SubscribeBlocksResponse {
                     block: block.block,
                     excluded_ancestors: block.excluded_ancestors,
-                    randomness_signatures: block.randomness_signatures
+                    randomness_signatures: block
+                        .randomness_signatures
                         .into_iter()
                         .map(|(round, signature)| RandomnessSignatureEntry {
                             round,
@@ -1143,7 +1145,8 @@ impl<S: NetworkService> ObserverConsensusService for ObserverServiceProxy<S> {
                 Ok(SubscribeBlocksResponse {
                     block: block.block,
                     excluded_ancestors: block.excluded_ancestors,
-                    randomness_signatures: block.randomness_signatures
+                    randomness_signatures: block
+                        .randomness_signatures
                         .into_iter()
                         .map(|(round, signature)| RandomnessSignatureEntry {
                             round,
@@ -1339,12 +1342,10 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             .map_request(move |mut request: http::Request<_>| {
                 if let Some(peer_certificates) =
                     request.extensions().get::<sui_http::PeerCertificates>()
-                {
-                    if let Some(peer_info) =
+                    && let Some(peer_info) =
                         peer_info_from_certs(&connections_info, peer_certificates)
-                    {
-                        request.extensions_mut().insert(peer_info);
-                    }
+                {
+                    request.extensions_mut().insert(peer_info);
                 }
                 request
             })
@@ -1366,15 +1367,11 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                 )
             });
 
-        let mut consensus_service_server = ConsensusServiceServer::new(validator_service)
+        let consensus_service_server = ConsensusServiceServer::new(validator_service)
             .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit);
-
-        if self.context.protocol_config.consensus_zstd_compression() {
-            consensus_service_server = consensus_service_server
-                .send_compressed(CompressionEncoding::Zstd)
-                .accept_compressed(CompressionEncoding::Zstd);
-        }
+            .max_decoding_message_size(config.message_size_limit)
+            .send_compressed(CompressionEncoding::Zstd)
+            .accept_compressed(CompressionEncoding::Zstd);
 
         let consensus_service = tonic::service::Routes::new(consensus_service_server)
             .into_axum_router()

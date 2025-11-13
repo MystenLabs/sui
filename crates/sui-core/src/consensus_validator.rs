@@ -7,17 +7,20 @@ use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto_tbls::dkg_v1;
 use mysten_metrics::monitored_scope;
-use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use prometheus::{
+    IntCounter, IntCounterVec, Registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry,
+};
 use sui_types::{
-    error::{SuiError, SuiResult},
+    error::{SuiError, SuiErrorKind, SuiResult},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
     transaction::Transaction,
 };
 use tap::TapFallible;
-use tracing::{info, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 use crate::{
-    authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityState},
+    authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
     checkpoints::CheckpointServiceNotify,
     consensus_adapter::ConsensusOverloadChecker,
 };
@@ -71,10 +74,11 @@ impl SuiTxValidator {
                         .protocol_config()
                         .consensus_checkpoint_signature_key_includes_digest()
                     {
-                        return Err(SuiError::UnexpectedMessage(
+                        return Err(SuiErrorKind::UnexpectedMessage(
                             "ConsensusTransactionKind::CheckpointSignatureV2 is unsupported"
                                 .to_string(),
-                        ));
+                        )
+                        .into());
                     }
                     ckpt_messages.push(signature.as_ref());
                     ckpt_batch.push(&signature.summary);
@@ -82,13 +86,13 @@ impl SuiTxValidator {
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
                     if bytes.len() > dkg_v1::DKG_MESSAGES_MAX_SIZE {
                         warn!("batch verification error: DKG Message too large");
-                        return Err(SuiError::InvalidDkgMessageSize);
+                        return Err(SuiErrorKind::InvalidDkgMessageSize.into());
                     }
                 }
                 ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
                     if bytes.len() > dkg_v1::DKG_MESSAGES_MAX_SIZE {
                         warn!("batch verification error: DKG Confirmation too large");
-                        return Err(SuiError::InvalidDkgMessageSize);
+                        return Err(SuiErrorKind::InvalidDkgMessageSize.into());
                     }
                 }
 
@@ -101,9 +105,10 @@ impl SuiTxValidator {
 
                 ConsensusTransactionKind::UserTransaction(_tx) => {
                     if !epoch_store.protocol_config().mysticeti_fastpath() {
-                        return Err(SuiError::UnexpectedMessage(
+                        return Err(SuiErrorKind::UnexpectedMessage(
                             "ConsensusTransactionKind::UserTransaction is unsupported".to_string(),
-                        ));
+                        )
+                        .into());
                     }
                     // TODO(fastpath): move deterministic verifications of user transactions here,
                     // for example validity_check() and verify_transaction().
@@ -118,10 +123,11 @@ impl SuiTxValidator {
                             .try_into()
                             .unwrap()
                     {
-                        return Err(SuiError::UnexpectedMessage(format!(
+                        return Err(SuiErrorKind::UnexpectedMessage(format!(
                             "ExecutionTimeObservation contains too many estimates: {}",
                             obs.estimates.len()
-                        )));
+                        ))
+                        .into());
                     }
                 }
             }
@@ -151,7 +157,7 @@ impl SuiTxValidator {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip_all, fields(block_ref = ?block_ref))]
+    #[instrument(level = "debug", skip_all, fields(block_ref))]
     fn vote_transactions(
         &self,
         block_ref: &BlockRef,
@@ -168,9 +174,14 @@ impl SuiTxValidator {
                 continue;
             };
 
+            let tx_digest = *tx.digest();
             if let Err(error) = self.vote_transaction(&epoch_store, tx) {
+                debug!(?tx_digest, "Transaction rejected during voting: {error}");
+                self.metrics
+                    .transaction_reject_votes
+                    .with_label_values(&[error.to_variant_name()])
+                    .inc();
                 result.push(i as TransactionIndex);
-
                 // Cache the rejection vote reason (error) for the transaction
                 epoch_store.set_rejection_vote_reason(
                     ConsensusPosition {
@@ -257,20 +268,28 @@ impl TransactionVerifier for SuiTxValidator {
 pub struct SuiTxValidatorMetrics {
     certificate_signatures_verified: IntCounter,
     checkpoint_signatures_verified: IntCounter,
+    transaction_reject_votes: IntCounterVec,
 }
 
 impl SuiTxValidatorMetrics {
     pub fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
             certificate_signatures_verified: register_int_counter_with_registry!(
-                "certificate_signatures_verified",
+                "tx_validator_certificate_signatures_verified",
                 "Number of certificates verified in consensus batch verifier",
                 registry
             )
             .unwrap(),
             checkpoint_signatures_verified: register_int_counter_with_registry!(
-                "checkpoint_signatures_verified",
+                "tx_validator_checkpoint_signatures_verified",
                 "Number of checkpoint verified in consensus batch verifier",
+                registry
+            )
+            .unwrap(),
+            transaction_reject_votes: register_int_counter_vec_with_registry!(
+                "tx_validator_transaction_reject_votes",
+                "Number of reject transaction votes per reason",
+                &["reason"],
                 registry
             )
             .unwrap(),
@@ -290,7 +309,7 @@ mod tests {
     use sui_macros::sim_test;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::crypto::deterministic_random_account_key;
-    use sui_types::error::{SuiError, UserInputError};
+    use sui_types::error::{SuiErrorKind, UserInputError};
     use sui_types::messages_checkpoint::{
         CheckpointContents, CheckpointSignatureMessage, CheckpointSummary, SignedCheckpointSummary,
     };
@@ -307,8 +326,8 @@ mod tests {
         authority::test_authority_builder::TestAuthorityBuilder,
         checkpoints::CheckpointServiceNoop,
         consensus_adapter::{
-            consensus_tests::{test_certificates, test_gas_objects, test_user_transaction},
             NoopConsensusOverloadChecker,
+            consensus_tests::{test_certificates, test_gas_objects, test_user_transaction},
         },
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
@@ -484,7 +503,7 @@ mod tests {
 
         assert_eq!(
             reason,
-            SuiError::UserInputError {
+            SuiErrorKind::UserInputError {
                 error: UserInputError::TransactionDenied {
                     error: format!(
                         "Access to input object {:?} is temporarily disabled",

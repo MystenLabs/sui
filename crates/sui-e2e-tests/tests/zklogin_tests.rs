@@ -12,7 +12,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
 use sui_types::crypto::Signature;
-use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::utils::load_test_vectors;
@@ -78,8 +78,8 @@ async fn test_zklogin_feature_deny() {
         .unwrap_err();
 
     assert!(matches!(
-        err,
-        SuiError::UserInputError {
+        err.as_inner(),
+        SuiErrorKind::UserInputError {
             error: UserInputError::Unsupported(..)
         }
     ));
@@ -98,7 +98,10 @@ async fn test_zklogin_feature_legacy_address_deny() {
     let err = do_zklogin_test(get_legacy_zklogin_user_address(), true)
         .await
         .unwrap_err();
-    assert!(matches!(err, SuiError::SignerSignatureAbsent { .. }));
+    assert!(matches!(
+        err.as_inner(),
+        SuiErrorKind::SignerSignatureAbsent { .. }
+    ));
 }
 
 #[sim_test]
@@ -112,7 +115,10 @@ async fn test_legacy_zklogin_address_accept() {
         .unwrap_err();
 
     // it does not hit the signer absent error.
-    assert!(matches!(err, SuiError::InvalidSignature { .. }));
+    assert!(matches!(
+        err.as_inner(),
+        SuiErrorKind::InvalidSignature { .. }
+    ));
 }
 
 #[sim_test]
@@ -135,10 +141,12 @@ async fn zklogin_end_to_end_test() {
 
     // a txn with max_epoch mismatch with proof, fails to execute.
     let signed_txn_with_wrong_max_epoch = build_zklogin_tx(&test_cluster, 1).await;
-    assert!(context
-        .execute_transaction_may_fail(signed_txn_with_wrong_max_epoch)
-        .await
-        .is_err());
+    assert!(
+        context
+            .execute_transaction_may_fail(signed_txn_with_wrong_max_epoch)
+            .await
+            .is_err()
+    );
 }
 
 #[sim_test]
@@ -159,10 +167,11 @@ async fn test_max_epoch_too_large_fail_tx() {
     // current epoch is 1, upper bound is 1 + 1, so max_epoch as 3 in zklogin signature should fail.
     let signed_txn = build_zklogin_tx(&test_cluster, 2).await;
     let res = context.execute_transaction_may_fail(signed_txn).await;
-    assert!(res
-        .unwrap_err()
-        .to_string()
-        .contains("ZKLogin max epoch too large"));
+    assert!(
+        res.unwrap_err()
+            .to_string()
+            .contains("ZKLogin max epoch too large")
+    );
 }
 
 #[sim_test]
@@ -209,10 +218,11 @@ async fn test_expired_zklogin_sig() {
     let res = context
         .execute_transaction_may_fail(signed_txn_expired)
         .await;
-    assert!(res
-        .unwrap_err()
-        .to_string()
-        .contains("ZKLogin expired at epoch 2"));
+    assert!(
+        res.unwrap_err()
+            .to_string()
+            .contains("ZKLogin expired at epoch 2")
+    );
 }
 
 // This test is intended to look for forks caused by conflicting / repeated JWK votes from

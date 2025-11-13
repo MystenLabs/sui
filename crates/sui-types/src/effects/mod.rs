@@ -6,8 +6,8 @@ use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
-    default_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo,
-    EmptySignInfo,
+    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, EmptySignInfo,
+    default_hash,
 };
 use crate::digests::{
     ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,

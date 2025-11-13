@@ -1,0 +1,10 @@
+[ingestion]
+ingest-concurrency = 20
+
+[committer]
+write-concurrency = 10
+
+[pruner]
+retention = 31104000
+
+[pipeline.tx_affected_addresses]

@@ -5,12 +5,15 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sui_indexer_alt_framework::{
-    pipeline::{sequential, Processor},
-    types::{base_types::VersionDigest, full_checkpoint_content::CheckpointData},
+    pipeline::{Processor, sequential},
+    types::{base_types::VersionDigest, full_checkpoint_content::Checkpoint, object::Object},
 };
 
-use crate::schema::{object_by_owner::Key, Schema};
 use crate::store::{Connection, Store};
+use crate::{
+    restore::Restore,
+    schema::{Schema, object_by_owner::Key},
+};
 
 use super::{checkpoint_input_objects, checkpoint_output_objects};
 
@@ -26,7 +29,7 @@ impl Processor for ObjectByOwner {
     const NAME: &'static str = "object_by_owner";
     type Value = Value;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Value>> {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Value>> {
         let input_objects = checkpoint_input_objects(checkpoint)?;
         let output_objects = checkpoint_output_objects(checkpoint)?;
         let mut values = vec![];
@@ -52,10 +55,9 @@ impl Processor for ObjectByOwner {
             if let Some(key_in) = input_objects
                 .get(&id)
                 .and_then(|(input, _)| Key::from_object(input))
+                && key_in != key_out
             {
-                if key_in != key_out {
-                    values.push(Value::Del(key_in));
-                }
+                values.push(Value::Del(key_in));
             }
 
             // The object is always put at its output location.
@@ -63,6 +65,21 @@ impl Processor for ObjectByOwner {
         }
 
         Ok(values)
+    }
+}
+
+impl Restore<Schema> for ObjectByOwner {
+    fn restore(
+        schema: &Schema,
+        object: &Object,
+        batch: &mut rocksdb::WriteBatch,
+    ) -> anyhow::Result<()> {
+        if let Some(key) = Key::from_object(object) {
+            let val = (object.version(), object.digest());
+            schema.object_by_owner.insert(key, val, batch)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -75,11 +92,12 @@ impl sequential::Handler for ObjectByOwner {
     const MAX_BATCH_CHECKPOINTS: usize = 1;
 
     /// No batching actually happens, because `MAX_BATCH_CHECKPOINTS` is 1.
-    fn batch(batch: &mut Self::Batch, values: Vec<Value>) {
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Value>) {
         batch.extend(values);
     }
 
     async fn commit<'a>(
+        &self,
         batch: &Self::Batch,
         conn: &mut Connection<'a, Schema>,
     ) -> anyhow::Result<usize> {

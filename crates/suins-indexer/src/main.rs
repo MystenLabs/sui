@@ -3,8 +3,8 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use diesel::{dsl::sql, BoolExpressionMethods, ExpressionMethods};
-use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
+use diesel::{BoolExpressionMethods, ExpressionMethods, dsl::sql};
+use diesel_async::{AsyncConnection, RunQueryDsl, scoped_futures::ScopedFutureExt};
 use dotenvy::dotenv;
 use mysten_service::metrics::start_basic_prometheus_server;
 use prometheus::Registry;
@@ -18,11 +18,10 @@ use tokio::sync::oneshot;
 use tracing::info;
 
 use suins_indexer::{
-    get_connection_pool,
-    indexer::{format_update_field_query, format_update_subdomain_wrapper_query, SuinsIndexer},
+    PgConnectionPool, get_connection_pool,
+    indexer::{SuinsIndexer, format_update_field_query, format_update_subdomain_wrapper_query},
     models::VerifiedDomain,
     schema::domains,
-    PgConnectionPool,
 };
 
 struct SuinsIndexerWorker {
@@ -114,7 +113,7 @@ impl Worker for SuinsIndexerWorker {
 
         // every 1000 checkpoints, we will print the checkpoint sequence number
         // to the console to keep track of progress
-        if checkpoint_seq_number % 1000 == 0 {
+        if checkpoint_seq_number.is_multiple_of(1000) {
             info!("Checkpoint sequence number: {}", checkpoint_seq_number);
         }
         self.commit_to_db(&updates, &removals, checkpoint_seq_number)

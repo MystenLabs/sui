@@ -8,7 +8,10 @@ use consensus_types::block::Round;
 use futures::StreamExt;
 use mysten_metrics::{monitored_mpsc, monitored_scope, spawn_monitored_task};
 use parking_lot::{Mutex, RwLock};
-use tokio::{task::{JoinHandle, JoinSet}, time::sleep};
+use tokio::{
+    task::{JoinHandle, JoinSet},
+    time::sleep,
+};
 use tracing::{debug, error, info, warn};
 
 use crate::{
@@ -207,7 +210,10 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
 
                 for worker_id in 0..num_workers {
                     let (block_tx, mut block_rx) = monitored_mpsc::channel(
-                        &format!("subscriber_blocks_peer_{}_worker_{}", peer_hostname, worker_id),
+                        &format!(
+                            "subscriber_blocks_peer_{}_worker_{}",
+                            peer_hostname, worker_id
+                        ),
                         channel_capacity,
                     );
                     senders.push(block_tx);
@@ -273,7 +279,10 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                                         continue;
                                     }
                                     Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                                        warn!("Worker {} channel closed for peer {}", next_worker, peer_hostname);
+                                        warn!(
+                                            "Worker {} channel closed for peer {}",
+                                            next_worker, peer_hostname
+                                        );
                                         break 'stream;
                                     }
                                 }
@@ -283,7 +292,10 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                             if !sent {
                                 next_worker = start_worker;
                                 if senders[next_worker].send(block).await.is_err() {
-                                    warn!("Worker {} channel closed for peer {}", next_worker, peer_hostname);
+                                    warn!(
+                                        "Worker {} channel closed for peer {}",
+                                        next_worker, peer_hostname
+                                    );
                                     break 'stream;
                                 }
                                 next_worker = (next_worker + 1) % num_workers;
@@ -365,11 +377,11 @@ mod test {
 
     use super::*;
     use crate::{
+        VerifiedBlock,
         commit::CommitRange,
         error::ConsensusResult,
-        network::{test_network::TestService, BlockStream, ExtendedSerializedBlock},
+        network::{BlockStream, ExtendedSerializedBlock, test_network::TestService},
         storage::mem_store::MemStore,
-        VerifiedBlock,
     };
 
     struct SubscriberTestClient {}
@@ -404,6 +416,7 @@ mod test {
                 let block = ExtendedSerializedBlock {
                     block: Bytes::from(vec![1u8; 8]),
                     excluded_ancestors: vec![],
+                    randomness_signatures: vec![],
                 };
                 Some((block, ()))
             })
@@ -486,7 +499,8 @@ mod test {
                 *block,
                 ExtendedSerializedBlock {
                     block: Bytes::from(vec![1u8; 8]),
-                    excluded_ancestors: vec![]
+                    excluded_ancestors: vec![],
+                    randomness_signatures: vec![],
                 }
             );
         }

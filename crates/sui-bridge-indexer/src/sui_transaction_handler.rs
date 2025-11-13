@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::metrics::BridgeIndexerMetrics;
-use crate::postgres_manager::{update_sui_progress_store, write, PgPool};
+use crate::postgres_manager::{PgPool, update_sui_progress_store, write};
 use crate::types::RetrievedTransaction;
 use crate::{
     BridgeDataSource, ProcessedTxnData, TokenTransfer, TokenTransferData, TokenTransferStatus,

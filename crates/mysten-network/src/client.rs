@@ -3,10 +3,10 @@
 
 use crate::{
     config::Config,
-    multiaddr::{parse_dns, parse_ip4, parse_ip6, Multiaddr, Protocol},
+    multiaddr::{Multiaddr, Protocol, parse_dns, parse_ip4, parse_ip6},
 };
-use eyre::{eyre, Context, Result};
-use hyper_util::client::legacy::connect::{dns::Name, HttpConnector};
+use eyre::{Context, Result, eyre};
+use hyper_util::client::legacy::connect::{HttpConnector, dns::Name};
 use once_cell::sync::OnceCell;
 use std::{
     collections::HashMap,

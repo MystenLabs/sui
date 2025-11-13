@@ -4,8 +4,8 @@
 use std::{ops::Deref, sync::Arc};
 
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Object};
-use diesel::{sql_types::BigInt, QueryableByName};
+use async_graphql::{Context, Object, connection::Connection, dataloader::DataLoader};
+use diesel::{QueryableByName, sql_types::BigInt};
 use fastcrypto::encoding::{Base58, Encoding};
 use futures::future::try_join_all;
 use sui_indexer_alt_reader::{
@@ -110,6 +110,13 @@ impl TransactionContents {
             TransactionExpiration::None => Ok(None),
             TransactionExpiration::Epoch(epoch_id) => {
                 Ok(Some(Epoch::with_id(self.scope.clone(), *epoch_id)))
+            }
+            TransactionExpiration::ValidDuring { max_epoch, .. } => {
+                if let Some(epoch_id) = max_epoch {
+                    Ok(Some(Epoch::with_id(self.scope.clone(), *epoch_id)))
+                } else {
+                    Ok(None)
+                }
             }
         }
     }

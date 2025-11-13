@@ -13,15 +13,11 @@
 
 use crate::{
     replay_interface::{EpochStore, ObjectKey, ObjectStore, VersionQuery},
-    replay_txn::{get_input_objects_for_replay, ReplayTransaction},
+    replay_txn::ReplayTransaction,
 };
-use anyhow::Context;
-use move_core_types::{
-    language_storage::{ModuleId, StructTag},
-    resolver::ModuleResolver,
-};
+use anyhow::{Context, Error, anyhow};
+use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_trace_format::format::MoveTraceBuilder;
-use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
     collections::{BTreeMap, HashSet},
@@ -33,19 +29,20 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
-    error::{ExecutionError, SuiError, SuiResult},
-    execution_params::{get_early_execution_error, BalanceWithdrawStatus, ExecutionOrEarlyError},
+    error::{ExecutionError, SuiErrorKind, SuiResult},
+    execution_params::{BalanceWithdrawStatus, ExecutionOrEarlyError, get_early_execution_error},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
     object::Object,
     storage::{BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync},
     supported_protocol_versions::ProtocolConfig,
-    transaction::{CheckedInputObjects, TransactionDataAPI},
+    transaction::{CheckedInputObjects, TransactionData, TransactionDataAPI},
 };
 use tracing::{debug, debug_span, trace};
 
 // Executor for the replay. Created and used by `ReplayTransaction`.
+#[derive(Clone)]
 pub struct ReplayExecutor {
     protocol_config: ProtocolConfig,
     executor: Arc<dyn Executor + Send + Sync>,
@@ -56,97 +53,14 @@ pub struct ReplayExecutor {
 // Transaction data and effects (both expected and actual) and the caches containing
 // the objects used during execution.
 pub struct TxnContextAndEffects {
+    pub txn_data: TransactionData,             // original transaction data
     pub execution_effects: TransactionEffects, // effects of the replay execution
     pub expected_effects: TransactionEffects,  // expected effects as found in the transaction data
     pub gas_status: SuiGasStatus,              // gas status of the replay execution
     pub object_cache: BTreeMap<ObjectID, BTreeMap<u64, Object>>, // object cache
     pub inner_store: InnerTemporaryStore,      // temporary store used during execution
     pub checkpoint: u64,                       // checkpoint where the transaction was included
-}
-
-/// Detailed information about a Move package.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PackageInfo {
-    pub published_id: ObjectID,
-    pub original_id: ObjectID,
-    pub module_names: Vec<String>,
-}
-
-/// Type of object in the replay cache with detailed Move information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ObjectType {
-    /// A Move package containing compiled modules
-    Package(PackageInfo),
-    /// A Move object with its struct tag
-    MoveObject(StructTag),
-}
-
-/// Entry in the replay cache summary representing an object accessed during replay.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CacheEntry {
-    pub object_id: ObjectID,
-    pub version: u64,
-    pub object_type: ObjectType,
-}
-
-/// Compact representation of the replay cache for serialization.
-/// Contains the execution context (epoch_id from transaction effects, checkpoint from transaction info)
-/// and a list of all objects accessed during replay, with their type information but without object content.
-/// The epoch_id represents the epoch in which the original transaction was executed.
-/// The checkpoint represents the checkpoint sequence number where the transaction was included.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReplayCacheSummary {
-    pub epoch_id: u64,
-    pub checkpoint: u64,
-    /// List of objects accessed during replay with their version and type information
-    pub cache_entries: Vec<CacheEntry>,
-}
-
-impl ReplayCacheSummary {
-    /// Create a ReplayCacheSummary from the object cache, extracting detailed Move information.
-    pub fn from_cache(
-        epoch_id: u64,
-        checkpoint: u64,
-        object_cache: &BTreeMap<ObjectID, BTreeMap<u64, Object>>,
-    ) -> Self {
-        let mut cache_entries = Vec::new();
-
-        for (object_id, versions) in object_cache {
-            for (version, object) in versions {
-                let object_type = if object.is_package() {
-                    // Extract package information
-                    let package = object
-                        .data
-                        .try_as_package()
-                        .expect("Package object should have package data");
-                    let package_info = PackageInfo {
-                        published_id: package.id(),
-                        original_id: package.original_package_id(),
-                        module_names: package.serialized_module_map().keys().cloned().collect(),
-                    };
-                    ObjectType::Package(package_info)
-                } else {
-                    // Extract Move object struct tag
-                    let struct_tag = object
-                        .struct_tag()
-                        .expect("Move object should have struct tag");
-                    ObjectType::MoveObject(struct_tag)
-                };
-
-                cache_entries.push(CacheEntry {
-                    object_id: *object_id,
-                    version: *version,
-                    object_type,
-                });
-            }
-        }
-
-        Self {
-            epoch_id,
-            checkpoint,
-            cache_entries,
-        }
-    }
+    pub protocol_version: u64,                 // protocol version used for execution
 }
 
 // Entry point. Executes a transaction.
@@ -163,28 +77,30 @@ pub fn execute_transaction_to_effects(
         Result<(), ExecutionError>, // transaction result
         TxnContextAndEffects,       // data touched and changed during execution
     ),
-    anyhow::Error,
+    Error,
 > {
     debug!(op = "execute_tx", phase = "start", "execution");
     // TODO: Hook up...
     let config_certificate_deny_set: HashSet<TransactionDigest> = HashSet::new();
 
+    let epoch = txn.epoch();
+    let digest = txn.digest();
+    let checkpoint = txn.checkpoint();
+    let _span = debug_span!("execute_tx", %digest, epoch, checkpoint).entered();
+    let input_objects = txn.get_input_objects_for_replay()?;
     let ReplayTransaction {
         digest,
-        checkpoint,
+        checkpoint: _,
         txn_data,
         effects: expected_effects,
         executor,
         object_cache,
     } = txn;
 
-    let epoch = expected_effects.executed_epoch();
-    let _span = debug_span!("execute_tx", %digest, epoch, checkpoint).entered();
-    let input_objects = get_input_objects_for_replay(&txn_data, &digest, &object_cache)?;
     let protocol_config = &executor.protocol_config;
     let epoch_data = epoch_store
         .epoch_info(epoch)?
-        .ok_or_else(|| anyhow::anyhow!(format!("Epoch {} not found", epoch)))?;
+        .ok_or_else(|| anyhow!(format!("Epoch {} not found", epoch)))?;
     let epoch_start_timestamp = epoch_data.start_timestamp;
     let gas_status = if txn_data.kind().is_system_tx() {
         SuiGasStatus::new_unmetered()
@@ -237,23 +153,44 @@ pub fn execute_transaction_to_effects(
         checkpoint: _,
         store: _,
     } = store;
-    let object_cache = object_cache.into_inner();
+    let mut object_cache = object_cache.into_inner();
+
+    // Get created objects from transaction effects
+    for (object_ref, _owner) in effects.created() {
+        let object_id = object_ref.0;
+        // Look for the created object in inner_store's written objects
+        if let Some(object) = inner_store.written.get(&object_id) {
+            object_cache
+                .entry(object_id)
+                .or_default()
+                .insert(object.version().value(), object.clone());
+        } else {
+            // Return error if created object is not found in inner_store
+            return Err(anyhow!(
+                "Created object {} not found in inner_store written objects",
+                object_id
+            ));
+        }
+    }
+
     debug!(op = "execute_tx", phase = "end", "execution");
     Ok((
         result,
         TxnContextAndEffects {
+            txn_data,
             execution_effects: effects,
             expected_effects,
             gas_status,
             object_cache,
             inner_store,
             checkpoint,
+            protocol_version: protocol_config.version.as_u64(),
         },
     ))
 }
 
 impl ReplayExecutor {
-    pub fn new(protocol_config: ProtocolConfig) -> Result<Self, anyhow::Error> {
+    pub fn new(protocol_config: ProtocolConfig) -> Result<Self, Error> {
         let silent = true; // disable Move debug API
         let executor = sui_execution::executor(&protocol_config, silent)
             .context("Filed to create executor. ProtocolConfig inconsistency?")?;
@@ -303,7 +240,7 @@ impl ReplayStore<'_> {
                 object_id: *object_id,
                 version_query: VersionQuery::Version(version.value()),
             }])
-            .map_err(|e| SuiError::Storage(e.to_string()))
+            .map_err(|e| SuiErrorKind::Storage(e.to_string()))
             .ok()?
             .into_iter()
             .next()?
@@ -345,7 +282,7 @@ impl BackingPackageStore for ReplayStore<'_> {
         let package = self
             .store
             .get_objects(&[object_key])
-            .map_err(|e| SuiError::Storage(e.to_string()))?;
+            .map_err(|e| SuiErrorKind::Storage(e.to_string()))?;
         debug_assert!(
             package.len() == 1,
             "Expected one package object for {}",
@@ -370,21 +307,32 @@ impl sui_types::storage::ObjectStore for ReplayStore<'_> {
     // at the checkpoint (mimic latest runtime behavior)
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         trace!("get_object({})", object_id);
-        let object = match self.object_cache.borrow().get(object_id) {
+
+        match self.object_cache.borrow().get(object_id) {
             Some(versions) => versions.last_key_value().map(|(_version, obj)| obj.clone()),
-            None => self
-                .store
-                .get_objects(&[ObjectKey {
-                    object_id: *object_id,
-                    version_query: VersionQuery::AtCheckpoint(self.checkpoint),
-                }])
-                .map_err(|e| SuiError::Storage(e.to_string()))
-                .ok()?
-                .into_iter()
-                .next()?
-                .map(|(obj, _version)| obj),
-        };
-        object
+            None => {
+                let fetched_object = self
+                    .store
+                    .get_objects(&[ObjectKey {
+                        object_id: *object_id,
+                        version_query: VersionQuery::AtCheckpoint(self.checkpoint),
+                    }])
+                    .map_err(|e| SuiErrorKind::Storage(e.to_string()))
+                    .ok()?
+                    .into_iter()
+                    .next()?
+                    .map(|(obj, _version)| obj)?;
+
+                // Add the fetched object to the cache
+                let mut cache = self.object_cache.borrow_mut();
+                cache
+                    .entry(*object_id)
+                    .or_default()
+                    .insert(fetched_object.version().value(), fetched_object.clone());
+
+                Some(fetched_object)
+            }
+        }
     }
 
     // Get an object by its ID and version
@@ -405,9 +353,7 @@ impl ChildObjectResolver for ReplayStore<'_> {
     ) -> SuiResult<Option<Object>> {
         trace!(
             "read_child_object({}, {}, {})",
-            _parent,
-            child,
-            child_version_upper_bound,
+            _parent, child, child_version_upper_bound,
         );
         let object_key = ObjectKey {
             object_id: *child,
@@ -416,13 +362,22 @@ impl ChildObjectResolver for ReplayStore<'_> {
         let object = self
             .store
             .get_objects(&[object_key])
-            .map_err(|e| SuiError::Storage(e.to_string()))?;
+            .map_err(|e| SuiErrorKind::Storage(e.to_string()))?;
         debug_assert!(object.len() == 1, "Expected one object for {}", child,);
         let object = object
             .into_iter()
             .next()
             .unwrap()
             .map(|(obj, _version)| obj);
+
+        // Add object to cache if it exists and not already cached
+        if let Some(ref obj) = object {
+            self.object_cache
+                .borrow_mut()
+                .entry(obj.id())
+                .or_default()
+                .insert(obj.version().value(), obj.clone());
+        }
         Ok(object)
     }
 
@@ -437,10 +392,7 @@ impl ChildObjectResolver for ReplayStore<'_> {
     ) -> SuiResult<Option<Object>> {
         trace!(
             "get_object_received_at_version({}, {}, {}, {})",
-            owner,
-            receiving_object_id,
-            receive_object_at_version,
-            epoch_id
+            owner, receiving_object_id, receive_object_at_version, epoch_id
         );
         Ok(self.get_object_at_version(receiving_object_id, receive_object_at_version))
     }
@@ -460,7 +412,7 @@ impl ParentSync for ReplayStore<'_> {
 }
 
 impl ModuleResolver for ReplayStore<'_> {
-    type Error = anyhow::Error;
+    type Error = Error;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         unreachable!("unexpected ModuleResolver::get_module({})", id)

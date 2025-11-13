@@ -10,7 +10,7 @@ mod transaction_submitter;
 /// Exports
 pub use error::TransactionDriverError;
 pub use metrics::*;
-use tokio_retry::strategy::ExponentialBackoff;
+use mysten_common::backoff::ExponentialBackoff;
 
 use std::{
     net::SocketAddr,
@@ -24,7 +24,6 @@ use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use parking_lot::Mutex;
 use rand::Rng;
 use sui_types::{
-    base_types::AuthorityName,
     committee::EpochId,
     error::{ErrorCategory, UserInputError},
     messages_grpc::{PingType, SubmitTxRequest, SubmitTxResult, TxType},
@@ -40,7 +39,7 @@ use transaction_submitter::*;
 use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
-    quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
+    quorum_driver::{AuthorityAggregatorUpdatable, reconfig_observer::ReconfigObserver},
     validator_client_monitor::{
         OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
@@ -55,7 +54,7 @@ pub struct SubmitTransactionOptions {
 
     /// When submitting a transaction, only the validators in the allowed validator list can be used to submit the transaction to.
     /// When the allowed validator list is empty, any validator can be used.
-    pub allowed_validators: Vec<AuthorityName>,
+    pub allowed_validators: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -178,7 +177,7 @@ where
                 }
                 let start_time = Instant::now();
 
-                let ping = if tx_type == TxType::SingleWriter {
+                let ping_type = if tx_type == TxType::SingleWriter {
                     PingType::FastPath
                 } else {
                     PingType::Consensus
@@ -187,9 +186,9 @@ where
                 // Now send a ping transaction to the chosen validator for the provided tx type
                 match self_clone
                     .drive_transaction(
-                        SubmitTxRequest::new_ping(ping),
+                        SubmitTxRequest::new_ping(ping_type),
                         SubmitTransactionOptions {
-                            allowed_validators: vec![name],
+                            allowed_validators: vec![display_name.clone()],
                             ..Default::default()
                         },
                         Some(ping_timeout),
@@ -205,7 +204,12 @@ where
                         );
                     }
                     Err(err) => {
-                        tracing::info!("Failed to get certified finalized effects for tx type {}, for ping transaction to validator {}: {}", tx_type.as_str(), display_name, err);
+                        tracing::info!(
+                            "Failed to get certified finalized effects for tx type {}, for ping transaction to validator {}: {}",
+                            tx_type.as_str(),
+                            display_name,
+                            err
+                        );
                     }
                 }
             };
@@ -214,16 +218,18 @@ where
         }
     }
 
-    /// Drives transaction to submission and effects certification. If ping is provided, then the requested will be treated as a ping transaction.
-    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.as_ref().map(|t| t.digest()), ping = ?request.ping))]
+    /// Drives transaction to submission and effects certification. Ping requests are derived from the submitted payload.
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.as_ref().map(|t| t.digest()), ping = %request.ping_type.is_some()))]
     pub async fn drive_transaction(
         &self,
         request: SubmitTxRequest,
         options: SubmitTransactionOptions,
         timeout_duration: Option<Duration>,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
+        const MAX_DRIVE_TRANSACTION_RETRY_DELAY: Duration = Duration::from_secs(10);
+
         // For ping requests, the amplification factor is always 1.
-        let amplification_factor = if request.ping.is_some() {
+        let amplification_factor = if request.ping_type.is_some() {
             1
         } else {
             let gas_price = request
@@ -247,7 +253,7 @@ where
         };
 
         let tx_type = request.tx_type();
-        let ping_label = if request.ping.is_some() {
+        let ping_label = if request.ping_type.is_some() {
             "true"
         } else {
             "false"
@@ -259,11 +265,7 @@ where
             .with_label_values(&[tx_type.as_str(), ping_label])
             .inc();
 
-        const MAX_RETRY_DELAY: Duration = Duration::from_secs(10);
-        // Exponential backoff with jitter to prevent thundering herd on retries
-        let mut backoff = ExponentialBackoff::from_millis(100)
-            .max_delay(MAX_RETRY_DELAY)
-            .map(|duration| duration.mul_f64(rand::thread_rng().gen_range(0.5..1.0)));
+        let mut backoff = ExponentialBackoff::new(MAX_DRIVE_TRANSACTION_RETRY_DELAY);
         let mut attempts = 0;
         let mut latest_retriable_error = None;
 
@@ -288,13 +290,25 @@ where
                         return Ok(resp);
                     }
                     Err(e) => {
+                        self.metrics
+                            .drive_transaction_errors
+                            .with_label_values(&[
+                                e.categorize().into(),
+                                tx_type.as_str(),
+                                ping_label,
+                            ])
+                            .inc();
                         if !e.is_submission_retriable() {
                             // Record the number of retries for failed transaction
                             self.metrics
                                 .transaction_retries
                                 .with_label_values(&["failure", tx_type.as_str(), ping_label])
                                 .observe(attempts as f64);
-                            tracing::info!("Failed to finalize transaction with non-retriable error after {} attempts: {}", attempts, e);
+                            tracing::info!(
+                                "Failed to finalize transaction with non-retriable error after {} attempts: {}",
+                                attempts,
+                                e
+                            );
                             return Err(e);
                         }
                         tracing::info!(
@@ -314,9 +328,10 @@ where
                 };
                 let delay = if overload {
                     // Increase delay during overload.
-                    backoff.next().unwrap_or(MAX_RETRY_DELAY) + MAX_RETRY_DELAY
+                    const OVERLOAD_ADDITIONAL_DELAY: Duration = Duration::from_secs(10);
+                    backoff.next().unwrap() + OVERLOAD_ADDITIONAL_DELAY
                 } else {
-                    backoff.next().unwrap_or(MAX_RETRY_DELAY)
+                    backoff.next().unwrap()
                 };
                 sleep(delay).await;
 
@@ -347,7 +362,7 @@ where
         }
     }
 
-    #[instrument(level = "error", skip_all, err)]
+    #[instrument(level = "error", skip_all, err(level = "debug"))]
     async fn drive_transaction_once(
         &self,
         amplification_factor: u64,
@@ -358,9 +373,9 @@ where
         let amplification_factor =
             amplification_factor.min(auth_agg.committee.num_members() as u64);
         let start_time = Instant::now();
-        let ping = request.ping;
         let tx_type = request.tx_type();
         let tx_digest = request.tx_digest();
+        let ping_type = request.ping_type;
 
         let (name, submit_txn_result) = self
             .submitter
@@ -375,7 +390,10 @@ where
             .await?;
         if let SubmitTxResult::Rejected { error } = &submit_txn_result {
             return Err(TransactionDriverError::ClientInternal {
-                error: format!("SubmitTxResult::Rejected should have been returned as an error in submit_transaction(): {}", error),
+                error: format!(
+                    "SubmitTxResult::Rejected should have been returned as an error in submit_transaction(): {}",
+                    error
+                ),
             });
         }
 
@@ -390,7 +408,6 @@ where
                 name,
                 submit_txn_result,
                 options,
-                ping,
             )
             .await;
 
@@ -404,7 +421,7 @@ where
                     } else {
                         OperationType::Consensus
                     },
-                    ping,
+                    ping_type,
                     result: Ok(start_time.elapsed()),
                 });
         }
@@ -449,24 +466,23 @@ where
 pub fn choose_transaction_driver_percentage(
     chain_id: Option<sui_types::digests::ChainIdentifier>,
 ) -> u8 {
-    if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
-        if let Ok(tx_driver_percentage) = v.parse::<u8>() {
-            if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
-                return tx_driver_percentage;
-            }
-        }
+    if let Ok(v) = std::env::var("TRANSACTION_DRIVER")
+        && let Ok(tx_driver_percentage) = v.parse::<u8>()
+        && tx_driver_percentage > 0
+        && tx_driver_percentage <= 100
+    {
+        return tx_driver_percentage;
     }
 
-    if let Some(chain_identifier) = chain_id {
-        if chain_identifier.chain() == sui_protocol_config::Chain::Mainnet {
-            // Require explicit opt-in to TransactionDriver on mainnet,
-            // via the TRANSACTION_DRIVER environment variable.
-            return 0;
-        }
+    if let Some(chain_identifier) = chain_id
+        && chain_identifier.chain() == sui_protocol_config::Chain::Unknown
+    {
+        // Kep test coverage for QD.
+        return 50;
     }
 
-    // Default to 50% everywhere except mainnet
-    50
+    // Default to 100% everywhere
+    100
 }
 
 // Inner state of TransactionDriver.

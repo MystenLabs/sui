@@ -1,0 +1,7 @@
+[ingestion]
+ingest-concurrency = 20
+
+[committer]
+write-concurrency = 10
+
+[pipeline.obj_versions]

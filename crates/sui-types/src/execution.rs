@@ -2,20 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    MoveTypeTagTrait, SUI_SYSTEM_ADDRESS,
     accumulator_event::AccumulatorEvent,
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
+    error::SuiError,
     event::Event,
     is_system_package,
     object::{Data, Object, Owner},
     storage::{BackingPackageStore, ObjectChange},
-    transaction::{Argument, Command},
+    transaction::{Argument, Command, SharedObjectMutability},
     type_input::TypeInput,
 };
-use move_core_types::language_storage::TypeTag;
+use move_core_types::{
+    identifier::Identifier,
+    language_storage::{StructTag, TypeTag},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
+
+const SUI_SYSTEM_STATE_INNER_MODULE: &str = "sui_system_state_inner";
+const EXECUTION_TIME_OBSERVATION_CHUNK_KEY_STRUCT: &str = "ExecutionTimeObservationChunkKey";
 
 /// A type containing all of the information needed to work in execution with an object whose
 /// consensus stream is ended, and when committing the execution effects of the transaction.
@@ -25,7 +33,12 @@ use std::time::Duration;
 /// 2. Whether the object appeared as mutable (or owned) in the transaction, or as read-only.
 /// 3. The transaction digest of the previous transaction that used this object mutably or
 ///    took it by value.
-pub type ConsensusStreamEndedInfo = (ObjectID, SequenceNumber, bool, TransactionDigest);
+pub type ConsensusStreamEndedInfo = (
+    ObjectID,
+    SequenceNumber,
+    SharedObjectMutability,
+    TransactionDigest,
+);
 
 /// A sequence of information about removed consensus objects in the transaction's inputs.
 pub type ConsensusStreamEndedObjects = Vec<ConsensusStreamEndedInfo>;
@@ -166,20 +179,19 @@ impl ExecutionResultsV2 {
                 }
 
                 // Update initial_shared_version for reshared objects
-                if reshare_at_initial_version {
-                    if let Some(Owner::Shared {
+                if reshare_at_initial_version
+                    && let Some(Owner::Shared {
                         initial_shared_version: previous_initial_shared_version,
                     }) = input_objects.get(id).map(|obj| &obj.owner)
-                    {
-                        debug_assert!(!self.created_object_ids.contains(id));
-                        debug_assert!(!self.deleted_object_ids.contains(id));
-                        debug_assert!(
-                            *initial_shared_version == SequenceNumber::new()
-                                || *initial_shared_version == *previous_initial_shared_version
-                        );
+                {
+                    debug_assert!(!self.created_object_ids.contains(id));
+                    debug_assert!(!self.deleted_object_ids.contains(id));
+                    debug_assert!(
+                        *initial_shared_version == SequenceNumber::new()
+                            || *initial_shared_version == *previous_initial_shared_version
+                    );
 
-                        *initial_shared_version = *previous_initial_shared_version;
-                    }
+                    *initial_shared_version = *previous_initial_shared_version;
                 }
             }
 
@@ -291,6 +303,22 @@ impl ExecutionTimeObservationKey {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Serialize, Deserialize)]
+pub struct ExecutionTimeObservationChunkKey {
+    pub chunk_index: u64,
+}
+
+impl MoveTypeTagTrait for ExecutionTimeObservationChunkKey {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Struct(Box::new(StructTag {
+            address: SUI_SYSTEM_ADDRESS,
+            module: Identifier::new(SUI_SYSTEM_STATE_INNER_MODULE).unwrap(),
+            name: Identifier::new(EXECUTION_TIME_OBSERVATION_CHUNK_KEY_STRUCT).unwrap(),
+            type_params: vec![],
+        }))
+    }
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum ExecutionTiming {
     Success(Duration),
@@ -311,3 +339,49 @@ impl ExecutionTiming {
 }
 
 pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
+
+/// Captures the output of executing a transaction in the execution driver.
+pub enum ExecutionOutput<T> {
+    /// The expected typical path - transaction executed successfully.
+    Success(T),
+    /// Validator has halted at epoch end or epoch mismatch. This is a valid state that should
+    /// be handled gracefully.
+    EpochEnded,
+    /// Execution failed with an error. This should never happen - we use fatal! when encountered.
+    Fatal(SuiError),
+    /// Execution should be retried later due to unsatisfied constraints such as insufficient object
+    /// balance withdrawals that require waiting for the balance to reach a deterministic amount.
+    /// When this happens, the transaction is auto-rescheduled from AuthorityState.
+    RetryLater,
+}
+
+impl<T> ExecutionOutput<T> {
+    /// Unwraps the ExecutionOutput, panicking if it's not Success.
+    /// This is primarily for test code.
+    pub fn unwrap(self) -> T {
+        match self {
+            ExecutionOutput::Success(value) => value,
+            ExecutionOutput::EpochEnded => {
+                panic!("called `ExecutionOutput::unwrap()` on `EpochEnded`")
+            }
+            ExecutionOutput::Fatal(e) => {
+                panic!("called `ExecutionOutput::unwrap()` on `Fatal`: {e}")
+            }
+            ExecutionOutput::RetryLater => {
+                panic!("called `ExecutionOutput::unwrap()` on `RetryLater`")
+            }
+        }
+    }
+
+    /// Expect the execution output to be an error (i.e. not Success).
+    pub fn unwrap_err<S>(self) -> ExecutionOutput<S> {
+        match self {
+            Self::Success(_) => {
+                panic!("called `ExecutionOutput::unwrap_err()` on `Success`")
+            }
+            Self::EpochEnded => ExecutionOutput::EpochEnded,
+            Self::Fatal(e) => ExecutionOutput::Fatal(e),
+            Self::RetryLater => ExecutionOutput::RetryLater,
+        }
+    }
+}

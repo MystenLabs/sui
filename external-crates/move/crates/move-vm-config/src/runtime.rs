@@ -30,6 +30,8 @@ pub struct VMConfig {
     pub max_type_to_layout_nodes: Option<u64>,
     /// Count variants as nodes.
     pub variant_nodes: bool,
+    /// Check for deprecated global storage operations during deserialization.
+    pub deprecate_global_storage_ops_during_deserialization: bool,
 }
 
 impl Default for VMConfig {
@@ -41,10 +43,14 @@ impl Default for VMConfig {
             enable_invariant_violation_check_in_swap_loc: true,
             check_no_extraneous_bytes_during_deserialization: true,
             error_execution_state: true,
-            binary_config: BinaryConfig::with_extraneous_bytes_check(true),
+            binary_config: BinaryConfig::legacy_with_flags(
+                /* check_no_extraneous_bytes */ true,
+                /* deprecate_global_storage_ops */ false,
+            ),
             rethrow_serialization_type_layout_errors: false,
             max_type_to_layout_nodes: Some(512),
             variant_nodes: true,
+            deprecate_global_storage_ops_during_deserialization: false,
         }
     }
 }

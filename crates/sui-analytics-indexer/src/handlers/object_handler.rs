@@ -12,8 +12,8 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::object::Object;
 
 use crate::handlers::{
-    get_move_struct, get_owner_address, get_owner_type, initial_shared_version,
-    process_transactions, AnalyticsHandler, ObjectStatusTracker, TransactionProcessor,
+    AnalyticsHandler, ObjectStatusTracker, TransactionProcessor, get_move_struct,
+    get_owner_address, get_owner_type, initial_shared_version, process_transactions,
 };
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
@@ -323,40 +323,50 @@ mod tests {
 
         // 1. Direct match
         let type_tag = create_struct_tag("0xabc", "module", "Type", vec![]);
-        assert!(handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
-            .await
-            .unwrap());
+        assert!(
+            handler
+                .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
+                .await
+                .unwrap()
+        );
 
         // 2. Match in type parameter
         let inner_type = create_struct_tag("0xabc", "module", "Inner", vec![]);
         let type_tag = create_struct_tag("0xcde", "module", "Type", vec![inner_type]);
-        assert!(handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
-            .await
-            .unwrap());
+        assert!(
+            handler
+                .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
+                .await
+                .unwrap()
+        );
 
         // 3. Match in nested vector
         let inner_type = create_struct_tag("0xabc", "module", "Inner", vec![]);
         let vector_type = TypeTag::Vector(Box::new(inner_type));
         let type_tag = create_struct_tag("0xcde", "module", "Type", vec![vector_type]);
-        assert!(handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
-            .await
-            .unwrap());
+        assert!(
+            handler
+                .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
+                .await
+                .unwrap()
+        );
 
         // 4. No match
         let type_tag = create_struct_tag("0xcde", "module", "Type", vec![]);
-        assert!(!handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
-            .await
-            .unwrap());
+        assert!(
+            !handler
+                .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
+                .await
+                .unwrap()
+        );
 
         // 5. Primitive type
         let type_tag = TypeTag::U64;
-        assert!(!handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
-            .await
-            .unwrap());
+        assert!(
+            !handler
+                .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
+                .await
+                .unwrap()
+        );
     }
 }

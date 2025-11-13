@@ -177,10 +177,10 @@ impl<P, T> Orchestrator<P, T> {
             if client_instances.len() == self.dedicated_clients {
                 break;
             }
-            if let Some(regional_instances) = instances_by_regions.get_mut(region) {
-                if let Some(instance) = regional_instances.pop_front() {
-                    client_instances.push(instance.clone());
-                }
+            if let Some(regional_instances) = instances_by_regions.get_mut(region)
+                && let Some(instance) = regional_instances.pop_front()
+            {
+                client_instances.push(instance.clone());
             }
         }
 
@@ -190,10 +190,10 @@ impl<P, T> Orchestrator<P, T> {
             if nodes_instances.len() == parameters.nodes {
                 break;
             }
-            if let Some(regional_instances) = instances_by_regions.get_mut(region) {
-                if let Some(instance) = regional_instances.pop_front() {
-                    nodes_instances.push(instance.clone());
-                }
+            if let Some(regional_instances) = instances_by_regions.get_mut(region)
+                && let Some(instance) = regional_instances.pop_front()
+            {
+                nodes_instances.push(instance.clone());
             }
         }
 

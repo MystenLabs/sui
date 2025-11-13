@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
@@ -9,8 +10,8 @@ use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_rpc::proto::sui::rpc::v2::{GetObjectRequest, GetObjectResponse, GetObjectResult};
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc_api::{
-    grpc::v2::ledger_service::validate_get_object_requests, ErrorReason, ObjectNotFoundError,
-    RpcError,
+    ErrorReason, ObjectNotFoundError, RpcError,
+    grpc::v2::ledger_service::validate_get_object_requests,
 };
 use sui_types::storage::ObjectKey;
 
@@ -72,18 +73,20 @@ pub(crate) async fn batch_get_objects(
             )
         })
         .collect();
-    let objects = client.get_objects(&object_keys).await?;
-    let mut objects_iter = objects.into_iter().peekable();
+    let response: HashMap<_, _> = client
+        .get_objects(&object_keys)
+        .await?
+        .into_iter()
+        .map(|obj| ((obj.id(), obj.version()), obj))
+        .collect();
+
     let objects = object_keys
         .into_iter()
         .map(|object_key| {
-            if let Some(obj) = objects_iter.peek() {
-                if object_key.0 == obj.id() && object_key.1 == obj.version() {
-                    let object = objects_iter.next().expect("invariant's checked above");
-                    let mut message = Object::default();
-                    message.merge(&object, &read_mask);
-                    return GetObjectResult::new_object(message);
-                }
+            if let Some(object) = response.get(&(object_key.0, object_key.1)) {
+                let mut message = Object::default();
+                message.merge(object, &read_mask);
+                return GetObjectResult::new_object(message);
             }
             let err: RpcError =
                 ObjectNotFoundError::new_with_version(object_key.0.into(), object_key.1.into())

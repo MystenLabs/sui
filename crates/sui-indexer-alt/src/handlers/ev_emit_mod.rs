@@ -8,30 +8,32 @@ use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{concurrent::Handler, Processor},
-    postgres::{Connection, Db},
-    types::full_checkpoint_content::CheckpointData,
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
+    types::full_checkpoint_content::Checkpoint,
 };
 use sui_indexer_alt_schema::{events::StoredEvEmitMod, schema::ev_emit_mod};
 
 use crate::handlers::cp_sequence_numbers::tx_interval;
+use async_trait::async_trait;
 
 pub(crate) struct EvEmitMod;
 
+#[async_trait]
 impl Processor for EvEmitMod {
     const NAME: &'static str = "ev_emit_mod";
 
     type Value = StoredEvEmitMod;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint {
             transactions,
-            checkpoint_summary,
+            summary,
             ..
         } = checkpoint.as_ref();
 
         let mut values = BTreeSet::new();
-        let first_tx = checkpoint_summary.network_total_transactions as usize - transactions.len();
+        let first_tx = summary.network_total_transactions as usize - transactions.len();
 
         for (i, tx) in transactions.iter().enumerate() {
             values.extend(
@@ -51,10 +53,8 @@ impl Processor for EvEmitMod {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for EvEmitMod {
-    type Store = Db;
-
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
@@ -89,8 +89,8 @@ mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        types::{event::Event, test_checkpoint_data_builder::TestCheckpointDataBuilder},
         Indexer,
+        types::{event::Event, test_checkpoint_data_builder::TestCheckpointBuilder},
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 
@@ -130,14 +130,14 @@ mod tests {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        let checkpoint = Arc::new(
-            TestCheckpointDataBuilder::new(0)
+        let checkpoint: Arc<Checkpoint> = Arc::new(
+            TestCheckpointBuilder::new(0)
                 .start_transaction(0)
                 .finish_transaction()
                 .build_checkpoint(),
         );
 
-        let values = EvEmitMod.process(&checkpoint).unwrap();
+        let values = EvEmitMod.process(&checkpoint).await.unwrap();
         EvEmitMod::commit(&values, &mut conn).await.unwrap();
 
         assert_eq!(values.len(), 0);
@@ -148,8 +148,8 @@ mod tests {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        let checkpoint = Arc::new(
-            TestCheckpointDataBuilder::new(0)
+        let checkpoint: Arc<Checkpoint> = Arc::new(
+            TestCheckpointBuilder::new(0)
                 .start_transaction(0)
                 .with_events(vec![Event::random_for_testing()])
                 .finish_transaction()
@@ -157,7 +157,7 @@ mod tests {
         );
 
         // Process checkpoint with one event
-        let values = EvEmitMod.process(&checkpoint).unwrap();
+        let values = EvEmitMod.process(&checkpoint).await.unwrap();
         EvEmitMod::commit(&values, &mut conn).await.unwrap();
 
         let events = get_all_ev_emit_mod(&mut conn).await.unwrap();
@@ -170,12 +170,13 @@ mod tests {
         let mut conn = indexer.store().connect().await.unwrap();
 
         // 0th checkpoint has no events
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = EvEmitMod.process(&checkpoint).unwrap();
+        let values = EvEmitMod.process(&checkpoint).await.unwrap();
+
         EvEmitMod::commit(&values, &mut conn).await.unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         // 1st checkpoint has 1 event
@@ -184,9 +185,10 @@ mod tests {
             .with_events(vec![Event::random_for_testing()])
             .finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = EvEmitMod.process(&checkpoint).unwrap();
+        let values = EvEmitMod.process(&checkpoint).await.unwrap();
+
         EvEmitMod::commit(&values, &mut conn).await.unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         // 2nd checkpoint has 2 events
@@ -198,9 +200,10 @@ mod tests {
             ])
             .finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
-        let values = EvEmitMod.process(&checkpoint).unwrap();
+        let values = EvEmitMod.process(&checkpoint).await.unwrap();
+
         EvEmitMod::commit(&values, &mut conn).await.unwrap();
-        let values = CpSequenceNumbers.process(&checkpoint).unwrap();
+        let values = CpSequenceNumbers.process(&checkpoint).await.unwrap();
         CpSequenceNumbers::commit(&values, &mut conn).await.unwrap();
 
         // Prune checkpoints from `[0, 2)`, expect 2 events remaining

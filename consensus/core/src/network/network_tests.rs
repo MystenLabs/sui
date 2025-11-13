@@ -9,11 +9,10 @@ use consensus_types::block::Round;
 use futures::StreamExt as _;
 use parking_lot::Mutex;
 use rstest::rstest;
-use tokio::time::sleep;
 
 use super::{
-    anemo_network::AnemoManager, test_network::TestService, tonic_network::TonicManager,
-    ExtendedSerializedBlock, NetworkClient, NetworkManager,
+    ExtendedSerializedBlock, NetworkClient, NetworkManager, test_network::TestService,
+    tonic_network::TonicManager,
 };
 use crate::{
     block::{TestBlock, VerifiedBlock},
@@ -26,18 +25,6 @@ trait ManagerBuilder {
         context: Arc<Context>,
         network_keypair: NetworkKeyPair,
     ) -> impl NetworkManager<Mutex<TestService>>;
-}
-
-struct AnemoManagerBuilder {}
-
-impl ManagerBuilder for AnemoManagerBuilder {
-    fn build(
-        &self,
-        context: Arc<Context>,
-        network_keypair: NetworkKeyPair,
-    ) -> impl NetworkManager<Mutex<TestService>> {
-        AnemoManager::new(context, network_keypair)
-    }
 }
 
 struct TonicManagerBuilder {}
@@ -56,6 +43,7 @@ fn block_for_round(round: Round) -> ExtendedSerializedBlock {
     ExtendedSerializedBlock {
         block: Bytes::from(vec![round as u8; 16]),
         excluded_ancestors: vec![],
+        randomness_signatures: vec![],
     }
 }
 
@@ -77,7 +65,7 @@ fn service_with_own_blocks() -> Arc<Mutex<TestService>> {
 #[rstest]
 #[tokio::test]
 async fn send_and_receive_blocks_with_auth(
-    #[values(AnemoManagerBuilder {}, TonicManagerBuilder {})] manager_builder: impl ManagerBuilder,
+    #[values(TonicManagerBuilder {})] manager_builder: impl ManagerBuilder,
 ) {
     let (context, keys) = Context::new_for_test(4);
 
@@ -100,9 +88,6 @@ async fn send_and_receive_blocks_with_auth(
     let client_1 = manager_1.client();
     let service_1 = service_with_own_blocks();
     manager_1.install_service(service_1.clone()).await;
-
-    // Wait for anemo to initialize.
-    sleep(Duration::from_secs(5)).await;
 
     // Test that servers can receive client RPCs.
     let test_block_0 = VerifiedBlock::new_for_test(TestBlock::new(9, 0).build());
@@ -131,6 +116,7 @@ async fn send_and_receive_blocks_with_auth(
         ExtendedSerializedBlock {
             block: test_block_1.serialized().clone(),
             excluded_ancestors: vec![],
+            randomness_signatures: vec![],
         },
     );
     assert_eq!(service_1.lock().handle_send_block.len(), 1);
@@ -140,6 +126,7 @@ async fn send_and_receive_blocks_with_auth(
         ExtendedSerializedBlock {
             block: test_block_0.serialized().clone(),
             excluded_ancestors: vec![],
+            randomness_signatures: vec![],
         },
     );
 
@@ -159,23 +146,27 @@ async fn send_and_receive_blocks_with_auth(
     // client_4 should not be able to reach service_0 or service_1, because of the
     // AllowedPeers filter.
     let test_block_2 = VerifiedBlock::new_for_test(TestBlock::new(9, 2).build());
-    assert!(client_4
-        .send_block(
-            context.committee.to_authority_index(0).unwrap(),
-            &test_block_2,
-            Duration::from_secs(5),
-        )
-        .await
-        .is_err());
+    assert!(
+        client_4
+            .send_block(
+                context.committee.to_authority_index(0).unwrap(),
+                &test_block_2,
+                Duration::from_secs(5),
+            )
+            .await
+            .is_err()
+    );
     let test_block_3 = VerifiedBlock::new_for_test(TestBlock::new(9, 3).build());
-    assert!(client_4
-        .send_block(
-            context.committee.to_authority_index(1).unwrap(),
-            &test_block_3,
-            Duration::from_secs(5),
-        )
-        .await
-        .is_err());
+    assert!(
+        client_4
+            .send_block(
+                context.committee.to_authority_index(1).unwrap(),
+                &test_block_3,
+                Duration::from_secs(5),
+            )
+            .await
+            .is_err()
+    );
 }
 
 #[rstest]

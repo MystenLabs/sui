@@ -9,20 +9,20 @@ use std::{
 use consensus_config::Stake;
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
 use mysten_metrics::{
-    monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    monitored_mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
     monitored_scope, spawn_logged_monitored_task,
 };
 use parking_lot::RwLock;
 use tokio::task::JoinSet;
 
 use crate::{
+    BlockAPI, CommitIndex, CommittedSubDag, VerifiedBlock,
     commit::DEFAULT_WAVE_LENGTH,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction_certifier::TransactionCertifier,
-    BlockAPI, CommitIndex, CommittedSubDag, VerifiedBlock,
 };
 
 /// For transaction T committed at leader round R, when a new leader at round >= R + INDIRECT_REJECT_DEPTH
@@ -113,15 +113,21 @@ impl CommitFinalizer {
 
     async fn run(mut self, mut receiver: UnboundedReceiver<CommittedSubDag>) {
         while let Some(committed_sub_dag) = receiver.recv().await {
-            let finalized_commits = if self.context.protocol_config.mysticeti_fastpath() {
+            let already_finalized = !self.context.protocol_config.mysticeti_fastpath()
+                || committed_sub_dag.recovered_rejected_transactions;
+            let finalized_commits = if !already_finalized {
                 self.process_commit(committed_sub_dag).await
             } else {
                 vec![committed_sub_dag]
             };
             if !finalized_commits.is_empty() {
+                // Transaction certifier state should be GC'ed as soon as new commits are finalized.
+                // But this is done outside of process_commit(), because during recovery process_commit()
+                // is not called to finalize commits, but GC still needs to run.
+                self.try_update_gc_round(finalized_commits.last().unwrap().leader.round);
                 let mut dag_state = self.dag_state.write();
-                if self.context.protocol_config.mysticeti_fastpath() {
-                    // Records commits that have been finalized and their rejected transactions.
+                if !already_finalized {
+                    // Records rejected transactions in newly finalized commits.
                     for commit in &finalized_commits {
                         dag_state.add_finalized_commit(
                             commit.commit_ref,
@@ -249,16 +255,6 @@ impl CommitFinalizer {
             }
         }
 
-        // GC TransactionCertifier state only with finalized commits, to ensure unfinalized transactions
-        // can access their reject votes from TransactionCertifier.
-        if let Some(last_commit) = finalized_commits.last() {
-            let gc_round = self
-                .dag_state
-                .read()
-                .calculate_gc_round(last_commit.leader.round);
-            self.transaction_certifier.run_gc(gc_round);
-        }
-
         self.context
             .metrics
             .node_metrics
@@ -288,6 +284,11 @@ impl CommitFinalizer {
                 .finalizer_transaction_status
                 .with_label_values(&["direct_finalize"])
                 .inc_by((num_transactions - reject_votes.len()) as u64);
+            let hostname = &self.context.committee.authority(block_ref.author).hostname;
+            metrics
+                .finalizer_reject_votes
+                .with_label_values(&[hostname])
+                .inc_by(reject_votes.len() as u64);
             // If a transaction_index does not exist in reject_votes, the transaction has no reject votes.
             // So it is finalized and does not need to be added to pending_transactions.
             for (transaction_index, stake) in reject_votes {
@@ -696,6 +697,16 @@ impl CommitFinalizer {
         finalized_commits
     }
 
+    fn try_update_gc_round(&mut self, last_finalized_commit_round: Round) {
+        // GC TransactionCertifier state only with finalized commits, to ensure unfinalized transactions
+        // can access their reject votes from TransactionCertifier.
+        let gc_round = self
+            .dag_state
+            .read()
+            .calculate_gc_round(last_finalized_commit_round);
+        self.transaction_certifier.run_gc(gc_round);
+    }
+
     #[cfg(test)]
     fn is_empty(&self) -> bool {
         self.pending_commits.is_empty() && self.blocks.read().is_empty()
@@ -786,8 +797,9 @@ mod tests {
     use parking_lot::RwLock;
 
     use crate::{
-        block::BlockTransactionVotes, dag_state::DagState, linearizer::Linearizer,
-        storage::mem_store::MemStore, test_dag_builder::DagBuilder, TestBlock, VerifiedBlock,
+        TestBlock, VerifiedBlock, block::BlockTransactionVotes, block_verifier::NoopBlockVerifier,
+        dag_state::DagState, linearizer::Linearizer, storage::mem_store::MemStore,
+        test_dag_builder::DagBuilder,
     };
 
     use super::*;
@@ -818,8 +830,12 @@ mod tests {
         let linearizer = Linearizer::new(context.clone(), dag_state.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let (commit_sender, _commit_receiver) = unbounded_channel("consensus_commit_output");
         let commit_finalizer = CommitFinalizer::new(
             context.clone(),

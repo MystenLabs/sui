@@ -5,9 +5,9 @@
 module profiles::profiles_tests;
 
 use profiles::profiles;
+use std::unit_test::destroy;
 use sui::derived_object;
 use sui::test_scenario;
-use sui::test_utils::destroy;
 
 const ALICE: address = @0xA11CE;
 const BOB: address = @0xB0B;

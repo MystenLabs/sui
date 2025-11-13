@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use diesel::prelude::*;
 use sui_field_count::FieldCount;
 use sui_protocol_config::{Chain, ProtocolVersion};

@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::{faults::FaultsType, measurement::MeasurementsCollection};
 

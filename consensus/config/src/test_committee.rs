@@ -4,7 +4,7 @@
 use std::net::{TcpListener, TcpStream};
 
 use mysten_network::Multiaddr;
-use rand::{rngs::StdRng, SeedableRng as _};
+use rand::{SeedableRng as _, rngs::StdRng};
 
 use crate::{
     Authority, AuthorityKeyPair, Committee, Epoch, NetworkKeyPair, ProtocolKeyPair, Stake,

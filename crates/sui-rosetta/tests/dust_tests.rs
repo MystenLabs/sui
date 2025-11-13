@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod test_utils;
+
 #[path = "dust_tests/pay_coin_with_dust.rs"]
 mod pay_coin_with_dust;
 #[path = "dust_tests/pay_with_dust.rs"]

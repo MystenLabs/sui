@@ -159,7 +159,7 @@ pub fn has_mainnet_protocol_config_override() -> bool {
 pub mod random {
     use super::*;
 
-    use rand_crate::{rngs::SmallRng, thread_rng, Rng, SeedableRng};
+    use rand_crate::{Rng, SeedableRng, rngs::SmallRng, thread_rng};
     use serde::Serialize;
     use std::cell::RefCell;
     use std::collections::HashSet;
@@ -171,7 +171,7 @@ pub mod random {
         thread_local! {
             // a random seed that is shared by the whole test process, so that equal `value`
             // inputs produce different outputs when the test seed changes
-            static SEED: u64 = thread_rng().gen();
+            static SEED: u64 = thread_rng().r#gen();
         }
 
         chance

@@ -50,12 +50,10 @@ fn test_vec_pack() {
 
     m.function_defs[0].code.as_mut().unwrap().code =
         std::iter::once(&[Bytecode::VecPack(sig, 0)][..])
-            .chain(
-                std::iter::repeat(
-                    &[Bytecode::VecUnpack(sig, 1024), Bytecode::VecPack(sig, 1024)][..],
-                )
-                .take(COUNT),
-            )
+            .chain(std::iter::repeat_n(
+                &[Bytecode::VecUnpack(sig, 1024), Bytecode::VecPack(sig, 1024)][..],
+                COUNT,
+            ))
             .chain(std::iter::once(&[Bytecode::Pop, Bytecode::Ret][..]))
             .flatten()
             .cloned()

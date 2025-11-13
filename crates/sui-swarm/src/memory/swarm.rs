@@ -47,6 +47,7 @@ pub struct SwarmBuilder<R = OsRng> {
     fullnode_count: usize,
     fullnode_rpc_port: Option<u16>,
     fullnode_rpc_addr: Option<SocketAddr>,
+    fullnode_rpc_config: Option<sui_config::RpcConfig>,
     supported_protocol_versions_config: ProtocolVersionsConfig,
     // Default to supported_protocol_versions_config, but can be overridden.
     fullnode_supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
@@ -81,6 +82,7 @@ impl SwarmBuilder {
             fullnode_count: 0,
             fullnode_rpc_port: None,
             fullnode_rpc_addr: None,
+            fullnode_rpc_config: None,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             fullnode_supported_protocol_versions_config: None,
             db_checkpoint_config: DBCheckpointConfig::default(),
@@ -115,6 +117,7 @@ impl<R> SwarmBuilder<R> {
             fullnode_count: self.fullnode_count,
             fullnode_rpc_port: self.fullnode_rpc_port,
             fullnode_rpc_addr: self.fullnode_rpc_addr,
+            fullnode_rpc_config: self.fullnode_rpc_config.clone(),
             supported_protocol_versions_config: self.supported_protocol_versions_config,
             fullnode_supported_protocol_versions_config: self
                 .fullnode_supported_protocol_versions_config,
@@ -212,6 +215,11 @@ impl<R> SwarmBuilder<R> {
     pub fn with_fullnode_rpc_addr(mut self, fullnode_rpc_addr: SocketAddr) -> Self {
         assert!(self.fullnode_rpc_port.is_none());
         self.fullnode_rpc_addr = Some(fullnode_rpc_addr);
+        self
+    }
+
+    pub fn with_fullnode_rpc_config(mut self, fullnode_rpc_config: sui_config::RpcConfig) -> Self {
+        self.fullnode_rpc_config = Some(fullnode_rpc_config);
         self
     }
 
@@ -461,6 +469,9 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                     }
                     if let Some(rpc_port) = self.fullnode_rpc_port {
                         builder = builder.with_rpc_port(rpc_port);
+                    }
+                    if let Some(rpc_config) = &self.fullnode_rpc_config {
+                        builder = builder.with_rpc_config(rpc_config.clone());
                     }
                 }
                 let config = builder.build(&mut OsRng, &network_config);

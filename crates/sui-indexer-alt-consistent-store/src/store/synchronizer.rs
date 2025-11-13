@@ -3,11 +3,11 @@
 
 use std::{cmp::Ordering, collections::HashMap, sync::Arc, time::Duration};
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use futures::future;
 use sui_indexer_alt_framework::task::with_slow_future_monitor;
 use tokio::{
-    sync::{mpsc, Barrier},
+    sync::{Barrier, mpsc},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
@@ -83,7 +83,7 @@ impl Synchronizer {
     pub(crate) fn register_pipeline(&mut self, pipeline: &'static str) -> anyhow::Result<()> {
         let watermark = self
             .db
-            .watermark(pipeline)
+            .commit_watermark(pipeline)
             .with_context(|| format!("Failed to get {pipeline} initial watermark"))?;
 
         self.last_watermarks.insert(pipeline, watermark);

@@ -5,24 +5,24 @@
 //! backed by the RPC GQL endpoint. Schema in `crates/sui-indexer-alt-graphql/schema.graphql`.
 //! The RPC calls are implemented in `gql_queries.rs`.
 
-use crate::summary_metrics::*;
 use crate::{
+    Node,
     data_stores::gql_queries,
     replay_interface::{
         EpochData, EpochStore, ObjectKey, ObjectStore, SetupStore, StoreSummary, TransactionInfo,
         TransactionStore, VersionQuery,
     },
-    Node,
+    summary_metrics::*,
 };
-use anyhow::Context;
+use anyhow::{Context, Error, Result};
 use cynic::{GraphQlResponse, Operation};
 use reqwest::header::USER_AGENT;
 use std::time::Instant;
 use std::{
     collections::BTreeMap,
     sync::{
-        atomic::{AtomicU64, Ordering},
         RwLock,
+        atomic::{AtomicU64, Ordering},
     },
 };
 use sui_types::{
@@ -107,10 +107,7 @@ macro_rules! block_on {
 }
 
 impl TransactionStore for DataStore {
-    fn transaction_data_and_effects(
-        &self,
-        digest: &str,
-    ) -> Result<Option<TransactionInfo>, anyhow::Error> {
+    fn transaction_data_and_effects(&self, digest: &str) -> Result<Option<TransactionInfo>, Error> {
         match block_on!(self.transaction(digest)) {
             Ok(Some((data, effects, checkpoint))) => {
                 self.metrics.txn_hit.fetch_add(1, Ordering::Relaxed);
@@ -133,7 +130,7 @@ impl TransactionStore for DataStore {
 }
 
 impl EpochStore for DataStore {
-    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, anyhow::Error> {
+    fn epoch_info(&self, epoch: u64) -> Result<Option<EpochData>, Error> {
         if let Some(epoch_data) = self.epoch_map.read().unwrap().get(&epoch) {
             self.metrics.epoch_hit.fetch_add(1, Ordering::Relaxed);
             return Ok(Some(epoch_data.clone()));
@@ -159,7 +156,7 @@ impl EpochStore for DataStore {
     }
 
     // Get the protocol config for an epoch directly from the binary
-    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, anyhow::Error> {
+    fn protocol_config(&self, epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
         match self.epoch_info(epoch) {
             Ok(Some(epoch)) => {
                 self.metrics.proto_hit.fetch_add(1, Ordering::Relaxed);
@@ -181,7 +178,7 @@ impl EpochStore for DataStore {
 }
 
 impl ObjectStore for DataStore {
-    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, anyhow::Error> {
+    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
         match block_on!(self.objects(keys)) {
             Ok(results) => {
                 assert_eq!(results.len(), keys.len());
@@ -244,20 +241,20 @@ impl ObjectStore for DataStore {
 }
 
 impl SetupStore for DataStore {
-    fn setup(&self, _chain_id: Option<String>) -> Result<Option<String>, anyhow::Error> {
+    fn setup(&self, _chain_id: Option<String>) -> Result<Option<String>, Error> {
         // Return the chain identifier
         Ok(Some(block_on!(gql_queries::chain_id_query::query(self))?))
     }
 }
 
 impl DataStore {
-    pub fn new(node: Node, version: &str) -> Result<Self, anyhow::Error> {
+    pub fn new(node: Node, version: &str) -> Result<Self, Error> {
         debug!("Start stores creation");
         let client = reqwest::Client::builder()
             .connect_timeout(std::time::Duration::from_secs(3))
             .timeout(std::time::Duration::from_secs(5))
             .build()?;
-        let url = node.rpc_url();
+        let url = node.gql_url();
         let rpc =
             reqwest::Url::parse(url).context(format!("Failed to parse GQL RPC URL {}", url))?;
         let epoch_map = RwLock::new(BTreeMap::new());
@@ -283,7 +280,7 @@ impl DataStore {
     pub(crate) async fn run_query<T, V>(
         &self,
         operation: &Operation<T, V>,
-    ) -> Result<GraphQlResponse<T>, anyhow::Error>
+    ) -> Result<GraphQlResponse<T>, Error>
     where
         T: serde::de::DeserializeOwned,
         V: serde::Serialize,
@@ -296,7 +293,7 @@ impl DataStore {
         rpc: &reqwest::Url,
         version: &str,
         operation: &Operation<T, V>,
-    ) -> Result<GraphQlResponse<T>, anyhow::Error>
+    ) -> Result<GraphQlResponse<T>, Error>
     where
         T: serde::de::DeserializeOwned,
         V: serde::Serialize,
@@ -316,10 +313,9 @@ impl DataStore {
     async fn transaction(
         &self,
         digest: &str,
-    ) -> Result<Option<(TransactionData, TransactionEffects, u64)>, anyhow::Error> {
+    ) -> Result<Option<(TransactionData, TransactionEffects, u64)>, Error> {
         let _span = debug_span!("gql_txn_query", digest = %digest).entered();
         debug!(op = "txn_query", phase = "start", "transaction query");
-        tx_counts_add_txn();
         let t0 = Instant::now();
         let data = gql_queries::txn_query::query(digest.to_string(), self).await;
         let elapsed = t0.elapsed().as_millis();
@@ -333,10 +329,9 @@ impl DataStore {
         data
     }
 
-    async fn epoch(&self, epoch_id: u64) -> Result<Option<EpochData>, anyhow::Error> {
+    async fn epoch(&self, epoch_id: u64) -> Result<Option<EpochData>, Error> {
         let _span = debug_span!("gql_epoch_query", epoch = epoch_id).entered();
         debug!(op = "epoch_query", phase = "start", "epoch query");
-        tx_counts_add_epoch();
         let t0 = Instant::now();
         let data = gql_queries::epoch_query::query(epoch_id, self).await;
         let elapsed = t0.elapsed().as_millis();
@@ -350,15 +345,9 @@ impl DataStore {
         data
     }
 
-    async fn objects(
-        &self,
-        keys: &[ObjectKey],
-    ) -> Result<Vec<Option<(Object, u64)>>, anyhow::Error> {
+    async fn objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
         let _span = debug_span!("gql_objects_query", num_keys = keys.len()).entered();
         debug!(op = "objects_query", phase = "start", "objects query");
-        // Track how many objects were requested in this batch
-        tx_objs_add(keys.len());
-        tx_counts_add_objs();
         let t0 = Instant::now();
         let data = gql_queries::object_query::query(keys, self).await?;
         let elapsed = t0.elapsed().as_millis();
@@ -374,7 +363,7 @@ impl DataStore {
 }
 
 impl StoreSummary for DataStore {
-    fn summary<W: std::io::Write>(&self, w: &mut W) -> anyhow::Result<()> {
+    fn summary<W: std::io::Write>(&self, w: &mut W) -> Result<()> {
         let m = &self.metrics;
         let txn_hit = m.txn_hit.load(Ordering::Relaxed);
         let txn_miss = m.txn_miss.load(Ordering::Relaxed);

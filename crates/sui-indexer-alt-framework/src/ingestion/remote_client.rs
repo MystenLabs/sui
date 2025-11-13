@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
-use crate::ingestion::Result as IngestionResult;
 use reqwest::{Client, StatusCode};
 use std::time::Duration;
 use tracing::{debug, error};
 use url::Url;
+
+use crate::ingestion::Result as IngestionResult;
+use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
 
 /// Default timeout for remote checkpoint fetches.
 /// This prevents requests from hanging indefinitely due to network issues,
@@ -23,13 +24,13 @@ fn status_code_to_error(code: StatusCode) -> anyhow::Error {
     HttpError::Http(code).into()
 }
 
-pub(crate) struct RemoteIngestionClient {
+pub struct RemoteIngestionClient {
     url: Url,
     client: Client,
 }
 
 impl RemoteIngestionClient {
-    pub(crate) fn new(url: Url) -> IngestionResult<Self> {
+    pub fn new(url: Url) -> IngestionResult<Self> {
         Ok(Self {
             url,
             client: Client::builder().timeout(DEFAULT_REQUEST_TIMEOUT).build()?,
@@ -37,11 +38,35 @@ impl RemoteIngestionClient {
     }
 
     #[cfg(test)]
-    pub(crate) fn new_with_timeout(url: Url, timeout: Duration) -> IngestionResult<Self> {
+    pub fn new_with_timeout(url: Url, timeout: Duration) -> IngestionResult<Self> {
         Ok(Self {
             url,
             client: Client::builder().timeout(timeout).build()?,
         })
+    }
+
+    /// Fetch metadata mapping epoch IDs to the sequence numbers of their last checkpoints.
+    /// The response is a JSON-encoded array of checkpoint sequence numbers.
+    pub async fn end_of_epoch_checkpoints(&self) -> reqwest::Result<reqwest::Response> {
+        // SAFETY: The path being joined is statically known to be valid.
+        let url = self
+            .url
+            .join("/epochs.json")
+            .expect("Unexpected invalid URL");
+
+        self.client.get(url).send().await
+    }
+
+    /// Fetch the bytes for a checkpoint by its sequence number.
+    /// The response is the serialized representation of a checkpoint, as raw bytes.
+    pub async fn checkpoint(&self, checkpoint: u64) -> reqwest::Result<reqwest::Response> {
+        // SAFETY: The path being joined is statically known to be valid.
+        let url = self
+            .url
+            .join(&format!("/{checkpoint}.chk"))
+            .expect("Unexpected invalid URL");
+
+        self.client.get(url).send().await
     }
 }
 
@@ -57,16 +82,8 @@ impl IngestionClientTrait for RemoteIngestionClient {
     /// - server errors (5xx),
     /// - issues getting a full response.
     async fn fetch(&self, checkpoint: u64) -> FetchResult {
-        // SAFETY: The path being joined is statically known to be valid.
-        let url = self
-            .url
-            .join(&format!("/{checkpoint}.chk"))
-            .expect("Unexpected invalid URL");
-
         let response = self
-            .client
-            .get(url)
-            .send()
+            .checkpoint(checkpoint)
             .await
             .map_err(|e| FetchError::Transient {
                 reason: "request",
@@ -132,12 +149,12 @@ pub(crate) mod tests {
     use crate::metrics::tests::test_metrics;
     use axum::http::StatusCode;
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Mutex,
+        atomic::{AtomicUsize, Ordering},
     };
     use wiremock::{
-        matchers::{method, path_regex},
         Mock, MockServer, Request, Respond, ResponseTemplate,
+        matchers::{method, path_regex},
     };
 
     pub(crate) async fn respond_with(server: &MockServer, response: impl Respond + 'static) {
@@ -196,7 +213,7 @@ pub(crate) mod tests {
         let client = remote_test_client(server.uri());
         let checkpoint = client.fetch(42).await.unwrap();
 
-        assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
+        assert_eq!(42, checkpoint.summary.sequence_number)
     }
 
     /// Assume that certain errors will recover by themselves, and keep retrying with an
@@ -221,11 +238,11 @@ pub(crate) mod tests {
         let client = remote_test_client(server.uri());
         let checkpoint = client.fetch(42).await.unwrap();
 
-        assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
+        assert_eq!(42, checkpoint.summary.sequence_number)
     }
 
     /// Treat deserialization failure as another kind of transient error -- all checkpoint data
-    /// that is fetched should be valid (deserializable as a `CheckpointData`).
+    /// that is fetched should be valid (deserializable as a `Checkpoint`).
     #[tokio::test]
     async fn retry_on_deserialization_error() {
         let server = MockServer::start().await;
@@ -244,7 +261,7 @@ pub(crate) mod tests {
         let client = remote_test_client(server.uri());
         let checkpoint = client.fetch(42).await.unwrap();
 
-        assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
+        assert_eq!(42, checkpoint.summary.sequence_number)
     }
 
     /// Test that timeout errors are retried as transient errors.
@@ -283,7 +300,7 @@ pub(crate) mod tests {
 
         // This should timeout once, then succeed on retry
         let checkpoint = ingestion_client.fetch(42).await.unwrap();
-        assert_eq!(42, checkpoint.checkpoint_summary.sequence_number);
+        assert_eq!(42, checkpoint.summary.sequence_number);
 
         // Verify that the server received exactly 2 requests (1 timeout + 1 successful retry)
         let final_count = times.load(Ordering::Relaxed);

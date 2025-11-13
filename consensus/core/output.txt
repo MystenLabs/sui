@@ -1,0 +1,9 @@
+    Updating git repository `https://github.com/MystenLabs/mysten-sim.git`
+    Blocking waiting for file lock on package cache
+     Locking 2 packages to latest compatible versions
+      Adding futures-timer v3.0.3 (https://github.com/MystenLabs/mysten-sim.git?rev=cad62679fd180a48c665f842cb80045f8fcfdee9#cad62679)
+      Adding tokio v1.44.2 (https://github.com/MystenLabs/mysten-sim.git?rev=cad62679fd180a48c665f842cb80045f8fcfdee9#cad62679)
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling move-core-types v0.0.4 (/Users/akichidis/Documents/Workspace/Rust/sui/external-crates/move/crates/move-core-types)
+   Compiling mysten-network v0.2.0 (/Users/akichidis/Documents/Workspace/Rust/sui/crates/mysten-network)

@@ -74,10 +74,10 @@ where
                 })?;
             }
             // stop adding to the commit batch if we've reached the end checkpoint
-            if let Some(end_checkpoint_sequence_number) = end_checkpoint_opt {
-                if next_checkpoint_sequence_number > end_checkpoint_sequence_number {
-                    break;
-                }
+            if let Some(end_checkpoint_sequence_number) = end_checkpoint_opt
+                && next_checkpoint_sequence_number > end_checkpoint_sequence_number
+            {
+                break;
             }
         }
         if !batch.is_empty() {
@@ -86,10 +86,10 @@ where
         }
 
         // stop the commit task if we've reached the end checkpoint
-        if let Some(end_checkpoint_sequence_number) = end_checkpoint_opt {
-            if next_checkpoint_sequence_number > end_checkpoint_sequence_number {
-                break;
-            }
+        if let Some(end_checkpoint_sequence_number) = end_checkpoint_opt
+            && next_checkpoint_sequence_number > end_checkpoint_sequence_number
+        {
+            break;
         }
     }
     Ok(())

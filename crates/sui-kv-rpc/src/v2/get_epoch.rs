@@ -9,15 +9,14 @@ use sui_rpc::proto::sui::rpc::v2::Epoch;
 use sui_rpc::proto::sui::rpc::v2::ProtocolConfig as RpcProtocolConfig;
 use sui_rpc::proto::sui::rpc::v2::{GetEpochRequest, GetEpochResponse};
 use sui_rpc_api::{
+    ErrorReason,
     grpc::v2::protocol_config_to_proto,
     proto::{google::rpc::bad_request::FieldViolation, timestamp_ms_to_proto},
-    ErrorReason,
 };
 use sui_sdk_types::ValidatorCommittee;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
-pub const READ_MASK_DEFAULT: &str =
-    "epoch,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
+pub const READ_MASK_DEFAULT: &str = "epoch,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
 
 pub async fn get_epoch(
     mut client: BigTableClient,

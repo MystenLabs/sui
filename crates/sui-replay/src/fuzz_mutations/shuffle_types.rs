@@ -13,7 +13,7 @@ pub struct ShuffleTypes {
 
 impl ShuffleTypes {
     fn shuffle_command(&mut self, command: &mut Command) {
-        if let Command::MoveCall(ref mut pt) = command {
+        if let Command::MoveCall(pt) = command {
             pt.type_arguments.shuffle(&mut self.rng)
         }
     }

@@ -1,7 +1,7 @@
 [package]
 name = "sui-transactional-test-runner"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
 description = "Move framework for Sui platform"
 license = "Apache-2.0"

@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Generate javadoc style documentation for Move packages
+/// Generate Rust style documentation for Move packages
 #[derive(Parser)]
 #[clap(name = "docgen")]
 pub struct Docgen {

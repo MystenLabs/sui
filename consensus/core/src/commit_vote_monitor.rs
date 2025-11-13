@@ -6,10 +6,10 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 use crate::{
+    CommitIndex,
     block::{BlockAPI as _, VerifiedBlock},
     commit::GENESIS_COMMIT_INDEX,
     context::Context,
-    CommitIndex,
 };
 
 /// Monitors the progress of consensus commits across the network.

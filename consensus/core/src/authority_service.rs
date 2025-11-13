@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
-use futures::{ready, stream, task, Stream, StreamExt};
+use futures::{Stream, StreamExt, ready, stream, task};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
 use rand::seq::SliceRandom as _;
@@ -23,7 +23,8 @@ use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
 
 use crate::{
-    block::{BlockAPI as _, ExtendedBlock, SignedBlock, VerifiedBlock, GENESIS_ROUND},
+    CommitIndex,
+    block::{BlockAPI as _, ExtendedBlock, GENESIS_ROUND, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit::{CommitAPI as _, CommitRange, TrustedCommit},
     commit_vote_monitor::CommitVoteMonitor,
@@ -37,7 +38,6 @@ use crate::{
     storage::Store,
     synchronizer::SynchronizerHandle,
     transaction_certifier::TransactionCertifier,
-    CommitIndex,
 };
 
 pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
@@ -74,10 +74,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         store: Arc<dyn Store>,
         rx_randomness_signature_broadcast: Option<broadcast::Receiver<(u64, Vec<u8>)>>,
     ) -> Self {
-        let subscription_counter = Arc::new(SubscriptionCounter::new(
-            context.clone(),
-            core_dispatcher.clone(),
-        ));
+        let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
         Self {
             context,
             block_verifier,
@@ -175,9 +172,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
                 .inc();
             debug!(
                 "Block {:?} is rejected because last commit index is lagging quorum commit index too much ({} < {})",
-                block_ref,
-                last_commit_index,
-                quorum_commit_index,
+                block_ref, last_commit_index, quorum_commit_index,
             );
             return Err(ConsensusError::BlockRejected {
                 block_ref,
@@ -340,7 +335,11 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
                 peer
             );
             for (round, sig_bytes) in &serialized_block.randomness_signatures {
-                debug!("  Randomness signature for round {}: {} bytes", round, sig_bytes.len());
+                debug!(
+                    "  Randomness signature for round {}: {} bytes",
+                    round,
+                    sig_bytes.len()
+                );
             }
         }
 
@@ -408,9 +407,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
                 .inc();
             debug!(
                 "Block {:?} is rejected because last commit index is lagging quorum commit index too much ({} < {})",
-                block_ref,
-                last_commit_index,
-                quorum_commit_index,
+                block_ref, last_commit_index, quorum_commit_index,
             );
             return Err(ConsensusError::BlockRejected {
                 block_ref,
@@ -506,7 +503,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                         .map(|block| ExtendedSerializedBlock {
                             block: block.serialized().clone(),
                             excluded_ancestors: vec![],
-                        randomness_signatures: vec![],
+                            randomness_signatures: vec![],
                         }),
                 ))
             };
@@ -519,7 +516,10 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                     self.rx_accepted_blocks_broadcast.resubscribe(),
                     self.subscription_counter.clone(),
                 );
-                let mut rx_randomness = self.rx_randomness_signature_broadcast.as_ref().map(|rx| rx.resubscribe());
+                let mut rx_randomness = self
+                    .rx_randomness_signature_broadcast
+                    .as_ref()
+                    .map(|rx| rx.resubscribe());
                 Box::pin(accepted_blocks_stream.map(move |block| {
                     let block_ref = block.reference();
                     info!("Broadcasting now accepted block {block_ref} to observer");
@@ -829,16 +829,14 @@ struct Counter {
     observer_subscriptions: usize,
 }
 
-/// Atomically counts the number of active subscriptions to the block broadcast stream,
-/// and dispatch commands to core based on the changes.
+/// Atomically counts the number of active subscriptions to the block broadcast stream.
 struct SubscriptionCounter {
     context: Arc<Context>,
     counter: parking_lot::Mutex<Counter>,
-    dispatcher: Arc<dyn CoreThreadDispatcher>,
 }
 
 impl SubscriptionCounter {
-    fn new(context: Arc<Context>, dispatcher: Arc<dyn CoreThreadDispatcher>) -> Self {
+    fn new(context: Arc<Context>) -> Self {
         // Set the subscribed peers by default to 0
         for (_, authority) in context.committee.authorities() {
             context
@@ -863,7 +861,6 @@ impl SubscriptionCounter {
                 subscriptions_by_authority: vec![0; context.committee.size()],
                 observer_subscriptions: 0,
             }),
-            dispatcher,
             context,
         }
     }
@@ -881,11 +878,6 @@ impl SubscriptionCounter {
             .with_label_values(&[peer_hostname, "validator"])
             .set(1);
 
-        if counter.count == 1 {
-            self.dispatcher
-                .set_subscriber_exists(true)
-                .map_err(|_| ConsensusError::Shutdown)?;
-        }
         Ok(())
     }
 
@@ -904,11 +896,6 @@ impl SubscriptionCounter {
                 .set(0);
         }
 
-        if counter.count == 0 {
-            self.dispatcher
-                .set_subscriber_exists(false)
-                .map_err(|_| ConsensusError::Shutdown)?;
-        }
         Ok(())
     }
 
@@ -926,12 +913,6 @@ impl SubscriptionCounter {
                     .subscribed_by
                     .with_label_values(&["observers", "observer"])
                     .set(counter.observer_subscriptions as i64);
-
-                if counter.count == 1 {
-                    self.dispatcher
-                        .set_subscriber_exists(true)
-                        .map_err(|_| ConsensusError::Shutdown)?;
-                }
                 Ok(())
             }
         }
@@ -951,12 +932,6 @@ impl SubscriptionCounter {
                     .subscribed_by
                     .with_label_values(&["observers", "observer"])
                     .set(counter.observer_subscriptions as i64);
-
-                if counter.count == 0 {
-                    self.dispatcher
-                        .set_subscriber_exists(false)
-                        .map_err(|_| ConsensusError::Shutdown)?;
-                }
                 Ok(())
             }
         }
@@ -1142,10 +1117,6 @@ mod tests {
             todo!()
         }
 
-        fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
-            todo!()
-        }
-
         fn set_last_known_proposed_round(&self, _round: Round) -> Result<(), CoreError> {
             todo!()
         }
@@ -1232,8 +1203,12 @@ mod tests {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            block_verifier.clone(),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
@@ -1273,7 +1248,7 @@ mod tests {
         let serialized = ExtendedSerializedBlock {
             block: input_block.serialized().clone(),
             excluded_ancestors: vec![],
-                        randomness_signatures: vec![],
+            randomness_signatures: vec![],
         };
 
         tokio::spawn(async move {
@@ -1308,8 +1283,12 @@ mod tests {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            block_verifier.clone(),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
@@ -1333,6 +1312,7 @@ mod tests {
             transaction_certifier,
             dag_state.clone(),
             store,
+            None,
         ));
 
         // GIVEN: 40 rounds of blocks in the dag state.
@@ -1473,8 +1453,12 @@ mod tests {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            block_verifier.clone(),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
@@ -1498,6 +1482,7 @@ mod tests {
             transaction_certifier,
             dag_state.clone(),
             store,
+            None,
         ));
 
         // Create some blocks for a few authorities. Create some equivocations as well and store in dag state.

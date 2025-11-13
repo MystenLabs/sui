@@ -5,7 +5,7 @@ use clap::Parser;
 use std::env;
 use std::sync::Arc;
 use sui_config::sui_config_dir;
-use sui_faucet::{create_wallet_context, start_faucet, AppState};
+use sui_faucet::{AppState, create_wallet_context, start_faucet};
 use sui_faucet::{FaucetConfig, LocalFaucet};
 
 // Define the `GIT_REVISION` and `VERSION` consts

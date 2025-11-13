@@ -8,10 +8,10 @@ use consensus_core::BlockStatus;
 use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX};
 use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{random_object_ref, ObjectRef, SuiAddress};
-use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
+use sui_types::base_types::{ObjectRef, SuiAddress, random_object_ref};
+use sui_types::crypto::{AccountKeyPair, get_account_key_pair};
 use sui_types::effects::TransactionEffectsAPI as _;
-use sui_types::error::{SuiError, UserInputError};
+use sui_types::error::{SuiError, SuiErrorKind, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message as _;
 use sui_types::messages_grpc::{
@@ -27,7 +27,7 @@ use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
-use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
+use crate::consensus_test_utils::make_consensus_adapter_for_test;
 use crate::execution_scheduler::SchedulingSource;
 use crate::mock_consensus::with_block_status;
 
@@ -103,7 +103,7 @@ impl TestContext {
     fn build_submit_request(&self, transaction: Transaction) -> SubmitTxRequest {
         SubmitTxRequest {
             transaction: Some(transaction),
-            ping: None,
+            ping_type: None,
         }
     }
 }
@@ -149,9 +149,10 @@ async fn test_submit_ping_request() {
             .submit_transaction(request)
             .await;
         assert!(response.is_err());
+        let error: SuiError = response.unwrap_err().into();
         assert!(matches!(
-            response.unwrap_err().into(),
-            SuiError::InvalidRequest { .. }
+            error.into_inner(),
+            SuiErrorKind::InvalidRequest { .. }
         ));
     }
 
@@ -361,14 +362,11 @@ async fn test_submit_transaction_gas_object_validation() {
     // with the Rejected variant.
     let response = test_context.client.submit_transaction(request, None).await;
     let result: SubmitTxResult = response.unwrap().results.first().unwrap().clone();
-    assert!(matches!(
-        result,
-        SubmitTxResult::Rejected {
-            error: SuiError::UserInputError {
-                error: UserInputError::ObjectNotFound { .. }
-            }
-        }
-    ));
+    assert!(
+        matches!(result, SubmitTxResult::Rejected { error } if matches!(error.as_inner(), SuiErrorKind::UserInputError {
+                        error: UserInputError::ObjectNotFound { .. }
+        }))
+    );
 }
 
 #[tokio::test]
@@ -577,20 +575,27 @@ async fn test_submit_soft_bundle_transactions_with_already_executed() {
     };
 
     // Submit request with batched transactions, using grpc client directly.
-    let error = test_context
+    let raw_response = test_context
         .client
         .client()
         .unwrap()
         .submit_transaction(request)
         .await
-        .unwrap_err()
-        .into();
+        .unwrap()
+        .into_inner();
 
-    // Verify the error is AlreadyExecutedInSoftBundleError.
-    assert!(matches!(
-        error,
-        SuiError::UserInputError {
-            error: UserInputError::AlreadyExecutedInSoftBundleError { .. }
+    // First should be already executed, second should be submitted
+    match &raw_response.results[0].inner {
+        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Executed(_)) => {
+            // Expected: first transaction was already executed
         }
-    ));
+        _ => panic!("Expected Executed status for first transaction"),
+    }
+
+    match &raw_response.results[1].inner {
+        Some(sui_types::messages_grpc::RawValidatorSubmitStatus::Submitted(_)) => {
+            // Expected: second transaction was submitted to consensus
+        }
+        _ => panic!("Expected Submitted status for second transaction"),
+    }
 }

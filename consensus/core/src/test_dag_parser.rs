@@ -6,13 +6,13 @@ use std::{collections::HashSet, sync::Arc};
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
 use nom::{
+    IResult,
     branch::alt,
-    bytes::complete::{tag, take_while1, take_while_m_n},
+    bytes::complete::{tag, take_while_m_n, take_while1},
     character::complete::{char, digit1, multispace0, multispace1, space0, space1},
     combinator::{map_res, opt},
     multi::{many0, separated_list0},
     sequence::{delimited, preceded, terminated, tuple},
-    IResult,
 };
 
 use crate::{block::Slot, context::Context, test_dag_builder::DagBuilder};
@@ -159,7 +159,8 @@ fn parse_specified_connections<'a>(
 
 fn get_blocks(slot: Slot, dag_builder: &DagBuilder) -> Vec<BlockRef> {
     // note: special case for genesis blocks as they are cached separately
-    let block_refs = if slot.round == 0 {
+
+    if slot.round == 0 {
         dag_builder
             .genesis_block_refs()
             .into_iter()
@@ -171,8 +172,7 @@ fn get_blocks(slot: Slot, dag_builder: &DagBuilder) -> Vec<BlockRef> {
             .iter()
             .map(|block| block.reference())
             .collect::<Vec<_>>()
-    };
-    block_refs
+    }
 }
 
 fn parse_author_and_connections(input: &str) -> IResult<&str, (AuthorityIndex, Vec<&str>)> {

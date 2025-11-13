@@ -36,7 +36,6 @@ mod checked {
     };
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
     use sui_types::storage::{get_package_objects, PackageObject};
     use sui_types::{
@@ -109,7 +108,7 @@ mod checked {
         let finished = context.finish::<Mode>();
         // Save loaded objects for debug. We dont want to lose the info
         state_view.save_loaded_runtime_objects(loaded_runtime_objects);
-        state_view.record_execution_results(finished?);
+        state_view.record_execution_results(finished?)?;
         Ok(mode_results)
     }
 
@@ -652,7 +651,7 @@ mod checked {
         };
 
         let pool = &mut normalized::RcPool::new();
-        let binary_config = to_binary_config(context.protocol_config);
+        let binary_config = context.protocol_config.binary_config(None);
         let Ok(current_normalized) =
             existing_package.normalize(pool, &binary_config, /* include code */ true)
         else {
@@ -803,7 +802,7 @@ mod checked {
         context: &mut ExecutionContext<'_, '_, '_>,
         module_bytes: &[Vec<u8>],
     ) -> Result<Vec<CompiledModule>, ExecutionError> {
-        let binary_config = to_binary_config(context.protocol_config);
+        let binary_config = context.protocol_config.binary_config(None);
         let modules = module_bytes
             .iter()
             .map(|b| {

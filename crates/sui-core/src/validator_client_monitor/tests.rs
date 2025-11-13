@@ -8,7 +8,7 @@ use std::time::Duration;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::base_types::{AuthorityName, ConciseableName};
 use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair, AuthorityKeyPair, KeypairTraits};
+use sui_types::crypto::{AuthorityKeyPair, KeypairTraits, get_key_pair};
 
 mod client_stats_tests {
 
@@ -38,7 +38,7 @@ mod client_stats_tests {
             authority_name: validator,
             display_name: validator.concise().to_string(),
             operation: OperationType::Submit,
-            ping: None,
+            ping_type: None,
             result: Ok(Duration::from_millis(100)),
         };
 
@@ -71,7 +71,7 @@ mod client_stats_tests {
             authority_name: validator1,
             display_name: validator1.concise().to_string(),
             operation: OperationType::FastPath,
-            ping: None,
+            ping_type: None,
             result: Ok(Duration::from_millis(50)),
         });
 
@@ -80,7 +80,7 @@ mod client_stats_tests {
             authority_name: validator2,
             display_name: validator2.concise().to_string(),
             operation: OperationType::FastPath,
-            ping: None,
+            ping_type: None,
             result: Ok(Duration::from_millis(200)),
         });
 
@@ -89,7 +89,7 @@ mod client_stats_tests {
             authority_name: validator2,
             display_name: validator2.concise().to_string(),
             operation: OperationType::Submit,
-            ping: None,
+            ping_type: None,
             result: Err(()),
         });
 
@@ -121,7 +121,7 @@ mod client_stats_tests {
                 authority_name: *validator,
                 display_name: validator.concise().to_string(),
                 operation: OperationType::Submit,
-                ping: None,
+                ping_type: None,
                 result: Ok(Duration::from_millis(100)),
             });
         }
@@ -179,7 +179,7 @@ mod client_stats_tests {
             authority_name: validator,
             display_name: validator.concise().to_string(),
             operation: OperationType::Submit,
-            ping: None,
+            ping_type: None,
             result: Ok(Duration::from_millis(100)),
         });
 
@@ -208,7 +208,7 @@ mod client_stats_tests {
             authority_name: validator,
             display_name: validator.concise().to_string(),
             operation: OperationType::Submit,
-            ping: None,
+            ping_type: None,
             result: Ok(Duration::from_millis(100)),
         });
 
@@ -225,7 +225,7 @@ mod client_stats_tests {
             authority_name: validator,
             display_name: validator.concise().to_string(),
             operation: OperationType::Submit,
-            ping: None,
+            ping_type: None,
             result: Err(()),
         });
 
@@ -250,7 +250,7 @@ mod client_stats_tests {
             authority_name: validator,
             display_name: validator.concise().to_string(),
             operation: OperationType::Submit,
-            ping: None,
+            ping_type: None,
             result: Ok(Duration::from_millis(100)),
         });
 
@@ -270,7 +270,7 @@ mod client_stats_tests {
             authority_name: validator,
             display_name: validator.concise().to_string(),
             operation: OperationType::Submit,
-            ping: None,
+            ping_type: None,
             result: Ok(Duration::from_millis(50)),
         });
 
@@ -318,7 +318,7 @@ mod client_stats_tests {
                 authority_name: validator1,
                 display_name: validator1.concise().to_string(),
                 operation: OperationType::FastPath,
-                ping: None,
+                ping_type: None,
                 result: Ok(Duration::from_millis(100)), // 0.1s
             });
 
@@ -336,7 +336,7 @@ mod client_stats_tests {
                 authority_name: validator1,
                 display_name: validator1.concise().to_string(),
                 operation: OperationType::Consensus,
-                ping: None,
+                ping_type: None,
                 result: Ok(Duration::from_millis(200)), // 0.2s
             });
 
@@ -354,7 +354,7 @@ mod client_stats_tests {
                 authority_name: validator2,
                 display_name: validator2.concise().to_string(),
                 operation: OperationType::FastPath,
-                ping: None,
+                ping_type: None,
                 result: Ok(Duration::from_millis(100)),
             });
 
@@ -363,7 +363,7 @@ mod client_stats_tests {
                 authority_name: validator2,
                 display_name: validator2.concise().to_string(),
                 operation: OperationType::Submit,
-                ping: None,
+                ping_type: None,
                 result: Err(()),
             });
 
@@ -385,7 +385,7 @@ mod client_stats_tests {
                     authority_name: validator2,
                     display_name: validator2.concise().to_string(),
                     operation: OperationType::Submit,
-                    ping: None,
+                    ping_type: None,
                     result: Err(()),
                 });
             }
@@ -402,7 +402,7 @@ mod client_stats_tests {
                     authority_name: validator2,
                     display_name: validator2.concise().to_string(),
                     operation: OperationType::Submit,
-                    ping: None,
+                    ping_type: None,
                     result: Ok(Duration::from_millis(100)),
                 });
             }
@@ -433,7 +433,7 @@ mod client_stats_tests {
                 authority_name: validator,
                 display_name: validator.concise().to_string(),
                 operation: OperationType::FastPath,
-                ping: None,
+                ping_type: None,
                 result: Ok(Duration::from_millis(100)), // 0.1s
             });
 
@@ -441,7 +441,7 @@ mod client_stats_tests {
                 authority_name: validator,
                 display_name: validator.concise().to_string(),
                 operation: OperationType::Submit,
-                ping: None,
+                ping_type: None,
                 result: Err(()), // failure
             });
 
@@ -468,7 +468,7 @@ mod client_stats_tests {
                 authority_name: validator,
                 display_name: validator.concise().to_string(),
                 operation: OperationType::FastPath,
-                ping: None,
+                ping_type: None,
                 result: Ok(Duration::from_millis(100)),
             });
 
@@ -476,7 +476,7 @@ mod client_stats_tests {
                 authority_name: validator,
                 display_name: validator.concise().to_string(),
                 operation: OperationType::Submit,
-                ping: None,
+                ping_type: None,
                 result: Err(()), // failure
             });
 
@@ -527,7 +527,7 @@ mod client_monitor_tests {
                 authority_name: *validator,
                 display_name: auth_agg.get_display_name(validator),
                 operation: OperationType::FastPath,
-                ping: None,
+                ping_type: None,
                 result: Ok(Duration::from_millis((i as u64 + 1) * 50)),
             });
         }
@@ -566,7 +566,7 @@ mod client_monitor_tests {
                 authority_name: *validator,
                 display_name: auth_agg.get_display_name(validator),
                 operation: OperationType::FastPath,
-                ping: None,
+                ping_type: None,
                 result: if i < 2 {
                     Ok(Duration::from_millis((i as u64 + 1) * 50))
                 } else {
@@ -628,7 +628,7 @@ mod client_monitor_tests {
                     authority_name: *validator,
                     display_name: auth_agg.get_display_name(validator),
                     operation: op,
-                    ping: None,
+                    ping_type: None,
                     result: Ok(Duration::from_millis(100)),
                 });
             }
@@ -668,7 +668,7 @@ mod client_monitor_tests {
                     authority_name: *validator,
                     display_name: auth_agg.get_display_name(validator),
                     operation: op,
-                    ping: None,
+                    ping_type: None,
                     result: Ok(Duration::from_millis(100)),
                 });
             }
@@ -701,7 +701,7 @@ mod client_monitor_tests {
                 authority_name: *validator,
                 display_name: auth_agg.get_display_name(validator),
                 operation: OperationType::FastPath,
-                ping: None,
+                ping_type: None,
                 result: Ok(Duration::from_millis((i as u64 + 1) * 50)),
             });
         }
@@ -711,7 +711,7 @@ mod client_monitor_tests {
                 authority_name: *validator,
                 display_name: auth_agg.get_display_name(validator),
                 operation: OperationType::Consensus,
-                ping: None,
+                ping_type: None,
                 result: Ok(Duration::from_millis((i as u64 + 1) * 50)),
             });
         }
@@ -766,7 +766,7 @@ mod client_monitor_tests {
                 authority_name: *validator,
                 display_name: initial_auth_agg.get_display_name(validator),
                 operation: OperationType::Submit,
-                ping: None,
+                ping_type: None,
                 result: Ok(Duration::from_millis(100)),
             });
         }
@@ -844,7 +844,7 @@ mod client_monitor_tests {
                 authority_name: *validator,
                 display_name: initial_auth_agg.get_display_name(validator),
                 operation: OperationType::HealthCheck,
-                ping: None,
+                ping_type: None,
                 result: Ok(Duration::from_millis(100)),
             });
         }

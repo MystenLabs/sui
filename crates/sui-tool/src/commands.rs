@@ -2,24 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(not(tidehunter))]
-use crate::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
+use crate::db_tool::{DbToolCommand, execute_db_tool_command, print_db_all_tables};
 use crate::{
+    ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
     check_completed_snapshot, download_db_snapshot, download_formal_snapshot,
     get_latest_available_epoch, get_object, get_transaction_block, make_clients,
-    restore_from_db_checkpoint, ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode,
-    VerboseObjectOutput,
+    restore_from_db_checkpoint,
 };
 use anyhow::Result;
-use consensus_core::storage::{rocksdb_store::RocksDBStore, Store};
+use consensus_core::storage::{Store, rocksdb_store::RocksDBStore};
 use consensus_core::{BlockAPI, CommitAPI, CommitRange};
-use futures::{future::join_all, StreamExt};
+use futures::{StreamExt, future::join_all};
 use std::path::PathBuf;
 use std::{collections::BTreeMap, env, sync::Arc};
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
 use sui_protocol_config::Chain;
-use sui_replay::{execute_replay_command, ReplayToolCommand};
-use sui_sdk::{rpc_types::SuiTransactionBlockResponseOptions, SuiClient, SuiClientBuilder};
+use sui_replay::{ReplayToolCommand, execute_replay_command};
+use sui_sdk::{SuiClient, SuiClientBuilder, rpc_types::SuiTransactionBlockResponseOptions};
 use sui_types::messages_consensus::ConsensusTransaction;
 use telemetry_subscribers::TracingHandle;
 
@@ -29,8 +29,8 @@ use sui_types::{
 
 use clap::*;
 use fastcrypto::encoding::Encoding;
-use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_config::Config;
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
@@ -340,12 +340,6 @@ pub enum ToolCommand {
         #[clap(long = "verbose")]
         verbose: bool,
 
-        /// If provided, all checkpoint summaries from genesis to the end of the target epoch
-        /// will be downloaded and (if --verify is provided) full checkpoint chain verification
-        /// will be performed. If omitted, only end of epoch checkpoint summaries will be
-        /// downloaded, and (if --verify is provided) will be verified via committee signature.
-        #[clap(long = "all-checkpoints")]
-        all_checkpoints: bool,
         /// Number of retries for failed HTTP requests when downloading snapshot files.
         /// Defaults to 3 retries. Set to 0 to disable retries.
         #[clap(long = "max-retries", default_value = "3")]
@@ -690,7 +684,6 @@ impl ToolCommand {
                 no_sign_request,
                 latest,
                 verbose,
-                all_checkpoints,
                 max_retries,
             } => {
                 if !verbose {
@@ -823,7 +816,6 @@ impl ToolCommand {
                     num_parallel_downloads,
                     network,
                     verify,
-                    all_checkpoints,
                     max_retries,
                 )
                 .await?;
@@ -842,6 +834,13 @@ impl ToolCommand {
                 verbose,
                 max_retries,
             } => {
+                if no_sign_request {
+                    anyhow::bail!(
+                        "The --no-sign-request flag is no longer supported. \
+                        Please use S3 or GCS buckets with --snapshot-bucket-type and --snapshot-bucket instead. \
+                        For more information, see: https://docs.sui.io/guides/operator/snapshots#mysten-labs-managed-snapshots"
+                    );
+                }
                 if !verbose {
                     tracing_handle
                         .update_log("off")
@@ -950,8 +949,8 @@ impl ToolCommand {
                                 }
                             } else {
                                 panic!(
-                                "--snapshot-path must be specified for --snapshot-bucket-type=file"
-                            );
+                                    "--snapshot-path must be specified for --snapshot-bucket-type=file"
+                                );
                             }
                         }
                     }

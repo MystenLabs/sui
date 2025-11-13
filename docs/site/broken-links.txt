@@ -1,0 +1,70 @@
+[404] https://docs.sui.io/references/sui-api/sui-graphql/reference/api/queries/verify-zklogin-signature
+[404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/api/queries/verify-zklogin-signature
+[404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/owner
+[404] https://docs.sui.io/references/sui-api/sui-graphql/reference/api/mutations/execute-transaction-block
+[404] https://docs.sui.io/references/sui-api/sui-graphql/reference/api/queries/dry-run-transaction-block
+[404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/api/mutations/execute-transaction-block
+[404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/api/queries/dry-run-transaction-block
+[404] https://docs.sui.io/references/sui-api/sui-graphql/reference/queries/owner
+[404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/queries/owner
+[404] https://marketplace.visualstudio.com/items?itemName=mysten.move
+[404] https://marketplace.visualstudio.com/items?itemName=mysten.move
+[404] https://marketplace.visualstudio.com/items?itemName=mysten.move
+[404] https://marketplace.visualstudio.com/items?itemName=mysten.move
+[404] https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug
+[404] https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug
+[404] https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax
+[404] https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax
+[404] https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax
+[404] https://docs.wormhole.com/wormhole/faqs
+[404] https://move-book.com/programmability/dynamic-object-fields.html)
+[404] https://marketplace.visualstudio.com/items?itemName=MoveBit.move-msl-syx
+[404] https://marketplace.visualstudio.com/items?itemName=MoveBit.sui-move-analyzer
+[404] https://marketplace.visualstudio.com/items?itemName=zktxio.sui-extension
+[404] https://marketplace.visualstudio.com/items?itemName=weminal-labs.sui-simulator-vscode
+[404] https://github.com/MystenLabs/sui/blob/main/sdk/typescript/src/bcs
+[404] https://github.com/FrankC01/pysui/blob/main/pysui/sui/sui_types/bcs.py
+[404] https://marketplace.visualstudio.com/items?itemName=mysten.move
+[404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/api/queries/verify-zklogin-signature
+[404] https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug
+[404] https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax
+[404] https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug
+[404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/owner
+[404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/api/mutations/execute-transaction-block
+[404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/api/queries/dry-run-transaction-block
+[404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/queries/owner
+  [404] https://marketplace.visualstudio.com/items?itemName=mysten.move
+  [404] https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug
+  [404] https://marketplace.visualstudio.com/items?itemName=mysten.move
+  [404] https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax
+  [404] https://marketplace.visualstudio.com/items?itemName=mysten.move
+  [404] https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug
+  [404] https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/reference/api/queries/verify-zklogin-signature
+  [404] https://move-book.com/programmability/dynamic-object-fields.html)
+  [404] https://marketplace.visualstudio.com/items?itemName=mysten.move
+  [404] https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax
+  [404] https://marketplace.visualstudio.com/items?itemName=MoveBit.move-msl-syx
+  [404] https://marketplace.visualstudio.com/items?itemName=MoveBit.sui-move-analyzer
+  [404] https://marketplace.visualstudio.com/items?itemName=zktxio.sui-extension
+  [404] https://marketplace.visualstudio.com/items?itemName=weminal-labs.sui-simulator-vscode
+  [404] https://github.com/MystenLabs/sui/blob/main/sdk/typescript/src/bcs
+  [404] https://github.com/FrankC01/pysui/blob/main/pysui/sui/sui_types/bcs.py
+  [404] https://marketplace.visualstudio.com/items?itemName=mysten.move
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/api/queries/verify-zklogin-signature
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/owner
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/reference/api/mutations/execute-transaction-block
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/reference/api/queries/dry-run-transaction-block
+  [404] https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug
+  [404] https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax
+  [404] https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/api/mutations/execute-transaction-block
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/api/queries/dry-run-transaction-block
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/reference/queries/owner
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/queries/owner
+  [404] https://docs.wormhole.com/wormhole/faqs
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/api/queries/verify-zklogin-signature
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/owner
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/api/mutations/execute-transaction-block
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/api/queries/dry-run-transaction-block
+  [404] https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/queries/owner

@@ -1,7 +1,7 @@
 [package]
 name = "custom-indexer"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 async-trait = "0.1.83"
@@ -20,4 +20,3 @@ name = "remote_reader"
 path = "remote_reader.rs"
 
 [workspace]
-

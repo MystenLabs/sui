@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Context as _};
-use async_graphql::{connection::Connection, Context, Object, Result};
+use anyhow::{Context as _, anyhow};
+use async_graphql::{Context, Object, Result, connection::Connection};
 use futures::future::try_join_all;
 use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
-use sui_rpc::proto::sui::rpc::v2beta2 as proto;
+use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::digests::ChainIdentifier;
 
 use crate::{
@@ -17,7 +17,7 @@ use crate::{
             transaction_effects::TransactionEffects,
         },
     },
-    error::{bad_user_input, upcast, RpcError},
+    error::{RpcError, bad_user_input, upcast},
     pagination::{Page, PaginationConfig},
     scope::Scope,
 };
@@ -29,10 +29,10 @@ use super::{
     },
     types::{
         address::Address,
-        checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
+        checkpoint::{CCheckpoint, Checkpoint, filter::CheckpointFilter},
         coin_metadata::CoinMetadata,
         epoch::Epoch,
-        event::{filter::EventFilter, CEvent, Event},
+        event::{CEvent, Event, filter::EventFilter},
         move_package::{self, MovePackage, PackageCheckpointFilter, PackageKey},
         move_type::{self, MoveType},
         name_service::name_to_address,
@@ -41,8 +41,8 @@ use super::{
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
         transaction::{
-            filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
             CTransaction, Transaction,
+            filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
         },
         zklogin::{self, ZkLoginIntentScope, ZkLoginVerifyResult},
     },
@@ -483,8 +483,9 @@ impl Query {
     }
 
     /// Configuration for this RPC service.
-    async fn service_config(&self) -> ServiceConfig {
-        ServiceConfig
+    async fn service_config(&self, ctx: &Context<'_>) -> Result<ServiceConfig, RpcError> {
+        let scope = self.scope(ctx)?;
+        Ok(ServiceConfig { scope })
     }
 
     /// Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.

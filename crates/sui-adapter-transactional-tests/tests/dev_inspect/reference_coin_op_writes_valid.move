@@ -3,7 +3,7 @@
 
 // tests valid writes of mut references using coin operations
 
-//# init --addresses test=0x0 --accounts A
+//# init --addresses test=0x0 --accounts A --allow-references-in-ptbs
 
 //# publish
 module test::m {
@@ -20,12 +20,12 @@ module test::m {
 
 }
 
-//# programmable --inputs 10 @A
+//# programmable --sender A --inputs 0 @A
 // generate some coins for testing
 //> SplitCoins(Gas, [Input(0), Input(0), Input(0)]);
 //> TransferObjects([NestedResult(0,0), NestedResult(0,1), NestedResult(0,2)], Input(1))
 
-//# programmable --dev-inspect --inputs 10 @A
+//# programmable --sender A --inputs 0 @A
 // Can write to same coin ref via split coins
 //> 0: sui::coin::zero<sui::sui::SUI>();
 //> 1: test::m::borrow_mut(Result(0));
@@ -34,7 +34,7 @@ module test::m {
 //> 4: test::m::borrow_mut(Result(1));
 //> TransferObjects([Result(0)], Input(1))
 
-//# programmable --dev-inspect --inputs 10 @A object(2,0)
+//# programmable --sender A --inputs 0 @A object(2,0)
 // Can write to same coin ref via Merge coins
 //> 0: sui::coin::zero<sui::sui::SUI>();
 //> 1: test::m::borrow_mut(Result(0));
@@ -42,7 +42,7 @@ module test::m {
 //> 3: test::m::borrow_mut(Result(1));
 //> TransferObjects([Result(0)], Input(1))
 
-//# programmable --dev-inspect --inputs 10 @A
+//# programmable --sender A --inputs 0 @A
 // Can write to same coin via split coins
 //> 0: sui::coin::zero<sui::sui::SUI>();
 //> 1: test::m::borrow_mut(Result(0));
@@ -51,8 +51,8 @@ module test::m {
 //> 4: test::m::borrow_mut(Result(0));
 //> TransferObjects([Result(0)], Input(1))
 
-//# programmable --dev-inspect --inputs 10 @A object(2,0)
-// Can write to same coin r via Merge coins
+//# programmable --sender A --inputs 0 @A object(2,1)
+// Can write to same coin via Merge coins
 //> 0: sui::coin::zero<sui::sui::SUI>();
 //> 1: test::m::borrow_mut(Result(0));
 //> 2: MergeCoins(Result(0), [Input(2)]);

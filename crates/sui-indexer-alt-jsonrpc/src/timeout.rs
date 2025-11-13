@@ -10,9 +10,9 @@ use std::{
 };
 
 use anyhow::anyhow;
-use jsonrpsee::{server::middleware::rpc::RpcServiceT, types::Request, MethodResponse};
+use jsonrpsee::{MethodResponse, server::middleware::rpc::RpcServiceT, types::Request};
 use pin_project_lite::pin_project;
-use tokio::time::{timeout, Timeout};
+use tokio::time::{Timeout, timeout};
 use tower::Layer;
 use tracing::warn;
 

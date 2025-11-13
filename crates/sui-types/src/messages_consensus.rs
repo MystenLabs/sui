@@ -5,7 +5,7 @@ use crate::base_types::{AuthorityName, ConsensusObjectSequenceKey, ObjectRef, Tr
 use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
 use crate::committee::EpochId;
 use crate::digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest};
-use crate::error::SuiError;
+use crate::error::{SuiError, SuiErrorKind};
 use crate::execution::ExecutionTimeObservationKey;
 use crate::messages_checkpoint::{
     CheckpointDigest, CheckpointSequenceNumber, CheckpointSignatureMessage,
@@ -16,11 +16,11 @@ use crate::supported_protocol_versions::{
 use crate::transaction::{CertifiedTransaction, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::Bytes;
-use consensus_types::block::{BlockRef, TransactionIndex, PING_TRANSACTION_INDEX};
+use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX, TransactionIndex};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::dkg_v1;
-use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -55,9 +55,12 @@ pub struct ConsensusPosition {
 impl ConsensusPosition {
     pub fn into_raw(self) -> Result<Bytes, SuiError> {
         bcs::to_bytes(&self)
-            .map_err(|e| SuiError::GrpcMessageSerializeError {
-                type_info: "ConsensusPosition".to_string(),
-                error: e.to_string(),
+            .map_err(|e| {
+                SuiErrorKind::GrpcMessageSerializeError {
+                    type_info: "ConsensusPosition".to_string(),
+                    error: e.to_string(),
+                }
+                .into()
             })
             .map(Bytes::from)
     }
@@ -77,9 +80,12 @@ impl TryFrom<&[u8]> for ConsensusPosition {
     type Error = SuiError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        bcs::from_bytes(bytes).map_err(|e| SuiError::GrpcMessageDeserializeError {
-            type_info: "ConsensusPosition".to_string(),
-            error: e.to_string(),
+        bcs::from_bytes(bytes).map_err(|e| {
+            SuiErrorKind::GrpcMessageDeserializeError {
+                type_info: "ConsensusPosition".to_string(),
+                error: e.to_string(),
+            }
+            .into()
         })
     }
 }
@@ -191,6 +197,42 @@ pub struct ConsensusTransaction {
     /// Use an byte array instead of u64 to ensure stable serialization.
     pub tracking_id: [u8; 8],
     pub kind: ConsensusTransactionKind,
+}
+
+impl ConsensusTransaction {
+    /// Displays a ConsensusTransaction created locally by the validator, for example during submission to consensus.
+    pub fn local_display(&self) -> String {
+        match &self.kind {
+            ConsensusTransactionKind::CertifiedTransaction(cert) => {
+                format!("Certified({})", cert.digest())
+            }
+            ConsensusTransactionKind::CheckpointSignature(data) => {
+                format!(
+                    "CkptSig({}, {})",
+                    data.summary.sequence_number,
+                    data.summary.digest()
+                )
+            }
+            ConsensusTransactionKind::CheckpointSignatureV2(data) => {
+                format!(
+                    "CkptSigV2({}, {})",
+                    data.summary.sequence_number,
+                    data.summary.digest()
+                )
+            }
+            ConsensusTransactionKind::EndOfPublish(..) => "EOP".to_string(),
+            ConsensusTransactionKind::CapabilityNotification(..) => "Cap".to_string(),
+            ConsensusTransactionKind::CapabilityNotificationV2(..) => "CapV2".to_string(),
+            ConsensusTransactionKind::NewJWKFetched(..) => "NewJWKFetched".to_string(),
+            ConsensusTransactionKind::RandomnessStateUpdate(..) => "RandStateUpdate".to_string(),
+            ConsensusTransactionKind::RandomnessDkgMessage(..) => "RandDkg".to_string(),
+            ConsensusTransactionKind::RandomnessDkgConfirmation(..) => "RandDkgConf".to_string(),
+            ConsensusTransactionKind::ExecutionTimeObservation(..) => "ExecTimeOb".to_string(),
+            ConsensusTransactionKind::UserTransaction(tx) => {
+                format!("User({})", tx.digest())
+            }
+        }
+    }
 }
 
 // Serialized ordinally - always append to end of enum
@@ -708,7 +750,9 @@ impl ConsensusTransaction {
                 )))
             }
             ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {
-                unreachable!("there should never be a RandomnessStateUpdate with SequencedConsensusTransactionKind::External")
+                unreachable!(
+                    "there should never be a RandomnessStateUpdate with SequencedConsensusTransactionKind::External"
+                )
             }
             ConsensusTransactionKind::RandomnessDkgMessage(authority, _) => {
                 ConsensusTransactionKey::RandomnessDkgMessage(*authority)

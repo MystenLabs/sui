@@ -4,12 +4,12 @@
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
-use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+use jsonrpsee::core::RpcResult;
 use move_binary_format::normalized;
 
-use sui_json_rpc::error::SuiRpcInputError;
 use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc::error::SuiRpcInputError;
 use sui_json_rpc_api::MoveUtilsServer;
 use sui_json_rpc_types::ObjectValueKind;
 use sui_json_rpc_types::SuiMoveNormalizedType;

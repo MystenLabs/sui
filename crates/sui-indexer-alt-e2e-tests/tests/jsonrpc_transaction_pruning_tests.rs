@@ -8,13 +8,13 @@
 use std::{str::FromStr, time::Duration};
 
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
-use sui_indexer_alt_e2e_tests::{find, FullCluster, OffchainClusterConfig};
+use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig, find};
 use sui_types::{
     base_types::SuiAddress,
-    crypto::{get_account_key_pair, Signature, Signer},
+    crypto::{Signature, Signer, get_account_key_pair},
     digests::TransactionDigest,
     effects::TransactionEffectsAPI,
     programmable_transaction_builder::ProgrammableTransactionBuilder,

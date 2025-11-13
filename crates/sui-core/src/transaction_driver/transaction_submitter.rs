@@ -20,12 +20,12 @@ use crate::{
     authority_client::AuthorityAPI,
     safe_client::SafeClient,
     transaction_driver::{
+        SubmitTransactionOptions, TransactionDriverMetrics,
         error::{
-            aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
-            TransactionRequestError,
+            AggregatedEffectsDigests, TransactionDriverError, TransactionRequestError,
+            aggregate_request_errors,
         },
         request_retrier::RequestRetrier,
-        SubmitTransactionOptions, TransactionDriverMetrics,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
@@ -73,7 +73,7 @@ impl TransactionSubmitter {
             options.allowed_validators.clone(),
         );
 
-        let ping_label = if request.ping.is_some() {
+        let ping_label = if request.ping_type.is_some() {
             "true"
         } else {
             "false"
@@ -152,11 +152,7 @@ impl TransactionSubmitter {
                     return Ok((name, result));
                 }
                 Some((name, display_name, Err(e))) => {
-                    let error_type = if e.is_submission_retriable() {
-                        "retriable"
-                    } else {
-                        "non_retriable"
-                    };
+                    let error_type = e.categorize().into();
                     self.metrics
                         .validator_submit_transaction_errors
                         .with_label_values(&[
@@ -218,7 +214,7 @@ impl TransactionSubmitter {
                 authority_name: validator,
                 display_name: display_name.clone(),
                 operation: OperationType::Submit,
-                ping: request.ping,
+                ping_type: request.ping_type,
                 result: Err(()),
             });
             TransactionRequestError::TimedOutSubmittingTransaction
@@ -229,7 +225,7 @@ impl TransactionSubmitter {
                     authority_name: validator,
                     display_name: display_name.clone(),
                     operation: OperationType::Submit,
-                    ping: request.ping,
+                    ping_type: request.ping_type,
                     result: Err(()),
                 });
             }
@@ -251,7 +247,7 @@ impl TransactionSubmitter {
                     authority_name: validator,
                     display_name,
                     operation: OperationType::Submit,
-                    ping: request.ping,
+                    ping_type: request.ping_type,
                     result: Err(()),
                 });
             }
@@ -263,7 +259,7 @@ impl TransactionSubmitter {
             authority_name: validator,
             display_name,
             operation: OperationType::Submit,
-            ping: request.ping,
+            ping_type: request.ping_type,
             result: Ok(latency),
         });
         Ok(result)

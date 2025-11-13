@@ -8,7 +8,7 @@ use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::committee::{CommitteeWithNetworkMetadata, NetworkMetadata};
 use crate::crypto::NetworkPublicKey;
 use crate::dynamic_field::get_dynamic_field_from_store;
-use crate::error::SuiError;
+use crate::error::{SuiError, SuiErrorKind};
 use crate::id::ID;
 use crate::multiaddr::Multiaddr;
 use crate::storage::ObjectStore;
@@ -469,7 +469,7 @@ where
         &ID::new(pool_id),
     )
     .map_err(|err| {
-        SuiError::SuiSystemStateReadError(format!(
+        SuiErrorKind::SuiSystemStateReadError(format!(
             "Failed to load candidate address from pool mappings: {:?}",
             err
         ))

@@ -9,6 +9,6 @@ error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/expansion/duplicate_function_in_module.move:3:9
   │
 2 │     fun foo() { }
-  │         --- Alias previously defined here
+  │         --- Module member or alias previously defined here
 3 │     fun foo() { }
-  │         ^^^ Duplicate module member or alias 'foo'. Top level names in a namespace must be unique
+  │         ^^^ Duplicate module member 'foo'. Top level names in a namespace must be unique

@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::Task;
 use crate::indexer_builder::{DataSender, Datasource};
 use crate::metrics::IndexerMetricProvider;
-use crate::Task;
 use anyhow::Error;
 use async_trait::async_trait;
 use mysten_metrics::{metered_channel, spawn_monitored_task};

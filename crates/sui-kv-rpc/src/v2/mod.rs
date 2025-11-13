@@ -3,10 +3,11 @@
 
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2::{
-    ledger_service_server::LedgerService, BatchGetObjectsRequest, BatchGetObjectsResponse,
-    BatchGetTransactionsRequest, BatchGetTransactionsResponse, GetCheckpointRequest,
-    GetCheckpointResponse, GetEpochRequest, GetEpochResponse, GetObjectRequest, GetObjectResponse,
-    GetServiceInfoRequest, GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse,
+    BatchGetObjectsRequest, BatchGetObjectsResponse, BatchGetTransactionsRequest,
+    BatchGetTransactionsResponse, GetCheckpointRequest, GetCheckpointResponse, GetEpochRequest,
+    GetEpochResponse, GetObjectRequest, GetObjectResponse, GetServiceInfoRequest,
+    GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse,
+    ledger_service_server::LedgerService,
 };
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
@@ -26,6 +27,13 @@ impl LedgerService for KvRpcServer {
         &self,
         _: tonic::Request<GetServiceInfoRequest>,
     ) -> Result<tonic::Response<GetServiceInfoResponse>, tonic::Status> {
+        {
+            let cache = self.cache.read().await;
+            if let Some(cached_info) = cache.as_ref() {
+                return Ok(tonic::Response::new(cached_info.clone()));
+            }
+        }
+        // If no cache available, fetch directly and update cache
         get_service_info(
             self.client.clone(),
             self.chain_id,
@@ -80,10 +88,14 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<GetCheckpointRequest>,
     ) -> Result<tonic::Response<GetCheckpointResponse>, tonic::Status> {
-        get_checkpoint::get_checkpoint(self.client.clone(), request.into_inner())
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        get_checkpoint::get_checkpoint(
+            self.client.clone(),
+            request.into_inner(),
+            self.checkpoint_bucket.clone(),
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn get_epoch(
@@ -101,7 +113,7 @@ impl LedgerService for KvRpcServer {
     }
 }
 
-async fn get_service_info(
+pub(crate) async fn get_service_info(
     mut client: BigTableClient,
     chain_id: ChainIdentifier,
     server_version: Option<ServerVersion>,

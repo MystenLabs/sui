@@ -8,11 +8,12 @@ use itertools::Itertools;
 use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
 use prometheus::Registry;
-use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
+use sui_protocol_config::ProtocolConfig;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
 use crate::{
+    CommitConsumerArgs,
     authority_service::AuthorityService,
     block_manager::BlockManager,
     block_verifier::SignedBlockVerifier,
@@ -27,10 +28,7 @@ use crate::{
     leader_schedule::LeaderSchedule,
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{
-        anemo_network::AnemoManager, tonic_network::TonicManager, NetworkClient as _,
-        NetworkManager,
-    },
+    network::{NetworkClient as _, NetworkManager, tonic_network::TonicManager},
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::PeerRoundTracker,
@@ -39,20 +37,18 @@ use crate::{
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
     transaction_certifier::TransactionCertifier,
-    CommitConsumerArgs,
 };
 
 /// ConsensusAuthority is used by Sui to manage the lifetime of AuthorityNode.
 /// It hides the details of the implementation from the caller, MysticetiManager.
 #[allow(private_interfaces)]
 pub enum ConsensusAuthority {
-    WithAnemo(AuthorityNode<AnemoManager>),
     WithTonic(AuthorityNode<TonicManager>),
 }
 
 impl ConsensusAuthority {
     pub async fn start(
-        network_type: ConsensusNetwork,
+        network_type: NetworkType,
         epoch_start_timestamp_ms: u64,
         own_index: Option<AuthorityIndex>,
         committee: Committee,
@@ -75,27 +71,7 @@ impl ConsensusAuthority {
         randomness_signature_receiver: Option<tokio::sync::broadcast::Receiver<(u64, Vec<u8>)>>,
     ) -> Self {
         match network_type {
-            ConsensusNetwork::Anemo => {
-                let authority = AuthorityNode::start(
-                    epoch_start_timestamp_ms,
-                    own_index,
-                    committee,
-                    parameters,
-                    protocol_config,
-                    protocol_keypair,
-                    network_keypair,
-                    clock,
-                    transaction_verifier,
-                    commit_consumer,
-                    registry,
-                    boot_counter,
-                    target_validator_index,
-                    randomness_signature_receiver,
-                )
-                .await;
-                Self::WithAnemo(authority)
-            }
-            ConsensusNetwork::Tonic => {
+            NetworkType::Tonic => {
                 let authority = AuthorityNode::start(
                     epoch_start_timestamp_ms,
                     own_index,
@@ -120,14 +96,12 @@ impl ConsensusAuthority {
 
     pub async fn stop(self) {
         match self {
-            Self::WithAnemo(authority) => authority.stop().await,
             Self::WithTonic(authority) => authority.stop().await,
         }
     }
 
     pub fn transaction_client(&self) -> Arc<TransactionClient> {
         match self {
-            Self::WithAnemo(authority) => authority.transaction_client(),
             Self::WithTonic(authority) => authority.transaction_client(),
         }
     }
@@ -135,18 +109,14 @@ impl ConsensusAuthority {
     #[cfg(test)]
     fn context(&self) -> &Arc<Context> {
         match self {
-            Self::WithAnemo(authority) => &authority.context,
             Self::WithTonic(authority) => &authority.context,
         }
     }
+}
 
-    #[allow(unused)]
-    fn sync_last_known_own_block_enabled(&self) -> bool {
-        match self {
-            Self::WithAnemo(authority) => authority.sync_last_known_own_block,
-            Self::WithTonic(authority) => authority.sync_last_known_own_block,
-        }
-    }
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum NetworkType {
+    Tonic,
 }
 
 pub(crate) struct AuthorityNode<N>
@@ -168,7 +138,6 @@ where
     broadcaster: Option<Broadcaster>,
     subscriber: Option<Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>>,
     network_manager: N,
-    sync_last_known_own_block: bool,
 }
 
 impl<N> AuthorityNode<N>
@@ -301,13 +270,9 @@ where
 
         let transaction_certifier = TransactionCertifier::new(
             context.clone(),
+            block_verifier.clone(),
             dag_state.clone(),
             commit_consumer.block_sender.clone(),
-        );
-        // TODO(fastpath): recover incrementally by chunk inside CommitObserver::new()
-        transaction_certifier.recover(
-            block_verifier.as_ref(),
-            commit_consumer.replay_after_commit_index,
         );
 
         // Observer nodes don't propose blocks so they don't need the proposed_block_handler
@@ -360,10 +325,6 @@ where
             tx_consumer,
             transaction_certifier.clone(),
             block_manager,
-            // For streaming RPC, Core will be notified when consumer is available.
-            // For non-streaming RPC, there is no way to know so default to true.
-            // When there is only one (this) authority, assume subscriber exists.
-            !N::Client::SUPPORT_STREAMING || context.committee.size() == 1,
             commit_observer,
             core_signals,
             protocol_keypair,
@@ -497,7 +458,6 @@ where
             broadcaster,
             subscriber,
             network_manager,
-            sync_last_known_own_block,
         }
     }
 
@@ -561,11 +521,11 @@ mod tests {
         time::Duration,
     };
 
-    use consensus_config::{local_committee_and_keys, Parameters};
-    use mysten_metrics::monitored_mpsc::UnboundedReceiver;
+    use consensus_config::{Parameters, local_committee_and_keys};
     use mysten_metrics::RegistryService;
+    use mysten_metrics::monitored_mpsc::UnboundedReceiver;
     use prometheus::Registry;
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{SeedableRng, rngs::StdRng};
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
@@ -574,15 +534,15 @@ mod tests {
 
     use super::*;
     use crate::{
+        CommittedSubDag,
         block::{BlockAPI as _, CertifiedBlocksOutput, GENESIS_ROUND},
         transaction::NoopTransactionVerifier,
-        CommittedSubDag,
     };
 
     #[rstest]
     #[tokio::test]
     async fn test_authority_start_and_stop(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(NetworkType::Tonic)] network_type: NetworkType,
     ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
         let registry = Registry::new();
@@ -630,7 +590,7 @@ mod tests {
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
     async fn test_authority_committee(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(NetworkType::Tonic)] network_type: NetworkType,
         #[values(5, 10)] gc_depth: u32,
     ) {
         telemetry_subscribers::init_for_testing();
@@ -735,7 +695,7 @@ mod tests {
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
     async fn test_authority_committee_with_observer(
-        #[values(ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(NetworkType::Tonic)] network_type: NetworkType,
         #[values(5)] gc_depth: u32,
     ) {
         telemetry_subscribers::init_for_testing();
@@ -836,7 +796,7 @@ mod tests {
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
     async fn test_small_committee(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(NetworkType::Tonic)] network_type: NetworkType,
         #[values(1, 2, 3)] num_authorities: usize,
     ) {
         telemetry_subscribers::init_for_testing();
@@ -958,12 +918,11 @@ mod tests {
                 &dir,
                 committee.clone(),
                 keypairs.clone(),
-                ConsensusNetwork::Tonic,
+                NetworkType::Tonic,
                 boot_counters[index],
                 protocol_config.clone(),
             )
             .await;
-            assert!(authority.sync_last_known_own_block_enabled(), "Expected syncing of last known own block to be enabled as all authorities are of empty db and boot for first time.");
             boot_counters[index] += 1;
             commit_receivers.push(commit_receiver);
             block_receivers.push(block_receiver);
@@ -1008,15 +967,11 @@ mod tests {
             &dir,
             committee.clone(),
             keypairs.clone(),
-            ConsensusNetwork::Tonic,
+            NetworkType::Tonic,
             boot_counters[index_1],
             protocol_config.clone(),
         )
         .await;
-        assert!(
-            authority.sync_last_known_own_block_enabled(),
-            "Authority should have the sync of last own block enabled"
-        );
         boot_counters[index_1] += 1;
         authorities.insert(index_1, authority);
         temp_dirs.insert(index_1, dir);
@@ -1029,15 +984,11 @@ mod tests {
             &temp_dirs[&index_2],
             committee.clone(),
             keypairs,
-            ConsensusNetwork::Tonic,
+            NetworkType::Tonic,
             boot_counters[index_2],
             protocol_config.clone(),
         )
         .await;
-        assert!(
-            !authority.sync_last_known_own_block_enabled(),
-            "Authority should not have attempted to sync the last own block"
-        );
         boot_counters[index_2] += 1;
         authorities.insert(index_2, authority);
         sleep(Duration::from_secs(5)).await;
@@ -1063,7 +1014,7 @@ mod tests {
         db_dir: &TempDir,
         committee: Committee,
         keypairs: Vec<(NetworkKeyPair, ProtocolKeyPair)>,
-        network_type: ConsensusNetwork,
+        network_type: NetworkType,
         boot_counter: u64,
         protocol_config: ProtocolConfig,
     ) -> (

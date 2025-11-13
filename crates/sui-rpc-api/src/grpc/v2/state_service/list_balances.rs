@@ -49,13 +49,13 @@ pub fn list_balances(
         .map(|token| decode_page_token(&token))
         .transpose()?;
 
-    if let Some(token) = &page_token {
-        if token.owner != owner {
-            return Err(FieldViolation::new("page_token")
-                .with_description("page token owner does not match request owner")
-                .with_reason(ErrorReason::FieldInvalid)
-                .into());
-        }
+    if let Some(token) = &page_token
+        && token.owner != owner
+    {
+        return Err(FieldViolation::new("page_token")
+            .with_description("page token owner does not match request owner")
+            .with_reason(ErrorReason::FieldInvalid)
+            .into());
     }
 
     let mut balances = indexes

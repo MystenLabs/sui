@@ -471,11 +471,11 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use crate::events::{init_all_struct_tags, NewTokenEvent};
+    use crate::events::{NewTokenEvent, init_all_struct_tags};
     use crate::test_utils::{
         bridge_committee_to_bridge_committee_summary, get_test_authority_and_key,
     };
-    use crate::types::{BridgeAuthority, BRIDGE_PAUSED, BRIDGE_UNPAUSED};
+    use crate::types::{BRIDGE_PAUSED, BRIDGE_UNPAUSED, BridgeAuthority};
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
     use sui_types::base_types::SuiAddress;

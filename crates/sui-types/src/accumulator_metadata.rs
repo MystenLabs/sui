@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    MoveTypeTagTrait, MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{SequenceNumber, SuiAddress},
     collection_types::Bag,
     dynamic_field::DynamicFieldKey,
     error::SuiResult,
     storage::ChildObjectResolver,
-    MoveTypeTagTrait, MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use move_core_types::{
     ident_str,
@@ -117,7 +117,7 @@ impl AccumulatorOwner {
         DynamicFieldKey(
             *self.balances.id.object_id(),
             key,
-            MetadataKey::get_type_tag(&[type_.clone()]),
+            MetadataKey::get_type_tag(std::slice::from_ref(type_)),
         )
         .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
         .exists(child_object_resolver)
@@ -133,7 +133,7 @@ impl AccumulatorOwner {
         DynamicFieldKey(
             *self.balances.id.object_id(),
             key,
-            MetadataKey::get_type_tag(&[type_.clone()]),
+            MetadataKey::get_type_tag(std::slice::from_ref(type_)),
         )
         .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
         .load_object(child_object_resolver)?

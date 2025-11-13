@@ -173,8 +173,7 @@ impl RWLockDependencyBuilder {
             for dep in reads {
                 trace!(
                     "Assuming additional dependency when constructing checkpoint {:?} -> {:?}",
-                    digest,
-                    *dep
+                    digest, *dep
                 );
                 v.insert(*dep);
             }
@@ -264,7 +263,7 @@ mod tests {
         let r = extract(CausalOrder::causal_sort(vec![e5, e2, e3]));
         assert_eq!(r.len(), 3);
         assert_eq!(*r.get(2).unwrap(), 3); // [3] is the last
-                                           // both [5] and [2] are present (but order is not fixed)
+        // both [5] and [2] are present (but order is not fixed)
         assert!(r.contains(&5));
         assert!(r.contains(&2));
     }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bincode::{Decode, Encode};
-use sui_indexer_alt_framework::types::{base_types::SuiAddress, TypeTag};
+use sui_indexer_alt_framework::types::{TypeTag, base_types::SuiAddress};
 
 /// Key for the index that supports fetching an account's balance (the sum of balances of all coins
 /// it owns).

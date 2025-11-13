@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::SUI_FRAMEWORK_ADDRESS;
 use crate::collection_types::VecMap;
 use crate::event::Event;
 use crate::id::{ID, UID};
-use crate::SUI_FRAMEWORK_ADDRESS;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::StructTag;

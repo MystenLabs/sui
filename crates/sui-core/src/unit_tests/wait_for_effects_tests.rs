@@ -4,15 +4,15 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use consensus_types::block::{BlockRef, TransactionIndex, PING_TRANSACTION_INDEX};
+use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX, TransactionIndex};
 use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::EpochId;
-use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
+use sui_types::crypto::{AccountKeyPair, get_account_key_pair};
 use sui_types::digests::TransactionEffectsDigest;
 use sui_types::effects::TransactionEffectsAPI as _;
-use sui_types::error::{SuiError, UserInputError};
+use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
@@ -22,7 +22,7 @@ use sui_types::transaction::VerifiedTransaction;
 use sui_types::utils::to_sender_signed_transaction;
 
 use crate::authority::consensus_tx_status_cache::{
-    ConsensusTxStatus, CONSENSUS_STATUS_RETENTION_ROUNDS,
+    CONSENSUS_STATUS_RETENTION_ROUNDS, ConsensusTxStatus,
 };
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
@@ -128,7 +128,7 @@ async fn test_wait_for_effects_position_mismatch() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position1),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context.client.wait_for_effects(request, None).await;
@@ -152,7 +152,7 @@ async fn test_wait_for_effects_consensus_rejected_validator_accepted() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     // Validator does not reject the transaction, but it is rejected by the commit.
@@ -197,7 +197,7 @@ async fn test_wait_for_effects_epoch_mismatch() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context.client.wait_for_effects(request, None).await;
@@ -222,7 +222,7 @@ async fn test_wait_for_effects_timeout() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context.client.wait_for_effects(request, None).await;
@@ -247,7 +247,7 @@ async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let state_clone = test_context.state.clone();
@@ -257,11 +257,12 @@ async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
         epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Rejected);
         epoch_store.set_rejection_vote_reason(
             tx_position,
-            &SuiError::UserInputError {
+            &SuiErrorKind::UserInputError {
                 error: UserInputError::TransactionDenied {
                     error: "object denied".to_string(),
                 },
-            },
+            }
+            .into(),
         );
     });
 
@@ -274,8 +275,8 @@ async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
     match response {
         WaitForEffectsResponse::Rejected { error } => {
             assert_eq!(
-                error,
-                Some(SuiError::UserInputError {
+                error.map(|e| e.into_inner()),
+                Some(SuiErrorKind::UserInputError {
                     error: UserInputError::TransactionDenied {
                         error: "object denied".to_string(),
                     },
@@ -326,7 +327,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
         consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context
@@ -354,7 +355,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context
@@ -381,7 +382,7 @@ async fn test_wait_for_effects_fastpath_certified_only() {
         transaction_digest: Some(tx_digest),
         consensus_position: None,
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context.client.wait_for_effects(request, None).await;
@@ -408,7 +409,7 @@ async fn test_wait_for_effects_fastpath_certified_then_executed() {
         consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
-        ping: None,
+        ping_type: None,
     };
 
     let state_clone = test_context.state.clone();
@@ -490,7 +491,7 @@ async fn test_wait_for_effects_finalized() {
         consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context
@@ -518,7 +519,7 @@ async fn test_wait_for_effects_finalized() {
         transaction_digest: Some(tx_digest),
         consensus_position: None,
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let response = test_context
@@ -562,7 +563,7 @@ async fn test_wait_for_effects_expired() {
         transaction_digest: Some(tx_digest),
         consensus_position: Some(tx_position),
         include_details: true,
-        ping: None,
+        ping_type: None,
     };
 
     let state_clone = test_context.state.clone();
@@ -607,7 +608,9 @@ async fn test_wait_for_effects_expired() {
 async fn test_wait_for_effects_ping() {
     let test_context = TestContext::new().await;
 
-    println!("Case 1. Send a FastPath ping request. The end point should wait until the block is certified via MFP (we assume the ping transaction is in the block).");
+    println!(
+        "Case 1. Send a FastPath ping request. The end point should wait until the block is certified via MFP (we assume the ping transaction is in the block)."
+    );
     {
         let tx_position = ConsensusPosition {
             epoch: EpochId::MIN,
@@ -619,7 +622,7 @@ async fn test_wait_for_effects_ping() {
             transaction_digest: None,
             consensus_position: Some(tx_position),
             include_details: false,
-            ping: Some(PingType::FastPath),
+            ping_type: Some(PingType::FastPath),
         };
 
         let state_clone = test_context.state.clone();
@@ -649,7 +652,9 @@ async fn test_wait_for_effects_ping() {
         }
     }
 
-    println!("Case 2. Send a Consensus ping request. The end point should wait for the transaction is finalised via Consensus.");
+    println!(
+        "Case 2. Send a Consensus ping request. The end point should wait for the transaction is finalised via Consensus."
+    );
     {
         let mut block = BlockRef::MIN;
         block.round = 5;
@@ -663,7 +668,7 @@ async fn test_wait_for_effects_ping() {
             transaction_digest: None,
             consensus_position: Some(tx_position),
             include_details: false,
-            ping: Some(PingType::Consensus),
+            ping_type: Some(PingType::Consensus),
         };
 
         let state_clone = test_context.state.clone();
@@ -700,7 +705,9 @@ async fn test_wait_for_effects_ping() {
         }
     }
 
-    println!("Case 3. Send a Consensus ping request but the corresponding block gets garbage collected and never committed.");
+    println!(
+        "Case 3. Send a Consensus ping request but the corresponding block gets garbage collected and never committed."
+    );
     {
         let mut block = BlockRef::MIN;
         block.round = 10;
@@ -714,7 +721,7 @@ async fn test_wait_for_effects_ping() {
             transaction_digest: None,
             consensus_position: Some(tx_position),
             include_details: false,
-            ping: Some(PingType::Consensus),
+            ping_type: Some(PingType::Consensus),
         };
 
         let state_clone = test_context.state.clone();

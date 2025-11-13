@@ -17,13 +17,13 @@ mod consensus_tests {
     use mysten_metrics::RegistryService;
     use mysten_network::Multiaddr;
     use prometheus::Registry;
-    use rand::{rngs::StdRng, Rng, SeedableRng as _};
+    use rand::{Rng, SeedableRng as _, rngs::StdRng};
     use sui_config::local_ip_utils;
     use sui_macros::sim_test;
     use sui_protocol_config::ProtocolConfig;
     use sui_simulator::{
-        configs::{bimodal_latency_ms, env_config, uniform_latency_ms},
         SimConfig,
+        configs::{bimodal_latency_ms, env_config, uniform_latency_ms},
     };
     use tempfile::TempDir;
     use tokio::task::JoinSet;

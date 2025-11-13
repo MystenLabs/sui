@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    get_extension, get_extension_mut,
+    NativesCostTable, get_extension, get_extension_mut,
     object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
-    NativesCostTable,
 };
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;

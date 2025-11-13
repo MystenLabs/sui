@@ -4,7 +4,7 @@
 use clap::Parser;
 use move_cli::base::summary;
 use move_core_types::account_address::AccountAddress;
-use move_package::{resolution::resolution_graph::ResolvedGraph, BuildConfig};
+use move_package::{BuildConfig, resolution::resolution_graph::ResolvedGraph};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},

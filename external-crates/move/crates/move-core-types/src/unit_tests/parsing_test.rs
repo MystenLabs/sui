@@ -611,7 +611,7 @@ proptest! {
     #[test]
     fn hex_parse_parity(s in "0x[0-9a-fA-F]{1,64}") {
         let bigint_parsed = {
-            let bytes = BigUint::parse_bytes(s[2..].as_bytes(), 16).unwrap().to_bytes_be();
+            let bytes = BigUint::parse_bytes(&s.as_bytes()[2..], 16).unwrap().to_bytes_be();
             let mut result = [0u8; AccountAddress::LENGTH];
             result[(AccountAddress::LENGTH - bytes.len())..].clone_from_slice(&bytes);
             result

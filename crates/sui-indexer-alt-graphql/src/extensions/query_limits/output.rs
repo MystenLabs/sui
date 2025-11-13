@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{
-    parser::types::ExecutableDocument, registry::Registry, ServerResult, Value, Variables,
+    ServerResult, Value, Variables, parser::types::ExecutableDocument, registry::Registry,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::pagination::{is_connection, PaginationConfig};
+use crate::pagination::{PaginationConfig, is_connection};
 
 use super::{
+    QueryLimitsConfig,
     error::{Error, ErrorKind},
     visitor::{Driver, FieldDriver, Visitor},
-    QueryLimitsConfig,
 };
 
 /// How many output nodes are estimated to be output from this query.

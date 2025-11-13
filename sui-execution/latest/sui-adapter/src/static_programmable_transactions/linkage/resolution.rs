@@ -14,7 +14,7 @@ use sui_types::{
 
 /// Unifiers. These are used to determine how to unify two packages.
 #[derive(Debug, Clone)]
-pub enum ConflictResolution {
+pub enum VersionConstraint {
     /// An exact constraint unifies as follows:
     /// 1. Exact(a) ~ Exact(b) ==> Exact(a), iff a == b
     /// 2. Exact(a) ~ AtLeast(b) ==> Exact(a), iff a >= b
@@ -27,7 +27,7 @@ pub enum ConflictResolution {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ResolutionTable {
-    pub(crate) resolution_table: BTreeMap<ObjectID, ConflictResolution>,
+    pub(crate) resolution_table: BTreeMap<ObjectID, VersionConstraint>,
     /// For every version of every package that we have seen, a mapping of the ObjectID for that
     /// package to its runtime ID.
     pub(crate) all_versions_resolution_table: BTreeMap<ObjectID, ObjectID>,
@@ -40,50 +40,21 @@ impl ResolutionTable {
             all_versions_resolution_table: BTreeMap::new(),
         }
     }
-
-    #[allow(dead_code)]
-    pub fn merge(&mut self, other: &ResolutionTable) -> Result<(), ExecutionError> {
-        for (object_id, resolution) in other.resolution_table.iter() {
-            if let Entry::Vacant(e) = self.resolution_table.entry(*object_id) {
-                e.insert(resolution.clone());
-            } else {
-                let existing_unifier = self
-                    .resolution_table
-                    .get_mut(object_id)
-                    .expect("Guaranteed to exist");
-                *existing_unifier = existing_unifier.unify(resolution)?;
-            }
-        }
-
-        for (object_id, original_pkg_id) in other.all_versions_resolution_table.iter() {
-            if !self.all_versions_resolution_table.contains_key(object_id) {
-                self.all_versions_resolution_table
-                    .insert(*object_id, *original_pkg_id);
-            }
-        }
-
-        Ok(())
-    }
 }
 
-impl ConflictResolution {
-    pub fn exact(pkg: &MovePackage) -> Option<ConflictResolution> {
-        Some(ConflictResolution::Exact(pkg.version(), pkg.id()))
+impl VersionConstraint {
+    pub fn exact(pkg: &MovePackage) -> Option<VersionConstraint> {
+        Some(VersionConstraint::Exact(pkg.version(), pkg.id()))
     }
 
-    pub fn at_least(pkg: &MovePackage) -> Option<ConflictResolution> {
-        Some(ConflictResolution::AtLeast(pkg.version(), pkg.id()))
+    pub fn at_least(pkg: &MovePackage) -> Option<VersionConstraint> {
+        Some(VersionConstraint::AtLeast(pkg.version(), pkg.id()))
     }
 
-    #[allow(dead_code)]
-    pub fn no_constraint(_pkg: &MovePackage) -> Option<ConflictResolution> {
-        None
-    }
-
-    pub fn unify(&self, other: &ConflictResolution) -> Result<ConflictResolution, ExecutionError> {
+    pub fn unify(&self, other: &VersionConstraint) -> Result<VersionConstraint, ExecutionError> {
         match (&self, other) {
             // If we have two exact resolutions, they must be the same.
-            (ConflictResolution::Exact(sv, self_id), ConflictResolution::Exact(ov, other_id)) => {
+            (VersionConstraint::Exact(sv, self_id), VersionConstraint::Exact(ov, other_id)) => {
                 if self_id != other_id || sv != ov {
                     Err(ExecutionError::new_with_source(
                         ExecutionErrorKind::InvalidLinkage,
@@ -94,13 +65,13 @@ impl ConflictResolution {
                         ),
                     ))
                 } else {
-                    Ok(ConflictResolution::Exact(*sv, *self_id))
+                    Ok(VersionConstraint::Exact(*sv, *self_id))
                 }
             }
             // Take the max if you have two at least resolutions.
             (
-                ConflictResolution::AtLeast(self_version, sid),
-                ConflictResolution::AtLeast(other_version, oid),
+                VersionConstraint::AtLeast(self_version, sid),
+                VersionConstraint::AtLeast(other_version, oid),
             ) => {
                 let id = if self_version > other_version {
                     *sid
@@ -108,7 +79,7 @@ impl ConflictResolution {
                     *oid
                 };
 
-                Ok(ConflictResolution::AtLeast(
+                Ok(VersionConstraint::AtLeast(
                     *self_version.max(other_version),
                     id,
                 ))
@@ -116,12 +87,12 @@ impl ConflictResolution {
             // If you unify an exact and an at least, the exact must be greater than or equal to
             // the at least. It unifies to an exact.
             (
-                ConflictResolution::Exact(exact_version, exact_id),
-                ConflictResolution::AtLeast(at_least_version, at_least_id),
+                VersionConstraint::Exact(exact_version, exact_id),
+                VersionConstraint::AtLeast(at_least_version, at_least_id),
             )
             | (
-                ConflictResolution::AtLeast(at_least_version, at_least_id),
-                ConflictResolution::Exact(exact_version, exact_id),
+                VersionConstraint::AtLeast(at_least_version, at_least_id),
+                VersionConstraint::Exact(exact_version, exact_id),
             ) => {
                 if exact_version < at_least_version {
                     return Err(ExecutionError::new_with_source(
@@ -135,7 +106,7 @@ impl ConflictResolution {
                     ));
                 }
 
-                Ok(ConflictResolution::Exact(*exact_version, *exact_id))
+                Ok(VersionConstraint::Exact(*exact_version, *exact_id))
             }
         }
     }
@@ -161,7 +132,7 @@ pub(crate) fn add_and_unify(
     object_id: &ObjectID,
     store: &dyn PackageStore,
     resolution_table: &mut ResolutionTable,
-    resolution_fn: fn(&MovePackage) -> Option<ConflictResolution>,
+    resolution_fn: fn(&MovePackage) -> Option<VersionConstraint>,
 ) -> Result<(), ExecutionError> {
     let package = get_package(object_id, store)?;
 

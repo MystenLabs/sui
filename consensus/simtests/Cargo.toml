@@ -3,7 +3,7 @@ name = "consensus-simtests"
 version = "0.1.0"
 license = "Apache-2.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
-edition = "2021"
+edition = "2024"
 publish = false
 
 [lints]

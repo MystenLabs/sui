@@ -24,7 +24,7 @@ fn main() -> Result<()> {
 }
 
 fn build_tonic_services(out_dir: &Path) {
-    let codec_path = "tonic::codec::ProstCodec";
+    let codec_path = "tonic_prost::ProstCodec";
 
     let service = tonic_build::manual::Service::builder()
         .name("ConsensusService")

@@ -3,7 +3,7 @@
 
 // tests returning a reference without any inputs
 
-//# init --addresses test=0x0 --accounts A
+//# init --addresses test=0x0 --accounts A --allow-references-in-ptbs
 
 //# publish
 module test::m {
@@ -29,12 +29,12 @@ module test::m {
 }
 
 
-//# programmable --dev-inspect
+//# programmable
 // This should be allowed and should abort
 //> 0: test::m::pair_mut();
 //> test::m::increment(Result(0));
 
-//# programmable --dev-inspect
+//# programmable
 // This should be allowed and should abort
 //> 0: test::m::box_mut();
 //> test::m::increment(NestedResult(0,0));
@@ -42,12 +42,12 @@ module test::m {
 //> test::m::increment(NestedResult(0,0));
 //> test::m::swap_x(NestedResult(0,0), NestedResult(0,1));
 
-//# programmable --dev-inspect
+//# programmable
 // This should be rejected by the borrow checker (in static PTBs)
 //> 0: test::m::pair_mut();
 //> test::m::swap_x(Result(0), Result(0));
 
-//# programmable --dev-inspect
+//# programmable
 // This should be rejected by the borrow checker (in static PTBs)
 //> 0: test::m::box_mut();
 //> test::m::swap_x(NestedResult(0,0), NestedResult(0,0));

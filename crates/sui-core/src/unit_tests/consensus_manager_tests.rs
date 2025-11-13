@@ -14,7 +14,7 @@ use sui_types::messages_checkpoint::{
 use tokio::{sync::mpsc, time::sleep};
 
 use crate::{
-    authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState},
+    authority::{AuthorityState, test_authority_builder::TestAuthorityBuilder},
     checkpoints::{CheckpointMetrics, CheckpointService, CheckpointServiceNoop},
     consensus_adapter::NoopConsensusOverloadChecker,
     consensus_handler::ConsensusHandlerInitializer,

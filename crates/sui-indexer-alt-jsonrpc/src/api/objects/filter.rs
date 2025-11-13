@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use diesel::{sql_types::Bool, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl};
+use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl, sql_types::Bool};
 use move_core_types::language_storage::StructTag;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -14,15 +14,15 @@ use sui_indexer_alt_schema::{
 use sui_json_rpc_types::{Page as PageResponse, SuiObjectDataOptions};
 use sui_sql_macro::sql;
 use sui_types::{
+    Identifier, SUI_FRAMEWORK_ADDRESS, TypeTag,
     base_types::{ObjectID, SuiAddress},
     dynamic_field::{DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME},
     sui_serde::SuiStructTag,
-    Identifier, TypeTag, SUI_FRAMEWORK_ADDRESS,
 };
 
 use crate::{
     context::Context,
-    error::{invalid_params, RpcError},
+    error::{RpcError, invalid_params},
     paginate::{BcsCursor, Cursor as _, Page},
 };
 
