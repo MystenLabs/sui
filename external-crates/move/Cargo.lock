@@ -2639,7 +2639,6 @@ dependencies = [
  "move-symbol-pool",
  "named-lock",
  "once_cell",
- "oxford_join",
  "path-clean",
  "petgraph",
  "pretty_assertions",
@@ -3323,12 +3322,6 @@ dependencies = [
  "quote",
  "syn 2.0.98",
 ]
-
-[[package]]
-name = "oxford_join"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a7dbde52538869ae3769b3e6ec91baabfccae5afe36d6ac210aeee19b1c5c91"
 
 [[package]]
 name = "packed_struct"

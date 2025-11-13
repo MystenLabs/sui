@@ -4,7 +4,6 @@
 
 use std::{fmt, path::PathBuf};
 
-use oxford_join::OxfordJoin;
 use path_clean::PathClean;
 
 use crate::{
@@ -93,11 +92,11 @@ impl PinnedDependencyInfo {
         environment_id: &EnvironmentID,
     ) -> PackageResult<(Vec<CombinedDependency>, Vec<PinnedDependencyInfo>)> {
         let all_system_deps = F::system_deps(environment_id);
-        let valid_list = all_system_deps
-            .keys()
-            .collect::<Vec<&String>>()
-            .oxford_and()
-            .to_string();
+        let valid_list = move_compiler::format_oxford_list!(
+            "and",
+            "{}",
+            all_system_deps.keys().collect::<Vec<&String>>()
+        );
 
         let mut system_deps: Vec<PinnedDependencyInfo> = Vec::new();
         let mut non_system_deps: Vec<CombinedDependency> = Vec::new();

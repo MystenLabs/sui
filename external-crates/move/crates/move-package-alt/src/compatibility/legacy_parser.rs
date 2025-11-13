@@ -19,7 +19,6 @@ use anyhow::{Context, Result, anyhow, bail, format_err};
 
 use colored::Colorize as _;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
-use oxford_join::OxfordJoin;
 use serde_spanned::Spanned;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -277,8 +276,8 @@ fn check_implicits(
             disabled for your package because you have explicitly included dependencies on {}. Consider \
             removing these dependencies from `Move.toml`.",
         "NOTE".yellow().bold(),
-        LEGACY_SYSTEM_DEPS_NAMES.oxford_and(),
-        explicit_implicits.oxford_and(),
+        move_compiler::format_oxford_list!("and", "{}", LEGACY_SYSTEM_DEPS_NAMES),
+        move_compiler::format_oxford_list!("and", "{}", explicit_implicits),
     );
 
     false
