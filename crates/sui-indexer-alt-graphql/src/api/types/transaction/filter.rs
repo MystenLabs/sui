@@ -99,6 +99,7 @@ impl TransactionFilter {
         })
     }
 
+    /// The active filters in TransactionFilter. Used to find the pipelines that are available to serve queries with these filters applied.
     pub(crate) fn active_filters(&self) -> Vec<String> {
         let mut filters = vec![];
 
