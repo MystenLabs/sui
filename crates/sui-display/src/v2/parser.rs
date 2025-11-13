@@ -5,22 +5,28 @@
 use std::borrow::Cow;
 use std::fmt;
 
-use base64::engine::general_purpose::{
-    GeneralPurpose, STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD,
-};
-use move_core_types::{
-    account_address::AccountAddress,
-    identifier::{IdentStr, Identifier},
-    language_storage::{StructTag, TypeTag},
-    u256::U256,
-};
+use base64::engine::general_purpose::GeneralPurpose;
+use base64::engine::general_purpose::STANDARD;
+use base64::engine::general_purpose::STANDARD_NO_PAD;
+use base64::engine::general_purpose::URL_SAFE;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::IdentStr;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
+use move_core_types::u256::U256;
 
-use super::error::{Expected, ExpectedSet, FormatError, Match};
-use super::peek::{Peekable2, Peekable2Ext};
-use super::{
-    lexer::{Lexeme as Lex, Lexer, Token as T},
-    meter::Meter,
-};
+use crate::v2::error::Expected;
+use crate::v2::error::ExpectedSet;
+use crate::v2::error::FormatError;
+use crate::v2::error::Match;
+use crate::v2::lexer::Lexeme as Lex;
+use crate::v2::lexer::Lexer;
+use crate::v2::lexer::Token as T;
+use crate::v2::meter::Meter;
+use crate::v2::peek::Peekable2;
+use crate::v2::peek::Peekable2Ext;
 
 /// A single Display string template is a sequence of strands.
 #[derive(PartialEq, Eq)]

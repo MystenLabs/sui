@@ -1,29 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    borrow::Cow,
-    fmt::Write as _,
-    sync::{Arc, atomic::AtomicUsize},
-};
+use std::borrow::Cow;
+use std::fmt::Write as _;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 
-use futures::{
-    future::{OptionFuture, join_all},
-    join,
-};
+use futures::future::OptionFuture;
+use futures::future::join_all;
+use futures::join;
 use move_core_types::account_address::AccountAddress;
-use sui_types::dynamic_field::{
-    DynamicFieldInfo, DynamicFieldType, derive_dynamic_field_id,
-    visitor::{self as DFV, FieldVisitor},
-};
+use sui_types::dynamic_field::DynamicFieldInfo;
+use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::dynamic_field::derive_dynamic_field_id;
+use sui_types::dynamic_field::visitor as DFV;
+use sui_types::dynamic_field::visitor::FieldVisitor;
 
-use super::{
-    error::FormatError,
-    parser as P,
-    value::{Accessor, Enum, Fields, Slice, Store, Struct, Value, Vector},
-    visitor::extractor::Extractor,
-    writer::BoundedWriter,
-};
+use crate::v2::error::FormatError;
+use crate::v2::parser as P;
+use crate::v2::value::Accessor;
+use crate::v2::value::Enum;
+use crate::v2::value::Fields;
+use crate::v2::value::Slice;
+use crate::v2::value::Store;
+use crate::v2::value::Struct;
+use crate::v2::value::Value;
+use crate::v2::value::Vector;
+use crate::v2::visitor::extractor::Extractor;
+use crate::v2::writer::BoundedWriter;
 
 /// The interpreter is responsible for evaluating expressions inside format strings into values.
 pub(crate) struct Interpreter<'s, S: Store<'s>> {
