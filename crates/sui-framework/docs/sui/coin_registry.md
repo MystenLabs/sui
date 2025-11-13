@@ -1549,7 +1549,7 @@ dynamic field for future borrows.
         <b>let</b> legacy = currency.<a href="../sui/coin_registry.md#sui_coin_registry_to_legacy_metadata">to_legacy_metadata</a>(ctx);
         df::add(&<b>mut</b> currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>(), legacy);
     };
-    <b>let</b> <b>mut</b> legacy = df::remove&lt;_, CoinMetadata&lt;T&gt;&gt;(&<b>mut</b> currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>());
+    <b>let</b> <b>mut</b> legacy: CoinMetadata&lt;T&gt; = df::remove(&<b>mut</b> currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>());
     legacy.update_coin_metadata(
         currency.<a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>,
         currency.<a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>.to_ascii(),

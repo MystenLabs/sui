@@ -510,7 +510,7 @@ public fun borrow_legacy_metadata<T>(
         df::add(&mut currency.id, LegacyMetadataKey(), legacy);
     };
 
-    let mut legacy = df::remove<_, CoinMetadata<T>>(&mut currency.id, LegacyMetadataKey());
+    let mut legacy: CoinMetadata<T> = df::remove(&mut currency.id, LegacyMetadataKey());
 
     legacy.update_coin_metadata(
         currency.name,

@@ -511,7 +511,7 @@ fun new_currency_is_shared() {
     currency.delete_metadata_cap(metadata_cap);
     test_scenario::return_shared(currency);
 
-    destroy(registry);g
+    destroy(registry);
     destroy(t_cap);
 
     test.end();
@@ -527,6 +527,8 @@ fun new_currency_is_shared_and_metadata_cap_is_deleted() {
     test.next_tx(@0);
 
     let currency = test.take_shared<Currency<TestDynamic>>();
+    assert!(currency.is_metadata_cap_claimed());
+    assert!(currency.is_metadata_cap_deleted());
     test_scenario::return_shared(currency);
 
     destroy(registry);
