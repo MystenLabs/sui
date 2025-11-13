@@ -1241,6 +1241,17 @@ impl AuthorityState {
             return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
         }
 
+        // Accept executed transactions, instead of voting to reject them.
+        // Execution is limited to the current epoch. Otherwise there can be a race where
+        // the transaction is accepted but the executed effects are pruned.
+        if let Some(effects) = self
+            .get_transaction_cache_reader()
+            .get_executed_effects(transaction.digest())
+            && effects.executed_epoch() == epoch_store.epoch()
+        {
+            return Ok(());
+        }
+
         let result =
             self.handle_transaction_impl(transaction, false /* sign */, epoch_store)?;
         assert!(
