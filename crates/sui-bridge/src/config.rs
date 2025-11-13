@@ -8,7 +8,7 @@ use crate::eth_client::EthClient;
 use crate::metered_eth_provider::MeteredEthHttpProvier;
 use crate::metered_eth_provider::new_metered_eth_provider;
 use crate::metrics::BridgeMetrics;
-use crate::sui_client::SuiClient;
+use crate::sui_client::SuiBridgeClient;
 use crate::types::{BridgeAction, is_route_valid};
 use crate::utils::get_eth_contract_addresses;
 use anyhow::anyhow;
@@ -25,8 +25,8 @@ use std::sync::Arc;
 use sui_config::Config;
 use sui_json_rpc_types::Coin;
 use sui_keys::keypair_file::read_key;
+use sui_sdk::SuiClientBuilder;
 use sui_sdk::apis::CoinReadApi;
-use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::bridge::BridgeChainId;
@@ -171,7 +171,7 @@ impl BridgeNodeConfig {
         // we do this check here instead of `prepare_for_sui` below because
         // that is only called when `run_client` is true.
         let sui_client =
-            Arc::new(SuiClient::<SuiSdkClient>::new(&self.sui.sui_rpc_url, metrics.clone()).await?);
+            Arc::new(SuiBridgeClient::new(&self.sui.sui_rpc_url, metrics.clone()).await?);
         let bridge_committee = sui_client
             .get_bridge_committee()
             .await
@@ -337,7 +337,7 @@ impl BridgeNodeConfig {
 
     async fn prepare_for_sui(
         &self,
-        sui_client: Arc<SuiClient<SuiSdkClient>>,
+        sui_client: Arc<SuiBridgeClient>,
         metrics: Arc<BridgeMetrics>,
     ) -> anyhow::Result<(SuiKeyPair, SuiAddress, ObjectRef)> {
         let bridge_client_key = match &self.sui.bridge_client_key_path {
@@ -415,7 +415,7 @@ pub struct BridgeServerConfig {
     pub server_listen_port: u16,
     pub eth_bridge_proxy_address: EthAddress,
     pub metrics_port: u16,
-    pub sui_client: Arc<SuiClient<SuiSdkClient>>,
+    pub sui_client: Arc<SuiBridgeClient>,
     pub eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
     /// A list of approved governance actions. Action in this list will be signed when requested by client.
     pub approved_governance_actions: Vec<BridgeAction>,
@@ -426,7 +426,7 @@ pub struct BridgeClientConfig {
     pub key: SuiKeyPair,
     pub gas_object_ref: ObjectRef,
     pub metrics_port: u16,
-    pub sui_client: Arc<SuiClient<SuiSdkClient>>,
+    pub sui_client: Arc<SuiBridgeClient>,
     pub eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
     pub db_path: PathBuf,
     pub eth_contracts: Vec<EthAddress>,

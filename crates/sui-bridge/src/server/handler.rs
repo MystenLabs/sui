@@ -111,11 +111,12 @@ where
         let record = self
             .sui_client
             .get_bridge_record(source_chain_id, seq_number)
-            .await?;
+            .await?
+            .ok_or_else(|| BridgeError::Generic(format!("message {seq_number} not found")))?;
         if record.verified_signatures.is_some() {
-            return Err(BridgeError::Generic(
-                "message {seq_number} already complete".into(),
-            ));
+            return Err(BridgeError::Generic(format!(
+                "message {seq_number} already complete"
+            )));
         }
         BridgeAction::try_from_bridge_record(&record)
             .tap_ok(|action| info!("Sui action found: {:?}", action))
