@@ -86,8 +86,8 @@ use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
 use sui_core::checkpoints::checkpoint_executor::metrics::CheckpointExecutorMetrics;
 use sui_core::checkpoints::checkpoint_executor::{CheckpointExecutor, StopReason};
 use sui_core::checkpoints::{
-    CheckpointMetrics, CheckpointService, CheckpointServiceNotify,
-    CheckpointStore, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
+    CheckpointMetrics, CheckpointService, CheckpointServiceNotify, CheckpointStore,
+    SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 use sui_core::consensus_adapter::{
     CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
