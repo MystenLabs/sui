@@ -23,6 +23,9 @@ pub enum Commands {
 
         #[clap(long, default_value = "mainnet")]
         network: String,
+
+        #[clap(long)]
+        data_dir: Option<String>,
     },
     /// Advance checkpoint by 1
     AdvanceCheckpoint {
@@ -55,3 +58,4 @@ pub enum Commands {
         tx_bytes: String,
     },
 }
+
