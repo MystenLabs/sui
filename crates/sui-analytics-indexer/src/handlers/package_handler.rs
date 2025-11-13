@@ -17,6 +17,10 @@ pub struct MovePackageBatch {
     pub inner: ParquetBatch<MovePackageEntry>,
 }
 
+pub struct PackageProcessor;
+
+pub type PackageHandler = AnalyticsHandler<PackageProcessor, MovePackageBatch>;
+
 impl Default for MovePackageBatch {
     fn default() -> Self {
         Self {
@@ -47,8 +51,6 @@ impl AnalyticsBatch for MovePackageBatch {
         &self.inner
     }
 }
-
-pub struct PackageProcessor;
 
 #[async_trait]
 impl Processor for PackageProcessor {
@@ -88,5 +90,3 @@ impl Processor for PackageProcessor {
         Ok(packages)
     }
 }
-
-pub type PackageHandler = AnalyticsHandler<PackageProcessor, MovePackageBatch>;

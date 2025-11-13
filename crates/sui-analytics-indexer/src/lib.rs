@@ -27,23 +27,12 @@ pub mod package_store;
 pub mod parquet;
 pub mod tables;
 
+// Re-export handler traits and generic wrapper for public API
+pub use handlers::{AnalyticsBatch, CheckpointMetadata};
+
 use async_trait::async_trait;
 use std::marker::PhantomData;
 use std::sync::Arc;
-
-/// Trait for entry types that provide checkpoint metadata
-pub trait CheckpointMetadata {
-    fn get_epoch(&self) -> EpochId;
-    fn get_checkpoint_sequence_number(&self) -> u64;
-}
-
-/// Trait for batch types that wrap ParquetBatch
-pub trait AnalyticsBatch: Default + Send + Sync {
-    type Entry: CheckpointMetadata + Serialize + ParquetSchema + Send + Sync;
-
-    fn inner_mut(&mut self) -> &mut parquet::ParquetBatch<Self::Entry>;
-    fn inner(&self) -> &parquet::ParquetBatch<Self::Entry>;
-}
 
 /// Generic wrapper that implements Handler for any Processor with analytics batching
 pub struct AnalyticsHandler<P, B> {

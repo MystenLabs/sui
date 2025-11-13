@@ -22,6 +22,12 @@ pub struct EventBatch {
     pub inner: ParquetBatch<EventEntry>,
 }
 
+pub struct EventProcessor {
+    package_cache: Arc<PackageCache>,
+}
+
+pub type EventHandler = AnalyticsHandler<EventProcessor, EventBatch>;
+
 impl Default for EventBatch {
     fn default() -> Self {
         Self {
@@ -30,7 +36,12 @@ impl Default for EventBatch {
     }
 }
 
-// Implement traits for composition pattern
+impl EventProcessor {
+    pub fn new(package_cache: Arc<PackageCache>) -> Self {
+        Self { package_cache }
+    }
+}
+
 impl CheckpointMetadata for EventEntry {
     fn get_epoch(&self) -> EpochId {
         self.epoch
@@ -50,17 +61,6 @@ impl AnalyticsBatch for EventBatch {
 
     fn inner(&self) -> &ParquetBatch<Self::Entry> {
         &self.inner
-    }
-}
-
-// The processor contains only processing logic, no config
-pub struct EventProcessor {
-    package_cache: Arc<PackageCache>,
-}
-
-impl EventProcessor {
-    pub fn new(package_cache: Arc<PackageCache>) -> Self {
-        Self { package_cache }
     }
 }
 
@@ -124,8 +124,3 @@ impl Processor for EventProcessor {
         Ok(entries)
     }
 }
-
-// Type alias for backward compatibility
-pub type EventHandler = AnalyticsHandler<EventProcessor, EventBatch>;
-
-// Constructor helper

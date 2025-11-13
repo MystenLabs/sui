@@ -19,6 +19,10 @@ pub struct TransactionBCSBatch {
     pub inner: ParquetBatch<TransactionBCSEntry>,
 }
 
+pub struct TransactionBCSProcessor;
+
+pub type TransactionBCSHandler = AnalyticsHandler<TransactionBCSProcessor, TransactionBCSBatch>;
+
 impl Default for TransactionBCSBatch {
     fn default() -> Self {
         Self {
@@ -28,7 +32,6 @@ impl Default for TransactionBCSBatch {
     }
 }
 
-// Implement traits for composition pattern
 impl CheckpointMetadata for TransactionBCSEntry {
     fn get_epoch(&self) -> EpochId {
         self.epoch
@@ -50,9 +53,6 @@ impl AnalyticsBatch for TransactionBCSBatch {
         &self.inner
     }
 }
-
-// The processor contains only processing logic, no config
-pub struct TransactionBCSProcessor;
 
 #[async_trait]
 impl Processor for TransactionBCSProcessor {
@@ -86,6 +86,3 @@ impl Processor for TransactionBCSProcessor {
         Ok(entries)
     }
 }
-
-// Type alias for backward compatibility
-pub type TransactionBCSHandler = AnalyticsHandler<TransactionBCSProcessor, TransactionBCSBatch>;

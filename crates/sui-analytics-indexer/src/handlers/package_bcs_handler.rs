@@ -18,6 +18,10 @@ pub struct PackageBCSBatch {
     pub inner: ParquetBatch<PackageBCSEntry>,
 }
 
+pub struct PackageBCSProcessor;
+
+pub type PackageBCSHandler = AnalyticsHandler<PackageBCSProcessor, PackageBCSBatch>;
+
 impl Default for PackageBCSBatch {
     fn default() -> Self {
         Self {
@@ -48,8 +52,6 @@ impl AnalyticsBatch for PackageBCSBatch {
         &self.inner
     }
 }
-
-pub struct PackageBCSProcessor;
 
 #[async_trait]
 impl Processor for PackageBCSProcessor {
@@ -82,5 +84,3 @@ impl Processor for PackageBCSProcessor {
         Ok(packages)
     }
 }
-
-pub type PackageBCSHandler = AnalyticsHandler<PackageBCSProcessor, PackageBCSBatch>;

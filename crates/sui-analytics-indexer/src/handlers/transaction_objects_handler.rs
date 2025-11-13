@@ -20,6 +20,11 @@ pub struct TransactionObjectsBatch {
     pub inner: ParquetBatch<TransactionObjectEntry>,
 }
 
+pub struct TransactionObjectsProcessor;
+
+pub type TransactionObjectsHandler =
+    AnalyticsHandler<TransactionObjectsProcessor, TransactionObjectsBatch>;
+
 impl Default for TransactionObjectsBatch {
     fn default() -> Self {
         Self {
@@ -50,8 +55,6 @@ impl AnalyticsBatch for TransactionObjectsBatch {
         &self.inner
     }
 }
-
-pub struct TransactionObjectsProcessor;
 
 #[async_trait]
 impl Processor for TransactionObjectsProcessor {
@@ -116,6 +119,3 @@ impl Processor for TransactionObjectsProcessor {
         Ok(entries)
     }
 }
-
-pub type TransactionObjectsHandler =
-    AnalyticsHandler<TransactionObjectsProcessor, TransactionObjectsBatch>;

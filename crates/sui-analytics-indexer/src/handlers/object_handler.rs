@@ -25,39 +25,19 @@ pub struct ObjectBatch {
     pub inner: ParquetBatch<ObjectEntry>,
 }
 
+pub struct ObjectProcessor {
+    package_cache: Arc<PackageCache>,
+    package_filter: Option<ObjectID>,
+}
+
+pub type ObjectHandler = AnalyticsHandler<ObjectProcessor, ObjectBatch>;
+
 impl Default for ObjectBatch {
     fn default() -> Self {
         Self {
             inner: ParquetBatch::new(FileType::Object, 0).expect("Failed to create ParquetBatch"),
         }
     }
-}
-
-impl CheckpointMetadata for ObjectEntry {
-    fn get_epoch(&self) -> EpochId {
-        self.epoch
-    }
-
-    fn get_checkpoint_sequence_number(&self) -> u64 {
-        self.checkpoint
-    }
-}
-
-impl AnalyticsBatch for ObjectBatch {
-    type Entry = ObjectEntry;
-
-    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
-        &mut self.inner
-    }
-
-    fn inner(&self) -> &ParquetBatch<Self::Entry> {
-        &self.inner
-    }
-}
-
-pub struct ObjectProcessor {
-    package_cache: Arc<PackageCache>,
-    package_filter: Option<ObjectID>,
 }
 
 impl ObjectProcessor {
@@ -222,6 +202,28 @@ impl ObjectProcessor {
     }
 }
 
+impl CheckpointMetadata for ObjectEntry {
+    fn get_epoch(&self) -> EpochId {
+        self.epoch
+    }
+
+    fn get_checkpoint_sequence_number(&self) -> u64 {
+        self.checkpoint
+    }
+}
+
+impl AnalyticsBatch for ObjectBatch {
+    type Entry = ObjectEntry;
+
+    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
+        &mut self.inner
+    }
+
+    fn inner(&self) -> &ParquetBatch<Self::Entry> {
+        &self.inner
+    }
+}
+
 #[async_trait]
 impl Processor for ObjectProcessor {
     const NAME: &'static str = "object";
@@ -288,5 +290,3 @@ impl Processor for ObjectProcessor {
         Ok(entries)
     }
 }
-
-pub type ObjectHandler = AnalyticsHandler<ObjectProcessor, ObjectBatch>;

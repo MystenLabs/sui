@@ -20,12 +20,24 @@ pub struct WrappedObjectBatch {
     pub inner: ParquetBatch<WrappedObjectEntry>,
 }
 
+pub struct WrappedObjectProcessor {
+    package_cache: Arc<PackageCache>,
+}
+
+pub type WrappedObjectHandler = AnalyticsHandler<WrappedObjectProcessor, WrappedObjectBatch>;
+
 impl Default for WrappedObjectBatch {
     fn default() -> Self {
         Self {
             inner: ParquetBatch::new(FileType::WrappedObject, 0)
                 .expect("Failed to create ParquetBatch"),
         }
+    }
+}
+
+impl WrappedObjectProcessor {
+    pub fn new(package_cache: Arc<PackageCache>) -> Self {
+        Self { package_cache }
     }
 }
 
@@ -48,16 +60,6 @@ impl AnalyticsBatch for WrappedObjectBatch {
 
     fn inner(&self) -> &ParquetBatch<Self::Entry> {
         &self.inner
-    }
-}
-
-pub struct WrappedObjectProcessor {
-    package_cache: Arc<PackageCache>,
-}
-
-impl WrappedObjectProcessor {
-    pub fn new(package_cache: Arc<PackageCache>) -> Self {
-        Self { package_cache }
     }
 }
 
@@ -135,5 +137,3 @@ impl Processor for WrappedObjectProcessor {
         Ok(wrapped_objects)
     }
 }
-
-pub type WrappedObjectHandler = AnalyticsHandler<WrappedObjectProcessor, WrappedObjectBatch>;
