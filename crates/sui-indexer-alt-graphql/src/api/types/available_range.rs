@@ -75,24 +75,14 @@ impl AvailableRangeKey {
     /// The max reader_lo for the pipelines that match the available range key.
     pub(crate) fn reader_lo(self, watermarks: &Watermarks) -> Result<u64, RpcError> {
         let mut pipelines = BTreeSet::new();
-        let filters = self.filters.clone().unwrap_or_default();
-        collect_pipelines(
-            &self.type_,
-            self.field.as_deref(),
-            BTreeSet::from_iter(filters),
-            &mut pipelines,
-        );
+        let filters = BTreeSet::from_iter(self.filters.unwrap_or_default());
+        collect_pipelines(&self.type_, self.field.as_deref(), filters, &mut pipelines);
 
-        let mut first_checkpoint = 0u64;
-        for pipeline in pipelines.iter() {
-            if let Some(wm) = watermarks.pipeline_lo_watermark(pipeline) {
-                first_checkpoint = first_checkpoint.max(wm.checkpoint());
-            } else {
-                return Err(pipeline_unavailable(pipeline));
-            }
-        }
-
-        Ok(first_checkpoint)
+        pipelines.iter().try_fold(0, |acc, pipeline| {
+            watermarks
+                .pipeline_lo_watermark(pipeline)
+                .map(|wm| acc.max(wm.checkpoint()))
+        })
     }
 }
 
