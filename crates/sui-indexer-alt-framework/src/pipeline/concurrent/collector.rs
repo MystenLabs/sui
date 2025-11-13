@@ -1,10 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 use tokio::{
-    sync::{mpsc, watch},
+    sync::{SetOnce, mpsc},
     task::JoinHandle,
     time::{MissedTickBehavior, interval},
 };
@@ -62,6 +68,8 @@ impl<H: Handler> From<IndexedCheckpoint<H>> for PendingCheckpoint<H> {
 /// - Otherwise, it will check for any data to write out at a regular interval (controlled by
 ///   `config.collect_interval()`).
 ///
+/// The `main_reader_lo` tracks the lowest checkpoint that can be committed by this pipeline.
+///
 /// This task will shutdown if canceled via the `cancel` token, or if any of its channels are
 /// closed.
 pub(super) fn collector<H: Handler + 'static>(
@@ -69,11 +77,37 @@ pub(super) fn collector<H: Handler + 'static>(
     config: CommitterConfig,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::Sender<BatchedRows<H>>,
-    mut main_reader_lo_rx: watch::Receiver<Option<u64>>,
+    main_reader_lo: Arc<SetOnce<AtomicU64>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
+        // Wait for the main reader lo to be initialized before proceeding to the main loop.
+        let atomic_reader_lo = loop {
+            tokio::select! {
+                _ = cancel.cancelled() => {
+                    info!(pipeline = H::NAME, "Shutdown received before main reader lo initialization");
+                    return;
+                }
+                // Until `main_reader_lo` is initialized, periodically check that the checkpoint rx is
+                // still open.
+                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
+                    // Only until we enter the main loop does it also make sense to check
+                    // `rx.is_empty()`. Progress can't be made by the collector right now.
+                    if rx.is_closed() {
+                        info!(
+                            pipeline = H::NAME,
+                            "Processor closed channel before main reader lo initialization, stopping collector",
+                        );
+                        return;
+                    }
+                }
+                atomic = main_reader_lo.wait() => {
+                    break atomic;
+                }
+            }
+        };
+
         // The `poll` interval controls the maximum time to wait between collecting batches,
         // regardless of number of rows pending.
         let mut poll = interval(config.collect_interval());
@@ -97,14 +131,6 @@ pub(super) fn collector<H: Handler + 'static>(
                     info!(pipeline = H::NAME, "Shutdown received, stopping collector");
                     break;
                 }
-
-                result = main_reader_lo_rx.changed() => {
-                    if result.is_err() {
-                        info!(pipeline = H::NAME, "Main reader lo channel closed, stopping collector");
-                        break;
-                    }
-                }
-
 
                 // Time to create another batch and push it to the committer.
                 _ = poll.tick() => {
@@ -190,20 +216,9 @@ pub(super) fn collector<H: Handler + 'static>(
 
                 // docs::#collector (see docs/content/guides/developer/advanced/custom-indexer.mdx)
                 Some(mut indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
-                    // Block until the main `reader_lo` is not `None` - writer needs to populate the
-                    // channel so the collector knows which checkpoints to keep or filter out.
-                    let main_reader_lo = match main_reader_lo_rx.wait_for(|v| v.is_some()).await {
-                        Err(_) => {
-                            info!(pipeline = H::NAME, "Main reader lo channel closed before initialization, stopping collector");
-                            break;
-                        }
-                        // SAFETY: We just waited for the value to be `Some`.
-                        Ok(value) => value.unwrap(),
-                    };
-
                     // Clear the values of outdated checkpoints, so that we don't commit data to the
                     // store, but can still advance watermarks.
-                    if indexed.checkpoint() < main_reader_lo {
+                    if indexed.checkpoint() < atomic_reader_lo.load(Ordering::Relaxed) {
                         indexed.values.clear();
                         metrics.total_collector_skipped_checkpoints
                             .with_label_values(&[H::NAME])
@@ -331,7 +346,7 @@ mod tests {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
         let cancel = CancellationToken::new();
-        let (_main_reader_lo_tx, main_reader_lo_rx) = watch::channel(Some(0u64));
+        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         let handler = Arc::new(TestHandler);
         let _collector = collector::<TestHandler>(
@@ -339,7 +354,7 @@ mod tests {
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
-            main_reader_lo_rx,
+            main_reader_lo.clone(),
             test_metrics(),
             cancel.clone(),
         );
@@ -375,7 +390,7 @@ mod tests {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
         let cancel = CancellationToken::new();
-        let (_main_reader_lo_tx, main_reader_lo_rx) = watch::channel(Some(0u64));
+        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         let handler = Arc::new(TestHandler);
         let collector = collector::<TestHandler>(
@@ -383,7 +398,7 @@ mod tests {
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
-            main_reader_lo_rx,
+            main_reader_lo,
             test_metrics(),
             cancel.clone(),
         );
@@ -409,13 +424,54 @@ mod tests {
         cancel.cancel();
     }
 
+    /// While waiting for the `main_reader_lo` to be initialized, if the processor shuts down, the
+    /// collector should also shut down.
+    #[tokio::test(start_paused = true)]
+    async fn test_collector_processor_shutdown_before_init() {
+        let (processor_tx, processor_rx) = mpsc::channel(10);
+        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let cancel = CancellationToken::new();
+        let main_reader_lo = Arc::new(SetOnce::new());
+
+        let handler = Arc::new(TestHandler);
+        let collector = collector::<TestHandler>(
+            handler,
+            CommitterConfig::default(),
+            processor_rx,
+            collector_tx,
+            main_reader_lo.clone(),
+            test_metrics(),
+            cancel.clone(),
+        );
+
+        processor_tx
+            .send(IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry, Entry]))
+            .await
+            .unwrap();
+
+        // Advance time significantly - collector should still be blocked waiting for
+        // main_reader_lo.
+        tokio::time::advance(Duration::from_secs(100)).await;
+        assert!(collector_rx.try_recv().is_err());
+
+        // Drop processor sender to simulate shutdown
+        drop(processor_tx);
+
+        // After a short delay, collector should shut down
+        let _ = tokio::time::timeout(Duration::from_millis(500), collector)
+            .await
+            .expect("collector did not shutdown");
+
+        cancel.cancel();
+    }
+
     #[tokio::test]
     async fn test_collector_respects_max_pending() {
         let processor_channel_size = 5; // unit is checkpoint
         let collector_channel_size = 2; // unit is batch, aka rows / MAX_CHUNK_ROWS
         let (processor_tx, processor_rx) = mpsc::channel(processor_channel_size);
         let (collector_tx, _collector_rx) = mpsc::channel(collector_channel_size);
-        let (_main_reader_lo_tx, main_reader_lo_rx) = watch::channel(Some(0u64));
+        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         let metrics = test_metrics();
         let cancel = CancellationToken::new();
@@ -426,7 +482,7 @@ mod tests {
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
-            main_reader_lo_rx,
+            main_reader_lo.clone(),
             metrics.clone(),
             cancel.clone(),
         );
@@ -470,7 +526,7 @@ mod tests {
     async fn test_collector_accumulates_across_checkpoints_until_eager_threshold() {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let (_main_reader_lo_tx, main_reader_lo_rx) = watch::channel(Some(0u64));
+        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         let cancel = CancellationToken::new();
 
@@ -485,7 +541,7 @@ mod tests {
             config,
             processor_rx,
             collector_tx,
-            main_reader_lo_rx,
+            main_reader_lo.clone(),
             test_metrics(),
             cancel.clone(),
         );
@@ -529,7 +585,7 @@ mod tests {
     async fn test_immediate_batch_on_min_eager_rows() {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let (_main_reader_lo_tx, main_reader_lo_rx) = watch::channel(Some(0u64));
+        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         let cancel = CancellationToken::new();
 
@@ -544,7 +600,7 @@ mod tests {
             config,
             processor_rx,
             collector_tx,
-            main_reader_lo_rx,
+            main_reader_lo.clone(),
             test_metrics(),
             cancel.clone(),
         );
@@ -577,7 +633,7 @@ mod tests {
     async fn test_collector_waits_for_timer_when_below_eager_threshold() {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let (_main_reader_lo_tx, main_reader_lo_rx) = watch::channel(Some(0u64));
+        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
 
         let cancel = CancellationToken::new();
 
@@ -592,7 +648,7 @@ mod tests {
             config,
             processor_rx,
             collector_tx,
-            main_reader_lo_rx,
+            main_reader_lo.clone(),
             test_metrics(),
             cancel.clone(),
         );
@@ -616,14 +672,14 @@ mod tests {
         cancel.cancel();
     }
 
-    /// If the `main_reader_lo_rx` channel is Some, the collector must wait for it to initialize the
-    /// `main_reader_lo` value before entering the main loop.
+    /// The collector must wait for `main_reader_lo` to be initialized before attempting to prepare
+    /// checkpoints for commit.
     #[tokio::test(start_paused = true)]
-    async fn test_collector_waits_for_main_reader_lo_initialization() {
+    async fn test_collector_waits_for_main_reader_lo_init() {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
         let cancel = CancellationToken::new();
-        let (main_reader_lo_tx, main_reader_lo_rx) = watch::channel(None);
+        let main_reader_lo = Arc::new(SetOnce::new());
 
         let handler = Arc::new(TestHandler);
         let collector = collector(
@@ -636,7 +692,7 @@ mod tests {
             },
             processor_rx,
             collector_tx,
-            main_reader_lo_rx,
+            main_reader_lo.clone(),
             test_metrics(),
             cancel.clone(),
         );
@@ -653,7 +709,7 @@ mod tests {
         assert!(collector_rx.try_recv().is_err());
 
         // Now initialize the main reader lo to 0, unblocking the collector.
-        main_reader_lo_tx.send(Some(0)).unwrap();
+        main_reader_lo.set(AtomicU64::new(0)).ok();
 
         tokio::time::advance(Duration::from_secs(1)).await;
 
@@ -665,95 +721,6 @@ mod tests {
         collector.await.unwrap();
     }
 
-    /// During initialization, if the `main_reader_lo_rx` channel closes before sending a value, the
-    /// collector should shut down.
-    #[tokio::test]
-    async fn test_collector_shuts_down_when_main_reader_lo_channel_closes_on_initialization() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let cancel = CancellationToken::new();
-        let (main_reader_lo_tx, main_reader_lo_rx) = watch::channel(None);
-
-        let collector = collector(
-            Arc::new(TestHandler),
-            CommitterConfig {
-                // Collect interval longer than time to advance to ensure timing doesn't trigger
-                // batching.
-                collect_interval_ms: 200_000,
-                ..CommitterConfig::default()
-            },
-            processor_rx,
-            collector_tx,
-            main_reader_lo_rx,
-            test_metrics(),
-            cancel.clone(),
-        );
-
-        // Send enough data to trigger batching.
-        let test_data =
-            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; TestHandler::MIN_EAGER_ROWS + 1]);
-        processor_tx.send(test_data).await.unwrap();
-
-        assert!(collector_rx.try_recv().is_err());
-
-        // Close the sender channel.
-        drop(main_reader_lo_tx);
-
-        // Collector should shut down shortly after.
-        let result = collector.await;
-        assert!(result.is_ok());
-
-        // After shutdown, we still should not have received any batch.
-        assert!(collector_rx.try_recv().is_err());
-    }
-
-    // During a run, if the `main_reader_lo_rx` channel closes, the collector should shut down.
-    #[tokio::test(start_paused = true)]
-    async fn test_collector_shuts_down_when_main_reader_lo_channel_closes_in_main_loop() {
-        let (processor_tx, processor_rx) = mpsc::channel(10);
-        let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let cancel = CancellationToken::new();
-        let (main_reader_lo_tx, main_reader_lo_rx) = watch::channel(None);
-
-        let collector = collector(
-            Arc::new(TestHandler),
-            CommitterConfig {
-                // Collect interval longer than time to advance to ensure timing doesn't trigger
-                // batching.
-                collect_interval_ms: 200_000,
-                ..CommitterConfig::default()
-            },
-            processor_rx,
-            collector_tx,
-            main_reader_lo_rx,
-            test_metrics(),
-            cancel.clone(),
-        );
-
-        // Send enough data to trigger batching, and validate that we are able to get the first batch.
-        let test_data =
-            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; TestHandler::MIN_EAGER_ROWS + 1]);
-        processor_tx.send(test_data).await.unwrap();
-        main_reader_lo_tx.send(Some(0)).unwrap();
-        tokio::time::advance(Duration::from_secs(1)).await;
-        let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(2)).await;
-
-        assert_eq!(batch.batch_len, TestHandler::MIN_EAGER_ROWS + 1);
-
-        // On the next batch, test that we eventually shut down when the channel closes.
-        let test_data =
-            IndexedCheckpoint::new(0, 2, 20, 2000, vec![Entry; TestHandler::MIN_EAGER_ROWS + 1]);
-        processor_tx.send(test_data).await.unwrap();
-        main_reader_lo_tx.send(Some(1)).unwrap();
-        tokio::time::advance(Duration::from_secs(1)).await;
-        drop(main_reader_lo_tx);
-
-        // Collector should shut down shortly after.
-        let result = collector.await;
-
-        assert!(result.is_ok());
-    }
-
     /// When receiving checkpoints, if they are below the main reader lo, they should be dropped
     /// immediately.
     #[tokio::test]
@@ -761,10 +728,10 @@ mod tests {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
         let cancel = CancellationToken::new();
-        let (_main_reader_lo_tx, main_reader_lo_rx) = watch::channel(Some(5u64));
+        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(5))));
         let metrics = test_metrics();
 
-        let _collector = collector(
+        let collector = collector(
             Arc::new(TestHandler),
             CommitterConfig {
                 // Collect interval longer than time to advance to ensure timing doesn't trigger
@@ -774,14 +741,14 @@ mod tests {
             },
             processor_rx,
             collector_tx,
-            main_reader_lo_rx,
+            main_reader_lo.clone(),
             metrics.clone(),
             cancel.clone(),
         );
 
         let eager_rows_plus_one = TestHandler::MIN_EAGER_ROWS + 1;
 
-        let test_data: Vec<_> = [1, 5, 2, 6, 4]
+        let test_data: Vec<_> = [1, 5, 2, 6, 4, 3]
             .into_iter()
             .map(|cp| IndexedCheckpoint::new(0, cp, 10, 1000, vec![Entry; eager_rows_plus_one]))
             .collect();
@@ -791,27 +758,28 @@ mod tests {
         let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(2)).await;
 
         // Make sure that we are advancing watermarks.
-        assert_eq!(batch.watermark.len(), 5);
+        assert_eq!(batch.watermark.len(), 6);
         // And reporting the checkpoints as received.
         assert_eq!(
             metrics
                 .total_collector_checkpoints_received
                 .with_label_values(&[TestHandler::NAME])
                 .get(),
-            5
+            6
         );
-        // But the collector should filter out three checkpoints: (1, 2, 4)
+        // But the collector should filter out four checkpoints: (1, 2, 3, 4)
         assert_eq!(
             metrics
                 .total_collector_skipped_checkpoints
                 .with_label_values(&[TestHandler::NAME])
                 .get(),
-            3
+            4
         );
         // And that we only have values from two checkpoints (5, 6)
         assert_eq!(batch.batch_len, eager_rows_plus_one * 2);
 
         cancel.cancel();
+        collector.await.unwrap();
     }
 
     /// Because a checkpoint may be partially batched before the main reader lo advances past it,
@@ -824,15 +792,16 @@ mod tests {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
         let cancel = CancellationToken::new();
-        let (main_reader_lo_tx, main_reader_lo_rx) = watch::channel(Some(0u64));
+        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
+
         let metrics = test_metrics();
 
-        let _collector = collector(
+        let collector = collector(
             Arc::new(TestHandler),
             CommitterConfig::default(),
             processor_rx,
             collector_tx,
-            main_reader_lo_rx,
+            main_reader_lo.clone(),
             metrics.clone(),
             cancel.clone(),
         );
@@ -863,7 +832,8 @@ mod tests {
         for data in test_data {
             processor_tx.send(data).await.unwrap();
         }
-        main_reader_lo_tx.send(Some(4)).unwrap();
+        let atomic = main_reader_lo.get().unwrap();
+        atomic.store(4, Ordering::Relaxed);
         tokio::time::advance(Duration::from_secs(10)).await;
 
         let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(2)).await;
@@ -890,5 +860,6 @@ mod tests {
         );
 
         cancel.cancel();
+        collector.await.unwrap();
     }
 }

@@ -187,6 +187,8 @@ impl PrunerWatermark {
     }
 }
 
+/// Construct the string used for tracking a pipeline's watermarks in the store. This is either the
+/// pipeline name itself, or `{pipeline}{Store::DELIMITER}{task}` if a task name is provided.
 pub fn pipeline_task<S: Store>(pipeline_name: &'static str, task_name: Option<&str>) -> String {
     match task_name {
         Some(task_name) => format!("{}{}{}", pipeline_name, S::DELIMITER, task_name),
@@ -194,6 +196,7 @@ pub fn pipeline_task<S: Store>(pipeline_name: &'static str, task_name: Option<&s
     }
 }
 
+/// Check that the pipeline name does not contain the store's delimiter.
 pub fn is_valid_pipeline<S: Store>(pipeline_name: &'static str) -> bool {
     !pipeline_name.contains(S::DELIMITER)
 }
