@@ -8388,7 +8388,6 @@ dependencies = [
  "move-symbol-pool",
  "named-lock",
  "once_cell",
- "oxford_join",
  "path-clean",
  "petgraph 0.8.1",
  "pretty_assertions",
@@ -9750,12 +9749,6 @@ name = "owo-colors"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "caff54706df99d2a78a5a4e3455ff45448d81ef1bb63c22cd14052ca0e993a3f"
-
-[[package]]
-name = "oxford_join"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a7dbde52538869ae3769b3e6ec91baabfccae5afe36d6ac210aeee19b1c5c91"
 
 [[package]]
 name = "p256"
