@@ -91,7 +91,7 @@ impl WriteApiServer for Write {
         let tx_data = bcs::from_bytes::<TransactionData>(&tx_data_decoded)
             .map_err(|e| invalid_params(Error::DecodeError(e.to_string())))?;
 
-        let transaction = Transaction::from_data(tx_data.clone(), vec![]);
+        let transaction = Transaction::from_data(tx_data, vec![]);
 
         // Execute the transaction using Simulacrum
         let mut simulacrum = self.0.write().unwrap();
