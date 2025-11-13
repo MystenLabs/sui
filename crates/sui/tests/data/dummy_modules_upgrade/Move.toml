@@ -2,8 +2,7 @@
 name = "examples"
 version = "0.0.1"
 edition = "2024.beta"
-system-dependencies = []
+implicit-dependencies = false
 
 [dependencies]
 sui = { local = "../system-packages/sui-framework" } # relative to the tempdir where the test runs and has all system pkgs
-

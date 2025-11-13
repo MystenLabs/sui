@@ -1,7 +1,7 @@
 [package]
 name = "g"
 edition = "2024"
-system-dependencies = []
+implicit-dependencies = false
 
 [dependencies]
 sui = { local = "../../system-packages/sui-framework" }
@@ -9,4 +9,3 @@ std = { local = "../../system-packages/move-stdlib" }
 bridge = { local = "../../system-packages/bridge" }
 deepbook = { local = "../../system-packages/deepbook" }
 sui_system = { local = "../../system-packages/sui-system" }
-

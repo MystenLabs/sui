@@ -1,9 +1,8 @@
 [package]
 name = "m"
 edition = "2024"
-system-dependencies = []
+implicit-dependencies = false
 
 [dependencies]
 k = { local = "../K_v2", override = true }
 l = { local = "../L" }
-

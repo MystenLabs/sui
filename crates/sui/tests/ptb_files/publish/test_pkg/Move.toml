@@ -1,5 +1,4 @@
 [package]
 name = "test_pkg"
 edition = "2024"
-system-dependencies = []
-
+implicit-dependencies = false
