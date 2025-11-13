@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use cache_coordinator::CacheReadyCoordinator;
 use lru::LruCache;
 use move_core_types::account_address::AccountAddress;
 use std::num::NonZeroUsize;
@@ -24,8 +23,6 @@ use sui_types::{
 use thiserror::Error;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::{DBMapUtils, Map, TypedStoreError};
-
-pub mod cache_coordinator;
 
 use std::sync::OnceLock;
 
@@ -231,7 +228,6 @@ pub struct PackageCache {
     pub global_cache: Arc<PackageStoreWithLruCache<LocalDBPackageStore>>,
     pub epochs: Arc<Mutex<LruCache<u64, Arc<PackageStoreWithLruCache<LocalDBPackageStore>>>>>,
     pub resolver: Resolver<GlobalArcStore>,
-    pub coordinator: CacheReadyCoordinator,
 }
 
 impl PackageCache {
@@ -245,7 +241,6 @@ impl PackageCache {
             epochs: Arc::new(Mutex::new(LruCache::new(
                 NonZeroUsize::new(MAX_EPOCH_CACHES).unwrap(),
             ))),
-            coordinator: CacheReadyCoordinator::new(),
         }
     }
 

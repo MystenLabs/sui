@@ -27,6 +27,69 @@ pub mod package_store;
 pub mod parquet;
 pub mod tables;
 
+/// Macro to eliminate boilerplate Handler implementations for analytics handlers
+#[macro_export]
+macro_rules! impl_analytics_handler {
+    ($handler:ty, $batch:ty, $checkpoint_field:ident) => {
+        #[async_trait]
+        impl Handler for $handler {
+            type Store = ObjectStore;
+            type Batch = $batch;
+
+            fn min_eager_rows(&self) -> usize {
+                self.config.max_row_count
+            }
+
+            fn max_pending_rows(&self) -> usize {
+                self.config.max_row_count * 5
+            }
+
+            fn batch(
+                &self,
+                batch: &mut Self::Batch,
+                values: &mut std::vec::IntoIter<Self::Value>,
+            ) -> BatchStatus {
+                let Some(first) = values.next() else {
+                    return BatchStatus::Pending;
+                };
+
+                batch.inner.set_epoch(first.epoch);
+                batch.inner.update_last_checkpoint(first.$checkpoint_field);
+
+                if let Err(e) = batch
+                    .inner
+                    .write_rows(std::iter::once(first).chain(values.by_ref()))
+                {
+                    tracing::error!("Failed to write rows to ParquetBatch: {}", e);
+                    return BatchStatus::Pending;
+                }
+
+                BatchStatus::Pending
+            }
+
+            async fn commit<'a>(
+                &self,
+                batch: &Self::Batch,
+                conn: &mut <Self::Store as Store>::Connection<'a>,
+            ) -> Result<usize> {
+                let Some(file_path) = batch.inner.current_file_path() else {
+                    return Ok(0);
+                };
+
+                let row_count = batch.inner.row_count()?;
+                let file_bytes = tokio::fs::read(file_path).await?;
+                let object_path = batch.inner.object_store_path();
+
+                conn.object_store()
+                    .put(&object_path, file_bytes.into())
+                    .await?;
+
+                Ok(row_count)
+            }
+        }
+    };
+}
+
 const EPOCH_DIR_PREFIX: &str = "epoch_";
 const CHECKPOINT_DIR_PREFIX: &str = "checkpoints";
 const OBJECT_DIR_PREFIX: &str = "objects";
