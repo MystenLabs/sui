@@ -552,6 +552,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation_upgraded_parsing: bool,
 
+    // Enable upgraded parsing of nitro attestation containing pcr16.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_nitro_attestation_pcr16_parsing: bool,
+
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
     reject_mutable_random_on_entry_functions: bool,
@@ -2227,6 +2231,10 @@ impl ProtocolConfig {
 
     pub fn enable_nitro_attestation_upgraded_parsing(&self) -> bool {
         self.feature_flags.enable_nitro_attestation_upgraded_parsing
+    }
+
+    pub fn enable_nitro_attestation_pcr16_parsing(&self) -> bool {
+        self.feature_flags.enable_nitro_attestation_pcr16_parsing
     }
 
     pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
@@ -4255,6 +4263,9 @@ impl ProtocolConfig {
                                 observations_chunk_size: Some(18),
                             },
                         );
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_nitro_attestation_pcr16_parsing = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
