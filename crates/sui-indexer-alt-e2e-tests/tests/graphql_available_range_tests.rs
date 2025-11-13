@@ -9,6 +9,7 @@ use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
 use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig, find::address_owned};
 
+use insta::assert_json_snapshot;
 use sui_indexer_alt_graphql::config::{RpcConfig as GraphQlConfig, WatermarkConfig};
 use sui_types::{
     base_types::SuiAddress,
@@ -169,26 +170,25 @@ async fn test_available_range_pipeline_unavailable() {
         })),
     )
     .await;
-
-    // Should get an error about the feature not being available
-    let errors = response["errors"]
-        .as_array()
-        .expect("Expected errors array");
-    assert!(!errors.is_empty(), "Expected an error but got none");
-
-    let error = &errors[0];
-    let message = error["message"].as_str().expect("Expected error message");
-    let code = error["extensions"]["code"]
-        .as_str()
-        .expect("Expected error code");
-
-    assert_eq!(code, "FEATURE_UNAVAILABLE");
-    assert!(
-        message.contains("consistent queries across objects and balances not available"),
-        "Expected human-readable error, got: {}",
-        message
-    );
-
+    assert_json_snapshot!(response["errors"], @r###"
+    [
+      {
+        "message": "consistent queries across objects and balances not available",
+        "locations": [
+          {
+            "line": 4,
+            "column": 13
+          }
+        ],
+        "path": [
+          "serviceConfig",
+          "availableRange"
+        ],
+        "extensions": {
+          "code": "FEATURE_UNAVAILABLE"
+        }
+      }
+    ]"###);
     cluster.stopped().await;
 }
 
