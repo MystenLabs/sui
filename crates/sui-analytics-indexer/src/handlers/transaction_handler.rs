@@ -7,9 +7,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::{BatchStatus, Handler};
-use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_object_store::ObjectStore;
+use sui_types::base_types::EpochId;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
@@ -19,7 +17,7 @@ use tracing::error;
 
 use crate::parquet::ParquetBatch;
 use crate::tables::TransactionEntry;
-use crate::{FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
 
 pub struct TransactionBatch {
     pub inner: ParquetBatch<TransactionEntry>,
@@ -34,18 +32,34 @@ impl Default for TransactionBatch {
     }
 }
 
-pub struct TransactionHandler {
-    config: PipelineConfig,
-}
+// Implement traits for composition pattern
+impl CheckpointMetadata for TransactionEntry {
+    fn get_epoch(&self) -> EpochId {
+        self.epoch
+    }
 
-impl TransactionHandler {
-    pub fn new(config: PipelineConfig) -> Self {
-        Self { config }
+    fn get_checkpoint_sequence_number(&self) -> u64 {
+        self.checkpoint
     }
 }
 
+impl AnalyticsBatch for TransactionBatch {
+    type Entry = TransactionEntry;
+
+    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
+        &mut self.inner
+    }
+
+    fn inner(&self) -> &ParquetBatch<Self::Entry> {
+        &self.inner
+    }
+}
+
+// The processor contains only processing logic, no config
+pub struct TransactionProcessor;
+
 #[async_trait]
-impl Processor for TransactionHandler {
+impl Processor for TransactionProcessor {
     const NAME: &'static str = "transaction";
     const FANOUT: usize = 10;
     type Value = TransactionEntry;
@@ -204,8 +218,10 @@ impl Processor for TransactionHandler {
     }
 }
 
-crate::impl_analytics_handler!(TransactionHandler, TransactionBatch, checkpoint);
+// Type alias for backward compatibility
+pub type TransactionHandler = AnalyticsHandler<TransactionProcessor, TransactionBatch>;
 
+// Constructor helper
 fn compute_transaction_positions(
     checkpoint_contents: &CheckpointContents,
 ) -> HashMap<TransactionDigest, usize> {

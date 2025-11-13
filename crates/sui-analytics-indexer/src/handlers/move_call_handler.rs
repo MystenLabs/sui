@@ -6,16 +6,14 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::{BatchStatus, Handler};
-use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_object_store::ObjectStore;
+use sui_types::base_types::EpochId;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::parquet::ParquetBatch;
 use crate::tables::MoveCallEntry;
-use crate::{FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
 
 pub struct MoveCallBatch {
     pub inner: ParquetBatch<MoveCallEntry>,
@@ -29,18 +27,34 @@ impl Default for MoveCallBatch {
     }
 }
 
-pub struct MoveCallHandler {
-    config: PipelineConfig,
-}
+// Implement traits for composition pattern
+impl CheckpointMetadata for MoveCallEntry {
+    fn get_epoch(&self) -> EpochId {
+        self.epoch
+    }
 
-impl MoveCallHandler {
-    pub fn new(config: PipelineConfig) -> Self {
-        Self { config }
+    fn get_checkpoint_sequence_number(&self) -> u64 {
+        self.checkpoint
     }
 }
 
+impl AnalyticsBatch for MoveCallBatch {
+    type Entry = MoveCallEntry;
+
+    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
+        &mut self.inner
+    }
+
+    fn inner(&self) -> &ParquetBatch<Self::Entry> {
+        &self.inner
+    }
+}
+
+// The processor contains only processing logic, no config
+pub struct MoveCallProcessor;
+
 #[async_trait]
-impl Processor for MoveCallHandler {
+impl Processor for MoveCallProcessor {
     const NAME: &'static str = "move_call";
     const FANOUT: usize = 10;
     type Value = MoveCallEntry;
@@ -74,4 +88,7 @@ impl Processor for MoveCallHandler {
     }
 }
 
-crate::impl_analytics_handler!(MoveCallHandler, MoveCallBatch, checkpoint);
+// Type alias for backward compatibility
+pub type MoveCallHandler = AnalyticsHandler<MoveCallProcessor, MoveCallBatch>;
+
+// Constructor helper

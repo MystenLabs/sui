@@ -6,9 +6,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::{BatchStatus, Handler};
-use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_object_store::ObjectStore;
+use sui_types::base_types::EpochId;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
@@ -16,7 +14,7 @@ use sui_types::transaction::TransactionDataAPI;
 use crate::handlers::{InputObjectTracker, ObjectStatusTracker};
 use crate::parquet::ParquetBatch;
 use crate::tables::TransactionObjectEntry;
-use crate::{FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
 
 pub struct TransactionObjectsBatch {
     pub inner: ParquetBatch<TransactionObjectEntry>,
@@ -31,18 +29,32 @@ impl Default for TransactionObjectsBatch {
     }
 }
 
-pub struct TransactionObjectsHandler {
-    config: PipelineConfig,
-}
+impl CheckpointMetadata for TransactionObjectEntry {
+    fn get_epoch(&self) -> EpochId {
+        self.epoch
+    }
 
-impl TransactionObjectsHandler {
-    pub fn new(config: PipelineConfig) -> Self {
-        Self { config }
+    fn get_checkpoint_sequence_number(&self) -> u64 {
+        self.checkpoint
     }
 }
 
+impl AnalyticsBatch for TransactionObjectsBatch {
+    type Entry = TransactionObjectEntry;
+
+    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
+        &mut self.inner
+    }
+
+    fn inner(&self) -> &ParquetBatch<Self::Entry> {
+        &self.inner
+    }
+}
+
+pub struct TransactionObjectsProcessor;
+
 #[async_trait]
-impl Processor for TransactionObjectsHandler {
+impl Processor for TransactionObjectsProcessor {
     const NAME: &'static str = "transaction_objects";
     const FANOUT: usize = 10;
     type Value = TransactionObjectEntry;
@@ -105,8 +117,5 @@ impl Processor for TransactionObjectsHandler {
     }
 }
 
-crate::impl_analytics_handler!(
-    TransactionObjectsHandler,
-    TransactionObjectsBatch,
-    checkpoint
-);
+pub type TransactionObjectsHandler =
+    AnalyticsHandler<TransactionObjectsProcessor, TransactionObjectsBatch>;

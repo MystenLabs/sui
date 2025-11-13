@@ -27,67 +27,125 @@ pub mod package_store;
 pub mod parquet;
 pub mod tables;
 
-/// Macro to eliminate boilerplate Handler implementations for analytics handlers
-#[macro_export]
-macro_rules! impl_analytics_handler {
-    ($handler:ty, $batch:ty, $checkpoint_field:ident) => {
-        #[async_trait]
-        impl Handler for $handler {
-            type Store = ObjectStore;
-            type Batch = $batch;
+use async_trait::async_trait;
+use std::marker::PhantomData;
+use std::sync::Arc;
 
-            fn min_eager_rows(&self) -> usize {
-                self.config.max_row_count
-            }
+/// Trait for entry types that provide checkpoint metadata
+pub trait CheckpointMetadata {
+    fn get_epoch(&self) -> EpochId;
+    fn get_checkpoint_sequence_number(&self) -> u64;
+}
 
-            fn max_pending_rows(&self) -> usize {
-                self.config.max_row_count * 5
-            }
+/// Trait for batch types that wrap ParquetBatch
+pub trait AnalyticsBatch: Default + Send + Sync {
+    type Entry: CheckpointMetadata + Serialize + ParquetSchema + Send + Sync;
 
-            fn batch(
-                &self,
-                batch: &mut Self::Batch,
-                values: &mut std::vec::IntoIter<Self::Value>,
-            ) -> BatchStatus {
-                let Some(first) = values.next() else {
-                    return BatchStatus::Pending;
-                };
+    fn inner_mut(&mut self) -> &mut parquet::ParquetBatch<Self::Entry>;
+    fn inner(&self) -> &parquet::ParquetBatch<Self::Entry>;
+}
 
-                batch.inner.set_epoch(first.epoch);
-                batch.inner.update_last_checkpoint(first.$checkpoint_field);
+/// Generic wrapper that implements Handler for any Processor with analytics batching
+pub struct AnalyticsHandler<P, B> {
+    processor: P,
+    config: PipelineConfig,
+    _batch: PhantomData<B>,
+}
 
-                if let Err(e) = batch
-                    .inner
-                    .write_rows(std::iter::once(first).chain(values.by_ref()))
-                {
-                    tracing::error!("Failed to write rows to ParquetBatch: {}", e);
-                    return BatchStatus::Pending;
-                }
-
-                BatchStatus::Pending
-            }
-
-            async fn commit<'a>(
-                &self,
-                batch: &Self::Batch,
-                conn: &mut <Self::Store as Store>::Connection<'a>,
-            ) -> Result<usize> {
-                let Some(file_path) = batch.inner.current_file_path() else {
-                    return Ok(0);
-                };
-
-                let row_count = batch.inner.row_count()?;
-                let file_bytes = tokio::fs::read(file_path).await?;
-                let object_path = batch.inner.object_store_path();
-
-                conn.object_store()
-                    .put(&object_path, file_bytes.into())
-                    .await?;
-
-                Ok(row_count)
-            }
+impl<P, B> AnalyticsHandler<P, B> {
+    pub fn new(processor: P, config: PipelineConfig) -> Self {
+        Self {
+            processor,
+            config,
+            _batch: PhantomData,
         }
-    };
+    }
+}
+
+// Implement Processor by delegating to inner processor
+#[async_trait]
+impl<P, B> sui_indexer_alt_framework::pipeline::Processor for AnalyticsHandler<P, B>
+where
+    P: sui_indexer_alt_framework::pipeline::Processor + Send + Sync,
+    P::Value: Send + Sync,
+    B: Send + Sync + 'static,
+{
+    const NAME: &'static str = P::NAME;
+    const FANOUT: usize = P::FANOUT;
+    type Value = P::Value;
+
+    async fn process(
+        &self,
+        checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
+    ) -> Result<Vec<Self::Value>> {
+        self.processor.process(checkpoint).await
+    }
+}
+
+// Implement Handler with shared batching logic
+#[async_trait]
+impl<P, B> sui_indexer_alt_framework::pipeline::concurrent::Handler for AnalyticsHandler<P, B>
+where
+    P: sui_indexer_alt_framework::pipeline::Processor + Send + Sync,
+    P::Value: CheckpointMetadata + Serialize + ParquetSchema + Send + Sync,
+    B: AnalyticsBatch<Entry = P::Value> + 'static,
+{
+    type Store = sui_indexer_alt_object_store::ObjectStore;
+    type Batch = B;
+
+    fn min_eager_rows(&self) -> usize {
+        self.config.max_row_count
+    }
+
+    fn max_pending_rows(&self) -> usize {
+        self.config.max_row_count * 5
+    }
+
+    fn batch(
+        &self,
+        batch: &mut Self::Batch,
+        values: &mut std::vec::IntoIter<Self::Value>,
+    ) -> sui_indexer_alt_framework::pipeline::concurrent::BatchStatus {
+        let Some(first) = values.next() else {
+            return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending;
+        };
+
+        let epoch = first.get_epoch();
+        let checkpoint = first.get_checkpoint_sequence_number();
+
+        batch.inner_mut().set_epoch(epoch);
+        batch.inner_mut().update_last_checkpoint(checkpoint);
+
+        if let Err(e) = batch
+            .inner_mut()
+            .write_rows(std::iter::once(first).chain(values.by_ref()))
+        {
+            tracing::error!("Failed to write rows to ParquetBatch: {}", e);
+            return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending;
+        }
+
+        sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending
+    }
+
+    async fn commit<'a>(
+        &self,
+        batch: &Self::Batch,
+        conn: &mut <Self::Store as sui_indexer_alt_framework::store::Store>::Connection<'a>,
+    ) -> Result<usize> {
+        let Some(file_path) = batch.inner().current_file_path() else {
+            return Ok(0);
+        };
+
+        let row_count = batch.inner().row_count()?;
+        let file_bytes = tokio::fs::read(file_path).await?;
+        let object_path = batch.inner().object_store_path();
+
+        conn.object_store()
+            .put(&object_path, file_bytes.into())
+            .await?;
+
+        Ok(row_count)
+    }
 }
 
 const EPOCH_DIR_PREFIX: &str = "epoch_";
@@ -492,18 +550,22 @@ pub mod indexer_alt {
     use sui_indexer_alt_object_store::ObjectStore;
     use tokio_util::sync::CancellationToken;
 
-    // Import all the handlers
-    use crate::handlers::checkpoint_handler::CheckpointHandler;
-    use crate::handlers::df_handler::DynamicFieldHandler;
-    use crate::handlers::event_handler::EventHandler;
-    use crate::handlers::move_call_handler::MoveCallHandler;
-    use crate::handlers::object_handler::ObjectHandler;
-    use crate::handlers::package_bcs_handler::PackageBCSHandler;
-    use crate::handlers::package_handler::PackageHandler;
-    use crate::handlers::transaction_bcs_handler::TransactionBCSHandler;
-    use crate::handlers::transaction_handler::TransactionHandler;
-    use crate::handlers::transaction_objects_handler::TransactionObjectsHandler;
-    use crate::handlers::wrapped_object_handler::WrappedObjectHandler;
+    // Import all the handlers and processors
+    use crate::handlers::checkpoint_handler::{CheckpointHandler, CheckpointProcessor};
+    use crate::handlers::df_handler::{DynamicFieldHandler, DynamicFieldProcessor};
+    use crate::handlers::event_handler::{EventHandler, EventProcessor};
+    use crate::handlers::move_call_handler::{MoveCallHandler, MoveCallProcessor};
+    use crate::handlers::object_handler::{ObjectHandler, ObjectProcessor};
+    use crate::handlers::package_bcs_handler::{PackageBCSHandler, PackageBCSProcessor};
+    use crate::handlers::package_handler::{PackageHandler, PackageProcessor};
+    use crate::handlers::transaction_bcs_handler::{
+        TransactionBCSHandler, TransactionBCSProcessor,
+    };
+    use crate::handlers::transaction_handler::{TransactionHandler, TransactionProcessor};
+    use crate::handlers::transaction_objects_handler::{
+        TransactionObjectsHandler, TransactionObjectsProcessor,
+    };
+    use crate::handlers::wrapped_object_handler::{WrappedObjectHandler, WrappedObjectProcessor};
 
     pub struct AnalyticsIndexerConfig {
         pub job_config: JobConfig,
@@ -644,18 +706,27 @@ pub mod indexer_alt {
         match pipeline_config.file_type {
             FileType::Checkpoint => {
                 indexer
-                    .concurrent_pipeline(CheckpointHandler::new(pipeline_config.clone()), config)
+                    .concurrent_pipeline(
+                        CheckpointHandler::new(CheckpointProcessor, pipeline_config.clone()),
+                        config,
+                    )
                     .await?;
             }
             FileType::Transaction => {
                 indexer
-                    .concurrent_pipeline(TransactionHandler::new(pipeline_config.clone()), config)
+                    .concurrent_pipeline(
+                        TransactionHandler::new(TransactionProcessor, pipeline_config.clone()),
+                        config,
+                    )
                     .await?;
             }
             FileType::TransactionBCS => {
                 indexer
                     .concurrent_pipeline(
-                        TransactionBCSHandler::new(pipeline_config.clone()),
+                        TransactionBCSHandler::new(
+                            TransactionBCSProcessor,
+                            pipeline_config.clone(),
+                        ),
                         config,
                     )
                     .await?;
@@ -665,12 +736,18 @@ pub mod indexer_alt {
                     .clone()
                     .ok_or_else(|| anyhow!("Package cache required for Event handler"))?;
                 indexer
-                    .concurrent_pipeline(EventHandler::new(cache, pipeline_config.clone()), config)
+                    .concurrent_pipeline(
+                        EventHandler::new(EventProcessor::new(cache), pipeline_config.clone()),
+                        config,
+                    )
                     .await?;
             }
             FileType::MoveCall => {
                 indexer
-                    .concurrent_pipeline(MoveCallHandler::new(pipeline_config.clone()), config)
+                    .concurrent_pipeline(
+                        MoveCallHandler::new(MoveCallProcessor, pipeline_config.clone()),
+                        config,
+                    )
                     .await?;
             }
             FileType::Object => {
@@ -680,8 +757,7 @@ pub mod indexer_alt {
                 indexer
                     .concurrent_pipeline(
                         ObjectHandler::new(
-                            cache,
-                            &pipeline_config.package_id_filter,
+                            ObjectProcessor::new(cache, &pipeline_config.package_id_filter),
                             pipeline_config.clone(),
                         ),
                         config,
@@ -694,7 +770,10 @@ pub mod indexer_alt {
                     .ok_or_else(|| anyhow!("Package cache required for DynamicField handler"))?;
                 indexer
                     .concurrent_pipeline(
-                        DynamicFieldHandler::new(cache, pipeline_config.clone()),
+                        DynamicFieldHandler::new(
+                            DynamicFieldProcessor::new(cache),
+                            pipeline_config.clone(),
+                        ),
                         config,
                     )
                     .await?;
@@ -702,19 +781,28 @@ pub mod indexer_alt {
             FileType::TransactionObjects => {
                 indexer
                     .concurrent_pipeline(
-                        TransactionObjectsHandler::new(pipeline_config.clone()),
+                        TransactionObjectsHandler::new(
+                            TransactionObjectsProcessor,
+                            pipeline_config.clone(),
+                        ),
                         config,
                     )
                     .await?;
             }
             FileType::MovePackage => {
                 indexer
-                    .concurrent_pipeline(PackageHandler::new(pipeline_config.clone()), config)
+                    .concurrent_pipeline(
+                        PackageHandler::new(PackageProcessor, pipeline_config.clone()),
+                        config,
+                    )
                     .await?;
             }
             FileType::MovePackageBCS => {
                 indexer
-                    .concurrent_pipeline(PackageBCSHandler::new(pipeline_config.clone()), config)
+                    .concurrent_pipeline(
+                        PackageBCSHandler::new(PackageBCSProcessor, pipeline_config.clone()),
+                        config,
+                    )
                     .await?;
             }
             FileType::WrappedObject => {
@@ -723,7 +811,10 @@ pub mod indexer_alt {
                     .ok_or_else(|| anyhow!("Package cache required for WrappedObject handler"))?;
                 indexer
                     .concurrent_pipeline(
-                        WrappedObjectHandler::new(cache, pipeline_config.clone()),
+                        WrappedObjectHandler::new(
+                            WrappedObjectProcessor::new(cache),
+                            pipeline_config.clone(),
+                        ),
                         config,
                     )
                     .await?;

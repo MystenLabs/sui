@@ -7,10 +7,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use move_core_types::annotated_value::MoveValue;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::{BatchStatus, Handler};
-use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_object_store::ObjectStore;
 use sui_json_rpc_types::type_and_fields_from_move_event_data;
+use sui_types::base_types::EpochId;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::full_checkpoint_content::Checkpoint;
@@ -18,7 +16,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use crate::package_store::PackageCache;
 use crate::parquet::ParquetBatch;
 use crate::tables::EventEntry;
-use crate::{FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
 
 pub struct EventBatch {
     pub inner: ParquetBatch<EventEntry>,
@@ -32,22 +30,42 @@ impl Default for EventBatch {
     }
 }
 
-pub struct EventHandler {
-    package_cache: Arc<PackageCache>,
-    config: PipelineConfig,
+// Implement traits for composition pattern
+impl CheckpointMetadata for EventEntry {
+    fn get_epoch(&self) -> EpochId {
+        self.epoch
+    }
+
+    fn get_checkpoint_sequence_number(&self) -> u64 {
+        self.checkpoint
+    }
 }
 
-impl EventHandler {
-    pub fn new(package_cache: Arc<PackageCache>, config: PipelineConfig) -> Self {
-        Self {
-            package_cache,
-            config,
-        }
+impl AnalyticsBatch for EventBatch {
+    type Entry = EventEntry;
+
+    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
+        &mut self.inner
+    }
+
+    fn inner(&self) -> &ParquetBatch<Self::Entry> {
+        &self.inner
+    }
+}
+
+// The processor contains only processing logic, no config
+pub struct EventProcessor {
+    package_cache: Arc<PackageCache>,
+}
+
+impl EventProcessor {
+    pub fn new(package_cache: Arc<PackageCache>) -> Self {
+        Self { package_cache }
     }
 }
 
 #[async_trait]
-impl Processor for EventHandler {
+impl Processor for EventProcessor {
     const NAME: &'static str = "event";
     const FANOUT: usize = 10;
     type Value = EventEntry;
@@ -107,4 +125,7 @@ impl Processor for EventHandler {
     }
 }
 
-crate::impl_analytics_handler!(EventHandler, EventBatch, checkpoint);
+// Type alias for backward compatibility
+pub type EventHandler = AnalyticsHandler<EventProcessor, EventBatch>;
+
+// Constructor helper

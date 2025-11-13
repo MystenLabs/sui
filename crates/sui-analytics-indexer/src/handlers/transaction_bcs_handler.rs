@@ -7,15 +7,13 @@ use anyhow::Result;
 use async_trait::async_trait;
 use fastcrypto::encoding::{Base64, Encoding};
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::{BatchStatus, Handler};
-use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_object_store::ObjectStore;
+use sui_types::base_types::EpochId;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::parquet::ParquetBatch;
 use crate::tables::TransactionBCSEntry;
-use crate::{FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
 
 pub struct TransactionBCSBatch {
     pub inner: ParquetBatch<TransactionBCSEntry>,
@@ -30,18 +28,34 @@ impl Default for TransactionBCSBatch {
     }
 }
 
-pub struct TransactionBCSHandler {
-    config: PipelineConfig,
-}
+// Implement traits for composition pattern
+impl CheckpointMetadata for TransactionBCSEntry {
+    fn get_epoch(&self) -> EpochId {
+        self.epoch
+    }
 
-impl TransactionBCSHandler {
-    pub fn new(config: PipelineConfig) -> Self {
-        Self { config }
+    fn get_checkpoint_sequence_number(&self) -> u64 {
+        self.checkpoint
     }
 }
 
+impl AnalyticsBatch for TransactionBCSBatch {
+    type Entry = TransactionBCSEntry;
+
+    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
+        &mut self.inner
+    }
+
+    fn inner(&self) -> &ParquetBatch<Self::Entry> {
+        &self.inner
+    }
+}
+
+// The processor contains only processing logic, no config
+pub struct TransactionBCSProcessor;
+
 #[async_trait]
-impl Processor for TransactionBCSHandler {
+impl Processor for TransactionBCSProcessor {
     const NAME: &'static str = "transaction_bcs";
     const FANOUT: usize = 10;
     type Value = TransactionBCSEntry;
@@ -73,4 +87,5 @@ impl Processor for TransactionBCSHandler {
     }
 }
 
-crate::impl_analytics_handler!(TransactionBCSHandler, TransactionBCSBatch, checkpoint);
+// Type alias for backward compatibility
+pub type TransactionBCSHandler = AnalyticsHandler<TransactionBCSProcessor, TransactionBCSBatch>;

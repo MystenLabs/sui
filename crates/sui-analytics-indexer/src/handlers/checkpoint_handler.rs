@@ -7,16 +7,14 @@ use anyhow::Result;
 use async_trait::async_trait;
 use fastcrypto::traits::EncodeDecodeBase64;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::{BatchStatus, Handler};
-use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_object_store::ObjectStore;
+use sui_types::base_types::EpochId;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::parquet::ParquetBatch;
 use crate::tables::CheckpointEntry;
-use crate::{FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
 
 pub struct CheckpointBatch {
     pub inner: ParquetBatch<CheckpointEntry>,
@@ -31,18 +29,34 @@ impl Default for CheckpointBatch {
     }
 }
 
-pub struct CheckpointHandler {
-    config: PipelineConfig,
-}
+// Implement traits for composition pattern
+impl CheckpointMetadata for CheckpointEntry {
+    fn get_epoch(&self) -> EpochId {
+        self.epoch
+    }
 
-impl CheckpointHandler {
-    pub fn new(config: PipelineConfig) -> Self {
-        Self { config }
+    fn get_checkpoint_sequence_number(&self) -> u64 {
+        self.sequence_number
     }
 }
 
+impl AnalyticsBatch for CheckpointBatch {
+    type Entry = CheckpointEntry;
+
+    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
+        &mut self.inner
+    }
+
+    fn inner(&self) -> &ParquetBatch<Self::Entry> {
+        &self.inner
+    }
+}
+
+// The processor contains only processing logic, no config
+pub struct CheckpointProcessor;
+
 #[async_trait]
-impl Processor for CheckpointHandler {
+impl Processor for CheckpointProcessor {
     const NAME: &'static str = "checkpoint";
     const FANOUT: usize = 10;
     type Value = CheckpointEntry;
@@ -53,7 +67,8 @@ impl Processor for CheckpointHandler {
     }
 }
 
-crate::impl_analytics_handler!(CheckpointHandler, CheckpointBatch, sequence_number);
+// Type alias for backward compatibility
+pub type CheckpointHandler = AnalyticsHandler<CheckpointProcessor, CheckpointBatch>;
 
 fn process_checkpoint(checkpoint: &Checkpoint) -> CheckpointEntry {
     let epoch = checkpoint.summary.data().epoch;

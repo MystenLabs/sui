@@ -10,12 +10,9 @@ use fastcrypto::encoding::{Base64, Encoding};
 use sui_indexer::errors::IndexerError;
 use sui_indexer::types::owner_to_owner_info;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::pipeline::concurrent::{BatchStatus, Handler};
-use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_object_store::ObjectStore;
 use sui_json_rpc_types::SuiMoveValue;
 use sui_types::TypeTag;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::dynamic_field::{DynamicFieldName, DynamicFieldType};
 use sui_types::full_checkpoint_content::Checkpoint;
@@ -27,7 +24,7 @@ use tracing::warn;
 use crate::package_store::PackageCache;
 use crate::parquet::ParquetBatch;
 use crate::tables::DynamicFieldEntry;
-use crate::{FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
 
 pub struct DynamicFieldBatch {
     pub inner: ParquetBatch<DynamicFieldEntry>,
@@ -42,17 +39,35 @@ impl Default for DynamicFieldBatch {
     }
 }
 
-pub struct DynamicFieldHandler {
-    package_cache: Arc<PackageCache>,
-    config: PipelineConfig,
+impl CheckpointMetadata for DynamicFieldEntry {
+    fn get_epoch(&self) -> EpochId {
+        self.epoch
+    }
+
+    fn get_checkpoint_sequence_number(&self) -> u64 {
+        self.checkpoint
+    }
 }
 
-impl DynamicFieldHandler {
-    pub fn new(package_cache: Arc<PackageCache>, config: PipelineConfig) -> Self {
-        Self {
-            package_cache,
-            config,
-        }
+impl AnalyticsBatch for DynamicFieldBatch {
+    type Entry = DynamicFieldEntry;
+
+    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
+        &mut self.inner
+    }
+
+    fn inner(&self) -> &ParquetBatch<Self::Entry> {
+        &self.inner
+    }
+}
+
+pub struct DynamicFieldProcessor {
+    package_cache: Arc<PackageCache>,
+}
+
+impl DynamicFieldProcessor {
+    pub fn new(package_cache: Arc<PackageCache>) -> Self {
+        Self { package_cache }
     }
 
     async fn process_dynamic_field(
@@ -144,7 +159,7 @@ impl DynamicFieldHandler {
 }
 
 #[async_trait]
-impl Processor for DynamicFieldHandler {
+impl Processor for DynamicFieldProcessor {
     const NAME: &'static str = "dynamic_field";
     const FANOUT: usize = 10;
     type Value = DynamicFieldEntry;
@@ -186,4 +201,4 @@ impl Processor for DynamicFieldHandler {
     }
 }
 
-crate::impl_analytics_handler!(DynamicFieldHandler, DynamicFieldBatch, checkpoint);
+pub type DynamicFieldHandler = AnalyticsHandler<DynamicFieldProcessor, DynamicFieldBatch>;
