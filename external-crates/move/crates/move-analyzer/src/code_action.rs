@@ -148,6 +148,7 @@ fn access_chain_autofix_actions(
         LintLevel::None,
         implicit_deps,
         flavor,
+        None,
     ) else {
         return code_actions;
     };

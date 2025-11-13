@@ -56,7 +56,7 @@ use crate::{
         DefMap, find_datatype, parsing_analysis::parsing_mod_def_to_map_key, run_parsing_analysis,
         run_typing_analysis,
     },
-    compiler_info::CompilerInfo,
+    compiler_info::CompilerAutocompleteInfo,
     symbols::{
         compilation::{
             CachedPackages, CachedPkgInfo, CompiledPkgInfo, CompiledProgram, ParsedDefinitions,
@@ -121,8 +121,8 @@ pub struct Symbols {
     pub files: MappedFiles,
     /// Additional information about definitions
     pub def_info: DefMap,
-    /// IDE Annotation Information from the Compiler
-    pub compiler_info: CompilerInfo,
+    /// IDE Autocomplete Information from the Compiler
+    pub compiler_autocomplete_info: CompilerAutocompleteInfo,
     /// Cursor information gathered up during analysis
     pub cursor_context: Option<CursorContext>,
 }
@@ -187,6 +187,7 @@ pub fn get_symbols(
             lint,
             implicit_deps.clone(),
             flavor,
+            cursor_info.map(|(path, _)| path),
         )?;
         eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
         let Some(compiled_pkg_info) = compiled_pkg_info_opt else {
@@ -217,7 +218,7 @@ pub fn compute_symbols(
     let cached_dep_opt = compiled_pkg_info.cached_deps.clone();
     let dep_hashes = compiled_pkg_info.dep_hashes.clone();
     let edition = compiled_pkg_info.edition;
-    let compiler_info = compiled_pkg_info.compiler_info.clone();
+    let compiler_analysis_info = compiled_pkg_info.compiler_analysis_info.clone();
     let lsp_diags = compiled_pkg_info.lsp_diags.clone();
     let file_paths = compiled_pkg_info
         .mapped_files
@@ -274,7 +275,7 @@ pub fn compute_symbols(
                     file_paths: Arc::new(file_paths),
                     user_file_hashes: Arc::new(user_file_hashes),
                     edition,
-                    compiler_info,
+                    compiler_analysis_info,
                     lsp_diags,
                 }),
             );
@@ -363,12 +364,12 @@ pub fn compute_symbols_typed_program(
     CompiledProgram,
 ) {
     // run typing analysis for the main user program
-    let compiler_info = &mut compiled_pkg_info.compiler_info.as_mut().unwrap();
+    let compiler_analysis_info = compiled_pkg_info.compiler_analysis_info.as_ref().unwrap();
     let mapped_files = &compiled_pkg_info.mapped_files;
     let mut computation_data = run_typing_analysis(
         computation_data,
         mapped_files,
-        compiler_info,
+        compiler_analysis_info,
         &compiled_pkg_info.program.typed_modules,
     );
     let mut file_use_defs = BTreeMap::new();
@@ -462,7 +463,7 @@ pub fn compute_symbols_typed_program(
             file_mods,
             def_info: computation_data.def_info,
             files: compiled_pkg_info.mapped_files,
-            compiler_info: compiled_pkg_info.compiler_info.unwrap(),
+            compiler_autocomplete_info: compiled_pkg_info.compiler_autocomplete_info.unwrap_or_default(),
             cursor_context,
         },
         deps_symbols_data_opt,
@@ -693,7 +694,7 @@ pub fn empty_symbols() -> Symbols {
         file_mods: BTreeMap::new(),
         def_info: BTreeMap::new(),
         files: MappedFiles::empty(),
-        compiler_info: CompilerInfo::new(),
+        compiler_autocomplete_info: CompilerAutocompleteInfo::new(),
         cursor_context: None,
     }
 }
