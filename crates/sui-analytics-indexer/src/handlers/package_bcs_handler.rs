@@ -12,7 +12,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::parquet::ParquetBatch;
 use crate::tables::PackageBCSEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
 
 pub struct PackageBCSBatch {
     pub inner: ParquetBatch<PackageBCSEntry>,

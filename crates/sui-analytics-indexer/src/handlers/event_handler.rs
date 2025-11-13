@@ -16,7 +16,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use crate::package_store::PackageCache;
 use crate::parquet::ParquetBatch;
 use crate::tables::EventEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
 
 pub struct EventBatch {
     pub inner: ParquetBatch<EventEntry>,

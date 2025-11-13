@@ -14,7 +14,7 @@ use sui_types::transaction::TransactionDataAPI;
 use crate::handlers::{InputObjectTracker, ObjectStatusTracker};
 use crate::parquet::ParquetBatch;
 use crate::tables::TransactionObjectEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
 
 pub struct TransactionObjectsBatch {
     pub inner: ParquetBatch<TransactionObjectEntry>,

@@ -14,7 +14,7 @@ use crate::handlers::{get_move_struct, parse_struct};
 use crate::package_store::PackageCache;
 use crate::parquet::ParquetBatch;
 use crate::tables::WrappedObjectEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
 
 pub struct WrappedObjectBatch {
     pub inner: ParquetBatch<WrappedObjectEntry>,

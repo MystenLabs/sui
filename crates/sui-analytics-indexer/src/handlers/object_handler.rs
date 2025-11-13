@@ -19,7 +19,7 @@ use crate::handlers::{
 use crate::package_store::PackageCache;
 use crate::parquet::ParquetBatch;
 use crate::tables::{ObjectEntry, ObjectStatus};
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType, PipelineConfig};
+use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
 
 pub struct ObjectBatch {
     pub inner: ParquetBatch<ObjectEntry>,
