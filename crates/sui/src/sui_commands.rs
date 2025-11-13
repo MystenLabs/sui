@@ -59,7 +59,10 @@ use sui_indexer_alt_consistent_store::{
     args::RpcArgs as ConsistentArgs, config::ServiceConfig as ConsistentConfig,
     start_service as start_consistent_store,
 };
-use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs};
+use sui_indexer_alt_framework::{
+    IndexerArgs,
+    ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
+};
 use sui_indexer_alt_graphql::{
     RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
 };
@@ -1085,7 +1088,10 @@ async fn start(
 
     let pipelines = if let Some(ref db_url) = database_url {
         let client_args = ClientArgs {
-            local_ingestion_path: data_ingestion_dir.clone(),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: data_ingestion_dir.clone(),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -1117,7 +1123,10 @@ async fn start(
             .context("Invalid consistent store host and port")?;
 
         let client_args = ClientArgs {
-            local_ingestion_path: data_ingestion_dir.clone(),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: data_ingestion_dir.clone(),
+                ..Default::default()
+            },
             ..Default::default()
         };
 

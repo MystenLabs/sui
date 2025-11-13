@@ -1,10 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
 use async_trait::async_trait;
 use axum::body::Bytes;
 use std::path::PathBuf;
+
+use crate::ingestion::ingestion_client::{
+    FetchData, FetchError, FetchResult, IngestionClientTrait,
+};
 
 // FIXME: To productionize this, we need to add garbage collection to remove old checkpoint files.
 
@@ -38,7 +41,7 @@ impl IngestionClientTrait for LocalIngestionClient {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::ingestion::client::IngestionClient;
+    use crate::ingestion::ingestion_client::IngestionClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_metrics;
     use sui_storage::blob::{Blob, BlobEncoding};
