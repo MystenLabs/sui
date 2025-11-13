@@ -45,10 +45,11 @@ use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::digests::ChainIdentifier;
+use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::Message;
+use sui_types::messages_grpc::{RawSubmitTxRequest, SubmitTxType};
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -60,6 +61,7 @@ use sui_types::transaction::{
 };
 use tokio::time::{Instant, timeout};
 use tokio::{task::JoinHandle, time::sleep};
+use tonic::IntoRequest;
 use tracing::{error, info};
 
 mod test_indexer_handle;
@@ -594,6 +596,99 @@ impl TestCluster {
     ) -> SuiTransactionBlockResponse {
         let tx = self.wallet.sign_transaction(tx_data).await;
         self.execute_transaction(tx).await
+    }
+
+    /// Sign and execute multiple transactions in a soft bundle.
+    /// Soft bundles allow submitting multiple transactions together with best-effort
+    /// ordering if they use the same gas price. Transactions in a soft bundle can be
+    /// individually rejected or deferred without affecting other transactions.
+    ///
+    /// NOTE: This is a simplified implementation that processes transactions individually.
+    /// For true soft bundle submission, the test file should use the raw gRPC client directly
+    /// with tonic, as shown in test_soft_bundle_different_gas_payers.
+    pub async fn sign_and_execute_txns_in_soft_bundle(
+        &self,
+        txns: &[TransactionData],
+    ) -> SuiResult<Vec<(TransactionDigest, TransactionEffects)>> {
+        // Sign all transactions
+        let signed_txs: Vec<Transaction> =
+            futures::future::join_all(txns.iter().map(|tx| self.wallet.sign_transaction(tx))).await;
+
+        self.execute_signed_txns_in_soft_bundle(&signed_txs).await
+    }
+
+    pub async fn execute_signed_txns_in_soft_bundle(
+        &self,
+        signed_txs: &[Transaction],
+    ) -> SuiResult<Vec<(TransactionDigest, TransactionEffects)>> {
+        let digests: Vec<_> = signed_txs.iter().map(|tx| *tx.digest()).collect();
+
+        let request = RawSubmitTxRequest {
+            transactions: signed_txs
+                .iter()
+                .map(|tx| bcs::to_bytes(tx).unwrap().into())
+                .collect(),
+            submit_type: SubmitTxType::SoftBundle.into(),
+        };
+
+        let mut validator_client = self
+            .authority_aggregator()
+            .authority_clients
+            .iter()
+            .next()
+            .unwrap()
+            .1
+            .authority_client()
+            .get_client_for_testing()
+            .unwrap();
+
+        let result = validator_client
+            .submit_transaction(request.into_request())
+            .await
+            .map(tonic::Response::into_inner)?;
+        assert_eq!(result.results.len(), signed_txs.len());
+
+        let effects = self
+            .fullnode_handle
+            .sui_node
+            .with_async(|node| {
+                let digests = digests.clone();
+                async move {
+                    let state = node.state();
+                    let transaction_cache_reader = state.get_transaction_cache_reader();
+                    transaction_cache_reader
+                        .notify_read_executed_effects(
+                            "sign_and_execute_txns_in_soft_bundle",
+                            &digests,
+                        )
+                        .await
+                }
+            })
+            .await;
+
+        Ok(digests.into_iter().zip(effects.into_iter()).collect())
+    }
+
+    pub async fn wait_for_tx_settlement(&self, digests: &[TransactionDigest]) {
+        self.fullnode_handle
+            .sui_node
+            .with_async(|node| async move {
+                let state = node.state();
+                // wait until the transactions are in checkpoints
+                let checkpoint_seqs = state
+                    .epoch_store_for_testing()
+                    .transactions_executed_in_checkpoint_notify(digests.to_vec())
+                    .await
+                    .unwrap();
+
+                // then wait until the highest of the checkpoints is executed
+                let max_checkpoint_seq = checkpoint_seqs.into_iter().max().unwrap();
+                state
+                    .checkpoint_store
+                    .notify_read_executed_checkpoint(max_checkpoint_seq)
+                    .await;
+            })
+            .await;
     }
 
     /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.
