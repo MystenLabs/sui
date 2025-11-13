@@ -86,7 +86,7 @@ use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
 use sui_core::checkpoints::checkpoint_executor::metrics::CheckpointExecutorMetrics;
 use sui_core::checkpoints::checkpoint_executor::{CheckpointExecutor, StopReason};
 use sui_core::checkpoints::{
-    CheckpointMetrics, CheckpointService, CheckpointServiceNoop, CheckpointServiceNotify,
+    CheckpointMetrics, CheckpointService, CheckpointServiceNotify,
     CheckpointStore, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 use sui_core::consensus_adapter::{
@@ -1453,20 +1453,7 @@ impl SuiNode {
         consensus_store_pruner: ConsensusStorePruner,
         checkpoint_metrics: Arc<CheckpointMetrics>,
     ) -> Result<ObserverComponents> {
-        info!("Starting consensus manager for observer node");
-
-        // Observer nodes don't build their own checkpoints - they only consume certified checkpoints
-        // from validators via state sync. Use CheckpointServiceNoop to skip checkpoint building.
-        let checkpoint_service_wrapper = Arc::new(CheckpointServiceWrapper::Noop(Arc::new(
-            CheckpointServiceNoop {},
-        )));
-
-        let low_scoring_authorities = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
-
-        let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
-            None,
-            state.metrics.clone(),
-        ));
+        info!("Starting epoch specific components for observer node");
 
         // Observer nodes need a minimal ConsensusAdapter for the ConsensusHandlerInitializer
         // but it won't actually submit transactions to consensus
@@ -1491,6 +1478,46 @@ impl SuiNode {
             consensus_config.submit_delay_step_override(),
             ConsensusAdapterMetrics::new(&Registry::new()),
             protocol_config.clone(),
+        ));
+
+        // Build checkpoint service for observer nodes (they need to build checkpoints like validators)
+        let checkpoint_service = Self::build_checkpoint_service(
+            config,
+            consensus_adapter.clone(),
+            checkpoint_store.clone(),
+            epoch_store.clone(),
+            state.clone(),
+            state_sync_handle,
+            state_hasher,
+            checkpoint_metrics.clone(),
+        );
+
+        let checkpoint_service_wrapper =
+            Arc::new(CheckpointServiceWrapper::Full(checkpoint_service.clone()));
+
+        let low_scoring_authorities = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
+
+        // Initialize RandomnessManager for observer nodes.
+        // Observer nodes track DKG state by observing validator messages and use it to align checkpoint heights.
+        // They don't send DKG messages or partial signatures themselves.
+        if epoch_store.randomness_state_enabled() {
+            let randomness_manager = RandomnessManager::try_new(
+                Arc::downgrade(&epoch_store),
+                Box::new(consensus_adapter.clone()),
+                randomness_handle,
+                config.protocol_key_pair(),
+            )
+            .await;
+            if let Some(randomness_manager) = randomness_manager {
+                epoch_store
+                    .set_randomness_manager(randomness_manager)
+                    .await?;
+            }
+        }
+
+        let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
+            None,
+            state.metrics.clone(),
         ));
 
         let consensus_handler_initializer = ConsensusHandlerInitializer::new(
@@ -1528,6 +1555,18 @@ impl SuiNode {
                     .await;
             }
         });
+
+        let replay_waiter = consensus_manager.replay_waiter();
+
+        info!("Spawning checkpoint service for observer node");
+        let replay_waiter = if std::env::var("DISABLE_REPLAY_WAITER").is_ok() {
+            None
+        } else {
+            Some(replay_waiter)
+        };
+        checkpoint_service
+            .spawn(epoch_store.clone(), replay_waiter)
+            .await;
 
         Ok(ObserverComponents {
             consensus_manager,
