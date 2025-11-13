@@ -287,7 +287,7 @@ where
     }
 
     pub async fn get_chain_identifier(&self) -> BridgeResult<String> {
-        Ok(self.inner.get_chain_identifier().await?)
+        self.inner.get_chain_identifier().await
     }
 
     pub async fn get_reference_gas_price_until_success(&self) -> u64 {
@@ -308,7 +308,7 @@ where
     }
 
     pub async fn get_latest_checkpoint_sequence_number(&self) -> BridgeResult<u64> {
-        Ok(self.inner.get_latest_checkpoint_sequence_number().await?)
+        self.inner.get_latest_checkpoint_sequence_number().await
     }
 
     pub async fn execute_transaction_block_with_effects(
@@ -492,62 +492,27 @@ impl SuiClientInner for SuiSdkClient {
         &self,
         tx_digest: TransactionDigest,
     ) -> Result<SuiEvents, BridgeError> {
-        let resp = self
-            .read_api()
-            .get_transaction_with_options(
-                tx_digest,
-                SuiTransactionBlockResponseOptions::new().with_events(),
-            )
-            .await?;
-        Ok(SuiEvents {
-            transaction_digest: resp.digest,
-            checkpoint: resp.checkpoint,
-            timestamp_ms: resp.timestamp_ms,
-            events: resp
-                .events
-                .ok_or_else(|| sui_sdk::error::Error::DataError("missing events".into()))?
-                .data,
-        })
+        unimplemented!("use gRPC implementation")
     }
 
     async fn get_chain_identifier(&self) -> Result<String, BridgeError> {
-        self.read_api()
-            .get_chain_identifier()
-            .await
-            .map_err(Into::into)
+        unimplemented!("use gRPC implementation")
     }
 
     async fn get_reference_gas_price(&self) -> Result<u64, BridgeError> {
-        self.governance_api()
-            .get_reference_gas_price()
-            .await
-            .map_err(Into::into)
+        unimplemented!("use gRPC implementation")
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, BridgeError> {
-        self.read_api()
-            .get_latest_checkpoint_sequence_number()
-            .await
-            .map_err(Into::into)
+        unimplemented!("use gRPC implementation")
     }
 
     async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, BridgeError> {
-        let initial_shared_version = self
-            .http()
-            .get_bridge_object_initial_shared_version()
-            .await?;
-        Ok(ObjectArg::SharedObject {
-            id: SUI_BRIDGE_OBJECT_ID,
-            initial_shared_version: SequenceNumber::from_u64(initial_shared_version),
-            mutability: SharedObjectMutability::Mutable,
-        })
+        unimplemented!("use gRPC implementation")
     }
 
     async fn get_bridge_summary(&self) -> Result<BridgeSummary, BridgeError> {
-        self.http()
-            .get_latest_bridge()
-            .await
-            .map_err(|e| BridgeError::InternalError(format!("Can't get bridge committee: {e}")))
+        unimplemented!("use gRPC implementation")
     }
 
     async fn get_token_transfer_action_onchain_status(
@@ -556,15 +521,7 @@ impl SuiClientInner for SuiSdkClient {
         source_chain_id: u8,
         seq_number: u64,
     ) -> Result<BridgeActionStatus, BridgeError> {
-        dev_inspect_bridge::<u8>(
-            self,
-            bridge_object_arg,
-            source_chain_id,
-            seq_number,
-            "get_token_transfer_action_status",
-        )
-        .await
-        .and_then(|status_byte| BridgeActionStatus::try_from(status_byte).map_err(Into::into))
+        unimplemented!("use gRPC implementation")
     }
 
     async fn get_token_transfer_action_onchain_signatures(
@@ -573,14 +530,7 @@ impl SuiClientInner for SuiSdkClient {
         source_chain_id: u8,
         seq_number: u64,
     ) -> Result<Option<Vec<Vec<u8>>>, BridgeError> {
-        dev_inspect_bridge::<Option<Vec<Vec<u8>>>>(
-            self,
-            bridge_object_arg,
-            source_chain_id,
-            seq_number,
-            "get_token_transfer_action_signatures",
-        )
-        .await
+        unimplemented!("use gRPC implementation")
     }
 
     async fn execute_transaction_block_with_effects(
@@ -603,14 +553,7 @@ impl SuiClientInner for SuiSdkClient {
         source_chain_id: u8,
         seq_number: u64,
     ) -> Result<Option<MoveTypeParsedTokenTransferMessage>, BridgeError> {
-        dev_inspect_bridge::<Option<MoveTypeParsedTokenTransferMessage>>(
-            self,
-            bridge_object_arg,
-            source_chain_id,
-            seq_number,
-            "get_parsed_token_transfer_message",
-        )
-        .await
+        unimplemented!("use gRPC implementation")
     }
 
     async fn get_bridge_record(
@@ -618,45 +561,7 @@ impl SuiClientInner for SuiSdkClient {
         source_chain_id: u8,
         seq_number: u64,
     ) -> Result<Option<MoveTypeBridgeRecord>, BridgeError> {
-        let key = MoveTypeBridgeMessageKey {
-            source_chain: source_chain_id,
-            message_type: crate::types::BridgeActionType::TokenTransfer as u8,
-            bridge_seq_num: seq_number,
-        };
-        let key_bytes = bcs::to_bytes(&key)?;
-        let key_type = sui_sdk_types::StructTag {
-            address: Address::from(BRIDGE_PACKAGE_ID),
-            module: sui_sdk_types::Identifier::from_static("message"),
-            name: sui_sdk_types::Identifier::from_static("BridgeMessageKey"),
-            type_params: vec![],
-        };
-        let bridge_summary = self.get_bridge_summary().await?;
-        let records_id = bridge_summary.bridge_records_id;
-        let record_id = sui_sdk_types::Address::from(records_id)
-            .derive_dynamic_child_id(&(key_type.into()), &key_bytes);
-
-        let response = self
-            .read_api()
-            .get_object_with_options(record_id.into(), SuiObjectDataOptions::default().with_bcs())
-            .await?;
-
-        let move_contents = if let Some(data) = response.data {
-            data.bcs
-                .and_then(|bcs| match bcs {
-                    sui_json_rpc_types::SuiRawData::MoveObject(bcs) => Some(bcs.bcs_bytes),
-                    sui_json_rpc_types::SuiRawData::Package(_) => None,
-                })
-                .ok_or_else(|| BridgeError::Generic("unable to fetch bridge record".into()))?
-        } else {
-            return Ok(None);
-        };
-
-        let field: sui_types::dynamic_field::Field<
-            MoveTypeBridgeMessageKey,
-            LinkedTableNode<MoveTypeBridgeMessageKey, MoveTypeBridgeRecord>,
-        > = bcs::from_bytes(&move_contents)?;
-
-        Ok(Some(field.value.value))
+        unimplemented!("use gRPC implementation")
     }
 
     async fn get_gas_data_panic_if_not_gas(
@@ -990,28 +895,6 @@ impl SuiClientInner for sui_rpc::Client {
         _gas_object_id: ObjectID,
     ) -> (GasCoin, ObjectRef, Owner) {
         todo!()
-        // loop {
-        //     match self
-        //         .read_api()
-        //         .get_object_with_options(
-        //             gas_object_id,
-        //             SuiObjectDataOptions::default().with_owner().with_content(),
-        //         )
-        //         .await
-        //         .map(|resp| resp.data)
-        //     {
-        //         Ok(Some(gas_obj)) => {
-        //             let owner = gas_obj.owner.clone().expect("Owner is requested");
-        //             let gas_coin = GasCoin::try_from(&gas_obj)
-        //                 .unwrap_or_else(|err| panic!("{} is not a gas coin: {err}", gas_object_id));
-        //             return (gas_coin, gas_obj.object_ref(), owner);
-        //         }
-        //         other => {
-        //             warn!("Can't get gas object: {:?}: {:?}", gas_object_id, other);
-        //             tokio::time::sleep(Duration::from_secs(5)).await;
-        //         }
-        //     }
-        // }
     }
 }
 
@@ -1122,66 +1005,6 @@ impl SuiClientInner for SuiClientInternal {
             .get_gas_data_panic_if_not_gas(gas_object_id)
             .await
     }
-}
-
-/// Helper function to dev-inspect `bridge::{function_name}` function
-/// with bridge object arg, source chain id, seq number as param
-/// and parse the return value as `T`.
-async fn dev_inspect_bridge<T>(
-    sui_client: &SuiSdkClient,
-    bridge_object_arg: ObjectArg,
-    source_chain_id: u8,
-    seq_number: u64,
-    function_name: &str,
-) -> Result<T, BridgeError>
-where
-    T: DeserializeOwned,
-{
-    let pt = ProgrammableTransaction {
-        inputs: vec![
-            CallArg::Object(bridge_object_arg),
-            CallArg::Pure(bcs::to_bytes(&source_chain_id).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&seq_number).unwrap()),
-        ],
-        commands: vec![Command::move_call(
-            BRIDGE_PACKAGE_ID,
-            Identifier::new("bridge").unwrap(),
-            Identifier::new(function_name).unwrap(),
-            vec![],
-            vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
-        )],
-    };
-    let kind = TransactionKind::programmable(pt);
-    let resp = sui_client
-        .read_api()
-        .dev_inspect_transaction_block(SuiAddress::ZERO, kind, None, None, None)
-        .await?;
-    let DevInspectResults {
-        results, effects, ..
-    } = resp;
-    let Some(results) = results else {
-        return Err(BridgeError::Generic(format!(
-            "No results returned for '{}', effects: {:?}",
-            function_name, effects
-        )));
-    };
-    let return_values = &results
-        .first()
-        .ok_or(BridgeError::Generic(format!(
-            "No return values for '{}', results: {:?}",
-            function_name, results
-        )))?
-        .return_values;
-    let (value_bytes, _type_tag) = return_values.first().ok_or(BridgeError::Generic(format!(
-        "No first return value for '{}', results: {:?}",
-        function_name, results
-    )))?;
-    bcs::from_bytes::<T>(value_bytes).map_err(|e| {
-        BridgeError::Generic(format!(
-            "Failed to parse return value for '{}', error: {:?}, results: {:?}",
-            function_name, e, results
-        ))
-    })
 }
 
 #[cfg(test)]
