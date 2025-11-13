@@ -12,28 +12,15 @@ use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::handlers::{get_move_struct, parse_struct};
 use crate::package_store::PackageCache;
-use crate::parquet::ParquetBatch;
 use crate::tables::WrappedObjectEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, CheckpointMetadata, FileType};
-
-pub struct WrappedObjectBatch {
-    pub inner: ParquetBatch<WrappedObjectEntry>,
-}
+use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, FileType};
 
 pub struct WrappedObjectProcessor {
     package_cache: Arc<PackageCache>,
 }
 
-pub type WrappedObjectHandler = AnalyticsHandler<WrappedObjectProcessor, WrappedObjectBatch>;
-
-impl Default for WrappedObjectBatch {
-    fn default() -> Self {
-        Self {
-            inner: ParquetBatch::new(FileType::WrappedObject, 0)
-                .expect("Failed to create ParquetBatch"),
-        }
-    }
-}
+pub type WrappedObjectHandler =
+    AnalyticsHandler<WrappedObjectProcessor, AnalyticsBatch<WrappedObjectEntry>>;
 
 impl WrappedObjectProcessor {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
@@ -41,25 +28,15 @@ impl WrappedObjectProcessor {
     }
 }
 
-impl CheckpointMetadata for WrappedObjectEntry {
+impl AnalyticsMetadata for WrappedObjectEntry {
+    const FILE_TYPE: FileType = FileType::WrappedObject;
+
     fn get_epoch(&self) -> EpochId {
         self.epoch
     }
 
     fn get_checkpoint_sequence_number(&self) -> u64 {
         self.checkpoint
-    }
-}
-
-impl AnalyticsBatch for WrappedObjectBatch {
-    type Entry = WrappedObjectEntry;
-
-    fn inner_mut(&mut self) -> &mut ParquetBatch<Self::Entry> {
-        &mut self.inner
-    }
-
-    fn inner(&self) -> &ParquetBatch<Self::Entry> {
-        &self.inner
     }
 }
 

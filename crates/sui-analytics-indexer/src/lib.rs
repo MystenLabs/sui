@@ -27,8 +27,8 @@ pub mod package_store;
 pub mod parquet;
 pub mod tables;
 
-// Re-export handler traits and generic wrapper for public API
-pub use handlers::{AnalyticsBatch, CheckpointMetadata};
+// Re-export handler traits and generic batch struct for public API
+pub use handlers::{AnalyticsBatch, AnalyticsMetadata};
 
 use async_trait::async_trait;
 use std::marker::PhantomData;
@@ -73,14 +73,14 @@ where
 
 // Implement Handler with shared batching logic
 #[async_trait]
-impl<P, B> sui_indexer_alt_framework::pipeline::concurrent::Handler for AnalyticsHandler<P, B>
+impl<P> sui_indexer_alt_framework::pipeline::concurrent::Handler
+    for AnalyticsHandler<P, AnalyticsBatch<P::Value>>
 where
     P: sui_indexer_alt_framework::pipeline::Processor + Send + Sync,
-    P::Value: CheckpointMetadata + Serialize + ParquetSchema + Send + Sync,
-    B: AnalyticsBatch<Entry = P::Value> + 'static,
+    P::Value: AnalyticsMetadata + Serialize + ParquetSchema + Send + Sync,
 {
     type Store = sui_indexer_alt_object_store::ObjectStore;
-    type Batch = B;
+    type Batch = AnalyticsBatch<P::Value>;
 
     fn min_eager_rows(&self) -> usize {
         self.config.max_row_count
@@ -102,11 +102,11 @@ where
         let epoch = first.get_epoch();
         let checkpoint = first.get_checkpoint_sequence_number();
 
-        batch.inner_mut().set_epoch(epoch);
-        batch.inner_mut().update_last_checkpoint(checkpoint);
+        batch.inner.set_epoch(epoch);
+        batch.inner.update_last_checkpoint(checkpoint);
 
         if let Err(e) = batch
-            .inner_mut()
+            .inner
             .write_rows(std::iter::once(first).chain(values.by_ref()))
         {
             tracing::error!("Failed to write rows to ParquetBatch: {}", e);
@@ -121,13 +121,13 @@ where
         batch: &Self::Batch,
         conn: &mut <Self::Store as sui_indexer_alt_framework::store::Store>::Connection<'a>,
     ) -> Result<usize> {
-        let Some(file_path) = batch.inner().current_file_path() else {
+        let Some(file_path) = batch.inner.current_file_path() else {
             return Ok(0);
         };
 
-        let row_count = batch.inner().row_count()?;
+        let row_count = batch.inner.row_count()?;
         let file_bytes = tokio::fs::read(file_path).await?;
-        let object_path = batch.inner().object_store_path();
+        let object_path = batch.inner.object_store_path();
 
         conn.object_store()
             .put(&object_path, file_bytes.into())
