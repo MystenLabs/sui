@@ -1,0 +1,12 @@
+#!/bin/bash
+
+echo "Running rustfmt before push..."
+
+if ! cargo fmt --check; then
+    echo "ERROR: rustfmt check failed!"
+    echo "Run 'cargo fmt' to fix formatting, then try pushing again."
+    exit 1
+fi
+
+echo "✓ rustfmt passed"
+exit 0
