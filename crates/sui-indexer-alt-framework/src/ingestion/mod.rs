@@ -6,61 +6,40 @@
 // bound is hit, the indexer could deadlock.
 #![allow(clippy::disallowed_methods)]
 
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tonic::transport::Uri;
-use url::Url;
 
 use crate::ingestion::broadcaster::broadcaster;
-use crate::ingestion::client::IngestionClient;
 use crate::ingestion::error::{Error, Result};
-use crate::ingestion::streaming_client::GrpcStreamingClient;
+use crate::ingestion::ingestion_client::{IngestionClient, IngestionClientArgs};
+use crate::ingestion::streaming_client::{GrpcStreamingClient, StreamingClientArgs};
 use crate::metrics::IndexerMetrics;
 use crate::types::full_checkpoint_content::Checkpoint;
 
 mod broadcaster;
-pub mod client;
 pub mod error;
+pub mod ingestion_client;
 mod local_client;
 pub mod remote_client;
 mod rpc_client;
-mod streaming_client;
+pub mod streaming_client;
 #[cfg(test)]
 mod test_utils;
 
 pub(crate) const MAX_GRPC_MESSAGE_SIZE_BYTES: usize = 128 * 1024 * 1024;
 
+/// Combined arguments for both ingestion and streaming clients.
+/// This is a convenience wrapper that flattens both argument types.
 #[derive(clap::Args, Clone, Debug, Default)]
-#[group(required = true)]
 pub struct ClientArgs {
-    /// Remote Store to fetch checkpoints from.
-    #[clap(long, group = "source")]
-    pub remote_store_url: Option<Url>,
+    #[clap(flatten)]
+    pub ingestion: IngestionClientArgs,
 
-    /// Path to the local ingestion directory.
-    /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
-    #[clap(long, group = "source")]
-    pub local_ingestion_path: Option<PathBuf>,
-
-    /// Sui fullnode gRPC url to fetch checkpoints from.
-    /// If all remote_store_url, local_ingestion_path and rpc_api_url are provided, remote_store_url will be used.
-    #[clap(long, env, group = "source")]
-    pub rpc_api_url: Option<Url>,
-
-    /// Optional username for the gRPC service.
-    #[clap(long, env)]
-    pub rpc_username: Option<String>,
-
-    /// Optional password for the gRPC service.
-    #[clap(long, env)]
-    pub rpc_password: Option<String>,
-
-    /// gRPC endpoint for streaming checkpoints
-    #[clap(long, env)]
-    pub streaming_url: Option<Uri>,
+    #[clap(flatten)]
+    pub streaming: StreamingClientArgs,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -107,23 +86,8 @@ impl IngestionService {
         metrics: Arc<IndexerMetrics>,
         cancel: CancellationToken,
     ) -> Result<Self> {
-        // TODO: Potentially support a hybrid mode where we can fetch from both local and remote.
-        let ingestion_client = if let Some(url) = args.remote_store_url.as_ref() {
-            IngestionClient::new_remote(url.clone(), metrics.clone())?
-        } else if let Some(path) = args.local_ingestion_path.as_ref() {
-            IngestionClient::new_local(path.clone(), metrics.clone())
-        } else if let Some(rpc_api_url) = args.rpc_api_url.as_ref() {
-            IngestionClient::new_rpc(
-                rpc_api_url.clone(),
-                args.rpc_username,
-                args.rpc_password,
-                metrics.clone(),
-            )?
-        } else {
-            panic!("One of remote_store_url, local_ingestion_path or rpc_api_url must be provided");
-        };
-
-        let streaming_client = args.streaming_url.map(GrpcStreamingClient::new);
+        let ingestion_client = IngestionClient::new(args.ingestion, metrics.clone())?;
+        let streaming_client = args.streaming.streaming_url.map(GrpcStreamingClient::new);
 
         let subscribers = Vec::new();
         let (commit_hi_tx, commit_hi_rx) = mpsc::unbounded_channel();
@@ -134,7 +98,7 @@ impl IngestionService {
             commit_hi_tx,
             commit_hi_rx,
             subscribers,
-            metrics,
+            metrics: metrics.clone(),
             cancel,
         })
     }
@@ -234,6 +198,7 @@ mod tests {
     use std::sync::Mutex;
 
     use reqwest::StatusCode;
+    use url::Url;
     use wiremock::{MockServer, Request};
 
     use crate::ingestion::remote_client::tests::{respond_with, status};
@@ -250,7 +215,10 @@ mod tests {
     ) -> IngestionService {
         IngestionService::new(
             ClientArgs {
-                remote_store_url: Some(Url::parse(&uri).unwrap()),
+                ingestion: IngestionClientArgs {
+                    remote_store_url: Some(Url::parse(&uri).unwrap()),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             IngestionConfig {

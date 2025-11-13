@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use prost_types::FieldMask;
@@ -10,6 +9,10 @@ use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_types::full_checkpoint_content::Checkpoint;
 use tonic::Code;
+
+use crate::ingestion::ingestion_client::{
+    FetchData, FetchError, FetchResult, IngestionClientTrait,
+};
 
 #[async_trait]
 impl IngestionClientTrait for RpcClient {

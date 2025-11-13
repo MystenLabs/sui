@@ -5,7 +5,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use anyhow::{Context, ensure};
 use futures::future;
-use ingestion::{ClientArgs, IngestionConfig, IngestionService, client::IngestionClient};
+use ingestion::{ClientArgs, IngestionConfig, IngestionService, ingestion_client::IngestionClient};
 use metrics::IndexerMetrics;
 use pipeline::{
     Processor,
@@ -445,6 +445,7 @@ impl<T: TransactionalStore> Indexer<T> {
 mod tests {
     use super::*;
     use crate::FieldCount;
+    use crate::ingestion::ingestion_client::IngestionClientArgs;
     use crate::mocks::store::MockStore;
     use crate::pipeline::{Processor, concurrent::ConcurrentConfig};
     use crate::store::CommitterWatermark;
@@ -572,7 +573,10 @@ mod tests {
         };
         let temp_dir = tempfile::tempdir().unwrap();
         let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -625,7 +629,10 @@ mod tests {
         };
         let temp_dir = tempfile::tempdir().unwrap();
         let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -678,7 +685,10 @@ mod tests {
         };
         let temp_dir = tempfile::tempdir().unwrap();
         let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -730,7 +740,10 @@ mod tests {
         };
         let temp_dir = tempfile::tempdir().unwrap();
         let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -783,7 +796,10 @@ mod tests {
         };
         let temp_dir = tempfile::tempdir().unwrap();
         let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -846,7 +862,10 @@ mod tests {
         .await;
 
         let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -924,7 +943,10 @@ mod tests {
         .await;
 
         let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -1017,7 +1039,10 @@ mod tests {
         };
 
         let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
             ..Default::default()
         };
 

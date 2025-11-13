@@ -250,6 +250,7 @@ mod tests {
 
     use crate::FieldCount;
     use crate::ingestion::ClientArgs;
+    use crate::ingestion::ingestion_client::IngestionClientArgs;
     use crate::pipeline::Processor;
     use crate::pipeline::concurrent::ConcurrentConfig;
     use crate::postgres::{
@@ -345,7 +346,10 @@ mod tests {
 
         let args = Args {
             client_args: Some(ClientArgs {
-                local_ingestion_path: Some(checkpoint_dir.path().to_owned()),
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some(checkpoint_dir.path().to_owned()),
+                    ..Default::default()
+                },
                 ..Default::default()
             }),
             indexer_args: IndexerArgs {
@@ -432,7 +436,10 @@ mod tests {
                     ..Default::default()
                 },
                 client_args: Some(ClientArgs {
-                    local_ingestion_path: Some("/bundled".into()),
+                    ingestion: IngestionClientArgs {
+                        local_ingestion_path: Some("/bundled".into()),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 }),
                 metrics_args: MetricsArgs {
@@ -444,7 +451,10 @@ mod tests {
                 ..Default::default()
             })
             .with_client_args(ClientArgs {
-                local_ingestion_path: Some("/individual".into()),
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some("/individual".into()),
+                    ..Default::default()
+                },
                 ..Default::default()
             })
             .with_metrics_args(MetricsArgs {
@@ -457,6 +467,7 @@ mod tests {
                 .args
                 .client_args
                 .unwrap()
+                .ingestion
                 .local_ingestion_path
                 .unwrap()
                 .to_string_lossy(),
@@ -476,7 +487,10 @@ mod tests {
                 ..Default::default()
             })
             .with_client_args(ClientArgs {
-                local_ingestion_path: Some("/individual".into()),
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some("/individual".into()),
+                    ..Default::default()
+                },
                 ..Default::default()
             })
             .with_metrics_args(MetricsArgs {
@@ -488,7 +502,10 @@ mod tests {
                     ..Default::default()
                 },
                 client_args: Some(ClientArgs {
-                    local_ingestion_path: Some("/bundled".into()),
+                    ingestion: IngestionClientArgs {
+                        local_ingestion_path: Some("/bundled".into()),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 }),
                 metrics_args: MetricsArgs {
@@ -502,6 +519,7 @@ mod tests {
                 .args
                 .client_args
                 .unwrap()
+                .ingestion
                 .local_ingestion_path
                 .unwrap()
                 .to_string_lossy(),

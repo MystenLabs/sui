@@ -11,7 +11,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use super::{IngestionConfig, client::IngestionClient};
+use super::{IngestionConfig, ingestion_client::IngestionClient};
 use crate::{
     ingestion::{error::Error, streaming_client::CheckpointStreamingClient},
     metrics::IndexerMetrics,
@@ -432,14 +432,14 @@ mod tests {
     use tokio::time::{error::Elapsed, timeout};
 
     use super::*;
-    use crate::ingestion::client::FetchData;
+    use crate::ingestion::ingestion_client::FetchData;
     use crate::ingestion::streaming_client::test_utils::MockStreamingClient;
     use crate::ingestion::{IngestionConfig, test_utils::test_checkpoint_data};
     use crate::metrics::tests::test_metrics;
 
     /// Create a mock IngestionClient for tests
     fn mock_client(metrics: Arc<IndexerMetrics>) -> IngestionClient {
-        use crate::ingestion::client::{FetchError, IngestionClientTrait};
+        use crate::ingestion::ingestion_client::{FetchError, IngestionClientTrait};
         use async_trait::async_trait;
 
         struct MockClient;

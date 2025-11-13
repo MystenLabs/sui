@@ -41,6 +41,32 @@ pub(crate) trait IngestionClientTrait: Send + Sync {
     async fn fetch(&self, checkpoint: u64) -> FetchResult;
 }
 
+#[derive(clap::Args, Clone, Debug, Default)]
+#[group(required = true)]
+pub struct IngestionClientArgs {
+    /// Remote Store to fetch checkpoints from.
+    #[clap(long, group = "source")]
+    pub remote_store_url: Option<Url>,
+
+    /// Path to the local ingestion directory.
+    /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
+    #[clap(long, group = "source")]
+    pub local_ingestion_path: Option<PathBuf>,
+
+    /// Sui fullnode gRPC url to fetch checkpoints from.
+    /// If all remote_store_url, local_ingestion_path and rpc_api_url are provided, remote_store_url will be used.
+    #[clap(long, env, group = "source")]
+    pub rpc_api_url: Option<Url>,
+
+    /// Optional username for the gRPC service.
+    #[clap(long, env)]
+    pub rpc_username: Option<String>,
+
+    /// Optional password for the gRPC service.
+    #[clap(long, env)]
+    pub rpc_password: Option<String>,
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum FetchError {
     #[error("Checkpoint not found")]
@@ -77,6 +103,27 @@ pub struct IngestionClient {
 }
 
 impl IngestionClient {
+    /// Construct a new ingestion client based on the provided arguments.
+    pub fn new(args: IngestionClientArgs, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
+        // TODO: Support stacking multiple ingestion clients for redundancy/failover.
+        let client = if let Some(url) = args.remote_store_url.as_ref() {
+            IngestionClient::new_remote(url.clone(), metrics.clone())?
+        } else if let Some(path) = args.local_ingestion_path.as_ref() {
+            IngestionClient::new_local(path.clone(), metrics.clone())
+        } else if let Some(rpc_api_url) = args.rpc_api_url.as_ref() {
+            IngestionClient::new_rpc(
+                rpc_api_url.clone(),
+                args.rpc_username,
+                args.rpc_password,
+                metrics.clone(),
+            )?
+        } else {
+            panic!("One of remote_store_url, local_ingestion_path or rpc_api_url must be provided");
+        };
+
+        Ok(client)
+    }
+
     pub(crate) fn new_remote(url: Url, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
         let client = Arc::new(RemoteIngestionClient::new(url)?);
         Ok(Self::new_impl(client, metrics))
@@ -161,12 +208,12 @@ impl IngestionClient {
     /// Fetch checkpoint data by sequence number.
     ///
     /// Repeatedly retries transient errors with an exponential backoff (up to
-    /// [MAX_TRANSIENT_RETRY_INTERVAL]). Transient errors are either defined by the client
+    /// `MAX_TRANSIENT_RETRY_INTERVAL`). Transient errors are either defined by the client
     /// implementation that returns a [FetchError::Transient] error variant, or within this
     /// function if we fail to deserialize the result as [Checkpoint].
     ///
     /// The function will immediately return if the checkpoint is not found.
-    pub(crate) async fn fetch(&self, checkpoint: u64) -> IngestionResult<Arc<Checkpoint>> {
+    pub async fn fetch(&self, checkpoint: u64) -> IngestionResult<Arc<Checkpoint>> {
         let client = self.client.clone();
         let request = move || {
             let client = client.clone();
