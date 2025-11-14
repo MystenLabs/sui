@@ -302,6 +302,10 @@ async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
     let affected = match handler.prune(from, to_exclusive, &mut conn).await {
         Ok(affected) => {
             guard.stop_and_record();
+            debug!(
+                pipeline = H::NAME,
+                "Finished pruning from {from} to {to_exclusive}, affected {affected} rows"
+            );
             affected
         }
 
