@@ -26,6 +26,9 @@ use std::sync::{Arc, RwLock};
 pub trait ReadApi {
     #[method(name = "getChainIdentifier")]
     async fn get_chain_identifier(&self) -> RpcResult<String>;
+
+    #[method(name = "getProtocolConfig")]
+    async fn get_protocol_config(&self) -> RpcResult<String>;
 }
 
 pub(crate) struct Read(pub Arc<RwLock<Simulacrum>>);
@@ -49,6 +52,11 @@ impl ReadApiServer for Read {
             .into();
         let chain_id = chain_id.to_string();
         Ok(chain_id)
+    }
+
+    async fn get_protocol_config(&self) -> RpcResult<String> {
+        let simulacrum = self.0.read().unwrap();
+        Ok(protocol_config_str)
     }
 }
 
