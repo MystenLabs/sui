@@ -7,7 +7,9 @@ use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
 use sui_types::base_types::FullObjectRef;
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair};
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
+use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
 
 use super::shared_object_version_manager::AssignedVersions;
 use super::test_authority_builder::TestAuthorityBuilder;
@@ -527,4 +529,88 @@ where
     };
 
     (scheduled_txns, assigned_tx_and_versions)
+}
+
+// ====== adddress balance test helpers ======
+
+pub fn make_send_to_account_tx(
+    amount: u64,
+    recipient: SuiAddress,
+    sender: SuiAddress,
+    gas: ObjectRef,
+    rgp: u64,
+) -> TransactionData {
+    make_send_to_multi_account_tx(&[(amount, recipient)], sender, gas, rgp)
+}
+
+pub fn make_send_to_multi_account_tx(
+    amounts_and_recipients: &[(u64, SuiAddress)],
+    sender: SuiAddress,
+    gas: ObjectRef,
+    rgp: u64,
+) -> TransactionData {
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    for (amount, recipient) in amounts_and_recipients {
+        let amount_arg = builder.pure(*amount).unwrap();
+        let recipient_arg = builder.pure(recipient).unwrap();
+        let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount_arg]));
+
+        let Argument::Result(coin_idx) = coin else {
+            panic!("coin is not a result");
+        };
+
+        let coin = Argument::NestedResult(coin_idx, 0);
+
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("send_funds").unwrap(),
+            vec!["0x2::sui::SUI".parse().unwrap()],
+            vec![coin, recipient_arg],
+        );
+    }
+
+    let tx = TransactionKind::ProgrammableTransaction(builder.finish());
+    TransactionData::new(tx, sender, gas, 10000000, rgp)
+}
+
+pub fn make_coin_reservation_tx(
+    coin_reservation: ObjectRef,
+    sender: SuiAddress,
+    recipient: SuiAddress,
+    gas: ObjectRef,
+    rgp: u64,
+) -> TransactionData {
+    make_coin_reservation_tx_with_split(coin_reservation, sender, recipient, gas, rgp, None)
+}
+
+pub fn make_coin_reservation_tx_with_split(
+    coin_reservation: ObjectRef,
+    sender: SuiAddress,
+    recipient: SuiAddress,
+    gas: ObjectRef,
+    rgp: u64,
+    split_amount: Option<u64>,
+) -> TransactionData {
+    // transfer the coin reservation obj ref back to a regular coin
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    let coin_res_arg = builder
+        .obj(ObjectArg::ImmOrOwnedObject(coin_reservation))
+        .unwrap();
+
+    let recipient_arg = builder.pure(recipient).unwrap();
+
+    let xfer_arg = if let Some(split_amount) = split_amount {
+        let amount = builder.pure(split_amount).unwrap();
+        builder.command(Command::SplitCoins(coin_res_arg, vec![amount]))
+    } else {
+        coin_res_arg
+    };
+
+    builder.command(Command::TransferObjects(vec![xfer_arg], recipient_arg));
+
+    let tx = TransactionKind::ProgrammableTransaction(builder.finish());
+    TransactionData::new(tx, sender, gas, 10000000, rgp)
 }

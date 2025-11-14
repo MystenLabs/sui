@@ -597,6 +597,10 @@ impl<K> DynamicFieldObject<K> {
     pub fn into_object(self) -> Object {
         self.0
     }
+
+    pub fn as_object(&self) -> &Object {
+        &self.0
+    }
 }
 
 impl<K> DynamicFieldObject<K>
