@@ -478,8 +478,7 @@ pub fn choose_transaction_driver_percentage(
 ) -> u8 {
     if let Ok(v) = std::env::var("TRANSACTION_DRIVER")
         && let Ok(tx_driver_percentage) = v.parse::<u8>()
-        && tx_driver_percentage > 0
-        && tx_driver_percentage <= 100
+        && (0..=100).contains(&tx_driver_percentage)
     {
         return tx_driver_percentage;
     }
