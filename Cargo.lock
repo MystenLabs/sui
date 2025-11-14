@@ -16659,6 +16659,7 @@ dependencies = [
  "serde",
  "sui-json-rpc-types",
  "sui-move-build",
+ "sui-package-alt",
  "sui-package-management",
  "sui-sdk",
  "sui-test-transaction-builder",

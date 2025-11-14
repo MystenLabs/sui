@@ -8,6 +8,7 @@ use std::{
     io::{self, Read},
     path::{Path, PathBuf},
     process::Command,
+    str::FromStr,
 };
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
@@ -16,6 +17,8 @@ use serde::{Deserialize, Serialize};
 use tar::Archive;
 use tempfile::TempDir;
 use tracing::{debug, info};
+
+use sui_package_alt::SuiFlavor;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_source_map::utils::source_map_from_file;
@@ -31,7 +34,7 @@ use move_compiler::{
     editions::{Edition, Flavor},
     shared::{NumericalAddress, files::FileName},
 };
-use move_package_alt::package::layout::SourcePackageLayout;
+use move_package_alt::{package::layout::SourcePackageLayout, schema::ParsedPublishedFile};
 use move_package_alt_compilation::compiled_package::CompiledUnitWithSource;
 use move_package_alt_compilation::layout::CompiledPackageLayout;
 use move_symbol_pool::Symbol;
@@ -52,6 +55,7 @@ const CANONICAL_WIN_BINARY_NAME: &str = "sui.exe";
 /// V3: Renames dependency `name` field to `id` and adds a `name` field to store the name from the manifest.
 pub const VERSION: u16 = 3;
 
+// TODO: pkg-alt, maybe we want to reuse the code in move-package-alt to read lockfiles
 #[derive(Serialize, Deserialize)]
 pub struct LockfileHeader {
     pub version: u16,
@@ -75,6 +79,7 @@ struct Schema<T> {
     move_: T,
 }
 
+// TODO: pkg-alt, maybe we want to reuse the code in move-package-alt to read lockfiles
 impl LockfileHeader {
     /// Read lock file header after verifying that the version of the lock is not newer than the version
     /// supported by this library.
@@ -114,32 +119,7 @@ impl ToolchainVersion {
         if published_path.exists() {
             let contents =
                 std::fs::read_to_string(&published_path).context("Reading Published.toml file")?;
-
-            #[derive(serde::Deserialize)]
-            struct BuildConfig {
-                edition: Edition,
-                flavor: Flavor,
-            }
-
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "kebab-case")]
-            struct Metadata {
-                toolchain_version: Option<String>,
-                build_config: Option<BuildConfig>,
-            }
-
-            #[derive(serde::Deserialize)]
-            struct Publication {
-                #[serde(flatten)]
-                metadata: Metadata,
-            }
-
-            #[derive(serde::Deserialize)]
-            struct PublishedFile {
-                published: std::collections::HashMap<String, Publication>,
-            }
-
-            let parsed: PublishedFile =
+            let parsed: ParsedPublishedFile<SuiFlavor> =
                 toml::de::from_str(&contents).context("Deserializing Published.toml")?;
 
             if let Some((_, publication)) = parsed.published.into_iter().next()
@@ -151,8 +131,8 @@ impl ToolchainVersion {
                 debug!("Found toolchain version in Published.toml file");
                 return Ok(Some(ToolchainVersion {
                     compiler_version,
-                    edition: build_config.edition,
-                    flavor: build_config.flavor,
+                    edition: Edition::from_str(&build_config.edition)?,
+                    flavor: Flavor::from_str(&build_config.flavor)?,
                 }));
             }
 
