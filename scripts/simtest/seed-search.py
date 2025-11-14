@@ -105,7 +105,7 @@ if __name__ == "__main__":
 
     for i in range(1, args.num_seeds + 1):
         next_seed = args.seed_start + i
-        commands.append(("%s %s %s" % (binary, '--exact' if args.exact else '', args.testname), {
+        commands.append(("%s --test-threads 1 %s %s" % (binary, '--exact' if args.exact else '', args.testname), {
           "MSIM_TEST_SEED": "%d" % next_seed,
           "RUST_LOG": "off",
         }))
