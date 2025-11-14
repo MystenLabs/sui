@@ -138,19 +138,29 @@ impl ScoringSubdag {
                     // If a blocks strong linked ancestor is in leaders, then
                     // it's a vote for leader.
                     if self.leaders.contains(ancestor) {
-                        // There should never be duplicate references to blocks
-                        // with strong linked ancestors to leader.
+                        // TODO(multi-leader): With multi-leader, the same block may appear in multiple subdags
+                        // (from different leaders in the same round). We skip duplicates here, but we should
+                        // verify this doesn't cause issues with score calculation. In particular:
+                        // 1. Ensure votes are being counted correctly across multiple leaders
+                        // 2. Verify that skipping duplicate votes doesn't skew reputation scores
+                        // 3. Consider if we need to track which leaders a block voted for separately
+                        // This check-and-skip pattern replaced an assertion for the prototype, but needs
+                        // careful analysis before production deployment beyond initial testing.
+                        if self.votes.contains_key(&block.reference()) {
+                            tracing::trace!(
+                                "Vote {} for leader {ancestor} already added (multi-leader)",
+                                block.reference()
+                            );
+                            continue;
+                        }
+
                         tracing::trace!(
                             "Found a vote {} for leader {ancestor} from authority {}",
                             block.reference(),
                             block.author()
                         );
-                        assert!(
-                            self.votes
-                                .insert(block.reference(), StakeAggregator::new())
-                                .is_none(),
-                            "Vote {block} already exists. Duplicate vote found for leader {ancestor}"
-                        );
+                        self.votes
+                            .insert(block.reference(), StakeAggregator::new());
                     }
 
                     if let Some(stake) = self.votes.get_mut(ancestor) {

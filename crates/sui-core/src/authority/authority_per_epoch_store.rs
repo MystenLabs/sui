@@ -3782,6 +3782,14 @@ impl AuthorityPerEpochStore {
         &self,
         commit_sub_dag_index: u64,
     ) -> u64 {
+        // TODO(multi-leader): Changed from round-based to sub_dag_index-based calculation to support
+        // multi-leader. This ensures each commit gets a unique checkpoint height even when multiple
+        // leaders commit in the same round. Before production deployment, verify:
+        // 1. Checkpoint height semantics are still correct for downstream consumers
+        // 2. AccumulatorSettlement transactions work correctly with new height scheme
+        // 3. Checkpoint resumption and recovery logic handles the new heights properly
+        // 4. State sync and checkpoint verification work with non-contiguous heights
+        //
         // With multi-leader, we use the global commit sub-dag index as the base for checkpoint height.
         // This ensures uniqueness across all commits, regardless of which leader produced them.
         // The sub_dag_index is a monotonically increasing global counter assigned by consensus.
