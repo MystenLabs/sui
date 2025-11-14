@@ -3,18 +3,18 @@
 
 use crate::{
     authority::{
-        AuthorityMetrics, ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
-        shared_object_version_manager::Schedulable,
+        authority_per_epoch_store::AuthorityPerEpochStore,
+        shared_object_version_manager::Schedulable, AuthorityMetrics, ExecutionEnv,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{
-        ExecutingGuard, PendingCertificateStats,
         balance_withdraw_scheduler::{
-            BalanceSettlement, ObjectBalanceWithdrawSchedulerTrait, ObjectBalanceWithdrawStatus,
-            ScheduleStatus, TxBalanceWithdraw,
             naive_scheduler::NaiveObjectBalanceWithdrawScheduler,
-            scheduler::BalanceWithdrawScheduler,
+            scheduler::BalanceWithdrawScheduler, BalanceSettlement,
+            ObjectBalanceWithdrawSchedulerTrait, ObjectBalanceWithdrawStatus, ScheduleStatus,
+            TxBalanceWithdraw,
         },
+        ExecutingGuard, PendingCertificateStats,
     },
 };
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -27,9 +27,8 @@ use std::{
 };
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     base_types::{FullObjectID, ObjectID},
-    digests::TransactionDigest,
+    digests::{ChainIdentifier, TransactionDigest},
     effects::{AccumulatorOperation, AccumulatorValue, TransactionEffects, TransactionEffectsAPI},
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
@@ -39,12 +38,13 @@ use sui_types::{
         SenderSignedData, SharedInputObject, SharedObjectMutability, TransactionData,
         TransactionDataAPI, TransactionKey,
     },
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use tracing::{debug, error, instrument};
 
-use super::{PendingCertificate, overload_tracker::OverloadTracker};
+use super::{overload_tracker::OverloadTracker, PendingCertificate};
 
 /// Utility struct for collecting barrier dependencies
 pub(crate) struct BarrierDependencyBuilder {
@@ -97,6 +97,7 @@ pub struct ExecutionScheduler {
     address_balance_withdraw_scheduler: Arc<Mutex<Option<BalanceWithdrawScheduler>>>,
     object_balance_withdraw_scheduler:
         Arc<Mutex<Option<Box<dyn ObjectBalanceWithdrawSchedulerTrait>>>>,
+    chain_identifier: ChainIdentifier,
     metrics: Arc<AuthorityMetrics>,
 }
 
@@ -137,6 +138,7 @@ impl ExecutionScheduler {
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        chain_identifier: ChainIdentifier,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         tracing::info!("Creating new ExecutionScheduler");
@@ -157,6 +159,7 @@ impl ExecutionScheduler {
             object_balance_withdraw_scheduler: Arc::new(Mutex::new(
                 object_balance_withdraw_scheduler,
             )),
+            chain_identifier,
             metrics,
         }
     }
@@ -352,7 +355,7 @@ impl ExecutionScheduler {
         for (cert, env) in &certs {
             let tx_withdraws = cert
                 .transaction_data()
-                .process_funds_withdrawals_for_execution();
+                .process_funds_withdrawals_for_execution(self.chain_identifier);
             assert!(!tx_withdraws.is_empty());
             let accumulator_version = env
                 .assigned_versions
@@ -824,14 +827,14 @@ impl ExecutionScheduler {
 #[cfg(test)]
 mod test {
     use super::{BarrierDependencyBuilder, ExecutionScheduler, PendingCertificate};
-    use crate::authority::ExecutionEnv;
     use crate::authority::shared_object_version_manager::AssignedVersions;
-    use crate::authority::{AuthorityState, authority_tests::init_state_with_objects};
+    use crate::authority::ExecutionEnv;
+    use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
     use crate::execution_scheduler::SchedulingSource;
     use std::collections::BTreeSet;
     use std::{time::Duration, vec};
     use sui_test_transaction_builder::TestTransactionBuilder;
-    use sui_types::base_types::{SuiAddress, random_object_ref};
+    use sui_types::base_types::{random_object_ref, SuiAddress};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::object::Owner;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -839,15 +842,15 @@ mod test {
         SharedObjectMutability, Transaction, TransactionData, TransactionKind, VerifiedTransaction,
     };
     use sui_types::{
-        SUI_FRAMEWORK_PACKAGE_ID,
         base_types::{ObjectID, SequenceNumber},
         crypto::deterministic_random_account_key,
         object::Object,
         transaction::{CallArg, ObjectArg},
+        SUI_FRAMEWORK_PACKAGE_ID,
     };
     use tokio::time::Instant;
     use tokio::{
-        sync::mpsc::{UnboundedReceiver, error::TryRecvError, unbounded_channel},
+        sync::mpsc::{error::TryRecvError, unbounded_channel, UnboundedReceiver},
         time::sleep,
     };
 
@@ -864,6 +867,7 @@ mod test {
             state.get_transaction_cache_reader().clone(),
             tx_ready_certificates,
             &state.epoch_store_for_testing(),
+            state.get_chain_identifier(),
             state.metrics.clone(),
         );
 
@@ -901,22 +905,18 @@ mod test {
         // execution_scheduler output from rx_ready_certificates.
         let (execution_scheduler, mut rx_ready_certificates) = make_execution_scheduler(&state);
         // scheduler should output no transaction.
-        assert!(
-            rx_ready_certificates
-                .try_recv()
-                .is_err_and(|err| err == TryRecvError::Empty)
-        );
+        assert!(rx_ready_certificates
+            .try_recv()
+            .is_err_and(|err| err == TryRecvError::Empty));
         // scheduler should be empty at the beginning.
         assert_eq!(execution_scheduler.num_pending_certificates(), 0);
 
         // Enqueue empty vec should not crash.
         execution_scheduler.enqueue_transactions(vec![], &state.epoch_store_for_testing());
         // scheduler should output no transaction.
-        assert!(
-            rx_ready_certificates
-                .try_recv()
-                .is_err_and(|err| err == TryRecvError::Empty)
-        );
+        assert!(rx_ready_certificates
+            .try_recv()
+            .is_err_and(|err| err == TryRecvError::Empty));
 
         // Enqueue a transaction with existing gas object, empty input.
         let transaction = make_transaction(gas_objects[0].clone(), vec![]);
@@ -962,11 +962,9 @@ mod test {
         );
         // scheduler should output no transaction yet.
         sleep(Duration::from_secs(1)).await;
-        assert!(
-            rx_ready_certificates
-                .try_recv()
-                .is_err_and(|err| err == TryRecvError::Empty)
-        );
+        assert!(rx_ready_certificates
+            .try_recv()
+            .is_err_and(|err| err == TryRecvError::Empty));
 
         assert_eq!(execution_scheduler.num_pending_certificates(), 1);
 
@@ -979,11 +977,9 @@ mod test {
             &state.epoch_store_for_testing(),
         );
         sleep(Duration::from_secs(1)).await;
-        assert!(
-            rx_ready_certificates
-                .try_recv()
-                .is_err_and(|err| err == TryRecvError::Empty)
-        );
+        assert!(rx_ready_certificates
+            .try_recv()
+            .is_err_and(|err| err == TryRecvError::Empty));
 
         assert_eq!(execution_scheduler.num_pending_certificates(), 2);
 
@@ -1734,16 +1730,12 @@ mod test {
     #[test]
     fn test_barrier_dependency_builder() {
         let make_transaction = |non_exclusive_writes: Vec<u32>, exclusive_writes: Vec<u32>| {
-            assert!(
-                non_exclusive_writes
-                    .iter()
-                    .all(|id| !exclusive_writes.contains(id))
-            );
-            assert!(
-                exclusive_writes
-                    .iter()
-                    .all(|id| !non_exclusive_writes.contains(id))
-            );
+            assert!(non_exclusive_writes
+                .iter()
+                .all(|id| !exclusive_writes.contains(id)));
+            assert!(exclusive_writes
+                .iter()
+                .all(|id| !non_exclusive_writes.contains(id)));
 
             let non_exclusive_writes = non_exclusive_writes
                 .into_iter()

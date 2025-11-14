@@ -5,18 +5,21 @@ use move_core_types::{identifier::Identifier, u256::U256};
 use shared_crypto::intent::Intent;
 use std::path::PathBuf;
 use sui_core::accumulators::balances::get_currency_types_for_owner;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
+use sui_core::authority::authority_test_utils::{
+    make_coin_reservation_tx_with_split, make_send_to_account_tx, make_send_to_multi_account_tx,
+};
+use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse};
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
     accumulator_metadata::AccumulatorOwner,
     accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
-    base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr},
+    base_types::{dbg_addr, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
+    coin_reservation::ParsedObjectRefWithdrawal,
     digests::{ChainIdentifier, CheckpointDigest},
     effects::{InputConsensusObject, TransactionEffectsAPI},
     gas::GasCostSummary,
@@ -29,16 +32,37 @@ use sui_types::{
         TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
         TransactionKind, VerifiedTransaction,
     },
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
 
 async fn get_sender_and_all_gas(context: &mut WalletContext) -> (SuiAddress, Vec<ObjectRef>) {
+    get_nth_sender_and_all_gas(context, 0).await
+}
+
+async fn get_sender_and_one_gas(context: &mut WalletContext) -> (SuiAddress, ObjectRef) {
+    let (sender, gas) = get_sender_and_all_gas(context).await;
+    (sender, gas.into_iter().next().unwrap())
+}
+
+async fn get_nth_sender_and_one_gas(
+    context: &mut WalletContext,
+    n: usize,
+) -> (SuiAddress, ObjectRef) {
+    let (sender, gas) = get_nth_sender_and_all_gas(context, n).await;
+    (sender, gas.into_iter().next().unwrap())
+}
+
+async fn get_nth_sender_and_all_gas(
+    context: &mut WalletContext,
+    n: usize,
+) -> (SuiAddress, Vec<ObjectRef>) {
     let sender = context
         .config
         .keystore
         .addresses()
-        .first()
-        .cloned()
+        .into_iter()
+        .nth(n)
         .unwrap();
 
     let gas = context
@@ -50,11 +74,6 @@ async fn get_sender_and_all_gas(context: &mut WalletContext) -> (SuiAddress, Vec
         .collect();
 
     (sender, gas)
-}
-
-async fn get_sender_and_one_gas(context: &mut WalletContext) -> (SuiAddress, ObjectRef) {
-    let (sender, gas) = get_sender_and_all_gas(context).await;
-    (sender, gas.into_iter().next().unwrap())
 }
 
 fn create_transaction_with_expiration(
@@ -134,11 +153,9 @@ async fn test_accumulators_root_created() {
     // accumulator root is not created yet.
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        assert!(
-            !state
-                .load_epoch_store_one_call_per_task()
-                .accumulator_root_exists()
-        );
+        assert!(!state
+            .load_epoch_store_one_call_per_task()
+            .accumulator_root_exists());
     });
 
     test_cluster.trigger_reconfiguration().await;
@@ -147,11 +164,9 @@ async fn test_accumulators_root_created() {
     // but we didn't upgrade to the next protocol version yet.
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        assert!(
-            state
-                .load_epoch_store_one_call_per_task()
-                .accumulator_root_exists()
-        );
+        assert!(state
+            .load_epoch_store_one_call_per_task()
+            .accumulator_root_exists());
         assert_eq!(
             state
                 .load_epoch_store_one_call_per_task()
@@ -466,14 +481,12 @@ fn verify_accumulator_exists(
             .expect("read cannot fail")
             .expect("accumulator should exist");
 
-    assert!(
-        accumulator_object
-            .data
-            .try_as_move()
-            .unwrap()
-            .type_()
-            .is_efficient_representation()
-    );
+    assert!(accumulator_object
+        .data
+        .try_as_move()
+        .unwrap()
+        .type_()
+        .is_efficient_representation());
 
     let accumulator_value =
         AccumulatorValue::load(child_object_resolver, None, owner, &sui_coin_type)
@@ -712,6 +725,55 @@ async fn test_withdraw_insufficient_balance() {
 
     // ensure that no conservation failures are detected during reconfig.
     test_cluster.trigger_reconfiguration().await;
+}
+
+fn withdraw_from_balance_tx(
+    amount: u64,
+    sender: SuiAddress,
+    gas: ObjectRef,
+    rgp: u64,
+) -> TransactionData {
+    withdraw_from_balance_tx_with_reservation(amount, amount, sender, gas, rgp)
+}
+
+fn withdraw_from_balance_tx_with_reservation(
+    amount: u64,
+    reservation_amount: u64,
+    sender: SuiAddress,
+    gas: ObjectRef,
+    rgp: u64,
+) -> TransactionData {
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    // Add withdraw reservation
+    let withdraw_arg = sui_types::transaction::FundsWithdrawalArg::balance_from_sender(
+        reservation_amount,
+        sui_types::type_input::TypeInput::from(sui_types::gas_coin::GAS::type_tag()),
+    );
+    let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
+
+    let amount_arg = builder.pure(U256::from(amount)).unwrap();
+
+    let split_withdraw_arg = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("funds_accumulator").unwrap(),
+        Identifier::new("withdrawal_split").unwrap(),
+        vec!["0x2::balance::Balance<0x2::sui::SUI>".parse().unwrap()],
+        vec![withdraw_arg, amount_arg],
+    );
+
+    let coin = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("coin").unwrap(),
+        Identifier::new("redeem_funds").unwrap(),
+        vec!["0x2::sui::SUI".parse().unwrap()],
+        vec![split_withdraw_arg],
+    );
+
+    builder.transfer_arg(sender, coin);
+
+    let tx = TransactionKind::ProgrammableTransaction(builder.finish());
+    TransactionData::new(tx, sender, gas, 10000000, rgp)
 }
 
 #[sim_test]
@@ -2758,7 +2820,7 @@ async fn test_address_balance_large_rebate() {
     let created_object_ref = effects
         .created()
         .iter()
-        .find(|(obj_ref, _)| obj_ref.0 != effects.gas_object().0.0)
+        .find(|(obj_ref, _)| obj_ref.0 != effects.gas_object().0 .0)
         .map(|(obj_ref, _)| *obj_ref)
         .expect("Should have created an object");
 
@@ -3010,11 +3072,9 @@ async fn test_get_all_balances() {
             get_currency_types_for_owner(sender, child_object_resolver, index_tables, 10, None)
                 .unwrap();
         assert_eq!(types.len(), 2);
-        assert!(
-            types
-                .iter()
-                .any(|t| t.to_canonical_string(true).contains("::sui::SUI"))
-        );
+        assert!(types
+            .iter()
+            .any(|t| t.to_canonical_string(true).contains("::sui::SUI")));
         assert!(types.iter().any(|t| {
             t.to_canonical_string(true)
                 .contains("::trusted_coin::TRUSTED_COIN")
@@ -3353,4 +3413,207 @@ async fn test_reject_signing_transaction_executed_in_previous_epoch() {
             );
         }
     }
+}
+
+#[sim_test]
+async fn test_coin_reservation_validation() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
+        cfg.enable_accumulators_for_testing();
+        cfg.enable_coin_reservation_for_testing();
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let chain_id = test_cluster.get_chain_identifier();
+    let context = &mut test_cluster.wallet;
+
+    let (sender1, gas1) = get_nth_sender_and_one_gas(context, 0).await;
+    let (sender2, gas2) = get_nth_sender_and_one_gas(context, 1).await;
+
+    // send 1000 gas from the gas coins to the balances
+    let tx = make_send_to_account_tx(1000, sender1, sender1, gas1, rgp);
+
+    let (_, effects) = test_cluster
+        .sign_and_execute_transaction_directly(&tx)
+        .await
+        .unwrap();
+    let gas1 = effects.gas_object().0;
+
+    // compute the sender's SUI accumulator object id
+    let accumulator_obj_id = AccumulatorValue::get_field_id(
+        sender1,
+        &Balance::type_tag(sui_types::gas_coin::GAS::type_tag()),
+    )
+    .unwrap();
+
+    let encode_coin_reservation = |epoch: u64, amount: u64| {
+        ParsedObjectRefWithdrawal::new(*accumulator_obj_id.inner(), epoch, amount)
+            .encode(SequenceNumber::new(), chain_id)
+    };
+
+    // Verify transaction is rejected if it reserves more than the available balance
+    {
+        let coin_reservation = encode_coin_reservation(0, 1001);
+
+        let err =
+            try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender1, sender1, gas1)
+                .await
+                .unwrap_err();
+        assert!(err.to_string().contains("is less than requested"));
+    }
+
+    // Verify transaction is rejected if it uses a bogus accumulator object id.
+    {
+        let random_id = ObjectID::random();
+        let coin_reservation = ParsedObjectRefWithdrawal::new(random_id, 0, 1001)
+            .encode(SequenceNumber::new(), chain_id);
+
+        let err =
+            try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender1, sender1, gas1)
+                .await
+                .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains(format!("object id {} not found", random_id).as_str()));
+    }
+
+    // Verify transaction is rejected if it is not valid in the current epoch.
+    {
+        let coin_reservation = encode_coin_reservation(1, 100);
+
+        let err =
+            try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender1, sender1, gas1)
+                .await
+                .unwrap_err();
+        assert!(err.to_string().contains("Transaction Expired"));
+    }
+
+    // Verify transaction is rejected if the reservation amount is zero.
+    {
+        let coin_reservation = encode_coin_reservation(0, 0);
+
+        let err =
+            try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender1, sender1, gas1)
+                .await
+                .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("reservation amount must be non-zero"));
+    }
+
+    // Verify the transaction is rejected if the accumulator object is not owned by the sender.
+    {
+        let coin_reservation = encode_coin_reservation(0, 100);
+
+        let recipient = SuiAddress::random_for_testing_only();
+        let err = try_coin_reservation_tx(
+            &mut test_cluster,
+            coin_reservation,
+            sender2,
+            recipient,
+            gas2,
+        )
+        .await
+        .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains(format!("is owned by {}, not sender {}", sender1, sender2).as_str()));
+    }
+
+    // Verify coin reservations cannot (yet) be used to pay gas.
+    {
+        let coin_reservation = encode_coin_reservation(0, 10000000);
+
+        let err =
+            try_coin_reservation_tx(&mut test_cluster, gas1, sender1, sender1, coin_reservation)
+                .await
+                .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Gas object is not an owned object"));
+    }
+}
+
+#[sim_test]
+async fn test_coin_reservation_gating() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
+        cfg.enable_accumulators_for_testing();
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let chain_id = test_cluster.get_chain_identifier();
+    let context = &mut test_cluster.wallet;
+
+    let (sender, gas) = get_sender_and_one_gas(context).await;
+
+    // compute the sender's SUI accumulator object id
+    let accumulator_obj_id = AccumulatorValue::get_field_id(
+        sender,
+        &Balance::type_tag(sui_types::gas_coin::GAS::type_tag()),
+    )
+    .unwrap();
+
+    let encode_coin_reservation = |epoch: u64, amount: u64| {
+        ParsedObjectRefWithdrawal::new(*accumulator_obj_id.inner(), epoch, amount)
+            .encode(SequenceNumber::new(), chain_id)
+    };
+
+    // Verify transaction is rejected if coin reservation is not enabled.
+    {
+        let coin_reservation = encode_coin_reservation(0, 1);
+
+        let err = try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender, sender, gas)
+            .await
+            .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("coin reservation backward compatibility layer is not enabled"));
+    }
+}
+
+async fn try_coin_reservation_tx(
+    test_cluster: &mut TestCluster,
+    coin_reservation: ObjectRef,
+    sender: SuiAddress,
+    recipient: SuiAddress,
+    gas: ObjectRef,
+) -> anyhow::Result<SuiTransactionBlockResponse> {
+    try_coin_reservation_tx_with_split(test_cluster, coin_reservation, sender, recipient, gas, None)
+        .await
+}
+
+async fn try_coin_reservation_tx_with_split(
+    test_cluster: &mut TestCluster,
+    coin_reservation: ObjectRef,
+    sender: SuiAddress,
+    recipient: SuiAddress,
+    gas: ObjectRef,
+    split_amount: Option<u64>,
+) -> anyhow::Result<SuiTransactionBlockResponse> {
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let tx = make_coin_reservation_tx_with_split(
+        coin_reservation,
+        sender,
+        recipient,
+        gas,
+        rgp,
+        split_amount,
+    );
+    let signed_tx = test_cluster.wallet.sign_transaction(&tx).await;
+    test_cluster
+        .wallet
+        .execute_transaction_may_fail(signed_tx)
+        .await
 }
