@@ -17444,6 +17444,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-util 0.7.13",
+ "tonic 0.14.2",
  "tracing",
 ]
 

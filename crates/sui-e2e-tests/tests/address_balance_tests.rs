@@ -7,11 +7,9 @@ use std::path::PathBuf;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
-use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::effects::TransactionEffects;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
     accumulator_metadata::AccumulatorOwner,
@@ -22,7 +20,6 @@ use sui_types::{
     effects::{InputConsensusObject, TransactionEffectsAPI},
     gas::GasCostSummary,
     gas_coin::GAS,
-    messages_grpc::{RawSubmitTxRequest, SubmitTxType},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ChildObjectResolver,
     supported_protocol_versions::SupportedProtocolVersions,
@@ -32,7 +29,6 @@ use sui_types::{
     },
 };
 use test_cluster::TestClusterBuilder;
-use tonic::IntoRequest;
 
 async fn get_sender_and_gas(context: &mut WalletContext) -> (SuiAddress, ObjectRef) {
     let sender = context
@@ -53,27 +49,6 @@ async fn get_sender_and_gas(context: &mut WalletContext) -> (SuiAddress, ObjectR
         .object_ref();
 
     (sender, gas)
-}
-
-async fn wait_for_effects(
-    validator_handle: &SuiNodeHandle,
-    digest: &sui_types::digests::TransactionDigest,
-) -> TransactionEffects {
-    for _ in 0..600 {
-        if let Some(effects) = validator_handle.with(|node| {
-            let state = node.state();
-            state
-                .get_transaction_cache_reader()
-                .get_executed_effects(digest)
-        }) {
-            return effects;
-        }
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    }
-    panic!(
-        "Transaction effects not found after 60 seconds for digest: {:?}",
-        digest
-    );
 }
 
 fn create_transaction_with_expiration(
@@ -1920,41 +1895,17 @@ async fn test_sponsor_insufficient_balance_charges_zero_gas() {
         "Transaction digests should be different"
     );
 
-    let agg = test_cluster.authority_aggregator();
-    let authority_client = agg
-        .authority_clients
-        .iter()
-        .next()
-        .unwrap()
-        .1
-        .authority_client();
-
-    let request = RawSubmitTxRequest {
-        transactions: vec![
-            bcs::to_bytes(&signed_tx1).unwrap().into(),
-            bcs::to_bytes(&signed_tx2).unwrap().into(),
-        ],
-        submit_type: SubmitTxType::SoftBundle.into(),
-    };
-
-    let mut validator_client = authority_client.get_client_for_testing().unwrap();
-    let result = validator_client
-        .submit_transaction(request.into_request())
+    let mut effects = test_cluster
+        .execute_signed_txns_in_soft_bundle(&[signed_tx1, signed_tx2])
         .await
-        .map(tonic::Response::into_inner)
         .unwrap();
 
-    assert_eq!(result.results.len(), 2, "Should have 2 submission results");
+    test_cluster
+        .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
+        .await;
 
-    let validator_handle = test_cluster
-        .swarm
-        .validator_node_handles()
-        .into_iter()
-        .next()
-        .expect("No validator found");
-
-    let tx1_effects = wait_for_effects(&validator_handle, &tx1_digest).await;
-    let tx2_effects = wait_for_effects(&validator_handle, &tx2_digest).await;
+    let tx2_effects = effects.pop().unwrap().1;
+    let tx1_effects = effects.pop().unwrap().1;
 
     let tx1_gas = tx1_effects.gas_cost_summary();
     let tx1_total_gas = calculate_total_gas_cost(tx1_gas);
@@ -1992,7 +1943,7 @@ async fn test_sponsor_insufficient_balance_charges_zero_gas() {
 
     let successful_tx_gas = succeeded_gas;
 
-    let final_sponsor_balance = validator_handle.with(|node| {
+    let final_sponsor_balance = test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
         get_balance(child_object_resolver, sponsor)
@@ -2004,7 +1955,7 @@ async fn test_sponsor_insufficient_balance_charges_zero_gas() {
         "Sponsor balance should reflect only the successful transaction"
     );
 
-    let final_sender_balance = validator_handle.with(|node| {
+    let final_sender_balance = test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
         get_balance(child_object_resolver, sender)
@@ -2049,52 +2000,21 @@ async fn test_insufficient_balance_charges_zero_gas() {
 
     let tx2 = create_withdraw_balance_transaction(sender, rgp, chain_id, withdraw_amount, 1);
 
-    let signed_tx1 = test_cluster.sign_transaction(&tx1).await;
-    let signed_tx2 = test_cluster.sign_transaction(&tx2).await;
-
-    let tx1_digest = *signed_tx1.digest();
-    let tx2_digest = *signed_tx2.digest();
+    let tx1_digest = tx1.digest();
+    let tx2_digest = tx2.digest();
 
     assert_ne!(
         tx1_digest, tx2_digest,
         "Transaction digests should be different"
     );
 
-    let agg = test_cluster.authority_aggregator();
-    let authority_client = agg
-        .authority_clients
-        .iter()
-        .next()
-        .unwrap()
-        .1
-        .authority_client();
-
-    let request = RawSubmitTxRequest {
-        transactions: vec![
-            bcs::to_bytes(&signed_tx1).unwrap().into(),
-            bcs::to_bytes(&signed_tx2).unwrap().into(),
-        ],
-        submit_type: SubmitTxType::SoftBundle.into(),
-    };
-
-    let mut validator_client = authority_client.get_client_for_testing().unwrap();
-    let result = validator_client
-        .submit_transaction(request.into_request())
+    let mut effects = test_cluster
+        .sign_and_execute_txns_in_soft_bundle(&[tx1, tx2])
         .await
-        .map(tonic::Response::into_inner)
         .unwrap();
 
-    assert_eq!(result.results.len(), 2, "Should have 2 submission results");
-
-    let validator_handle = test_cluster
-        .swarm
-        .validator_node_handles()
-        .into_iter()
-        .next()
-        .expect("No validator found");
-
-    let tx1_effects = wait_for_effects(&validator_handle, &tx1_digest).await;
-    let tx2_effects = wait_for_effects(&validator_handle, &tx2_digest).await;
+    let tx2_effects = effects.pop().unwrap().1;
+    let tx1_effects = effects.pop().unwrap().1;
 
     let tx1_gas = tx1_effects.gas_cost_summary();
     let tx1_total_gas = calculate_total_gas_cost(tx1_gas);
@@ -2132,17 +2052,26 @@ async fn test_insufficient_balance_charges_zero_gas() {
 
     let successful_tx_gas = succeeded_gas;
 
-    let final_sender_balance = validator_handle.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        get_balance(child_object_resolver, sender)
-    });
+    test_cluster
+        .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
+        .await;
 
-    let expected_final_balance = initial_balance - withdraw_amount - successful_tx_gas;
-    assert_eq!(
-        final_sender_balance, expected_final_balance,
-        "Final balance should reflect only the successful transaction"
-    );
+    test_cluster
+        .fullnode_handle
+        .sui_node
+        .with_async(|node| async move {
+            let state = node.state();
+            let child_object_resolver = state.get_child_object_resolver().as_ref();
+
+            let final_sender_balance = get_balance(child_object_resolver, sender);
+
+            let expected_final_balance = initial_balance - withdraw_amount - successful_tx_gas;
+            assert_eq!(
+                final_sender_balance, expected_final_balance,
+                "Final balance should reflect only the successful transaction"
+            );
+        })
+        .await;
 
     test_cluster.trigger_reconfiguration().await;
 }
@@ -2214,52 +2143,21 @@ async fn test_soft_bundle_different_gas_payers() {
         1,
     );
 
-    let signed_tx1 = test_cluster.sign_transaction(&tx1).await;
-    let signed_tx2 = test_cluster.sign_transaction(&tx2).await;
-
-    let tx1_digest = *signed_tx1.digest();
-    let tx2_digest = *signed_tx2.digest();
+    let tx1_digest = tx1.digest();
+    let tx2_digest = tx2.digest();
 
     assert_ne!(
         tx1_digest, tx2_digest,
         "Transaction digests should be different"
     );
 
-    let agg = test_cluster.authority_aggregator();
-    let authority_client = agg
-        .authority_clients
-        .iter()
-        .next()
-        .unwrap()
-        .1
-        .authority_client();
-
-    let request = RawSubmitTxRequest {
-        transactions: vec![
-            bcs::to_bytes(&signed_tx1).unwrap().into(),
-            bcs::to_bytes(&signed_tx2).unwrap().into(),
-        ],
-        submit_type: SubmitTxType::SoftBundle.into(),
-    };
-
-    let mut validator_client = authority_client.get_client_for_testing().unwrap();
-    let result = validator_client
-        .submit_transaction(request.into_request())
+    let mut effects = test_cluster
+        .sign_and_execute_txns_in_soft_bundle(&[tx1, tx2])
         .await
-        .map(tonic::Response::into_inner)
         .unwrap();
 
-    assert_eq!(result.results.len(), 2, "Should have 2 submission results");
-
-    let validator_handle = test_cluster
-        .swarm
-        .validator_node_handles()
-        .into_iter()
-        .next()
-        .expect("No validator found");
-
-    let tx1_effects = wait_for_effects(&validator_handle, &tx1_digest).await;
-    let tx2_effects = wait_for_effects(&validator_handle, &tx2_digest).await;
+    let tx2_effects = effects.pop().unwrap().1;
+    let tx1_effects = effects.pop().unwrap().1;
 
     assert!(tx1_effects.status().is_ok(), "Transaction 1 should succeed");
     assert!(tx2_effects.status().is_ok(), "Transaction 2 should succeed");
@@ -2280,24 +2178,33 @@ async fn test_soft_bundle_different_gas_payers() {
     let expected_balance1 = 10_000_000 - gas_used1;
     let expected_balance2 = 10_000_000 - gas_used2;
 
-    validator_handle.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
+    test_cluster
+        .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
+        .await;
 
-        let actual_balance1 = get_balance(child_object_resolver, sender1);
-        let actual_balance2 = get_balance(child_object_resolver, sender2);
+    test_cluster
+        .fullnode_handle
+        .sui_node
+        .with_async(|node| async move {
+            let state = node.state();
 
-        assert_eq!(
-            actual_balance1, expected_balance1,
-            "Sender1 balance should be {} after gas deduction, got {}",
-            expected_balance1, actual_balance1
-        );
-        assert_eq!(
-            actual_balance2, expected_balance2,
-            "Sender2 balance should be {} after gas deduction, got {}",
-            expected_balance2, actual_balance2
-        );
-    });
+            let child_object_resolver = state.get_child_object_resolver().as_ref();
+
+            let actual_balance1 = get_balance(child_object_resolver, sender1);
+            let actual_balance2 = get_balance(child_object_resolver, sender2);
+
+            assert_eq!(
+                actual_balance1, expected_balance1,
+                "Sender1 balance should be {} after gas deduction, got {}",
+                expected_balance1, actual_balance1
+            );
+            assert_eq!(
+                actual_balance2, expected_balance2,
+                "Sender2 balance should be {} after gas deduction, got {}",
+                expected_balance2, actual_balance2
+            );
+        })
+        .await;
 
     test_cluster.trigger_reconfiguration().await;
 }
