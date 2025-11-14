@@ -210,8 +210,22 @@ impl AccumulatorValue {
             DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
                 .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
                 .load_object(child_object_resolver)?
-                .map(|o| o.as_object()),
+                .map(|o| o.into_object()),
         )
+    }
+
+    pub fn load_object_by_id(
+        child_object_resolver: &dyn ChildObjectResolver,
+        version_bound: Option<SequenceNumber>,
+        id: ObjectID,
+    ) -> SuiResult<Option<Object>> {
+        Ok(BoundedDynamicFieldID::<AccumulatorKey>::new(
+            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            id,
+            version_bound.unwrap_or(SequenceNumber::MAX),
+        )
+        .load_object(child_object_resolver)?
+        .map(|o| o.into_object()))
     }
 
     pub fn create_for_testing(owner: SuiAddress, type_tag: TypeTag, balance: u64) -> Object {
@@ -253,16 +267,20 @@ pub fn stream_id_from_accumulator_event(ev: &AccumulatorEvent) -> Option<SuiAddr
 impl TryFrom<&MoveObject> for AccumulatorValue {
     type Error = SuiError;
     fn try_from(value: &MoveObject) -> Result<Self, Self::Error> {
+        let (_key, value): (AccumulatorKey, AccumulatorValue) = value.try_into()?;
+        Ok(value)
+    }
+}
+
+impl TryFrom<&MoveObject> for (AccumulatorKey, AccumulatorValue) {
+    type Error = SuiError;
+    fn try_from(value: &MoveObject) -> Result<Self, Self::Error> {
         value
             .type_()
             .is_balance_accumulator_field()
-            .then(|| {
-                value
-                    .to_rust::<Field<AccumulatorKey, U128>>()
-                    .map(|f| f.value)
-            })
+            .then(|| value.to_rust::<Field<AccumulatorKey, U128>>())
             .flatten()
-            .map(Self::U128)
+            .map(|f| (f.name, AccumulatorValue::U128(f.value)))
             .ok_or_else(|| {
                 SuiErrorKind::DynamicFieldReadError(format!(
                     "Dynamic field {:?} is not a AccumulatorValue",
