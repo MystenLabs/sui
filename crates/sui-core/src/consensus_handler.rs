@@ -1095,7 +1095,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // DONE(commit-handler-rewrite): Create pending checkpoints if we are still accepting tx.
         let checkpoint_height = self
             .epoch_store
-            .calculate_pending_checkpoint_height(commit_info.round);
+            .calculate_pending_checkpoint_height(commit_info.sub_dag_index);
 
         // DONE(commit-handler-rewrite): [ssm] write pending randomness checkpoint if we have a new randomness round, OR dkg failed while there are pending randomness txns
 
@@ -1281,7 +1281,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         if self.epoch_store.accumulators_enabled() {
             let checkpoint_height = self
                 .epoch_store
-                .calculate_pending_checkpoint_height(commit_info.round);
+                .calculate_pending_checkpoint_height(commit_info.sub_dag_index);
 
             settlement = Some(Schedulable::AccumulatorSettlement(epoch, checkpoint_height));
 

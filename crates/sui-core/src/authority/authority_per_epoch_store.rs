@@ -3580,7 +3580,7 @@ impl AuthorityPerEpochStore {
             // and settlements will bump the accumulator version at the end to reflect all
             // balance changes during the commit.
             let checkpoint_height =
-                self.calculate_pending_checkpoint_height(consensus_commit_info.round);
+                self.calculate_pending_checkpoint_height(consensus_commit_info.sub_dag_index);
 
             let non_random_settlement =
                 Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height);
@@ -3658,7 +3658,7 @@ impl AuthorityPerEpochStore {
         // TODO(commit-handler-rewrite): Create pending checkpoints if we are still accepting tx.
         if make_checkpoint {
             let checkpoint_height =
-                self.calculate_pending_checkpoint_height(consensus_commit_info.round);
+                self.calculate_pending_checkpoint_height(consensus_commit_info.sub_dag_index);
 
             let mut non_randomness_roots: Vec<TransactionKey> = Vec::with_capacity(roots.len() + 1);
 
@@ -3778,11 +3778,22 @@ impl AuthorityPerEpochStore {
         Ok((all_txns, assigned_versions))
     }
 
-    pub(crate) fn calculate_pending_checkpoint_height(&self, consensus_round: u64) -> u64 {
+    pub(crate) fn calculate_pending_checkpoint_height(
+        &self,
+        commit_sub_dag_index: u64,
+    ) -> u64 {
+        // With multi-leader, we use the global commit sub-dag index as the base for checkpoint height.
+        // This ensures uniqueness across all commits, regardless of which leader produced them.
+        // The sub_dag_index is a monotonically increasing global counter assigned by consensus.
+        let base_height = commit_sub_dag_index;
+
+        // If randomness is enabled, we reserve two heights per commit:
+        // - base_height * 2 for non-randomness checkpoint
+        // - base_height * 2 + 1 for randomness checkpoint
         if self.randomness_state_enabled() {
-            consensus_round * 2
+            base_height * 2
         } else {
-            consensus_round
+            base_height
         }
     }
 
