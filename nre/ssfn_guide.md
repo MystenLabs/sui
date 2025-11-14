@@ -56,6 +56,6 @@ metrics:
 This coupled with starting your node from a formal snapshot should mean a very small database footprint for ssfns
 
 
-![ssfn diagram](nre/ssfn-diagram.png)
+![ssfn diagram](https://github.com/MystenLabs/sui/blob/main/nre/ssfn-diagram.png)
 
 
