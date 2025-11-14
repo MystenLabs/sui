@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulators::AccumulatorSettlementTxBuilder;
 use crate::accumulators::balance_read::AccountBalanceRead;
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
@@ -3907,6 +3908,82 @@ impl AuthorityState {
         // see also assert in AuthorityState::process_certificate
         // on the epoch store and execution lock epoch match
         Ok(new_epoch_store)
+    }
+
+    pub async fn settle_transactions_for_testing(
+        &self,
+        ckpt_seq: CheckpointSequenceNumber,
+        effects: &[TransactionEffects],
+    ) {
+        let builder = AccumulatorSettlementTxBuilder::new(
+            Some(self.get_transaction_cache_reader().as_ref()),
+            effects,
+            ckpt_seq,
+            0,
+        );
+        let epoch_store = self.epoch_store_for_testing();
+        let epoch = epoch_store.epoch();
+        let (settlements, barrier) = builder.build_tx(
+            epoch_store.protocol_config(),
+            epoch,
+            epoch_store
+                .epoch_start_config()
+                .accumulator_root_obj_initial_shared_version()
+                .unwrap(),
+            ckpt_seq,
+            ckpt_seq,
+        );
+
+        let settlements: Vec<_> = settlements
+            .into_iter()
+            .map(|tx| {
+                VerifiedExecutableTransaction::new_system(
+                    VerifiedTransaction::new_system_transaction(tx),
+                    epoch,
+                )
+            })
+            .collect();
+        let barrier = VerifiedExecutableTransaction::new_system(
+            VerifiedTransaction::new_system_transaction(barrier),
+            epoch,
+        );
+
+        let assigned_versions = epoch_store
+            .assign_shared_object_versions_for_tests(
+                self.get_object_cache_reader().as_ref(),
+                &settlements,
+            )
+            .unwrap();
+
+        let version_map = assigned_versions.into_map();
+
+        for tx in settlements {
+            let env = ExecutionEnv::new()
+                .with_assigned_versions(version_map.get(&tx.key()).unwrap().clone());
+            let (effects, _) = self
+                .try_execute_immediately(&tx, env, &epoch_store)
+                .await
+                .unwrap();
+            assert!(effects.status().is_ok());
+        }
+
+        let assigned_versions = epoch_store
+            .assign_shared_object_versions_for_tests(
+                self.get_object_cache_reader().as_ref(),
+                std::slice::from_ref(&barrier),
+            )
+            .unwrap()
+            .0
+            .into_iter()
+            .next()
+            .unwrap()
+            .1;
+        let env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
+        let (effects, _) = self
+            .try_execute_immediately(&barrier, env, &epoch_store)
+            .await
+            .unwrap();
+        assert!(effects.status().is_ok());
     }
 
     /// Advance the epoch store to the next epoch for testing only.
