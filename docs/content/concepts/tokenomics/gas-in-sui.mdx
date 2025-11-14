@@ -41,7 +41,7 @@ $$
 ComputationPrice[\tau] \ = \ ReferencePrice \ + \ Tip[\tau]
 $$
 
-On the Sui network, a single $ReferencePrice$ exists throughout each epoch, with Sui validators updating the $ReferencePrice$ at each epoch boundary. Hence, in practice, when a user submits a gas price above the $ReferencePrice$, it is useful to think of the difference as a tip paid to the network in order to get higher priority. During moments of regular network operations, users are not expected to pay tips and the vast majority of transactions have gas prices equal to $ReferencePrice$.
+On the Sui network, a single $ReferencePrice$ exists throughout each epoch, with Sui validators updating the $ReferencePrice$ at each epoch boundary. Hence, in practice, when a user submits a gas price above the $ReferencePrice$, think of the difference as a tip paid to the network in order to get higher priority. During moments of regular network operations, users are not expected to pay tips and the vast majority of transactions have gas prices equal to $ReferencePrice$.
 
 More generally, the Sui gas price mechanism makes the $ReferencePrice$ a credible anchor for you to reference when submitting transactions to the network. Providing reasonable confidence that transactions submitted with gas prices at or close to the reference price are executed in a timely manner. This is achieved through three core steps:
 
