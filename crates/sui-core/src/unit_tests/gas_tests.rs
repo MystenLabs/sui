@@ -3,8 +3,12 @@
 
 use super::*;
 
-use super::authority_tests::{init_state_with_ids, send_and_confirm_transaction};
-use super::move_integration_tests::build_and_try_publish_test_package;
+use super::authority_tests::{
+    init_state_with_ids, publish_object_basics, send_and_confirm_transaction,
+};
+use super::move_integration_tests::{
+    build_and_try_publish_test_package, build_and_try_publish_test_package_with_address_balance,
+};
 use crate::authority::authority_tests::init_state_with_ids_and_object_basics;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use move_core_types::account_address::AccountAddress;
@@ -17,6 +21,7 @@ use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{GasData, TransactionDataV1, TransactionExpiration};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     base_types::{FullObjectRef, dbg_addr},
@@ -528,7 +533,28 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
 }
 
 #[tokio::test]
+async fn test_address_balance_native_transfer_sufficient_gas() {
+    // This test does a native transfer with sufficient gas budget and balance.
+    // It's expected to succeed. We check that gas was charged properly.
+    let result = execute_transfer_with_address_balance(*MAX_GAS_BUDGET, 1).await;
+    let effects = result
+        .response
+        .unwrap()
+        .into_effects_for_testing()
+        .into_data();
+
+    assert!(effects.status().is_ok());
+    let gas_cost = effects.gas_cost_summary();
+    assert!(gas_cost.net_gas_usage() as u64 > *MIN_GAS_BUDGET_PRE_RGP);
+    assert!(gas_cost.computation_cost > 0);
+    assert!(gas_cost.storage_cost > 0);
+    assert_eq!(gas_cost.storage_rebate, 0);
+    assert!(gas_cost.gas_used() <= *MAX_GAS_BUDGET);
+}
+
+#[tokio::test]
 async fn test_native_transfer_gas_price_is_used() {
+    // This test asserts that gas cahrged honors rgp
     let result =
         execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, 1, true, false).await;
     let effects = result
@@ -560,6 +586,31 @@ async fn test_native_transfer_gas_price_is_used() {
         UserInputError::try_from(result.response.unwrap_err()).unwrap(),
         UserInputError::GasBalanceTooLow { .. }
     ));
+}
+
+#[tokio::test]
+async fn test_address_balance_native_transfer_gas_price_is_used() {
+    // This test asserts that gas charged honors rgp
+    let result_1 = execute_transfer_with_address_balance(*MAX_GAS_BUDGET, 1).await;
+    let effects_1 = result_1
+        .response
+        .unwrap()
+        .into_effects_for_testing()
+        .into_data();
+    let gas_summary_1 = effects_1.gas_cost_summary();
+
+    let result_2 = execute_transfer_with_address_balance(*MAX_GAS_BUDGET, 2).await;
+    let effects_2 = result_2
+        .response
+        .unwrap()
+        .into_effects_for_testing()
+        .into_data();
+    let gas_summary_2 = effects_2.gas_cost_summary();
+
+    assert_eq!(
+        gas_summary_1.computation_cost * 2,
+        gas_summary_2.computation_cost
+    );
 }
 
 #[tokio::test]
@@ -776,7 +827,35 @@ async fn test_native_transfer_insufficient_gas_execution() {
 }
 
 #[tokio::test]
+async fn test_address_balance_native_transfer_insufficient_gas_execution() {
+    let result = execute_transfer_with_address_balance(*MAX_GAS_BUDGET, 1).await;
+    let total_gas = result
+        .response
+        .unwrap()
+        .into_effects_for_testing()
+        .data()
+        .gas_cost_summary()
+        .gas_used();
+    let budget = total_gas - 1;
+
+    let result = execute_transfer_with_address_balance(budget, 1).await;
+    let effects = result
+        .response
+        .unwrap()
+        .into_effects_for_testing()
+        .into_data();
+
+    assert_eq!(effects.gas_cost_summary().gas_used(), budget);
+    assert_eq!(
+        effects.into_status().unwrap_err().0,
+        ExecutionFailureStatus::InsufficientGas,
+    );
+}
+
+#[tokio::test]
 async fn test_publish_gas() -> anyhow::Result<()> {
+    // This tests asserts that we can publish a package given sufficient budget
+    // Then tests that we cannot publish the same package given insufficient budget
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
@@ -844,6 +923,66 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     );
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_address_balance_publish_gas() {
+    // This tests asserts that we can publish a package given sufficient budget
+    // Then tests that we cannot publish the same package given insufficient budget
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+
+    let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    protocol_config.enable_address_balance_gas_payments_for_testing();
+
+    let authority_state = TestAuthorityBuilder::new()
+        .with_protocol_config(protocol_config)
+        .build()
+        .await;
+
+    let gas_coin = Object::with_id_owner_gas_for_testing(gas_object_id, sender, *MAX_GAS_BUDGET);
+    authority_state.insert_genesis_object(gas_coin).await;
+
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+
+    let response = build_and_try_publish_test_package_with_address_balance(
+        &authority_state,
+        &sender,
+        &sender_key,
+        "object_wrapping",
+        TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp * 2,
+        rgp,
+        false,
+    )
+    .await;
+    let effects = response.1.into_data();
+    let gas_cost = effects.gas_cost_summary();
+    assert!(gas_cost.storage_cost > 0);
+
+    let total_gas_used = gas_cost.net_gas_usage() as u64;
+    let delta: u64 = 1000;
+    let budget = if delta < total_gas_used {
+        total_gas_used - delta
+    } else {
+        total_gas_used - 10
+    };
+
+    let response = build_and_try_publish_test_package_with_address_balance(
+        &authority_state,
+        &sender,
+        &sender_key,
+        "object_wrapping",
+        budget,
+        rgp,
+        false,
+    )
+    .await;
+    let effects = response.1.into_data();
+    let gas_cost = effects.gas_cost_summary().clone();
+    let err = effects.into_status().unwrap_err().0;
+
+    assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
+    assert!(gas_cost.gas_used() > 0);
 }
 
 #[tokio::test]
@@ -923,6 +1062,128 @@ async fn test_move_call_gas() -> SuiResult {
         prev_storage_cost
     );
     Ok(())
+}
+
+#[tokio::test]
+async fn test_address_balance_move_call_gas() {
+    // This test asserts that we charge gas correctly on arbitrary move calls that create & delete objects
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+
+    let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    protocol_config.enable_address_balance_gas_payments_for_testing();
+
+    let authority_state = TestAuthorityBuilder::new()
+        .with_protocol_config(protocol_config)
+        .build()
+        .await;
+
+    let gas_coin = Object::with_id_owner_gas_for_testing(gas_object_id, sender, *MAX_GAS_BUDGET);
+    authority_state.insert_genesis_object(gas_coin).await;
+
+    let (authority_state, package_object_ref) = publish_object_basics(authority_state).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+
+    let module = ident_str!("object_basics").to_owned();
+    let function = ident_str!("create").to_owned();
+
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .move_call(
+                package_object_ref.0,
+                module.clone(),
+                function.clone(),
+                Vec::new(),
+                vec![
+                    CallArg::Pure(16u64.to_le_bytes().to_vec()),
+                    CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
+                ],
+            )
+            .unwrap();
+        builder.finish()
+    };
+
+    let chain_id = authority_state.get_chain_identifier();
+    let data = TransactionData::V1(TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(pt),
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sender,
+            price: rgp,
+            budget: *MAX_GAS_BUDGET,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp_seconds: None,
+            max_timestamp_seconds: None,
+            chain: chain_id,
+            nonce: 0,
+        },
+    });
+
+    let tx = to_sender_signed_transaction(data, &sender_key);
+    let response = send_and_confirm_transaction(&authority_state, tx)
+        .await
+        .unwrap();
+    let effects = response.1.into_data();
+    let created_object_ref = effects.created()[0].0;
+    assert!(effects.status().is_ok());
+    let gas_cost = effects.gas_cost_summary();
+    assert!(gas_cost.storage_cost > 0);
+    assert_eq!(gas_cost.storage_rebate, 0);
+
+    let prev_storage_cost = gas_cost.storage_cost;
+
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .move_call(
+                package_object_ref.0,
+                module.clone(),
+                ident_str!("delete").to_owned(),
+                vec![],
+                vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                    created_object_ref,
+                ))],
+            )
+            .unwrap();
+        builder.finish()
+    };
+
+    let data = TransactionData::V1(TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(pt),
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sender,
+            price: rgp,
+            budget: *MAX_GAS_BUDGET,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp_seconds: None,
+            max_timestamp_seconds: None,
+            chain: chain_id,
+            nonce: 1,
+        },
+    });
+
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let response = send_and_confirm_transaction(&authority_state, transaction)
+        .await
+        .unwrap();
+    let effects = response.1.into_data();
+    assert!(effects.status().is_ok());
+    let gas_cost = effects.gas_cost_summary();
+    assert!(gas_cost.storage_rebate > 0);
+    assert_eq!(
+        gas_cost.storage_rebate + gas_cost.non_refundable_storage_fee,
+        prev_storage_cost
+    );
 }
 
 #[tokio::test]
@@ -1093,6 +1354,107 @@ async fn execute_transfer_with_price(
     }
 }
 
+/// create an address balance transaction that transfers an object (happens to be a coin, but could be any object)
+/// note that since we use test_authority_builder, we do not actually do scheduling or settlement
+/// we can only write UTs that verify txn success/failure and gas cost summary; not perform assertions on balance changes
+async fn execute_transfer_with_address_balance(
+    gas_budget: u64,
+    rgp_multiple: u64,
+) -> TransferResult {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let object_id: ObjectID = ObjectID::random();
+    let recipient = dbg_addr(2);
+
+    let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    protocol_config.enable_address_balance_gas_payments_for_testing();
+
+    let authority_state = TestAuthorityBuilder::new()
+        .with_protocol_config(protocol_config)
+        .build()
+        .await;
+
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap() * rgp_multiple;
+
+    let object = Object::with_id_owner_for_testing(object_id, sender);
+    authority_state.insert_genesis_object(object.clone()).await;
+
+    let gas_object_id = ObjectID::random();
+    let gas_coin = Object::with_id_owner_gas_for_testing(gas_object_id, sender, *MAX_GAS_BUDGET);
+    authority_state.insert_genesis_object(gas_coin).await;
+
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .transfer_object(
+                recipient,
+                FullObjectRef::from_fastpath_ref(object.compute_object_reference()),
+            )
+            .unwrap();
+        builder.finish()
+    };
+    let kind = TransactionKind::ProgrammableTransaction(pt);
+    let chain_id = authority_state.get_chain_identifier();
+    let data = TransactionData::V1(TransactionDataV1 {
+        kind,
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sender,
+            price: rgp,
+            budget: gas_budget,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp_seconds: None,
+            max_timestamp_seconds: None,
+            chain: chain_id,
+            nonce: 0,
+        },
+    });
+    let tx = to_sender_signed_transaction(data, &sender_key);
+
+    let response = send_and_confirm_transaction(&authority_state, tx)
+        .await
+        .map(|(cert, effects)| {
+            let effects_data = effects.data();
+            let mutated = effects_data.mutated();
+            if effects_data.status().is_ok() {
+                let transferred_obj = mutated
+                    .iter()
+                    .find(|(obj_ref, _)| obj_ref.0 == object_id)
+                    .expect("Transferred object should be in mutated");
+                assert_eq!(
+                    transferred_obj.1.get_address_owner_address().unwrap(),
+                    recipient,
+                    "Object should be transferred to recipient on success"
+                );
+            } else {
+                let obj = mutated
+                    .iter()
+                    .find(|(obj_ref, _)| obj_ref.0 == object_id)
+                    .expect("Object should be in mutated even on failure");
+                assert_eq!(
+                    obj.1.get_address_owner_address().unwrap(),
+                    sender,
+                    "Object should remain with sender on failure"
+                );
+            }
+            TransactionStatus::Executed(
+                Some(cert.into_sig()),
+                effects,
+                TransactionEvents::default(),
+            )
+        });
+
+    TransferResult {
+        authority_state,
+        gas_object_id,
+        response,
+        rgp,
+    }
+}
+
 #[tokio::test]
 async fn test_gas_price_capping_for_aborted_transactions() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -1168,4 +1530,252 @@ async fn test_gas_price_capping_for_aborted_transactions() {
     // The computation cost should be less than what it would be with full gas price
     let uncapped_computation_cost = gas_used * high_gas_price; // bucket cost * full price
     assert!(gas_cost.computation_cost < uncapped_computation_cost);
+}
+
+#[tokio::test]
+async fn test_address_balance_gas_price_capping_for_aborted_transactions() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+
+    let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    protocol_config.enable_address_balance_gas_payments_for_testing();
+
+    let authority_state = TestAuthorityBuilder::new()
+        .with_protocol_config(protocol_config.clone())
+        .build()
+        .await;
+
+    let max_gas_price_for_aborted_transactions = protocol_config
+        .max_gas_price_rgp_factor_for_aborted_transactions()
+        * authority_state.reference_gas_price_for_testing().unwrap();
+
+    let high_gas_price = max_gas_price_for_aborted_transactions * 2;
+    let budget = high_gas_price * 1000;
+
+    let gas_amount = budget * 10;
+    let gas_object_id = ObjectID::random();
+    let gas_coin = Object::with_id_owner_gas_for_testing(gas_object_id, sender, gas_amount);
+    authority_state.insert_genesis_object(gas_coin).await;
+
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+
+    let response = build_and_try_publish_test_package_with_address_balance(
+        &authority_state,
+        &sender,
+        &sender_key,
+        "move_random",
+        10_000_000,
+        rgp,
+        false,
+    )
+    .await;
+    let effects = response.1.into_data();
+    assert!(effects.status().is_ok());
+    let package = effects
+        .created()
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .unwrap()
+        .0
+        .0;
+
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .move_call(
+                package,
+                ident_str!("move_random").to_owned(),
+                ident_str!("always_abort").to_owned(),
+                vec![],
+                vec![],
+            )
+            .unwrap();
+        builder.finish()
+    };
+
+    let chain_id = authority_state.get_chain_identifier();
+    let data = TransactionData::V1(TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(pt),
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sender,
+            price: high_gas_price,
+            budget,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp_seconds: None,
+            max_timestamp_seconds: None,
+            chain: chain_id,
+            nonce: 0,
+        },
+    });
+
+    let tx = to_sender_signed_transaction(data, &sender_key);
+    let effects = send_and_confirm_transaction(&authority_state, tx)
+        .await
+        .unwrap()
+        .1
+        .into_data();
+
+    assert!(matches!(
+        effects.status().clone().unwrap_err().0,
+        ExecutionFailureStatus::MoveAbort(_, 42)
+    ));
+
+    let gas_cost = effects.gas_cost_summary();
+
+    let gas_used_pre_gas_price = 1;
+    let gas_used = ((gas_used_pre_gas_price / protocol_config.gas_rounding_step()) + 1)
+        * protocol_config.gas_rounding_step();
+
+    let expected_max_computation_cost = gas_used * max_gas_price_for_aborted_transactions;
+    assert!(gas_cost.computation_cost <= expected_max_computation_cost);
+
+    let uncapped_computation_cost = gas_used * high_gas_price;
+    assert!(gas_cost.computation_cost < uncapped_computation_cost);
+}
+
+// Budget enforcement: charges for input objects when full storage exceeds budget
+#[tokio::test]
+async fn test_address_balance_storage_oog_input_objects() -> SuiResult {
+    const GAS_PRICE: u64 = 1000;
+    const BUDGET: u64 = 15_000_000;
+    let (sender, sender_key) = get_key_pair();
+
+    let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    protocol_config.enable_address_balance_gas_payments_for_testing();
+
+    let authority_state = TestAuthorityBuilder::new()
+        .with_protocol_config(protocol_config)
+        .build()
+        .await;
+
+    let gas_object_id = ObjectID::random();
+    let gas_coin = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 10_000_000_000);
+    authority_state.insert_genesis_object(gas_coin).await;
+
+    let package =
+        publish_move_random_package(&authority_state, &sender, &sender_key, &gas_object_id).await;
+
+    // First create an object using address balance payment
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            package,
+            ident_str!("move_random").to_owned(),
+            ident_str!("storage_heavy").to_owned(),
+            vec![],
+            vec![
+                CallArg::Pure(bcs::to_bytes(&(100_u64)).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&sender).unwrap()),
+            ],
+        )
+        .unwrap();
+    let pt = builder.finish();
+    let kind = TransactionKind::ProgrammableTransaction(pt);
+    let chain_id = authority_state.get_chain_identifier();
+    let data = TransactionData::V1(TransactionDataV1 {
+        kind,
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sender,
+            price: GAS_PRICE,
+            budget: 10_000_000,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp_seconds: None,
+            max_timestamp_seconds: None,
+            chain: chain_id,
+            nonce: 0,
+        },
+    });
+    let tx = to_sender_signed_transaction(data, &sender_key);
+    let effects = send_and_confirm_transaction(&authority_state, tx)
+        .await
+        .unwrap()
+        .1
+        .into_data();
+
+    let created_obj = effects.created()[0].0;
+
+    // Now use that object as input in address balance transaction
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            package,
+            ident_str!("move_random").to_owned(),
+            ident_str!("storage_heavy").to_owned(),
+            vec![],
+            vec![
+                CallArg::Pure(bcs::to_bytes(&(5000_u64)).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&sender).unwrap()),
+            ],
+        )
+        .unwrap();
+    builder
+        .obj(ObjectArg::ImmOrOwnedObject(created_obj))
+        .unwrap();
+    let pt = builder.finish();
+    let kind = TransactionKind::ProgrammableTransaction(pt);
+    let data = TransactionData::V1(TransactionDataV1 {
+        kind,
+        sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sender,
+            price: GAS_PRICE,
+            budget: BUDGET,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp_seconds: None,
+            max_timestamp_seconds: None,
+            chain: chain_id,
+            nonce: 0,
+        },
+    });
+
+    let tx = to_sender_signed_transaction(data, &sender_key);
+    let effects = send_and_confirm_transaction(&authority_state, tx)
+        .await
+        .unwrap()
+        .1
+        .into_data();
+
+    assert_eq!(
+        effects.status().clone().unwrap_err().0,
+        ExecutionFailureStatus::InsufficientGas
+    );
+
+    let summary = effects.gas_cost_summary();
+
+    assert!(summary.computation_cost > 0);
+    assert!(
+        summary.computation_cost < BUDGET,
+        "Expected computation {} < budget {}",
+        summary.computation_cost,
+        BUDGET
+    );
+
+    assert!(
+        summary.storage_cost > 0,
+        "Expected to charge for input objects, got storage_cost = 0"
+    );
+
+    let total = (summary.computation_cost as i128 + summary.storage_cost as i128
+        - summary.storage_rebate as i128) as u64;
+    assert!(
+        total <= BUDGET,
+        "Total {} exceeded budget {}",
+        total,
+        BUDGET
+    );
+
+    Ok(())
 }

@@ -2857,6 +2857,61 @@ pub async fn build_and_try_publish_test_package(
     )
 }
 
+pub async fn build_and_try_publish_test_package_with_address_balance(
+    authority: &AuthorityState,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    test_dir: &str,
+    gas_budget: u64,
+    gas_price: u64,
+    with_unpublished_deps: bool,
+) -> (Transaction, SignedTransactionEffects) {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["src", "unit_tests", "data", test_dir]);
+
+    let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
+    let all_module_bytes = compiled_package.get_package_bytes(with_unpublished_deps);
+    let dependencies = compiled_package.get_dependency_storage_package_ids();
+
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let upgrade_cap = builder.publish_upgradeable(all_module_bytes, dependencies);
+        builder.transfer_arg(*sender, upgrade_cap);
+        builder.finish()
+    };
+
+    let chain_id = authority.get_chain_identifier();
+    let data = TransactionData::V1(TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(pt),
+        sender: *sender,
+        gas_data: GasData {
+            payment: vec![],
+            owner: *sender,
+            price: gas_price,
+            budget: gas_budget,
+        },
+        expiration: TransactionExpiration::ValidDuring {
+            min_epoch: Some(0),
+            max_epoch: Some(0),
+            min_timestamp_seconds: None,
+            max_timestamp_seconds: None,
+            chain: chain_id,
+            nonce: 0,
+        },
+    });
+
+    let transaction = to_sender_signed_transaction(data, sender_key);
+
+    (
+        transaction.clone(),
+        send_and_confirm_transaction(authority, transaction)
+            .await
+            .unwrap()
+            .1,
+    )
+}
+
 pub async fn build_and_publish_test_package(
     authority: &AuthorityState,
     sender: &SuiAddress,
