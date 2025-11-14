@@ -2125,70 +2125,65 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
     Ok(())
 }
 
-// TODO: pkg alt FAILING TEST -
-// #[sim_test]
-// async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Error> {
-//     let with_unpublished_dependencies = true; // Invalid packages should fail to publish, even if we allow unpublished dependencies.
-//
-//     let mut test_cluster = TestClusterBuilder::new().build().await;
-//     let rgp = test_cluster.get_reference_gas_price().await;
-//     let address = test_cluster.get_address_0();
-//     let context = &mut test_cluster.wallet;
-//
-//     let client = context.get_client().await?;
-//     let object_refs = client
-//         .read_api()
-//         .get_owned_objects(
-//             address,
-//             Some(SuiObjectResponseQuery::new_with_options(
-//                 SuiObjectDataOptions::new()
-//                     .with_type()
-//                     .with_owner()
-//                     .with_previous_transaction(),
-//             )),
-//             None,
-//             None,
-//         )
-//         .await?
-//         .data;
-//
-//     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
-//
-//     let mut package_path = PathBuf::from(TEST_DATA_DIR);
-//     package_path.push("module_publish_failure_invalid");
-//     let build_config = BuildConfig::new_for_testing().config;
-//     let result = SuiClientCommands::TestPublish(TestPublishArgs {
-//         publish_args: PublishArgs {
-//             package_path,
-//             build_config,
-//             skip_dependency_verification: false,
-//             verify_deps: true,
-//             with_unpublished_dependencies,
-//             payment: PaymentArgs {
-//                 gas: vec![gas_obj_id],
-//             },
-//             gas_data: GasDataArgs {
-//                 gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-//                 ..Default::default()
-//             },
-//             processing: TxProcessingArgs::default(),
-//         },
-//         build_env: Some("testnet".to_string()),
-//         pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
-//     })
-//     .execute(context)
-//     .await;
-//
-//     let expect = expect![[r#"
-//         Err(
-//             ModulePublishFailure {
-//                 error: "Package dependency \"Invalid\" does not specify a valid published address: could not parse value \"mystery\" for 'published-at' field in Move.toml or 'published-id' in Move.lock file.",
-//             },
-//         )
-//     "#]];
-//     expect.assert_debug_eq(&result);
-//     Ok(())
-// }
+#[sim_test]
+async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Error> {
+    let with_unpublished_dependencies = true; // Invalid packages should fail to publish, even if we allow unpublished dependencies.
+
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("module_publish_failure_invalid");
+    let build_config = BuildConfig::new_for_testing().config;
+    let result = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
+        },
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
+    .execute(context)
+    .await;
+
+    let expect = expect![[r#"
+        "Error while loading dependency tests/data/module_dependency_invalid: error while loading legacy manifest \"tests/data/module_dependency_invalid/Move.toml\": Unable to parse AccountAddress (must be hex string of length 32)"
+    "#]];
+    expect.assert_debug_eq(&result.unwrap_err().to_string());
+    Ok(())
+}
 
 #[sim_test]
 async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {

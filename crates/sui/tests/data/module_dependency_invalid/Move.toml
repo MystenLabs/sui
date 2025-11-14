@@ -8,4 +8,4 @@ edition = "2024.beta"
 MoveStdlib = { local = "../../../../sui-framework/packages/move-stdlib" }
 
 [addresses]
-invalid = "0x0"
+invalid = "0xCAFE"
