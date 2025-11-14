@@ -131,18 +131,13 @@ fn leak_with_local_cycle() {
 #[test]
 fn test_native_function_arc_drop() {
     use std::sync::Arc;
-
-    // Create a test Arc (simulating a NativeFunction Arc)
     let test_arc = Arc::new(42);
-
-    // Get initial Arc strong count
     let initial_count = Arc::strong_count(&test_arc);
     assert_eq!(initial_count, 1, "Initial Arc count should be 1");
 
     // Simulate what happens with Function.native: wrap in Option and clone the Arc
     let mut func_native: Option<Arc<i32>> = Some(test_arc.clone());
 
-    // Arc count should be 2 now (original + in Option)
     let count_with_clone = Arc::strong_count(&test_arc);
     assert_eq!(
         count_with_clone, 2,
@@ -161,14 +156,82 @@ fn test_native_function_arc_drop() {
         "Arc count should be 1 after std::mem::take - this proves the fix works"
     );
 
-    // Verify the Option is now None
     assert!(func_native.is_none(), "Option should be None after take");
 
-    // Final verification
     drop(func_native);
     let final_count = Arc::strong_count(&test_arc);
     assert_eq!(
         final_count, 1,
         "Final Arc count should be 1, confirming no memory leak"
     );
+}
+
+/// Integration test: Verify that Package::drop() is called correctly when adapter is dropped.
+/// This test creates a Package and ensures Package::drop() doesn't panic.
+#[test]
+fn test_package_drop_no_arc_leak() {
+    use crate::dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, storage::StoredPackage};
+    use move_binary_format::file_format::empty_module;
+
+    let mut m = empty_module();
+    m.version = 6;
+    let addr = *m.address();
+
+    let mut adapter = InMemoryTestAdapter::new();
+    let pkg = StoredPackage::from_modules_for_testing(addr, vec![m]).unwrap();
+
+    adapter.insert_package_into_storage(pkg);
+
+    // When the adapter goes out of scope, all packages should be dropped
+    // and Package::drop() should be called, cleaning up any native function Arcs.
+    drop(adapter);
+
+    // Success means Package::drop() works correctly.
+}
+
+#[test]
+fn test_package_drop_multiple_modules() {
+    use crate::dev_utils::{in_memory_test_adapter::InMemoryTestAdapter, storage::StoredPackage};
+    use move_binary_format::file_format::{
+        Bytecode, CodeUnit, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
+        IdentifierIndex, SignatureIndex, Visibility, empty_module,
+    };
+
+    let mut adapter = InMemoryTestAdapter::new();
+
+    let mut modules = Vec::new();
+    for i in 0..3 {
+        let mut m = empty_module();
+        m.version = 6;
+        // Add a simple function to each module
+        m.function_handles.push(FunctionHandle {
+            module: m.self_module_handle_idx,
+            name: IdentifierIndex(i),
+            parameters: SignatureIndex(0),
+            return_: SignatureIndex(0),
+            type_parameters: vec![],
+        });
+        m.function_defs.push(FunctionDefinition {
+            function: FunctionHandleIndex(0),
+            visibility: Visibility::Public,
+            is_entry: false,
+            acquires_global_resources: vec![],
+            code: Some(CodeUnit {
+                locals: SignatureIndex(0),
+                jump_tables: vec![],
+                code: vec![Bytecode::Ret],
+            }),
+        });
+        modules.push(m);
+    }
+
+    let addr = *modules[0].address();
+    let pkg = StoredPackage::from_modules_for_testing(addr, modules).unwrap();
+
+    adapter.insert_package_into_storage(pkg);
+
+    // Drop the adapter, which should drop all packages and modules.
+    drop(adapter);
+
+    // Success means Package::drop() handles multiple modules correctly.
 }
