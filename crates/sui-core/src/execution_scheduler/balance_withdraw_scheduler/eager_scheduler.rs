@@ -14,10 +14,12 @@ use sui_types::{
 use tokio::sync::oneshot::Sender;
 use tracing::{debug, instrument};
 
-use crate::execution_scheduler::balance_withdraw_scheduler::{
-    BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
-    balance_read::AccountBalanceRead,
-    scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
+use crate::{
+    accumulators::balance_read::AccountBalanceRead,
+    execution_scheduler::balance_withdraw_scheduler::{
+        BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
+        scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
+    },
 };
 
 pub(crate) struct EagerBalanceWithdrawScheduler {

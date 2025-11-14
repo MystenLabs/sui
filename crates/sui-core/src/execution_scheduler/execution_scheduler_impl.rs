@@ -316,7 +316,7 @@ impl ExecutionScheduler {
         for (cert, env) in &certs {
             let tx_withdraws = cert
                 .transaction_data()
-                .process_funds_withdrawals()
+                .process_funds_withdrawals_for_signing()
                 .expect("Balance withdraws should have already been checked");
             assert!(!tx_withdraws.is_empty());
             let accumulator_version = env

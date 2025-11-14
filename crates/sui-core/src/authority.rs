@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulators::balance_read::AccountBalanceRead;
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
@@ -1023,6 +1024,12 @@ impl AuthorityState {
             &self.config.transaction_deny_config,
             self.get_backing_package_store().as_ref(),
         )?;
+
+        let withdraws = tx_data.process_funds_withdrawals_for_signing()?;
+
+        self.execution_cache_trait_pointers
+            .child_object_resolver
+            .check_balances_available(&withdraws)?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             Some(tx_digest),
