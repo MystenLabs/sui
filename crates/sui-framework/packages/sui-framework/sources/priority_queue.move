@@ -60,13 +60,12 @@ public fun create_entries<T: drop>(mut p: vector<u64>, mut v: vector<T>): vector
     let len = p.length();
     assert!(v.length() == len, 0);
     let mut res = vector[];
-    let mut i = 0;
-    while (i < len) {
-        let priority = p.remove(0);
-        let value = v.remove(0);
+    len.do!(|i| {
+        let priority = p.pop_back();
+        let value = v.pop_back();
         res.push_back(Entry { priority, value });
-        i = i + 1;
-    };
+    });
+    res.reverse();
     res
 }
 
