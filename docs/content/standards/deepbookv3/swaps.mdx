@@ -1,7 +1,23 @@
 ---
 title: Swaps
 description: Use DeepBookV3 to execute token swaps.
-keywords: [ automatic market makers, amms, swap_exact_amount, balancemanager, base_in, quote_in, deep_in, swaps, swap base quantity, deep quantity, DEEP, swap exact quantity, deepbook, deepbookv3  ]
+keywords:
+  [
+    automatic market makers,
+    amms,
+    swap_exact_amount,
+    balancemanager,
+    base_in,
+    quote_in,
+    deep_in,
+    swaps,
+    swap base quantity,
+    deep quantity,
+    DEEP,
+    swap exact quantity,
+    deepbook,
+    deepbookv3,
+  ]
 ---
 
 DeepBook provides a swap-like interface commonly seen in automatic market makers (AMMs). Unlike the order functions, you can call `swap_exact_amount` without a `BalanceManager`. You call it directly with `Coin` objects instead. When swapping from base to quote, `base_in` must have a positive value while `quote_in` must be zero. When swapping from quote to base, `quote_in` must be positive and `base_in` zero. Some `deep_in` amount is required to pay for trading fees. You can overestimate this amount, as the unused DEEP tokens are returned at the end of the call.
@@ -14,17 +30,24 @@ Following are the endpoints that the `Pool` exposes for swaps.
 
 ### Swap exact base for quote
 
-Swap exact base quantity without needing a `balance_manager`. DEEP quantity can be overestimated. Returns three `Coin` objects:     
+Swap exact base quantity without needing a `balance_manager`. DEEP quantity can be overestimated. Returns three `Coin` objects:
 
 - `BaseAsset`
 - `QuoteAsset`
-- `DEEP` 
+- `DEEP`
 
 Some base quantity may be left over, if the input quantity is not divisible by lot size.
 
 You can overestimate the amount of DEEP required. The remaining balance is returned.
 
-<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="swap_exact_base_for_quote" noComments />
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="swap_exact_base_for_quote"
+	noComments
+/>
 
 ### Swap exact quote for base
 
@@ -36,14 +59,71 @@ Swap exact quote quantity without needing a `balance_manager`. You can overestim
 
 Some quote quantity might be left over if the input quantity is not divisible by lot size.
 
-<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3"  fun="swap_exact_quote_for_base" noComments />
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="swap_exact_quote_for_base"
+	noComments
+/>
 
 ### Swap exact quantity
 
 This function is what the previous two functions call with `coin::zero()` set for the third coin. Users can call this directly for base → quote or quote → base as long as base or quote have a zero value.
 
-<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="swap_exact_quantity" noComments />
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="swap_exact_quantity"
+	noComments
+/>
+
+### Swap exact base for quote with manager
+
+Swap exact base for quote using a `BalanceManager`. Assumes fees are paid in DEEP. Assumes balance manager has enough DEEP for fees. Returns two `Coin` objects: base and quote.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="swap_exact_base_for_quote_with_manager"
+	noComments
+/>
+
+### Swap exact quote for base with manager
+
+Swap exact quote for base using a `BalanceManager`. Assumes fees are paid in DEEP. Assumes balance manager has enough DEEP for fees. Returns two `Coin` objects: base and quote.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="swap_exact_quote_for_base_with_manager"
+	noComments
+/>
+
+### Swap exact quantity with manager
+
+Swap exact quantity using a `BalanceManager`. This is the underlying function that the two manager-based swap functions call. Assumes fees are paid in DEEP and that the balance manager has sufficient DEEP for fees. Returns two `Coin` objects: base and quote.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="swap_exact_quantity_with_manager"
+	noComments
+/>
 
 ## Related links
 
-<RelatedLink href="https://github.com/MystenLabs/deepbookv3" label="DeepBookV3 repository" desc="The DeepBookV3 repository on GitHub." />
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3"
+	label="DeepBookV3 repository"
+	desc="The DeepBookV3 repository on GitHub."
+/>
