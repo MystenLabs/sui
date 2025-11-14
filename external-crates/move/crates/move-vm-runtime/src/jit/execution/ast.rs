@@ -50,6 +50,19 @@ pub struct Package {
     pub vtable: PackageVirtualTable,
 }
 
+impl Drop for Package {
+    fn drop(&mut self) {
+        // Manually drop all NativeFunction Arc references to prevent memory leaks.
+        //
+        // ArenaVec uses ManuallyDrop and does NOT call drop on its elements.
+        // This means Function.native (which contains Arc<UnboxedNativeFunction>)
+        // would leak if we don't explicitly handle it.
+        for module in self.loaded_modules.values_mut() {
+            module.drop_native_functions();
+        }
+    }
+}
+
 // A LoadedModule is very similar to a CompiledModule but data is "transformed" to a representation
 // more appropriate to execution.
 // When code executes indexes in instructions are resolved against those runtime structure
@@ -114,6 +127,14 @@ pub struct Module {
     pub constants: ArenaVec<Constant>,
 }
 
+impl Module {
+    pub(crate) fn drop_native_functions(&mut self) {
+        for function in self.functions.iter_mut() {
+            let _ = std::mem::take(&mut function.native);
+        }
+    }
+}
+
 // A runtime constant
 #[derive(Debug)]
 pub struct Constant {
@@ -137,7 +158,7 @@ pub struct Function {
     pub(crate) locals: ArenaVec<ArenaType>,
     pub(crate) return_: ArenaVec<ArenaType>,
     pub(crate) type_parameters: ArenaVec<AbilitySet>,
-    // TODO(vm-rewrite): This field probably leaks
+    // NOTE: This field is manually dropped in Package::drop() to prevent Arc leaks
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
     pub name: VirtualTableKey,
