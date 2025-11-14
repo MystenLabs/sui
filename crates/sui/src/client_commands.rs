@@ -458,8 +458,13 @@ pub enum SuiClientCommands {
         env: Option<String>,
     },
 
-    /// Ephemeral publishing of a package.
-    #[clap(name = "test-publish")]
+    /// Publish a package using ephemeral addresses for dependencies.
+    #[clap(
+        name = "test-publish",
+        after_long_help = "The `test-publish` command is used to publish packages ephemerally, i.e. without recording the published addresses in the main `Published.toml` file. Running `sui client test-publish <pubfile> --build-env <env>` will build the package for environment <env>, but will publish it on the current network, taking the dependency addresses from <pubfile>. It will also record the publication information for the package in <pubfile>.
+
+See https://docs.sui.io/guides/developer/sui-101/move-package-management for more information."
+    )]
     TestPublish(TestPublishArgs),
 
     /// Get the effects of executing the given transaction block
