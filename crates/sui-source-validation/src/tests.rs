@@ -20,7 +20,9 @@ use test_cluster::TestClusterBuilder;
 
 use crate::toolchain::CURRENT_COMPILER_VERSION;
 use crate::{BytecodeSourceVerifier, ValidationMode};
-use move_package_alt::schema::Environment;
+use move_package_alt::package::RootPackage;
+use move_package_alt::schema::{Environment, OriginalID, PublishAddresses, PublishedID};
+use sui_package_alt::{PublishedMetadata, SuiFlavor};
 
 #[tokio::test]
 async fn successful_verification() -> anyhow::Result<()> {
@@ -159,6 +161,11 @@ async fn successful_verification_module_ordering() -> anyhow::Result<()> {
 async fn successful_verification_upgrades() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
+    let client = context.get_client().await?;
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
 
     let b_v1_fixtures = tempfile::tempdir()?;
     let (b_v1, b_cap) = {
@@ -177,18 +184,13 @@ async fn successful_verification_upgrades() -> anyhow::Result<()> {
     let (b_pkg, e_pkg) = {
         let b_src =
             copy_upgraded_package(&b_fixtures, "b-v2", b_v2.0.into(), b_v1.0.into()).await?;
+
         write_published_toml(&b_src.clone(), b_v2.0.into(), b_v1.0.into()).await?;
         let e_src = copy_published_package(&b_fixtures, "e", SuiAddress::ZERO).await?;
         (compile_package(b_src), compile_package(e_src))
     };
 
-    let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
-    let env = Environment::new(
-        "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
-    );
-
     // Verify the upgraded package b-v2 as the root.
     verifier
         .verify(&b_pkg, ValidationMode::root(), &env)
@@ -567,6 +569,11 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
 async fn linkage_differs() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
+    let client = context.get_client().await?;
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
 
     let b_v1_fixtures = tempfile::tempdir()?;
     let (b_v1, b_cap) = {
@@ -622,17 +629,11 @@ async fn linkage_differs() -> anyhow::Result<()> {
         compile_package(e_src)
     };
 
-    let client = context.get_client().await?;
     let stable_ids = HashMap::from_iter([
         (b_v1.0.into(), "<b1>"),
         (b_v2.0.into(), "<b2>"),
         (b_v3.0.into(), "<b3>"),
     ]);
-    let env = Environment::new(
-        "localnet".to_string(),
-        client.read_api().get_chain_identifier().await?,
-    );
-
     let error = BytecodeSourceVerifier::new(client.read_api())
         .verify(&e_pkg, ValidationMode::root(), &env)
         .await
@@ -985,15 +986,20 @@ async fn write_published_toml(
     pkg_path: impl AsRef<Path>,
     published_at: SuiAddress,
     original_id: SuiAddress,
-) -> io::Result<()> {
-    let toml_path = pkg_path.as_ref().join("Published.toml");
-    let toml = format!(
-        r#"[published.testnet]
-chain-id = "_test_env_id"
-published-at = "{published_at}"
-original-id = "{original_id}"
-version = 1
-"#
-    );
-    tokio::fs::write(toml_path, toml).await
+) -> anyhow::Result<()> {
+    // we need testnet here because BuildConfig::build will use the first env in the list
+    let env = Environment::new("testnet".to_string(), "_test_env_id".to_string());
+    let mut root_pkg = RootPackage::<SuiFlavor>::load(pkg_path, env.clone(), vec![]).await?;
+    root_pkg.write_publish_data(move_package_alt::schema::Publication {
+        chain_id: "_test_env_id".to_string(),
+        addresses: PublishAddresses {
+            published_at: PublishedID(published_at.into()),
+            original_id: OriginalID(original_id.into()),
+        },
+        version: 1,
+        metadata: PublishedMetadata {
+            ..Default::default()
+        },
+    })?;
+    Ok(())
 }
