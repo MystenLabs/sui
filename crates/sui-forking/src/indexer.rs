@@ -47,7 +47,7 @@ pub(crate) async fn start_indexer(
     config: IndexerConfig,
     registry: &Registry,
     cancel: CancellationToken,
-) -> anyhow::Result<JoinHandle<()>> {
+) -> anyhow::Result<()> {
     let IndexerConfig {
         database_url,
         db_args,
@@ -69,7 +69,13 @@ pub(crate) async fn start_indexer(
     .await?;
 
     let pipelines: Vec<_> = indexer.pipelines().collect();
-    let handle = indexer.run().await.context("Failed to start indexer")?;
+    tokio::spawn(async move {
+        let _ = indexer
+            .run()
+            .await
+            .context("Failed to start indexer")
+            .unwrap();
+    });
 
-    Ok(handle)
+    Ok(())
 }

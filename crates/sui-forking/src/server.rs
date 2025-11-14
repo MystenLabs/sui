@@ -25,6 +25,8 @@ use crate::{
     types::*,
 };
 
+use diesel::prelude::*;
+
 pub struct AppState {
     pub simulacrum: Arc<RwLock<Simulacrum>>,
     pub transaction_count: Arc<AtomicUsize>,
@@ -229,9 +231,9 @@ async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> 
     let registry = prometheus::Registry::new();
     let cancel = tokio_util::sync::CancellationToken::new();
     let rocksdb_db_path = mysten_common::tempdir().unwrap().keep();
-    let db_url =
-        reqwest::Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt")
-            .unwrap();
+    let db_url_str = "https://docs.sui.io/guides/developer/getting-started/install-source";
+    let db_url = reqwest::Url::parse(format!("{db_url}/sui_indexer_alt")).unwrap();
+    let _ = drop_and_recreate_db("").unwrap();
     let indexer_config = indexer::IndexerConfig::new(db_url, data_ingestion_path.clone());
     let consistent_store_config = consistent_store::ConsistentStoreConfig::new(
         rocksdb_db_path.clone(),
@@ -239,10 +241,26 @@ async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> 
         indexer_config.client_args.clone(),
         version,
     );
-    info!("Starting indexer...");
+    println!("Starting indexer...");
     start_indexer(indexer_config, &registry, cancel.clone()).await?;
-    info!("Starting consistent store...");
-    start_consistent_store(consistent_store_config, &registry, cancel.clone()).await?;
+    // println!("Starting consistent store...");
+    // start_consistent_store(consistent_store_config, &registry, cancel.clone()).await?;
+
+    Ok(())
+}
+
+use diesel::pg::PgConnection;
+
+fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> {
+    // Connect to the 'postgres' database (not your target database)
+    let mut conn = PgConnection::establish(&db_url)?;
+
+    println!("Dropping and recreating database sui_indexer_alt...");
+    // Drop the database
+    diesel::sql_query("DROP DATABASE IF EXISTS sui_indexer_alt").execute(&mut conn)?;
+
+    // Recreate it
+    diesel::sql_query("CREATE DATABASE sui_indexer_alt").execute(&mut conn)?;
 
     Ok(())
 }
