@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod read;
 pub mod write;
 
 use std::sync::Arc;
@@ -46,6 +47,7 @@ pub(crate) async fn start_rpc(
     )
     .await?;
     // let mut rpc = RpcService::new(RpcArgs::default(), &registry, cancel.clone()).unwrap();
+    rpc.add_module(read::Read(simulacrum.clone()))?;
     rpc.add_module(write::Write(simulacrum))?;
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
