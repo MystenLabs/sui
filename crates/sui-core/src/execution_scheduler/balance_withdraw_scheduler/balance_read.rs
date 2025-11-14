@@ -23,6 +23,10 @@ pub(crate) trait AccountBalanceRead: Send + Sync {
         // bound the version when we look for child account objects.
         accumulator_version: SequenceNumber,
     ) -> u128;
+
+    /// Gets latest balance, without a version bound on the accumulator root object.
+    /// Only used for signing time checks / RPC reads, not scheduling.
+    fn get_latest_account_balance(&self, account_id: &AccumulatorObjId) -> u128;
 }
 
 impl AccountBalanceRead for Arc<dyn ChildObjectResolver + Send + Sync> {
@@ -43,6 +47,14 @@ impl AccountBalanceRead for Arc<dyn ChildObjectResolver + Send + Sync> {
                 // object
                 .expect("read cannot fail")
                 .unwrap_or(U128 { value: 0 });
+
+        value.value
+    }
+
+    fn get_latest_account_balance(&self, account_id: &AccumulatorObjId) -> u128 {
+        let value = AccumulatorValue::load_by_id(self.as_ref(), None, *account_id)
+            .expect("read cannot fail")
+            .unwrap_or(U128 { value: 0 });
 
         value.value
     }
@@ -144,6 +156,11 @@ impl MockBalanceReadInner {
             .last()
             .and_then(|(_, balance)| *balance)
     }
+
+    fn get_latest_account_balance(&self, account_id: &AccumulatorObjId) -> Option<u128> {
+        let account_balances = self.balances.get(account_id)?;
+        account_balances.values().last().and_then(|b| *b)
+    }
 }
 
 #[cfg(test)]
@@ -159,6 +176,13 @@ impl AccountBalanceRead for MockBalanceRead {
         let inner = self.inner.read();
         inner
             .get_account_balance(account_id, accumulator_version)
+            .unwrap_or_default()
+    }
+
+    fn get_latest_account_balance(&self, account_id: &AccumulatorObjId) -> u128 {
+        let inner = self.inner.read();
+        inner
+            .get_latest_account_balance(account_id)
             .unwrap_or_default()
     }
 }

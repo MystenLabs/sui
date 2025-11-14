@@ -282,6 +282,25 @@ impl IndexStoreTables {
 
         Ok(())
     }
+
+    pub fn get_dynamic_fields_iterator(
+        &self,
+        object: ObjectID,
+        cursor: Option<ObjectID>,
+    ) -> SuiResult<impl Iterator<Item = Result<(ObjectID, DynamicFieldInfo), TypedStoreError>> + '_>
+    {
+        debug!(?object, "get_dynamic_fields");
+        // The object id 0 is the smallest possible
+        let iter_lower_bound = (object, cursor.unwrap_or(ObjectID::ZERO));
+        let iter_upper_bound = (object, ObjectID::MAX);
+        Ok(self
+            .dynamic_field_index
+            .safe_iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
+            // skip an extra b/c the cursor is exclusive
+            .skip(usize::from(cursor.is_some()))
+            .take_while(move |result| result.is_err() || (result.as_ref().unwrap().0.0 == object))
+            .map_ok(|((_, c), object_info)| (c, object_info)))
+    }
 }
 
 pub struct IndexStore {
@@ -1446,18 +1465,7 @@ impl IndexStore {
         cursor: Option<ObjectID>,
     ) -> SuiResult<impl Iterator<Item = Result<(ObjectID, DynamicFieldInfo), TypedStoreError>> + '_>
     {
-        debug!(?object, "get_dynamic_fields");
-        // The object id 0 is the smallest possible
-        let iter_lower_bound = (object, cursor.unwrap_or(ObjectID::ZERO));
-        let iter_upper_bound = (object, ObjectID::MAX);
-        Ok(self
-            .tables
-            .dynamic_field_index
-            .safe_iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
-            // skip an extra b/c the cursor is exclusive
-            .skip(usize::from(cursor.is_some()))
-            .take_while(move |result| result.is_err() || (result.as_ref().unwrap().0.0 == object))
-            .map_ok(|((_, c), object_info)| (c, object_info)))
+        self.tables.get_dynamic_fields_iterator(object, cursor)
     }
 
     #[instrument(skip(self))]
@@ -1649,15 +1657,25 @@ impl IndexStore {
     /// done with `spawn_blocking` as that is expected to block
     #[instrument(skip(self))]
     pub fn get_balance(&self, owner: SuiAddress, coin_type: TypeTag) -> SuiResult<TotalBalance> {
+        self.get_coin_object_balance(owner, coin_type)
+    }
+
+    fn get_coin_object_balance(
+        &self,
+        owner: SuiAddress,
+        coin_type: TypeTag,
+    ) -> SuiResult<TotalBalance> {
         let force_disable_cache = read_size_from_env(ENV_VAR_DISABLE_INDEX_CACHE).unwrap_or(0) > 0;
         let cloned_coin_type = coin_type.clone();
         let metrics_cloned = self.metrics.clone();
         let coin_index_cloned = self.tables.coin_index_2.clone();
         if force_disable_cache {
-            Self::get_balance_from_db(metrics_cloned, coin_index_cloned, owner, cloned_coin_type)
+            return self
+                .get_balance_from_db(metrics_cloned, coin_index_cloned, owner, cloned_coin_type)
                 .map_err(|e| {
-                SuiErrorKind::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
-            })?;
+                    SuiErrorKind::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
+                        .into()
+                });
         }
 
         self.metrics.balance_lookup_from_total.inc();
@@ -1682,16 +1700,14 @@ impl IndexStore {
         self.caches
             .per_coin_type_balance
             .get_with((owner, coin_type), move || {
-                Self::get_balance_from_db(
-                    metrics_cloned,
-                    coin_index_cloned,
-                    owner,
-                    cloned_coin_type,
-                )
-                .map_err(|e| {
-                    SuiErrorKind::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
+                self.get_balance_from_db(metrics_cloned, coin_index_cloned, owner, cloned_coin_type)
+                    .map_err(|e| {
+                        SuiErrorKind::ExecutionError(format!(
+                            "Failed to read balance frm DB: {:?}",
+                            e
+                        ))
                         .into()
-                })
+                    })
             })
     }
 
@@ -1705,34 +1721,47 @@ impl IndexStore {
         &self,
         owner: SuiAddress,
     ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
+        self.get_all_coin_object_balances(owner)
+    }
+
+    fn get_all_coin_object_balances(
+        &self,
+        owner: SuiAddress,
+    ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
         let force_disable_cache = read_size_from_env(ENV_VAR_DISABLE_INDEX_CACHE).unwrap_or(0) > 0;
         let metrics_cloned = self.metrics.clone();
         let coin_index_cloned = self.tables.coin_index_2.clone();
         if force_disable_cache {
-            Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner).map_err(
-                |e| {
+            return self
+                .get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner)
+                .map_err(|e| {
                     SuiErrorKind::ExecutionError(format!(
                         "Failed to read all balance from DB: {:?}",
                         e
                     ))
-                },
-            )?;
+                    .into()
+                });
         }
 
         self.metrics.all_balance_lookup_from_total.inc();
         let metrics_cloned = self.metrics.clone();
         let coin_index_cloned = self.tables.coin_index_2.clone();
         self.caches.all_balances.get_with(owner, move || {
-            Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner).map_err(|e| {
-                SuiErrorKind::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
+            self.get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner)
+                .map_err(|e| {
+                    SuiErrorKind::ExecutionError(format!(
+                        "Failed to read all balance from DB: {:?}",
+                        e
+                    ))
                     .into()
-            })
+                })
         })
     }
 
     /// Read balance for a `SuiAddress` and `CoinType` from the backend database
     #[instrument(skip_all)]
     pub fn get_balance_from_db(
+        &self,
         metrics: Arc<IndexStoreMetrics>,
         coin_index: DBMap<CoinIndexKey2, CoinInfo>,
         owner: SuiAddress,
@@ -1755,6 +1784,7 @@ impl IndexStore {
     /// Read all balances for a `SuiAddress` from the backend database
     #[instrument(skip_all)]
     pub fn get_all_balances_from_db(
+        &self,
         metrics: Arc<IndexStoreMetrics>,
         coin_index: DBMap<CoinIndexKey2, CoinInfo>,
         owner: SuiAddress,
@@ -1941,7 +1971,7 @@ mod tests {
             Some(tx_coins),
         )?;
 
-        let balance_from_db = IndexStore::get_balance_from_db(
+        let balance_from_db = index_store.get_balance_from_db(
             index_store.metrics.clone(),
             index_store.tables.coin_index_2.clone(),
             address,
@@ -1982,7 +2012,7 @@ mod tests {
             1234,
             Some(tx_coins),
         )?;
-        let balance_from_db = IndexStore::get_balance_from_db(
+        let balance_from_db = index_store.get_balance_from_db(
             index_store.metrics.clone(),
             index_store.tables.coin_index_2.clone(),
             address,

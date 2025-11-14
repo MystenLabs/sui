@@ -2,6 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulators::balance_checks;
+use crate::accumulators::coin_reservation::CoinReservationResolver;
+use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
@@ -10,6 +13,7 @@ use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::SchedulingSource;
+use crate::execution_scheduler::balance_withdraw_scheduler::balance_read::AccountBalanceRead;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
 use crate::traffic_controller::TrafficController;
@@ -60,7 +64,10 @@ use std::{
 };
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
+use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
+use sui_types::accumulator_root::AccumulatorValue;
+use sui_types::coin_reservation;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
@@ -917,6 +924,7 @@ pub struct AuthorityState {
     /// The database
     input_loader: TransactionInputLoader,
     execution_cache_trait_pointers: ExecutionCacheTraitPointers,
+    coin_reservation_resolver: CoinReservationResolver,
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
@@ -1022,6 +1030,14 @@ impl AuthorityState {
             &receiving_objects_refs,
             &self.config.transaction_deny_config,
             self.get_backing_package_store().as_ref(),
+        )?;
+
+        let withdraws =
+            tx_data.process_funds_withdrawals_for_signing(&self.coin_reservation_resolver)?;
+
+        balance_checks::check_balances_available(
+            &self.execution_cache_trait_pointers.child_object_resolver,
+            &withdraws,
         )?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
@@ -1997,6 +2013,81 @@ impl AuthorityState {
         );
     }
 
+    /// Helper function that handles transaction rewriting for coin reservations and executes
+    /// the transaction to effects. Returns the execution results along with the command offset
+    /// used for rewriting failure command indices.
+    fn execute_transaction_with_rewriting(
+        &self,
+        executor: &dyn Executor,
+        store: &dyn BackingStore,
+        sender: SuiAddress,
+        kind: TransactionKind,
+        input_objects: CheckedInputObjects,
+        gas_data: GasData,
+        gas_status: SuiGasStatus,
+        signer: SuiAddress,
+        tx_digest: TransactionDigest,
+        protocol_config: &ProtocolConfig,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<(), ExecutionError>,
+    ) {
+        let (kind, user_command_offset) = rewrite_transaction_for_coin_reservations(
+            protocol_config,
+            store,
+            executor,
+            &self.coin_reservation_resolver,
+            sender,
+            kind,
+            *epoch_id,
+        );
+
+        let (inner_temp_store, gas_status, mut effects, timings, execution_error) = executor
+            .execute_transaction_to_effects(
+                store,
+                protocol_config,
+                self.metrics.limits_metrics.clone(),
+                enable_expensive_checks,
+                execution_params,
+                epoch_id,
+                epoch_timestamp_ms,
+                input_objects,
+                gas_data,
+                gas_status,
+                kind,
+                signer,
+                tx_digest,
+                &mut None,
+            );
+
+        dbg!(&user_command_offset);
+        let timings = timings.into_iter().skip(user_command_offset).collect();
+        effects.rewrite_failure_command_index(user_command_offset);
+        let execution_error = execution_error.map_err(|e| {
+            if let Some(idx) = e.command() {
+                let new_error_offset = idx.saturating_sub(user_command_offset);
+                e.with_command_index(new_error_offset)
+            } else {
+                e
+            }
+        });
+
+        (
+            inner_temp_store,
+            gas_status,
+            effects,
+            timings,
+            execution_error,
+        )
+    }
+
     /// execute_certificate validates the transaction input, and executes the certificate,
     /// returning transaction outputs.
     ///
@@ -2049,6 +2140,7 @@ impl AuthorityState {
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
+        let sender = transaction_data.sender();
         let (kind, signer, gas_data) = transaction_data.execution_parts();
         let early_execution_error = get_early_execution_error(
             &tx_digest,
@@ -2064,29 +2156,29 @@ impl AuthorityState {
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
         #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
-            epoch_store.executor().execute_transaction_to_effects(
+        let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
+            .execute_transaction_with_rewriting(
+                &**epoch_store.executor(),
                 &tracking_store,
+                sender,
+                kind,
+                input_objects,
+                gas_data,
+                gas_status,
+                signer,
+                tx_digest,
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
+                &epoch_store.epoch_start_config().epoch_data().epoch_id(),
+                epoch_store
+                    .epoch_start_config()
+                    .epoch_data()
+                    .epoch_start_timestamp(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
                 // cyclic dependency w/ sui-adapter
                 self.config
                     .expensive_safety_check_config
                     .enable_deep_per_tx_sui_conservation_check(),
                 execution_params,
-                &epoch_store.epoch_start_config().epoch_data().epoch_id(),
-                epoch_store
-                    .epoch_start_config()
-                    .epoch_data()
-                    .epoch_start_timestamp(),
-                input_objects,
-                gas_data,
-                gas_status,
-                kind,
-                signer,
-                tx_digest,
-                &mut None,
             );
 
         if let Some(expected_effects_digest) = expected_effects_digest
@@ -2374,26 +2466,28 @@ impl AuthorityState {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
-        let (inner_temp_store, _, effects, _timings, execution_error) = executor
-            .execute_transaction_to_effects(
+
+        let (inner_temp_store, _, effects, _timings, execution_error) = self
+            .execute_transaction_with_rewriting(
+                executor.as_ref(),
                 self.get_backing_store().as_ref(),
+                transaction.sender(),
+                kind,
+                checked_input_objects,
+                gas_data,
+                gas_status,
+                signer,
+                transaction_digest,
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
-                expensive_checks,
-                execution_params,
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
                 epoch_store
                     .epoch_start_config()
                     .epoch_data()
                     .epoch_start_timestamp(),
-                checked_input_objects,
-                gas_data,
-                gas_status,
-                kind,
-                signer,
-                transaction_digest,
-                &mut None,
+                expensive_checks,
+                execution_params,
             );
+
         let tx_digest = *effects.transaction_digest();
 
         let module_cache =
@@ -3608,6 +3702,10 @@ impl AuthorityState {
                 .expect("Failed to initialize fork recovery state")
         });
 
+        let coin_reservation_resolver = CoinReservationResolver::new(
+            execution_cache_trait_pointers.child_object_resolver.clone(),
+        );
+
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3615,6 +3713,7 @@ impl AuthorityState {
             epoch_store: ArcSwap::new(epoch_store.clone()),
             input_loader,
             execution_cache_trait_pointers,
+            coin_reservation_resolver,
             indexes,
             rpc_index,
             subscription_handler: Arc::new(SubscriptionHandler::new(prometheus_registry)),
@@ -4272,7 +4371,7 @@ impl AuthorityState {
         Ok(Some((object, layout)))
     }
 
-    fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
+    pub fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
         let layout = object
             .data
             .try_as_move()
@@ -4319,6 +4418,52 @@ impl AuthorityState {
         } else {
             Err(SuiErrorKind::IndexStoreNotAvailable.into())
         }
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub fn get_address_balance_coin_info(
+        &self,
+        owner: SuiAddress,
+        balance_type: TypeTag,
+    ) -> SuiResult<Option<(ObjectRef, u64, TransactionDigest)>> {
+        // get address balance
+        let accumulator_id = AccumulatorValue::get_field_id(owner, &balance_type)?;
+        tracing::info!(
+            "accumulator_id: {:?} {} {:?}",
+            owner,
+            balance_type.to_canonical_display(true),
+            accumulator_id
+        );
+        let accumulator_obj = AccumulatorValue::load_object_by_id(
+            self.get_child_object_resolver().as_ref(),
+            None,
+            *accumulator_id.inner(),
+        )?;
+
+        let Some(accumulator_obj) = accumulator_obj else {
+            return Ok(None);
+        };
+
+        let balance = self
+            .get_child_object_resolver()
+            .get_latest_account_balance(&accumulator_id) as u64;
+
+        if balance == 0 {
+            return Ok(None);
+        };
+
+        let object_ref = coin_reservation::encode_object_ref(
+            accumulator_obj.id(),
+            accumulator_obj.version(),
+            self.load_epoch_store_one_call_per_task().epoch(),
+            balance,
+        )?;
+
+        Ok(Some((
+            object_ref,
+            balance,
+            accumulator_obj.previous_transaction,
+        )))
     }
 
     #[instrument(level = "trace", skip_all)]

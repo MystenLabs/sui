@@ -24,6 +24,14 @@ use sui_types::{
 
 /// Abstracts over access to the VM across versions of the execution layer.
 pub trait Executor {
+    fn find_live_inputs(
+        &self,
+        protocol_config: &ProtocolConfig,
+        store: &dyn BackingStore,
+        transaction_kind: &TransactionKind,
+        epoch_id: u64,
+    ) -> Option<Vec<bool>>;
+
     fn execute_transaction_to_effects(
         &self,
         store: &dyn BackingStore,

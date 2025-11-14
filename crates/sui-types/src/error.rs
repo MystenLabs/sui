@@ -300,6 +300,9 @@ pub enum UserInputError {
 
     #[error("Transaction chain ID {provided} does not match network chain ID {expected}.")]
     InvalidChainId { provided: String, expected: String },
+
+    #[error("Transaction not valid during this epoch: {valid_epoch}")]
+    TransactionNotValidDuringThisEpoch { valid_epoch: u64 },
 }
 
 #[derive(

@@ -162,6 +162,9 @@ mod checked {
             sponsor,
             protocol_config,
         );
+
+        // XXX insert fake inputs here
+
         let tx_ctx = Rc::new(RefCell::new(tx_ctx));
 
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
