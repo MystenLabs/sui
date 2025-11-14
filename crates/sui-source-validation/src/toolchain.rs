@@ -188,7 +188,6 @@ pub(crate) fn legacy_toolchain() -> ToolchainVersion {
 // /// Move.lock contents. This works by detecting if a compiled unit requires a prior compiler version:
 // /// - If so, download the compiler, recompile the unit, and return that unit in the result.
 // /// - If not, simply keep the current compiled unit.
-#[allow(clippy::ptr_arg)] // TODO: remove this
 pub(crate) fn units_for_toolchain(
     compiled_units: &Vec<(Symbol, CompiledUnitWithSource)>,
 ) -> anyhow::Result<Vec<(Symbol, CompiledUnitWithSource)>> {
