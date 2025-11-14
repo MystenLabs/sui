@@ -91,6 +91,7 @@ where
     type Future = MetricsFuture<'a, S::Future>;
 
     fn call(&self, request: Request<'a>) -> Self::Future {
+        println!("Received request for method: {}", request.method_name());
         let method = if self.layer.methods.contains(request.method_name()) {
             request.method.clone()
         } else {
