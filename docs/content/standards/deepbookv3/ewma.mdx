@@ -15,7 +15,7 @@ keywords:
   ]
 ---
 
-DeepBook implements an Exponentially Weighted Moving Average (EWMA) system to dynamically adjust taker fees based on network gas prices. This feature helps prevent toxic takers from using high gas prices to prioritize their transactions and pick off stale maker orders.
+DeepBook implements an exponentially weighted moving average (EWMA) system to dynamically adjust taker fees based on network gas prices. This feature helps prevent toxic takers from using high gas prices to prioritize their transactions and pick off stale maker orders.
 
 ## Overview
 
@@ -28,15 +28,15 @@ The EWMA system calculates a smoothed average and variance of recent gas prices,
 
 ### Key components
 
-- **Mean (μ)**: Smoothed average of recent gas prices.
-- **Variance (σ²)**: Measure of gas price volatility.
-- **Standard Deviation (σ)**: Square root of variance, used for z-score calculation.
-- **Z-Score**: How many standard deviations the current gas price is from the mean.
-- **Z-Score Threshold**: Trigger point for applying the penalty.
+- **Mean (μ):** Smoothed average of recent gas prices.
+- **Variance (σ²):** Measure of gas price volatility.
+- **Standard Deviation (σ):** Square root of variance, used for z-score calculation.
+- **Z-Score:** How many standard deviations the current gas price is from the mean.
+- **Z-Score Threshold:** Trigger point for applying the penalty.
 
 ### The formula
 
-```
+```sh
 z_score = (current_gas_price - mean) / standard_deviation
 
 if z_score > z_score_threshold:
@@ -66,7 +66,7 @@ The penalty is applied only when **all** of the following conditions are met:
 
 ### Penalty threshold calculation
 
-```
+```sh
 Penalty Threshold = Mean + (Z-Score Threshold × Std Dev)
 Penalty Threshold = 1,478 + (3.0 × 6,578)
 Penalty Threshold = 1,478 + 19,734
@@ -77,45 +77,45 @@ Penalty Threshold ≈ 21,212
 
 ### Example 1: Normal conditions (current)
 
-- **Gas price**: 1,000
-- **Calculation**: (1,000 - 1,478) / 6,578 = -0.073
-- **Z-score**: Negative, below mean
-- **Result**: No penalty - Base taker fee only
+- **Gas price:** 1,000
+- **Calculation:** (1,000 - 1,478) / 6,578 = -0.073
+- **Z-score:** Negative, below mean
+- **Result:** No penalty - Base taker fee only
 
 ### Example 2: Slightly elevated
 
-- **Gas price**: 5,000
-- **Calculation**: (5,000 - 1,478) / 6,578 = 0.54
-- **Z-score**: 0.54
-- **Result**: No penalty - Below 3.0 threshold
+- **Gas price:** 5,000
+- **Calculation:** (5,000 - 1,478) / 6,578 = 0.54
+- **Z-score:** 0.54
+- **Result:** No penalty - Below 3.0 threshold
 
 ### Example 3: High spike
 
-- **Gas price**: 15,000
-- **Calculation**: (15,000 - 1,478) / 6,578 = 2.06
-- **Z-score**: 2.06
-- **Result**: No penalty - Still below 3.0 threshold
+- **Gas price:** 15,000
+- **Calculation:** (15,000 - 1,478) / 6,578 = 2.06
+- **Z-score:** 2.06
+- **Result:** No penalty - Still below 3.0 threshold
 
 ### Example 4: Extreme spike (penalty triggered)
 
-- **Gas price**: 25,000
-- **Calculation**: (25,000 - 1,478) / 6,578 = 3.58
-- **Z-score**: 3.58
-- **Result**: **Penalty applied** - Additional 0.1% fee added
+- **Gas price:** 25,000
+- **Calculation:** (25,000 - 1,478) / 6,578 = 3.58
+- **Z-score:** 3.58
+- **Result:** **Penalty applied** - Additional 0.1% fee added
 
 ## Benefits
 
-- **Maker protection**: Discourages takers from picking off stale maker orders during network congestion.
-- **Dynamic adjustment**: Automatically adapts to changing gas price patterns over time.
-- **Fair pricing**: Only penalizes during extreme conditions (3 standard deviations).
-- **Statistical rigor**: Uses well-established statistical methods to identify outliers.
+- **Maker protection:** Discourages takers from picking off stale maker orders during network congestion.
+- **Dynamic adjustment:** Automatically adapts to changing gas price patterns over time.
+- **Fair pricing:** Only penalizes during extreme conditions (3 standard deviations).
+- **Statistical rigor:** Uses well-established statistical methods to identify outliers.
 
 ## Technical notes
 
-- **Update frequency**: EWMA updates when an order is submitted. Only counts if the timestamp is different (multiple orders within the same transaction will only be counted once).
-- **Alpha value**: 0.1 means the system adapts relatively quickly to new price levels while maintaining historical context.
-- **3-sigma threshold**: Statistically, only ~0.3% of observations exceed 3 standard deviations in a normal distribution (~0.15% above 3 standard deviations).
-- **Pool-specific**: Each pool has its own EWMA state tracked independently.
+- **Update frequency:** EWMA updates when an order is submitted. Only counts if the timestamp is different (multiple orders within the same transaction will only be counted once).
+- **Alpha value:** 0.1 means the system adapts relatively quickly to new price levels while maintaining historical context.
+- **3-sigma threshold:** Statistically, only ~0.3% of observations exceed 3 standard deviations in a normal distribution (~0.15% above 3 standard deviations).
+- **Pool-specific:** Each pool has its own EWMA state tracked independently.
 
 ## API
 

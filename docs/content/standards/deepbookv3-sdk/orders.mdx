@@ -40,9 +40,7 @@ Use `placeLimitOrder` to place limit orders. The call returns a function that ta
 
 - `params`: `SwapParams` object that represents the parameters for the swap.
 
-```tsx
-placeLimitOrder({ params: PlaceLimitOrderParams });
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="placeLimitOrder" signatureOnly/>
 
 ### placeMarketOrder
 
@@ -52,9 +50,7 @@ Use `placeMarketOrder` to place market orders. The call returns a function that 
 
 - `params`: `SwapParams` object that represents the parameters for the swap.
 
-```tsx
-placeMarketOrder({ params: PlaceMarketOrderParams });
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="placeMarketOrder" signatureOnly/>
 
 ### cancelOrder
 
@@ -70,9 +66,7 @@ The `orderId` is the protocol `orderId` generated during order placement, which 
 - `balanceManagerKey`: String that identifies the `BalanceManager`.
 - `orderId`: String of the protocol order ID that identifies the order to cancel.
 
-```tsx
-cancelOrder(poolKey: string, balanceManagerKey: string, orderId: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="cancelOrder" signatureOnly/>
 
 ### cancelAllOrders
 
@@ -83,9 +77,7 @@ Use `cancelAllOrders` to cancel every order for the balance manager whose key yo
 - `poolKey`: String that identifies the pool from which to borrow.
 - `balanceManagerKey`: String that identifies the `BalanceManager`.
 
-```tsx
-cancelAllOrders(poolKey: string, balanceManagerKey: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="cancelAllOrders" signatureOnly/>
 
 ### `modifyOrder`
 
@@ -98,9 +90,7 @@ Use `modifyOrder` to modify an existing order by changing its quantity. The new 
 - `orderId`: String of the protocol order ID to modify.
 - `newQuantity`: Number representing the new quantity for the order.
 
-```tsx
-modifyOrder(poolKey: string, balanceManagerKey: string, orderId: string, newQuantity: number);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="modifyOrder" signatureOnly/>
 
 ### `withdrawSettledAmounts`
 
@@ -111,9 +101,7 @@ Use `withdrawSettledAmounts` to withdraw all settled amounts for a balance manag
 - `poolKey`: String that identifies the pool.
 - `balanceManagerKey`: String that identifies the `BalanceManager`.
 
-```tsx
-withdrawSettledAmounts(poolKey: string, balanceManagerKey: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="withdrawSettledAmounts" signatureOnly/>
 
 ## Examples
 
