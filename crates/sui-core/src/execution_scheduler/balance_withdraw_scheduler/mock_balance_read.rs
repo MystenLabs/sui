@@ -1,67 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(test)]
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-#[cfg(test)]
 use parking_lot::RwLock;
-#[cfg(test)]
 use sui_types::base_types::ObjectID;
-use sui_types::{
-    accumulator_root::{AccumulatorObjId, AccumulatorValue, U128},
-    base_types::SequenceNumber,
-    storage::ChildObjectResolver,
-};
+use sui_types::{accumulator_root::AccumulatorObjId, base_types::SequenceNumber};
 
-pub(crate) trait AccountBalanceRead: Send + Sync {
-    fn get_account_balance(
-        &self,
-        account_id: &AccumulatorObjId,
-        // Version of the accumulator root object, used to
-        // bound the version when we look for child account objects.
-        accumulator_version: SequenceNumber,
-    ) -> u128;
-}
-
-impl AccountBalanceRead for Arc<dyn ChildObjectResolver + Send + Sync> {
-    fn get_account_balance(
-        &self,
-        account_id: &AccumulatorObjId,
-        accumulator_version: SequenceNumber,
-    ) -> u128 {
-        // TODO: The implementation currently relies on the fact that we could
-        // load older versions of child objects. This has two problems:
-        // 1. Aggressive pruning might prune old versions of child objects,
-        // 2. Tidehunter might not continue to support this kinds of reads.
-        // To fix this, we could also read the latest version of the accumulator root object,
-        // and see if the provided accumulator version is already settled.
-        let value: U128 =
-            AccumulatorValue::load_by_id(self.as_ref(), Some(accumulator_version), *account_id)
-                // Expect is safe because at this point we should know that we are dealing with a Balance<T>
-                // object
-                .expect("read cannot fail")
-                .unwrap_or(U128 { value: 0 });
-
-        value.value
-    }
-}
+use crate::accumulators::balance_read::AccountBalanceRead;
 
 // Mock implementation of a balance account book for testing.
 // Allows setting the balance for a given account at different accumulator versions.
-#[cfg(test)]
 pub(crate) struct MockBalanceRead {
     inner: Arc<RwLock<MockBalanceReadInner>>,
 }
 
-#[cfg(test)]
 struct MockBalanceReadInner {
     cur_version: SequenceNumber,
     balances: BTreeMap<AccumulatorObjId, BTreeMap<SequenceNumber, Option<u128>>>,
 }
 
-#[cfg(test)]
 impl MockBalanceRead {
     pub(crate) fn new(
         init_version: SequenceNumber,
@@ -99,7 +58,6 @@ impl MockBalanceRead {
     }
 }
 
-#[cfg(test)]
 impl MockBalanceReadInner {
     fn settle_balance_changes(
         &mut self,
@@ -144,9 +102,13 @@ impl MockBalanceReadInner {
             .last()
             .and_then(|(_, balance)| *balance)
     }
+
+    fn get_latest_account_balance(&self, account_id: &AccumulatorObjId) -> Option<u128> {
+        let account_balances = self.balances.get(account_id)?;
+        account_balances.values().last().and_then(|b| *b)
+    }
 }
 
-#[cfg(test)]
 impl AccountBalanceRead for MockBalanceRead {
     /// Mimic the behavior of child object read.
     /// Find the balance for the given account at the max version
@@ -159,6 +121,13 @@ impl AccountBalanceRead for MockBalanceRead {
         let inner = self.inner.read();
         inner
             .get_account_balance(account_id, accumulator_version)
+            .unwrap_or_default()
+    }
+
+    fn get_latest_account_balance(&self, account_id: &AccumulatorObjId) -> u128 {
+        let inner = self.inner.read();
+        inner
+            .get_latest_account_balance(account_id)
             .unwrap_or_default()
     }
 }
