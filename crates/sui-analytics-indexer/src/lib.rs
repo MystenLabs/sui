@@ -37,6 +37,7 @@ use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_object_store::ObjectStore;
 
 pub mod analytics_metrics;
+pub mod csv;
 pub mod errors;
 mod handlers;
 pub mod package_store;
@@ -92,6 +93,17 @@ fn default_max_row_count() -> usize {
 
 fn default_time_interval_s() -> u64 {
     600
+}
+
+fn default_file_format() -> FileFormat {
+    FileFormat::Parquet
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FileFormat {
+    Csv,
+    Parquet,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,6 +169,9 @@ pub struct PipelineConfig {
     pub pipeline_name: String,
     /// Type of data to write i.e. checkpoint, object, transaction, etc
     pub pipeline: Pipeline,
+    /// File format to use (csv or parquet)
+    #[serde(default = "default_file_format")]
+    pub file_format: FileFormat,
     /// Number of checkpoints to process before uploading to the datastore.
     #[serde(default = "default_checkpoint_interval")]
     pub checkpoint_interval: u64,
@@ -227,12 +242,17 @@ pub(crate) fn construct_file_path(
     dir_prefix: &str,
     epoch_num: EpochId,
     checkpoint_range: Range<u64>,
+    file_format: FileFormat,
 ) -> PathBuf {
+    let extension = match file_format {
+        FileFormat::Csv => "csv",
+        FileFormat::Parquet => "parquet",
+    };
     PathBuf::from(dir_prefix)
         .join(format!("epoch_{}", epoch_num))
         .join(format!(
-            "{}_{}.parquet",
-            checkpoint_range.start, checkpoint_range.end
+            "{}_{}.{}",
+            checkpoint_range.start, checkpoint_range.end, extension
         ))
 }
 

@@ -23,7 +23,7 @@ pub struct ParquetBatch<S: Serialize + ParquetSchema> {
 
 impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
     pub fn new(dir_prefix: String, start_checkpoint: u64) -> Result<Self> {
-        let writer = ParquetWriter::new(start_checkpoint)?;
+        let writer = ParquetWriter::new()?;
 
         Ok(Self {
             writer,
@@ -64,8 +64,7 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
     /// Flush accumulated rows to an in-memory Parquet buffer
     /// Returns the Parquet bytes if successful
     pub fn flush(&mut self) -> Result<Option<Bytes>> {
-        let end_checkpoint = self.last_checkpoint + 1;
-        let buffer = self.writer.flush::<S>(end_checkpoint)?;
+        let buffer = self.writer.flush::<S>()?;
 
         if let Some(bytes_vec) = buffer {
             let bytes = Bytes::from(bytes_vec);
@@ -79,8 +78,12 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
     /// Get the object store path for the current file
     pub fn object_store_path(&self) -> ObjectPath {
         let checkpoint_range = self.checkpoint_range_start..(self.last_checkpoint + 1);
-        let path_buf =
-            crate::construct_file_path(&self.dir_prefix, self.current_epoch, checkpoint_range);
+        let path_buf = crate::construct_file_path(
+            &self.dir_prefix,
+            self.current_epoch,
+            checkpoint_range,
+            crate::FileFormat::Parquet,
+        );
         // Convert PathBuf to ObjectPath (always uses forward slashes)
         ObjectPath::from_iter(
             path_buf
@@ -92,14 +95,5 @@ impl<S: Serialize + ParquetSchema + 'static> ParquetBatch<S> {
     /// Get the current file bytes for uploading
     pub fn current_file_bytes(&self) -> Option<&Bytes> {
         self.current_file_bytes.as_ref()
-    }
-
-    /// Reset the batch after successful upload
-    pub fn reset(&mut self, start_checkpoint: u64) -> Result<()> {
-        self.writer.reset(self.current_epoch, start_checkpoint)?;
-        self.current_file_bytes = None;
-        self.checkpoint_range_start = start_checkpoint;
-        self.last_checkpoint = start_checkpoint;
-        Ok(())
     }
 }

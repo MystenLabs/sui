@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::marker::PhantomData;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use async_trait::async_trait;
+use bytes::Bytes;
 use serde::Serialize;
 use sui_types::base_types::EpochId;
 
-use crate::parquet::ParquetBatch;
-use crate::{ParquetSchema, Pipeline, PipelineConfig};
+use crate::csv::CsvWriter;
+use crate::parquet::ParquetWriter;
+use crate::{FileFormat, ParquetSchema, Pipeline, PipelineConfig};
 
 /// Trait for entry types that provide analytics metadata
 pub trait AnalyticsMetadata {
@@ -20,9 +22,46 @@ pub trait AnalyticsMetadata {
     fn get_checkpoint_sequence_number(&self) -> u64;
 }
 
+/// Enum to hold either CSV or Parquet writer
+enum WriterVariant {
+    Csv(CsvWriter),
+    Parquet(ParquetWriter),
+}
+
+impl WriterVariant {
+    fn write<S: Serialize + ParquetSchema>(
+        &mut self,
+        rows: Box<dyn Iterator<Item = S> + Send + Sync>,
+    ) -> Result<()> {
+        match self {
+            WriterVariant::Csv(w) => w.write(rows),
+            WriterVariant::Parquet(w) => w.write(rows),
+        }
+    }
+
+    fn flush<S: Serialize + ParquetSchema>(&mut self) -> Result<Option<Vec<u8>>> {
+        match self {
+            WriterVariant::Csv(w) => w.flush::<S>(),
+            WriterVariant::Parquet(w) => w.flush::<S>(),
+        }
+    }
+
+    fn rows(&self) -> Result<usize> {
+        match self {
+            WriterVariant::Csv(w) => w.rows(),
+            WriterVariant::Parquet(w) => w.rows(),
+        }
+    }
+}
+
 /// Generic batch struct that works for all entry types
 pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + ParquetSchema> {
-    pub inner: ParquetBatch<T>,
+    inner: Mutex<Option<WriterVariant>>,
+    dir_prefix: String,
+    current_epoch: Mutex<EpochId>,
+    last_checkpoint: Mutex<u64>,
+    current_file_bytes: Mutex<Option<Bytes>>,
+    _phantom: PhantomData<T>,
 }
 
 /// Generic wrapper that implements Handler for any Processor with analytics batching
@@ -35,9 +74,85 @@ pub struct AnalyticsHandler<P, B> {
 impl<T: AnalyticsMetadata + Serialize + ParquetSchema + 'static> Default for AnalyticsBatch<T> {
     fn default() -> Self {
         Self {
-            inner: ParquetBatch::new(T::PIPELINE.dir_prefix().as_ref().to_string(), 0)
-                .expect("Failed to create ParquetBatch"),
+            inner: Mutex::new(None),
+            dir_prefix: T::PIPELINE.dir_prefix().as_ref().to_string(),
+            current_epoch: Mutex::new(0),
+            last_checkpoint: Mutex::new(0),
+            current_file_bytes: Mutex::new(None),
+            _phantom: PhantomData,
         }
+    }
+}
+
+impl<T: AnalyticsMetadata + Serialize + ParquetSchema> AnalyticsBatch<T> {
+    /// Write rows to the batch (initializes writer on first call)
+    fn write_rows<I>(&self, rows: I, format: FileFormat) -> Result<()>
+    where
+        I: Iterator<Item = T>,
+        T: Send + Sync + 'static,
+    {
+        let mut inner = self.inner.lock().unwrap();
+
+        let writer = match inner.as_mut() {
+            Some(w) => w,
+            None => {
+                let w = match format {
+                    FileFormat::Csv => WriterVariant::Csv(CsvWriter::new()?),
+                    FileFormat::Parquet => WriterVariant::Parquet(ParquetWriter::new()?),
+                };
+                inner.insert(w)
+            }
+        };
+
+        let collected: Vec<T> = rows.collect();
+        writer.write(Box::new(collected.into_iter()))?;
+        Ok(())
+    }
+
+    /// Set the current epoch
+    fn set_epoch(&self, epoch: EpochId) {
+        *self.current_epoch.lock().unwrap() = epoch;
+    }
+
+    /// Update the last checkpoint
+    fn update_last_checkpoint(&self, checkpoint: u64) {
+        *self.last_checkpoint.lock().unwrap() = checkpoint;
+    }
+
+    /// Get the current file bytes if available (cloned to avoid holding the lock)
+    fn current_file_bytes(&self) -> Option<Bytes> {
+        self.current_file_bytes.lock().unwrap().clone()
+    }
+
+    /// Get the row count
+    fn row_count(&self) -> Result<usize> {
+        let inner = self.inner.lock().unwrap();
+        match &*inner {
+            Some(writer) => writer.rows(),
+            None => Ok(0),
+        }
+    }
+
+    /// Get the object store path for the current file
+    fn object_store_path(&self, format: FileFormat) -> object_store::path::Path {
+        let path = crate::construct_file_path(
+            &self.dir_prefix,
+            *self.current_epoch.lock().unwrap(),
+            0..*self.last_checkpoint.lock().unwrap(),
+            format,
+        );
+        object_store::path::Path::from(path.to_string_lossy().as_ref())
+    }
+
+    /// Flush the current batch and store the bytes
+    fn flush(&self) -> Result<()> {
+        let mut inner = self.inner.lock().unwrap();
+        if let Some(ref mut writer) = *inner
+            && let Some(bytes) = writer.flush::<T>()?
+        {
+            *self.current_file_bytes.lock().unwrap() = Some(Bytes::from(bytes));
+        }
+        Ok(())
     }
 }
 
@@ -102,14 +217,14 @@ where
         let epoch = first.get_epoch();
         let checkpoint = first.get_checkpoint_sequence_number();
 
-        batch.inner.set_epoch(epoch);
-        batch.inner.update_last_checkpoint(checkpoint);
+        batch.set_epoch(epoch);
+        batch.update_last_checkpoint(checkpoint);
 
-        if let Err(e) = batch
-            .inner
-            .write_rows(std::iter::once(first).chain(values.by_ref()))
-        {
-            tracing::error!("Failed to write rows to ParquetBatch: {}", e);
+        if let Err(e) = batch.write_rows(
+            std::iter::once(first).chain(values.by_ref()),
+            self.config.file_format,
+        ) {
+            tracing::error!("Failed to write rows to batch: {}", e);
             return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending;
         }
 
@@ -121,15 +236,18 @@ where
         batch: &Self::Batch,
         conn: &mut <Self::Store as sui_indexer_alt_framework::store::Store>::Connection<'a>,
     ) -> Result<usize> {
-        let Some(file_bytes) = batch.inner.current_file_bytes() else {
+        // Ensure the batch is flushed before committing
+        batch.flush()?;
+
+        let Some(file_bytes) = batch.current_file_bytes() else {
             return Ok(0);
         };
 
-        let row_count = batch.inner.row_count()?;
-        let object_path = batch.inner.object_store_path();
+        let row_count = batch.row_count()?;
+        let object_path = batch.object_store_path(self.config.file_format);
 
         conn.object_store()
-            .put(&object_path, file_bytes.clone().into())
+            .put(&object_path, file_bytes.into())
             .await?;
 
         Ok(row_count)

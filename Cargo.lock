@@ -13634,6 +13634,7 @@ dependencies = [
  "bcs",
  "bytes",
  "chrono",
+ "csv",
  "eyre",
  "fastcrypto",
  "futures",
