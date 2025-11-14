@@ -79,6 +79,7 @@ pub struct TransactionOrchestrator<A: Clone> {
     transaction_driver: Option<Arc<TransactionDriver<A>>>,
     td_percentage: u8,
     td_allowed_submission_list: Vec<String>,
+    td_blocked_submission_list: Vec<String>,
     enable_early_validation: bool,
 }
 
@@ -174,6 +175,19 @@ where
             .map(|config| config.allowed_submission_validators.clone())
             .unwrap_or_default();
 
+        let td_blocked_submission_list = node_config
+            .transaction_driver_config
+            .as_ref()
+            .map(|config| config.blocked_submission_validators.clone())
+            .unwrap_or_default();
+
+        if !td_allowed_submission_list.is_empty() && !td_blocked_submission_list.is_empty() {
+            panic!(
+                "Both allowed and blocked submission lists are set, this is not allowed, {:?} {:?}",
+                td_allowed_submission_list, td_blocked_submission_list
+            );
+        }
+
         let enable_early_validation = node_config
             .transaction_driver_config
             .as_ref()
@@ -190,6 +204,7 @@ where
             transaction_driver,
             td_percentage,
             td_allowed_submission_list,
+            td_blocked_submission_list,
             enable_early_validation,
         }
     }
@@ -699,6 +714,7 @@ where
                 SubmitTransactionOptions {
                     forwarded_client_addr: client_addr,
                     allowed_validators: self.td_allowed_submission_list.clone(),
+                    blocked_validators: self.td_blocked_submission_list.clone(),
                 },
                 timeout_duration,
             )
