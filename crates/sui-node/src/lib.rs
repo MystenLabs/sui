@@ -497,7 +497,8 @@ impl SuiNode {
         let is_validator = matches!(node_type, sui_config::NodeType::Validator);
         let is_full_node = matches!(node_type, sui_config::NodeType::FullNode);
         // Observer nodes need the same RPC capabilities as fullnodes (indexes, transaction orchestrator, etc.)
-        let needs_rpc_capabilities = is_full_node || matches!(node_type, sui_config::NodeType::Observer);
+        let needs_rpc_capabilities =
+            is_full_node || matches!(node_type, sui_config::NodeType::Observer);
         let prometheus_registry = registry_service.default_registry();
 
         info!(node =? config.protocol_public_key(),
@@ -691,22 +692,23 @@ impl SuiNode {
             None
         };
 
-        let rpc_index = if needs_rpc_capabilities && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
-            Some(Arc::new(
-                RpcIndexStore::new(
-                    &config.db_path(),
-                    &store,
-                    &checkpoint_store,
-                    &epoch_store,
-                    &cache_traits.backing_package_store,
-                    pruner_watermarks.checkpoint_id.clone(),
-                    config.rpc().cloned().unwrap_or_default(),
-                )
-                .await,
-            ))
-        } else {
-            None
-        };
+        let rpc_index =
+            if needs_rpc_capabilities && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
+                Some(Arc::new(
+                    RpcIndexStore::new(
+                        &config.db_path(),
+                        &store,
+                        &checkpoint_store,
+                        &epoch_store,
+                        &cache_traits.backing_package_store,
+                        pruner_watermarks.checkpoint_id.clone(),
+                        config.rpc().cloned().unwrap_or_default(),
+                    )
+                    .await,
+                ))
+            } else {
+                None
+            };
 
         let chain_identifier = epoch_store.get_chain_identifier();
 

@@ -206,42 +206,79 @@ mod test {
         use std::io::Write;
         let mut output = std::fs::File::create("checkpoint_comparison_output.txt").unwrap();
 
-        writeln!(&mut output, "\n=== Comparing checkpoints 8-15 between observer and validator ===\n").unwrap();
+        writeln!(
+            &mut output,
+            "\n=== Comparing checkpoints 8-15 between observer and validator ===\n"
+        )
+        .unwrap();
 
         // Get the observer node (fullnode)
-        let observer_handle = test_cluster.swarm.fullnodes().next().unwrap().get_node_handle().unwrap();
+        let observer_handle = test_cluster
+            .swarm
+            .fullnodes()
+            .next()
+            .unwrap()
+            .get_node_handle()
+            .unwrap();
 
         // Get a validator node
-        let validator_handle = test_cluster.swarm.validator_node_handles().into_iter().next().unwrap();
+        let validator_handle = test_cluster
+            .swarm
+            .validator_node_handles()
+            .into_iter()
+            .next()
+            .unwrap();
 
         // Check if observer is actually building checkpoints locally
-        writeln!(&mut output, "\n=== Checking if observer node is building checkpoints locally ===\n").unwrap();
+        writeln!(
+            &mut output,
+            "\n=== Checking if observer node is building checkpoints locally ===\n"
+        )
+        .unwrap();
 
         let observer_locally_built = observer_handle.with(|node| {
             let checkpoint_store = &node.state().checkpoint_store;
-            checkpoint_store.get_latest_locally_computed_checkpoint().unwrap()
+            checkpoint_store
+                .get_latest_locally_computed_checkpoint()
+                .unwrap()
         });
 
         let validator_locally_built = validator_handle.with(|node| {
             let checkpoint_store = &node.state().checkpoint_store;
-            checkpoint_store.get_latest_locally_computed_checkpoint().unwrap()
+            checkpoint_store
+                .get_latest_locally_computed_checkpoint()
+                .unwrap()
         });
 
         match observer_locally_built {
             Some(cp) => {
                 writeln!(&mut output, "Observer IS building checkpoints locally!").unwrap();
-                writeln!(&mut output, "  Latest locally computed checkpoint: seq={}, digest={}",
-                    cp.sequence_number, cp.digest()).unwrap();
+                writeln!(
+                    &mut output,
+                    "  Latest locally computed checkpoint: seq={}, digest={}",
+                    cp.sequence_number,
+                    cp.digest()
+                )
+                .unwrap();
             }
             None => {
-                writeln!(&mut output, "Observer IS NOT building checkpoints locally (only syncing from validators)").unwrap();
+                writeln!(
+                    &mut output,
+                    "Observer IS NOT building checkpoints locally (only syncing from validators)"
+                )
+                .unwrap();
             }
         }
 
         match validator_locally_built {
             Some(cp) => {
-                writeln!(&mut output, "Validator latest locally computed checkpoint: seq={}, digest={}",
-                    cp.sequence_number, cp.digest()).unwrap();
+                writeln!(
+                    &mut output,
+                    "Validator latest locally computed checkpoint: seq={}, digest={}",
+                    cp.sequence_number,
+                    cp.digest()
+                )
+                .unwrap();
             }
             None => {
                 writeln!(&mut output, "Validator has no locally computed checkpoints").unwrap();
@@ -251,11 +288,17 @@ mod test {
 
         for seq in 8..=15 {
             let observer_checkpoint = observer_handle.with(|node| {
-                node.state().checkpoint_store.get_checkpoint_by_sequence_number(seq).unwrap()
+                node.state()
+                    .checkpoint_store
+                    .get_checkpoint_by_sequence_number(seq)
+                    .unwrap()
             });
 
             let validator_checkpoint = validator_handle.with(|node| {
-                node.state().checkpoint_store.get_checkpoint_by_sequence_number(seq).unwrap()
+                node.state()
+                    .checkpoint_store
+                    .get_checkpoint_by_sequence_number(seq)
+                    .unwrap()
             });
 
             if let (Some(obs_cp), Some(val_cp)) = (observer_checkpoint, validator_checkpoint) {
@@ -271,7 +314,12 @@ mod test {
                     val_cp.network_total_transactions
                 ).unwrap();
 
-                assert_eq!(obs_cp.digest(), val_cp.digest(), "Checkpoint {} digests don't match!", seq);
+                assert_eq!(
+                    obs_cp.digest(),
+                    val_cp.digest(),
+                    "Checkpoint {} digests don't match!",
+                    seq
+                );
             }
         }
         writeln!(&mut output, "\n=== Checkpoint comparison complete ===\n").unwrap();
