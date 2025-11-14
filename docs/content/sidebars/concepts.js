@@ -4,132 +4,51 @@
 const concepts = [
 	'concepts',
 	'concepts/sui-for-ethereum',
-	'concepts/components',
 	{
 		type: 'category',
-		label: 'App Developers',
+		label: 'Sui Architecture',
 		link: {
 			type: 'doc',
-			id: 'concepts/app-devs',
+			id: 'concepts/components',
 		},
 		items: [
-			{
-				type: 'category',
-				label: 'Object Model',
-				link: {
-					type: 'doc',
-					id: 'concepts/object-model',
-				},
-				items: [
-					{
-						type: 'category',
-						label: 'Object Ownership',
-						link: {
-							type: 'doc',
-							id: 'concepts/object-ownership',
-						},
-						items: [
-							'concepts/object-ownership/address-owned',
-							'concepts/object-ownership/immutable',
-							'concepts/object-ownership/party',
-							'concepts/object-ownership/shared',
-							'concepts/object-ownership/wrapped',
-						],
-					},
-					{
-						type: 'category',
-						label: 'Transfers',
-						link: {
-							type: 'doc',
-							id: 'concepts/transfers',
-						},
-						items: ['concepts/transfers/custom-rules', 
-								'concepts/transfers/transfer-policies',
-							    'concepts/transfers/transfer-to-object'],
-					},
-					'concepts/versioning',
-				],
-			},
-			{
-				type: 'category',
-				label: 'Move Overview',
-				link: {
-					type: 'doc',
-					id: 'concepts/sui-move-concepts',
-				},
-				items: [
-					{
-						type: 'category',
-						label: 'Packages',
-						link: {
-							type: 'doc',
-							id: 'concepts/sui-move-concepts/packages',
-						},
-						items: [
-							'concepts/sui-move-concepts/packages/upgrade',
-							'concepts/sui-move-concepts/packages/custom-policies',
-							'concepts/sui-move-concepts/packages/automated-address-management',
-						],
-					},
-					{
-						type: 'category',
-						label: 'Dynamic Fields',
-						link: {
-							type: 'doc',
-							id: 'concepts/dynamic-fields',
-						},
-						items: ['concepts/dynamic-fields/tables-bags'],
-					},
-					'concepts/sui-move-concepts/derived-objects',
-					'concepts/sui-move-concepts/conventions'
-					
-				],
-			},
-			{
-				type: 'category',
-				label: 'Transactions',
-				link: {
-					type: 'doc',
-					id: 'concepts/transactions',
-				},
-				items: [
-					'concepts/transactions/prog-txn-blocks',
-					'concepts/transactions/sponsored-transactions',
-					'concepts/transactions/gas-smashing',
-				],
-			},
-			'concepts/gaming'
+			'concepts/sui-architecture/networks',
+			'concepts/sui-architecture/consensus',
+			'concepts/sui-architecture/sui-storage',
+			'concepts/sui-architecture/sui-security',
+			'concepts/sui-architecture/epochs',
+			'concepts/sui-architecture/indexer-functions',
+			'concepts/sui-architecture/protocol-upgrades',
+			'concepts/sui-architecture/data-management-things',
 		],
 	},
 	{
 		type: 'category',
-		label: 'Data Access',
+		label: 'Tokenomics',
+		link: {
+			type: 'doc',
+			id: 'concepts/tokenomics',
+		},
 		items: [
-			'concepts/grpc-overview',
-			{ 
-				type: 'category',
-				label: 'GraphQL and Indexer Framework',
-				link: {
-					type: 'doc',
-					id: 'concepts/graphql-indexer',
-				},
-				items: [
-					'concepts/graphql-rpc',
-					'concepts/custom-indexing-framework',
-					'concepts/custom-indexer/pipeline-architecture'
-				]
-			},
-			'concepts/archival-store'
-		]
+			'concepts/tokenomics/staking-unstaking',
+			'concepts/tokenomics/sui-bridging',
+			'concepts/tokenomics/gas-in-sui',
+			'concepts/tokenomics/vesting-strategies',
+			'concepts/sui-architecture/staking-rewards',
+		],
 	},
 	{
 		type: 'category',
-		label: 'Cryptography',
+		label: 'Transactions',
 		link: {
 			type: 'doc',
-			id: 'concepts/cryptography',
+			id: 'concepts/transactions',
 		},
 		items: [
+			'concepts/sui-architecture/transaction-lifecycle',
+			'concepts/transactions/prog-txn-blocks',
+			'concepts/transactions/sponsored-transactions',
+			'concepts/transactions/gas-smashing',
 			{
 				type: 'category',
 				label: 'Transaction Authentication',
@@ -145,6 +64,110 @@ const concepts = [
 					'concepts/cryptography/transaction-auth/intent-signing',
 				],
 			},
+		],
+	},
+	{
+		type: 'category',
+		label: 'Object Model',
+		link: {
+			type: 'doc',
+			id: 'concepts/object-model',
+		},
+		items: [
+			{
+				type: 'category',
+				label: 'Object Ownership',
+				link: {
+					type: 'doc',
+					id: 'concepts/object-ownership',
+				},
+				items: [
+					'concepts/object-ownership/address-owned',
+					'concepts/object-ownership/immutable',
+					'concepts/object-ownership/party',
+					'concepts/object-ownership/shared',
+					'concepts/object-ownership/wrapped',
+				],
+			},
+			{
+				type: 'category',
+				label: 'Transfers',
+				link: {
+					type: 'doc',
+					id: 'concepts/transfers',
+				},
+				items: [
+					'concepts/transfers/custom-rules',
+					'concepts/transfers/transfer-policies',
+					'concepts/transfers/transfer-to-object',
+				],
+			},
+			'concepts/versioning',
+		],
+	},
+	{
+		type: 'category',
+		label: 'Move',
+		link: {
+			type: 'doc',
+			id: 'concepts/sui-move-concepts',
+		},
+		items: [
+			{
+				type: 'category',
+				label: 'Packages',
+				link: {
+					type: 'doc',
+					id: 'concepts/sui-move-concepts/packages',
+				},
+				items: [
+					'concepts/sui-move-concepts/packages/upgrade',
+					'concepts/sui-move-concepts/packages/custom-policies',
+					'concepts/sui-move-concepts/packages/automated-address-management',
+				],
+			},
+			{
+				type: 'category',
+				label: 'Dynamic Fields',
+				link: {
+					type: 'doc',
+					id: 'concepts/dynamic-fields',
+				},
+				items: ['concepts/dynamic-fields/tables-bags'],
+			},
+			'concepts/sui-move-concepts/derived-objects',
+			'concepts/sui-move-concepts/conventions',
+		],
+	},
+	{
+		type: 'category',
+		label: 'Data Access',
+		items: [
+			'concepts/grpc-overview',
+			{
+				type: 'category',
+				label: 'GraphQL and Indexer Framework',
+				link: {
+					type: 'doc',
+					id: 'concepts/graphql-indexer',
+				},
+				items: [
+					'concepts/graphql-rpc',
+					'concepts/custom-indexing-framework',
+					'concepts/custom-indexer/pipeline-architecture',
+				],
+			},
+			'concepts/archival-store',
+		],
+	},
+	{
+		type: 'category',
+		label: 'Cryptography',
+		link: {
+			type: 'doc',
+			id: 'concepts/cryptography',
+		},
+		items: [
 			'concepts/cryptography/zklogin',
 			'concepts/cryptography/passkeys',
 			{
@@ -175,41 +198,7 @@ const concepts = [
 			},*/
 		],
 	},
-	{
-		type: 'category',
-		label: 'Sui Architecture',
-		link: {
-			type: 'doc',
-			id: 'concepts/sui-architecture',
-		},
-		items: [
-			'concepts/sui-architecture/high-level',
-			'concepts/sui-architecture/sui-storage',
-			'concepts/sui-architecture/sui-security',
-			'concepts/sui-architecture/transaction-lifecycle',
-			'concepts/sui-architecture/consensus',
-			'concepts/sui-architecture/indexer-functions',
-			'concepts/sui-architecture/epochs',
-			'concepts/sui-architecture/protocol-upgrades',
-			'concepts/sui-architecture/data-management-things',
-			'concepts/sui-architecture/staking-rewards',
-		],
-	},
-	{
-		type: 'category',
-		label: 'Tokenomics',
-		link: {
-			type: 'doc',
-			id: 'concepts/tokenomics',
-		},
-		items: [
-			'concepts/tokenomics/staking-unstaking',
-			'concepts/tokenomics/sui-bridging',
-			'concepts/tokenomics/gas-pricing',
-			'concepts/tokenomics/gas-in-sui',
-			'concepts/tokenomics/vesting-strategies'
-		],
-	},
+	'concepts/gaming',
 	'concepts/research-papers',
 ];
 export default concepts;
