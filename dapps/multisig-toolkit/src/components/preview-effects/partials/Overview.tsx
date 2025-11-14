@@ -28,7 +28,7 @@ export function Overview({ output }: { output: DryRunTransactionBlockResponse })
 		network,
 		status:
 			output.effects.status?.status === 'success'
-				? '✅ Transaction dry run executed succesfully!'
+				? '✅ Transaction dry run executed successfully!'
 				: output.effects.status?.status === 'failure'
 					? '❌ Transaction failed to execute!'
 					: null,
