@@ -4,12 +4,11 @@
 #[test_only]
 module sui_system::validator_set_tests;
 
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, destroy};
 use sui::address;
 use sui::balance;
 use sui::coin;
 use sui::test_scenario::{Self, Scenario};
-use sui::test_utils;
 use sui::vec_map;
 use sui_system::validator::{Self, Validator, staking_pool_id};
 use sui_system::validator_set::{Self, ValidatorSet};
@@ -85,7 +84,7 @@ fun validator_set_flow() {
     // Validator1 is gone. This removes its stake (100) + the 500 staked with it.
     assert_eq!(validator_set.total_stake(), 900 * MIST_PER_SUI);
 
-    test_utils::destroy(validator_set);
+    destroy(validator_set);
     scenario_val.end();
 }
 
@@ -137,7 +136,7 @@ fun reference_gas_price_derivation() {
 
     assert_eq!(validator_set.derive_reference_gas_price(), 43);
 
-    test_utils::destroy(validator_set);
+    destroy(validator_set);
     scenario_val.end();
 }
 
@@ -162,7 +161,7 @@ fun staking_below_threshold() {
         ctx1,
     );
     transfer::public_transfer(stake, @0x1);
-    test_utils::destroy(validator_set);
+    destroy(validator_set);
     scenario_val.end();
 }
 
@@ -190,7 +189,7 @@ fun staking_min_threshold() {
     advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
     assert!(validator_set.total_stake() == 101 * MIST_PER_SUI);
 
-    test_utils::destroy(validator_set);
+    destroy(validator_set);
     scenario_val.end();
 }
 
@@ -218,7 +217,7 @@ fun add_validator_failure_below_min_voting_power() {
     // Try to add a validator with less than the min voting power
     validator_set.request_add_validator_candidate(validator2, scenario.ctx());
     validator_set.request_add_validator(scenario.ctx());
-    test_utils::destroy(validator_set);
+    destroy(validator_set);
     scenario_val.end();
 }
 
@@ -275,7 +274,7 @@ fun add_validator_with_min_voting_power() {
     let effects = scenario.next_tx(@0xB);
     assert_eq!(effects.num_user_events(), num_validators + 1);
 
-    test_utils::destroy(validator_set);
+    destroy(validator_set);
     scenario_val.end();
 }
 
@@ -311,7 +310,7 @@ fun add_candidate_then_remove() {
     assert!(validator_set.is_inactive_validator(pool_id_2));
     assert_eq!(validator_set.validator_address_by_pool_id(&pool_id_2), @0x2);
 
-    test_utils::destroy(validator_set);
+    destroy(validator_set);
     scenario_val.end();
 }
 
@@ -339,8 +338,8 @@ fun request_add_then_pull_stake() {
     validator_set.request_add_validator(scenario.ctx()); // can be admitted
     let bal = validator_set.request_withdraw_stake(stake, scenario.ctx()); // should fail here with ENotAValidator
 
-    test_utils::destroy(validator_set);
-    test_utils::destroy(bal);
+    destroy(validator_set);
+    destroy(bal);
     scenario_val.end();
 }
 
@@ -376,8 +375,8 @@ fun withdraw_all() {
     let effects = scenario.next_tx(@0xB);
     assert_eq!(effects.num_user_events(), num_validators + 1);
 
-    test_utils::destroy(validator_set);
-    test_utils::destroy(bal);
+    destroy(validator_set);
+    destroy(bal);
     scenario_val.end();
 }
 
@@ -416,9 +415,9 @@ fun very_low_voting_power_departure() {
     let effects = scenario.next_tx(@0xB);
     assert_eq!(effects.num_user_events(), num_validators + 1);
 
-    test_utils::destroy(validator_set);
-    test_utils::destroy(bal);
-    test_utils::destroy(stake);
+    destroy(validator_set);
+    destroy(bal);
+    destroy(stake);
     scenario_val.end();
 }
 
@@ -474,9 +473,9 @@ fun low_voting_power_departure() {
     let effects = scenario.next_tx(@0xB);
     assert_eq!(effects.num_user_events(), num_validators + 1);
 
-    test_utils::destroy(validator_set);
-    test_utils::destroy(bal);
-    test_utils::destroy(stake);
+    destroy(validator_set);
+    destroy(bal);
+    destroy(stake);
     scenario_val.end();
 }
 
@@ -521,9 +520,9 @@ fun low_voting_power_recovery() {
     assert!(validator_set.find_for_testing(@0xB).voting_power() == 3);
     assert!(!validator_set.is_at_risk_validator(@0xB));
 
-    test_utils::destroy(validator_set);
-    test_utils::destroy(stake1);
-    test_utils::destroy(stake2);
+    destroy(validator_set);
+    destroy(stake1);
+    destroy(stake2);
     scenario_val.end();
 }
 
@@ -545,7 +544,7 @@ fun add_then_increase_stake_of_others() {
         balance::create_for_testing(1000 * MIST_PER_SUI),
         scenario.ctx(),
     );
-    test_utils::destroy(stake);
+    destroy(stake);
     validator_set.request_add_validator(scenario.ctx()); // can be admitted
 
     let mut new_total_stake = validator_set.total_stake();
@@ -559,7 +558,7 @@ fun add_then_increase_stake_of_others() {
             scenario.ctx(),
         );
         new_total_stake = new_total_stake + to_add;
-        test_utils::destroy(stake);
+        destroy(stake);
     });
 
     // advance epoch, new guy should no longer be added
@@ -571,7 +570,7 @@ fun add_then_increase_stake_of_others() {
     let effects = scenario.next_tx(@0xB);
     assert_eq!(effects.num_user_events(), num_validators); // epoch changes hould not emit ValidatorJoinEvent or ValidatorLeaveEvent
 
-    test_utils::destroy(validator_set);
+    destroy(validator_set);
     scenario_val.end();
 }
 

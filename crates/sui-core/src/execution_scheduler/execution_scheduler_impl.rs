@@ -3,9 +3,8 @@
 
 use crate::{
     authority::{
-        AuthorityMetrics, ExecutionEnv,
-        authority_per_epoch_store::AuthorityPerEpochStore,
-        shared_object_version_manager::{Schedulable, WithdrawType},
+        AuthorityMetrics, ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
+        shared_object_version_manager::Schedulable,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{
@@ -27,11 +26,11 @@ use std::{
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    base_types::{FullObjectID, ObjectID, SequenceNumber},
+    base_types::{FullObjectID, ObjectID},
     digests::TransactionDigest,
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
-    storage::{InputKey, ObjectStore},
+    storage::{ChildObjectResolver, InputKey},
     transaction::{
         SenderSignedData, SharedInputObject, SharedObjectMutability, TransactionData,
         TransactionDataAPI, TransactionKey,
@@ -88,7 +87,6 @@ impl BarrierDependencyBuilder {
 #[derive(Clone)]
 pub struct ExecutionScheduler {
     object_cache_read: Arc<dyn ObjectCacheRead>,
-    object_store: Arc<dyn ObjectStore + Send + Sync>,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
@@ -129,19 +127,21 @@ impl Drop for PendingGuard<'_> {
 impl ExecutionScheduler {
     pub fn new(
         object_cache_read: Arc<dyn ObjectCacheRead>,
-        object_store: Arc<dyn ObjectStore + Send + Sync>,
+        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         tracing::info!("Creating new ExecutionScheduler");
-        let balance_withdraw_scheduler = Arc::new(Mutex::new(
-            Self::initialize_balance_withdraw_scheduler(epoch_store, &object_store),
-        ));
+        let balance_withdraw_scheduler =
+            Arc::new(Mutex::new(Self::initialize_balance_withdraw_scheduler(
+                epoch_store,
+                &object_cache_read,
+                child_object_resolver,
+            )));
         Self {
             object_cache_read,
-            object_store,
             transaction_cache_read,
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
@@ -152,19 +152,20 @@ impl ExecutionScheduler {
 
     fn initialize_balance_withdraw_scheduler(
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        object_store: &Arc<dyn ObjectStore + Send + Sync>,
+        object_cache_read: &Arc<dyn ObjectCacheRead>,
+        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
     ) -> Option<BalanceWithdrawScheduler> {
         let withdraw_scheduler_enabled =
             epoch_store.is_validator() && epoch_store.accumulators_enabled();
         if !withdraw_scheduler_enabled {
             return None;
         }
-        let starting_accumulator_version = object_store
+        let starting_accumulator_version = object_cache_read
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .expect("Accumulator root object must be present if balance accumulator is enabled")
             .version();
         Some(BalanceWithdrawScheduler::new(
-            Arc::new(object_store.clone()),
+            Arc::new(child_object_resolver),
             starting_accumulator_version,
         ))
     }
@@ -304,7 +305,7 @@ impl ExecutionScheduler {
 
     fn schedule_balance_withdraws(
         &self,
-        certs: Vec<(VerifiedExecutableTransaction, SequenceNumber, ExecutionEnv)>,
+        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         if certs.is_empty() {
@@ -312,20 +313,24 @@ impl ExecutionScheduler {
         }
         let mut withdraws = BTreeMap::new();
         let mut prev_version = None;
-        for (cert, version, _) in &certs {
+        for (cert, env) in &certs {
             let tx_withdraws = cert
                 .transaction_data()
                 .process_funds_withdrawals()
                 .expect("Balance withdraws should have already been checked");
             assert!(!tx_withdraws.is_empty());
+            let accumulator_version = env
+                .assigned_versions
+                .accumulator_version
+                .expect("accumulator_version must be set when there are withdraws");
             if let Some(prev_version) = prev_version {
                 // Transactions must be in order.
-                assert!(prev_version <= *version);
+                assert!(prev_version <= accumulator_version);
             }
-            prev_version = Some(*version);
+            prev_version = Some(accumulator_version);
             let tx_digest = *cert.digest();
             withdraws
-                .entry(*version)
+                .entry(accumulator_version)
                 .or_insert(Vec::new())
                 .push(TxBalanceWithdraw {
                     tx_digest,
@@ -347,7 +352,7 @@ impl ExecutionScheduler {
         let epoch_store = epoch_store.clone();
         spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
             let mut cert_map = HashMap::new();
-            for (cert, _, env) in certs {
+            for (cert, env) in certs {
                 cert_map.insert(*cert.digest(), (cert, env));
             }
             while let Some(result) = receivers.next().await {
@@ -496,14 +501,10 @@ impl ExecutionScheduler {
         for (schedulable, env) in certs {
             match schedulable {
                 Schedulable::Transaction(tx) => {
-                    // Check if this transaction has withdraws based on the assigned versions
-                    match env.assigned_versions.withdraw_type {
-                        WithdrawType::Withdraw(accumulator_version) => {
-                            tx_with_withdraws.push((tx, accumulator_version, env));
-                        }
-                        WithdrawType::NonWithdraw => {
-                            ordinary_txns.push((tx, env));
-                        }
+                    if tx.transaction_data().has_funds_withdrawals() {
+                        tx_with_withdraws.push((tx, env));
+                    } else {
+                        ordinary_txns.push((tx, env));
                     }
                 }
                 s @ Schedulable::RandomnessStateUpdate(..) => {
@@ -591,9 +592,16 @@ impl ExecutionScheduler {
 
     /// Reconfigure internal state at epoch start. This resets the balance withdraw scheduler
     /// to the current accumulator root object version.
-    pub fn reconfigure(&self, new_epoch_store: &Arc<AuthorityPerEpochStore>) {
-        let scheduler =
-            Self::initialize_balance_withdraw_scheduler(new_epoch_store, &self.object_store);
+    pub fn reconfigure(
+        &self,
+        new_epoch_store: &Arc<AuthorityPerEpochStore>,
+        child_object_resolver: &Arc<dyn ChildObjectResolver + Send + Sync>,
+    ) {
+        let scheduler = Self::initialize_balance_withdraw_scheduler(
+            new_epoch_store,
+            &self.object_cache_read,
+            child_object_resolver.clone(),
+        );
         let mut guard = self.balance_withdraw_scheduler.lock();
         if let Some(old_scheduler) = guard.as_ref() {
             old_scheduler.close_epoch();
@@ -667,7 +675,7 @@ mod test {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = ExecutionScheduler::new(
             state.get_object_cache_reader().clone(),
-            state.get_object_store().clone(),
+            state.get_child_object_resolver().clone(),
             state.get_transaction_cache_reader().clone(),
             tx_ready_certificates,
             &state.epoch_store_for_testing(),
@@ -945,26 +953,30 @@ mod test {
             vec![
                 (
                     transaction_read_0.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
                         tx_read_0_assigned_versions,
+                        None,
                     )),
                 ),
                 (
                     transaction_read_1.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
                         tx_read_1_assigned_versions,
+                        None,
                     )),
                 ),
                 (
                     transaction_default.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
                         tx_default_assigned_versions,
+                        None,
                     )),
                 ),
                 (
                     transaction_read_2.clone(),
-                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
                         tx_read_2_assigned_versions,
+                        None,
                     )),
                 ),
             ],
@@ -1502,7 +1514,7 @@ mod test {
             vec![(
                 cancelled_transaction.clone(),
                 ExecutionEnv::new()
-                    .with_assigned_versions(AssignedVersions::non_withdraw(assigned_versions)),
+                    .with_assigned_versions(AssignedVersions::new(assigned_versions, None)),
             )],
             &state.epoch_store_for_testing(),
         );

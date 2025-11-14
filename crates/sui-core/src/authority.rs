@@ -1241,12 +1241,81 @@ impl AuthorityState {
             return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
         }
 
+        // Accept executed transactions, instead of voting to reject them.
+        // Execution is limited to the current epoch. Otherwise there can be a race where
+        // the transaction is accepted but the executed effects are pruned.
+        if let Some(effects) = self
+            .get_transaction_cache_reader()
+            .get_executed_effects(transaction.digest())
+            && effects.executed_epoch() == epoch_store.epoch()
+        {
+            return Ok(());
+        }
+
         let result =
             self.handle_transaction_impl(transaction, false /* sign */, epoch_store)?;
         assert!(
             result.is_none(),
             "handle_transaction_impl should not return a signed transaction when sign is false"
         );
+        Ok(())
+    }
+
+    /// Used for early client validation check for transactions before submission to server.
+    /// Performs the same validation checks as handle_vote_transaction without acquiring locks.
+    /// This allows for fast failure feedback to clients for non-retriable errors.
+    ///
+    /// The key addition is checking that owned object versions match live object versions.
+    /// This is necessary because handle_transaction_deny_checks fetches objects at their
+    /// requested version (which may exist in storage as historical versions), whereas
+    /// validators check against the live/current version during locking (verify_live_object).
+    pub fn check_transaction_validity(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        transaction: &VerifiedTransaction,
+    ) -> SuiResult<()> {
+        if !epoch_store
+            .get_reconfig_state_read_lock_guard()
+            .should_accept_user_certs()
+        {
+            return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
+        }
+
+        let checked_input_objects =
+            self.handle_transaction_deny_checks(transaction, epoch_store)?;
+
+        // Check that owned object versions match live objects
+        // This closely mimics verify_live_object logic from acquire_transaction_locks
+        let owned_objects = checked_input_objects.inner().filter_owned_objects();
+        let cache_reader = self.get_object_cache_reader();
+
+        for obj_ref in &owned_objects {
+            if let Some(live_object) = cache_reader.get_object(&obj_ref.0) {
+                // Only reject if transaction references an old version. Allow newer
+                // versions that may exist on validators but not yet synced to fullnode.
+                if obj_ref.1 < live_object.version() {
+                    return Err(SuiErrorKind::UserInputError {
+                        error: UserInputError::ObjectVersionUnavailableForConsumption {
+                            provided_obj_ref: *obj_ref,
+                            current_version: live_object.version(),
+                        },
+                    }
+                    .into());
+                }
+
+                // If version matches, verify digest also matches
+                if obj_ref.1 == live_object.version() && obj_ref.2 != live_object.digest() {
+                    return Err(SuiErrorKind::UserInputError {
+                        error: UserInputError::InvalidObjectDigest {
+                            object_id: obj_ref.0,
+                            expected_digest: live_object.digest(),
+                        },
+                    }
+                    .into());
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -3490,7 +3559,7 @@ impl AuthorityState {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = Arc::new(ExecutionScheduler::new(
             execution_cache_trait_pointers.object_cache_reader.clone(),
-            execution_cache_trait_pointers.object_store.clone(),
+            execution_cache_trait_pointers.child_object_resolver.clone(),
             execution_cache_trait_pointers
                 .transaction_cache_reader
                 .clone(),
@@ -3824,7 +3893,8 @@ impl AuthorityState {
             )
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
-        self.execution_scheduler.reconfigure(&new_epoch_store);
+        self.execution_scheduler
+            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
         *execution_lock = new_epoch;
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
@@ -3857,7 +3927,8 @@ impl AuthorityState {
                 .map(|c| *c.sequence_number())
                 .unwrap_or_default(),
         );
-        self.execution_scheduler.reconfigure(&new_epoch_store);
+        self.execution_scheduler
+            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
         let new_epoch = new_epoch_store.epoch();
         self.epoch_store.store(new_epoch_store);
         epoch_store.epoch_terminated().await;

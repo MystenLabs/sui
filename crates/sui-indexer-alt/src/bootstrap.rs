@@ -9,15 +9,16 @@ use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::postgres::Db;
 use sui_indexer_alt_framework::types::{
-    full_checkpoint_content::CheckpointData,
+    full_checkpoint_content::Checkpoint,
     sui_system_state::{SuiSystemStateTrait, get_sui_system_state},
-    transaction::{TransactionDataAPI, TransactionKind},
+    transaction::TransactionKind,
 };
 use sui_indexer_alt_schema::{
     checkpoints::StoredGenesis,
     epochs::StoredEpochStart,
     schema::{kv_epoch_starts, kv_genesis},
 };
+use sui_types::transaction::TransactionDataAPI;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -80,24 +81,26 @@ pub async fn bootstrap(
                 }
             };
 
-            let CheckpointData {
-                checkpoint_summary,
+            let Checkpoint {
+                summary: checkpoint_summary,
                 transactions,
                 ..
             } = genesis_checkpoint.as_ref();
 
-            let Some(genesis_transaction) = transactions.iter().find(|tx| {
-                matches!(
-                    tx.transaction.intent_message().value.kind(),
-                    TransactionKind::Genesis(_)
-                )
-            }) else {
+            let Some(genesis_transaction) = transactions
+                .iter()
+                .find(|tx| matches!(tx.transaction.kind(), TransactionKind::Genesis(_)))
+            else {
                 bail!("Could not find Genesis transaction");
             };
 
-            let sui_system_state =
-                get_sui_system_state(&genesis_transaction.output_objects.as_slice())
-                    .context("Failed to get Genesis SystemState")?;
+            let output_objects: Vec<_> = genesis_transaction
+                .output_objects(&genesis_checkpoint.object_set)
+                .cloned()
+                .collect();
+
+            let sui_system_state = get_sui_system_state(&output_objects.as_slice())
+                .context("Failed to get Genesis SystemState")?;
 
             let stored_genesis = StoredGenesis {
                 genesis_digest: checkpoint_summary.digest().inner().to_vec(),

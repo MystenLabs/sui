@@ -12,16 +12,14 @@ import copy from "copy-text-to-clipboard";
 import { translate } from "@docusaurus/Translate";
 import Button from "@theme/CodeBlock/Buttons/Button";
 import type { Props } from "@theme/CodeBlock/Buttons/CopyButton";
-import IconCopy from "@theme/Icon/Copy";
-import IconSuccess from "@theme/Icon/Success";
-
-import styles from "./styles.module.css";
 
 function getNearestCodeText(start: HTMLElement | null): string | null {
   let el: HTMLElement | null = start;
   while (el) {
     // Try common code selectors within a code block
-    const codeEl = el.querySelector?.('pre code, code, pre') as HTMLElement | null;
+    const codeEl = el.querySelector?.(
+      "pre code, code, pre",
+    ) as HTMLElement | null;
     if (codeEl && codeEl.innerText) {
       return codeEl.innerText;
     }
@@ -64,7 +62,7 @@ function useCopyButton(buttonRef: React.RefObject<HTMLElement>) {
     setIsCopied(true);
     copyTimeout.current = window.setTimeout(() => {
       setIsCopied(false);
-    }, 1000);
+    }, 2000);
   }, [buttonRef]);
 
   useEffect(() => () => window.clearTimeout(copyTimeout.current), []);
@@ -83,14 +81,20 @@ export default function CopyButton({ className }: Props): ReactNode {
         title={title()}
         className={clsx(
           className,
-          styles.copyButton,
-          isCopied && styles.copyButtonCopied,
+          "!opacity-50 !hover:opacity-100 text-xs !pb-2 w-24 justify-center",
+          isCopied && "block",
         )}
         onClick={copyCode}
       >
-        <span className={styles.copyButtonIcons} aria-hidden="true">
-          <IconCopy className={styles.copyButtonIcon} />
-          <IconSuccess className={styles.copyButtonSuccessIcon} />
+        <span className="">
+          <span className={`${isCopied ? "hidden" : "block"} opacity-100 p-1`}>
+            <i class="fa-regular fa-copy leading-[0] pr-1"></i>Copy
+          </span>
+          <span
+            className={`${isCopied ? "block text-sui-success p-1" : "hidden"}`}
+          >
+            <i class="fa-regular fa-thumbs-up leading-[0]"></i> Copied
+          </span>
         </span>
       </Button>
     </span>

@@ -104,6 +104,7 @@ members = [
   "crates/sui-bridge-indexer",
   "crates/sui-bridge-indexer-alt",
   "crates/sui-bridge-schema",
+  "crates/sui-checkpoint-blob-indexer",
   "crates/sui-cluster-test",
   "crates/sui-config",
   "crates/sui-core",
@@ -114,7 +115,6 @@ members = [
   "crates/sui-default-config",
   "crates/sui-display",
   "crates/sui-e2e-tests",
-  "crates/sui-edge-proxy",
   "crates/sui-enum-compat-util",
   "crates/sui-faucet",
   "crates/sui-field-count",
@@ -138,6 +138,7 @@ members = [
   "crates/sui-indexer-alt-graphql",
   "crates/sui-indexer-alt-jsonrpc",
   "crates/sui-indexer-alt-metrics",
+  "crates/sui-indexer-alt-object-store",
   "crates/sui-indexer-alt-reader",
   "crates/sui-indexer-alt-restorer",
   "crates/sui-indexer-alt-schema",
@@ -229,7 +230,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.60.0"
+version = "1.62.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -541,7 +542,6 @@ tempfile = "3.20.0"
 test-fuzz = "3.0.4"
 thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
-# TODO: Remove the `=` symbol once msim supports 1.48 too.
 tokio = "=1.47.1"
 tokio-retry = "0.3"
 tokio-rustls = { version = "0.26", default-features = false, features = [
@@ -725,6 +725,7 @@ sui-indexer-alt-reader = { path = "crates/sui-indexer-alt-reader" }
 sui-indexer-alt-restorer = { path = "crates/sui-indexer-alt-restorer" }
 sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }
+sui-indexer-alt-object-store = { path = "crates/sui-indexer-alt-object-store" }
 sui-json = { path = "crates/sui-json" }
 sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }

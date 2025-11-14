@@ -316,7 +316,7 @@ impl BenchmarkContext {
                         validator
                             .execute_certificate(
                                 tx,
-                                &AssignedVersions::non_withdraw(vec![]),
+                                &AssignedVersions::new(vec![], None),
                                 component,
                             )
                             .await
@@ -522,7 +522,7 @@ impl BenchmarkContext {
                             .execute_transaction_in_memory(
                                 store,
                                 tx,
-                                &AssignedVersions::non_withdraw(vec![]),
+                                &AssignedVersions::new(vec![], None),
                             )
                             .await
                     })

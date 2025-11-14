@@ -657,6 +657,13 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
     ) -> Option<Vec<sui_types::storage::ObjectKey>> {
         None
     }
+
+    fn get_transaction_checkpoint(
+        &self,
+        _digest: &TransactionDigest,
+    ) -> Option<CheckpointSequenceNumber> {
+        None
+    }
 }
 
 impl RpcStateReader for PersistedStoreInnerReadOnlyWrapper {

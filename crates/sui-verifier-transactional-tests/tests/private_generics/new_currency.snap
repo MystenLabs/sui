@@ -6,7 +6,7 @@ processed 3 tasks
 task 0, lines 6-32:
 //# publish
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::t::test. Invalid call to 'sui::coin_registry::new_currency' with type 'sui::coin::Coin<u64>'. The coin's type must be defined in the current module"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::t::test. Invalid call to 'sui::coin_registry::new_currency'. Type argument #0 must be a type defined in the current module, found 'sui::coin::Coin<u64>'."), command: Some(0) } }
 
 task 1, lines 34-65:
 //# publish

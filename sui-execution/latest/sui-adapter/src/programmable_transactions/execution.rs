@@ -75,6 +75,7 @@ mod checked {
     use sui_verifier::{
         INIT_FN_NAME,
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
+        private_generics_verifier_v2,
     };
     use tracing::instrument;
 
@@ -1254,7 +1255,11 @@ mod checked {
                 check_non_entry_signature::<Mode>(context, module_id, function, &signature)?
             }
         };
-        check_private_generics(module_id, function)?;
+        if context.protocol_config.private_generics_verifier_v2() {
+            check_private_generics_v2(module_id, function)?;
+        } else {
+            check_private_generics(module_id, function)?;
+        }
         Ok(LoadedFunctionInfo {
             kind: function_kind,
             signature,
@@ -1385,6 +1390,47 @@ mod checked {
         }
 
         Ok(())
+    }
+
+    pub fn check_private_generics_v2(
+        callee_package: &ModuleId,
+        callee_function: &IdentStr,
+    ) -> Result<(), ExecutionError> {
+        let callee_address = *callee_package.address();
+        let callee_module = callee_package.name();
+        let callee = (callee_address, callee_module, callee_function);
+        let Some((_f, internal_type_parameters)) = private_generics_verifier_v2::FUNCTIONS_TO_CHECK
+            .iter()
+            .find(|(f, _)| &callee == f)
+        else {
+            return Ok(());
+        };
+        // If we find an internal type parameter, the call is automatically invalid--since we
+        // are not in a module and cannot define any types to satisfy the internal constraint.
+        let Some((internal_idx, _)) = internal_type_parameters
+            .iter()
+            .enumerate()
+            .find(|(_, is_internal)| **is_internal)
+        else {
+            // No `internal` type parameters, so it is ok to call
+            return Ok(());
+        };
+        let callee_package_name =
+            private_generics_verifier_v2::callee_package_name(&callee_address);
+        let help = private_generics_verifier_v2::help_message(
+            &callee_address,
+            callee_module,
+            callee_function,
+        );
+        let msg = format!(
+            "Cannot directly call function '{}::{}::{}' since type parameter #{} can \
+                 only be instantiated with types defined within the caller's module.{}",
+            callee_package_name, callee_module, callee_function, internal_idx, help,
+        );
+        Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            msg,
+        ))
     }
 
     type ArgInfo = (

@@ -73,7 +73,7 @@ jobs:
       - run: cargo xlint
 
   test:
-    needs: diff
+    needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     env:
@@ -108,7 +108,7 @@ jobs:
         # shell: bash
 
   test-extra:
-    needs: diff
+    needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     env:
@@ -180,7 +180,7 @@ jobs:
         shell: bash
 
   windows-build:
-    needs: diff
+    needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     runs-on: ${{ matrix.os }}
@@ -212,7 +212,7 @@ jobs:
           cargo build --all-features
 
   simtest:
-    needs: diff
+    needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
     runs-on: [ ubuntu-ghcloud ]
@@ -238,7 +238,7 @@ jobs:
           scripts/simtest/stress-new-tests.sh
 
   simtest-mainnet:
-    needs: diff
+    needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
     runs-on: [ ubuntu-ghcloud ]
@@ -416,7 +416,7 @@ jobs:
 
   sui-excution-cut:
     name: cutting a new execution layer
-    needs: diff
+    needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-ghcloud ]
     steps:

@@ -4,7 +4,8 @@
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use sui_indexer_alt_framework::types::SUI_BRIDGE_OBJECT_ID;
-use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointTransaction;
+use sui_indexer_alt_framework::types::full_checkpoint_content::ExecutedTransaction;
+use sui_indexer_alt_framework::types::transaction::TransactionDataAPI;
 
 pub mod error_handler;
 pub mod governance_action_handler;
@@ -32,8 +33,10 @@ macro_rules! struct_tag {
     }};
 }
 
-pub fn is_bridge_txn(txn: &CheckpointTransaction) -> bool {
-    txn.input_objects
+pub fn is_bridge_txn(txn: &ExecutedTransaction) -> bool {
+    txn.transaction
+        .input_objects()
         .iter()
-        .any(|obj| obj.id() == SUI_BRIDGE_OBJECT_ID)
+        .flatten()
+        .any(|obj| obj.object_id() == SUI_BRIDGE_OBJECT_ID)
 }

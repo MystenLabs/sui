@@ -23,7 +23,7 @@ use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use mysten_metrics::{add_server_timing, spawn_logged_monitored_task, spawn_monitored_task};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
-    HistogramVec, IntCounter, Registry, register_histogram_vec_with_registry,
+    HistogramVec, IntCounter, IntCounterVec, Registry, register_histogram_vec_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
@@ -79,6 +79,8 @@ pub struct TransactionOrchestrator<A: Clone> {
     transaction_driver: Option<Arc<TransactionDriver<A>>>,
     td_percentage: u8,
     td_allowed_submission_list: Vec<String>,
+    td_blocked_submission_list: Vec<String>,
+    enable_early_validation: bool,
 }
 
 impl TransactionOrchestrator<NetworkAuthorityClient> {
@@ -173,6 +175,25 @@ where
             .map(|config| config.allowed_submission_validators.clone())
             .unwrap_or_default();
 
+        let td_blocked_submission_list = node_config
+            .transaction_driver_config
+            .as_ref()
+            .map(|config| config.blocked_submission_validators.clone())
+            .unwrap_or_default();
+
+        if !td_allowed_submission_list.is_empty() && !td_blocked_submission_list.is_empty() {
+            panic!(
+                "Both allowed and blocked submission lists are set, this is not allowed, {:?} {:?}",
+                td_allowed_submission_list, td_blocked_submission_list
+            );
+        }
+
+        let enable_early_validation = node_config
+            .transaction_driver_config
+            .as_ref()
+            .map(|config| config.enable_early_validation)
+            .unwrap_or(true);
+
         Self {
             quorum_driver_handler,
             validator_state,
@@ -183,6 +204,8 @@ where
             transaction_driver,
             td_percentage,
             td_allowed_submission_list,
+            td_blocked_submission_list,
+            enable_early_validation,
         }
     }
 }
@@ -315,6 +338,34 @@ where
             .verify_transaction(request.transaction.clone())
             .map_err(QuorumDriverError::InvalidUserSignature)?;
         let tx_digest = *verified_transaction.digest();
+
+        // Early validation check against local state before submission to catch non-retriable errors
+        // TODO: Consider moving this check to TransactionDriver for per-retry validation
+        if self.enable_early_validation
+            && let Err(e) = self
+                .validator_state
+                .check_transaction_validity(&epoch_store, &verified_transaction)
+        {
+            let error_category = e.categorize();
+            if !error_category.is_submission_retriable() {
+                // Skip early validation rejection if transaction has already been executed (allows retries to return cached results)
+                if !self.validator_state.is_tx_already_executed(&tx_digest) {
+                    self.metrics
+                        .early_validation_rejections
+                        .with_label_values(&[e.to_variant_name()])
+                        .inc();
+                    debug!(
+                        error = ?e,
+                        "Transaction rejected during early validation"
+                    );
+
+                    return Err(QuorumDriverError::TransactionFailed {
+                        category: error_category,
+                        details: e.to_string(),
+                    });
+                }
+            }
+        }
 
         // Add transaction to WAL log.
         let is_new_transaction = self
@@ -663,6 +714,7 @@ where
                 SubmitTransactionOptions {
                     forwarded_client_addr: client_addr,
                     allowed_validators: self.td_allowed_submission_list.clone(),
+                    blocked_validators: self.td_blocked_submission_list.clone(),
                 },
                 timeout_duration,
             )
@@ -964,6 +1016,8 @@ pub struct TransactionOrchestratorMetrics {
 
     concurrent_execution: IntCounter,
 
+    early_validation_rejections: IntCounterVec,
+
     request_latency: HistogramVec,
     local_execution_latency: HistogramVec,
     settlement_finality_latency: HistogramVec,
@@ -1057,6 +1111,13 @@ impl TransactionOrchestratorMetrics {
             concurrent_execution: register_int_counter_with_registry!(
                 "tx_orchestrator_concurrent_execution",
                 "Total number of concurrent execution where effects are available locally finishing driving the transaction to finality",
+                registry,
+            )
+            .unwrap(),
+            early_validation_rejections: register_int_counter_vec_with_registry!(
+                "tx_orchestrator_early_validation_rejections",
+                "Total number of transactions rejected during early validation before submission, by reason",
+                &["reason"],
                 registry,
             )
             .unwrap(),

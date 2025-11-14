@@ -69,10 +69,7 @@ async fn main() -> Result<(), anyhow::Error> {
         indexer_args,
         ClientArgs {
             remote_store_url: Some(remote_store_url),
-            local_ingestion_path: None,
-            rpc_api_url: None,
-            rpc_username: None,
-            rpc_password: None,
+            ..Default::default()
         },
         Default::default(),
         Some(&MIGRATIONS),

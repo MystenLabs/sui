@@ -57,6 +57,7 @@ NOTE_ORDER = [
     "GraphQL",
     "CLI",
     "Rust SDK",
+    "Indexing Framework",
 ]
 
 

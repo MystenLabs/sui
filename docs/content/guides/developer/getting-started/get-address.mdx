@@ -60,7 +60,9 @@ This command specifies the key pair scheme to be of type `ed25519`.
 
 Every Sui address has a _recovery phrase_. Recovery phrases are a series of 12 randomly generated words that you use to recover the address if you lose access to the address's key pair. 
 
-:::caution
+:::danger
+
+Recovery phrases are only shown once. They are not stored anywhere automatically and cannot be retrieved if you do not save them yourself.
 
 Store recovery phrases securely and do not share them with anyone, as they provide access to any objects and tokens that an address owns.
 
@@ -69,7 +71,7 @@ Store recovery phrases securely and do not share them with anyone, as they provi
 To recover an address using the recovery phrase, use the command:
 
 ```
-sui client import-address
+$ sui client import-address
 ```
 
 Then, enter the 12-word recovery phrase. You must enter the words in the correct order. If successful, the CLI restores your address and prints it in the CLI output.
