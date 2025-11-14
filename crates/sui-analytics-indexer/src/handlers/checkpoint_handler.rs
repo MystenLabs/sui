@@ -20,7 +20,7 @@ pub struct CheckpointProcessor;
 pub type CheckpointHandler = AnalyticsHandler<CheckpointProcessor, AnalyticsBatch<CheckpointEntry>>;
 
 impl AnalyticsMetadata for CheckpointEntry {
-    const FILE_TYPE: Pipeline = Pipeline::Checkpoint;
+    const PIPELINE: Pipeline = Pipeline::Checkpoint;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

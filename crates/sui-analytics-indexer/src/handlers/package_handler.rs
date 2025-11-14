@@ -17,7 +17,7 @@ pub struct PackageProcessor;
 pub type PackageHandler = AnalyticsHandler<PackageProcessor, AnalyticsBatch<MovePackageEntry>>;
 
 impl AnalyticsMetadata for MovePackageEntry {
-    const FILE_TYPE: Pipeline = Pipeline::MovePackage;
+    const PIPELINE: Pipeline = Pipeline::MovePackage;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

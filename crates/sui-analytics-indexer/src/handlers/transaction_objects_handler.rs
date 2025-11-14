@@ -21,7 +21,7 @@ pub type TransactionObjectsHandler =
     AnalyticsHandler<TransactionObjectsProcessor, AnalyticsBatch<TransactionObjectEntry>>;
 
 impl AnalyticsMetadata for TransactionObjectEntry {
-    const FILE_TYPE: Pipeline = Pipeline::TransactionObjects;
+    const PIPELINE: Pipeline = Pipeline::TransactionObjects;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

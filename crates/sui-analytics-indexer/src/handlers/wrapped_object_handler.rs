@@ -29,7 +29,7 @@ impl WrappedObjectProcessor {
 }
 
 impl AnalyticsMetadata for WrappedObjectEntry {
-    const FILE_TYPE: Pipeline = Pipeline::WrappedObject;
+    const PIPELINE: Pipeline = Pipeline::WrappedObject;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

@@ -14,7 +14,7 @@ use crate::{ParquetSchema, Pipeline, PipelineConfig};
 
 /// Trait for entry types that provide analytics metadata
 pub trait AnalyticsMetadata {
-    const FILE_TYPE: Pipeline;
+    const PIPELINE: Pipeline;
 
     fn get_epoch(&self) -> EpochId;
     fn get_checkpoint_sequence_number(&self) -> u64;
@@ -35,7 +35,7 @@ pub struct AnalyticsHandler<P, B> {
 impl<T: AnalyticsMetadata + Serialize + ParquetSchema + 'static> Default for AnalyticsBatch<T> {
     fn default() -> Self {
         Self {
-            inner: ParquetBatch::new(T::FILE_TYPE.dir_prefix().as_ref().to_string(), 0)
+            inner: ParquetBatch::new(T::PIPELINE.dir_prefix().as_ref().to_string(), 0)
                 .expect("Failed to create ParquetBatch"),
         }
     }
