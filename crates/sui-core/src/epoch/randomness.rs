@@ -471,6 +471,7 @@ impl RandomnessManager {
         // Observers don't participate in DKG
         if self.is_observer {
             info!("random beacon: observer node - skipping DKG message creation");
+            let _ = self.dkg_start_time.set(Instant::now());
             return Ok(());
         }
 
@@ -556,8 +557,9 @@ impl RandomnessManager {
                     .sum();
 
                 if confirmations_weight >= validity_threshold {
+                    let elapsed = self.dkg_start_time.get().map(|t| t.elapsed().as_millis());
                     info!(
-                        "random beacon: observer node received {} stake in confirmations (threshold: {}), marking DKG tracking complete",
+                        "random beacon: observer node received {} stake in confirmations (threshold: {}), marking DKG tracking complete. Consensus round: {round}. Elapsed time: {elapsed:?}.",
                         confirmations_weight, validity_threshold
                     );
 
@@ -684,7 +686,7 @@ impl RandomnessManager {
                     let epoch_elapsed = epoch_store.epoch_open_time.elapsed().as_millis();
                     let elapsed = self.dkg_start_time.get().map(|t| t.elapsed().as_millis());
                     info!(
-                        "random beacon: DKG complete in {epoch_elapsed}ms since epoch start, {elapsed:?}ms since DKG start, with {num_shares} shares for this node"
+                        "random beacon: DKG complete in {epoch_elapsed}ms since epoch start, {elapsed:?}ms since DKG start, with {num_shares} shares for this node. Consensus round: {round}"
                     );
                     epoch_store
                         .metrics
