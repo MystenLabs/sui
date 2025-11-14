@@ -19,7 +19,7 @@ pub struct MoveCallProcessor;
 pub type MoveCallHandler = AnalyticsHandler<MoveCallProcessor, AnalyticsBatch<MoveCallEntry>>;
 
 impl AnalyticsMetadata for MoveCallEntry {
-    const FILE_TYPE: Pipeline = Pipeline::MoveCall;
+    const PIPELINE: Pipeline = Pipeline::MoveCall;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

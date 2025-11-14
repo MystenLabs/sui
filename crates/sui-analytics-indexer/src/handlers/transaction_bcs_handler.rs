@@ -20,7 +20,7 @@ pub type TransactionBCSHandler =
     AnalyticsHandler<TransactionBCSProcessor, AnalyticsBatch<TransactionBCSEntry>>;
 
 impl AnalyticsMetadata for TransactionBCSEntry {
-    const FILE_TYPE: Pipeline = Pipeline::TransactionBCS;
+    const PIPELINE: Pipeline = Pipeline::TransactionBCS;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

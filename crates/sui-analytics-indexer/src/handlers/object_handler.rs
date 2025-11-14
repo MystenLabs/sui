@@ -190,7 +190,7 @@ impl ObjectProcessor {
 }
 
 impl AnalyticsMetadata for ObjectEntry {
-    const FILE_TYPE: Pipeline = Pipeline::Object;
+    const PIPELINE: Pipeline = Pipeline::Object;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

@@ -30,7 +30,7 @@ impl EventProcessor {
 }
 
 impl AnalyticsMetadata for EventEntry {
-    const FILE_TYPE: Pipeline = Pipeline::Event;
+    const PIPELINE: Pipeline = Pipeline::Event;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch

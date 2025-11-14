@@ -171,7 +171,7 @@ impl Processor for DynamicFieldProcessor {
 }
 
 impl AnalyticsMetadata for DynamicFieldEntry {
-    const FILE_TYPE: Pipeline = Pipeline::DynamicField;
+    const PIPELINE: Pipeline = Pipeline::DynamicField;
 
     fn get_epoch(&self) -> EpochId {
         self.epoch
