@@ -1,4 +1,4 @@
-# TODO: pkg-alt this may be testing something other than _ addresses? reenable and fix. DVX-1365
+# this is disabled because it is testing setting dep "_" addresses, which isn't supported in the new system
 [package]
 name = "Foo"
 edition = "2024.beta"
