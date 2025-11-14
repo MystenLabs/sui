@@ -37,10 +37,24 @@
 use thiserror::Error;
 
 use crate::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     committee::EpochId,
     digests::{ChainIdentifier, ObjectDigest},
+    error::UserInputResult,
+    transaction::FundsWithdrawalArg,
 };
+
+/// Trait for resolving funds withdrawal from a coin reservation
+pub trait CoinReservationResolverTrait {
+    // Used to check validity of the transaction. If the coin_reservation does not
+    // point to an existing accumulator object, the transaction will be rejected.
+    fn resolve_funds_withdrawal(
+        &self,
+        // Note: must be the sender. We do not support sponsorship.
+        sender: SuiAddress,
+        coin_reservation: ObjectRef,
+    ) -> UserInputResult<FundsWithdrawalArg>;
+}
 
 pub const COIN_RESERVATION_MAGIC: [u8; 20] = [
     0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac, 0xac,
@@ -107,12 +121,31 @@ impl From<ParsedDigest> for ObjectDigest {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ParsedObjectRefWithdrawal {
     pub unmasked_object_id: ObjectID,
     pub parsed_digest: ParsedDigest,
 }
 
 impl ParsedObjectRefWithdrawal {
+    pub fn new(unmasked_object_id: ObjectID, epoch_id: EpochId, reservation_amount: u64) -> Self {
+        Self {
+            unmasked_object_id,
+            parsed_digest: ParsedDigest {
+                epoch_id: epoch_id.try_into().unwrap(),
+                reservation_amount,
+            },
+        }
+    }
+
+    pub fn reservation_amount(&self) -> u64 {
+        self.parsed_digest.reservation_amount()
+    }
+
+    pub fn epoch_id(&self) -> EpochId {
+        self.parsed_digest.epoch_id()
+    }
+
     pub fn encode(&self, version: SequenceNumber, chain_identifier: ChainIdentifier) -> ObjectRef {
         let digest = self.parsed_digest.into();
         let masked_id = mask_or_unmask_id(self.unmasked_object_id, chain_identifier);
