@@ -227,6 +227,10 @@ impl ChainIdentifier {
     pub fn as_bytes(&self) -> &[u8; 32] {
         self.0.inner()
     }
+
+    pub fn random() -> Self {
+        Self(CheckpointDigest::random())
+    }
 }
 
 pub fn get_mainnet_chain_identifier() -> ChainIdentifier {
