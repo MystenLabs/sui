@@ -51,7 +51,7 @@ pub const MAX_SIGNING_ATTEMPTS: u64 = 16;
 pub const MAX_EXECUTION_ATTEMPTS: u64 = 16;
 
 async fn delay(attempt_times: u64) {
-    let delay_ms = 100 * (2 ^ attempt_times);
+    let delay_ms = 100 * 2_u64.pow(attempt_times as u32);
     tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
 }
 
