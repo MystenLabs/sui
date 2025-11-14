@@ -8,9 +8,7 @@ use arrow_array::{
     builder::{ArrayBuilder, BooleanBuilder, GenericStringBuilder, Int64Builder, UInt64Builder},
 };
 use serde::Serialize;
-use std::ops::Range;
 use std::sync::Arc;
-use sui_types::base_types::EpochId;
 
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
@@ -47,17 +45,13 @@ impl ColumnBuilder {
 
 // Save table entries to parquet files.
 pub struct ParquetWriter {
-    epoch: EpochId,
-    checkpoint_range: Range<u64>,
     builders: Vec<ColumnBuilder>,
     row_count: usize,
 }
 
 impl ParquetWriter {
-    pub fn new(start_checkpoint_seq_num: u64) -> Result<Self> {
+    pub fn new() -> Result<Self> {
         Ok(Self {
-            epoch: 0,
-            checkpoint_range: start_checkpoint_seq_num..u64::MAX,
             builders: vec![],
             row_count: 0,
         })
@@ -126,10 +120,7 @@ impl ParquetWriter {
     }
 
     /// Flush accumulated rows to an in-memory Parquet buffer
-    pub fn flush<S: Serialize + ParquetSchema>(
-        &mut self,
-        end_checkpoint_seq_num: u64,
-    ) -> Result<Option<Vec<u8>>> {
+    pub fn flush<S: Serialize + ParquetSchema>(&mut self) -> Result<Option<Vec<u8>>> {
         // Nothing to flush if builders aren't initialized or are empty
         if self.builders.is_empty()
             || self
@@ -139,8 +130,6 @@ impl ParquetWriter {
         {
             return Ok(None);
         }
-
-        self.checkpoint_range.end = end_checkpoint_seq_num;
 
         // Turn builders into Arrow arrays.
         let arrays: Vec<ArrayRef> = std::mem::take(&mut self.builders)
@@ -161,15 +150,6 @@ impl ParquetWriter {
         writer.close()?;
 
         Ok(Some(buffer))
-    }
-
-    /// Reset internal state with given epoch and checkpoint sequence number
-    pub fn reset(&mut self, epoch_num: EpochId, start_checkpoint_seq_num: u64) -> Result<()> {
-        self.epoch = epoch_num;
-        self.checkpoint_range = start_checkpoint_seq_num..u64::MAX;
-        self.builders.clear();
-        self.row_count = 0;
-        Ok(())
     }
 
     /// Number of rows accumulated since last flush

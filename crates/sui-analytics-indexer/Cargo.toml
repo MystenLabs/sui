@@ -13,6 +13,7 @@ async-trait.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 chrono.workspace = true
+csv.workspace = true
 move-core-types.workspace = true
 object_store.workspace = true
 num_enum.workspace = true
