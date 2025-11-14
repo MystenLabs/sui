@@ -51,6 +51,7 @@ mod test {
     use sui_types::base_types::{AuthorityName, ConciseableName, ObjectID, SequenceNumber};
     use sui_types::digests::TransactionDigest;
     use sui_types::full_checkpoint_content::CheckpointData;
+    use sui_types::message_envelope::Message;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
@@ -176,7 +177,104 @@ mod test {
     async fn test_simulated_load_basic() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(7, 0, 1).await;
-        test_simulated_load(test_cluster, 15).await;
+
+        // Configure to send ONLY randomness transactions
+        let mut simulated_load_config = SimulatedLoadConfig::default();
+        simulated_load_config.shared_counter_weight = 0;
+        simulated_load_config.slow_weight = 0;
+        simulated_load_config.transfer_object_weight = 0;
+        simulated_load_config.delegation_weight = 0;
+        simulated_load_config.batch_payment_weight = 0;
+        simulated_load_config.shared_deletion_weight = 0;
+        simulated_load_config.randomness_weight = 1; // Only randomness transactions
+        simulated_load_config.randomized_transaction_weight = 0;
+        simulated_load_config.expected_failure_weight = 0;
+        simulated_load_config.party_weight = 0;
+
+        test_simulated_load_with_test_config(
+            test_cluster.clone(),
+            120,
+            simulated_load_config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false, // disable surfer since we only want randomness transactions
+        )
+        .await;
+
+        // Compare checkpoints 8-15 between observer and validator nodes
+        use std::io::Write;
+        let mut output = std::fs::File::create("checkpoint_comparison_output.txt").unwrap();
+
+        writeln!(&mut output, "\n=== Comparing checkpoints 8-15 between observer and validator ===\n").unwrap();
+
+        // Get the observer node (fullnode)
+        let observer_handle = test_cluster.swarm.fullnodes().next().unwrap().get_node_handle().unwrap();
+
+        // Get a validator node
+        let validator_handle = test_cluster.swarm.validator_node_handles().into_iter().next().unwrap();
+
+        // Check if observer is actually building checkpoints locally
+        writeln!(&mut output, "\n=== Checking if observer node is building checkpoints locally ===\n").unwrap();
+
+        let observer_locally_built = observer_handle.with(|node| {
+            let checkpoint_store = &node.state().checkpoint_store;
+            checkpoint_store.get_latest_locally_computed_checkpoint().unwrap()
+        });
+
+        let validator_locally_built = validator_handle.with(|node| {
+            let checkpoint_store = &node.state().checkpoint_store;
+            checkpoint_store.get_latest_locally_computed_checkpoint().unwrap()
+        });
+
+        match observer_locally_built {
+            Some(cp) => {
+                writeln!(&mut output, "Observer IS building checkpoints locally!").unwrap();
+                writeln!(&mut output, "  Latest locally computed checkpoint: seq={}, digest={}",
+                    cp.sequence_number, cp.digest()).unwrap();
+            }
+            None => {
+                writeln!(&mut output, "Observer IS NOT building checkpoints locally (only syncing from validators)").unwrap();
+            }
+        }
+
+        match validator_locally_built {
+            Some(cp) => {
+                writeln!(&mut output, "Validator latest locally computed checkpoint: seq={}, digest={}",
+                    cp.sequence_number, cp.digest()).unwrap();
+            }
+            None => {
+                writeln!(&mut output, "Validator has no locally computed checkpoints").unwrap();
+            }
+        }
+        writeln!(&mut output, "").unwrap();
+
+        for seq in 8..=15 {
+            let observer_checkpoint = observer_handle.with(|node| {
+                node.state().checkpoint_store.get_checkpoint_by_sequence_number(seq).unwrap()
+            });
+
+            let validator_checkpoint = validator_handle.with(|node| {
+                node.state().checkpoint_store.get_checkpoint_by_sequence_number(seq).unwrap()
+            });
+
+            if let (Some(obs_cp), Some(val_cp)) = (observer_checkpoint, validator_checkpoint) {
+                writeln!(
+                    &mut output,
+                    "Checkpoint {}: Observer digest={}, timestamp={}, txns={} | Validator digest={}, timestamp={}, txns={}",
+                    seq,
+                    obs_cp.digest(),
+                    obs_cp.timestamp_ms,
+                    obs_cp.network_total_transactions,
+                    val_cp.digest(),
+                    val_cp.timestamp_ms,
+                    val_cp.network_total_transactions
+                ).unwrap();
+
+                assert_eq!(obs_cp.digest(), val_cp.digest(), "Checkpoint {} digests don't match!", seq);
+            }
+        }
+        writeln!(&mut output, "\n=== Checkpoint comparison complete ===\n").unwrap();
     }
 
     #[sim_test(config = "test_config()")]

@@ -496,6 +496,8 @@ impl SuiNode {
         let node_type = config.node_type();
         let is_validator = matches!(node_type, sui_config::NodeType::Validator);
         let is_full_node = matches!(node_type, sui_config::NodeType::FullNode);
+        // Observer nodes need the same RPC capabilities as fullnodes (indexes, transaction orchestrator, etc.)
+        let needs_rpc_capabilities = is_full_node || matches!(node_type, sui_config::NodeType::Observer);
         let prometheus_registry = registry_service.default_registry();
 
         info!(node =? config.protocol_public_key(),
@@ -675,7 +677,7 @@ impl SuiNode {
             checkpoint_store.clone(),
         );
 
-        let index_store = if is_full_node && config.enable_index_processing {
+        let index_store = if needs_rpc_capabilities && config.enable_index_processing {
             info!("creating index store");
             Some(Arc::new(IndexStore::new(
                 config.db_path().join("indexes"),
@@ -689,7 +691,7 @@ impl SuiNode {
             None
         };
 
-        let rpc_index = if is_full_node && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
+        let rpc_index = if needs_rpc_capabilities && config.rpc().is_some_and(|rpc| rpc.enable_indexing()) {
             Some(Arc::new(
                 RpcIndexStore::new(
                     &config.db_path(),
@@ -846,7 +848,7 @@ impl SuiNode {
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 
-        let transaction_orchestrator = if is_full_node && run_with_range.is_none() {
+        let transaction_orchestrator = if needs_rpc_capabilities && run_with_range.is_none() {
             Some(Arc::new(TransactionOrchestrator::new_with_auth_aggregator(
                 auth_agg.load_full(),
                 state.clone(),
@@ -2845,8 +2847,8 @@ async fn build_http_servers(
     prometheus_registry: &Registry,
     server_version: ServerVersion,
 ) -> Result<(HttpServers, Option<tokio::sync::mpsc::Sender<Checkpoint>>)> {
-    // Validators do not expose these APIs
-    if config.consensus_config().is_some() {
+    // Validators do not expose these APIs. Observer nodes do expose them like fullnodes.
+    if matches!(config.node_type(), sui_config::NodeType::Validator) {
         return Ok((HttpServers::default(), None));
     }
 
