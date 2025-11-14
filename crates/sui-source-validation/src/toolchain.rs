@@ -34,7 +34,10 @@ use move_compiler::{
     editions::{Edition, Flavor},
     shared::{NumericalAddress, files::FileName},
 };
-use move_package_alt::{package::layout::SourcePackageLayout, schema::ParsedPublishedFile};
+use move_package_alt::{
+    package::layout::SourcePackageLayout,
+    schema::{Environment, ParsedPublishedFile},
+};
 use move_package_alt_compilation::compiled_package::CompiledUnitWithSource;
 use move_package_alt_compilation::layout::CompiledPackageLayout;
 use move_symbol_pool::Symbol;
@@ -112,7 +115,7 @@ impl ToolchainVersion {
     /// Read toolchain version info from the root project directory. Tries to read Published.toml
     /// first (new pkg-alt format), then falls back to Move.lock (old format). Returns None if
     /// neither file exists or if no toolchain info is found.
-    pub fn read(root_path: &Path) -> anyhow::Result<Option<ToolchainVersion>> {
+    pub fn read(root_path: &Path, env: &Environment) -> anyhow::Result<Option<ToolchainVersion>> {
         let published_path = root_path.join("Published.toml");
         let lock_path = root_path.join(SourcePackageLayout::Lock.path());
 
@@ -128,12 +131,17 @@ impl ToolchainVersion {
                     publication.metadata.build_config,
                 )
             {
-                debug!("Found toolchain version in Published.toml file");
-                return Ok(Some(ToolchainVersion {
-                    compiler_version,
-                    edition: Edition::from_str(&build_config.edition)?,
-                    flavor: Flavor::from_str(&build_config.flavor)?,
-                }));
+                // Check that the publication info matches the current environment before returning
+                // the toolchain info. If they don't match, then we don't know which toolchain was
+                // used.
+                if env.id() == &publication.chain_id {
+                    debug!("Found toolchain version in Published.toml file");
+                    return Ok(Some(ToolchainVersion {
+                        compiler_version,
+                        edition: Edition::from_str(&build_config.edition)?,
+                        flavor: Flavor::from_str(&build_config.flavor)?,
+                    }));
+                }
             }
 
             debug!("Did not find toolchain version in Published.toml file");
@@ -190,6 +198,7 @@ pub(crate) fn legacy_toolchain() -> ToolchainVersion {
 // /// - If not, simply keep the current compiled unit.
 pub(crate) fn units_for_toolchain(
     compiled_units: &Vec<(Symbol, CompiledUnitWithSource)>,
+    env: &Environment,
 ) -> anyhow::Result<Vec<(Symbol, CompiledUnitWithSource)>> {
     if std::env::var("SUI_RUN_TOOLCHAIN_BUILD").is_err() {
         return Ok(compiled_units.clone());
@@ -230,7 +239,7 @@ pub(crate) fn units_for_toolchain(
             continue;
         }
 
-        let toolchain_version = ToolchainVersion::read(&package_root)?;
+        let toolchain_version = ToolchainVersion::read(&package_root, env)?;
         match toolchain_version {
             // No ToolchainVersion and new Move.lock version implies current compiler.
             None => {

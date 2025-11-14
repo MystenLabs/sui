@@ -20,6 +20,7 @@ use test_cluster::TestClusterBuilder;
 
 use crate::toolchain::CURRENT_COMPILER_VERSION;
 use crate::{BytecodeSourceVerifier, ValidationMode};
+use move_package_alt::schema::Environment;
 
 #[tokio::test]
 async fn successful_verification() -> anyhow::Result<()> {
@@ -51,27 +52,35 @@ async fn successful_verification() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
 
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
     // Verify root without updating the address
     verifier
-        .verify(&b_pkg, ValidationMode::root())
+        .verify(&b_pkg, ValidationMode::root(), &env)
         .await
         .unwrap();
 
     // Verify deps but skip root
     verifier
-        .verify(&a_pkg, ValidationMode::deps())
+        .verify(&a_pkg, ValidationMode::deps(), &env)
         .await
         .unwrap();
 
     // Skip deps but verify root
     verifier
-        .verify(&a_pkg, ValidationMode::root_at(a_ref.0.into()))
+        .verify(&a_pkg, ValidationMode::root_at(a_ref.0.into()), &env)
         .await
         .unwrap();
 
     // Verify both deps and root
     verifier
-        .verify(&a_pkg, ValidationMode::root_and_deps_at(a_ref.0.into()))
+        .verify(
+            &a_pkg,
+            ValidationMode::root_and_deps_at(a_ref.0.into()),
+            &env,
+        )
         .await
         .unwrap();
 
@@ -95,9 +104,13 @@ async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
 
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
     // Verify the root package which now includes dependency modules
     verifier
-        .verify(&a_pkg, ValidationMode::root_at(a_ref.0.into()))
+        .verify(&a_pkg, ValidationMode::root_at(a_ref.0.into()), &env)
         .await
         .unwrap();
 
@@ -130,8 +143,12 @@ async fn successful_verification_module_ordering() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
     BytecodeSourceVerifier::new(client.read_api())
-        .verify(&z_pkg, ValidationMode::root())
+        .verify(&z_pkg, ValidationMode::root(), &env)
         .await
         .unwrap();
 
@@ -167,16 +184,20 @@ async fn successful_verification_upgrades() -> anyhow::Result<()> {
 
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
 
     // Verify the upgraded package b-v2 as the root.
     verifier
-        .verify(&b_pkg, ValidationMode::root())
+        .verify(&b_pkg, ValidationMode::root(), &env)
         .await
         .unwrap();
 
     // Verify the upgraded package b-v2 as a dep of e.
     verifier
-        .verify(&e_pkg, ValidationMode::deps())
+        .verify(&e_pkg, ValidationMode::deps(), &env)
         .await
         .unwrap();
 
@@ -203,12 +224,17 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
     let expected = expect!["On-chain address cannot be zero"];
     expected.assert_eq(
         &BytecodeSourceVerifier::new(client.read_api())
             .verify(
                 &a_pkg,
                 ValidationMode::root_and_deps_at(AccountAddress::ZERO),
+                &env,
             )
             .await
             .unwrap_err()
@@ -230,13 +256,17 @@ async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
 
     // Trying to verify the root package, which hasn't been published -- this is going to fail
     // because there is no on-chain package to verify against.
     let expected = expect!["Invalid module b with error: Can't verify unpublished source"];
     expected.assert_eq(
         &BytecodeSourceVerifier::new(client.read_api())
-            .verify(&b_pkg, ValidationMode::root())
+            .verify(&b_pkg, ValidationMode::root(), &env)
             .await
             .unwrap_err()
             .to_string(),
@@ -314,8 +344,11 @@ async fn package_not_found() -> anyhow::Result<()> {
 
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api());
-
-    let Err(err) = verifier.verify(&a_pkg, ValidationMode::deps()).await else {
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
+    let Err(err) = verifier.verify(&a_pkg, ValidationMode::deps(), &env).await else {
         panic!("Expected verification to fail");
     };
 
@@ -326,7 +359,7 @@ async fn package_not_found() -> anyhow::Result<()> {
     let package_root = AccountAddress::random();
     stable_addrs.insert(SuiAddress::from(package_root), "<id>");
     let Err(err) = verifier
-        .verify(&a_pkg, ValidationMode::root_and_deps_at(package_root))
+        .verify(&a_pkg, ValidationMode::root_and_deps_at(package_root), &env)
         .await
     else {
         panic!("Expected verification to fail");
@@ -341,7 +374,7 @@ async fn package_not_found() -> anyhow::Result<()> {
     let package_root = AccountAddress::random();
     stable_addrs.insert(SuiAddress::from(package_root), "<id>");
     let Err(err) = verifier
-        .verify(&a_pkg, ValidationMode::root_at(package_root))
+        .verify(&a_pkg, ValidationMode::root_at(package_root), &env)
         .await
     else {
         panic!("Expected verification to fail");
@@ -368,12 +401,16 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
     let expected = expect![
         "Dependency ID contains a Sui object, not a Move package: 0x0000000000000000000000000000000000000000000000000000000000000005"
     ];
     expected.assert_eq(
         &BytecodeSourceVerifier::new(client.read_api())
-            .verify(&a_pkg, ValidationMode::deps())
+            .verify(&a_pkg, ValidationMode::deps(), &env)
             .await
             .unwrap_err()
             .to_string(),
@@ -402,8 +439,12 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
     let Err(err) = BytecodeSourceVerifier::new(client.read_api())
-        .verify(&a_pkg, ValidationMode::deps())
+        .verify(&a_pkg, ValidationMode::deps(), &env)
         .await
     else {
         panic!("Expected verification to fail");
@@ -438,8 +479,12 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
     let Err(err) = BytecodeSourceVerifier::new(client.read_api())
-        .verify(&a_pkg, ValidationMode::deps())
+        .verify(&a_pkg, ValidationMode::deps(), &env)
         .await
     else {
         panic!("Expected verification to fail");
@@ -492,9 +537,13 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
     stable_addrs.insert(a_addr, "<a_addr>");
 
     let client = context.get_client().await?;
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
     let verifier = BytecodeSourceVerifier::new(client.read_api());
 
-    let Err(err) = verifier.verify(&a_pkg, ValidationMode::deps()).await else {
+    let Err(err) = verifier.verify(&a_pkg, ValidationMode::deps(), &env).await else {
         panic!("Expected verification to fail");
     };
 
@@ -502,7 +551,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
     expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
 
     let Err(err) = verifier
-        .verify(&a_pkg, ValidationMode::root_at(a_addr.into()))
+        .verify(&a_pkg, ValidationMode::root_at(a_addr.into()), &env)
         .await
     else {
         panic!("Expected verification to fail");
@@ -579,9 +628,13 @@ async fn linkage_differs() -> anyhow::Result<()> {
         (b_v2.0.into(), "<b2>"),
         (b_v3.0.into(), "<b3>"),
     ]);
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
 
     let error = BytecodeSourceVerifier::new(client.read_api())
-        .verify(&e_pkg, ValidationMode::root())
+        .verify(&e_pkg, ValidationMode::root(), &env)
         .await
         .unwrap_err()
         .to_string();
@@ -634,8 +687,12 @@ async fn multiple_failures() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
     let Err(err) = BytecodeSourceVerifier::new(client.read_api())
-        .verify(&d_pkg, ValidationMode::deps())
+        .verify(&d_pkg, ValidationMode::deps(), &env)
         .await
     else {
         panic!("Expected verification to fail");
@@ -673,10 +730,14 @@ async fn successful_versioned_dependency_verification() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
 
     // Verify versioned dependency
     BytecodeSourceVerifier::new(client.read_api())
-        .verify(&a_pkg, ValidationMode::deps())
+        .verify(&a_pkg, ValidationMode::deps(), &env)
         .await
         .unwrap();
 
@@ -721,23 +782,31 @@ async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
     // );
 
     let client = context.get_client().await?;
+    let env = Environment::new(
+        "localnet".to_string(),
+        client.read_api().get_chain_identifier().await?,
+    );
     let verifier = BytecodeSourceVerifier::new(client.read_api());
 
     // Verify deps but skip root
     verifier
-        .verify(&a_pkg, ValidationMode::deps())
+        .verify(&a_pkg, ValidationMode::deps(), &env)
         .await
         .unwrap();
 
     // Skip deps but verify root
     verifier
-        .verify(&a_pkg, ValidationMode::root_at(a_ref.0.into()))
+        .verify(&a_pkg, ValidationMode::root_at(a_ref.0.into()), &env)
         .await
         .unwrap();
 
     // Verify both deps and root
     verifier
-        .verify(&a_pkg, ValidationMode::root_and_deps_at(a_ref.0.into()))
+        .verify(
+            &a_pkg,
+            ValidationMode::root_and_deps_at(a_ref.0.into()),
+            &env,
+        )
         .await
         .unwrap();
 

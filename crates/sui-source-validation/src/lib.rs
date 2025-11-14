@@ -6,6 +6,7 @@ use futures::future;
 use move_binary_format::CompiledModule;
 use move_compiler::compiled_unit::NamedCompiledModule;
 use move_core_types::account_address::AccountAddress;
+use move_package_alt::schema::Environment;
 use move_symbol_pool::Symbol;
 use std::collections::{HashMap, HashSet};
 use sui_move_build::CompiledPackage;
@@ -219,19 +220,17 @@ impl ValidationMode {
     /// modules from the root package will be expected at address `0x0` and this address will be
     /// substituted with the specified address.
     #[allow(clippy::result_large_err)]
-    fn local(&self, package: &CompiledPackage) -> Result<LocalModules, Error> {
+    fn local(&self, package: &CompiledPackage, env: &Environment) -> Result<LocalModules, Error> {
         let sui_package = package;
         let package = &package.package;
         let root_package = package.compiled_package_info.package_name;
         let mut map = LocalModules::new();
 
         if self.verify_deps() {
-            let deps_compiled_units =
-                units_for_toolchain(&package.deps_compiled_units).map_err(|e| {
-                    Error::CannotCheckLocalModules {
-                        package: package.compiled_package_info.package_name,
-                        message: e.to_string(),
-                    }
+            let deps_compiled_units = units_for_toolchain(&package.deps_compiled_units, env)
+                .map_err(|e| Error::CannotCheckLocalModules {
+                    package: package.compiled_package_info.package_name,
+                    message: e.to_string(),
                 })?;
 
             // TODO: pkg-alt does this still work correctly given that pkg names might have
@@ -275,6 +274,7 @@ impl ValidationMode {
                 .iter()
                 .map(|u| ("root".into(), u.clone()))
                 .collect(),
+            env,
         )
         .map_err(|e| Error::CannotCheckLocalModules {
             package: package.compiled_package_info.package_name,
@@ -337,6 +337,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         &self,
         package: &CompiledPackage,
         mode: ValidationMode,
+        env: &Environment,
     ) -> Result<(), AggregateError> {
         if matches!(
             mode,
@@ -348,7 +349,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
             return Err(Error::ZeroOnChainAddresSpecifiedFailure.into());
         }
 
-        let local = mode.local(package)?;
+        let local = mode.local(package, env)?;
         let mut chain = mode.on_chain(package, self).await?;
         let mut errs = vec![];
 

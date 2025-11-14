@@ -1847,24 +1847,35 @@ impl SuiClientCommands {
                     (true, true, Some(at)) => ValidationMode::root_and_deps_at(*at),
                 };
 
-                let chain_id = context
-                    .get_client()
-                    .await?
-                    .read_api()
-                    .get_chain_identifier()
-                    .await?;
+                let client = context.get_client().await?;
+                let chain_id = client.read_api().get_chain_identifier().await?;
+                let active_env = context.get_active_env()?;
+                let env = find_environment(
+                    Some(&chain_id),
+                    Some(active_env.alias.clone()),
+                    &build_config,
+                    &package_path,
+                )?;
 
-                let compiled_package = BuildConfig {
+                let mut root_pkg = load_root_pkg_for_publish_upgrade(
+                    &chain_id,
+                    active_env.alias.clone(),
+                    &build_config,
+                    &package_path,
+                )
+                .await?;
+                let build_config = BuildConfig {
                     config: build_config,
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
                     chain_id: Some(chain_id),
-                }
-                .build(&package_path)?;
+                };
+                let compiled_package = build_config
+                    .build_async_from_root_pkg(&mut root_pkg)
+                    .await?;
 
-                let client = context.get_client().await?;
                 BytecodeSourceVerifier::new(client.read_api())
-                    .verify(&compiled_package, mode)
+                    .verify(&compiled_package, mode, &env)
                     .await?;
 
                 SuiClientCommandResult::VerifySource
