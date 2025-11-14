@@ -1,9 +1,7 @@
 [package]
 name = "e"
 version = "0.0.1"
-system-dependencies = []
-implicit-deps = false
-# published-at = "$STORAGE_ID"
+implicit-dependencies = false
 
 [dependencies]
 b = { local = "../b-v2" }
