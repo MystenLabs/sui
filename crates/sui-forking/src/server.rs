@@ -202,10 +202,15 @@ pub async fn start_server(
     data_ingestion_path: PathBuf,
     version: &'static str,
 ) -> Result<()> {
+    let data_ingestion_path_clone = data_ingestion_path.clone();
     // Start indexers
-    start_indexers(data_ingestion_path.clone(), version).await?;
+    tokio::spawn(async move {
+        if let Err(e) = start_indexers(data_ingestion_path.clone(), version).await {
+            eprintln!("Failed to start indexers: {:?}", e);
+        }
+    });
 
-    let state = Arc::new(AppState::new(data_ingestion_path.clone()).await);
+    let state = Arc::new(AppState::new(data_ingestion_path_clone.clone()).await);
 
     let app = Router::new()
         .route("/health", get(health))
@@ -227,13 +232,12 @@ pub async fn start_server(
 
 /// Start the indexers: both the main indexer and the consistent store
 async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> Result<()> {
-    println!("Data ingestion path: {:?}", data_ingestion_path);
     let registry = prometheus::Registry::new();
     let cancel = tokio_util::sync::CancellationToken::new();
     let rocksdb_db_path = mysten_common::tempdir().unwrap().keep();
-    let db_url_str = "https://docs.sui.io/guides/developer/getting-started/install-source";
-    let db_url = reqwest::Url::parse(format!("{db_url}/sui_indexer_alt")).unwrap();
-    let _ = drop_and_recreate_db("").unwrap();
+    let db_url_str = "postgres://postgres:postgrespw@localhost:5432";
+    let db_url = reqwest::Url::parse(&format!("{db_url_str}/sui_indexer_alt")).unwrap();
+    let _ = drop_and_recreate_db(db_url_str).unwrap();
     let indexer_config = indexer::IndexerConfig::new(db_url, data_ingestion_path.clone());
     let consistent_store_config = consistent_store::ConsistentStoreConfig::new(
         rocksdb_db_path.clone(),
@@ -241,10 +245,8 @@ async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> 
         indexer_config.client_args.clone(),
         version,
     );
-    println!("Starting indexer...");
     start_indexer(indexer_config, &registry, cancel.clone()).await?;
-    // println!("Starting consistent store...");
-    // start_consistent_store(consistent_store_config, &registry, cancel.clone()).await?;
+    start_consistent_store(consistent_store_config, &registry, cancel.clone()).await?;
 
     Ok(())
 }

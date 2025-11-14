@@ -69,13 +69,13 @@ pub(crate) async fn start_indexer(
     .await?;
 
     let pipelines: Vec<_> = indexer.pipelines().collect();
-    tokio::spawn(async move {
-        let _ = indexer
-            .run()
-            .await
-            .context("Failed to start indexer")
-            .unwrap();
-    });
+    // tokio::spawn(async move {
+    let _ = indexer
+        .run()
+        .await
+        .context("Failed to start indexer")
+        .unwrap();
+    // });
 
     Ok(())
 }
