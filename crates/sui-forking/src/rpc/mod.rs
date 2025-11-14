@@ -10,6 +10,7 @@ use anyhow::Context;
 use prometheus::Registry;
 use tokio_util::sync::CancellationToken;
 
+use reqwest::Url;
 use simulacrum::Simulacrum;
 use sui_indexer_alt_jsonrpc::NodeArgs;
 use sui_indexer_alt_jsonrpc::RpcArgs;
@@ -22,6 +23,7 @@ use tokio::task::JoinHandle;
 
 pub(crate) async fn start_rpc(
     simulacrum: Arc<RwLock<Simulacrum>>,
+    database_url: Url,
 ) -> anyhow::Result<JoinHandle<()>> {
     let cancel = CancellationToken::new();
 
@@ -29,7 +31,7 @@ pub(crate) async fn start_rpc(
         .context("Failed to create Prometheus registry.")?;
 
     let mut rpc = sui_indexer_alt_jsonrpc::basic_rpc(
-        None,
+        Some(database_url),
         None,
         DbArgs::default(),
         BigtableArgs::default(),
