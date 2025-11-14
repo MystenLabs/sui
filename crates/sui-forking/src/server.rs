@@ -34,11 +34,11 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub async fn new(data_ingestion_path: PathBuf) -> Self {
+    pub async fn new(data_ingestion_path: PathBuf, database_url: Url) -> Self {
         let mut simulacrum = Simulacrum::new();
         simulacrum.set_data_ingestion_path(data_ingestion_path);
         let simulacrum = Arc::new(RwLock::new(simulacrum));
-        let rpc = start_rpc(simulacrum.clone())
+        let rpc = start_rpc(simulacrum.clone(), database_url)
             .await
             .expect("Failed to start RPC server");
         Self {
@@ -203,6 +203,8 @@ pub async fn start_server(
     version: &'static str,
 ) -> Result<()> {
     let data_ingestion_path_clone = data_ingestion_path.clone();
+    let database_url =
+        reqwest::Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt")?;
     // Start indexers
     tokio::spawn(async move {
         if let Err(e) = start_indexers(data_ingestion_path.clone(), version).await {
@@ -210,7 +212,7 @@ pub async fn start_server(
         }
     });
 
-    let state = Arc::new(AppState::new(data_ingestion_path_clone.clone()).await);
+    let state = Arc::new(AppState::new(data_ingestion_path_clone.clone(), database_url).await);
 
     let app = Router::new()
         .route("/health", get(health))
@@ -223,6 +225,7 @@ pub async fn start_server(
         .with_state(state);
 
     let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
+    println!("Forking server listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
@@ -252,6 +255,7 @@ async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> 
 }
 
 use diesel::pg::PgConnection;
+use reqwest::Url;
 
 fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Connect to the 'postgres' database (not your target database)
