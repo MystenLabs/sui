@@ -16,6 +16,8 @@ use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSi
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
 use crate::gas_coin::GAS;
+use crate::gas_model::gas_predicates::check_for_gas_price_too_high;
+use crate::gas_model::gas_v2::SuiCostTable;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::{
@@ -2070,6 +2072,29 @@ impl TransactionData {
         )
     }
 
+    pub fn new_transfer_funds_to_address_balance(
+        recipient: SuiAddress,
+        sender: SuiAddress,
+        amount: u64,
+        type_arg: TypeTag,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> anyhow::Result<Self> {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_balance(recipient, amount, type_arg)?;
+            builder.finish()
+        };
+        Ok(Self::new_programmable(
+            sender,
+            vec![gas_payment],
+            pt,
+            gas_budget,
+            gas_price,
+        ))
+    }
+
     pub fn new_transfer_sui_allow_sponsor(
         recipient: SuiAddress,
         sender: SuiAddress,
@@ -2626,18 +2651,18 @@ impl TransactionDataAPI for TransactionDataV1 {
             );
 
             // TODO(address-balances): Use a protocol config parameter for max_withdraws.
-            let num_withdraws = self.kind.get_funds_withdrawals().count();
             let max_withdraws = 10;
-            fp_ensure!(
-                num_withdraws <= max_withdraws,
-                UserInputError::InvalidWithdrawReservation {
-                    error: format!(
-                        "Maximum number of balance withdraw reservations is {max_withdraws}"
-                    ),
-                }
-            );
 
-            for withdraw in self.kind.get_funds_withdrawals() {
+            for (count, withdraw) in self.kind.get_funds_withdrawals().enumerate() {
+                fp_ensure!(
+                    count < max_withdraws,
+                    UserInputError::InvalidWithdrawReservation {
+                        error: format!(
+                            "Maximum number of balance withdraw reservations is {max_withdraws}"
+                        ),
+                    }
+                );
+
                 match withdraw.withdraw_from {
                     WithdrawFrom::Sender => (),
                     WithdrawFrom::Sponsor => {
@@ -2702,6 +2727,33 @@ impl TransactionDataAPI for TransactionDataV1 {
                 value: config.max_gas_payment_objects().to_string()
             }
         );
+
+        if !self.is_system_tx() {
+            let cost_table = SuiCostTable::new(config, self.gas_data.price);
+
+            fp_ensure!(
+                !check_for_gas_price_too_high(config.gas_model_version())
+                    || self.gas_data.price < config.max_gas_price(),
+                UserInputError::GasPriceTooHigh {
+                    max_gas_price: config.max_gas_price(),
+                }
+            );
+
+            fp_ensure!(
+                self.gas_data.budget <= cost_table.max_gas_budget,
+                UserInputError::GasBudgetTooHigh {
+                    gas_budget: self.gas_data().budget,
+                    max_budget: cost_table.max_gas_budget,
+                }
+            );
+            fp_ensure!(
+                self.gas_data.budget >= cost_table.min_transaction_cost,
+                UserInputError::GasBudgetTooLow {
+                    gas_budget: self.gas_data.budget,
+                    min_budget: cost_table.min_transaction_cost,
+                }
+            );
+        }
 
         self.validity_check_no_gas_check(config)
     }

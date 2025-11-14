@@ -25,7 +25,7 @@ use sui_types::{
     supported_protocol_versions::SupportedProtocolVersions,
     transaction::{
         Argument, Command, FundsWithdrawalArg, GasData, Transaction, TransactionData,
-        TransactionDataV1, TransactionExpiration, TransactionKind,
+        TransactionDataAPI, TransactionDataV1, TransactionExpiration, TransactionKind,
     },
 };
 use test_cluster::TestClusterBuilder;
@@ -743,6 +743,26 @@ async fn test_address_balance_gas() {
     });
 
     let chain_id = test_cluster.get_chain_identifier();
+
+    // check that a transaction with a zero gas budget is rejected
+    {
+        let mut tx = create_storage_test_transaction_address_balance(
+            sender,
+            gas_package_id,
+            rgp,
+            chain_id,
+            None,
+            0,
+        );
+        tx.gas_data_mut().budget = 0;
+        let signed_tx = test_cluster.sign_transaction(&tx).await;
+        let err = test_cluster
+            .wallet
+            .execute_transaction_may_fail(signed_tx)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("Gas budget: 0 is lower than min:"));
+    }
 
     let tx = create_storage_test_transaction_address_balance(
         sender,
@@ -2275,7 +2295,7 @@ async fn test_multiple_deposits_merged_in_effects() {
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas) = get_sender_and_gas(context).await;
+    let (sender, gas) = get_sender_and_one_gas(context).await;
     let recipient = sender;
 
     let initial_deposit = make_send_to_account_tx(10000, recipient, sender, gas, rgp);
