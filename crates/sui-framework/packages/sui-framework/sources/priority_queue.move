@@ -116,14 +116,10 @@ fun max_heapify_recursive<T: drop>(v: &mut vector<Entry<T>>, len: u64, i: u64) {
 }
 
 public fun priorities<T: drop>(pq: &PriorityQueue<T>): vector<u64> {
-    let mut res = vector[];
-    let mut i = 0;
-    while (i < pq.entries.length()) {
-        res.push_back(pq.entries[i].priority);
-        i = i +1;
-    };
-    res
-}
+    pq.entries.map_ref!(|e| {
+        e.priority
+        })
+    }
 
 #[test]
 fun test_pq() {
