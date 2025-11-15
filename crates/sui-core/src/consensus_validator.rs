@@ -176,7 +176,7 @@ impl SuiTxValidator {
 
             let tx_digest = *tx.digest();
             if let Err(error) = self.vote_transaction(&epoch_store, tx) {
-                debug!(?tx_digest, "Transaction rejected during voting: {error}");
+                debug!(?tx_digest, "Voting to reject transaction: {error}");
                 self.metrics
                     .transaction_reject_votes
                     .with_label_values(&[error.to_variant_name()])
@@ -191,6 +191,8 @@ impl SuiTxValidator {
                     },
                     &error,
                 );
+            } else {
+                debug!(?tx_digest, "Voting to accept transaction");
             }
         }
 
