@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::ident_str;
+use move_core_types::u256::U256;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::path::PathBuf;
 use sui_genesis_builder::validator_info::GenesisValidatorMetadata;
@@ -10,21 +11,21 @@ use sui_sdk::rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
 };
 use sui_sdk::wallet_context::WalletContext;
-use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{AccountKeyPair, Signature, Signer, get_key_pair};
 use sui_types::digests::TransactionDigest;
-use sui_types::gas_coin::GAS;
 use sui_types::multisig::{BitmapUnit, MultiSig, MultiSigPublicKey};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
-    CallArg, DEFAULT_VALIDATOR_GAS_PRICE, ObjectArg, ProgrammableTransaction,
+    Argument, CallArg, Command, DEFAULT_VALIDATOR_GAS_PRICE, ObjectArg, ProgrammableTransaction,
     SharedObjectMutability, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData,
 };
+use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::{SUI_SYSTEM_PACKAGE_ID, TypeTag};
 
 pub struct TestTransactionBuilder {
@@ -295,31 +296,6 @@ impl TestTransactionBuilder {
         self
     }
 
-    pub fn transfer_sui_to_address_balance(mut self, amount: u64, recipient: SuiAddress) -> Self {
-        self.test_data =
-            TestTransactionData::TransferFundsToAddressBalance(TransferFundsToAddressBalanceData {
-                amount,
-                type_arg: GAS::type_tag(),
-                recipient,
-            });
-        self
-    }
-
-    pub fn transfer_funds_to_address_balance(
-        mut self,
-        amount: u64,
-        type_arg: TypeTag,
-        recipient: SuiAddress,
-    ) -> Self {
-        self.test_data =
-            TestTransactionData::TransferFundsToAddressBalance(TransferFundsToAddressBalanceData {
-                amount,
-                type_arg,
-                recipient,
-            });
-        self
-    }
-
     pub fn split_coin(mut self, coin: ObjectRef, amounts: Vec<u64>) -> Self {
         self.test_data = TestTransactionData::SplitCoin(SplitCoinData { coin, amounts });
         self
@@ -361,6 +337,76 @@ impl TestTransactionBuilder {
         self
     }
 
+    /// Split the gas coin and send the funds to the recipients (in the form of address balances).
+    /// If a recipient is None, the funds will be sent to the sender's address balance.
+    pub fn send_funds_sui(self, amounts_and_recipients: &[(u64, Option<SuiAddress>)]) -> Self {
+        let mut builder = ProgrammableTransactionBuilder::new();
+
+        for (amount, recipient) in amounts_and_recipients {
+            let recipient = recipient.unwrap_or(self.sender);
+            let amount_arg = builder.pure(*amount).unwrap();
+            let recipient_arg = builder.pure(recipient).unwrap();
+            let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount_arg]));
+
+            let Argument::Result(coin_idx) = coin else {
+                panic!("coin is not a result");
+            };
+
+            let coin = Argument::NestedResult(coin_idx, 0);
+
+            builder.programmable_move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                Identifier::new("coin").unwrap(),
+                Identifier::new("send_funds").unwrap(),
+                vec!["0x2::sui::SUI".parse().unwrap()],
+                vec![coin, recipient_arg],
+            );
+        }
+
+        self.programmable(builder.finish())
+    }
+
+    /// Withdraws address balance from sender and convert them back to gas coins,
+    /// If a recipient is None, the funds will be sent to the sender's address balance.
+    pub fn withdraw_funds_sui(
+        self,
+        withdraw_amount: u64,
+        reservation_amount: u64,
+        recipient: Option<SuiAddress>,
+    ) -> Self {
+        let recipient = recipient.unwrap_or(self.sender);
+        let mut builder = ProgrammableTransactionBuilder::new();
+
+        // Add withdraw reservation
+        let withdraw_arg = sui_types::transaction::FundsWithdrawalArg::balance_from_sender(
+            reservation_amount,
+            sui_types::type_input::TypeInput::from(sui_types::gas_coin::GAS::type_tag()),
+        );
+        let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
+
+        let amount_arg = builder.pure(U256::from(withdraw_amount)).unwrap();
+
+        let split_withdraw_arg = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("funds_accumulator").unwrap(),
+            Identifier::new("withdrawal_split").unwrap(),
+            vec!["0x2::balance::Balance<0x2::sui::SUI>".parse().unwrap()],
+            vec![withdraw_arg, amount_arg],
+        );
+
+        let coin = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("redeem_funds").unwrap(),
+            vec!["0x2::sui::SUI".parse().unwrap()],
+            vec![split_withdraw_arg],
+        );
+
+        builder.transfer_arg(recipient, coin);
+
+        self.programmable(builder.finish())
+    }
+
     pub fn build(self) -> TransactionData {
         match self.test_data {
             TestTransactionData::Move(data) => TransactionData::new_move_call(
@@ -394,19 +440,6 @@ impl TestTransactionBuilder {
                     .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
                 self.gas_price,
             ),
-            TestTransactionData::TransferFundsToAddressBalance(data) => {
-                TransactionData::new_transfer_funds_to_address_balance(
-                    data.recipient,
-                    self.sender,
-                    data.amount,
-                    data.type_arg,
-                    self.gas_object,
-                    self.gas_budget
-                        .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
-                    self.gas_price,
-                )
-                .unwrap()
-            }
             TestTransactionData::SplitCoin(data) => TransactionData::new_split_coin(
                 self.sender,
                 data.coin,
@@ -513,7 +546,6 @@ enum TestTransactionData {
     Move(MoveData),
     Transfer(TransferData),
     TransferSui(TransferSuiData),
-    TransferFundsToAddressBalance(TransferFundsToAddressBalanceData),
     SplitCoin(SplitCoinData),
     Publish(PublishData),
     Programmable(ProgrammableTransaction),
@@ -544,12 +576,6 @@ struct TransferData {
 
 struct TransferSuiData {
     amount: Option<u64>,
-    recipient: SuiAddress,
-}
-
-struct TransferFundsToAddressBalanceData {
-    amount: u64,
-    type_arg: TypeTag,
     recipient: SuiAddress,
 }
 
