@@ -13805,7 +13805,7 @@ dependencies = [
  "once_cell",
  "prometheus",
  "rand 0.8.5",
- "reqwest 0.12.9",
+ "reqwest 0.11.20",
  "serde",
  "serde_json",
  "serde_with",
