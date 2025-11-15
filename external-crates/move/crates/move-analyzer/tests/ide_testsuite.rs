@@ -392,7 +392,7 @@ fn completion_test(
     test_idx: usize,
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
-    project_path: &PathBuf,
+    project_path: &Path,
     output: &mut dyn std::io::Write,
     use_file_path: &Path,
     auto_import: bool,
@@ -409,7 +409,7 @@ fn completion_test(
     let symbols = test_symbols_for_autocomplete(
         packages_info,
         ide_files_root,
-        project_path.clone(),
+        project_path.to_path_buf(),
         &cursor_path,
         use_pos,
     )?;
@@ -597,7 +597,7 @@ fn use_def_test_suite(
             .ok_or(format!("NO SYMBOLS FOR {}", cpath.to_str().unwrap()))?;
 
         for (idx, test) in tests.iter().enumerate() {
-            test.test(idx, mod_symbols, &symbols, writer, &file, &cpath)?;
+            test.test(idx, mod_symbols, symbols, writer, &file, &cpath)?;
             writeln!(writer)?;
         }
     }
