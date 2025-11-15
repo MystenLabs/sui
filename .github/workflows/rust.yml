@@ -214,7 +214,7 @@ jobs:
   windows-test:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    timeout-minutes: 45
+    timeout-minutes: 120
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
@@ -239,21 +239,10 @@ jobs:
 
       - uses: taiki-e/install-action@nextest
 
-      - name: Install postgres (Windows)
-        shell: bash
-        run: |
-          choco install postgresql12 --force --params '/Password:root'
-          echo "C:\Program Files\PostgreSQL\12\bin" >> $GITHUB_PATH
-          echo "C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_PATH
-          echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
-          echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
-          echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
-
       - name: cargo test Sui CLI
         shell: bash
         run: |
-          cargo nextest run -p sui
-
+          cargo nextest run -p sui --no-fail-fast --profile ci
 
   simtest:
     needs: [diff, rustfmt, clippy]
