@@ -1441,7 +1441,7 @@ impl ValidatorService {
         Ok((tonic::Response::new(response), Weight::zero()))
     }
 
-    #[instrument(name= "ValidatorService::wait_for_effects_response", level = "error", skip_all, err(level = "debug"), fields(consensus_position = ?request.consensus_position, fast_path_effects = tracing::field::Empty))]
+    #[instrument(name= "ValidatorService::wait_for_effects_response", level = "error", skip_all, fields(consensus_position = ?request.consensus_position, fast_path_effects = tracing::field::Empty))]
     async fn wait_for_effects_response(
         &self,
         request: WaitForEffectsRequest,
