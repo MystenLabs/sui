@@ -616,7 +616,11 @@ pub fn get_compiled_pkg(
             lib_definitions: parsed_program.lib_definitions,
         };
         let typed_modules = typed_ast.unwrap().modules;
-        (parsed_definitions, typed_modules, compiler_analysis_info_opt)
+        (
+            parsed_definitions,
+            typed_modules,
+            compiler_analysis_info_opt,
+        )
     } else if files_to_compile.is_empty() {
         // no compilation happened, so we get everything from the cache, and
         // the unwraps are safe because the cache is guaranteed to exist (otherwise
@@ -956,7 +960,9 @@ fn merge_compiler_analysis_info(
     result.expanded_lambdas.retain(|loc| !is_modified(loc));
     result.ellipsis_binders.retain(|loc| !is_modified(loc));
 
-    // Add new entries
+    // Add new entries - no additional filtering needed
+    // as incremental compilation produced these
+    // only for modified files
     result.macro_info.extend(new_info.macro_info);
     result.expanded_lambdas.extend(new_info.expanded_lambdas);
     result.ellipsis_binders.extend(new_info.ellipsis_binders);
