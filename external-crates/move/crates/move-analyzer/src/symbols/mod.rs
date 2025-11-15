@@ -463,7 +463,9 @@ pub fn compute_symbols_typed_program(
             file_mods,
             def_info: computation_data.def_info,
             files: compiled_pkg_info.mapped_files,
-            compiler_autocomplete_info: compiled_pkg_info.compiler_autocomplete_info.unwrap_or_default(),
+            compiler_autocomplete_info: compiled_pkg_info
+                .compiler_autocomplete_info
+                .unwrap_or_default(),
             cursor_context,
         },
         deps_symbols_data_opt,

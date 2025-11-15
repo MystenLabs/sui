@@ -66,10 +66,7 @@ impl CompilerAutocompleteInfo {
     }
 
     /// Get path autocomplete information (for module::path completions)
-    pub fn get_path_autocomplete_info(
-        &self,
-        loc: &Loc,
-    ) -> Option<&CI::AliasAutocompleteInfo> {
+    pub fn get_path_autocomplete_info(&self, loc: &Loc) -> Option<&CI::AliasAutocompleteInfo> {
         self.path_autocomplete_info.get(loc)
     }
 }
