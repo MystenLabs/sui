@@ -54,6 +54,24 @@ impl CheckpointFilter {
             before_checkpoint: intersect!(before_checkpoint, intersect::by_min)?,
         })
     }
+
+    /// The active filters in CheckpointFilter. Used to find the pipelines that are available to serve queries with these filters applied.
+    pub(crate) fn active_filters(&self) -> Vec<String> {
+        let mut filters = vec![];
+        if self.at_epoch.is_some() {
+            filters.push("atEpoch".to_string());
+        }
+        if self.at_checkpoint.is_some() {
+            filters.push("atCheckpoint".to_string());
+        }
+        if self.after_checkpoint.is_some() {
+            filters.push("afterCheckpoint".to_string());
+        }
+        if self.before_checkpoint.is_some() {
+            filters.push("beforeCheckpoint".to_string());
+        }
+        filters
+    }
 }
 
 /// The bounds on checkpoint sequence number, imposed by filters. The outermost bounds are
