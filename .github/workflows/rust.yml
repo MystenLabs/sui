@@ -231,6 +231,12 @@ jobs:
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
 
+      - uses: al-cheb/configure-pagefile-action@v1.2
+        with:
+          minimum-size: 8GB
+          maximum-size: 32GB
+          disk-root: "C:"
+
       - uses: taiki-e/install-action@nextest
 
       - name: Install postgres (Windows)
