@@ -224,7 +224,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ windows-2022 ]
+          - [ windows-latest ]
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
@@ -233,20 +233,20 @@ jobs:
 
       - uses: taiki-e/install-action@nextest
 
-      # - name: Install postgres (Windows)
-      #   shell: bash
-      #   run: |
-      #     choco install postgresql12 --force --params '/Password:root'
-      #     echo "C:\Program Files\PostgreSQL\12\bin" >> $GITHUB_PATH
-      #     echo "C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_PATH
-      #     echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
-      #     echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
-      #     echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
+      - name: Install postgres (Windows)
+        shell: bash
+        run: |
+          choco install postgresql12 --force --params '/Password:root'
+          echo "C:\Program Files\PostgreSQL\12\bin" >> $GITHUB_PATH
+          echo "C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_PATH
+          echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
+          echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
+          echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
       - name: cargo test Sui CLI
         shell: bash
         run: |
-          cargo nextest run --profile ci -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
+          cargo nextest run -p sui
 
 
   simtest:
