@@ -121,11 +121,21 @@ impl TransactionCertifier {
     /// Because own votes on blocks are not stored, input blocks are voted on if they can be
     /// included in a future proposed block.
     pub(crate) fn recover_and_vote_on_blocks(&self, blocks: Vec<VerifiedBlock>) {
-        let dag_state = self.dag_state.read();
+        let (gc_round, hard_linked) = {
+            let dag_state = self.dag_state.read();
+            (
+                dag_state.gc_round(),
+                blocks
+                    .iter()
+                    .map(|b| dag_state.is_hard_linked(&b.reference()))
+                    .collect::<Vec<_>>(),
+            )
+        };
         let voted_blocks = blocks
             .into_iter()
-            .map(|b| {
-                if b.round() <= dag_state.gc_round() || dag_state.is_hard_linked(&b.reference()) {
+            .zip(hard_linked)
+            .map(|(b, linked)| {
+                if b.round() <= gc_round || linked {
                     // Voting is unnecessary for blocks already included in own proposed blocks,
                     // or outside of local DAG GC bound.
                     (b, vec![])
@@ -140,6 +150,7 @@ impl TransactionCertifier {
                 }
             })
             .collect::<Vec<_>>();
+
         self.certifier_state.write().add_voted_blocks(voted_blocks);
         // Do not send certified blocks to the fastpath output channel during recovery,
         // because these transactions could have been executed and fastpath latency optimization is

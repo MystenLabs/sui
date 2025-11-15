@@ -80,9 +80,9 @@ impl CommitObserver {
         tokio::runtime::Handle::current()
             .spawn_blocking({
                 let transaction_certifier = observer.transaction_certifier.clone();
-                let dag_state = observer.dag_state.clone();
+                let gc_round = observer.dag_state.read().gc_round();
                 move || {
-                    transaction_certifier.recover_blocks_after_round(dag_state.read().gc_round());
+                    transaction_certifier.recover_blocks_after_round(gc_round);
                 }
             })
             .await
