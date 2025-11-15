@@ -96,11 +96,16 @@ impl TransactionCertifier {
             .map(|(index, _)| index)
             .collect::<Vec<_>>();
         for authority_index in authorities {
+            info!(
+                "Recovering blocks for authority {} {}",
+                authority_index,
+                context.committee.authority(authority_index).hostname
+            );
             let blocks = store
                 .scan_blocks_by_author(authority_index, recovery_start_round)
                 .unwrap();
             info!(
-                "Recovering and voting on {} blocks for authority {} {}",
+                "Voting on {} blocks for authority {} {}",
                 blocks.len(),
                 authority_index,
                 context.committee.authority(authority_index).hostname
