@@ -60,7 +60,7 @@ public fun create_entries<T: drop>(mut p: vector<u64>, mut v: vector<T>): vector
     let len = p.length();
     assert!(v.length() == len, 0);
     let mut res = vector[];
-    len.do!(|i| {
+    len.do!(|_| {
         let priority = p.pop_back();
         let value = v.pop_back();
         res.push_back(Entry { priority, value });
