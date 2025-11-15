@@ -203,7 +203,7 @@ impl AutoCompletionTest {
         test_idx: usize,
         packages_info: Arc<Mutex<CachedPackages>>,
         ide_files_root: VfsPath,
-        project_path: &PathBuf,
+        project_path: &Path,
         output: &mut dyn std::io::Write,
         use_file_path: &Path,
     ) -> anyhow::Result<()> {
@@ -227,7 +227,7 @@ impl AutoImportTest {
         test_idx: usize,
         packages_info: Arc<Mutex<CachedPackages>>,
         ide_files_root: VfsPath,
-        project_path: &PathBuf,
+        project_path: &Path,
         output: &mut dyn std::io::Write,
         use_file_path: &Path,
     ) -> anyhow::Result<()> {
