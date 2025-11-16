@@ -239,10 +239,18 @@ jobs:
 
       - uses: taiki-e/install-action@nextest
 
-      - name: cargo test Sui CLI
-        shell: bash
-        run: |
-          cargo nextest run -p sui --no-fail-fast --profile ci
+      - name: Setup WSL
+        uses: Vampire/setup-wsl@v3
+        with:
+          distribution: Ubuntu-22.04
+      
+      - name: cargo test Sui CLI (via WSL)
+        run: wsl bash -c "cargo nextest run -p sui --no-fail-fast --profile ci"
+
+      # - name: cargo test Sui CLI
+        # shell: bash
+        # run: |
+          # cargo nextest run -p sui --no-fail-fast --profile ci
 
   simtest:
     needs: [diff, rustfmt, clippy]
