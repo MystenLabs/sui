@@ -246,16 +246,20 @@ jobs:
 
       - namee: Install Rust Tools on WSL
         run: | 
-            wsl bash -c "
+          wsl bash -c "
             sudo apt update && sudo apt upgrade -y
             sudo apt install -y build-essential curl file git
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
             source $HOME/.cargo/env
             cargo install cargo-nextest
-            "
+          "
       
       - name: cargo test Sui CLI (via WSL)
-        run: wsl bash -c "cargo nextest run -p sui --no-fail-fast --profile ci"
+        run: 
+          wsl bash -c "
+            source $HOME/.cargo/env
+            cargo nextest run -p sui --no-fail-fast --profile ci
+          "
 
       # - name: cargo test Sui CLI
         # shell: bash
