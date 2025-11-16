@@ -244,7 +244,7 @@ jobs:
         with:
           distribution: Ubuntu-22.04
 
-      - namee: Install Rust Tools on WSL
+      - name: Install Rust Tools on WSL
         run: | 
           wsl bash -c "
             sudo apt update && sudo apt upgrade -y
