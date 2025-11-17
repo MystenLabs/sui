@@ -263,5 +263,5 @@ jobs:
       - name: cargo test Sui CLI
         shell: bash
         run: |
-          cargo nextest run -p sui --no-fail-fast --profile windows
+          cargo nextest run -p sui --no-fail-fast --profile ci
 
