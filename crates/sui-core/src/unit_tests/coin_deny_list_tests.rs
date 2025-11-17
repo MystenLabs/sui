@@ -228,7 +228,7 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
     let (denied_address, denied_keypair) = get_account_key_pair();
 
     env.authority
-        .settle_transactions_for_testing(0, std::slice::from_ref(&env.publish_effects))
+        .settle_accumulator_for_testing(std::slice::from_ref(&env.publish_effects))
         .await;
 
     {
@@ -252,7 +252,7 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
         env_gas_ref = effects.gas_object().0;
 
         env.authority
-            .settle_transactions_for_testing(1, std::slice::from_ref(&effects))
+            .settle_accumulator_for_testing(std::slice::from_ref(&effects))
             .await;
     }
 

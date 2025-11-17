@@ -163,7 +163,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         self.validator.read_objects_for_execution(
             &CertLockGuard::dummy_for_tests(),
             &tx,
-            assigned_versions,
+            &assigned_versions,
             &epoch_store,
         )
     }

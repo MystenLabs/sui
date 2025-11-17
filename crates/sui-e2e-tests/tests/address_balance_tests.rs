@@ -2064,7 +2064,8 @@ async fn test_sponsor_insufficient_balance_charges_zero_gas() {
     let status_str = format!("{:?}", failed_effects.status());
     assert!(
         status_str.contains("InsufficientBalanceForWithdraw"),
-        "Failed transaction should have InsufficientBalanceForWithdraw error"
+        "Failed transaction should have InsufficientBalanceForWithdraw error: {}",
+        status_str
     );
 
     let successful_tx_gas = succeeded_gas;
@@ -2178,7 +2179,8 @@ async fn test_insufficient_balance_charges_zero_gas() {
     let status_str = format!("{:?}", failed_effects.status());
     assert!(
         status_str.contains("InsufficientBalanceForWithdraw"),
-        "Failed transaction should have InsufficientBalanceForWithdraw error"
+        "Failed transaction should have InsufficientBalanceForWithdraw error: {}",
+        status_str
     );
 
     let successful_tx_gas = succeeded_gas;
