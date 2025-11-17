@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::marker::PhantomData;
+use std::ops::Range;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
@@ -59,7 +60,7 @@ pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + ParquetSchema> {
     inner: Mutex<Option<WriterVariant>>,
     dir_prefix: String,
     current_epoch: Mutex<EpochId>,
-    last_checkpoint: Mutex<u64>,
+    checkpoint_range: Mutex<Option<Range<u64>>>,
     current_file_bytes: Mutex<Option<Bytes>>,
     _phantom: PhantomData<T>,
 }
@@ -77,7 +78,7 @@ impl<T: AnalyticsMetadata + Serialize + ParquetSchema + 'static> Default for Ana
             inner: Mutex::new(None),
             dir_prefix: T::PIPELINE.dir_prefix().as_ref().to_string(),
             current_epoch: Mutex::new(0),
-            last_checkpoint: Mutex::new(0),
+            checkpoint_range: Mutex::new(None),
             current_file_bytes: Mutex::new(None),
             _phantom: PhantomData,
         }
@@ -114,9 +115,13 @@ impl<T: AnalyticsMetadata + Serialize + ParquetSchema> AnalyticsBatch<T> {
         *self.current_epoch.lock().unwrap() = epoch;
     }
 
-    /// Update the last checkpoint
-    fn update_last_checkpoint(&self, checkpoint: u64) {
-        *self.last_checkpoint.lock().unwrap() = checkpoint;
+    /// Update checkpoint range (initializes on first checkpoint)
+    fn update_checkpoint_range(&self, checkpoint: u64) {
+        let mut range = self.checkpoint_range.lock().unwrap();
+        match range.as_mut() {
+            Some(r) => r.end = checkpoint,
+            None => *range = Some(checkpoint..checkpoint),
+        }
     }
 
     /// Get the current file bytes if available (cloned to avoid holding the lock)
@@ -134,14 +139,22 @@ impl<T: AnalyticsMetadata + Serialize + ParquetSchema> AnalyticsBatch<T> {
     }
 
     /// Get the object store path for the current file
-    fn object_store_path(&self, format: FileFormat) -> object_store::path::Path {
+    fn object_store_path(&self, format: FileFormat) -> Result<object_store::path::Path> {
+        let range = self
+            .checkpoint_range
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("No checkpoint range set"))?;
         let path = crate::construct_file_path(
             &self.dir_prefix,
             *self.current_epoch.lock().unwrap(),
-            0..*self.last_checkpoint.lock().unwrap(),
+            range,
             format,
         );
-        object_store::path::Path::from(path.to_string_lossy().as_ref())
+        Ok(object_store::path::Path::from(
+            path.to_string_lossy().as_ref(),
+        ))
     }
 
     /// Flush the current batch and store the bytes
@@ -218,7 +231,7 @@ where
         let checkpoint = first.get_checkpoint_sequence_number();
 
         batch.set_epoch(epoch);
-        batch.update_last_checkpoint(checkpoint);
+        batch.update_checkpoint_range(checkpoint);
 
         if let Err(e) = batch.write_rows(
             std::iter::once(first).chain(values.by_ref()),
@@ -244,7 +257,7 @@ where
         };
 
         let row_count = batch.row_count()?;
-        let object_path = batch.object_store_path(self.config.file_format);
+        let object_path = batch.object_store_path(self.config.file_format)?;
 
         conn.object_store()
             .put(&object_path, file_bytes.into())
