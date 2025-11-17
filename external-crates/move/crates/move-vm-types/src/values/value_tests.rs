@@ -244,12 +244,7 @@ fn signer_equivalence() -> PartialVMResult<()> {
     let signer = Value::signer(addr);
 
     assert_eq!(
-        signer.serialize(),
-        signer.typed_serialize(&runtime_value::MoveTypeLayout::Signer)
-    );
-
-    assert_eq!(
-        signer.serialize(),
+        signer.typed_serialize(&runtime_value::MoveTypeLayout::Signer),
         signer.typed_serialize(&runtime_value::MoveTypeLayout::Struct(Box::new(
             runtime_value::MoveStructLayout(Box::new(vec![runtime_value::MoveTypeLayout::Address]))
         )))

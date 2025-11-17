@@ -3,7 +3,7 @@
 
 use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
 use move_binary_format::errors::PartialVMError;
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, runtime_value::MoveTypeLayout};
 use move_vm_types::{
     values::{
         self, Locals as VMLocals, Struct, VMValueCast, Value as VMValue, VectorSpecialization,
@@ -154,8 +154,8 @@ impl Value {
         Ok(Value(value))
     }
 
-    pub fn serialize(&self) -> Option<Vec<u8>> {
-        self.0.serialize()
+    pub fn typed_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
+        self.0.typed_serialize(layout)
     }
 }
 
