@@ -706,7 +706,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let mut fetched = vec![];
         let mut missing = vec![];
 
-        for id in dependency_ids {
+        // Collect into a set to avoid duplicate fetches and preserve existing behavior
+        let dependency_ids: BTreeSet<_> = dependency_ids.iter().collect();
+
+        for id in &dependency_ids {
             match self.env.linkable_store.get_package(id) {
                 Err(e) => {
                     return Err(ExecutionError::new_with_source(
