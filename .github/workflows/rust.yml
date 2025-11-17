@@ -219,11 +219,12 @@ jobs:
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
       # non-deterministic `test` job.
       SUI_SKIP_SIMTESTS: 1
+      RUST_MIN_STACK: 8388608  # 8 MB
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os:
-          - [ windows-latest ]
+          - [ windows-ghcloud ]
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
@@ -257,13 +258,10 @@ jobs:
       #     source $HOME/.cargo/env
       #     cargo nextest run -p sui --no-fail-fast --profile ci
 
-      - name: Install cargo-nextest
-        shell: bash
-        run: |
-          cargo install cargo-nextest
+      - uses: taiki-e/install-action@nextest
 
       - name: cargo test Sui CLI
         shell: bash
         run: |
-          cargo nextest run -p sui --release --no-fail-fast --profile ci
+          cargo nextest run -p sui --no-fail-fast --profile windows
 
