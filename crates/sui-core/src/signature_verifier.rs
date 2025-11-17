@@ -412,6 +412,7 @@ impl SignatureVerifier {
         self.jwks.read().clone()
     }
 
+    #[must_use]
     pub fn verify_tx_with_current_aliases(
         &self,
         signed_tx: &SenderSignedData,
@@ -456,28 +457,15 @@ impl SignatureVerifier {
         Ok(NonEmpty::from_vec(versions).expect("must have at least one required_signer"))
     }
 
-    pub fn verify_tx_require_alias_versions(
-        &self,
-        signed_tx: &SenderSignedData,
-        // Note: this must be in the same order as `required_signers` of the given tx.
-        versions: NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
-    ) -> SuiResult {
+    #[must_use]
+    pub fn verify_tx_require_no_aliases(&self, signed_tx: &SenderSignedData) -> SuiResult {
         let current_aliases = self.verify_tx_with_current_aliases(signed_tx)?;
-        if current_aliases != versions {
-            return Err(SuiError::AliasesChanged);
+        for (_, version) in current_aliases {
+            if version.is_some() {
+                return Err(SuiError::AliasesChanged);
+            }
         }
         Ok(())
-    }
-
-    pub fn verify_tx_require_no_aliases(&self, signed_tx: &SenderSignedData) -> SuiResult {
-        self.verify_tx_require_alias_versions(
-            signed_tx,
-            signed_tx
-                .intent_message()
-                .value
-                .required_signers()
-                .map(|s| (s, None)),
-        )
     }
 
     fn verify_tx(
