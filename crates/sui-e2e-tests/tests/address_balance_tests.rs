@@ -2208,3 +2208,143 @@ async fn test_soft_bundle_different_gas_payers() {
 
     test_cluster.trigger_reconfiguration().await;
 }
+
+#[sim_test]
+async fn test_multiple_deposits_merged_in_effects() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
+        cfg.enable_accumulators_for_testing();
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let context = &mut test_cluster.wallet;
+
+    let (sender, gas) = get_sender_and_gas(context).await;
+    let recipient = sender;
+
+    let initial_deposit = make_send_to_account_tx(10000, recipient, sender, gas, rgp);
+    let res = test_cluster
+        .sign_and_execute_transaction(&initial_deposit)
+        .await;
+    let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        verify_accumulator_exists(child_object_resolver, recipient, 10000);
+    });
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    let deposit_amounts = vec![1000u64, 2000u64, 3000u64];
+    for amount in &deposit_amounts {
+        let amount_arg = builder.pure(*amount).unwrap();
+        let recipient_arg = builder.pure(recipient).unwrap();
+        let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount_arg]));
+
+        let Argument::Result(coin_idx) = coin else {
+            panic!("coin is not a result");
+        };
+
+        let coin = Argument::NestedResult(coin_idx, 0);
+
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("send_funds").unwrap(),
+            vec!["0x2::sui::SUI".parse().unwrap()],
+            vec![coin, recipient_arg],
+        );
+    }
+
+    let withdraw_amounts = vec![500u64, 1500u64];
+    for amount in &withdraw_amounts {
+        let withdraw_arg = sui_types::transaction::FundsWithdrawalArg::balance_from_sender(
+            *amount,
+            sui_types::type_input::TypeInput::from(sui_types::gas_coin::GAS::type_tag()),
+        );
+        let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
+
+        let amount_arg = builder
+            .pure(move_core_types::u256::U256::from(*amount))
+            .unwrap();
+
+        let split_withdraw_arg = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("funds_accumulator").unwrap(),
+            Identifier::new("withdrawal_split").unwrap(),
+            vec!["0x2::balance::Balance<0x2::sui::SUI>".parse().unwrap()],
+            vec![withdraw_arg, amount_arg],
+        );
+
+        let coin = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("redeem_funds").unwrap(),
+            vec!["0x2::sui::SUI".parse().unwrap()],
+            vec![split_withdraw_arg],
+        );
+
+        builder.transfer_arg(sender, coin);
+    }
+
+    let tx = TransactionKind::ProgrammableTransaction(builder.finish());
+    let tx_data = TransactionData::new(tx, sender, gas, 10000000, rgp);
+
+    let signed_tx = test_cluster.wallet.sign_transaction(&tx_data).await;
+    let (effects, _) = test_cluster
+        .execute_transaction_return_raw_effects(signed_tx)
+        .await
+        .unwrap();
+
+    assert!(
+        effects.status().is_ok(),
+        "Transaction should succeed, got: {:?}",
+        effects.status()
+    );
+
+    let acc_events = effects.accumulator_events();
+    assert_eq!(
+        acc_events.len(),
+        1,
+        "Should have exactly 1 accumulator event (merged), got: {}",
+        acc_events.len()
+    );
+
+    let event = &acc_events[0];
+    assert_eq!(
+        event.write.address.address, recipient,
+        "Accumulator event should be for the recipient"
+    );
+
+    let deposit_total: u64 = deposit_amounts.iter().sum();
+    let withdraw_total: u64 = withdraw_amounts.iter().sum();
+    let expected_net = deposit_total - withdraw_total;
+
+    match &event.write.value {
+        sui_types::effects::AccumulatorValue::Integer(value) => {
+            assert_eq!(
+                *value, expected_net,
+                "Merged accumulator value should be {} (deposits {} - withdrawals {}), got {}",
+                expected_net, deposit_total, withdraw_total, value
+            );
+        }
+        _ => panic!("Expected Integer accumulator value"),
+    }
+
+    match &event.write.operation {
+        sui_types::effects::AccumulatorOperation::Merge => {}
+        _ => panic!("Expected Merge operation since deposits > withdrawals"),
+    }
+
+    let expected_final_balance = 10000 + expected_net;
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        verify_accumulator_exists(child_object_resolver, recipient, expected_final_balance);
+    });
+
+    test_cluster.trigger_reconfiguration().await;
+}

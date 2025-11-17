@@ -5478,18 +5478,21 @@
             "properties": {
               "eventDigest": {
                 "type": "array",
-                "items": [
-                  {
-                    "type": "integer",
-                    "format": "uint64",
-                    "minimum": 0.0
-                  },
-                  {
-                    "$ref": "#/components/schemas/Digest"
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
+                "items": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "type": "integer",
+                      "format": "uint64",
+                      "minimum": 0.0
+                    },
+                    {
+                      "$ref": "#/components/schemas/Digest"
+                    }
+                  ],
+                  "maxItems": 2,
+                  "minItems": 2
+                }
               }
             },
             "additionalProperties": false
