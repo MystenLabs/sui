@@ -107,6 +107,7 @@ move-ir-types.workspace = true
 move-command-line-common.workspace = true
 move-cli.workspace = true
 move-symbol-pool.workspace = true
+normalize-line-endings = "0.3.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 tikv-jemalloc-ctl.workspace = true
