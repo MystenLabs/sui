@@ -611,20 +611,17 @@ impl AuthorityStorePruner {
     fn prune_executed_tx_digests_th(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
-        num_epochs_to_retain: u64,
     ) -> anyhow::Result<()> {
-        let num_epochs_to_retain = max(num_epochs_to_retain, 1);
         let current_epoch = checkpoint_store
             .get_highest_executed_checkpoint()?
             .map(|c| c.epoch)
             .unwrap_or_default();
 
-        if current_epoch < num_epochs_to_retain {
+        if current_epoch < 2 {
             return Ok(());
         }
 
-        let target_epoch = current_epoch - num_epochs_to_retain;
-        let last_epoch_to_delete = target_epoch - 1;
+        let last_epoch_to_delete = current_epoch - 2;
         let from_key = (0u64, TransactionDigest::ZERO);
         let to_key = (last_epoch_to_delete, TransactionDigest::new([0xff; 32]));
         info!(
@@ -693,7 +690,7 @@ impl AuthorityStorePruner {
         }
         perpetual_db.objects.db.start_relocation()?;
         checkpoint_store.tables.watermarks.db.start_relocation()?;
-        Self::prune_executed_tx_digests_th(perpetual_db, checkpoint_store, num_epochs_to_retain)?;
+        Self::prune_executed_tx_digests_th(perpetual_db, checkpoint_store)?;
         Ok(())
     }
 

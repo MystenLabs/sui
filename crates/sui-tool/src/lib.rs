@@ -1066,11 +1066,15 @@ async fn backfill_epoch_transaction_digests(
             let checkpoint_data = checkpoint.0;
 
             async move {
-                for tx_data in &checkpoint_data.transactions {
-                    let tx_digest = tx_data.transaction.digest();
-                    perpetual_db.insert_executed_transaction_digest(epoch, tx_digest)?;
-                    tx_counter.fetch_add(1, Ordering::Relaxed);
-                }
+                let tx_digests: Vec<_> = checkpoint_data
+                    .transactions
+                    .iter()
+                    .map(|tx_data| *tx_data.transaction.digest())
+                    .collect();
+                let num_txs = tx_digests.len();
+                perpetual_db
+                    .insert_executed_transaction_digests_batch(epoch, tx_digests.into_iter())?;
+                tx_counter.fetch_add(num_txs as u64, Ordering::Relaxed);
                 checkpoint_counter.fetch_add(1, Ordering::Relaxed);
                 Ok::<(), anyhow::Error>(())
             }
