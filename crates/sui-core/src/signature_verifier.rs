@@ -8,10 +8,6 @@ use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::pin_mut;
 use im::hashmap::HashMap as ImHashMap;
 use itertools::{Itertools as _, izip};
-use move_core_types::{
-    identifier::Identifier,
-    language_storage::{StructTag, TypeTag},
-};
 use mysten_common::debug_fatal;
 use mysten_metrics::monitored_scope;
 use nonempty::NonEmpty;
@@ -19,7 +15,7 @@ use parking_lot::{Mutex, MutexGuard, RwLock};
 use prometheus::{IntCounter, Registry, register_int_counter_with_registry};
 use shared_crypto::intent::Intent;
 use std::sync::Arc;
-use sui_types::authenticator_state::AddressAliases;
+use sui_types::authenticator_state;
 use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::digests::SenderSignedDataDigest;
 use sui_types::digests::ZKLoginInputsDigest;
@@ -420,12 +416,6 @@ impl SignatureVerifier {
         &self,
         signed_tx: &SenderSignedData,
     ) -> SuiResult<NonEmpty<(SuiAddress, Option<SequenceNumber>)>> {
-        let alias_key_type = TypeTag::Struct(Box::new(StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            module: Identifier::new("authenticator_state").unwrap(),
-            name: Identifier::new("AliasKey").unwrap(),
-            type_params: vec![],
-        }));
         let mut versions = Vec::new();
         let mut aliases = Vec::new();
 
@@ -437,39 +427,25 @@ impl SignatureVerifier {
                 aliases.push((signer, NonEmpty::singleton(signer)));
             } else {
                 // Look up aliases for the signer using the derived object address.
-                let key_bytes = bcs::to_bytes(&signer).unwrap();
-                let Ok(address_aliases_id) = derived_object::derive_object_id(
-                    SuiAddress::from(SUI_AUTHENTICATOR_STATE_OBJECT_ID),
-                    &alias_key_type,
-                    &key_bytes,
-                ) else {
-                    debug_fatal!("failed to compute derived object id for alias state");
-                    return Err(SuiError::Unknown(
-                        "failed to compute derived object id for alias state".to_string(),
-                    ));
-                };
-                let address_aliases = self.object_store.get_object(&address_aliases_id);
+                let address_aliases = authenticator_state::get_address_aliases_from_store(
+                    &self.object_store,
+                    signer,
+                )?;
 
-                versions.push((signer, address_aliases.as_ref().map(|a| a.version())));
+                versions.push((signer, address_aliases.as_ref().map(|(_, v)| *v)));
                 aliases.push((
                     signer,
                     address_aliases
-                        .map(|obj| {
-                            let move_obj = obj
-                                .data
-                                .try_as_move()
-                                .expect("AddressAliases object must be a MoveObject");
-                            let address_aliases: AddressAliases =
-                                bcs::from_bytes(move_obj.contents())
-                                    .expect("failed to parse AddressAliases object");
-                            NonEmpty::from_vec(address_aliases.aliases.contents.clone())
-                                .unwrap_or_else(|| {
+                        .map(|(aliases, _)| {
+                            NonEmpty::from_vec(aliases.aliases.contents.clone()).unwrap_or_else(
+                                || {
                                     debug_fatal!(
                                     "AddressAliases struct has empty aliases field for signer {}",
                                     signer
                                 );
                                     NonEmpty::singleton(signer)
-                                })
+                                },
+                            )
                         })
                         .unwrap_or(NonEmpty::singleton(signer)),
                 ));

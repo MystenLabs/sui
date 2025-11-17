@@ -2,11 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
+use mysten_common::debug_fatal;
 use serde::{Deserialize, Serialize};
 
 use crate::base_types::{SequenceNumber, SuiAddress};
 use crate::collection_types::VecSet;
+use crate::derived_object;
 use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::{SuiErrorKind, SuiResult};
 use crate::object::Owner;
@@ -154,4 +158,39 @@ pub fn get_authenticator_state_obj_initial_shared_version(
             } => initial_shared_version,
             _ => unreachable!("Authenticator state object must be shared"),
         }))
+}
+
+pub fn get_address_aliases_from_store(
+    object_store: &dyn ObjectStore,
+    address: SuiAddress,
+) -> SuiResult<Option<(AddressAliases, SequenceNumber)>> {
+    let alias_key_type = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: Identifier::new("authenticator_state").unwrap(),
+        name: Identifier::new("AliasKey").unwrap(),
+        type_params: vec![],
+    }));
+
+    let key_bytes = bcs::to_bytes(&address).unwrap();
+    let Ok(address_aliases_id) = derived_object::derive_object_id(
+        SuiAddress::from(SUI_AUTHENTICATOR_STATE_OBJECT_ID),
+        &alias_key_type,
+        &key_bytes,
+    ) else {
+        debug_fatal!("failed to compute derived object id for alias state");
+        return Err(SuiError::Unknown(
+            "failed to compute derived object id for alias state".to_string(),
+        ));
+    };
+    let address_aliases = object_store.get_object(&address_aliases_id);
+
+    Ok(address_aliases.map(|obj| {
+        let move_obj = obj
+            .data
+            .try_as_move()
+            .expect("AddressAliases object must be a MoveObject");
+        let address_aliases: AddressAliases =
+            bcs::from_bytes(move_obj.contents()).expect("failed to parse AddressAliases object");
+        (address_aliases, obj.version())
+    }))
 }
