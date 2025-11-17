@@ -489,7 +489,7 @@ accumulator.
 Create a <code>Withdrawal&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt;</code> from an object to withdraw funds from it.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_withdraw_funds_from_object">withdraw_funds_from_object</a>&lt;T&gt;(obj: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, <a href="../sui/balance.md#sui_balance_value">value</a>: u64): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_withdraw_funds_from_object">withdraw_funds_from_object</a>&lt;T&gt;(obj: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, <a href="../sui/balance.md#sui_balance_value">value</a>: u64): <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;&gt;
 </code></pre>
 
 
@@ -498,7 +498,7 @@ Create a <code>Withdrawal&lt;<a href="../sui/balance.md#sui_balance_Balance">Bal
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_withdraw_funds_from_object">withdraw_funds_from_object</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_withdraw_funds_from_object">withdraw_funds_from_object</a>&lt;T&gt;(
     obj: &<b>mut</b> UID,
     <a href="../sui/balance.md#sui_balance_value">value</a>: u64,
 ): Withdrawal&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt; {
