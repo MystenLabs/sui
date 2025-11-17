@@ -9,13 +9,13 @@ use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::wallet_context::WalletContext;
-use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
     accumulator_metadata::AccumulatorOwner,
     accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
-    base_types::{ObjectID, ObjectRef, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr},
     digests::{ChainIdentifier, CheckpointDigest},
     effects::{InputConsensusObject, TransactionEffectsAPI},
     gas::GasCostSummary,
@@ -364,7 +364,7 @@ async fn test_multiple_settlement_txns() {
         .map(|_| (1u64, SuiAddress::random_for_testing_only()))
         .collect::<Vec<_>>();
 
-    let tx = make_send_to_multi_account_tx(&amounts_and_recipients, sender, gas, rgp);
+    let tx = make_send_to_multi_account_tx(amounts_and_recipients.clone(), sender, gas, rgp);
 
     let res = test_cluster.sign_and_execute_transaction(&tx).await;
     let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
@@ -644,37 +644,12 @@ fn withdraw_from_balance_tx_with_reservation(
     gas: ObjectRef,
     rgp: u64,
 ) -> TransactionData {
-    let mut builder = ProgrammableTransactionBuilder::new();
-
-    // Add withdraw reservation
-    let withdraw_arg = sui_types::transaction::FundsWithdrawalArg::balance_from_sender(
-        reservation_amount,
-        sui_types::type_input::TypeInput::from(sui_types::gas_coin::GAS::type_tag()),
-    );
-    let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
-
-    let amount_arg = builder.pure(U256::from(amount)).unwrap();
-
-    let split_withdraw_arg = builder.programmable_move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("funds_accumulator").unwrap(),
-        Identifier::new("withdrawal_split").unwrap(),
-        vec!["0x2::balance::Balance<0x2::sui::SUI>".parse().unwrap()],
-        vec![withdraw_arg, amount_arg],
-    );
-
-    let coin = builder.programmable_move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("coin").unwrap(),
-        Identifier::new("redeem_funds").unwrap(),
-        vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![split_withdraw_arg],
-    );
-
-    builder.transfer_arg(sender, coin);
-
-    let tx = TransactionKind::ProgrammableTransaction(builder.finish());
-    TransactionData::new(tx, sender, gas, 10000000, rgp)
+    TestTransactionBuilder::new(sender, gas, rgp)
+        .transfer_sui_to_address_balance(
+            FundSource::address_fund_with_reservation(reservation_amount),
+            vec![(amount, dbg_addr(2))],
+        )
+        .build()
 }
 
 fn make_send_to_account_tx(
@@ -684,39 +659,18 @@ fn make_send_to_account_tx(
     gas: ObjectRef,
     rgp: u64,
 ) -> TransactionData {
-    make_send_to_multi_account_tx(&[(amount, recipient)], sender, gas, rgp)
+    make_send_to_multi_account_tx(vec![(amount, recipient)], sender, gas, rgp)
 }
 
 fn make_send_to_multi_account_tx(
-    amounts_and_recipients: &[(u64, SuiAddress)],
+    amounts_and_recipients: Vec<(u64, SuiAddress)>,
     sender: SuiAddress,
     gas: ObjectRef,
     rgp: u64,
 ) -> TransactionData {
-    let mut builder = ProgrammableTransactionBuilder::new();
-
-    for (amount, recipient) in amounts_and_recipients {
-        let amount_arg = builder.pure(*amount).unwrap();
-        let recipient_arg = builder.pure(recipient).unwrap();
-        let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount_arg]));
-
-        let Argument::Result(coin_idx) = coin else {
-            panic!("coin is not a result");
-        };
-
-        let coin = Argument::NestedResult(coin_idx, 0);
-
-        builder.programmable_move_call(
-            SUI_FRAMEWORK_PACKAGE_ID,
-            Identifier::new("coin").unwrap(),
-            Identifier::new("send_funds").unwrap(),
-            vec!["0x2::sui::SUI".parse().unwrap()],
-            vec![coin, recipient_arg],
-        );
-    }
-
-    let tx = TransactionKind::ProgrammableTransaction(builder.finish());
-    TransactionData::new(tx, sender, gas, 10000000, rgp)
+    TestTransactionBuilder::new(sender, gas, rgp)
+        .transfer_sui_to_address_balance(FundSource::coin(gas), amounts_and_recipients)
+        .build()
 }
 
 #[sim_test]
