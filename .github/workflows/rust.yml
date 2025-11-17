@@ -236,29 +236,34 @@ jobs:
           maximum-size: 32GB
           disk-root: "C:"
 
-      - name: Setup WSL
-        uses: Vampire/setup-wsl@v2
-        with:
-          distribution: Ubuntu-22.04
+      # - name: Setup WSL
+      #   uses: Vampire/setup-wsl@v2
+      #   with:
+      #     distribution: Ubuntu-22.04
       
-      - name: Install Rust and dependencies in WSL
-        shell: wsl-bash {0}
-        run: |
-          sudo apt update
-          sudo apt install -y build-essential curl file git cmake llvm clang
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          source $HOME/.cargo/env
-          rustup default stable
-          cargo install cargo-nextest --locked
-      
-      - name: Run tests in WSL
-        shell: wsl-bash {0}
-        run: |
-          source $HOME/.cargo/env
-          cargo nextest run -p sui --no-fail-fast --profile ci
+      # - name: Install Rust and dependencies in WSL
+      #   shell: wsl-bash {0}
+      #   run: |
+      #     sudo apt update
+      #     sudo apt install -y build-essential curl file git cmake llvm clang
+      #     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      #     source $HOME/.cargo/env
+      #     rustup default stable
+      #     cargo install cargo-nextest --locked
+      # 
+      # - name: Run tests in WSL
+      #   shell: wsl-bash {0}
+      #   run: |
+      #     source $HOME/.cargo/env
+      #     cargo nextest run -p sui --no-fail-fast --profile ci
 
-      # - name: cargo test Sui CLI
-        # shell: bash
-        # run: |
-          # cargo nextest run -p sui --no-fail-fast --profile ci
+      - name: Install cargo-nextest
+        shell: bash
+        run: |
+          cargo install cargo-nextest
+
+      - name: cargo test Sui CLI
+        shell: bash
+        run: |
+          cargo nextest run -p sui --release --no-fail-fast --profile ci
 
