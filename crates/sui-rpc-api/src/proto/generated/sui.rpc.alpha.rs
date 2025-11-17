@@ -36,17 +36,20 @@ pub struct AuthenticatedEvent {
     /// The checkpoint sequence number where this event was recorded.
     #[prost(uint64, optional, tag = "1")]
     pub checkpoint: ::core::option::Option<u64>,
+    /// The accumulator version that this event is settled into.
+    #[prost(uint64, optional, tag = "2")]
+    pub accumulator_version: ::core::option::Option<u64>,
     /// Index of the transaction within the checkpoint where the event was emitted.
-    #[prost(uint32, optional, tag = "2")]
+    #[prost(uint32, optional, tag = "3")]
     pub transaction_idx: ::core::option::Option<u32>,
     /// Index of the event within the transaction's event list.
-    #[prost(uint32, optional, tag = "3")]
+    #[prost(uint32, optional, tag = "4")]
     pub event_idx: ::core::option::Option<u32>,
     /// The event payload.
-    #[prost(message, optional, tag = "4")]
+    #[prost(message, optional, tag = "5")]
     pub event: ::core::option::Option<::sui_rpc::proto::sui::rpc::v2::Event>,
     /// The stream identifier (owner address) for which this event is authenticated.
-    #[prost(string, optional, tag = "5")]
+    #[prost(string, optional, tag = "6")]
     pub stream_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Generated client implementations.
