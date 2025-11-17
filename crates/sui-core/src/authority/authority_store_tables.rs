@@ -610,15 +610,19 @@ impl AuthorityPerpetualTables {
         Ok(Some(transaction))
     }
 
-    /// Insert an executed transaction digest into the executed_transaction_digests table.
+    /// Batch insert executed transaction digests for a given epoch.
     /// Used by formal snapshot restore to backfill transaction digests from the previous epoch.
-    pub fn insert_executed_transaction_digest(
+    pub fn insert_executed_transaction_digests_batch(
         &self,
         epoch: EpochId,
-        digest: &TransactionDigest,
+        digests: impl Iterator<Item = TransactionDigest>,
     ) -> SuiResult {
-        self.executed_transaction_digests
-            .insert(&(epoch, *digest), &())?;
+        let mut batch = self.executed_transaction_digests.batch();
+        batch.insert_batch(
+            &self.executed_transaction_digests,
+            digests.map(|digest| ((epoch, digest), ())),
+        )?;
+        batch.write()?;
         Ok(())
     }
 
