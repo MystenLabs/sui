@@ -8,7 +8,17 @@ license = "Apache-2.0"
 
 [dependencies]
 itertools.workspace = true
+proptest.workspace = true
+insta.workspace = true
+
 move-binary-format.workspace = true
 move-core-types.workspace = true
+move-command-line-common.workspace = true
 petgraph.workspace = true
-proptest.workspace = true
+
+[dev-dependencies]
+datatest-stable.workspace = true
+
+[[test]]
+name = "borrow_graph_tests"
+harness = false
