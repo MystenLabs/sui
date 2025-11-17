@@ -7,6 +7,12 @@ module sui::priority_queue;
 /// For when heap is empty and there's no data to pop.
 const EPopFromEmptyHeap: u64 = 0;
 
+/// For when the value vector and priority vector have mismatched lengths
+const ELengthMismatch: u64 = 1;
+
+/// For when access a node of a priority_queue at an invalid index
+const EIndexOutOfBounds: u64 = 2;
+
 /// Struct representing a priority queue. The `entries` vector represents a max
 /// heap structure, where entries[0] is the root, entries[1] and entries[2] are the
 /// left child and right child of the root, etc. More generally, the children of
@@ -58,7 +64,7 @@ public fun new_entry<T: drop>(priority: u64, value: T): Entry<T> {
 
 public fun create_entries<T: drop>(mut p: vector<u64>, mut v: vector<T>): vector<Entry<T>> {
     let len = p.length();
-    assert!(v.length() == len, 0);
+    assert!(v.length() == len, ELengthMismatch);
     let mut res = vector[];
     len.do!(|_| {
         let priority = p.pop_back();
@@ -93,7 +99,7 @@ fun max_heapify_recursive<T: drop>(v: &mut vector<Entry<T>>, len: u64, i: u64) {
     if (len == 0) {
         return
     };
-    assert!(i < len, 1);
+    assert!(i < len, EIndexOutOfBounds);
     let left = i * 2 + 1;
     let right = left + 1;
     let mut max = i;
