@@ -119,12 +119,12 @@ where
             tx_hash,
             log_index_in_tx: event_idx,
             log: log.clone(),
-            block_timestamp,
+            // block_timestamp,
         };
         let bridge_event = EthBridgeEvent::try_from_eth_log(&eth_log)
             .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
         bridge_event
-            .try_into_bridge_action(tx_hash, event_idx, block_timestamp)?
+            .try_into_bridge_action(tx_hash, event_idx, /* block_timestamp */)?
             .ok_or(BridgeError::BridgeEventNotActionable)
     }
 
@@ -292,30 +292,18 @@ where
             log, tx_hash
         )))?;
 
-        // get block 
-        let block = self
-            .provider
-            .get_block(block_number)
-            .await
-            .map_err(BridgeError::from)?
-            .ok_or(BridgeError::ProviderError(
-                "Provider returns block without data".into(),
-            ))?;
-        let block_timestamp_ms = Some(block.timestamp.as_u64()) * 1000;
-
         Ok(EthLog {
             block_number,
             tx_hash,
             log_index_in_tx: log_index_in_tx as u16,
             log,
-            block_timestamp_ms,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use ethers::types::{Address as EthAddress, Block, Log, TransactionReceipt, TxHash, U256, U64};
+    use ethers::types::{Address as EthAddress, Log, TransactionReceipt, U256, U64};
     use prometheus::Registry;
 
     use super::*;

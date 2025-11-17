@@ -1043,7 +1043,6 @@ mod tests {
             eth_address: EthAddress::random(),
             token_id: TOKEN_ID_SUI,
             amount_sui_adjusted: 100,
-            timestamp_ms: None,
         };
         let emitted_event_1 = MoveTokenDepositedEvent {
             seq_num: sanitized_event_1.nonce,

@@ -245,7 +245,7 @@ where
                 match bridge_event.try_into_bridge_action(
                     log.tx_hash,
                     log.log_index_in_tx,
-                    log.block_timestamp,
+                    // log.block_timestamp,
                 ) {
                     Ok(Some(action)) => {
                         metrics.last_observed_actions_seq_num.with_label_values(&[
@@ -409,7 +409,6 @@ mod tests {
             tx_hash: log.transaction_hash.unwrap(),
             block_number: log_block_num,
             log_index_in_tx,
-            block_timestamp_ms: Some(0),
         };
         let end_block_num = log_block_num + 15;
 
