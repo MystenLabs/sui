@@ -418,7 +418,7 @@ async fn new_authority_and_publish(path: &str) -> TestEnv {
 
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config.enable_accumulators_for_testing();
+    protocol_config.set_enable_accumulators_for_testing(true);
     protocol_config
         .set_per_object_congestion_control_mode_for_testing(PerObjectCongestionControlMode::None);
 

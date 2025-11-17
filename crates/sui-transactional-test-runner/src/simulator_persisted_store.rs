@@ -135,7 +135,7 @@ impl PersistedStore {
                 move |_, cfg| {
                     let mut c = cfg;
                     if enable_accumulators {
-                        c.enable_accumulators_for_testing();
+                        c.set_enable_accumulators_for_testing(true);
                     }
                     if enable_authenticated_event_streams {
                         c.enable_authenticated_event_streams_for_testing();
