@@ -761,10 +761,10 @@ fn get_manifest_address_info(
             }))
         }
         (Some(published_at), Some(original_id)) => {
-            let published_at = parse_address_literal(&published_at)?;
             if original_id == AccountAddress::ZERO {
                 return Ok(None);
             }
+            let published_at = parse_address_literal(&published_at)?;
             Ok(Some(PublishAddresses {
                 published_at: crate::schema::PublishedID(published_at),
                 original_id: crate::schema::OriginalID(original_id),
