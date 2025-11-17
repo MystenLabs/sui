@@ -2287,7 +2287,7 @@ async fn test_soft_bundle_different_gas_payers() {
 async fn test_multiple_deposits_merged_in_effects() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
+        cfg.set_enable_accumulators_for_testing(true);
         cfg
     });
 
