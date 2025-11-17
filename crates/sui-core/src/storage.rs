@@ -543,7 +543,7 @@ impl<I> Iterator for BatchedEventIterator<'_, I>
 where
     I: Iterator<Item = Result<crate::rpc_index::EventIndexKey, TypedStoreError>>,
 {
-    type Item = Result<(u64, u32, u32, sui_types::event::Event), TypedStoreError>;
+    type Item = Result<(u64, u64, u32, u32, sui_types::event::Event), TypedStoreError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let key = match self.key_iter.next()? {
@@ -577,6 +577,7 @@ where
 
         Some(Ok((
             key.checkpoint_seq,
+            key.accumulator_version,
             key.transaction_idx,
             key.event_index,
             event,
@@ -728,20 +729,23 @@ impl RpcIndexes for RestReadStore {
         &self,
         stream_id: SuiAddress,
         start_checkpoint: u64,
+        start_accumulator_version: Option<u64>,
         start_transaction_idx: Option<u32>,
         start_event_idx: Option<u32>,
         end_checkpoint: u64,
         limit: u32,
     ) -> sui_types::storage::error::Result<
         Box<
-            dyn Iterator<Item = Result<(u64, u32, u32, sui_types::event::Event), TypedStoreError>>
-                + '_,
+            dyn Iterator<
+                    Item = Result<(u64, u64, u32, u32, sui_types::event::Event), TypedStoreError>,
+                > + '_,
         >,
     > {
         let index = self.index()?;
         let key_iter = index.event_iter(
             stream_id,
             start_checkpoint,
+            start_accumulator_version.unwrap_or(0),
             start_transaction_idx.unwrap_or(0),
             start_event_idx.unwrap_or(0),
             end_checkpoint,
