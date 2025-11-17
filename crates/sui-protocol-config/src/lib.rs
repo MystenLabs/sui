@@ -903,6 +903,10 @@ struct FeatureFlags {
     // Enables address aliases.
     #[serde(skip_serializing_if = "is_false")]
     address_aliases: bool,
+
+    // If true, enable object funds withdraw.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_object_funds_withdraw: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4680,6 +4684,10 @@ impl ProtocolConfig {
 
     pub fn set_consensus_skip_gced_accept_votes_for_testing(&mut self, val: bool) {
         self.feature_flags.consensus_skip_gced_accept_votes = val;
+    }
+
+    pub fn set_enable_object_funds_withdraw_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_object_funds_withdraw = val;
     }
 }
 
