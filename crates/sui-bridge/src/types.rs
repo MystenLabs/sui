@@ -284,6 +284,16 @@ pub struct EthToSuiBridgeAction {
     pub eth_bridge_event: EthToSuiTokenBridgeV1,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct EthToSuiTokenTransferV2 {
+    // Digest of the transaction where the event was emitted
+    pub eth_tx_hash: EthTransactionHash,
+    // The index of the event in the transaction
+    pub eth_event_index: u16,
+    pub eth_bridge_event: EthToSuiTokenBridgeV1,
+    pub timestamp_ms: u64,
+}
+
 #[derive(
     Debug,
     Serialize,
@@ -407,7 +417,7 @@ pub enum BridgeAction {
     /// Sui to Eth bridge action V2
     SuiToEthTokenTransferV2(SuiToEthTokenTransferV2),
     // /// Eth to sui bridge action V2
-    // EthToSuiTokenTransferV2(EthToSuiTokenTransferV2),
+    EthToSuiTokenTransferV2(EthToSuiTokenTransferV2),
 }
 
 impl BridgeAction {
@@ -435,6 +445,7 @@ impl BridgeAction {
             BridgeAction::SuiToEthTokenTransfer(a) => a.sui_chain_id,
             BridgeAction::SuiToEthTokenTransferV2(a) => a.sui_chain_id,
             BridgeAction::EthToSuiBridgeAction(a) => a.eth_bridge_event.eth_chain_id,
+            BridgeAction::EthToSuiTokenTransferV2(a) => a.eth_bridge_event.eth_chain_id,
             BridgeAction::BlocklistCommitteeAction(a) => a.chain_id,
             BridgeAction::EmergencyAction(a) => a.chain_id,
             BridgeAction::LimitUpdateAction(a) => a.chain_id,
@@ -465,6 +476,7 @@ impl BridgeAction {
             BridgeAction::SuiToEthTokenTransfer(_) => BridgeActionType::TokenTransfer,
             BridgeAction::SuiToEthTokenTransferV2(_) => BridgeActionType::TokenTransfer,
             BridgeAction::EthToSuiBridgeAction(_) => BridgeActionType::TokenTransfer,
+            BridgeAction::EthToSuiTokenTransferV2(_) => BridgeActionType::TokenTransfer,
             BridgeAction::BlocklistCommitteeAction(_) => BridgeActionType::UpdateCommitteeBlocklist,
             BridgeAction::EmergencyAction(_) => BridgeActionType::EmergencyButton,
             BridgeAction::LimitUpdateAction(_) => BridgeActionType::LimitUpdate,
@@ -482,6 +494,7 @@ impl BridgeAction {
             BridgeAction::SuiToEthTokenTransfer(a) => a.nonce,
             BridgeAction::SuiToEthTokenTransferV2(a) => a.nonce,
             BridgeAction::EthToSuiBridgeAction(a) => a.eth_bridge_event.nonce,
+            BridgeAction::EthToSuiTokenTransferV2(a) => a.eth_bridge_event.nonce,
             BridgeAction::BlocklistCommitteeAction(a) => a.nonce,
             BridgeAction::EmergencyAction(a) => a.nonce,
             BridgeAction::LimitUpdateAction(a) => a.nonce,
@@ -498,6 +511,7 @@ impl BridgeAction {
             BridgeAction::SuiToEthTokenTransfer(_) => APPROVAL_THRESHOLD_TOKEN_TRANSFER,
             BridgeAction::SuiToEthTokenTransferV2(_) => APPROVAL_THRESHOLD_TOKEN_TRANSFER,
             BridgeAction::EthToSuiBridgeAction(_) => APPROVAL_THRESHOLD_TOKEN_TRANSFER,
+            BridgeAction::EthToSuiTokenTransferV2(_) => APPROVAL_THRESHOLD_TOKEN_TRANSFER,
             BridgeAction::BlocklistCommitteeAction(_) => APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST,
             BridgeAction::EmergencyAction(a) => match a.action_type {
                 EmergencyActionType::Pause => APPROVAL_THRESHOLD_EMERGENCY_PAUSE,
@@ -526,6 +540,7 @@ impl BridgeAction {
                 })
             }
             BridgeAction::EthToSuiBridgeAction(_) => self,
+            BridgeAction::EthToSuiTokenTransferV2(_) => self,
             BridgeAction::BlocklistCommitteeAction(_) => self,
             BridgeAction::EmergencyAction(_) => self,
             BridgeAction::LimitUpdateAction(_) => self,
@@ -652,6 +667,7 @@ pub struct EthLog {
     pub tx_hash: H256,
     pub log_index_in_tx: u16,
     pub log: Log,
+    pub block_timestamp_ms: u64,
 }
 
 /// The version of EthLog that does not have

@@ -45,6 +45,9 @@ pub async fn build_eth_transaction(
         BridgeAction::EthToSuiBridgeAction(_) => {
             unreachable!()
         }
+        BridgeAction::EthToSuiTokenTransferV2(_) => {
+            unreachable!()
+        }
         BridgeAction::EmergencyAction(action) => {
             build_emergency_op_approve_transaction(contract_address, signer, action.clone(), sigs)
                 .await

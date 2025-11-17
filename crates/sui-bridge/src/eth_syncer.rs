@@ -248,7 +248,7 @@ mod tests {
             tx_hash: log.transaction_hash.unwrap(),
             log_index_in_tx: 0,
             log: log.clone(),
-            // block_timestamp: Some(0),
+            block_timestamp_ms: 0,
         };
         mock_get_logs(
             &mock_provider,
@@ -322,7 +322,7 @@ mod tests {
             tx_hash: log1.transaction_hash.unwrap(),
             log_index_in_tx: 0,
             log: log1.clone(),
-            // block_timestamp: Some(0),
+            block_timestamp_ms: 0,
         };
         mock_get_logs(
             &mock_provider,
@@ -375,7 +375,7 @@ mod tests {
             tx_hash: log1.transaction_hash.unwrap(),
             log_index_in_tx: 0,
             log: log1.clone(),
-            // block_timestamp: Some(0),
+            block_timestamp_ms: 0,
         };
         mock_get_logs(
             &mock_provider,
@@ -396,7 +396,7 @@ mod tests {
             tx_hash: log2.transaction_hash.unwrap(),
             log_index_in_tx: 0,
             log: log2.clone(),
-            // block_timestamp: Some(0),
+            block_timestamp_ms: 0,
         };
         mock_get_logs(
             &mock_provider,
@@ -463,14 +463,14 @@ mod tests {
             tx_hash: log.transaction_hash.unwrap(),
             log_index_in_tx: 0,
             log: log.clone(),
-            // block_timestamp: Some(0),
+            block_timestamp_ms: 0,
         };
         let eth_log2 = EthLog {
             block_number: last_finalized_block,
             tx_hash: log2.transaction_hash.unwrap(),
             log_index_in_tx: 0,
             log: log2.clone(),
-            // block_timestamp: Some(0),
+            block_timestamp_ms: 0,
         };
         // First query handles [start, start + ETH_LOG_QUERY_MAX_BLOCK_RANGE - 1]
         mock_get_logs(

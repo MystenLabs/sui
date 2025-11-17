@@ -9,6 +9,7 @@ use crate::types::BridgeAction;
 use crate::types::BridgeActionType;
 use crate::types::EmergencyAction;
 use crate::types::EthToSuiBridgeAction;
+use crate::types::EthToSuiTokenTransferV2;
 use crate::types::EvmContractUpgradeAction;
 use crate::types::LimitUpdateAction;
 use crate::types::SuiToEthBridgeAction;
@@ -215,6 +216,53 @@ impl BridgeMessageEncoding for EthToSuiBridgeAction {
 
         // Add token amount
         bytes.extend_from_slice(&e.sui_adjusted_amount.to_be_bytes());
+
+        Ok(bytes)
+    }
+}
+
+impl BridgeMessageEncoding for EthToSuiTokenTransferV2 {
+    fn as_bytes(&self) -> Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+        let e = &self.eth_bridge_event;
+        // Add message type
+        bytes.push(BridgeActionType::TokenTransfer as u8);
+        // Add message version
+        bytes.push(TOKEN_TRANSFER_MESSAGE_VERSION_V1);
+        // Add nonce
+        bytes.extend_from_slice(&e.nonce.to_be_bytes());
+        // Add source chain id
+        bytes.push(e.eth_chain_id as u8);
+
+        // Add payload bytes
+        bytes.extend_from_slice(&self.as_payload_bytes()?);
+
+        Ok(bytes)
+    }
+
+    fn as_payload_bytes(&self) -> Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+        let e = &self.eth_bridge_event;
+
+        // Add source address length
+        bytes.push(EthAddress::len_bytes() as u8);
+        // Add source address
+        bytes.extend_from_slice(e.eth_address.as_bytes());
+        // Add dest chain id
+        bytes.push(e.sui_chain_id as u8);
+        // Add dest address length
+        bytes.push(SUI_ADDRESS_LENGTH as u8);
+        // Add dest address
+        bytes.extend_from_slice(&e.sui_address.to_vec());
+
+        // Add token id
+        bytes.push(e.token_id);
+
+        // Add token amount
+        bytes.extend_from_slice(&e.sui_adjusted_amount.to_be_bytes());
+
+        // Add timestamp
+        bytes.extend_from_slice(&self.timestamp_ms.to_be_bytes());
 
         Ok(bytes)
     }

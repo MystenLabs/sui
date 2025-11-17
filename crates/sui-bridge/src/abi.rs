@@ -7,7 +7,7 @@ use crate::encoding::{
 };
 use crate::encoding::{
     COMMITTEE_BLOCKLIST_MESSAGE_VERSION, EMERGENCY_BUTTON_MESSAGE_VERSION,
-    TOKEN_TRANSFER_MESSAGE_VERSION_V1, TOKEN_TRANSFER_MESSAGE_VERSION_V2,
+    TOKEN_TRANSFER_MESSAGE_VERSION_V1,
 };
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::ParsedTokenTransferMessage;
@@ -552,7 +552,8 @@ mod tests {
                 transaction_log_index: None,
                 log_type: None,
                 removed: Some(false),
-            }
+            },
+            block_timestamp_ms: 0,
         };
         let event = EthBridgeEvent::try_from_eth_log(&action).unwrap();
         assert_eq!(

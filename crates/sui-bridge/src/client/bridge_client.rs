@@ -71,6 +71,11 @@ impl BridgeClient {
                 Hex::encode(e.eth_tx_hash.0),
                 e.eth_event_index
             ),
+            BridgeAction::EthToSuiTokenTransferV2(e) => format!(
+                "sign/bridge_tx/eth/sui/{}/{}",
+                Hex::encode(e.eth_tx_hash.0),
+                e.eth_event_index
+            ),
             BridgeAction::BlocklistCommitteeAction(a) => {
                 let chain_id = (a.chain_id as u8).to_string();
                 let nonce = a.nonce.to_string();

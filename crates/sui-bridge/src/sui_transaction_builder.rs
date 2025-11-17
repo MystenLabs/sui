@@ -32,15 +32,17 @@ pub fn build_sui_transaction(
 ) -> BridgeResult<TransactionData> {
     // TODO: Check chain id?
     match action.data() {
-        BridgeAction::EthToSuiBridgeAction(_) => build_token_bridge_approve_transaction(
-            client_address,
-            gas_object_ref,
-            action,
-            true,
-            bridge_object_arg,
-            sui_token_type_tags,
-            rgp,
-        ),
+        BridgeAction::EthToSuiBridgeAction(_) | BridgeAction::EthToSuiTokenTransferV2(_) => {
+            build_token_bridge_approve_transaction(
+                client_address,
+                gas_object_ref,
+                action,
+                true,
+                bridge_object_arg,
+                sui_token_type_tags,
+                rgp,
+            )
+        }
         BridgeAction::SuiToEthBridgeAction(_) => build_token_bridge_approve_transaction(
             client_address,
             gas_object_ref,
@@ -120,6 +122,7 @@ fn build_token_bridge_approve_transaction(
     let mut builder = ProgrammableTransactionBuilder::new();
 
     let (source_chain, seq_num, sender, target_chain, target, token_type, amount) =
+        //TODO build txn with v2 payload
         match bridge_action {
             BridgeAction::SuiToEthBridgeAction(a) => {
                 let bridge_event = a.sui_bridge_event;

@@ -409,6 +409,7 @@ mod tests {
             tx_hash: log.transaction_hash.unwrap(),
             block_number: log_block_num,
             log_index_in_tx,
+            block_timestamp_ms: 0,
         };
         let end_block_num = log_block_num + 15;
 
