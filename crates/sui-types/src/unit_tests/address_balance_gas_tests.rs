@@ -66,7 +66,7 @@ fn test_address_balance_payment_requires_accumulators_enabled() {
 #[test]
 fn test_address_balance_payment_requires_feature_flag() {
     let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-    config.enable_accumulators_for_testing();
+    config.set_enable_accumulators_for_testing(true);
 
     let tx_data = create_test_transaction_data(
         vec![],

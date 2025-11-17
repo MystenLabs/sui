@@ -4207,7 +4207,7 @@ impl ProtocolConfig {
                 95 => {
                     cfg.type_name_id_base_cost = Some(52);
 
-                    // Reudce the frequency of checkpoint splitting under high TPS.
+                    // Reduce the frequency of checkpoint splitting under high TPS.
                     cfg.max_transactions_per_checkpoint = Some(20_000);
                 }
                 96 => {
@@ -4583,8 +4583,8 @@ impl ProtocolConfig {
             .prepend_prologue_tx_in_consensus_commit_in_checkpoints = val;
     }
 
-    pub fn enable_accumulators_for_testing(&mut self) {
-        self.feature_flags.enable_accumulators = true;
+    pub fn set_enable_accumulators_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_accumulators = val;
     }
 
     pub fn create_root_accumulator_object_for_testing(&mut self) {
@@ -4598,7 +4598,7 @@ impl ProtocolConfig {
     }
 
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
-        self.enable_accumulators_for_testing();
+        self.set_enable_accumulators_for_testing(true);
         self.feature_flags.enable_authenticated_event_streams = true;
         self.feature_flags
             .include_checkpoint_artifacts_digest_in_summary = true;
