@@ -1,0 +1,5 @@
+0 = &mut local_0
+1 = &mut 0.a
+2 = &mut local_1
+3 = &mut 2.a
+writable: 1,3
