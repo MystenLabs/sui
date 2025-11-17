@@ -9,11 +9,25 @@ public struct Vault has key {
     id: UID,
 }
 
-public fun new(ctx: &mut TxContext) {
-    let vault = Vault {
+public fun create(ctx: &mut TxContext): Vault {
+    Vault {
         id: object::new(ctx),
-    };
+    }
+}
+
+public fun new_owned(ctx: &mut TxContext) {
+    let vault = create(ctx);
     transfer::transfer(vault, ctx.sender());
+}
+
+public fun new_party(ctx: &mut TxContext) {
+    let vault = create(ctx);
+    transfer::party_transfer(vault, sui::party::single_owner(ctx.sender()));
+}
+
+public fun new_shared(ctx: &mut TxContext) {
+    let vault = create(ctx);
+    transfer::share_object(vault);
 }
 
 public fun withdraw_funds<T>(vault: &mut Vault, amount: u64): Balance<T> {
