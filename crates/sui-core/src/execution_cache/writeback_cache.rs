@@ -230,8 +230,6 @@ struct UncommittedData {
 
     executed_effects_digests: DashMap<TransactionDigest, TransactionEffectsDigest>,
 
-    executed_transaction_digests_by_epoch: DashMap<(EpochId, TransactionDigest), ()>,
-
     // Transaction outputs that have not yet been written to the DB. Items are removed from this
     // table as they are flushed to the db.
     pending_transaction_writes: DashMap<TransactionDigest, Arc<TransactionOutputs>>,
@@ -261,7 +259,6 @@ impl UncommittedData {
             markers: DashMap::with_shard_amount(2048),
             transaction_effects: DashMap::with_shard_amount(2048),
             executed_effects_digests: DashMap::with_shard_amount(2048),
-            executed_transaction_digests_by_epoch: DashMap::with_shard_amount(2048),
             pending_transaction_writes: DashMap::with_shard_amount(2048),
             fastpath_transaction_outputs: MokaCache::builder(8)
                 .max_capacity(randomize_cache_capacity_in_tests(
@@ -280,7 +277,6 @@ impl UncommittedData {
         self.markers.clear();
         self.transaction_effects.clear();
         self.executed_effects_digests.clear();
-        self.executed_transaction_digests_by_epoch.clear();
         self.pending_transaction_writes.clear();
         self.fastpath_transaction_outputs.invalidate_all();
         self.transaction_events.clear();
@@ -299,7 +295,6 @@ impl UncommittedData {
                     && self.markers.is_empty()
                     && self.transaction_effects.is_empty()
                     && self.executed_effects_digests.is_empty()
-                    && self.executed_transaction_digests_by_epoch.is_empty()
                     && self.transaction_events.is_empty()
                     && self.unchanged_loaded_runtime_objects.is_empty()
                     && self
@@ -995,10 +990,6 @@ impl WritebackCache {
             .executed_effects_digests
             .insert(tx_digest, effects_digest);
 
-        self.dirty
-            .executed_transaction_digests_by_epoch
-            .insert((epoch_id, tx_digest), ());
-
         self.executed_effects_digests_notify_read
             .notify(&tx_digest, &effects_digest);
 
@@ -1193,11 +1184,6 @@ impl WritebackCache {
             .executed_effects_digests
             .remove(&tx_digest)
             .expect("executed effects must exist");
-
-        self.dirty
-            .executed_transaction_digests_by_epoch
-            .remove(&(epoch, tx_digest))
-            .expect("executed transaction digest must exist");
 
         // Move dirty markers to cache
         for (object_key, marker_value) in markers.iter() {
