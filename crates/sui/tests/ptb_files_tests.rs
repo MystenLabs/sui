@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use normalize_line_endings::normalized;
 #[cfg(not(msim))]
 use std::path::Path;
 #[cfg(not(msim))]
@@ -93,13 +94,12 @@ async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
             results.push(format!("{:?}", e));
         }
     }
-    use normalize_line_endings::normalized;
+
+    let results = results.join("\n").replace("\r\n", "\n");
+    let normalize_line_endings = normalized(results.chars());
 
     // === FINALLY DO THE ASSERTION ===
-    insta::assert_snapshot!(
-        fname(),
-        &String::from_iter(normalized(results.join("\n").chars()))
-    );
+    insta::assert_snapshot!(fname(), &String::from_iter(normalize_line_endings));
 
     Ok(())
 }
