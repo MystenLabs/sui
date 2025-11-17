@@ -5,4 +5,3 @@
 --assign c0 coins.0
 --assign "c1" coins.1
 --merge-coins gas [c0, c1]
-

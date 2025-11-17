@@ -8,4 +8,3 @@
 --split-coins gas [1,2,3] 
 --assign s
 --transfer-objects s @0x1
-
