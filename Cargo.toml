@@ -232,6 +232,7 @@ members = [
 version = "1.62.0"
 
 [profile.windows]
+inherits = "test"
 opt-level = 2 # to avoid stack overflows on Windows debug builds
 
 [profile.release]
