@@ -1,0 +1,11 @@
+---
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
+---
+  Module: pack
+    Function: pack (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Move(lcl_0)
+        reg_1 : u64 = Move(lcl_1)
+        reg_2 : u64 = Move(lcl_2)
+        reg_3 : 0x0::pack::S = Pack<S>(reg_0 : u64, reg_1 : u64, reg_2 : u64)
+        Return(reg_3 : 0x0::pack::S)

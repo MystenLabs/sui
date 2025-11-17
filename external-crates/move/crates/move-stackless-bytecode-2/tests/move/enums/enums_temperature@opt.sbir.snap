@@ -1,0 +1,68 @@
+---
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
+---
+  Module: temperature
+    Function: c (entry: LBL_0)
+      Label LBL_0:
+        reg_1 : 0x42::temperature::Temperature = PackVariant<Celcius>(Immediate(0u32))
+        Return(reg_1 : 0x42::temperature::Temperature)
+
+
+    Function: dtor (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : 0x42::temperature::Temperature = Move(lcl_0)
+        lcl_2 = reg_0 : 0x42::temperature::Temperature
+        reg_1 : &0x42::temperature::Temperature = ImmBorrow(lcl_2)
+        lcl_1 = reg_1 : &0x42::temperature::Temperature
+        reg_2 : &0x42::temperature::Temperature = Copy(lcl_1)
+        Switch(reg_2 : &0x42::temperature::Temperature : 0x42::temperature::Temperature) Case: Fahrenheit (lbl 6), Case: Celcius (lbl 13)
+
+      Label LBL_6:
+        reg_3 : &0x42::temperature::Temperature = Move(lcl_1)
+        reg_4 : &u64 = UnpackVariantImmRef<Fahrenheit>(reg_3 : &0x42::temperature::Temperature)
+        Drop(reg_4 : &u64)
+        reg_5 : 0x42::temperature::Temperature = Move(lcl_2)
+        reg_6 : u64 = UnpackVariant<Fahrenheit>(reg_5 : 0x42::temperature::Temperature)
+        Drop(reg_6 : u64)
+        Jump(LBL_19)
+
+      Label LBL_13:
+        reg_7 : &0x42::temperature::Temperature = Move(lcl_1)
+        reg_8 : &u32 = UnpackVariantImmRef<Celcius>(reg_7 : &0x42::temperature::Temperature)
+        Drop(reg_8 : &u32)
+        reg_9 : 0x42::temperature::Temperature = Move(lcl_2)
+        reg_10 : u32 = UnpackVariant<Celcius>(reg_9 : 0x42::temperature::Temperature)
+        Drop(reg_10 : u32)
+
+      Label LBL_19:
+        Return()
+
+
+    Function: f (entry: LBL_0)
+      Label LBL_0:
+        reg_1 : 0x42::temperature::Temperature = PackVariant<Fahrenheit>(Immediate(32u64))
+        Return(reg_1 : 0x42::temperature::Temperature)
+
+
+    Function: is_temperature_fahrenheit (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : &0x42::temperature::Temperature = Move(lcl_0)
+        lcl_2 = reg_0 : &0x42::temperature::Temperature
+        reg_1 : &0x42::temperature::Temperature = Copy(lcl_2)
+        Switch(reg_1 : &0x42::temperature::Temperature : 0x42::temperature::Temperature) Case: Fahrenheit (lbl 4), Case: Celcius (lbl 10)
+
+      Label LBL_4:
+        reg_2 : &0x42::temperature::Temperature = Move(lcl_2)
+        reg_3 : &u64 = UnpackVariantImmRef<Fahrenheit>(reg_2 : &0x42::temperature::Temperature)
+        Drop(reg_3 : &u64)
+        lcl_1 = Immediate(true)
+        Jump(LBL_14)
+
+      Label LBL_10:
+        reg_5 : &0x42::temperature::Temperature = Move(lcl_2)
+        Drop(reg_5 : &0x42::temperature::Temperature)
+        lcl_1 = Immediate(false)
+
+      Label LBL_14:
+        reg_7 : bool = Move(lcl_1)
+        Return(reg_7 : bool)

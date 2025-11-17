@@ -1,0 +1,111 @@
+---
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
+---
+  Module: exp
+    Function: pop_back (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(0u64)
+        Abort(reg_0 : u64)
+
+
+    Function: push_back (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(0u64)
+        Abort(reg_0 : u64)
+
+
+    Function: step (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : 0x42::exp::Exp = Move(lcl_1)
+        lcl_4 = reg_0 : 0x42::exp::Exp
+        reg_1 : &0x42::exp::Exp = ImmBorrow(lcl_4)
+        lcl_3 = reg_1 : &0x42::exp::Exp
+        reg_2 : &0x42::exp::Exp = Copy(lcl_3)
+        Switch(reg_2 : &0x42::exp::Exp : 0x42::exp::Exp) Case: Push (lbl 6), Case: PushTwo (lbl 16), Case: Add (lbl 33), Case: Sub (lbl 49), Case: Mul (lbl 65)
+
+      Label LBL_6:
+        reg_3 : &0x42::exp::Exp = Move(lcl_3)
+        reg_4 : &u64 = UnpackVariantImmRef<Push>(reg_3 : &0x42::exp::Exp)
+        Drop(reg_4 : &u64)
+        reg_5 : 0x42::exp::Exp = Move(lcl_4)
+        reg_6 : u64 = UnpackVariant<Push>(reg_5 : 0x42::exp::Exp)
+        lcl_13 = reg_6 : u64
+        reg_7 : &mut vector<u64> = Move(lcl_0)
+        reg_8 : u64 = Move(lcl_13)
+        Call 0x42::exp::push_back(reg_7 : &mut vector<u64>, reg_8 : u64)
+        Jump(LBL_80)
+
+      Label LBL_16:
+        reg_9 : &0x42::exp::Exp = Move(lcl_3)
+        reg_10 : &u64, reg_11 : &u64 = UnpackVariantImmRef<PushTwo>(reg_9 : &0x42::exp::Exp)
+        Drop(reg_11 : &u64)
+        Drop(reg_10 : &u64)
+        reg_12 : 0x42::exp::Exp = Move(lcl_4)
+        reg_13 : u64, reg_14 : u64 = UnpackVariant<PushTwo>(reg_12 : 0x42::exp::Exp)
+        lcl_2 = reg_14 : u64
+        lcl_11 = reg_13 : u64
+        reg_15 : u64 = Move(lcl_2)
+        lcl_12 = reg_15 : u64
+        reg_16 : &mut vector<u64> = Copy(lcl_0)
+        reg_17 : u64 = Move(lcl_11)
+        Call 0x42::exp::push_back(reg_16 : &mut vector<u64>, reg_17 : u64)
+        reg_18 : &mut vector<u64> = Move(lcl_0)
+        reg_19 : u64 = Move(lcl_12)
+        Call 0x42::exp::push_back(reg_18 : &mut vector<u64>, reg_19 : u64)
+        Jump(LBL_80)
+
+      Label LBL_33:
+        reg_20 : &0x42::exp::Exp = Move(lcl_3)
+        UnpackVariantImmRef<Add>(reg_20 : &0x42::exp::Exp)
+        reg_21 : 0x42::exp::Exp = Move(lcl_4)
+        UnpackVariant<Add>(reg_21 : 0x42::exp::Exp)
+        reg_22 : &mut vector<u64> = Copy(lcl_0)
+        reg_23 : u64 = Call 0x42::exp::pop_back(reg_22 : &mut vector<u64>)
+        lcl_5 = reg_23 : u64
+        reg_24 : &mut vector<u64> = Copy(lcl_0)
+        reg_25 : u64 = Call 0x42::exp::pop_back(reg_24 : &mut vector<u64>)
+        lcl_8 = reg_25 : u64
+        reg_26 : &mut vector<u64> = Move(lcl_0)
+        reg_27 : u64 = Move(lcl_5)
+        reg_28 : u64 = Move(lcl_8)
+        reg_29 : u64 = Add(reg_27 : u64, reg_28 : u64)
+        Call 0x42::exp::push_back(reg_26 : &mut vector<u64>, reg_29 : u64)
+        Jump(LBL_80)
+
+      Label LBL_49:
+        reg_30 : &0x42::exp::Exp = Move(lcl_3)
+        UnpackVariantImmRef<Sub>(reg_30 : &0x42::exp::Exp)
+        reg_31 : 0x42::exp::Exp = Move(lcl_4)
+        UnpackVariant<Sub>(reg_31 : 0x42::exp::Exp)
+        reg_32 : &mut vector<u64> = Copy(lcl_0)
+        reg_33 : u64 = Call 0x42::exp::pop_back(reg_32 : &mut vector<u64>)
+        lcl_6 = reg_33 : u64
+        reg_34 : &mut vector<u64> = Copy(lcl_0)
+        reg_35 : u64 = Call 0x42::exp::pop_back(reg_34 : &mut vector<u64>)
+        lcl_9 = reg_35 : u64
+        reg_36 : &mut vector<u64> = Move(lcl_0)
+        reg_37 : u64 = Move(lcl_6)
+        reg_38 : u64 = Move(lcl_9)
+        reg_39 : u64 = Subtract(reg_37 : u64, reg_38 : u64)
+        Call 0x42::exp::push_back(reg_36 : &mut vector<u64>, reg_39 : u64)
+        Jump(LBL_80)
+
+      Label LBL_65:
+        reg_40 : &0x42::exp::Exp = Move(lcl_3)
+        UnpackVariantImmRef<Mul>(reg_40 : &0x42::exp::Exp)
+        reg_41 : 0x42::exp::Exp = Move(lcl_4)
+        UnpackVariant<Mul>(reg_41 : 0x42::exp::Exp)
+        reg_42 : &mut vector<u64> = Copy(lcl_0)
+        reg_43 : u64 = Call 0x42::exp::pop_back(reg_42 : &mut vector<u64>)
+        lcl_7 = reg_43 : u64
+        reg_44 : &mut vector<u64> = Copy(lcl_0)
+        reg_45 : u64 = Call 0x42::exp::pop_back(reg_44 : &mut vector<u64>)
+        lcl_10 = reg_45 : u64
+        reg_46 : &mut vector<u64> = Move(lcl_0)
+        reg_47 : u64 = Move(lcl_7)
+        reg_48 : u64 = Move(lcl_10)
+        reg_49 : u64 = Multiply(reg_47 : u64, reg_48 : u64)
+        Call 0x42::exp::push_back(reg_46 : &mut vector<u64>, reg_49 : u64)
+
+      Label LBL_80:
+        Return()
