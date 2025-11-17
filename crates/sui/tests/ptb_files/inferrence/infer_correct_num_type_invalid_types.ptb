@@ -13,4 +13,3 @@
 --make-move-vec <0x1::option::Option<0x1::option::Option<vector<u8>>>> [some(vector[1,2,3,4])]
 --make-move-vec <0x1::option::Option<0x1::option::Option<vector<u8>>>> [some(some(vector[1,2u128,3,4]))]
 --gas-budget 100000000
-

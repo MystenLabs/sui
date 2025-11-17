@@ -22,4 +22,3 @@
 --assign c0 c.0
 # Can assign to the other field as well
 --assign c1 c.1
-
