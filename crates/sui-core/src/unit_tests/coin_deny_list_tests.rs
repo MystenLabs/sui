@@ -10,7 +10,7 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use std::sync::Arc;
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
-use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr};
 use sui_types::crypto::{AccountKeyPair, get_account_key_pair};
 use sui_types::deny_list_v1::{CoinDenyCap, RegulatedCoinMetadata};
@@ -238,7 +238,11 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
             env_gas_ref,
             env.authority.reference_gas_price_for_testing().unwrap(),
         )
-        .transfer_funds_to_address_balance(100_000_000, regulated_coin_type.clone(), denied_address)
+        .transfer_funds_to_address_balance(
+            FundSource::address_fund(),
+            vec![(100_000_000, denied_address)],
+            regulated_coin_type.clone(),
+        )
         .build_and_sign(&env.keypair);
         let effects = send_and_confirm_transaction_(&env.authority, None, tx, true)
             .await
