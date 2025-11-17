@@ -17429,6 +17429,7 @@ dependencies = [
  "mysten-common",
  "prometheus",
  "rand 0.8.5",
+ "shared-crypto",
  "sui-config",
  "sui-core",
  "sui-framework",

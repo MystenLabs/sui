@@ -5,6 +5,7 @@ use futures::{StreamExt, future::join_all};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use mysten_common::fatal;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
+use shared_crypto::intent::Intent;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
@@ -39,6 +40,11 @@ use sui_swarm_config::network_config_builder::{
 };
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::Identifier;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+use sui_types::accumulator_metadata::AccumulatorOwner;
+use sui_types::accumulator_root::AccumulatorValue;
+use sui_types::balance::Balance;
 use sui_types::base_types::ConciseableName;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
 use sui_types::committee::CommitteeTrait;
@@ -48,16 +54,19 @@ use sui_types::crypto::SuiKeyPair;
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
+use sui_types::gas_coin::GAS;
 use sui_types::message_envelope::Message;
 use sui_types::messages_grpc::{RawSubmitTxRequest, SubmitTxType};
 use sui_types::object::Object;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 use sui_types::transaction::{
-    CertifiedTransaction, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
+    Argument, CertifiedTransaction, Command, Transaction, TransactionData, TransactionDataAPI,
+    TransactionKind,
 };
 use tokio::time::{Instant, timeout};
 use tokio::{task::JoinHandle, time::sleep};
@@ -149,6 +158,18 @@ impl TestCluster {
     // Helper function to get the 2nd address in WalletContext
     pub fn get_address_2(&self) -> SuiAddress {
         self.get_addresses()[2]
+    }
+
+    pub async fn get_address_0_with_balance(&self, amount: u64) -> SuiAddress {
+        let address = self.get_address_0();
+        self.fund_address_balance(address, amount).await;
+        address
+    }
+
+    pub async fn get_address_1_with_balance(&self, amount: u64) -> SuiAddress {
+        let address = self.get_address_1();
+        self.fund_address_balance(address, amount).await;
+        address
     }
 
     pub fn fullnode_config_builder(&self) -> FullnodeConfigBuilder {
@@ -250,6 +271,78 @@ impl TestCluster {
 
     pub fn get_chain_identifier(&self) -> ChainIdentifier {
         ChainIdentifier::from(*self.swarm.config().genesis.checkpoint().digest())
+    }
+
+    pub async fn get_one_sender_and_gas(&self) -> (SuiAddress, ObjectRef) {
+        self.wallet.get_one_gas_object().await.unwrap().unwrap()
+    }
+
+    pub fn get_address_balance(&self, address: SuiAddress) -> u64 {
+        self.fullnode_handle.sui_node.with(|node| {
+            let state = node.state();
+            let child_object_resolver = state.get_child_object_resolver().as_ref();
+            let sui_coin_type = Balance::type_tag(GAS::type_tag());
+
+            let accumulator_value =
+                AccumulatorValue::load(child_object_resolver, None, address, &sui_coin_type)
+                    .expect("read cannot fail");
+
+            match accumulator_value {
+                Some(AccumulatorValue::U128(u128_val)) => {
+                    assert!(
+                        AccumulatorValue::exists(
+                            child_object_resolver,
+                            None,
+                            address,
+                            &sui_coin_type
+                        )
+                        .unwrap(),
+                        "Accumulator value should have been created"
+                    );
+
+                    let accumulator_object = AccumulatorValue::load_object(
+                        child_object_resolver,
+                        None,
+                        address,
+                        &sui_coin_type,
+                    )
+                    .expect("read cannot fail")
+                    .expect("accumulator should exist");
+
+                    assert!(
+                        accumulator_object
+                            .data
+                            .try_as_move()
+                            .unwrap()
+                            .type_()
+                            .is_efficient_representation()
+                    );
+
+                    assert!(
+                        AccumulatorOwner::exists(child_object_resolver, None, address).unwrap(),
+                        "Owner object should have been created"
+                    );
+
+                    let owner = AccumulatorOwner::load(child_object_resolver, None, address)
+                        .expect("read cannot fail")
+                        .expect("owner must exist");
+
+                    assert!(
+                        owner
+                            .metadata_exists(child_object_resolver, None, &sui_coin_type)
+                            .unwrap(),
+                        "Metadata object should have been created"
+                    );
+
+                    let _metadata = owner
+                        .load_metadata(child_object_resolver, None, &sui_coin_type)
+                        .unwrap();
+
+                    u128_val.value as u64
+                }
+                None => 0,
+            }
+        })
     }
 
     pub async fn get_object_from_fullnode_store(&self, object_id: &ObjectID) -> Option<Object> {
@@ -610,9 +703,31 @@ impl TestCluster {
         &self,
         txns: &[TransactionData],
     ) -> SuiResult<Vec<(TransactionDigest, TransactionEffects)>> {
-        // Sign all transactions
-        let signed_txs: Vec<Transaction> =
-            futures::future::join_all(txns.iter().map(|tx| self.wallet.sign_transaction(tx))).await;
+        let signed_txs: Vec<Transaction> = futures::future::join_all(txns.iter().map(|tx| async {
+            let sender = tx.sender();
+            let gas_owner = tx.gas_owner();
+
+            if sender != gas_owner {
+                let sender_sig = self
+                    .wallet
+                    .config
+                    .keystore
+                    .sign_secure(&sender, tx, Intent::sui_transaction())
+                    .await
+                    .unwrap();
+                let sponsor_sig = self
+                    .wallet
+                    .config
+                    .keystore
+                    .sign_secure(&gas_owner, tx, Intent::sui_transaction())
+                    .await
+                    .unwrap();
+                Transaction::from_data(tx.clone(), vec![sender_sig, sponsor_sig])
+            } else {
+                self.wallet.sign_transaction(tx).await
+            }
+        }))
+        .await;
 
         self.execute_signed_txns_in_soft_bundle(&signed_txs).await
     }
@@ -844,6 +959,40 @@ impl TestCluster {
             .unwrap();
         assert_eq!(&SuiExecutionStatus::Success, effects.status());
         effects.created().first().unwrap().object_id()
+    }
+
+    pub async fn fund_address_balance(&self, address: SuiAddress, amount: u64) {
+        let rgp = self.get_reference_gas_price().await;
+        let gas = self
+            .wallet
+            .get_one_gas_object_owned_by_address(address)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let amount_arg = builder.pure(amount).unwrap();
+        let recipient_arg = builder.pure(address).unwrap();
+        let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount_arg]));
+
+        let Argument::Result(coin_idx) = coin else {
+            panic!("coin is not a result");
+        };
+
+        let coin = Argument::NestedResult(coin_idx, 0);
+
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("send_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![coin, recipient_arg],
+        );
+
+        let tx = TransactionKind::ProgrammableTransaction(builder.finish());
+        let deposit_tx = TransactionData::new(tx, address, gas, 10000000, rgp);
+
+        self.sign_and_execute_transaction(&deposit_tx).await;
     }
 
     #[cfg(msim)]
