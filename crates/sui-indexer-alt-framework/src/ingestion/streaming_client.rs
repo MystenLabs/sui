@@ -11,6 +11,7 @@ use sui_rpc::proto::sui::rpc::v2::{
 use sui_rpc_api::client::checkpoint_data_field_mask;
 use tonic::{Status, transport::Uri};
 
+use crate::ingestion::MAX_GRPC_MESSAGE_SIZE_BYTES;
 use crate::ingestion::error::{Error, Result};
 use crate::types::full_checkpoint_content::Checkpoint;
 
@@ -39,7 +40,8 @@ impl CheckpointStreamingClient for GrpcStreamingClient {
     async fn connect(&mut self) -> Result<CheckpointStream> {
         let mut client = SubscriptionServiceClient::connect(self.uri.clone())
             .await
-            .map_err(|err| Error::RpcClientError(Status::from_error(err.into())))?;
+            .map_err(|err| Error::RpcClientError(Status::from_error(err.into())))?
+            .max_decoding_message_size(MAX_GRPC_MESSAGE_SIZE_BYTES);
 
         let mut request = SubscribeCheckpointsRequest::default();
         request.read_mask = Some(checkpoint_data_field_mask());
