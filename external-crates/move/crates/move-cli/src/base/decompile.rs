@@ -74,7 +74,7 @@ impl Decompile {
         std::fs::create_dir_all(&output_path).map_err(|_| anyhow!("Failed to create directory"))?;
 
         // Decompile the files
-        let _paths = move_decompiler::generate_from_files(&files_to_process, &output_path)?;
+        let _paths = move_decompiler::generate_from_files(&files_to_process, output_path)?;
         Ok(())
     }
 }
