@@ -59,7 +59,8 @@ async fn publish_auth_event_package(test_cluster: &TestCluster) -> ObjectID {
         .sign_transaction(
             &sui_test_transaction_builder::TestTransactionBuilder::new(sender, gas_object, 1000)
                 .with_gas_budget(50_000_000_000)
-                .publish(path)
+                .publish_async(path)
+                .await
                 .build(),
         )
         .await;
@@ -417,19 +418,17 @@ async fn test_client_resume_from_checkpoint_without_events() {
 
     emit_events(&test_cluster, package_id, sender, 5).await;
 
-    let mut last_checkpoint = 0;
     let mut received_count = 0;
 
     while received_count < 5 {
-        if let Some(Ok(event)) = stream.next().await {
-            last_checkpoint = event.checkpoint;
+        if let Some(Ok(_event)) = stream.next().await {
             received_count += 1;
         }
     }
 
     drop(stream);
 
-    let checkpoint_with_no_events = last_checkpoint + 5;
+    let checkpoint_with_no_events = 1;
 
     let result = client
         .clone()
