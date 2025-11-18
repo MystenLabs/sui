@@ -264,17 +264,7 @@ impl CheckpointStoreTables {
             ("epoch_last_checkpoint_map", config_u64.clone()),
             (
                 "watermarks",
-                ThConfig::new_with_config(
-                    4,
-                    1,
-                    KeyType::uniform(1),
-                    apply_relocation_filter(
-                        watermarks_config.clone(),
-                        pruner_watermarks.checkpoint_id.clone(),
-                        |(watermark, _): (CheckpointSequenceNumber, CheckpointDigest)| watermark,
-                        false,
-                    ),
-                ),
+                ThConfig::new_with_config(4, 1, KeyType::uniform(1), watermarks_config.clone()),
             ),
             (
                 "transaction_fork_detected",
@@ -363,25 +353,26 @@ impl CheckpointStore {
         );
 
         // Only insert the genesis checkpoint if the DB is empty and doesn't have it already
-        if self
-            .get_checkpoint_by_digest(checkpoint.digest())
-            .unwrap()
-            .is_none()
-        {
-            if epoch_store.epoch() == checkpoint.epoch {
-                epoch_store
-                    .put_genesis_checkpoint_in_builder(checkpoint.data(), &contents)
-                    .unwrap();
-            } else {
-                debug!(
-                    validator_epoch =% epoch_store.epoch(),
-                    genesis_epoch =% checkpoint.epoch(),
-                    "Not inserting checkpoint builder data for genesis checkpoint",
-                );
+        match self.get_checkpoint_by_sequence_number(0).unwrap() {
+            Some(existing_checkpoint) => {
+                assert_eq!(existing_checkpoint.digest(), checkpoint.digest())
             }
-            self.insert_checkpoint_contents(contents).unwrap();
-            self.insert_verified_checkpoint(&checkpoint).unwrap();
-            self.update_highest_synced_checkpoint(&checkpoint).unwrap();
+            None => {
+                if epoch_store.epoch() == checkpoint.epoch {
+                    epoch_store
+                        .put_genesis_checkpoint_in_builder(checkpoint.data(), &contents)
+                        .unwrap();
+                } else {
+                    debug!(
+                        validator_epoch =% epoch_store.epoch(),
+                        genesis_epoch =% checkpoint.epoch(),
+                        "Not inserting checkpoint builder data for genesis checkpoint",
+                    );
+                }
+                self.insert_checkpoint_contents(contents).unwrap();
+                self.insert_verified_checkpoint(&checkpoint).unwrap();
+                self.update_highest_synced_checkpoint(&checkpoint).unwrap();
+            }
         }
     }
 
@@ -513,8 +504,10 @@ impl CheckpointStore {
             .watermarks
             .get(&CheckpointWatermark::HighestSynced)?
         {
+            eprintln!("get_highest_synced_checkpoint: {:?}", highest_synced);
             highest_synced
         } else {
+            eprintln!("get_highest_synced_checkpoint: entry not found");
             return Ok(None);
         };
         self.get_checkpoint_by_digest(&highest_synced.1)
