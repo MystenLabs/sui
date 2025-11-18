@@ -21,8 +21,6 @@ use crate::ingestion::streaming_client::GrpcStreamingClient;
 use crate::metrics::IndexerMetrics;
 use crate::types::full_checkpoint_content::Checkpoint;
 
-pub(crate) const MAX_GRPC_MESSAGE_SIZE_BYTES: usize = 128 * 1024 * 1024;
-
 mod broadcaster;
 pub mod client;
 pub mod error;
@@ -32,6 +30,8 @@ mod rpc_client;
 mod streaming_client;
 #[cfg(test)]
 mod test_utils;
+
+pub(crate) const MAX_GRPC_MESSAGE_SIZE_BYTES: usize = 128 * 1024 * 1024;
 
 #[derive(clap::Args, Clone, Debug, Default)]
 #[group(required = true)]
