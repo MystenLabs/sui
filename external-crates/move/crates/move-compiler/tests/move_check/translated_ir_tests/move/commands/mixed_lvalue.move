@@ -7,7 +7,7 @@ module 0x8675309::A {
     }
 
     public fun mixed() {
-        let r = 0;
+        let r = 0u64;
         let r_ref = &mut r;
         let s = S { f: 0 };
 

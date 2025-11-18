@@ -13,7 +13,7 @@ module 0x42::m {
     }
 
     public fun t0(): u64 {
-        let o = &mut Option::Some(0);
+        let o = &mut Option::Some(0u64);
         match (o) {
             Option::None => 0,
             _ if (foo()) => 1,

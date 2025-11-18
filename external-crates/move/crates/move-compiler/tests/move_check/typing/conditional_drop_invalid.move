@@ -12,7 +12,7 @@ module M {
         Box<T> { f: t };
         Box<Box<T>> { f: Box { f: t } };
         Pair<S, R> { f1: S{}, f2: R{} };
-        (Pair<S, R> { f1: S{}, f2: R{} }, 0, @0x1);
+        (Pair<S, R> { f1: S{}, f2: R{} }, 0u64, @0x1);
 
         Box<R> { f: R {} } == Box<R> { f: R {} };
         Box<Box<R>> { f: Box { f: R {} } } == Box<Box<R>> { f: Box { f: R {} }};

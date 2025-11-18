@@ -1,7 +1,7 @@
 //# run
 module 0x42::m {
 fun main() {
-    let x = 5;
+    let x = 5u64;
     let y = 2;
     let x_ref;
     let y_ref;

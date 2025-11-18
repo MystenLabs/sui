@@ -10,7 +10,7 @@ error[E04024]: invalid usage of immutable variable
   │
 3 │         let a;
   │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut a'
-4 │         while (cond) { a = 0; a; };
+4 │         while (cond) { a = 0u64; a; };
   │                        ^
   │                        │
   │                        Invalid assignment of immutable variable 'a'
@@ -21,7 +21,7 @@ error[E04024]: invalid usage of immutable variable
   │
 8 │         let b;
   │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut b'
-9 │         loop { b = 0; b; }
+9 │         loop { b = 0u64; b; }
   │                ^
   │                │
   │                Invalid assignment of immutable variable 'b'
@@ -54,7 +54,7 @@ error[E04024]: invalid usage of immutable variable
 20 │         let x;
    │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
 21 │         loop {
-22 │             x = 0;
+22 │             x = 0u64;
    │             ^
    │             │
    │             Invalid assignment of immutable variable 'x'

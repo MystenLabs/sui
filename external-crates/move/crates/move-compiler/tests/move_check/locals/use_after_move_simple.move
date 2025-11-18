@@ -4,7 +4,7 @@ module 0x8675309::M {
     fun tmove() {
         let x = 0;
         move x;
-        let _ = move x + 1;
+        let _ = move x + 1u64;
 
         let s = S{};
         let _s2 = s;
@@ -12,7 +12,7 @@ module 0x8675309::M {
     }
 
     fun tcopy() {
-        let x = 0;
+        let x = 0u64;
         move x;
         let _ = x + 1;
 
@@ -22,7 +22,7 @@ module 0x8675309::M {
     }
 
     fun tborrow() {
-        let x = 0;
+        let x = 0u64;
         move x;
         let _ = &x;
 

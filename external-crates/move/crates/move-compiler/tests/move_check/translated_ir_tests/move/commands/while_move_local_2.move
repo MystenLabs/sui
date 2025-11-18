@@ -1,6 +1,6 @@
 module 0x42::m {
 fun main() {
-    let x = 0;
+    let x = 0u64;
     let y = 0;
     let b = true;
     while (true) {

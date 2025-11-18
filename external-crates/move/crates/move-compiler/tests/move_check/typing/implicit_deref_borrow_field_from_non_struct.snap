@@ -8,20 +8,20 @@ info:
 error[E04009]: expected specific type
   ┌─ tests/move_check/typing/implicit_deref_borrow_field_from_non_struct.move:6:9
   │
-6 │         0.f;
-  │         ^^^
+6 │         0u64.f;
+  │         ^^^^^^
   │         │
   │         Unbound field 'f'
-  │         Expected a struct type in the current module but got: integer
+  │         Expected a struct type in the current module but got: 'u64'
 
 error[E04009]: expected specific type
   ┌─ tests/move_check/typing/implicit_deref_borrow_field_from_non_struct.move:7:9
   │
-7 │         0.g;
-  │         ^^^
+7 │         0u64.g;
+  │         ^^^^^^
   │         │
   │         Unbound field 'g'
-  │         Expected a struct type in the current module but got: integer
+  │         Expected a struct type in the current module but got: 'u64'
 
 error[E04009]: expected specific type
   ┌─ tests/move_check/typing/implicit_deref_borrow_field_from_non_struct.move:8:9

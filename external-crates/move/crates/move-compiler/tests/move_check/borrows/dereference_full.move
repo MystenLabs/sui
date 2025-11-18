@@ -8,23 +8,23 @@ module 0x8675309::M {
     }
 
     fun t0() {
-        let x = &mut 0;
+        let x = &mut 0u64;
         let y = copy x;
         *y;
         *x;
 
-        let x = &mut 0;
+        let x = &mut 0u64;
         let y = id_mut(x);
         *y;
         *x;
 
-        let x = &0;
+        let x = &0u64;
         let y = copy x;
         *y;
         *x;
 
 
-        let x = &0;
+        let x = &0u64;
         let y = id(x);
         *y;
         *x;

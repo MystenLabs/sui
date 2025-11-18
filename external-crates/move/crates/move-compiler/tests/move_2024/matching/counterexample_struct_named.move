@@ -3,13 +3,13 @@ module 0x42::m {
     public struct NTuple2<T,U> { fst: T, snd: U } has drop;
 
     fun t00(): u64 {
-        match (NTuple2 { fst: 0, snd: 1 }) {
+        match (NTuple2 { fst: 0u64, snd: 1u64 }) {
             NTuple2 { fst: 0, snd: _ } => 0, // invalid
         }
     }
 
     fun t01(): u64 {
-        match (NTuple2 { fst: 0, snd: 1 }) {
+        match (NTuple2 { fst: 0u64, snd: 1u64 }) {
             NTuple2 { fst: 0, snd: _ } => 0,
             NTuple2 { fst: 3, snd: _ } => 3
         }
@@ -35,10 +35,10 @@ module 0x42::m {
     }
 
     fun t07(): u64 {
-        match (NTuple2 { fst: 0, snd: 1 }) {
+        match (NTuple2 { fst: 0, snd: 1u64 }) {
             NTuple2 { fst: 0, snd: _ } => 0,
             NTuple2 { fst: 3, snd: _ } => 3,
-            NTuple2 { fst: 7, snd: _ } => 7,
+            NTuple2 { fst: 7u64, snd: _ } => 7,
             NTuple2 { fst: 4, snd: _ } => 4
         }
     }

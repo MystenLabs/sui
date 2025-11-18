@@ -12,7 +12,7 @@ fun test1(): u64 {
     'a: loop {
         let x = loop {
             break 'a 5;
-            break 10;
+            break 10u64;
         };
         let _x = x;
     }

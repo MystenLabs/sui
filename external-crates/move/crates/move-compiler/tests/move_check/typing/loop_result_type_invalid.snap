@@ -21,10 +21,10 @@ error[E04007]: incompatible types
    │
 14 │     fun t1(): u64 {
    │               --- Expected: 'u64'
-15 │         loop { let _x = 0; break }
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │         │                  │
-   │         │                  Given: '()'
+15 │         loop { let _x = 0u64; break }
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                     │
+   │         │                     Given: '()'
    │         Invalid return expression
 
 error[E04007]: incompatible types

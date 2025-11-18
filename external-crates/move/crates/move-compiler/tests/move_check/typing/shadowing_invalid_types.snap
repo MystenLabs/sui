@@ -8,8 +8,8 @@ info:
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/shadowing_invalid_types.move:8:13
   │
-5 │         let x = 0;
-  │             - Given: integer
+5 │         let x = 0u64;
+  │                 ---- Given: 'u64'
   ·
 8 │         (x: bool);
   │             ^^^^
@@ -30,8 +30,8 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/shadowing_invalid_types.move:11:13
    │
- 5 │         let x = 0;
-   │             - Given: integer
+ 5 │         let x = 0u64;
+   │                 ---- Given: 'u64'
    ·
 11 │         (x: bool);
    │             ^^^^
@@ -62,8 +62,8 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/shadowing_invalid_types.move:14:13
    │
- 5 │         let x = 0;
-   │             - Given: integer
+ 5 │         let x = 0u64;
+   │                 ---- Given: 'u64'
    ·
 14 │         (x: bool);
    │             ^^^^
@@ -96,8 +96,8 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/shadowing_invalid_types.move:27:13
    │
-18 │         let x = 0;
-   │             - Given: integer
+18 │         let x = 0u64;
+   │                 ---- Given: 'u64'
    ·
 27 │         (x: address);
    │             ^^^^^^^
@@ -120,8 +120,8 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/shadowing_invalid_types.move:37:13
    │
-31 │         let x = 0;
-   │             - Given: integer
+31 │         let x = 0u64;
+   │                 ---- Given: 'u64'
    ·
 37 │         (x: bool);
    │             ^^^^

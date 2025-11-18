@@ -6,10 +6,10 @@ info:
   lint: false
 ---
 warning[W09005]: dead or unreachable code
-  ┌─ tests/move_check/typing/continue_any_type.move:6:17
+  ┌─ tests/move_check/typing/continue_any_type.move:6:20
   │
-6 │             0 + continue;
-  │                 ^^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+6 │             0u64 + continue;
+  │                    ^^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

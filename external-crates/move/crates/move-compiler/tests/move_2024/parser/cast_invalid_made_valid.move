@@ -4,10 +4,10 @@ module a::m {
     fun simple(cond: bool, x: u32) {
         (if (cond) x else { x }) as u32;
         (if (cond) x else { x } as u32);
-        (loop { break 0 }) as u32;
-        (loop { break 0 } as u32);
-        ('l: { 0 }) as u32;
-        ('l: { 0 } as u32);
+        (loop { break 0u64 }) as u32;
+        (loop { break 0u64 } as u32);
+        ('l: { 0u64 }) as u32;
+        ('l: { 0u64 } as u32);
         (return) as u32;
         (return as u32);
         loop {
@@ -16,8 +16,8 @@ module a::m {
             (continue) as u32;
             (continue as u32);
         };
-        (0 as u32) as u32;
-        (0 as u32 as u32);
+        (0u64 as u32) as u32;
+        (0u64 as u32 as u32);
     }
 
     public struct S has copy, drop { f: u64 }
@@ -27,7 +27,7 @@ module a::m {
         (1 + s.f as u32);
         (1 + S { f: 0 }.f) as u32;
         (1 + S { f: 0 }.f as u32);
-        (*if (cond) { &0 } else { &mut 0 }) as u32;
+        (*if (cond) { &0 } else { &mut 0u64 }) as u32;
         // this case still does not work
         // (*if (cond) { &0 } else { &mut 0 } as u32);
         (*if (cond) { &s } else {&mut s}.f_imm()) as u32;

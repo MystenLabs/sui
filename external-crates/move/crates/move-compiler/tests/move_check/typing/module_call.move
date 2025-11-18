@@ -43,7 +43,7 @@ module M {
         let () = X::bing(X::baz(X::bar(X::foo())));
         let () = X::bing (X::baz (X::bar (X::foo())));
         let () = X::bing (X::baz (X::bar(1)));
-        let () = X::bing (X::baz (@0x0, 1));
+        let () = X::bing (X::baz (@0x0, 1u64));
         let () = X::bing (false, @0x0, 1);
     }
 
@@ -51,7 +51,7 @@ module M {
         let () = bing(baz(bar(foo())));
         let () = bing (baz (bar (foo())));
         let () = bing (baz (bar(1)));
-        let () = bing (baz (@0x0, 1));
+        let () = bing (baz (@0x0, 1u64));
         let () = bing (false, @0x0, 1);
     }
 

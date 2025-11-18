@@ -6,6 +6,6 @@ module 0x42::loop_test {
         while (always_true) {};
         while (true && true) {};
         while (true || false) {};
-        while (1 > 0) {};
+        while (1 > 0u64) {};
     }
 }

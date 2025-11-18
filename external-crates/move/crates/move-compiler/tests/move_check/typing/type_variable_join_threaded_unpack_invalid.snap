@@ -10,10 +10,9 @@ error[E04007]: incompatible types
    │
 30 │     fun t0(): bool {
    │               ---- Expected: 'bool'
-31 │         let v = Container::new();
-32 │         let Box { f1, f2 }  = Container::get(&v); f2;
-   │             -------------- Given: integer
-33 │         Container::put(&mut v, Box { f1: 0, f2: 0});
+   ·
+33 │         Container::put(&mut v, Box { f1: 0u64, f2: 0});
+   │                                          ---- Given: 'u64'
 34 │         f1
    │         ^^ Invalid return expression
 

@@ -5,9 +5,9 @@ module 0x8675309::M {
     }
 
     fun t0(r: R, s: S) {
-        0 || 1;
-        1 || false;
-        false || 1;
+        0u64 || 1u64;
+        1u64 || false;
+        false || 1u64;
         @0x0 || @0x1;
         (0: u8) || (1: u128);
         r || r;

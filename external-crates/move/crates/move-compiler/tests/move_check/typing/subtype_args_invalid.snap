@@ -11,10 +11,10 @@ error[E04006]: invalid subtype
  4 │     fun mut<T>(_x: &mut T) {}
    │                    ------ Expected: '&mut u64'
    ·
-10 │         mut<u64>(&0);
-   │         ^^^^^^^^^^^^
+10 │         mut<u64>(&0u64);
+   │         ^^^^^^^^^^^^^^^
    │         │        │
-   │         │        Given: '&{integer}'
+   │         │        Given: '&u64'
    │         Invalid call of '0x8675309::M::mut'. Invalid argument for parameter '_x'
 
 error[E04006]: invalid subtype
@@ -35,10 +35,10 @@ error[E04006]: invalid subtype
  5 │     fun imm_mut<T>(_x: &T, _y: &mut T) {}
    │                                ------ Expected: '&mut u64'
    ·
-15 │         imm_mut<u64>(&0, &0);
-   │         ^^^^^^^^^^^^^^^^^^^^
+15 │         imm_mut<u64>(&0, &0u64);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^
    │         │                │
-   │         │                Given: '&{integer}'
+   │         │                Given: '&u64'
    │         Invalid call of '0x8675309::M::imm_mut'. Invalid argument for parameter '_y'
 
 error[E04006]: invalid subtype
@@ -47,10 +47,10 @@ error[E04006]: invalid subtype
  6 │     fun mut_imm<T>(_x: &mut T, _y: &T) {}
    │                        ------ Expected: '&mut u64'
    ·
-16 │         mut_imm<u64>(&0, &0);
-   │         ^^^^^^^^^^^^^^^^^^^^
+16 │         mut_imm<u64>(&0u64, &0);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^
    │         │            │
-   │         │            Given: '&{integer}'
+   │         │            Given: '&u64'
    │         Invalid call of '0x8675309::M::mut_imm'. Invalid argument for parameter '_x'
 
 error[E04006]: invalid subtype
@@ -59,10 +59,10 @@ error[E04006]: invalid subtype
  7 │     fun mut_mut<T>(_x: &mut T, _y: &mut T) {}
    │                        ------ Expected: '&mut u64'
    ·
-17 │         mut_mut<u64>(&0, &0);
-   │         ^^^^^^^^^^^^^^^^^^^^
+17 │         mut_mut<u64>(&0u64, &0u64);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │            │
-   │         │            Given: '&{integer}'
+   │         │            Given: '&u64'
    │         Invalid call of '0x8675309::M::mut_mut'. Invalid argument for parameter '_x'
 
 error[E04006]: invalid subtype
@@ -71,8 +71,8 @@ error[E04006]: invalid subtype
  7 │     fun mut_mut<T>(_x: &mut T, _y: &mut T) {}
    │                                    ------ Expected: '&mut u64'
    ·
-17 │         mut_mut<u64>(&0, &0);
-   │         ^^^^^^^^^^^^^^^^^^^^
-   │         │                │
-   │         │                Given: '&{integer}'
+17 │         mut_mut<u64>(&0u64, &0u64);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                   │
+   │         │                   Given: '&u64'
    │         Invalid call of '0x8675309::M::mut_mut'. Invalid argument for parameter '_y'

@@ -8,9 +8,9 @@ info:
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/num_literal_invalid_type.move:2:30
   │
-2 │     fun test(): vector<u8> { 0 }
-  │                 ----------   ^
+2 │     fun test(): vector<u8> { 0u64 }
+  │                 ----------   ^^^^
   │                 │            │
   │                 │            Invalid return expression
-  │                 │            Given: integer
+  │                 │            Given: 'u64'
   │                 Expected: 'vector<u8>'

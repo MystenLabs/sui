@@ -4,17 +4,17 @@ module 0x42::M {
         return << 0;
         return || false;
         return && false;
-        return + 0;
-        return - 0;
-        return % 0;
-        return / 1;
-        return < 0;
-        return > 0;
-        return <= 0;
-        return == 0;
-        return >= 0;
-        return != 0;
-        return | 0;
-        return ^ 0;
+        return + 0u64;
+        return - 0u64;
+        return % 0u64;
+        return / 1u64;
+        return < 0u64;
+        return > 0u64;
+        return <= 0u64;
+        return == 0u64;
+        return >= 0u64;
+        return != 0u64;
+        return | 0u64;
+        return ^ 0u64;
     }
 }

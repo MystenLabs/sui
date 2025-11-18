@@ -31,7 +31,7 @@ module 0x42::m {
         let o: Option<u64> = Option::None;
         let _y = &10;
         match (o) {
-            Option::Some(n) if (_y == &5) => n,
+            Option::Some(n) if (_y == &5u64) => n,
             Option::None => 1,
             z => default(z),
         }

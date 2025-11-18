@@ -10,7 +10,7 @@ module a::m {
     }
 
     fun t() {
-        call!(|| -> X { 0 }).foo();
-        call!(|| -> &mut u64 { &0 });
+        call!(|| -> X { 0u64 }).foo();
+        call!(|| -> &mut u64 { &0u64 });
     }
 }

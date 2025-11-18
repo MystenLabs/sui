@@ -56,13 +56,13 @@ warning[W00001]: DEPRECATED. will be removed
 warning[W00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:32:9
    │
-32 │         spec {} + 1;
+32 │         spec {} + 1u64;
    │         ^^^^^^^ Specification blocks are deprecated and are no longer used
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:32:9
    │
-32 │         spec {} + 1;
+32 │         spec {} + 1u64;
    │         ^^^^^^^
    │         │
    │         Invalid argument to '+'
@@ -71,8 +71,8 @@ error[E04003]: built-in operation not supported
 error[E04007]: incompatible types
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:32:17
    │
-32 │         spec {} + 1;
-   │         ------- ^ - Found: integer. It is not compatible with the other type.
+32 │         spec {} + 1u64;
+   │         ------- ^ ---- Found: 'u64'. It is not compatible with the other type.
    │         │       │  
    │         │       Incompatible arguments to '+'
    │         Found: '()'. It is not compatible with the other type.
@@ -80,8 +80,8 @@ error[E04007]: incompatible types
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:32:19
    │
-32 │         spec {} + 1;
-   │         -------   ^ Invalid argument to '+'
+32 │         spec {} + 1u64;
+   │         -------   ^^^^ Invalid argument to '+'
    │         │          
    │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 

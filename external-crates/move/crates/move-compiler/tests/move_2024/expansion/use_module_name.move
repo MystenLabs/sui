@@ -12,13 +12,13 @@ module a::vector_tests {
     public struct NotDroppable {}
 
     fun test_singleton_contains() {
-        assert!(*V::borrow(&V::singleton(0), 0) == 0, 0);
+        assert!(*V::borrow(&V::singleton(0), 0) == 0u64, 0);
         assert!(*V::borrow(&V::singleton(true), 0) == true, 0);
         assert!(*V::borrow(&V::singleton(@0x1), 0) == @0x1, 0);
     }
 
     fun test_singleton_len() {
-        assert!(V::length(&V::singleton(0)) == 1, 0);
+        assert!(V::length(&V::singleton(0u64)) == 1, 0);
         assert!(V::length(&V::singleton(true)) == 1, 0);
         assert!(V::length(&V::singleton(@0x1)) == 1, 0);
     }

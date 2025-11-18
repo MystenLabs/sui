@@ -18,19 +18,19 @@ error[E04006]: invalid subtype
 error[E04006]: invalid subtype
   ┌─ tests/move_check/typing/mutate_immutable.move:6:10
   │
-6 │         *&0 = 1;
-  │          ^^
+6 │         *&0u64 = 1u64;
+  │          ^^^^^
   │          │
   │          Invalid mutation. Expected a mutable reference
   │          Expected: '&mut _'
-  │          Given: '&{integer}'
+  │          Given: '&u64'
 
 error[E04006]: invalid subtype
    ┌─ tests/move_check/typing/mutate_immutable.move:10:10
    │
  9 │         let x_ref: &u64 = x_ref;
    │                    ---- Given: '&u64'
-10 │         *x_ref = 0;
+10 │         *x_ref = 0u64;
    │          ^^^^^
    │          │
    │          Invalid mutation. Expected a mutable reference

@@ -7,7 +7,7 @@ module 0x42::m {
         while (i < stop) {
             let x = i;
             count = count + x * x;
-            i = i + 1;
+            i = i + 1u64;
         };
         assert!(count == 285, 0);
     }

@@ -6,7 +6,7 @@ module a::m {
         let mut i = 0;
         while (!v.is_empty()) {
             $f(v.pop_back());
-            i = i + 1;
+            i = i + 1u64;
         };
         v.destroy_empty();
     }

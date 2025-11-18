@@ -4,6 +4,6 @@ module 0x8675309::M {
         let r1 = &mut a;
         let r2 = &mut a;
         *r1 = 1;
-        *r2 = 2;
+        *r2 = 2u64;
     }
 }

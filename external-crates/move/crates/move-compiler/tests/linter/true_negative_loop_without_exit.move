@@ -4,13 +4,13 @@ module a::m {
     public fun t1() {
         let i = 0;
         loop {
-            if (i >= 10) break;
+            if (i >= 10u64) break;
             i = i + 1;
         }
     }
 
     public fun t2() {
-        let i = 0;
+        let i = 0u64;
         loop {
             if (i >= 10) return;
             i = i + 1;

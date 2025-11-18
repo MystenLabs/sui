@@ -4,7 +4,7 @@ module 0x42::Test {
 
     fun t() {
         // test args of incompatible types
-        vector<&mut u64>[&0];
-        vector[(), (0, 1)];
+        vector<&mut u64>[&0u64];
+        vector[(), (0u64, 1u64)];
     }
 }

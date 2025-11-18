@@ -15,13 +15,13 @@ module 0x42::m {
     fun dead() {
         use 0x42::x;
         loop {};
-        assert!(1 == 0, 0)
+        assert!(1 == 0u64, 0)
     }
     fun ab() {
         abort 0;
     }
     fun assgn(x: u64) {
-        let y = 0;
+        let y = 0u64;
         x = 1;
     }
 }
@@ -35,10 +35,10 @@ module 0x42::n {
     fun dead(a: u64) {
         use 0x42::x;
         let y;
-        let z = 0;
+        let z = 0u64;
         a = 0;
         let x = abort 0;
-        x + 1;
+        x + 1u64;
         abort 0;
     }
 }

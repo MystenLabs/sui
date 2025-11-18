@@ -1,6 +1,6 @@
 module 0x42::m {
     fun t0() {
-        let _x = loop { break 0 };
+        let _x = loop { break 0u64 };
     }
 
     fun t1(): u64 {

@@ -7,14 +7,14 @@ module 0x8675309::M {
         (true as u128);
 
         (() as u64);
-        ((0, 1) as u8);
+        ((0u64, 1u64) as u8);
 
-        (0 as bool);
-        (0 as address);
-        R{} = (0 as R);
-        (0 as Cup<u8>);
-        (0 as ());
-        (0 as (u64, u8));
+        (0u64 as bool);
+        (0u64 as address);
+        R{} = (0u64 as R);
+        (0u64 as Cup<u8>);
+        (0u64 as ());
+        (0u64 as (u64, u8));
 
         (x"1234" as u64);
     }
@@ -24,14 +24,14 @@ module 0x8675309::M {
         true as u128;
 
         () as u64;
-        (0, 1) as u8;
+        (0u64, 1u64) as u8;
 
-        0 as bool;
-        0 as address;
-        R{} = 0 as R;
-        0 as Cup<u8>;
-        0 as ();
-        0 as (u64, u8);
+        0u64 as bool;
+        0u64 as address;
+        R{} = 0u64 as R;
+        0u64 as Cup<u8>;
+        0u64 as ();
+        0u64 as (u64, u8);
 
         x"1234" as u64;
     }

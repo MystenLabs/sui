@@ -36,7 +36,7 @@ module M {
         let v = Container::new();
         let x = Container::get(&v);
         let b = Box { f1: x, f2: x };
-        Container::put(&mut v, 0);
+        Container::put(&mut v, 0u64);
         let r = Container::get_ref(&v);
         id(r);
         b

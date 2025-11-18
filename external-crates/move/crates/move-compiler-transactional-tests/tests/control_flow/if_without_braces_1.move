@@ -1,7 +1,7 @@
 //# run
 module 0x42::m {
 fun main() {
-    let x;
+    let x: u64;
     if (true)
         x = 3
     else

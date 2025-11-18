@@ -8,7 +8,7 @@ module 0x42::m {
     public struct NTuple2<T,U> { fst: T, snd: U } has drop;
 
     public fun t00(): u64 {
-        match (PTuple2(0, 1)) {
+        match (PTuple2(0, 1u64)) {
             PTuple2(x, _) => x
         }
     }
@@ -31,7 +31,7 @@ module 0x42::m {
     }
 
     public fun t01(): u64 {
-        match (NTuple2 { fst: 0, snd : 1}) {
+        match (NTuple2 { fst: 0, snd : 1u64 }) {
             NTuple2 { fst: x, snd: _ } => x
         }
     }

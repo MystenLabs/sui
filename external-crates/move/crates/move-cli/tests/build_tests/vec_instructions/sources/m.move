@@ -2,7 +2,7 @@ module 0x42::m;
 
 public fun vec_ops_post() {
     let mut v = vector::empty();
-    v.push_back(0);
+    v.push_back(0u64);
     v.push_back(1);
     // assert!(v.length() == 2);
     // assert!(v[0] == 0);

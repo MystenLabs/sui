@@ -47,8 +47,8 @@ error[E01002]: unexpected token
 error[E04007]: incompatible types
    ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:20:16
    │
-19 │         let n = (42 as u32);
-   │                        --- Given: 'u32'
+19 │         let n = (42u64 as u32);
+   │                           --- Given: 'u32'
 20 │         while (n.
    │                ^^
    │                │

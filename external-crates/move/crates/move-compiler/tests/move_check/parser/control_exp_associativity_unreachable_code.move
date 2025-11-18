@@ -8,9 +8,9 @@ module 0x42::M {
 
     fun t(cond: bool): u64 {
         // loop
-        1 + loop { foo() } + 2;
-        1 + loop foo();
-        loop { foo() } + 1;
+        1 + loop { foo() } + 2u64;
+        1u64 + loop foo();
+        loop { foo() } + 1u64;
 
         // return
         return 1 + 2;

@@ -4,12 +4,12 @@ module 0x8675309::M {
     struct S<T: drop> has drop { c: T }
 
     fun t0() {
-        R {r:_ } = R { r: 0 };
+        R {r:_ } = R { r: 0u64 };
         S { c: Coin {} };
     }
 
     fun t1() {
-        R {r: R { r: _ } } = R { r: R { r: 0 }};
+        R {r: R { r: _ } } = R { r: R { r: 0u64 }};
         S { c: S { c: Coin {} } };
     }
 }

@@ -1,5 +1,5 @@
 module a::m;
 
 fun t() {
-    match (&10) { _ => {} }
+    match (&10u64) { _ => {} }
 }

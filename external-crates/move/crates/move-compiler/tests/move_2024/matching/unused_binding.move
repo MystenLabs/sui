@@ -6,7 +6,7 @@ module 0x42::m {
     }
 
     fun t0(): u64 {
-        match (Option::Some(0)) {
+        match (Option::Some(0u64)) {
             Option::Some(x) => 0, // x unused
             Option::None => 1,
         }

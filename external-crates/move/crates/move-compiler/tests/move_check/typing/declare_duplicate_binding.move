@@ -4,7 +4,7 @@ module 0x8675309::M {
     fun t0() {
         let (x, x);
         let (f, R{f}, f);
-        x = 0; x;
-        f = 0; f;
+        x = 0u64; x;
+        f = 0u64; f;
     }
 }

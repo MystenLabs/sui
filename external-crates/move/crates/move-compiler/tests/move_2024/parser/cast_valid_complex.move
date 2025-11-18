@@ -5,9 +5,9 @@ module a::m {
     fun weird(cond: bool, x: u64): u64 {
         // lower precedence than else, abort, return, lambda
         if (cond) 1 else x as u32;
-        call!(|| 0 as u32);
-        abort 0 as u64;
-        return 0 as u64;
+        call!(|| 0u64 as u32);
+        abort 0u64 as u64;
+        return 0u64 as u64;
         0
     }
 

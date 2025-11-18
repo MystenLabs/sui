@@ -30,7 +30,7 @@ module 0x42::m {
     public fun test_00(s: &NBase): u64 {
         match (s) {
            NBase { mut t } => {
-                t = t + 1;
+                t = t + 1u64;
                 0
            },
         }
@@ -39,7 +39,7 @@ module 0x42::m {
     public fun test_01(s: &NBase): u64 {
         match (s) {
            NBase { t: mut x } => {
-                x = x + 1;
+                x = x + 1u64;
                 0
            },
         }
@@ -48,7 +48,7 @@ module 0x42::m {
     public fun test_02(s: &PBase): u64 {
         match (s) {
            PBase(mut x) => {
-               x = x + 1;
+               x = x + 1u64;
                0
            }
         }
@@ -57,7 +57,7 @@ module 0x42::m {
     public fun test_03(s: &NPoly<NBase>): u64 {
         match (s) {
            NPoly { t : NBase { mut t } } => {
-                t = t + 1;
+                t = t + 1u64;
                 0
            },
         }
@@ -66,7 +66,7 @@ module 0x42::m {
     public fun test_04(s: &NPoly<NBase>): u64 {
         match (s) {
            NPoly { t : NBase { t: mut x } } => {
-                x = x + 1;
+                x = x + 1u64;
                 0
            },
         }
@@ -75,7 +75,7 @@ module 0x42::m {
     public fun test_05(s: &NPoly<PBase>): u64 {
         match (s) {
            NPoly { t : PBase(mut x) } => {
-                x = x + 1;
+                x = x + 1u64;
                 0
            },
         }
@@ -84,7 +84,7 @@ module 0x42::m {
     public fun test_06(s: &PPoly<NBase>): u64 {
         match (s) {
            PPoly(NBase { t: mut x }) => {
-                x = x + 1;
+                x = x + 1u64;
                 0
            },
         }
@@ -93,7 +93,7 @@ module 0x42::m {
     public fun test_07(s: &PPoly<PBase>): u64 {
         match (s) {
            PPoly(PBase(mut x)) => {
-                x = x + 1;
+                x = x + 1u64;
                 0
            },
         }

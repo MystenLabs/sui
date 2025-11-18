@@ -28,12 +28,12 @@ module a::m {
         });
         call!(|| {
             if (cond) return &0;
-            if (cond) return &mut 0;
+            if (cond) return &mut 0u64;
             return &0
         });
         call!(|| {
-            if (cond) return (&0, vector[0]);
-            if (cond) return (&mut 0, vector[0, 1]);
+            if (cond) return (&0, vector[0u64]);
+            if (cond) return (&mut 0u64, vector[0, 1]);
             return (&0, vector[])
         });
     }

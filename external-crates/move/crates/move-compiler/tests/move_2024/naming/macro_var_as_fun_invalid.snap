@@ -8,13 +8,13 @@ info:
 error[E03004]: unbound type
   ┌─ tests/move_2024/naming/macro_var_as_fun_invalid.move:3:13
   │
-3 │         let $var = 0;
+3 │         let $var = 0u64;
   │             ^^^^ Unbound type '$var' in current scope
 
 error[E01002]: unexpected token
   ┌─ tests/move_2024/naming/macro_var_as_fun_invalid.move:3:18
   │
-3 │         let $var = 0;
+3 │         let $var = 0u64;
   │                  ^
   │                  │
   │                  Unexpected '='

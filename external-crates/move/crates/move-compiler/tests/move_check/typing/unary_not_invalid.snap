@@ -28,22 +28,22 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/unary_not_invalid.move:9:10
   │
-9 │         !0;
-  │          ^
+9 │         !0u64;
+  │          ^^^^
   │          │
   │          Invalid argument to '!'
   │          Expected: 'bool'
-  │          Given: integer
+  │          Given: 'u64'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/unary_not_invalid.move:10:10
    │
-10 │         !1;
-   │          ^
+10 │         !1u64;
+   │          ^^^^
    │          │
    │          Invalid argument to '!'
    │          Expected: 'bool'
-   │          Given: integer
+   │          Given: 'u64'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/unary_not_invalid.move:11:10
@@ -72,12 +72,12 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/unary_not_invalid.move:13:10
    │
-13 │         !(0, false);
-   │          ^^^^^^^^^^
+13 │         !(0u64, false);
+   │          ^^^^^^^^^^^^^
    │          │
    │          Invalid argument to '!'
    │          Expected: 'bool'
-   │          Given: '({integer}, bool)'
+   │          Given: '(u64, bool)'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/unary_not_invalid.move:14:10

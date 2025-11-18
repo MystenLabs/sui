@@ -17,9 +17,9 @@ module a::m {
 
     fun t() {
        foo!<u8, &mut u8>(1, 2u64, &mut 3u64);
-       ref!<u64, u64>(|| &1);
-       double!<u64, u64>(|| (0, 0));
+       ref!<u64, u64>(|| &1u64);
+       double!<u64, u64>(|| (0u64, 0u64));
        double!<u64, u64>(|| 0);
-       double!<(u64, u64), u64>(|| (&0, &0));
+       double!<(u64, u64), u64>(|| (&0u64, &0u64));
     }
 }

@@ -11,5 +11,5 @@ error[E06002]: use of unassigned variable
  3 │     let x;
    │         - The variable 'x' might not have a value. The variable must be assigned a value before being used.
    ·
-11 │     assert!(x == 42, 42);
+11 │     assert!(x == 42u64, 42);
    │             ^ Invalid usage of unassigned variable 'x'

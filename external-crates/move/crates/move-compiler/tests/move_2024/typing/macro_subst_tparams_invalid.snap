@@ -178,8 +178,8 @@ error[E05001]: ability constraint not satisfied
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:20:10
    │
-20 │         (0 as $U);
-   │          ^ Invalid argument to 'as'
+20 │         (0u64 as $U);
+   │          ^^^^ Invalid argument to 'as'
    ·
 27 │         useless!<None>(X());
    │                  ---- Found: 'a::m::None'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'

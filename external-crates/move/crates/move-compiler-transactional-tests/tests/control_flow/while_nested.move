@@ -1,9 +1,9 @@
 //# run
 module 0x42::m {
 fun main() {
-    let x = 0;
-    let z = 0;
-    let y;
+    let x = 0u64;
+    let z = 0u64;
+    let y: u64;
     while (x < 3) {
         x = x + 1;
         y = 0;

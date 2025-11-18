@@ -6,7 +6,7 @@ module 0x8675309::M {
         let f;
         let s2;
         R { s1: S { f }, s2 } = &R { s1: S{f: 0}, s2: S{f: 1} };
-        f = 0;
+        f = 0u64;
         s2 = S { f: 0 }
     }
 
@@ -14,7 +14,7 @@ module 0x8675309::M {
         let f;
         let s2;
         R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
-        f = 0;
+        f = 0u64;
         s2 = S { f: 0 }
     }
 
@@ -23,7 +23,7 @@ module 0x8675309::M {
         let f;
         let s2;
         R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
-        f = &0;
+        f = &0u64;
         s2 = &S { f: 0 }
     }
 }

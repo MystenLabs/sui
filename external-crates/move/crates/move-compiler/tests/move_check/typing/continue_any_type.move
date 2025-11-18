@@ -3,7 +3,7 @@ module 0x8675309::M {
 
     fun t0() {
         while (true) {
-            0 + continue;
+            0u64 + continue;
         }
     }
 

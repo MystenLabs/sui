@@ -6,10 +6,10 @@ info:
   lint: false
 ---
 error[E04007]: incompatible types
-  ┌─ tests/move_2024/typing/macros_not_type_checked_called.move:4:11
+  ┌─ tests/move_2024/typing/macros_not_type_checked_called.move:4:14
   │
-4 │         1 + b"2"
-  │         - ^ ---- Found: 'vector<u8>'. It is not compatible with the other type.
-  │         │ │  
-  │         │ Incompatible arguments to '+'
-  │         Found: integer. It is not compatible with the other type.
+4 │         1u64 + b"2"
+  │         ---- ^ ---- Found: 'vector<u8>'. It is not compatible with the other type.
+  │         │    │  
+  │         │    Incompatible arguments to '+'
+  │         Found: 'u64'. It is not compatible with the other type.

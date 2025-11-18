@@ -6,14 +6,14 @@ module 0x8675309::M {
     }
 
     fun t1() {
-        0;
+        0u64;
     }
 
     fun t2() {
-        (0, false, S{});
+        (0u64, false, S{});
     }
 
     fun t3() {
-        if (true) (0, false, S{}) else (0, false, S{});
+        if (true) (0, false, S{}) else (0u64, false, S{});
     }
 }

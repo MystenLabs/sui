@@ -31,13 +31,13 @@ module 42::m {
 
     entry fun t04() {
         let x =  'a: loop {
-            (loop { break 'a 0 } : ())
+            (loop { break 'a 0u64 } : ())
         };
         assert!(x == 0, 42);
     }
 
     entry fun t05() {
-        let mut i = 0;
+        let mut i = 0u64;
         'a: while (i < 10) {
             i = i + 1;
             (loop { continue 'a } : ())
@@ -45,7 +45,7 @@ module 42::m {
     }
 
     entry fun t06() {
-        let mut i = 0;
+        let mut i = 0u64;
         'a: while (i < 10) {
             i = i + 1;
             'b: { continue 'a }
@@ -53,7 +53,7 @@ module 42::m {
     }
 
     entry fun t07() {
-        let mut i = 0;
+        let mut i = 0u64;
         'a: while (i < 10) {
             i = i + 1;
             ('b: { continue 'a } : ())
@@ -61,7 +61,7 @@ module 42::m {
     }
 
     entry fun t08() {
-        let mut i = 0;
+        let mut i = 0u64;
         'a: while (i < 10) {
             i = i + 1;
             'b: { break 'a }
@@ -69,7 +69,7 @@ module 42::m {
     }
 
     entry fun t09() {
-        let mut i = 0;
+        let mut i = 0u64;
         'a: while (i < 10) {
             i = i + 1;
             ('b: { break 'a } : ())
@@ -86,12 +86,12 @@ module 42::m {
 
     entry fun t11() {
         let _x = 'a: loop {
-            (loop { break 'a 0 } : ())
+            (loop { break 'a 0u64 } : ())
         };
     }
 
     entry fun t12() {
-        let mut i = 0;
+        let mut i = 0u64;
         'a: while (i < 10) {
             i = i + 1;
             (loop { continue 'a } : ())
@@ -99,7 +99,7 @@ module 42::m {
     }
 
     entry fun t13() {
-        let mut i = 0;
+        let mut i = 0u64;
         'a: while (i < 10) {
             i = i + 1;
             'b: { continue 'a }
@@ -107,7 +107,7 @@ module 42::m {
     }
 
     entry fun t14() {
-        let mut i = 0;
+        let mut i = 0u64;
         'a: while (i < 10) {
             i = i + 1;
             ('b: { continue 'a } : ())
@@ -115,7 +115,7 @@ module 42::m {
     }
 
     entry fun t15() {
-        let mut i = 0;
+        let mut i = 0u64;
         'a: while (i < 10) {
             i = i + 1;
             'b: { break 'a }
@@ -123,7 +123,7 @@ module 42::m {
     }
 
     entry fun t16() {
-        let mut i = 0;
+        let mut i = 0u64;
         'a: while (i < 10) {
             i = i + 1;
             ('b: { break 'a } : ())
@@ -157,7 +157,7 @@ module 42::m {
     entry fun t20(): u64 {
         'a: loop {
             ('b: {
-                'c: { 'd: loop { break 'a 0 } }
+                'c: { 'd: loop { break 'a 0u64 } }
             }: ())
         }
     }
@@ -165,7 +165,7 @@ module 42::m {
     entry fun t21(): u64 {
         'a: loop {
             'b: {
-                ('c: { 'd: loop { break 'a 0 } } : ())
+                ('c: { 'd: loop { break 'a 0u64 } } : ())
             }
         }
     }
@@ -173,7 +173,7 @@ module 42::m {
     entry fun t22(): u64 {
         'a: loop {
             ('b: {
-                 ('c: { 'd: loop { break 'a 0 } } : ())
+                 ('c: { 'd: loop { break 'a 0u64 } } : ())
             } : ())
         }
     }
@@ -181,7 +181,7 @@ module 42::m {
     entry fun t23(): u64 {
         let x = 'a: loop {
             ('b: {
-                'c: { 'd: loop { break 'a 0 } }
+                'c: { 'd: loop { break 'a 0u64 } }
             }: ())
         };
         x
@@ -190,7 +190,7 @@ module 42::m {
     entry fun t24(): u64 {
         let x = 'a: loop {
             'b: {
-                ('c: { 'd: loop { break 'a 0 } } : ())
+                ('c: { 'd: loop { break 'a 0u64 } } : ())
             }
         };
         x
@@ -199,7 +199,7 @@ module 42::m {
     entry fun t25(): u64 {
         let x = 'a: loop {
             ('b: {
-                 ('c: { 'd: loop { break 'a 0 } } : ())
+                 ('c: { 'd: loop { break 'a 0u64 } } : ())
             } : ())
         };
         x

@@ -10,7 +10,7 @@ warning[W09005]: dead or unreachable code
    │
 14 │             break 'a 5;
    │             ^^^^^^^^^^ Any code after this expression will not be reached
-15 │             break 10;
-   │             -------- Unreachable code. This statement (and any following statements) will not be executed.
+15 │             break 10u64;
+   │             ----------- Unreachable code. This statement (and any following statements) will not be executed.
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

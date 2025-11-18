@@ -1,6 +1,6 @@
 module 0x8675309::M {
     fun t0(cond: bool) {
-        let x = 0;
+        let x = 0u64;
         let x_ref = &mut x;
         if (cond) {
             *move x_ref = 1;
@@ -10,7 +10,7 @@ module 0x8675309::M {
     }
 
     fun t1(cond: bool) {
-        let x = 0;
+        let x = 0u64;
         let x_ref = &mut x;
         if (cond) {
         } else {

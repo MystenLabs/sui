@@ -7,13 +7,13 @@ module 0x8675309::M {
     fun mut_mut<T>(_x: &mut T, _y: &mut T) {}
 
     fun t0() {
-        mut<u64>(&0);
+        mut<u64>(&0u64);
         mut<u64>(&S{});
     }
 
     fun t1() {
-        imm_mut<u64>(&0, &0);
-        mut_imm<u64>(&0, &0);
-        mut_mut<u64>(&0, &0);
+        imm_mut<u64>(&0, &0u64);
+        mut_imm<u64>(&0u64, &0);
+        mut_mut<u64>(&0u64, &0u64);
     }
 }

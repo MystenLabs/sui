@@ -89,8 +89,8 @@ error[E04017]: too many arguments
  2 │     fun foo(): u64 { 0 }
    │         --- Expected 0 argument(s)
    ·
-24 │         foo({ let _x = 0; });
-   │         ^^^^^^^^^^^^^^^^^^^^
+24 │         foo({ let _x = 0u64; });
+   │         ^^^^^^^^^^^^^^^^^^^^^^^
    │         │  │
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::foo'. The call expected 0 argument(s) but got 1
@@ -155,8 +155,8 @@ error[E04017]: too many arguments
  2 │     fun foo(): u64 { 0 }
    │         --- Expected 0 argument(s)
    ·
-37 │         foo({ let _x = 0; });
-   │         ^^^^^^^^^^^^^^^^^^^^
+37 │         foo({ let _x = 0u64; });
+   │         ^^^^^^^^^^^^^^^^^^^^^^^
    │         │  │
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x8675309::M::foo'. The call expected 0 argument(s) but got 1

@@ -6,32 +6,32 @@ module a::m {
     // simple test of break/return in a lambda with a named block
     fun t() {
         do!(|| 'a: {
-            if (false) return'a 0;
+            if (false) return'a 0u64;
             0
         });
         do!(|| ('a: {
-            if (false) return'a 0;
+            if (false) return'a 0u64;
             0
         }));
         do2!(|| 'a: {
             if (false) return'a 0;
-            0
+            0u64
         },
         || 'b: {
-            if (false) return'b 0;
+            if (false) return'b 0u64;
             0
         });
     }
     fun nested() {
         do!(|| 'outer: {
             do2!(|| 'a: {
-                if (false) return'outer (0, 1);
+                if (false) return'outer (0u64, 1);
                 if (false) return'a 0;
                 0
             },
             || 'b: {
                 if (false) return'outer (0, 1);
-                if (false) return'b 0;
+                if (false) return'b 0u64;
                 0
             })
         });

@@ -12,15 +12,15 @@ module 0x42::M {
         if (cond) bar() + 1;
         // (if (cond) bar()) + 1;
         // so error about wrong argument to +
-        if (cond) 'a: { foo() } + 1;
+        if (cond) 'a: { foo() } + 1u64;
 
         // while (cond) (bar() + 1);
         // so error about invalid loop body type
         'a: while (cond) bar() + 2;
         // ('a: while (cond) foo()) + 2
         // so error about wrong argument to +
-        'a: while (cond) { foo() } + 2;
-        while (cond) 'a: { return 'a foo() } + 2;
+        'a: while (cond) { foo() } + 2u64;
+        while (cond) 'a: { return 'a foo() } + 2u64;
 
         // loop (bar() + 1);
         // so error about invalid loop body type
@@ -29,6 +29,6 @@ module 0x42::M {
 
 
         // does not type check since this return should be a break
-        let _: u64 = loop 'a: { return 'a 0 } + 1;
+        let _: u64 = loop 'a: { return 'a 0u64 } + 1;
     }
 }

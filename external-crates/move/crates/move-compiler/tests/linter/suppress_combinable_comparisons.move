@@ -8,7 +8,7 @@ module a::m {
 
 module a::n {
     #[allow(lint(combinable_comparisons))]
-    const C: bool = 5 > 3 || 5 == 3;
+    const C: bool = 5 > 3u64 || 5 == 3u64;
 
     #[allow(lint(combinable_comparisons))]
     fun t(x: u64, y: u64): bool {

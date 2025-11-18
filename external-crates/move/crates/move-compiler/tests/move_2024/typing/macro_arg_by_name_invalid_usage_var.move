@@ -7,7 +7,7 @@ module a::m {
     }
 
     fun t() {
-        let x = 0;
+        let x = 0u64;
         foo!(x);
         x;
     }

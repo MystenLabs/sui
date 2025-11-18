@@ -4,7 +4,7 @@ module 1::m {
     // Checks that default integers will always be u64 otherwise existing impls might fail
     // We're going above u64 max
     fun main() {
-        let i = 1;
+        let i = 1u64;
         let j = 1;
         while (j < 65) {
             i = 2 * i;
@@ -17,8 +17,8 @@ module 1::m {
 module 2::m {
     // Checks that default integers will always be u64 otherwise existing impls might fail
     fun main() {
-        let i = 1;
-        let j = 1;
+        let i = 1u64;
+        let j = 1u64;
         while (j < 64) {
             i = 2 * i;
             j = j + 1;
@@ -30,11 +30,11 @@ module 2::m {
 module 3::m {
     // Checks that default integers will always be u64 otherwise existing impls might fail
     fun main() {
-        let i = 256;
+        let i = 256u64;
         let j = 1;
         while (j < (64 - 8)) {
             i = 2 * i;
-            j = j + 1;
+            j = j + 1u64;
         };
     }
 }
@@ -43,9 +43,9 @@ module 3::m {
 module 4::m {
     // Checks that default integers will always be u64 otherwise existing impls might fail
     fun main() {
-        let i = 65536;
+        let i = 65536u64;
         let j = 1;
-        while (j < (64 - 16)) {
+        while (j < (64u64 - 16)) {
             i = 2 * i;
             j = j + 1;
         };

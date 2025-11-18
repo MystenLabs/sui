@@ -7,8 +7,8 @@
 module a::m;
 
 fun simple(x: u64, b: bool) {
-    &1 == 1;
-    (*&1) == 1;
+    &1 == 1u64;
+    (*&1u64) == 1;
     *&x == copy x;
     b && b;
     b || b;
@@ -20,7 +20,7 @@ fun optimizations() {
         x = 1;
         break
     };
-    let y = if (true) 1 else 1;
+    let y = if (true) 1u64 else 1;
     x == y;
     x == 1; // using x a second time produces a warning
 }

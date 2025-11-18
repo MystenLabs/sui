@@ -23,18 +23,18 @@ error[E04003]: built-in operation not supported
   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/binary_mod_invalid.move:9:11
+  ┌─ tests/move_check/typing/binary_mod_invalid.move:9:14
   │
-9 │         1 % false;
-  │         - ^ ----- Found: 'bool'. It is not compatible with the other type.
-  │         │ │  
-  │         │ Incompatible arguments to '%'
-  │         Found: integer. It is not compatible with the other type.
+9 │         1u64 % false;
+  │         ---- ^ ----- Found: 'bool'. It is not compatible with the other type.
+  │         │    │  
+  │         │    Incompatible arguments to '%'
+  │         Found: 'u64'. It is not compatible with the other type.
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_mod_invalid.move:10:9
    │
-10 │         false % 1;
+10 │         false % 1u64;
    │         ^^^^^
    │         │
    │         Invalid argument to '%'
@@ -43,8 +43,8 @@ error[E04003]: built-in operation not supported
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/binary_mod_invalid.move:10:15
    │
-10 │         false % 1;
-   │         ----- ^ - Found: integer. It is not compatible with the other type.
+10 │         false % 1u64;
+   │         ----- ^ ---- Found: 'u64'. It is not compatible with the other type.
    │         │     │  
    │         │     Incompatible arguments to '%'
    │         Found: 'bool'. It is not compatible with the other type.
@@ -52,8 +52,8 @@ error[E04007]: incompatible types
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_mod_invalid.move:10:17
    │
-10 │         false % 1;
-   │         -----   ^ Invalid argument to '%'
+10 │         false % 1u64;
+   │         -----   ^^^^ Invalid argument to '%'
    │         │        
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
@@ -134,37 +134,37 @@ error[E04003]: built-in operation not supported
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_mod_invalid.move:15:9
    │
-15 │         1 % false % @0x0 % 0;
-   │         ^^^^^^^^^^^^^^^^
-   │         │           │
-   │         │           Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+15 │         1u64 % false % @0x0 % 0u64;
+   │         ^^^^^^^^^^^^^^^^^^^
+   │         │              │
+   │         │              Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
    │         Invalid argument to '%'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_check/typing/binary_mod_invalid.move:15:11
+   ┌─ tests/move_check/typing/binary_mod_invalid.move:15:14
    │
-15 │         1 % false % @0x0 % 0;
-   │         - ^ ----- Found: 'bool'. It is not compatible with the other type.
-   │         │ │  
-   │         │ Incompatible arguments to '%'
-   │         Found: integer. It is not compatible with the other type.
+15 │         1u64 % false % @0x0 % 0u64;
+   │         ---- ^ ----- Found: 'bool'. It is not compatible with the other type.
+   │         │    │  
+   │         │    Incompatible arguments to '%'
+   │         Found: 'u64'. It is not compatible with the other type.
 
 error[E04007]: incompatible types
-   ┌─ tests/move_check/typing/binary_mod_invalid.move:15:26
+   ┌─ tests/move_check/typing/binary_mod_invalid.move:15:29
    │
-15 │         1 % false % @0x0 % 0;
-   │                     ---- ^ - Found: integer. It is not compatible with the other type.
-   │                     │    │  
-   │                     │    Incompatible arguments to '%'
-   │                     Found: 'address'. It is not compatible with the other type.
+15 │         1u64 % false % @0x0 % 0u64;
+   │                        ---- ^ ---- Found: 'u64'. It is not compatible with the other type.
+   │                        │    │  
+   │                        │    Incompatible arguments to '%'
+   │                        Found: 'address'. It is not compatible with the other type.
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/binary_mod_invalid.move:15:28
+   ┌─ tests/move_check/typing/binary_mod_invalid.move:15:31
    │
-15 │         1 % false % @0x0 % 0;
-   │                     ----   ^ Invalid argument to '%'
-   │                     │       
-   │                     Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+15 │         1u64 % false % @0x0 % 0u64;
+   │                        ----   ^^^^ Invalid argument to '%'
+   │                        │       
+   │                        Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_mod_invalid.move:16:9
@@ -184,53 +184,53 @@ error[E04003]: built-in operation not supported
    │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_check/typing/binary_mod_invalid.move:17:11
+   ┌─ tests/move_check/typing/binary_mod_invalid.move:17:14
    │
-17 │         1 % ();
-   │         - ^ -- Found: '()'. It is not compatible with the other type.
-   │         │ │  
-   │         │ Incompatible arguments to '%'
-   │         Found: integer. It is not compatible with the other type.
+17 │         1u64 % ();
+   │         ---- ^ -- Found: '()'. It is not compatible with the other type.
+   │         │    │  
+   │         │    Incompatible arguments to '%'
+   │         Found: 'u64'. It is not compatible with the other type.
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_mod_invalid.move:18:9
    │
-18 │         (0, 1) % (0, 1, 2);
-   │         ^^^^^^
+18 │         (0u64, 1u64) % (0u64, 1u64, 2u64);
+   │         ^^^^^^^^^^^^
    │         │
    │         Invalid argument to '%'
-   │         Found: '({integer}, {integer})'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_check/typing/binary_mod_invalid.move:18:16
+   ┌─ tests/move_check/typing/binary_mod_invalid.move:18:22
    │
-18 │         (0, 1) % (0, 1, 2);
-   │         ------ ^ --------- Found expression list of length 3: '({integer}, {integer}, {integer})'. It is not compatible with the other type of length 2.
-   │         │      │  
-   │         │      Incompatible arguments to '%'
-   │         Found expression list of length 2: '({integer}, {integer})'. It is not compatible with the other type of length 3.
+18 │         (0u64, 1u64) % (0u64, 1u64, 2u64);
+   │         ------------ ^ ------------------ Found expression list of length 3: '(u64, u64, u64)'. It is not compatible with the other type of length 2.
+   │         │            │  
+   │         │            Incompatible arguments to '%'
+   │         Found expression list of length 2: '(u64, u64)'. It is not compatible with the other type of length 3.
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/binary_mod_invalid.move:18:18
+   ┌─ tests/move_check/typing/binary_mod_invalid.move:18:24
    │
-18 │         (0, 1) % (0, 1, 2);
-   │         ------   ^^^^^^^^^ Invalid argument to '%'
-   │         │         
-   │         Found: '({integer}, {integer})'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+18 │         (0u64, 1u64) % (0u64, 1u64, 2u64);
+   │         ------------   ^^^^^^^^^^^^^^^^^^ Invalid argument to '%'
+   │         │               
+   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_mod_invalid.move:19:9
    │
-19 │         (1, 2) % (0, 1);
-   │         ^^^^^^
+19 │         (1, 2u64) % (0u64, 1);
+   │         ^^^^^^^^^
    │         │
    │         Invalid argument to '%'
-   │         Found: '({integer}, {integer})'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/binary_mod_invalid.move:19:18
+   ┌─ tests/move_check/typing/binary_mod_invalid.move:19:21
    │
-19 │         (1, 2) % (0, 1);
-   │         ------   ^^^^^^ Invalid argument to '%'
-   │         │         
-   │         Found: '({integer}, {integer})'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+19 │         (1, 2u64) % (0u64, 1);
+   │         ---------   ^^^^^^^^^ Invalid argument to '%'
+   │         │            
+   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'

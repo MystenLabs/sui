@@ -4,11 +4,11 @@ module a::m {
     }
 
     fun conditional(cond: bool) {
-        call!(|| { if (cond) return 0; &1 });
-        call!(|| { if (cond) 1 else return &0 });
-        call!(|| { if (cond) return 0; &1 });
-        call!(|| { if (cond) 1 else return &0 });
-        call!(|| { if (cond) return (vector[], 0, false); (vector[0], true) });
-        call!(|| { if (cond) (vector[], 0, false) else return (vector[0], true) });
+        call!(|| { if (cond) return 0u64; &1u64 });
+        call!(|| { if (cond) 1u64 else return &0u64 });
+        call!(|| { if (cond) return 0u64; &1u64 });
+        call!(|| { if (cond) 1u64 else return &0u64 });
+        call!(|| { if (cond) return (vector[], 0u64, false); (vector[0u64], true) });
+        call!(|| { if (cond) (vector[], 0u64, false) else return (vector[0u64], true) });
     }
 }

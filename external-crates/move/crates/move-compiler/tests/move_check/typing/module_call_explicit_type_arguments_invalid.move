@@ -4,9 +4,9 @@ module 0x8675309::M {
 
     fun t1() {
         foo<u64, u64>(false, false);
-        foo<bool, bool>(0, false);
-        foo<bool, bool>(false, 0);
-        foo<bool, bool>(0, 0);
+        foo<bool, bool>(0u64, false);
+        foo<bool, bool>(false, 0u64);
+        foo<bool, bool>(0u64, 0u64);
     }
 
     fun t2<T, U, V>(t: T, u: U, v: V) {

@@ -4,9 +4,9 @@ module 0x8675309::M {
     struct Box<T> has drop { f: T }
 
     fun t0() {
-        (0, S{ }, R<u64> { f: 1 });
-        (0, S{ }, Box<R<u64>> { f: R { f: 1 } });
-        (0, S{ }, Box { f: abort 0 });
+        (0u64, S{ }, R<u64> { f: 1 });
+        (0u64, S{ }, Box<R<u64>> { f: R { f: 1 } });
+        (0u64, S{ }, Box { f: abort 0 });
     }
 
 }

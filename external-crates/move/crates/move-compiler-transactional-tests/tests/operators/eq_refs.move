@@ -154,15 +154,15 @@ module 0x42::m {
     }
 
     public fun tnum_0(): bool {
-       0 == &0
+       0 == &0u64
     }
 
     public fun tnum_1(): bool {
-       &0 == &0
+       &0 == &0u64
     }
 
     public fun tnum_2(): bool {
-        let a = 0;
+        let a = 0u64;
         let b = &mut 0;
         let c = &0;
         a == b && b == c && a == c

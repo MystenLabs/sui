@@ -63,31 +63,31 @@ error[E04027]: invalid 'move' usage
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:85:10
    │
-85 │         (move t2.u).vs[2];
+85 │         (move t2.u).vs[2u64];
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:86:10
    │
-86 │         (move t2.u).vs[2].w;
+86 │         (move t2.u).vs[2u64].w;
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:87:10
    │
-87 │         (move t2.u).vs[2].w.xs[m+1];
+87 │         (move t2.u).vs[2u64].w.xs[m+1];
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:88:10
    │
-88 │         (move t2.u).vs[2].w.xs[m+1].y;
+88 │         (move t2.u).vs[2u64].w.xs[m+1].y;
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:89:10
    │
-89 │         (move t2.u).vs[2].w.xs[m+1].y.z;
+89 │         (move t2.u).vs[2u64].w.xs[m+1].y.z;
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
 error[E01013]: invalid 'move' or 'copy'

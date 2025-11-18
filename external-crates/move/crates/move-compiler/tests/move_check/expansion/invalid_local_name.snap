@@ -26,7 +26,7 @@ error[E02010]: invalid name
 error[E02010]: invalid name
    ┌─ tests/move_check/expansion/invalid_local_name.move:14:13
    │
-14 │         let No = 100;
+14 │         let No = 100u64;
    │             ^^ Invalid local name 'No'. Local variable names must start with 'a'..'z', '_', or be a valid name quoted with backticks (`name`)
 
 error[E03005]: unbound unscoped name

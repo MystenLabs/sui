@@ -30,10 +30,10 @@ module 0x2::M {
 
     #[test]
     public fun test()  {
-        let x = 42;
+        let x = 42u64;
         print(&x);
 
-        let mut v = vector::empty();
+        let mut v: vector<u64> = vector::empty();
         vector::push_back(&mut v, 100);
         vector::push_back(&mut v, 200);
         vector::push_back(&mut v, 300);

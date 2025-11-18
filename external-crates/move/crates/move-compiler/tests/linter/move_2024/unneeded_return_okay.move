@@ -5,18 +5,18 @@ fun t0() { return abort 0 }
 // invalid type, so no lint
 fun t1() {
     let mut x = 0;
-    return (x = 1)
+    return (x = 1u64)
 }
 
 // invalid syntax, so no lint
 fun t2() {
-    let mut x = 0;
+    let mut x = 0u64;
     let y = &mut x;
-    return (*x = 1)
+    return (*x = 1u64)
 }
 
 // invalid type, so no lint
-fun t3() { 'a: { return { return 'a 0 } } }
+fun t3() { 'a: { return { return 'a 0u64 } } }
 
 // the following are all invalid syntax, so no lint
 

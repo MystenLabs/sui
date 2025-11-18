@@ -1,8 +1,8 @@
 // true negative cases for redundant conditional
 module a::m {
     public fun t0(condition: bool) {
-        if (condition) 1 else { 0 };
-        if (condition) vector[] else vector[1];
+        if (condition) 1 else { 0u64 };
+        if (condition) vector[] else vector[1u64];
     }
 
     public fun t1(x: u64, y: u64) {

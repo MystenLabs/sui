@@ -9,7 +9,7 @@ module 0x42::m {
 
     fun t2() {
         loop {
-            let x = 0;
+            let x = 0u64;
             0 + x + 0;
         };
     }
@@ -54,7 +54,7 @@ module 0x42::m {
         let x;
         loop {
             if (cond) {
-                x = 1;
+                x = 1u64;
                 break
             } else {
                 x = 2;

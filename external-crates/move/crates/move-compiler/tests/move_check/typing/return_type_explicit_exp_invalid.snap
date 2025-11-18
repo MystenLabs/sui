@@ -21,32 +21,32 @@ error[E04007]: incompatible types
   │
 8 │     fun t1(): () {
   │               -- Expected: '()'
-9 │         if (true) return 1 else return 0
-  │                   ^^^^^^^^
+9 │         if (true) return 1u64 else return 0u64
+  │                   ^^^^^^^^^^^
   │                   │      │
-  │                   │      Given: integer
+  │                   │      Given: 'u64'
   │                   Invalid return
 
 error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/return_type_explicit_exp_invalid.move:9:33
+  ┌─ tests/move_check/typing/return_type_explicit_exp_invalid.move:9:36
   │
 8 │     fun t1(): () {
   │               -- Expected: '()'
-9 │         if (true) return 1 else return 0
-  │                                 ^^^^^^^^
-  │                                 │      │
-  │                                 │      Given: integer
-  │                                 Invalid return
+9 │         if (true) return 1u64 else return 0u64
+  │                                    ^^^^^^^^^^^
+  │                                    │      │
+  │                                    │      Given: 'u64'
+  │                                    Invalid return
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/return_type_explicit_exp_invalid.move:13:14
    │
 12 │     fun t2(): (u64, bool) {
    │               ----------- Expected expression list of length 2: '(u64, bool)'
-13 │         loop return (0, false, R{});
-   │              ^^^^^^^^^^^^^^^^^^^^^^
+13 │         loop return (0u64, false, R{});
+   │              ^^^^^^^^^^^^^^^^^^^^^^^^^
    │              │      │
-   │              │      Given expression list of length 3: '({integer}, bool, 0x8675309::M::R)'
+   │              │      Given expression list of length 3: '(u64, bool, 0x8675309::M::R)'
    │              Invalid return
 
 error[E04007]: incompatible types
@@ -54,10 +54,10 @@ error[E04007]: incompatible types
    │
 17 │     fun t3(): (u64, bool, R, bool) {
    │               -------------------- Expected expression list of length 4: '(u64, bool, 0x8675309::M::R, bool)'
-18 │         while (true) return (0, false, R{});
-   │                      ^^^^^^^^^^^^^^^^^^^^^^
+18 │         while (true) return (0u64, false, R{});
+   │                      ^^^^^^^^^^^^^^^^^^^^^^^^^
    │                      │      │
-   │                      │      Given expression list of length 3: '({integer}, bool, 0x8675309::M::R)'
+   │                      │      Given expression list of length 3: '(u64, bool, 0x8675309::M::R)'
    │                      Invalid return
 
 error[E04007]: incompatible types
@@ -65,8 +65,8 @@ error[E04007]: incompatible types
    │
 22 │     fun t4(): (bool, u64, R) {
    │                ---- Expected: 'bool'
-23 │         while (false) return (0, false, R{});
-   │                       ^^^^^^^^^^^^^^^^^^^^^^
+23 │         while (false) return (0u64, false, R{});
+   │                       ^^^^^^^^^^^^^^^^^^^^^^^^^
    │                       │       │
-   │                       │       Given: integer
+   │                       │       Given: 'u64'
    │                       Invalid return

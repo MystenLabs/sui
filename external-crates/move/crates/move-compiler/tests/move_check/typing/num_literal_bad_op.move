@@ -1,3 +1,3 @@
 module a::m {
-    fun test(): bool { let x = 0; x + b"foo" }
+    fun test(): bool { let x = 0u64; x + b"foo" }
 }

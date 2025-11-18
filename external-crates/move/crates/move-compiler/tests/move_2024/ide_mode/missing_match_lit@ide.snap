@@ -8,16 +8,16 @@ info:
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/ide_mode/missing_match_lit.move:4:16
   │
-4 │         match (0) {
-  │                ^ Pattern '_0' not covered
+4 │         match (0u64) {
+  │                ^^^^ Pattern '_0' not covered
   │
   = When '_0' is not 1
 
 note[I15004]: IDE missing match arms
-  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:4:19
+  ┌─ tests/move_2024/ide_mode/missing_match_lit.move:4:22
   │  
-4 │           match (0) {
-  │ ╭───────────────────^
+4 │           match (0u64) {
+  │ ╭──────────────────────^
 5 │ │             1 => 0
 6 │ │         }
   │ ╰─────────^ Missing arms: '_'
@@ -25,13 +25,13 @@ note[I15004]: IDE missing match arms
 error[E04036]: non-exhaustive pattern
    ┌─ tests/move_2024/ide_mode/missing_match_lit.move:10:16
    │
-10 │         match (0) {
-   │                ^ Pattern '_' not covered
+10 │         match (0u64) {
+   │                ^^^^ Pattern '_' not covered
 
 note[I15004]: IDE missing match arms
-   ┌─ tests/move_2024/ide_mode/missing_match_lit.move:10:19
+   ┌─ tests/move_2024/ide_mode/missing_match_lit.move:10:22
    │  
-10 │           match (0) {
-   │ ╭───────────────────^
+10 │           match (0u64) {
+   │ ╭──────────────────────^
 11 │ │         }
    │ ╰─────────^ Missing arms: '_'

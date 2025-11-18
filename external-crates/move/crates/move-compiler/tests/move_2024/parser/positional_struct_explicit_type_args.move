@@ -13,6 +13,6 @@ module 0x42::M {
     }
 
     fun should_fail() {
-        let _ = Foo <u64>(0);
+        let _ = Foo <u64>(0u64);
     }
 }

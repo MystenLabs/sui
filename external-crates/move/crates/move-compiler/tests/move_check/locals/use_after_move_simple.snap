@@ -13,7 +13,7 @@ error[E06002]: use of unassigned variable
   │         │
   │         The value of 'x' was previously moved here.
   │         Suggestion: use 'copy x' to avoid the move.
-7 │         let _ = move x + 1;
+7 │         let _ = move x + 1u64;
   │                 ^^^^^^ Invalid usage of previously moved variable 'x'.
 
 error[E06002]: use of unassigned variable
