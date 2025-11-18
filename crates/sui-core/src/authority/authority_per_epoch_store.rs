@@ -650,7 +650,7 @@ impl AuthorityEpochTables {
                     object_ref_indexing,
                     mutexes * 2,
                     uniform_key,
-                    bloom_config.clone(),
+                    lru_bloom_config.clone(),
                 ),
             ),
             (
