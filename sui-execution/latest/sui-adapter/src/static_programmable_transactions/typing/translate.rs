@@ -12,7 +12,7 @@ use crate::{
     },
 };
 use indexmap::{IndexMap, IndexSet};
-use std::rc::Rc;
+use std::{collections::BTreeMap, rc::Rc};
 use sui_types::{
     base_types::{ObjectRef, TxContextKind},
     coin::RESOLVED_COIN_STRUCT,
@@ -45,7 +45,10 @@ struct Context {
     objects: IndexMap<T::InputIndex, T::ObjectInput>,
     pure: IndexMap<(T::InputIndex, Type), T::PureInput>,
     receiving: IndexMap<(T::InputIndex, Type), T::ReceivingInput>,
-    results: Vec<T::ResultType>,
+    commands: Vec<T::Command>,
+    // map from original result to the lifted result
+    // the map should only be queried via a range, up to the current command index
+    result_index_lift: BTreeMap<u16, u16>,
 }
 
 impl Context {
@@ -59,7 +62,8 @@ impl Context {
             objects: IndexMap::new(),
             pure: IndexMap::new(),
             receiving: IndexMap::new(),
-            results: vec![],
+            commands: vec![],
+            result_index_lift: BTreeMap::new(),
         };
         // clone inputs for debug assertions
         #[cfg(debug_assertions)]
@@ -120,12 +124,13 @@ impl Context {
         Ok(context)
     }
 
-    fn finish(self, commands: T::Commands) -> T::Transaction {
+    fn finish(self) -> T::Transaction {
         let Self {
             bytes,
             objects,
             pure,
             receiving,
+            commands,
             ..
         } = self;
         let objects = objects.into_iter().map(|(_, o)| o).collect();
@@ -140,6 +145,52 @@ impl Context {
         }
     }
 
+    fn push_result(&mut self, command: T::Command_) -> Result<(), ExecutionError> {
+        self.commands.push(sp(self.current_command, command));
+        Ok(())
+    }
+
+    /// Push a generated command that was not part of the original PTB
+    /// It then "lifts" all subsequent result indices by 1
+    /// returns the new index of the pushed command
+    fn push_generated_command(&mut self, command: T::Command_) -> Result<u16, ExecutionError> {
+        // we are "overwriting" the command that was normally at `cur`, as such, we need to "lift"
+        // `cur` and all subsequent result indices by 1
+        let cur = self.current_command;
+        let prev_lift = self
+            .result_index_lift
+            .last_key_value()
+            .map(|(k, v)| {
+                debug_assert!(*k <= cur);
+                *v
+            })
+            .unwrap_or(0);
+        let Some(cur_lift) = prev_lift.checked_add(1) else {
+            invariant_violation!("Cannot increment lift value of {prev_lift}")
+        };
+        self.result_index_lift.insert(cur, cur_lift + 1);
+        self.commands.push(sp(self.current_command, command));
+        Ok(cur)
+    }
+
+    fn lift_result_index(&mut self, original_idx: u16) -> Result<u16, ExecutionError> {
+        let lift = self
+            .result_index_lift
+            .range(0..=original_idx)
+            .last()
+            .map(|(_k, v)| *v)
+            .unwrap_or(0);
+        original_idx.checked_add(lift).ok_or_else(|| {
+            make_invariant_violation!(
+                "Result index lift overflow. Cannot lift {original_idx} by {lift}",
+            )
+        })
+    }
+
+    fn result_type(&self, i: u16) -> Option<&T::ResultType> {
+        self.commands.get(i as usize).map(|c| &c.value.result_type)
+    }
+
     // Get the fixed type of a location. Returns `None` for Pure and Receiving inputs,
     fn fixed_type(
         &mut self,
@@ -150,7 +201,7 @@ impl Context {
             SplatLocation::GasCoin => (T::Location::GasCoin, env.gas_coin_type()?),
             SplatLocation::Result(i, j) => (
                 T::Location::Result(i, j),
-                self.results[i as usize][j as usize].clone(),
+                self.result_type(i).unwrap()[j as usize].clone(),
             ),
             SplatLocation::Input(i) => match &self.input_resolution[i.0 as usize] {
                 InputKind::Object => {
@@ -235,7 +286,7 @@ pub fn transaction<Mode: ExecutionMode>(
 ) -> Result<T::Transaction, ExecutionError> {
     let L::Transaction { inputs, commands } = lt;
     let mut context = Context::new(inputs)?;
-    let commands = commands
+    commands
         .into_iter()
         .enumerate()
         .map(|(i, c)| {
@@ -243,7 +294,6 @@ pub fn transaction<Mode: ExecutionMode>(
             context.current_command = idx;
             let (c_, tys) =
                 command::<Mode>(env, &mut context, c).map_err(|e| e.with_command_index(i))?;
-            context.results.push(tys.clone());
             let c = T::Command_ {
                 command: c_,
                 result_type: tys,
@@ -252,10 +302,10 @@ pub fn transaction<Mode: ExecutionMode>(
                 // computed later
                 consumed_shared_objects: vec![],
             };
-            Ok(sp(idx, c))
+            context.push_result(c)
         })
-        .collect::<Result<Vec<_>, ExecutionError>>()?;
-    let mut ast = context.finish(commands);
+        .collect::<Result<(), ExecutionError>>()?;
+    let mut ast = context.finish();
     // mark the last usage of references as Move instead of Copy
     scope_references::transaction(&mut ast);
     // mark unused results to be dropped
@@ -489,13 +539,14 @@ where
                 }
                 res.push(SplatLocation::Input(T::InputIndex(i)))
             }
-            L::Argument::NestedResult(i, j) => {
-                let Some(command_result) = context.results.get(i as usize) else {
-                    return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
+            L::Argument::NestedResult(original_i, j) => {
+                let i = context.lift_result_index(original_i)?;
+                let Some(command_result) = context.result_type(i) else {
+                    return Err(CommandArgumentError::IndexOutOfBounds { idx: original_i }.into());
                 };
                 if j as usize >= command_result.len() {
                     return Err(CommandArgumentError::SecondaryIndexOutOfBounds {
-                        result_idx: i,
+                        result_idx: original_i,
                         secondary_idx: j,
                     }
                     .into());
@@ -503,7 +554,8 @@ where
                 res.push(SplatLocation::Result(i, j))
             }
             L::Argument::Result(i) => {
-                let Some(result) = context.results.get(i as usize) else {
+                let lifted_i = context.lift_result_index(i)?;
+                let Some(result) = context.result_type(lifted_i) else {
                     return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
                 };
                 let Ok(len): Result<u16, _> = result.len().try_into() else {
