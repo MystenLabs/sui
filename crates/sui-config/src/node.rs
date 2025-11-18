@@ -1245,6 +1245,11 @@ pub struct StateSnapshotConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_store_config: Option<ObjectStoreConfig>,
     pub concurrency: usize,
+    /// Archive snapshots every N epochs. If set to 0, archival is disabled.
+    /// Archived snapshots are copied to `archive/epoch_<N>/` in the same bucket
+    /// and are intended to be kept indefinitely.
+    #[serde(default)]
+    pub archive_interval_epochs: u64,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
