@@ -9,8 +9,8 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use sui_macros::register_fail_point_arg;
 use sui_macros::sim_test;
-use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::base_types::AuthorityName;
 use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, ProgrammableTransaction};
@@ -313,7 +313,8 @@ async fn test_checkpoint_contents_v2_alias_versions() {
         .unwrap()
         .1
         .authority_client()
-        .client_for_testing();
+        .get_client_for_testing()
+        .unwrap();
     let request = sui_types::messages_grpc::RawSubmitTxRequest {
         transactions: vec![
             bcs::to_bytes(&init_aliases_tx).unwrap().into(),
