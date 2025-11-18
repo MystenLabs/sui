@@ -37,6 +37,8 @@ pub struct AuthenticatedEvent {
     pub event: Event,
     /// The checkpoint sequence number where this event was included.
     pub checkpoint: u64,
+    /// The accumulator version when this event was committed.
+    pub accumulator_version: u64,
     /// The transaction index within the checkpoint.
     pub transaction_idx: u32,
     /// The event index within the transaction.
@@ -110,10 +112,14 @@ impl TryFrom<sui_rpc_api::grpc::alpha::event_service_proto::AuthenticatedEvent>
         let event_idx = event
             .event_idx
             .ok_or_else(|| ClientError::InternalError("Missing event_idx".to_string()))?;
+        let accumulator_version = event
+            .accumulator_version
+            .ok_or_else(|| ClientError::InternalError("Missing accumulator_version".to_string()))?;
 
         Ok(AuthenticatedEvent {
             event: event_data,
             checkpoint,
+            accumulator_version,
             transaction_idx,
             event_idx,
         })

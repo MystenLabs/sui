@@ -189,7 +189,7 @@ impl EventStreamState {
         last_verified_checkpoint: u64,
     ) -> Vec<Vec<EventCommitment>> {
         let mut accumulated_events: Vec<Vec<EventCommitment>> = Vec::new();
-        let mut current_checkpoint: Option<u64> = None;
+        let mut current_accumulator_version: Option<u64> = None;
         let mut current_batch: Vec<EventCommitment> = Vec::new();
 
         for event in events {
@@ -210,18 +210,18 @@ impl EventStreamState {
                 digest,
             );
 
-            match current_checkpoint {
+            match current_accumulator_version {
                 None => {
-                    current_checkpoint = Some(event.checkpoint);
+                    current_accumulator_version = Some(event.accumulator_version);
                     current_batch.push(commitment);
                 }
-                Some(cp) if cp == event.checkpoint => {
+                Some(version) if version == event.accumulator_version => {
                     current_batch.push(commitment);
                 }
                 Some(_) => {
                     accumulated_events.push(current_batch);
                     current_batch = vec![commitment];
-                    current_checkpoint = Some(event.checkpoint);
+                    current_accumulator_version = Some(event.accumulator_version);
                 }
             }
         }
