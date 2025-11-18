@@ -220,7 +220,7 @@ mod tests {
     use insta::{assert_json_snapshot, assert_snapshot};
     use serde_json::json;
 
-    use crate::pagination::PageLimits;
+    use crate::{api::scalars::json::Json, pagination::PageLimits};
 
     use super::*;
 
@@ -287,8 +287,9 @@ mod tests {
         }
 
         /// Looks like a transaction execution or dry-run field.
-        async fn tx(&self, bytes: String, other: usize) -> usize {
-            bytes.len() + other
+        async fn tx(&self, _transaction: Json, other: usize) -> usize {
+            // For testing purposes, just return the other value
+            other
         }
 
         /// Looks like a ZkLogin prover endpoint.
@@ -307,8 +308,9 @@ mod tests {
     #[Object]
     impl Mutation {
         /// Looks like a transaction execution or dry-run field.
-        async fn tx(&self, bytes: String, other: usize) -> usize {
-            bytes.len() + other
+        async fn tx(&self, _bytes: Json, other: usize) -> usize {
+            // For testing purposes, just return the other value
+            other
         }
 
         /// Looks like a ZkLogin prover endpoint (this field is not included in `tx_payload_args` to test that configuration).
@@ -326,7 +328,7 @@ mod tests {
             max_tx_payload_size: 1000,
             tx_payload_args: BTreeSet::from_iter([
                 ("Mutation", "tx", "bytes"),
-                ("Query", "tx", "bytes"),
+                ("Query", "tx", "transaction"),
                 ("Query", "zk", "bytes"),
                 ("Query", "zk", "sigs"),
             ]),
@@ -841,7 +843,7 @@ mod tests {
             page(),
         );
 
-        let response = execute(&schema, r#"{ tx(bytes: "hello world", other: 1) }"#).await;
+        let response = execute(&schema, r#"{ tx(transaction: "hello world", other: 1) }"#).await;
 
         assert_json_snapshot!(response, @r###"
         {
@@ -852,7 +854,7 @@ mod tests {
               "locations": [
                 {
                   "line": 1,
-                  "column": 13
+                  "column": 19
                 }
               ],
               "path": [
@@ -875,14 +877,14 @@ mod tests {
             &schema,
             r#"
             {
-              tx(bytes: "hello world", other: 1)
+              tx(transaction: "hello world", other: 1)
               zk(bytes: "hello world", sigs: ["a", "b", "c"])
             }
             "#,
         )
         .await;
 
-        assert_snapshot!(usage(response, "payload"), @"{query_payload_size: 113,tx_payload_size: 39}");
+        assert_snapshot!(usage(response, "payload"), @"{query_payload_size: 119,tx_payload_size: 39}");
     }
 
     /// Transaction payloads that are in nested fields are not counted.
@@ -894,7 +896,7 @@ mod tests {
             r#"
             {
               a {
-                tx(bytes: "hello world", other: 1)
+                tx(transaction: "hello world", other: 1)
                 zk(bytes: "hello world", sigs: ["a", "b", "c"])
               }
             }
@@ -902,7 +904,7 @@ mod tests {
         )
         .await;
 
-        assert_snapshot!(usage(response, "payload"), @"{query_payload_size: 190,tx_payload_size: 0}");
+        assert_snapshot!(usage(response, "payload"), @"{query_payload_size: 196,tx_payload_size: 0}");
     }
 
     /// The test config specifies the Query.zk contains transaction payloads, but `Mutation.zk`
@@ -923,6 +925,72 @@ mod tests {
         .await;
 
         assert_snapshot!(usage(response, "payload"), @"{query_payload_size: 148,tx_payload_size: 13}");
+    }
+
+    /// Test that structured (JSON object) transaction payloads are counted correctly.
+    #[tokio::test]
+    async fn test_tx_payload_structured_inline() {
+        let schema = schema(config(), page());
+        let response = execute(
+            &schema,
+            r#"
+            {
+              tx(transaction: { sender: "0xabc", data: [1, 2, 3], flag: true }, other: 1)
+            }
+            "#,
+        )
+        .await;
+
+        assert_snapshot!(usage(response, "payload"), @"{query_payload_size: 92,tx_payload_size: 39}");
+    }
+
+    /// Test that structured transaction payloads in variables are counted correctly.
+    #[tokio::test]
+    async fn test_tx_payload_structured_variable() {
+        let schema = schema(config(), page());
+        let query = r#"
+            query ($txData: JSON!) {
+              tx(transaction: $txData, other: 1)
+            }
+            "#;
+
+        let variables = BTreeMap::from([(
+            "txData".to_string(),
+            json!({ "sender": "0xdef", "amount": 100, "nested": { "key": "value" } }),
+        )]);
+
+        let request = Request::from(query)
+            .data(ShowUsage(HeaderValue::from_static("true")))
+            .data(ContentLength(query.len() as u64))
+            .variables(Variables::from_json(
+                serde_json::to_value(variables).unwrap(),
+            ));
+
+        let response = schema.execute(request).await;
+        assert_snapshot!(usage(response, "payload"), @"{query_payload_size: 57,tx_payload_size: 56}");
+    }
+
+    /// Accounting for a transaction payload that is part literal, part variable.
+    #[tokio::test]
+    async fn test_tx_payload_structured_mixed() {
+        let schema = schema(config(), page());
+        let query = r#"
+            query ($nested: JSON!) {
+              tx(transaction: { sender: "0xabc", nested: $nested }, other: 1)
+            }
+            "#;
+
+        let variables = BTreeMap::from([("nested".to_string(), json!({ "key": "value" }))]);
+
+        let request = Request::from(query)
+            .data(ShowUsage(HeaderValue::from_static("true")))
+            .data(ContentLength(query.len() as u64))
+            .variables(Variables::from_json(
+                serde_json::to_value(variables).unwrap(),
+            ));
+
+        let response = schema.execute(request).await;
+        assert_snapshot!(usage(response, "payload"), @"{query_payload_size: 103,tx_payload_size: 39}");
     }
 
     #[tokio::test]
