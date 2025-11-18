@@ -531,6 +531,39 @@ public(package) fun allow_global_pause<T>(cap: &DenyCapV2<T>): bool {
     cap.allow_global_pause
 }
 
+public(package) fun new_coin_metadata<T>(
+    decimals: u8,
+    name: string::String,
+    symbol: ascii::String,
+    description: string::String,
+    icon_url: ascii::String,
+    ctx: &mut TxContext,
+): CoinMetadata<T> {
+    CoinMetadata {
+        id: object::new(ctx),
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url: option::some(url::new_unsafe(icon_url)),
+    }
+}
+
+/// Internal function to refresh the `CoinMetadata` with new values in
+/// `CoinRegistry` borrowing.
+public(package) fun update_coin_metadata<T>(
+    metadata: &mut CoinMetadata<T>,
+    name: string::String,
+    symbol: ascii::String,
+    description: string::String,
+    icon_url: ascii::String,
+) {
+    metadata.name = name;
+    metadata.symbol = symbol;
+    metadata.description = description;
+    metadata.icon_url = option::some(url::new_unsafe(icon_url));
+}
+
 // === Test-only code ===
 
 #[test_only]
