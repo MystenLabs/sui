@@ -14,7 +14,7 @@ use sui_core::jsonrpc_index::TotalBalance;
 use tap::TapFallible;
 use tracing::{debug, instrument};
 
-use mysten_metrics::spawn_monitored_task;
+use crate::spawn_cancellable_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::{CoinReadApiOpenRpc, CoinReadApiServer, JsonRpcMetrics, cap_page_limit};
 use sui_json_rpc_types::Balance;
@@ -337,7 +337,7 @@ async fn find_package_object_id(
     object_struct_tag: StructTag,
     kv_store: Arc<TransactionKeyValueStore>,
 ) -> RpcInterimResult<ObjectID> {
-    spawn_monitored_task!(async move {
+    spawn_cancellable_monitored_task!(async move {
         let publish_txn_digest = state.find_publish_txn_digest(package_id)?;
 
         let effect = kv_store.get_fx_by_tx_digest(publish_txn_digest).await?;
@@ -490,7 +490,7 @@ impl CoinReadInternal for CoinReadInternalImpl {
         let limit = cap_page_limit(limit);
         self.metrics.get_coins_limit.observe(limit as f64);
         let state = self.get_state();
-        let mut data = spawn_monitored_task!(async move {
+        let mut data = spawn_cancellable_monitored_task!(async move {
             state.get_owned_coins(owner, cursor, limit + 1, one_coin_type_only)
         })
         .await??;

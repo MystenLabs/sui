@@ -31,8 +31,8 @@ use sui_types::storage::ObjectKey;
 use tap::TapFallible;
 use tracing::{debug, error, info, instrument, trace, warn};
 
+use crate::spawn_cancellable_monitored_task;
 use mysten_metrics::add_server_timing;
-use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::{
     JsonRpcMetrics, QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS, ReadApiOpenRpc,
@@ -552,7 +552,7 @@ impl ReadApiServer for ReadApi {
     ) -> RpcResult<SuiObjectResponse> {
         with_tracing!(async move {
             let state = self.state.clone();
-            let object_read = spawn_monitored_task!(async move {
+            let object_read = spawn_cancellable_monitored_task!(async move {
                 state.get_object_read(&object_id).map_err(|e| {
                     warn!(?object_id, "Failed to get object: {:?}", e);
                     Error::from(e)
@@ -654,7 +654,7 @@ impl ReadApiServer for ReadApi {
     ) -> RpcResult<SuiPastObjectResponse> {
         with_tracing!(async move {
             let state = self.state.clone();
-            let past_read = spawn_monitored_task!(async move {
+            let past_read = spawn_cancellable_monitored_task!(async move {
             state.get_past_object_read(&object_id, version)
             .map_err(|e| {
                 error!("Failed to call try_get_past_object for object: {object_id:?} version: {version:?} with error: {e:?}");
@@ -786,7 +786,7 @@ impl ReadApiServer for ReadApi {
 
             // Fetch transaction to determine existence
             let transaction_kv_store = self.transaction_kv_store.clone();
-            let transaction = spawn_monitored_task!(async move {
+            let transaction = spawn_cancellable_monitored_task!(async move {
                 let ret = transaction_kv_store.get_tx(digest).await.map_err(|err| {
                     debug!(tx_digest=?digest, "Failed to get transaction: {}", err);
                     Error::from(err)
@@ -813,7 +813,7 @@ impl ReadApiServer for ReadApi {
             if opts.require_effects() {
                 let transaction_kv_store = self.transaction_kv_store.clone();
                 temp_response.effects = Some(
-                    spawn_monitored_task!(async move {
+                    spawn_cancellable_monitored_task!(async move {
                         transaction_kv_store
                             .get_fx_by_tx_digest(digest)
                             .await
@@ -839,7 +839,7 @@ impl ReadApiServer for ReadApi {
             if let Some(checkpoint_seq) = &temp_response.checkpoint_seq {
                 let kv_store = self.transaction_kv_store.clone();
                 let checkpoint_seq = *checkpoint_seq;
-                let checkpoint = spawn_monitored_task!(async move {
+                let checkpoint = spawn_cancellable_monitored_task!(async move {
                     kv_store
                     // safe to unwrap because we have checked `is_some` above
                     .get_checkpoint_summary(checkpoint_seq)
@@ -855,7 +855,7 @@ impl ReadApiServer for ReadApi {
 
             if opts.show_events && temp_response.effects.is_some() {
                 let transaction_kv_store = self.transaction_kv_store.clone();
-                let events = spawn_monitored_task!(async move {
+                let events = spawn_cancellable_monitored_task!(async move {
                     transaction_kv_store
                         .multi_get_events_by_tx_digests(&[digest])
                         .await
@@ -933,7 +933,7 @@ impl ReadApiServer for ReadApi {
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
         with_tracing!(async move {
             let cloned_self = self.clone();
-            spawn_monitored_task!(async move {
+            spawn_cancellable_monitored_task!(async move {
                 cloned_self
                     .multi_get_transaction_blocks_internal(digests, opts)
                     .await
@@ -948,7 +948,7 @@ impl ReadApiServer for ReadApi {
         with_tracing!(async move {
             let state = self.state.clone();
             let transaction_kv_store = self.transaction_kv_store.clone();
-            spawn_monitored_task!(async move{
+            spawn_cancellable_monitored_task!(async move{
             let store = state.load_epoch_store_one_call_per_task();
             let events = transaction_kv_store
                 .multi_get_events_by_tx_digests(&[transaction_digest])
@@ -1014,7 +1014,7 @@ impl ReadApiServer for ReadApi {
 
             self.metrics.get_checkpoints_limit.observe(limit as f64);
 
-            let mut data = spawn_monitored_task!(Self::get_checkpoints_internal(
+            let mut data = spawn_cancellable_monitored_task!(Self::get_checkpoints_internal(
                 state,
                 kv_store,
                 cursor.map(|s| *s),
