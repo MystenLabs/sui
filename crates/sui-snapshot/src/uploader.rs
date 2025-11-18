@@ -129,6 +129,11 @@ impl StateSnapshotUploader {
         dirs.sort_by_key(|(epoch_num, _path)| *epoch_num);
         for (epoch, db_path) in dirs {
             if missing_epochs.contains(epoch) || *epoch >= last_missing_epoch {
+                // TEMPORARY: Only upload epochs divisible by archive_interval_epochs for backfill
+                if self.archive_interval_epochs > 0 && !epoch.is_multiple_of(self.archive_interval_epochs) {
+                    info!("Skipping epoch {} (not divisible by {})", *epoch, self.archive_interval_epochs);
+                    continue;
+                }
                 info!("Starting state snapshot creation for epoch: {}", *epoch);
                 let state_snapshot_writer = StateSnapshotWriterV1::new_from_store(
                     &self.staging_path,
