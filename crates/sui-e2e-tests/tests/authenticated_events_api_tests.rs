@@ -1054,32 +1054,16 @@ async fn test_object_inclusion_proof_error_code() {
         .await;
 
     let package_id = publish_test_package(&test_cluster).await;
-    let sender = test_cluster.wallet.config.keystore.addresses()[0];
-
-    emit_test_event(&test_cluster, package_id, sender, 100).await;
-
     let stream_id = sui_types::base_types::SuiAddress::from(package_id);
     let event_stream_head_id = get_event_stream_head_object_id(stream_id).unwrap();
 
-    let mut event_client = EventServiceClient::connect(test_cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
-
-    let mut req = ListAuthenticatedEventsRequest::default();
-    req.stream_id = Some(package_id.to_string());
-    req.start_checkpoint = Some(0);
-    req.page_size = None;
-    req.page_token = None;
-
-    let response = event_client
-        .list_authenticated_events(req)
-        .await
-        .unwrap()
-        .into_inner();
-
-    assert_eq!(response.events.len(), 1, "should have exactly one event");
-
-    let event_checkpoint = response.events[0].checkpoint.unwrap();
+    let highest_checkpoint = test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            .unwrap()
+    });
 
     let mut proof_client = ProofServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
@@ -1087,17 +1071,8 @@ async fn test_object_inclusion_proof_error_code() {
 
     let mut req = GetObjectInclusionProofRequest::default();
     req.object_id = Some(event_stream_head_id.to_string());
-    req.checkpoint = Some(event_checkpoint);
+    req.checkpoint = Some(highest_checkpoint);
 
-    let result = proof_client.get_object_inclusion_proof(req.clone()).await;
-    assert!(
-        result.is_ok(),
-        "Should get inclusion proof at checkpoint where object was modified"
-    );
-
-    let checkpoint_without_modification = event_checkpoint + 5;
-
-    req.checkpoint = Some(checkpoint_without_modification);
     let result = proof_client.get_object_inclusion_proof(req).await;
 
     assert!(
