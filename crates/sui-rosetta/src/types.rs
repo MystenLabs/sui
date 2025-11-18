@@ -640,7 +640,7 @@ pub struct ConstructionMetadata {
     /// For PaySui/Stake: extra gas coins to merge into gas
     /// For PayCoin/WithdrawStake: empty
     /// New code should use `objects` field instead.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub extra_gas_coins: Vec<ObjectRef>,
     /// For PaySui/Stake: extra gas coins to merge into gas
     /// For PayCoin: payment coins of the specified type
