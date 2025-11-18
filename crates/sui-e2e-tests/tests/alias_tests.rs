@@ -73,7 +73,7 @@ async fn test_alias_changes() {
     ];
 
     let test_cluster = TestClusterBuilder::new()
-        .with_num_validators(2)
+        .with_num_validators(3)
         .with_additional_accounts(accounts)
         .build()
         .await;
@@ -97,9 +97,9 @@ async fn test_alias_changes() {
         .await
         .unwrap();
 
-    // Use the custom accounts we added (indices 5 and 6) which have more gas objects
-    let (account1, gas_objects1) = &accounts[5];
-    let (account2, _gas_objects2) = &accounts[6];
+    // Use the custom accounts we added which have more gas objects
+    let (account1, gas_objects1) = &accounts[0];
+    let (account2, _gas_objects2) = &accounts[1];
     let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
 
     let client = test_cluster

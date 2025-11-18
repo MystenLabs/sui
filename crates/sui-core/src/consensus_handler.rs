@@ -1462,7 +1462,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             &mut txns,
             protocol_config.consensus_transaction_ordering(),
         );
-
         PostConsensusTxReorder::reorder(
             &mut randomness_txns,
             protocol_config.consensus_transaction_ordering(),
