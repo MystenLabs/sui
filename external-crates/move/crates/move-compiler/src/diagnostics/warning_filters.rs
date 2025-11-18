@@ -36,6 +36,7 @@ pub const FILTER_DUPLICATE_ALIAS: &str = "duplicate_alias";
 pub const FILTER_DEPRECATED: &str = "deprecated_usage";
 pub const FILTER_IDE_PATH_AUTOCOMPLETE: &str = "ide_path_autocomplete";
 pub const FILTER_IDE_DOT_AUTOCOMPLETE: &str = "ide_dot_autocomplete";
+pub const FILTER_LITERAL_ENFORCEMENT: &str = "untyped_literal";
 
 macro_rules! known_code_filter {
     ($name:ident, $category:ident::$code:ident) => {{
@@ -527,6 +528,7 @@ impl WarningFilter {
             known_code_filter!(FILTER_IMPLICIT_CONST_COPY, TypeSafety::ImplicitConstantCopy),
             known_code_filter!(FILTER_DUPLICATE_ALIAS, Declarations::DuplicateAlias),
             known_code_filter!(FILTER_DEPRECATED, TypeSafety::DeprecatedUsage),
+            known_code_filter!(FILTER_LITERAL_ENFORCEMENT, TypeSafety::MissingLiteralType),
         ])
     }
 
