@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 103;
+const MAX_PROTOCOL_VERSION: u64 = 104;
 
 // Record history of protocol version allocations here:
 //
@@ -276,6 +276,7 @@ const MAX_PROTOCOL_VERSION: u64 = 103;
 // Version 101: Framework update
 //              Set max updates per settlement txn to 100.
 // Version 103: Framework update: internal Coin methods
+// Version 104: Framework update: CoinRegistry follow up for Coin methods
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4267,6 +4268,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.deprecate_global_storage_ops = true;
                 }
                 103 => {}
+                104 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
