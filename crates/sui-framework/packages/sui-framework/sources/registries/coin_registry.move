@@ -52,6 +52,8 @@ const ESupplyNotBurnOnly: vector<u8> = b"Cannot burn on a non burn-only supply."
 const EInvariantViolation: vector<u8> = b"Code invariant violation.";
 #[error(code = 12)]
 const EDeletionNotSupported: vector<u8> = b"Deleting legacy metadata is not supported.";
+#[error(code = 13)]
+const ENotOneTimeWitness: vector<u8> = b"Type is expected to be OTW";
 
 /// Incremental identifier for regulated coin versions in the deny list.
 /// We start from `0` in the new system, which aligns with the state of `DenyCapV2`.
@@ -63,14 +65,11 @@ const NEW_CURRENCY_MARKER: vector<u8> = b"is_new_currency";
 /// System object found at address `0xc` that stores coin data for all
 /// registered coin types. This is a shared object that acts as a central
 /// registry for coin metadata, supply information, and regulatory status.
-public struct CoinRegistry has key {
-    id: UID,
-}
+public struct CoinRegistry has key { id: UID }
 
 /// Store only object that enables more flexible coin data
 /// registration, allowing for additional fields to be added
 /// without changing the `Currency` structure.
-#[allow(unused_field)]
 public struct ExtraField(TypeName, vector<u8>) has store;
 
 /// Key used to derive addresses when creating `Currency<T>` objects.
@@ -205,7 +204,7 @@ public fun new_currency_with_otw<T: drop>(
     icon_url: String,
     ctx: &mut TxContext,
 ): (CurrencyInitializer<T>, TreasuryCap<T>) {
-    assert!(sui::types::is_one_time_witness(&otw));
+    assert!(sui::types::is_one_time_witness(&otw), ENotOneTimeWitness);
     assert!(is_ascii_printable!(&symbol), EInvalidSymbol);
 
     let treasury_cap = coin::new_treasury_cap(ctx);
@@ -309,24 +308,14 @@ public fun make_supply_burn_only<T>(currency: &mut Currency<T>, cap: TreasuryCap
 #[allow(lint(share_owned))]
 /// Finalize the coin initialization, returning `MetadataCap`
 public fun finalize<T>(builder: CurrencyInitializer<T>, ctx: &mut TxContext): MetadataCap<T> {
-    let CurrencyInitializer { mut currency, is_otw, extra_fields } = builder;
-    extra_fields.destroy_empty();
-    let id = object::new(ctx);
-    currency.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
+    let is_otw = builder.is_otw;
+    let (currency, metadata_cap) = finalize_impl!(builder, ctx);
 
-    // Mark the currency as new, so in the future we can support borrowing of the
-    // legacy metadata.
-    currency
-        .extra_fields
-        .insert(
-            NEW_CURRENCY_MARKER.to_string(),
-            ExtraField(type_name::with_original_ids<bool>(), NEW_CURRENCY_MARKER),
-        );
-
+    // Either share directly (`new_currency` scenario), or transfer as TTO to `CoinRegistry`.
     if (is_otw) transfer::transfer(currency, object::sui_coin_registry_address())
     else transfer::share_object(currency);
 
-    MetadataCap<T> { id }
+    metadata_cap
 }
 
 /// The second step in the "otw" initialization of coin metadata, that takes in
@@ -355,6 +344,7 @@ public fun finalize_registration<T>(
         extra_fields,
     } = transfer::receive(&mut registry.id, currency);
     id.delete();
+
     // Now, create the derived version of the coin currency.
     transfer::share_object(Currency {
         id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
@@ -400,13 +390,6 @@ public fun set_name<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, name: Str
     currency.name = name;
 }
 
-#[test_only]
-/// Update the symbol of the `Currency`.
-public fun set_symbol<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, symbol: String) {
-    assert!(is_ascii_printable!(&symbol), EInvalidSymbol);
-    currency.symbol = symbol;
-}
-
 /// Update the description of the `Currency`.
 public fun set_description<T>(currency: &mut Currency<T>, _: &MetadataCap<T>, description: String) {
     currency.description = description;
@@ -434,25 +417,8 @@ public fun migrate_legacy_metadata<T>(
     legacy: &CoinMetadata<T>,
     _ctx: &mut TxContext,
 ) {
-    assert!(!registry.exists<T>(), ECurrencyAlreadyRegistered);
-    assert!(is_ascii_printable!(&legacy.get_symbol().to_string()), EInvalidSymbol);
-
-    transfer::share_object(Currency<T> {
-        id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
-        decimals: legacy.get_decimals(),
-        name: legacy.get_name(),
-        symbol: legacy.get_symbol().to_string(),
-        description: legacy.get_description(),
-        icon_url: legacy
-            .get_icon_url()
-            .map!(|url| url.inner_url().to_string())
-            .destroy_or!(b"".to_string()),
-        supply: option::some(SupplyState::Unknown),
-        regulated: RegulatedState::Unknown, // We don't know if it's regulated or not!
-        treasury_cap_id: option::none(),
-        metadata_cap_id: MetadataCapState::Unclaimed,
-        extra_fields: vec_map::empty(),
-    });
+    let currency = migrate_legacy_metadata_impl!(registry, legacy);
+    transfer::share_object(currency);
 }
 
 /// Update `Currency` from `CoinMetadata` if the `MetadataCap` is not claimed. After
@@ -607,6 +573,57 @@ fun create(ctx: &TxContext) {
     });
 }
 
+/// Internal macro to keep implementation between build and test modes.
+macro fun finalize_impl<$T>(
+    $builder: CurrencyInitializer<$T>,
+    $ctx: &mut TxContext,
+): (Currency<$T>, MetadataCap<$T>) {
+    let CurrencyInitializer { mut currency, extra_fields, is_otw: _ } = $builder;
+    extra_fields.destroy_empty();
+    let id = object::new($ctx);
+    currency.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
+
+    // Mark the currency as new, so in the future we can support borrowing of the
+    // legacy metadata.
+    currency
+        .extra_fields
+        .insert(
+            NEW_CURRENCY_MARKER.to_string(),
+            ExtraField(type_name::with_original_ids<bool>(), NEW_CURRENCY_MARKER),
+        );
+
+    (currency, MetadataCap<$T> { id })
+}
+
+/// Internal macro to keep implementation between build and test modes.
+macro fun migrate_legacy_metadata_impl<$T>(
+    $registry: &mut CoinRegistry,
+    $legacy: &CoinMetadata<$T>,
+): Currency<$T> {
+    let registry = $registry;
+    let legacy = $legacy;
+
+    assert!(!registry.exists<$T>(), ECurrencyAlreadyRegistered);
+    assert!(is_ascii_printable!(&legacy.get_symbol().to_string()), EInvalidSymbol);
+
+    Currency<$T> {
+        id: derived_object::claim(&mut registry.id, CurrencyKey<$T>()),
+        decimals: legacy.get_decimals(),
+        name: legacy.get_name(),
+        symbol: legacy.get_symbol().to_string(),
+        description: legacy.get_description(),
+        icon_url: legacy
+            .get_icon_url()
+            .map!(|url| url.inner_url().to_string())
+            .destroy_or!(b"".to_string()),
+        supply: option::some(SupplyState::Unknown),
+        regulated: RegulatedState::Unknown,
+        treasury_cap_id: option::none(),
+        metadata_cap_id: MetadataCapState::Unclaimed,
+        extra_fields: vec_map::empty(),
+    }
+}
+
 /// Nit: consider adding this function to `std::string` in the future.
 macro fun is_ascii_printable($s: &String): bool {
     let s = $s;
@@ -625,6 +642,12 @@ public fun create_coin_data_registry_for_testing(ctx: &mut TxContext): CoinRegis
 }
 
 #[test_only]
+/// For transactional tests (if CoinRegistry is used as a shared object).
+public fun share_for_testing(registry: CoinRegistry) {
+    transfer::share_object(registry);
+}
+
+#[test_only]
 /// Unwrap CurrencyInitializer for testing purposes.
 /// This function is test-only and should only be used in tests.
 public fun unwrap_for_testing<T>(init: CurrencyInitializer<T>): Currency<T> {
@@ -635,14 +658,10 @@ public fun unwrap_for_testing<T>(init: CurrencyInitializer<T>): Currency<T> {
 
 #[test_only]
 public fun finalize_unwrap_for_testing<T>(
-    init: CurrencyInitializer<T>,
+    builder: CurrencyInitializer<T>,
     ctx: &mut TxContext,
 ): (Currency<T>, MetadataCap<T>) {
-    let CurrencyInitializer { mut currency, extra_fields, .. } = init;
-    extra_fields.destroy_empty();
-    let id = object::new(ctx);
-    currency.metadata_cap_id = MetadataCapState::Claimed(id.to_inner());
-    (currency, MetadataCap { id })
+    finalize_impl!(builder, ctx)
 }
 
 #[test_only]
@@ -651,22 +670,5 @@ public fun migrate_legacy_metadata_for_testing<T>(
     legacy: &CoinMetadata<T>,
     _ctx: &mut TxContext,
 ): Currency<T> {
-    assert!(!registry.exists<T>(), ECurrencyAlreadyRegistered);
-
-    Currency<T> {
-        id: derived_object::claim(&mut registry.id, CurrencyKey<T>()),
-        decimals: legacy.get_decimals(),
-        name: legacy.get_name(),
-        symbol: legacy.get_symbol().to_string(),
-        description: legacy.get_description(),
-        icon_url: legacy
-            .get_icon_url()
-            .map!(|url| url.inner_url().to_string())
-            .destroy_or!(b"".to_string()),
-        supply: option::some(SupplyState::Unknown),
-        regulated: RegulatedState::Unknown,
-        treasury_cap_id: option::none(),
-        metadata_cap_id: MetadataCapState::Unclaimed,
-        extra_fields: vec_map::empty(),
-    }
+    migrate_legacy_metadata_impl!(registry, legacy)
 }

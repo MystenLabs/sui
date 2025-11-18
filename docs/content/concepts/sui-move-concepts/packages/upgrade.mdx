@@ -213,10 +213,10 @@ This pattern forms the basis for upgradeable packages involving shared objects, 
 - The version constraints can be made more expressive:
   - Rather than using a single `u64`, versions could be specified as a `String`, or a pair of upper and lower bounds.
   - You can control access to specific functions or sets of functions by adding and removing marker types as dynamic fields on the shared object.
-- The `migrate` function could be made more sophisticated (modifying other fields in the shared object, adding/removing dynamic fields, migrating multiple shared objects simultaneously).
+- The `migrate` function could be made more sophisticated (modifying other fields in the shared object, adding or removing dynamic fields, migrating multiple shared objects simultaneously).
 - You can implement large migrations that need to run over multiple transactions in a three phase set-up:
-  - Disable general access to the shared object by setting its version to a sentinel value (e.g. `U64_MAX`), using an `AdminCap`-guarded call.
-  - Run the migration over the course of multiple transactions (e.g. if a large volume of objects need to be moved, it is best to do this in batches, to avoid hitting transaction limits).
+  - Disable general access to the shared object by setting its version to a sentinel value (for example, `U64_MAX`), using an `AdminCap`-guarded call.
+  - Run the migration over the course of multiple transactions (for example, if a large volume of objects need to be moved, it is best to do this in batches, to avoid hitting transaction limits).
   - Set the version of the shared object back to a usable value.
 
 ## Upgrade requirements
@@ -447,7 +447,7 @@ After a while, you decide to upgrade your `sui_package` to include some requeste
 
 <TabItem value="manual-address-management" label="Manual Addresses">
 
-If your package has not [adopted automated address management](automated-address-management#adopting-automated-address-management-for-published-packages) you'll need to take the following manual steps.
+If your package has not [adopted automated address management](automated-address-management#adopting-automated-address-management-for-published-packages) you need to take the following manual steps.
 
 To make sure your other packages can use this package as a dependency, you must update the `Move.toml` manifest file for your package to include published information.
 
@@ -655,7 +655,7 @@ The result provides a new ID for the upgraded package.
 
 Beginning with the Sui `v1.29.0` release, upgraded addresses are automatically managed in the `Move.lock` file and you do not need to take further action.
 
-If the package was published or upgraded with a Sui version prior to `v1.29.0`, you may follow [the guide for adopting automated address management](automated-address-management#adopting-automated-address-management-for-published-packages). Alternatively, refer to the `Manual Addresses` tab above for further steps.
+If the package was published or upgraded with a Sui version prior to `v1.29.0`, you might follow [the guide for adopting automated address management](automated-address-management#adopting-automated-address-management-for-published-packages). Alternatively, refer to the `Manual Addresses` tab above for further steps.
 
 :::
 

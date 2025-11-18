@@ -1,0 +1,28 @@
+// Move bytecode v6
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+
+return_ref_param(value_ref#0#0: &u64): &u64 {
+B0:
+	0: MoveLoc[0](value_ref#0#0: &u64)
+	1: Ret
+}
+
+test() {
+L0:	my_value#1#0: u64
+B0:
+	0: LdU64(42)
+	1: StLoc[0](my_value#1#0: u64)
+	2: ImmBorrowLoc[0](my_value#1#0: u64)
+	3: Call return_ref_param(&u64): &u64
+	4: Pop
+	5: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

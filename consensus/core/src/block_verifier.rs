@@ -13,7 +13,7 @@ use crate::{
     transaction::TransactionVerifier,
 };
 
-pub(crate) trait BlockVerifier: Send + Sync + 'static {
+pub trait BlockVerifier: Send + Sync + 'static {
     /// Verifies a block and its transactions, checking signatures, size limits,
     /// and transaction validity. All honest validators should produce the same verification
     /// outcome for the same block, so any verification error should be due to equivocation.
@@ -24,6 +24,7 @@ pub(crate) trait BlockVerifier: Send + Sync + 'static {
     /// validators may vote differently on transactions.
     ///
     /// The method takes both the SignedBlock and its serialized bytes, to avoid re-serializing the block.
+    #[allow(private_interfaces)]
     fn verify_and_vote(
         &self,
         block: SignedBlock,
@@ -217,11 +218,11 @@ impl BlockVerifier for SignedBlockVerifier {
     }
 }
 
-#[cfg(test)]
-pub(crate) struct NoopBlockVerifier;
+/// Allows all transactions to pass verification, for testing.
+pub struct NoopBlockVerifier;
 
-#[cfg(test)]
 impl BlockVerifier for NoopBlockVerifier {
+    #[allow(private_interfaces)]
     fn verify_and_vote(
         &self,
         _block: SignedBlock,

@@ -225,6 +225,7 @@ pub struct ValidatorServiceMetrics {
     num_rejected_cert_in_epoch_boundary: IntCounter,
     num_rejected_tx_during_overload: IntCounterVec,
     num_rejected_cert_during_overload: IntCounterVec,
+    submission_rejected_transactions: IntCounterVec,
     connection_ip_not_found: IntCounter,
     forwarded_header_parse_error: IntCounter,
     forwarded_header_invalid: IntCounter,
@@ -382,6 +383,13 @@ impl ValidatorServiceMetrics {
                 "validator_service_num_rejected_cert_during_overload",
                 "Number of rejected transaction certificate due to system overload",
                 &["error_type"],
+                registry,
+            )
+            .unwrap(),
+            submission_rejected_transactions: register_int_counter_vec_with_registry!(
+                "validator_service_submission_rejected_transactions",
+                "Number of transactions rejected during submission",
+                &["reason"],
                 registry,
             )
             .unwrap(),
@@ -785,7 +793,13 @@ impl ValidatorService {
                             continue;
                         }
                     }
-                    // If the transaction has not been executed, record the error for the transaction.
+
+                    // When the transaction has not been executed, record the error for the transaction.
+                    debug!(?tx_digest, "Transaction rejected during submission: {e}");
+                    metrics
+                        .submission_rejected_transactions
+                        .with_label_values(&[e.to_variant_name()])
+                        .inc();
                     results[idx] = Some(SubmitTxResult::Rejected { error: e });
                     continue;
                 }

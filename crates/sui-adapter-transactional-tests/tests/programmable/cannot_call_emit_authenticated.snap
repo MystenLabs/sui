@@ -17,7 +17,7 @@ task 2, lines 14-16:
 //> 0: test::m1::a();
 //> sui::event::emit_authenticated<test::m1::A>(Result(0));
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call functions in sui::event"), command: Some(1) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call function 'sui::event::emit_authenticated' since type parameter #0 can only be instantiated with types defined within the caller's module."), command: Some(1) } }
 
 task 3, lines 18-21:
 //# programmable
@@ -25,7 +25,7 @@ task 3, lines 18-21:
 // wrong type annotation did not matter in v1 of PTB execution
 //> sui::event::emit_authenticated<bool>(Result(0));
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call functions in sui::event"), command: Some(1) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call function 'sui::event::emit_authenticated' since type parameter #0 can only be instantiated with types defined within the caller's module."), command: Some(1) } }
 
 task 4, lines 23-26:
 //# programmable

@@ -60,6 +60,8 @@ fn main() {
         }
     }
 
+    proto_files.sort();
+
     let file_descriptors = protox::compile(proto_files, [sui_proto_dir, sui_rpc_proto_dir])
         .expect("failed to compile proto files");
 

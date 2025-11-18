@@ -1,0 +1,11 @@
+[package]
+name = "ref_after_lifetime"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+ref_after_lifetime = "0x0"
+std = "0x1"
+

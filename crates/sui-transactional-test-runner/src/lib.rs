@@ -418,6 +418,13 @@ impl ReadStore for ValidatorWithFullnode {
     ) -> Option<Vec<sui_types::storage::ObjectKey>> {
         None
     }
+
+    fn get_transaction_checkpoint(
+        &self,
+        _digest: &TransactionDigest,
+    ) -> Option<sui_types::messages_checkpoint::CheckpointSequenceNumber> {
+        None
+    }
 }
 
 impl ObjectStore for ValidatorWithFullnode {

@@ -18,7 +18,7 @@ use std::{fs, io};
 use sui_config::{NodeConfig, genesis::Genesis};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_core::execution_cache::build_execution_cache_from_env;
-use sui_data_ingestion_core::{ReaderOptions, end_of_epoch_data, setup_single_workflow};
+use sui_data_ingestion_core::end_of_epoch_data;
 use sui_network::default_mysten_network_config;
 use sui_protocol_config::Chain;
 use sui_sdk::SuiClient;
@@ -55,14 +55,13 @@ use sui_snapshot::reader::StateSnapshotReaderV1;
 use sui_snapshot::setup_db_state;
 use sui_storage::object_store::ObjectStoreGetExt;
 use sui_storage::object_store::util::{copy_file, exists, get_path};
-use sui_storage::verify_checkpoint_range;
 use sui_types::messages_checkpoint::{CheckpointCommitment, ECMHLiveObjectSetDigest};
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse, TransactionInfoRequest,
     TransactionStatus,
 };
 
-use crate::formal_snapshot_util::{FormalSnapshotWorker, read_summaries_for_list_no_verify};
+use crate::formal_snapshot_util::read_summaries_for_list_no_verify;
 use sui_core::authority::authority_store_pruner::PrunerWatermarks;
 use sui_types::storage::ReadStore;
 use tracing::info;
@@ -586,7 +585,6 @@ fn start_summary_sync(
     epoch: u64,
     num_parallel_downloads: usize,
     verify: bool,
-    all_checkpoints: bool,
 ) -> JoinHandle<Result<(), anyhow::Error>> {
     tokio::spawn(async move {
         info!("Starting summary sync");
@@ -616,11 +614,7 @@ fn start_summary_sync(
             .last()
             .expect("Expected at least one checkpoint");
 
-        let num_to_sync = if all_checkpoints {
-            *last_checkpoint
-        } else {
-            end_of_epoch_checkpoint_seq_nums.len() as u64
-        };
+        let num_to_sync = end_of_epoch_checkpoint_seq_nums.len() as u64;
         let sync_progress_bar = m.add(
             ProgressBar::new(num_to_sync).with_style(
                 ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len} ({msg})")
@@ -658,31 +652,14 @@ fn start_summary_sync(
             }
         });
 
-        if all_checkpoints {
-            let reader_options = ReaderOptions {
-                batch_size: num_parallel_downloads,
-                upper_limit: Some(last_checkpoint + 1),
-                ..Default::default()
-            };
-            let (executor, _exit_sender) = setup_single_workflow(
-                FormalSnapshotWorker(state_sync_store.clone(), sync_checkpoint_counter),
-                ingestion_url,
-                s_start,
-                1,
-                Some(reader_options),
-            )
-            .await?;
-            executor.await?;
-        } else {
-            read_summaries_for_list_no_verify(
-                ingestion_url,
-                num_parallel_downloads,
-                state_sync_store.clone(),
-                end_of_epoch_checkpoint_seq_nums.clone(),
-                sync_checkpoint_counter,
-            )
-            .await?;
-        }
+        read_summaries_for_list_no_verify(
+            ingestion_url,
+            num_parallel_downloads,
+            state_sync_store.clone(),
+            end_of_epoch_checkpoint_seq_nums.clone(),
+            sync_checkpoint_counter,
+        )
+        .await?;
         sync_progress_bar.finish_with_message("Checkpoint summary sync is complete");
 
         let checkpoint = checkpoint_store
@@ -703,7 +680,6 @@ fn start_summary_sync(
             let v_instant = Instant::now();
 
             tokio::spawn(async move {
-                let v_start = if all_checkpoints { s_start } else { 0 };
                 loop {
                     if cloned_verify_progress_bar.is_finished() {
                         break;
@@ -711,7 +687,7 @@ fn start_summary_sync(
                     let num_summaries = cloned_verify_counter.load(Ordering::Relaxed);
                     let total_checkpoints_per_sec =
                         num_summaries as f64 / v_instant.elapsed().as_secs_f64();
-                    cloned_verify_progress_bar.set_position(v_start + num_summaries);
+                    cloned_verify_progress_bar.set_position(num_summaries);
                     cloned_verify_progress_bar.set_message(format!(
                         "checkpoints verified per sec: {}",
                         total_checkpoints_per_sec
@@ -720,44 +696,19 @@ fn start_summary_sync(
                 }
             });
 
-            if all_checkpoints {
-                // in this case we need to verify all the checkpoints in the range pairwise
-                let v_start = s_start;
-                // update highest verified to be highest synced. We will move back
-                // iff parallel verification succeeds
-                let latest_verified = checkpoint_store
-                    .get_checkpoint_by_sequence_number(latest_synced)
-                    .expect("Failed to get checkpoint")
-                    .expect("Expected checkpoint to exist after summary sync");
-                checkpoint_store
-                    .update_highest_verified_checkpoint(&latest_verified)
-                    .expect("Failed to update highest verified checkpoint");
-
-                let verify_range = v_start..last_checkpoint + 1;
-                verify_checkpoint_range(
-                    verify_range,
-                    state_sync_store,
-                    verify_checkpoint_counter,
-                    num_parallel_downloads,
-                )
-                .await;
-            } else {
-                // in this case we only need to verify the end of epoch checkpoints by checking
-                // signatures against the corresponding epoch committee.
-                for (cp_epoch, epoch_last_cp_seq_num) in
-                    end_of_epoch_checkpoint_seq_nums.iter().enumerate()
-                {
-                    let epoch_last_checkpoint = checkpoint_store
-                        .get_checkpoint_by_sequence_number(*epoch_last_cp_seq_num)?
-                        .ok_or(anyhow!("Failed to read checkpoint"))?;
-                    let committee = state_sync_store.get_committee(cp_epoch as u64).expect(
-                        "Expected committee to exist after syncing all end of epoch checkpoints",
-                    );
-                    epoch_last_checkpoint
-                        .verify_authority_signatures(&committee)
-                        .expect("Failed to verify checkpoint");
-                    verify_checkpoint_counter.fetch_add(1, Ordering::Relaxed);
-                }
+            for (cp_epoch, epoch_last_cp_seq_num) in
+                end_of_epoch_checkpoint_seq_nums.iter().enumerate()
+            {
+                let epoch_last_checkpoint = checkpoint_store
+                    .get_checkpoint_by_sequence_number(*epoch_last_cp_seq_num)?
+                    .ok_or(anyhow!("Failed to read checkpoint"))?;
+                let committee = state_sync_store.get_committee(cp_epoch as u64).expect(
+                    "Expected committee to exist after syncing all end of epoch checkpoints",
+                );
+                epoch_last_checkpoint
+                    .verify_authority_signatures(&committee)
+                    .expect("Failed to verify checkpoint");
+                verify_checkpoint_counter.fetch_add(1, Ordering::Relaxed);
             }
 
             verify_progress_bar.finish_with_message("Checkpoint summary verification is complete");
@@ -827,7 +778,6 @@ pub async fn download_formal_snapshot(
     num_parallel_downloads: usize,
     network: Chain,
     verify: SnapshotVerifyMode,
-    all_checkpoints: bool,
     max_retries: usize,
 ) -> Result<(), anyhow::Error> {
     let m = MultiProgress::new();
@@ -874,7 +824,6 @@ pub async fn download_formal_snapshot(
         epoch,
         num_parallel_downloads,
         verify != SnapshotVerifyMode::None,
-        all_checkpoints,
     );
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
     let perpetual_db_clone = perpetual_db.clone();

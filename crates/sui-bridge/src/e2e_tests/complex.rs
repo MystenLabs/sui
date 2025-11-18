@@ -61,7 +61,7 @@ async fn test_sui_bridge_paused() {
     // verify Eth was transferred to Sui address
     let eth_coin_type = sui_token_type_tags.get(&TOKEN_ID_ETH).unwrap();
     let eth_coin = bridge_client
-        .sui_client()
+        .jsonrpc_client()
         .coin_read_api()
         .get_coins(sui_address, Some(eth_coin_type.to_string()), None, None)
         .await

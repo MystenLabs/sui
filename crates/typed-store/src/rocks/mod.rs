@@ -1817,6 +1817,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
 }
 
 // Drops a database if there is no other handle to it, with retries and timeout.
+#[cfg(not(tidehunter))]
 pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksdb::Error> {
     let mut backoff = backoff::ExponentialBackoff {
         max_elapsed_time: Some(timeout),
@@ -1831,6 +1832,11 @@ pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksd
             },
         }
     }
+}
+
+#[cfg(tidehunter)]
+pub async fn safe_drop_db(path: PathBuf, _: Duration) -> Result<(), std::io::Error> {
+    std::fs::remove_dir_all(path)
 }
 
 fn populate_missing_cfs(

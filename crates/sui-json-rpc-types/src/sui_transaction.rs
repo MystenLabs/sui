@@ -2388,6 +2388,7 @@ impl SuiCallArg {
                 },
                 withdraw_from: match arg.withdraw_from {
                     WithdrawFrom::Sender => SuiWithdrawFrom::Sender,
+                    WithdrawFrom::Sponsor => SuiWithdrawFrom::Sponsor,
                 },
             }),
         })
@@ -2486,6 +2487,7 @@ pub enum SuiWithdrawalTypeArg {
 #[serde(rename_all = "camelCase")]
 pub enum SuiWithdrawFrom {
     Sender,
+    Sponsor,
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]

@@ -8,12 +8,10 @@ use anyhow::{Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{Processor, concurrent::Handler},
-    postgres::{Connection, Db},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
     types::{
-        coin::Coin,
-        effects::TransactionEffectsAPI,
-        full_checkpoint_content::{CheckpointData, CheckpointTransaction},
+        coin::Coin, effects::TransactionEffectsAPI, full_checkpoint_content::Checkpoint,
         gas_coin::GAS,
     },
 };
@@ -21,6 +19,7 @@ use sui_indexer_alt_schema::{
     schema::tx_balance_changes,
     transactions::{BalanceChange, StoredTxBalanceChange},
 };
+use sui_types::full_checkpoint_content::ExecutedTransaction;
 
 use crate::handlers::cp_sequence_numbers::tx_interval;
 use async_trait::async_trait;
@@ -33,19 +32,19 @@ impl Processor for TxBalanceChanges {
 
     type Value = StoredTxBalanceChange;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint {
             transactions,
-            checkpoint_summary,
+            summary,
             ..
         } = checkpoint.as_ref();
 
         let mut values = Vec::new();
-        let first_tx = checkpoint_summary.network_total_transactions as usize - transactions.len();
+        let first_tx = summary.network_total_transactions as usize - transactions.len();
 
         for (i, tx) in transactions.iter().enumerate() {
             let tx_sequence_number = (first_tx + i) as i64;
-            let balance_changes = balance_changes(tx).with_context(|| {
+            let balance_changes = balance_changes(tx, checkpoint).with_context(|| {
                 format!("Calculating balance changes for transaction {tx_sequence_number}")
             })?;
 
@@ -63,8 +62,6 @@ impl Processor for TxBalanceChanges {
 
 #[async_trait]
 impl Handler for TxBalanceChanges {
-    type Store = Db;
-
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
@@ -95,7 +92,10 @@ impl Handler for TxBalanceChanges {
 }
 
 /// Calculate balance changes based on the object's input and output objects.
-fn balance_changes(transaction: &CheckpointTransaction) -> Result<Vec<BalanceChange>> {
+fn balance_changes(
+    transaction: &ExecutedTransaction,
+    checkpoint: &Checkpoint,
+) -> Result<Vec<BalanceChange>> {
     // Shortcut if the transaction failed -- we know that only gas was charged.
     if transaction.effects.status().is_err() {
         return Ok(vec![BalanceChange::V1 {
@@ -106,13 +106,14 @@ fn balance_changes(transaction: &CheckpointTransaction) -> Result<Vec<BalanceCha
     }
 
     let mut changes = BTreeMap::new();
-    for object in &transaction.input_objects {
+
+    for object in transaction.input_objects(&checkpoint.object_set) {
         if let Some((type_, balance)) = Coin::extract_balance_if_coin(object)? {
             *changes.entry((object.owner(), type_)).or_insert(0i128) -= balance as i128;
         }
     }
 
-    for object in &transaction.output_objects {
+    for object in transaction.output_objects(&checkpoint.object_set) {
         if let Some((type_, balance)) = Coin::extract_balance_if_coin(object)? {
             *changes.entry((object.owner(), type_)).or_insert(0i128) += balance as i128;
         }
@@ -133,7 +134,7 @@ mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        Indexer, types::test_checkpoint_data_builder::TestCheckpointDataBuilder,
+        Indexer, types::test_checkpoint_data_builder::TestCheckpointBuilder,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 
@@ -168,7 +169,7 @@ mod tests {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
         let values = TxBalanceChanges.process(&checkpoint).await.unwrap();

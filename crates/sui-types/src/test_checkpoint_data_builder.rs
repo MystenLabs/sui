@@ -8,7 +8,6 @@ use move_core_types::{
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk_types::CheckpointTimestamp;
-use tap::Pipe;
 
 use crate::messages_checkpoint::CheckpointCommitment;
 use crate::{
@@ -19,9 +18,13 @@ use crate::{
     },
     committee::Committee,
     digests::TransactionDigest,
-    effects::{TestEffectsBuilder, TransactionEffectsAPI, TransactionEvents},
+    effects::{
+        self, TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+    },
     event::{Event, SystemEpochInfoEvent},
-    full_checkpoint_content::{CheckpointData, CheckpointTransaction},
+    execution_status::ExecutionStatus,
+    full_checkpoint_content::{Checkpoint, CheckpointTransaction, ExecutedTransaction, ObjectSet},
+    gas::GasCostSummary,
     gas_coin::GAS,
     message_envelope::Message,
     messages_checkpoint::{
@@ -46,7 +49,7 @@ use crate::{
 /// For instance, all object digests will be randomly set. It focuses on providing a way to generate
 /// various shaped test data for testing purposes.
 /// If you need to test the validity of the checkpoint data, you should use Simulacrum instead.
-pub struct TestCheckpointDataBuilder {
+pub struct TestCheckpointBuilder {
     /// Map of all live objects in the state.
     live_objects: HashMap<ObjectID, Object>,
     /// Map of all wrapped objects in the state.
@@ -131,7 +134,7 @@ impl Default for AdvanceEpochConfig {
     }
 }
 
-impl TestCheckpointDataBuilder {
+impl TestCheckpointBuilder {
     pub fn new(checkpoint: u64) -> Self {
         Self {
             live_objects: HashMap::new(),
@@ -597,7 +600,7 @@ impl TestCheckpointDataBuilder {
 
     /// Build the checkpoint data using all the transactions added to the builder so far.
     /// This will also increment the stored checkpoint sequence number.
-    pub fn build_checkpoint(&mut self) -> CheckpointData {
+    pub fn build_checkpoint(&mut self) -> Checkpoint {
         assert!(self.checkpoint_builder.next_transaction.is_none());
         let transactions = std::mem::take(&mut self.checkpoint_builder.transactions);
         let contents = CheckpointContents::new_with_digests_only_for_tests(
@@ -626,10 +629,35 @@ impl TestCheckpointDataBuilder {
             &committee,
         );
         self.checkpoint_builder.checkpoint += 1;
-        CheckpointData {
-            checkpoint_summary: checkpoint_cert,
-            checkpoint_contents: contents,
-            transactions,
+
+        // Build the object set and convert transactions to ExecutedTransaction
+        let mut object_set = ObjectSet::default();
+        let executed_transactions = transactions
+            .into_iter()
+            .map(|tx| {
+                // Insert all input and output objects into the object set
+                for o in tx.input_objects.into_iter().chain(tx.output_objects) {
+                    object_set.insert(o);
+                }
+
+                // Extract TransactionData and signatures from Transaction
+                let sender_signed = tx.transaction.into_data().into_inner();
+
+                ExecutedTransaction {
+                    transaction: sender_signed.intent_message.value,
+                    signatures: sender_signed.tx_signatures,
+                    effects: tx.effects,
+                    events: tx.events,
+                    unchanged_loaded_runtime_objects: Vec::new(),
+                }
+            })
+            .collect();
+
+        Checkpoint {
+            summary: checkpoint_cert,
+            contents,
+            transactions: executed_transactions,
+            object_set,
         }
     }
 
@@ -646,7 +674,7 @@ impl TestCheckpointDataBuilder {
             output_objects,
             epoch_commitments,
         }: AdvanceEpochConfig,
-    ) -> CheckpointData {
+    ) -> Checkpoint {
         let (committee, _) = Committee::new_simple_test_committee();
         let tx_kind = EndOfEpochTransactionKind::new_change_epoch(
             self.checkpoint_builder.epoch + 1,
@@ -658,18 +686,15 @@ impl TestCheckpointDataBuilder {
             Default::default(),
             Default::default(),
         );
-
-        // TODO: need the system state object wrapper and dynamic field object to "correctly" mock
-        // advancing epoch, at least to satisfy kv_epoch_starts pipeline.
-        let end_of_epoch_tx = TransactionData::new(
+        let end_of_epoch_tx_data = TransactionData::new(
             TransactionKind::EndOfEpochTransaction(vec![tx_kind]),
             SuiAddress::default(),
             random_object_ref(),
             1,
             1,
-        )
-        .pipe(|data| SenderSignedData::new(data, vec![]))
-        .pipe(Transaction::new);
+        );
+        let end_of_epoch_tx_signed = SenderSignedData::new(end_of_epoch_tx_data, vec![]);
+        let end_of_epoch_tx = Transaction::new(end_of_epoch_tx_signed.clone());
 
         let events = if !safe_mode {
             let system_epoch_info_event = SystemEpochInfoEvent {
@@ -686,7 +711,7 @@ impl TestCheckpointDataBuilder {
             Some(vec![Event::new(
                 &SUI_SYSTEM_ADDRESS,
                 ident_str!("sui_system_state_inner"),
-                TestCheckpointDataBuilder::derive_address(0),
+                TestCheckpointBuilder::derive_address(0),
                 struct_tag,
                 bcs::to_bytes(&system_epoch_info_event).unwrap(),
             )])
@@ -695,27 +720,66 @@ impl TestCheckpointDataBuilder {
         };
 
         let transaction_events = events.map(|events| TransactionEvents { data: events });
+        let events_digest = transaction_events.as_ref().map(|events| events.digest());
 
-        // Similar to calling self.finish_transaction()
+        let changed_objects = output_objects
+            .iter()
+            .map(|obj| {
+                (
+                    obj.id(),
+                    effects::EffectsObjectChange {
+                        input_state: effects::ObjectIn::NotExist,
+                        output_state: effects::ObjectOut::ObjectWrite((
+                            obj.digest(),
+                            obj.owner().clone(),
+                        )),
+                        id_operation: effects::IDOperation::Created,
+                    },
+                )
+            })
+            .collect();
+
+        let lamport_version = SequenceNumber::from_u64(1);
+
+        let output_objects: Vec<Object> = output_objects
+            .into_iter()
+            .map(|mut obj| {
+                if let Some(move_obj) = obj.data.try_as_move_mut() {
+                    move_obj.increment_version_to(lamport_version);
+                }
+                obj
+            })
+            .collect();
+
+        let effects = TransactionEffects::new_from_execution_v2(
+            ExecutionStatus::Success,
+            self.checkpoint_builder.epoch,
+            GasCostSummary::default(),
+            vec![],
+            BTreeSet::new(),
+            end_of_epoch_tx_signed.digest(),
+            lamport_version,
+            changed_objects,
+            None,
+            events_digest,
+            vec![],
+        );
         self.checkpoint_builder
             .transactions
             .push(CheckpointTransaction {
                 transaction: end_of_epoch_tx,
-                effects: Default::default(),
+                effects,
                 events: transaction_events,
                 input_objects: vec![],
                 output_objects,
             });
-
-        // Call build_checkpoint() to finalize the checkpoint and then populate the checkpoint with
-        // additional end of epoch data.
         let mut checkpoint = self.build_checkpoint();
         let end_of_epoch_data = EndOfEpochData {
             next_epoch_committee: committee.voting_rights.clone(),
             next_epoch_protocol_version: protocol_version,
             epoch_commitments,
         };
-        checkpoint.checkpoint_summary.end_of_epoch_data = Some(end_of_epoch_data);
+        checkpoint.summary.end_of_epoch_data = Some(end_of_epoch_data);
         self.checkpoint_builder.epoch += 1;
         checkpoint
     }
@@ -767,30 +831,30 @@ mod tests {
     #[test]
     fn test_basic_checkpoint_builder() {
         // Create a checkpoint with a single transaction that does nothing.
-        let checkpoint = TestCheckpointDataBuilder::new(1)
+        let checkpoint = TestCheckpointBuilder::new(1)
             .with_epoch(5)
             .start_transaction(0)
             .finish_transaction()
             .build_checkpoint();
 
-        assert_eq!(*checkpoint.checkpoint_summary.sequence_number(), 1);
-        assert_eq!(checkpoint.checkpoint_summary.epoch, 5);
+        assert_eq!(*checkpoint.summary.sequence_number(), 1);
+        assert_eq!(checkpoint.summary.epoch, 5);
         assert_eq!(checkpoint.transactions.len(), 1);
         let tx = &checkpoint.transactions[0];
         assert_eq!(
-            tx.transaction.sender_address(),
-            TestCheckpointDataBuilder::derive_address(0)
+            tx.transaction.sender(),
+            TestCheckpointBuilder::derive_address(0)
         );
         assert_eq!(tx.effects.mutated().len(), 1); // gas object
         assert_eq!(tx.effects.deleted().len(), 0);
         assert_eq!(tx.effects.created().len(), 0);
-        assert_eq!(tx.input_objects.len(), 1);
-        assert_eq!(tx.output_objects.len(), 1);
+        // object_set contains both input and output versions (2 total: input gas + output gas)
+        assert_eq!(checkpoint.object_set.iter().count(), 2);
     }
 
     #[test]
     fn test_multiple_transactions() {
-        let checkpoint = TestCheckpointDataBuilder::new(1)
+        let checkpoint = TestCheckpointBuilder::new(1)
             .start_transaction(0)
             .finish_transaction()
             .start_transaction(1)
@@ -805,32 +869,33 @@ mod tests {
         let senders: Vec<_> = checkpoint
             .transactions
             .iter()
-            .map(|tx| tx.transaction.transaction_data().sender())
+            .map(|tx| tx.transaction.sender())
             .collect();
         assert_eq!(
             senders,
             vec![
-                TestCheckpointDataBuilder::derive_address(0),
-                TestCheckpointDataBuilder::derive_address(1),
-                TestCheckpointDataBuilder::derive_address(2)
+                TestCheckpointBuilder::derive_address(0),
+                TestCheckpointBuilder::derive_address(1),
+                TestCheckpointBuilder::derive_address(2)
             ]
         );
     }
 
     #[test]
     fn test_object_creation() {
-        let checkpoint = TestCheckpointDataBuilder::new(1)
+        let checkpoint = TestCheckpointBuilder::new(1)
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction()
             .build_checkpoint();
 
         let tx = &checkpoint.transactions[0];
-        let created_obj_id = TestCheckpointDataBuilder::derive_object_id(0);
+        let created_obj_id = TestCheckpointBuilder::derive_object_id(0);
 
-        // Verify the newly created object appears in output objects
+        // Verify the newly created object appears in the object set
         assert!(
-            tx.output_objects
+            checkpoint
+                .object_set
                 .iter()
                 .any(|obj| obj.id() == created_obj_id)
         );
@@ -842,13 +907,13 @@ mod tests {
                 .iter()
                 .any(|((id, ..), owner)| *id == created_obj_id
                     && owner.get_owner_address().unwrap()
-                        == TestCheckpointDataBuilder::derive_address(0))
+                        == TestCheckpointBuilder::derive_address(0))
         );
     }
 
     #[test]
     fn test_object_mutation() {
-        let checkpoint = TestCheckpointDataBuilder::new(1)
+        let checkpoint = TestCheckpointBuilder::new(1)
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction()
@@ -857,14 +922,13 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let tx = &checkpoint.transactions[1];
-        let obj_id = TestCheckpointDataBuilder::derive_object_id(0);
+        let obj_id = TestCheckpointBuilder::derive_object_id(0);
 
-        // Verify object appears in both input and output objects
-        assert!(tx.input_objects.iter().any(|obj| obj.id() == obj_id));
-        assert!(tx.output_objects.iter().any(|obj| obj.id() == obj_id));
+        // Verify object is in the object set
+        assert!(checkpoint.object_set.iter().any(|obj| obj.id() == obj_id));
 
         // Verify effects show object mutation
+        let tx = &checkpoint.transactions[1];
         assert!(
             tx.effects
                 .mutated()
@@ -875,7 +939,7 @@ mod tests {
 
     #[test]
     fn test_object_deletion() {
-        let checkpoint = TestCheckpointDataBuilder::new(1)
+        let checkpoint = TestCheckpointBuilder::new(1)
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction()
@@ -884,20 +948,20 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let tx = &checkpoint.transactions[1];
-        let obj_id = TestCheckpointDataBuilder::derive_object_id(0);
+        let obj_id = TestCheckpointBuilder::derive_object_id(0);
 
-        // Verify object appears in input objects but not output
-        assert!(tx.input_objects.iter().any(|obj| obj.id() == obj_id));
-        assert!(!tx.output_objects.iter().any(|obj| obj.id() == obj_id));
+        // The deleted object is still in object_set (it contains both inputs and outputs)
+        // We verify deletion via the effects instead
+        assert!(checkpoint.object_set.iter().any(|obj| obj.id() == obj_id));
 
         // Verify effects show object deletion
+        let tx = &checkpoint.transactions[1];
         assert!(tx.effects.deleted().iter().any(|(id, ..)| *id == obj_id));
     }
 
     #[test]
     fn test_object_wrapping() {
-        let checkpoint = TestCheckpointDataBuilder::new(1)
+        let checkpoint = TestCheckpointBuilder::new(1)
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction()
@@ -909,23 +973,17 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let tx = &checkpoint.transactions[1];
-        let obj_id = TestCheckpointDataBuilder::derive_object_id(0);
+        let obj_id = TestCheckpointBuilder::derive_object_id(0);
 
-        // Verify object appears in input objects but not output
-        assert!(tx.input_objects.iter().any(|obj| obj.id() == obj_id));
-        assert!(!tx.output_objects.iter().any(|obj| obj.id() == obj_id));
+        // After wrap and unwrap, object should be in the final object set
+        assert!(checkpoint.object_set.iter().any(|obj| obj.id() == obj_id));
 
         // Verify effects show object wrapping
+        let tx = &checkpoint.transactions[1];
         assert!(tx.effects.wrapped().iter().any(|(id, ..)| *id == obj_id));
 
-        let tx = &checkpoint.transactions[2];
-
-        // Verify object appears in output objects but not input
-        assert!(!tx.input_objects.iter().any(|obj| obj.id() == obj_id));
-        assert!(tx.output_objects.iter().any(|obj| obj.id() == obj_id));
-
         // Verify effects show object unwrapping
+        let tx = &checkpoint.transactions[2];
         assert!(
             tx.effects
                 .unwrapped()
@@ -936,7 +994,7 @@ mod tests {
 
     #[test]
     fn test_object_transfer() {
-        let checkpoint = TestCheckpointDataBuilder::new(1)
+        let checkpoint = TestCheckpointBuilder::new(1)
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction()
@@ -945,38 +1003,37 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let tx = &checkpoint.transactions[1];
-        let obj_id = TestCheckpointDataBuilder::derive_object_id(0);
+        let obj_id = TestCheckpointBuilder::derive_object_id(0);
 
-        // Verify object appears in input and output objects
-        assert!(tx.input_objects.iter().any(|obj| obj.id() == obj_id));
-        assert!(tx.output_objects.iter().any(|obj| obj.id() == obj_id));
+        // Object should be in the final object set
+        assert!(checkpoint.object_set.iter().any(|obj| obj.id() == obj_id));
 
         // Verify effects show object transfer
+        let tx = &checkpoint.transactions[1];
         assert!(
             tx.effects
                 .mutated()
                 .iter()
                 .any(|((id, ..), owner)| *id == obj_id
                     && owner.get_owner_address().unwrap()
-                        == TestCheckpointDataBuilder::derive_address(1))
+                        == TestCheckpointBuilder::derive_address(1))
         );
     }
 
     #[test]
     fn test_shared_object() {
-        let checkpoint = TestCheckpointDataBuilder::new(1)
+        let checkpoint = TestCheckpointBuilder::new(1)
             .start_transaction(0)
             .create_shared_object(0)
             .finish_transaction()
             .build_checkpoint();
 
-        let tx = &checkpoint.transactions[0];
-        let obj_id = TestCheckpointDataBuilder::derive_object_id(0);
+        let obj_id = TestCheckpointBuilder::derive_object_id(0);
 
-        // Verify object appears in output objects and is shared
+        // Verify object is in object set and is shared
         assert!(
-            tx.output_objects
+            checkpoint
+                .object_set
                 .iter()
                 .any(|obj| obj.id() == obj_id && obj.owner().is_shared())
         );
@@ -984,7 +1041,7 @@ mod tests {
 
     #[test]
     fn test_freeze_object() {
-        let checkpoint = TestCheckpointDataBuilder::new(1)
+        let checkpoint = TestCheckpointBuilder::new(1)
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction()
@@ -993,12 +1050,12 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let tx = &checkpoint.transactions[1];
-        let obj_id = TestCheckpointDataBuilder::derive_object_id(0);
+        let obj_id = TestCheckpointBuilder::derive_object_id(0);
 
-        // Verify object appears in output objects and is immutable
+        // Verify object is in object set and is immutable
         assert!(
-            tx.output_objects
+            checkpoint
+                .object_set
                 .iter()
                 .any(|obj| obj.id() == obj_id && obj.owner().is_immutable())
         );
@@ -1006,7 +1063,7 @@ mod tests {
 
     #[test]
     fn test_sui_balance_transfer() {
-        let checkpoint = TestCheckpointDataBuilder::new(1)
+        let checkpoint = TestCheckpointBuilder::new(1)
             .start_transaction(0)
             .create_sui_object(0, 100)
             .finish_transaction()
@@ -1015,24 +1072,15 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let tx = &checkpoint.transactions[0];
-        let obj_id0 = TestCheckpointDataBuilder::derive_object_id(0);
+        let obj_id0 = TestCheckpointBuilder::derive_object_id(0);
+        let obj_id1 = TestCheckpointBuilder::derive_object_id(1);
 
-        // Verify the newly created object appears in output objects and is a gas coin with 100 MIST.
-        assert!(tx.output_objects.iter().any(|obj| obj.id() == obj_id0
-            && obj.is_gas_coin()
-            && obj.data.try_as_move().unwrap().get_coin_value_unsafe() == 100));
-
-        let tx = &checkpoint.transactions[1];
-        let obj_id1 = TestCheckpointDataBuilder::derive_object_id(1);
-
-        // Verify the original SUI coin now has 90 MIST after the transfer.
-        assert!(tx.output_objects.iter().any(|obj| obj.id() == obj_id0
+        // Verify both coins are in the final object set with correct balances
+        assert!(checkpoint.object_set.iter().any(|obj| obj.id() == obj_id0
             && obj.is_gas_coin()
             && obj.data.try_as_move().unwrap().get_coin_value_unsafe() == 90));
 
-        // Verify the split out SUI coin has 10 MIST.
-        assert!(tx.output_objects.iter().any(|obj| obj.id() == obj_id1
+        assert!(checkpoint.object_set.iter().any(|obj| obj.id() == obj_id1
             && obj.is_gas_coin()
             && obj.data.try_as_move().unwrap().get_coin_value_unsafe() == 10));
     }
@@ -1040,7 +1088,7 @@ mod tests {
     #[test]
     fn test_coin_balance_transfer() {
         let type_tag = TypeTag::from_str("0x100::a::b").unwrap();
-        let checkpoint = TestCheckpointDataBuilder::new(1)
+        let checkpoint = TestCheckpointBuilder::new(1)
             .start_transaction(0)
             .create_coin_object(0, 0, 100, type_tag.clone())
             .finish_transaction()
@@ -1049,29 +1097,27 @@ mod tests {
             .finish_transaction()
             .build_checkpoint();
 
-        let tx = &checkpoint.transactions[1];
-        let obj_id0 = TestCheckpointDataBuilder::derive_object_id(0);
-        let obj_id1 = TestCheckpointDataBuilder::derive_object_id(1);
+        let obj_id0 = TestCheckpointBuilder::derive_object_id(0);
+        let obj_id1 = TestCheckpointBuilder::derive_object_id(1);
 
-        // Verify the original coin now has 90 balance after the transfer.
-        assert!(tx.output_objects.iter().any(|obj| obj.id() == obj_id0
+        // Verify both coins are in the final object set with correct balances
+        assert!(checkpoint.object_set.iter().any(|obj| obj.id() == obj_id0
             && obj.coin_type_maybe().unwrap() == type_tag
             && obj.data.try_as_move().unwrap().get_coin_value_unsafe() == 90));
 
-        // Verify the split out coin has 10 balance, with the same type tag.
-        assert!(tx.output_objects.iter().any(|obj| obj.id() == obj_id1
+        assert!(checkpoint.object_set.iter().any(|obj| obj.id() == obj_id1
             && obj.coin_type_maybe().unwrap() == type_tag
             && obj.data.try_as_move().unwrap().get_coin_value_unsafe() == 10));
     }
 
     #[test]
     fn test_events() {
-        let checkpoint = TestCheckpointDataBuilder::new(1)
+        let checkpoint = TestCheckpointBuilder::new(1)
             .start_transaction(0)
             .with_events(vec![Event::new(
                 &ObjectID::ZERO,
                 ident_str!("test"),
-                TestCheckpointDataBuilder::derive_address(0),
+                TestCheckpointBuilder::derive_address(0),
                 GAS::type_(),
                 vec![],
             )])
@@ -1088,7 +1134,7 @@ mod tests {
 
     #[test]
     fn test_move_call() {
-        let checkpoint = TestCheckpointDataBuilder::new(1)
+        let checkpoint = TestCheckpointBuilder::new(1)
             .start_transaction(0)
             .add_move_call(ObjectID::ZERO, "test", "test")
             .finish_transaction()
@@ -1096,26 +1142,20 @@ mod tests {
         let tx = &checkpoint.transactions[0];
 
         // Verify the transaction has a move call matching the arguments provided.
-        assert!(
-            tx.transaction
-                .transaction_data()
-                .kind()
-                .iter_commands()
-                .any(|cmd| {
-                    cmd == &Command::MoveCall(Box::new(ProgrammableMoveCall {
-                        package: ObjectID::ZERO,
-                        module: "test".to_string(),
-                        function: "test".to_string(),
-                        type_arguments: vec![],
-                        arguments: vec![],
-                    }))
-                })
-        );
+        assert!(tx.transaction.kind().iter_commands().any(|cmd| {
+            cmd == &Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package: ObjectID::ZERO,
+                module: "test".to_string(),
+                function: "test".to_string(),
+                type_arguments: vec![],
+                arguments: vec![],
+            }))
+        }));
     }
 
     #[test]
     fn test_multiple_checkpoints() {
-        let mut builder = TestCheckpointDataBuilder::new(1)
+        let mut builder = TestCheckpointBuilder::new(1)
             .start_transaction(0)
             .create_owned_object(0)
             .finish_transaction();
@@ -1132,8 +1172,8 @@ mod tests {
         let checkpoint3 = builder.build_checkpoint();
 
         // Verify the sequence numbers are consecutive.
-        assert_eq!(checkpoint1.checkpoint_summary.sequence_number, 1);
-        assert_eq!(checkpoint2.checkpoint_summary.sequence_number, 2);
-        assert_eq!(checkpoint3.checkpoint_summary.sequence_number, 3);
+        assert_eq!(checkpoint1.summary.sequence_number, 1);
+        assert_eq!(checkpoint2.summary.sequence_number, 2);
+        assert_eq!(checkpoint3.summary.sequence_number, 3);
     }
 }

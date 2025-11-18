@@ -7,35 +7,25 @@ mod rosetta_client;
 mod test_coin_utils;
 
 use std::num::NonZeroUsize;
-use std::path::Path;
-use std::str::FromStr;
 
+use prost_types::FieldMask;
 use serde_json::json;
+use sui_rpc::client::Client as GrpcClient;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
 
-use shared_crypto::intent::Intent;
-use sui_json_rpc_types::{
-    ObjectChange, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponseOptions,
-};
-use sui_keys::keystore::AccountKeystore;
+use sui_rosetta::operations::Operations;
+mod test_utils;
 use sui_rosetta::CoinMetadataCache;
 use sui_rosetta::SUI;
-use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Amount, Currency,
     CurrencyMetadata, NetworkIdentifier, SuiEnv,
 };
 use sui_rosetta::types::{Currencies, OperationType};
-use sui_types::coin::COIN_MODULE_NAME;
-use sui_types::object::Owner;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
-use sui_types::transaction::{
-    Argument, Command, ObjectArg, Transaction, TransactionData, TransactionDataAPI,
-};
-use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::TestClusterBuilder;
 use test_coin_utils::{TEST_COIN_DECIMALS, init_package, mint};
+use test_utils::wait_for_transaction;
 
 use crate::rosetta_client::{RosettaEndpoint, start_rosetta_test_server};
 
@@ -44,16 +34,15 @@ async fn test_mint() {
     const COIN1_BALANCE: u64 = 100_000_000;
     const COIN2_BALANCE: u64 = 200_000_000;
     let test_cluster = TestClusterBuilder::new().build().await;
-    let client = test_cluster.wallet.get_client().await.unwrap();
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
     let sender = test_cluster.get_address_0();
-    let init_ret = init_package(
-        &client,
-        keystore,
-        sender,
-        Path::new("tests/custom_coins/test_coin"),
-    )
+    let init_ret = init_package(&test_cluster, &mut client, keystore, sender, &{
+        let mut test_coin_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        test_coin_path.push("tests/custom_coins/test_coin");
+        test_coin_path
+    })
     .await
     .unwrap();
 
@@ -61,55 +50,62 @@ async fn test_mint() {
     let address2 = test_cluster.get_address_2();
     let balances_to = vec![(COIN1_BALANCE, address1), (COIN2_BALANCE, address2)];
 
-    let mint_res = mint(&client, keystore, init_ret, balances_to)
+    let mint_res = mint(&test_cluster, &mut client, keystore, init_ret, balances_to)
         .await
         .unwrap();
     let coins = mint_res
-        .object_changes
-        .unwrap()
-        .into_iter()
-        .filter_map(|change| {
-            if let ObjectChange::Created {
-                object_type, owner, ..
-            } = change
-            {
-                Some((object_type, owner))
-            } else {
-                None
-            }
+        .objects_opt()
+        .map(|object_set| {
+            object_set
+                .objects
+                .iter()
+                .filter(|obj| {
+                    if let Some(object_type) = &obj.object_type {
+                        object_type.contains("Coin<")
+                    } else {
+                        false
+                    }
+                })
+                .collect::<Vec<_>>()
         })
-        .collect::<Vec<_>>();
+        .unwrap_or_default();
     let coin1 = coins
         .iter()
-        .find(|coin| coin.1 == Owner::AddressOwner(address1))
+        .find(|obj| {
+            obj.owner_opt()
+                .and_then(|owner| owner.address_opt())
+                .is_some_and(|addr| addr == address1.to_string())
+        })
         .unwrap();
     let coin2 = coins
         .iter()
-        .find(|coin| coin.1 == Owner::AddressOwner(address2))
+        .find(|obj| {
+            obj.owner_opt()
+                .and_then(|owner| owner.address_opt())
+                .is_some_and(|addr| addr == address2.to_string())
+        })
         .unwrap();
-    assert!(coin1.0.to_string().contains("::test_coin::TEST_COIN"));
-    assert!(coin2.0.to_string().contains("::test_coin::TEST_COIN"));
+    assert!(coin1.object_type().contains("::test_coin::TEST_COIN"));
+    assert!(coin2.object_type().contains("::test_coin::TEST_COIN"));
 }
 
 #[tokio::test]
 async fn test_custom_coin_balance() {
-    // mint coins to `test_culset.get_address_1()` and `test_culset.get_address_2()`
     const SUI_BALANCE: u64 = 150_000_000_000_000_000;
     const COIN1_BALANCE: u64 = 100_000_000;
     const COIN2_BALANCE: u64 = 200_000_000;
     let test_cluster = TestClusterBuilder::new().build().await;
-    let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
 
     let sender = test_cluster.get_address_0();
-    let init_ret = init_package(
-        &client,
-        keystore,
-        sender,
-        Path::new("tests/custom_coins/test_coin"),
-    )
+    let init_ret = init_package(&test_cluster, &mut client, keystore, sender, &{
+        let mut test_coin_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        test_coin_path.push("tests/custom_coins/test_coin");
+        test_coin_path
+    })
     .await
     .unwrap();
 
@@ -118,11 +114,10 @@ async fn test_custom_coin_balance() {
     let balances_to = vec![(COIN1_BALANCE, address1), (COIN2_BALANCE, address2)];
     let coin_type = init_ret.coin_tag.to_canonical_string(true);
 
-    let _mint_res = mint(&client, keystore, init_ret, balances_to)
+    let _mint_res = mint(&test_cluster, &mut client, keystore, init_ret, balances_to)
         .await
         .unwrap();
 
-    // setup AccountBalanceRequest
     let network_identifier = NetworkIdentifier {
         blockchain: "sui".to_string(),
         network: SuiEnv::LocalNet,
@@ -137,7 +132,6 @@ async fn test_custom_coin_balance() {
         },
     };
 
-    // Verify initial balance and stake
     let request = AccountBalanceRequest {
         network_identifier: network_identifier.clone(),
         account_identifier: AccountIdentifier {
@@ -148,18 +142,10 @@ async fn test_custom_coin_balance() {
         currencies: Currencies(vec![sui_currency, test_coin_currency]),
     };
 
-    println!(
-        "request: {}",
-        serde_json::to_string_pretty(&request).unwrap()
-    );
     let response: AccountBalanceResponse = rosetta_client
         .call(RosettaEndpoint::Balance, &request)
         .await
         .unwrap();
-    println!(
-        "response: {}",
-        serde_json::to_string_pretty(&response).unwrap()
-    );
     assert_eq!(response.balances.len(), 2);
     assert_eq!(response.balances[0].value, SUI_BALANCE as i128);
     assert_eq!(
@@ -175,12 +161,11 @@ async fn test_custom_coin_balance() {
 
 #[tokio::test]
 async fn test_default_balance() {
-    // mint coins to `test_culset.get_address_1()` and `test_culset.get_address_2()`
     const SUI_BALANCE: u64 = 150_000_000_000_000_000;
     let test_cluster = TestClusterBuilder::new().build().await;
-    let client = test_cluster.wallet.get_client().await.unwrap();
 
-    let (rosetta_client, _handles) = start_rosetta_test_server(client.clone()).await;
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handles) = start_rosetta_test_server(client).await;
 
     let request: AccountBalanceRequest = serde_json::from_value(json!(
         {
@@ -198,10 +183,6 @@ async fn test_default_balance() {
         .call(RosettaEndpoint::Balance, &request)
         .await
         .unwrap();
-    println!(
-        "response: {}",
-        serde_json::to_string_pretty(&response).unwrap()
-    );
     assert_eq!(response.balances.len(), 1);
     assert_eq!(response.balances[0].value, SUI_BALANCE as i128);
 }
@@ -212,21 +193,19 @@ async fn test_custom_coin_transfer() {
     let test_cluster = TestClusterBuilder::new().build().await;
     let sender = test_cluster.get_address_0();
     let recipient = test_cluster.get_address_1();
-    let client = test_cluster.wallet.get_client().await.unwrap();
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    // TEST_COIN setup and mint
-    let init_ret = init_package(
-        &client,
-        keystore,
-        sender,
-        Path::new("tests/custom_coins/test_coin"),
-    )
+    let init_ret = init_package(&test_cluster, &mut client, keystore, sender, &{
+        let mut test_coin_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        test_coin_path.push("tests/custom_coins/test_coin");
+        test_coin_path
+    })
     .await
     .unwrap();
     let balances_to = vec![(COIN1_BALANCE, sender)];
     let coin_type = init_ret.coin_tag.to_canonical_string(true);
-    let _mint_res = mint(&client, keystore, init_ret, balances_to)
+    let _mint_res = mint(&test_cluster, &mut client, keystore, init_ret, balances_to)
         .await
         .unwrap();
 
@@ -266,33 +245,70 @@ async fn test_custom_coin_transfer() {
     ))
     .unwrap();
 
-    let response = rosetta_client
-        .rosetta_flow(&ops, keystore, None)
+    let flow_response = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    let response = flow_response.submit.unwrap().unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(response.transaction_identifier.hash.to_string())
+        .with_read_mask(FieldMask::from_paths([
+            "digest",
+            "transaction",
+            "effects",
+            "balance_changes",
+            "events",
+        ]));
+
+    let grpc_response = client
+        .clone()
+        .ledger_client()
+        .get_transaction(grpc_request)
         .await
-        .submit
         .unwrap()
-        .unwrap();
+        .into_inner();
 
-    let tx = client
-        .read_api()
-        .get_transaction_with_options(
-            response.transaction_identifier.hash,
-            SuiTransactionBlockResponseOptions::new()
-                .with_input()
-                .with_effects()
-                .with_balance_changes()
-                .with_events(),
-        )
-        .await
-        .unwrap();
+    let tx = grpc_response
+        .transaction
+        .expect("Response transaction should not be empty");
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        tx.effects.as_ref().unwrap().status()
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
-    println!("Sui TX: {tx:?}");
-    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
-    let ops2 = Operations::try_from_response(tx, &coin_cache)
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let tx_digest = tx.digest.expect("Expected transaction digest");
+
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(tx_digest.clone())
+        .with_read_mask(FieldMask::from_paths([
+            "digest",
+            "transaction",
+            "effects",
+            "balance_changes",
+            "events.events.event_type",
+            "events.events.json",
+            "events.events.contents",
+        ]));
+
+    let mut client_copy = client.clone();
+    let grpc_response = client_copy
+        .ledger_client()
+        .get_transaction(grpc_request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
+    let executed_tx = grpc_response
+        .transaction
+        .expect("Response transaction should not be empty");
+    let ops2 = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
         .await
         .unwrap();
     assert!(
@@ -308,43 +324,78 @@ async fn test_custom_coin_without_symbol() {
     const COIN1_BALANCE: u64 = 100_000_000_000_000_000;
     let test_cluster = TestClusterBuilder::new().build().await;
     let sender = test_cluster.get_address_0();
-    let client = test_cluster.wallet.get_client().await.unwrap();
+    let _client = test_cluster.wallet.get_client().await.unwrap();
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    // TEST_COIN setup and mint
-    let init_ret = init_package(
-        &client,
-        keystore,
-        sender,
-        Path::new("tests/custom_coins/test_coin_no_symbol"),
-    )
+    let init_ret = init_package(&test_cluster, &mut client, keystore, sender, &{
+        let mut test_coin_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        test_coin_path.push("tests/custom_coins/test_coin_no_symbol");
+        test_coin_path
+    })
     .await
     .unwrap();
 
     let balances_to = vec![(COIN1_BALANCE, sender)];
-    let mint_res = mint(&client, keystore, init_ret, balances_to)
+    let mint_res = mint(&test_cluster, &mut client, keystore, init_ret, balances_to)
         .await
         .unwrap();
 
-    let tx = client
-        .read_api()
-        .get_transaction_with_options(
-            mint_res.digest,
-            SuiTransactionBlockResponseOptions::new()
-                .with_input()
-                .with_effects()
-                .with_balance_changes()
-                .with_events(),
-        )
-        .await
-        .unwrap();
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(mint_res.digest().to_string())
+        .with_read_mask(FieldMask::from_paths([
+            "digest",
+            "transaction",
+            "effects",
+            "balance_changes",
+            "events",
+        ]));
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        tx.effects.as_ref().unwrap().status()
+    let grpc_response = client
+        .clone()
+        .ledger_client()
+        .get_transaction(grpc_request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    let tx = grpc_response
+        .transaction
+        .expect("Response transaction should not be empty");
+
+    assert!(
+        tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        tx.effects().status().error()
     );
-    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
-    let ops = Operations::try_from_response(tx, &coin_cache)
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let tx_digest = tx.digest.expect("Expected transaction digest");
+
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(tx_digest.clone())
+        .with_read_mask(FieldMask::from_paths([
+            "digest",
+            "transaction",
+            "effects",
+            "balance_changes",
+            "events.events.event_type",
+            "events.events.json",
+            "events.events.contents",
+        ]));
+
+    let mut client_copy = client.clone();
+    let grpc_response = client_copy
+        .ledger_client()
+        .get_transaction(grpc_request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
+    let executed_tx = grpc_response
+        .transaction
+        .expect("Response transaction should not be empty");
+    let ops = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
         .await
         .unwrap();
 
@@ -360,16 +411,15 @@ async fn test_mint_with_gas_coin_transfer() -> anyhow::Result<()> {
     const COIN1_BALANCE: u64 = 100_000_000;
     const COIN2_BALANCE: u64 = 200_000_000;
     let test_cluster = TestClusterBuilder::new().build().await;
-    let client = test_cluster.wallet.get_client().await.unwrap();
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
     let sender = test_cluster.get_address_0();
-    let init_ret = init_package(
-        &client,
-        keystore,
-        sender,
-        Path::new("tests/custom_coins/test_coin"),
-    )
+    let init_ret = init_package(&test_cluster, &mut client, keystore, sender, &{
+        let mut test_coin_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        test_coin_path.push("tests/custom_coins/test_coin");
+        test_coin_path
+    })
     .await
     .unwrap();
 
@@ -377,102 +427,59 @@ async fn test_mint_with_gas_coin_transfer() -> anyhow::Result<()> {
     let address2 = test_cluster.get_address_2();
     let balances_to = vec![(COIN1_BALANCE, address1), (COIN2_BALANCE, address2)];
 
-    let treasury_cap_owner = init_ret.owner;
-
-    let gas_price = client
-        .governance_api()
-        .get_reference_gas_price()
+    let mint_res = mint(&test_cluster, &mut client, keystore, init_ret, balances_to)
         .await
         .unwrap();
-    const LARGE_GAS_BUDGET: u128 = 1_000_000_000;
-    let mut gas_coins = client
-        .coin_read_api()
-        .select_coins(sender, None, LARGE_GAS_BUDGET, vec![])
-        .await?;
-    assert!(
-        gas_coins.len() == 1,
-        "Expected 1 large gas-coin to satisfy the budget"
-    );
-    let gas_coin = gas_coins.pop().unwrap();
-    let mut ptb = ProgrammableTransactionBuilder::new();
-
-    let treasury_cap = ptb.obj(ObjectArg::ImmOrOwnedObject(init_ret.treasury_cap))?;
-    for (balance, to) in balances_to {
-        let balance = ptb.pure(balance)?;
-        let coin = ptb.command(Command::move_call(
-            SUI_FRAMEWORK_PACKAGE_ID,
-            Identifier::from(COIN_MODULE_NAME),
-            Identifier::from_str("mint")?,
-            vec![init_ret.coin_tag.clone()],
-            vec![treasury_cap, balance],
-        ));
-        ptb.transfer_arg(to, coin);
-    }
-    ptb.transfer_arg(address1, Argument::GasCoin);
-    let builder = ptb.finish();
-
-    // Sign transaction
-    let tx_data = TransactionData::new_programmable(
-        treasury_cap_owner,
-        vec![gas_coin.object_ref()],
-        builder,
-        LARGE_GAS_BUDGET as u64,
-        gas_price,
-    );
-
-    let sig = keystore
-        .sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())
-        .await?;
-
-    let mint_res = client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            Transaction::from_data(tx_data, vec![sig]),
-            SuiTransactionBlockResponseOptions::new()
-                .with_balance_changes()
-                .with_effects()
-                .with_input()
-                .with_object_changes(),
-            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-        )
-        .await?;
-    let gas_used = mint_res.effects.as_ref().unwrap().gas_cost_summary();
-    let mut gas_used = gas_used.net_gas_usage() as i128;
-    println!("gas_used: {gas_used}");
+    let effects = mint_res.effects();
+    let gas_summary = effects.gas_used();
+    let gas_used_amount = gas_summary.computation_cost.unwrap_or(0)
+        + gas_summary.storage_cost.unwrap_or(0)
+        - gas_summary.storage_rebate.unwrap_or(0);
+    let mut gas_used = gas_used_amount as i128;
 
     let coins = mint_res
-        .object_changes
-        .as_ref()
-        .unwrap()
-        .iter()
-        .filter_map(|change| {
-            if let ObjectChange::Created {
-                object_type, owner, ..
-            } = change
-            {
-                Some((object_type, owner))
-            } else {
-                None
-            }
+        .objects_opt()
+        .map(|object_set| {
+            object_set
+                .objects
+                .iter()
+                .filter(|obj| {
+                    if let Some(object_type) = &obj.object_type {
+                        object_type.contains("Coin<")
+                    } else {
+                        false
+                    }
+                })
+                .collect::<Vec<_>>()
         })
-        .collect::<Vec<_>>();
+        .unwrap_or_default();
     let coin1 = coins
         .iter()
-        .find(|coin| coin.1.get_address_owner_address().unwrap() == address1)
+        .find(|obj| {
+            obj.owner_opt()
+                .and_then(|owner| owner.address_opt())
+                .is_some_and(|addr| addr == address1.to_string())
+        })
         .unwrap();
     let coin2 = coins
         .iter()
-        .find(|coin| coin.1.get_address_owner_address().unwrap() == address2)
+        .find(|obj| {
+            obj.owner_opt()
+                .and_then(|owner| owner.address_opt())
+                .is_some_and(|addr| addr == address2.to_string())
+        })
         .unwrap();
-    assert!(coin1.0.to_string().contains("::test_coin::TEST_COIN"));
-    assert!(coin2.0.to_string().contains("::test_coin::TEST_COIN"));
+    assert!(coin1.object_type().contains("::test_coin::TEST_COIN"));
+    assert!(coin2.object_type().contains("::test_coin::TEST_COIN"));
 
-    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
-    let ops = Operations::try_from_response(mint_res, &coin_cache)
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
+    let executed_tx = mint_res;
+
+    let ops = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
         .await
         .unwrap();
     const COIN_BALANCE_CREATED: u64 = COIN1_BALANCE + COIN2_BALANCE;
-    println!("ops: {}", serde_json::to_string_pretty(&ops).unwrap());
     let mut coin_created = 0;
     ops.into_iter().for_each(|op| {
         if let Some(Amount {
@@ -486,6 +493,7 @@ async fn test_mint_with_gas_coin_transfer() -> anyhow::Result<()> {
             }
         }
     });
+
     assert!(COIN_BALANCE_CREATED as i128 == coin_created);
     assert!(gas_used == 0);
 

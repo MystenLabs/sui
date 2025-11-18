@@ -39,7 +39,7 @@ impl CompiledModule {
         binary_config: &BinaryConfig,
     ) -> BinaryLoaderResult<Self> {
         let module = deserialize_compiled_module(binary, binary_config)?;
-        BoundsChecker::verify_module(&module)?;
+        BoundsChecker::verify_module(&module, binary_config.deprecate_global_storage_ops)?;
         Ok(module)
     }
 

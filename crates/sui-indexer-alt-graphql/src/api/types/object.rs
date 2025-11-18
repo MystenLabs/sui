@@ -861,6 +861,7 @@ impl Object {
 
         let mut query = v::obj_versions
             .filter(v::object_id.eq(address.to_vec()))
+            .filter(v::object_digest.is_not_null())
             .filter(sql!(as Bool,
                 r#"
                     object_version <= (SELECT

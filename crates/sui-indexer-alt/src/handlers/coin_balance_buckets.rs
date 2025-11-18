@@ -8,12 +8,12 @@ use diesel::prelude::QueryableByName;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     FieldCount,
-    pipeline::{Processor, concurrent::Handler},
-    postgres::{Connection, Db},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
     types::{
         TypeTag,
         base_types::{ObjectID, SuiAddress},
-        full_checkpoint_content::CheckpointData,
+        full_checkpoint_content::Checkpoint,
         object::{Object, Owner},
     },
 };
@@ -59,14 +59,11 @@ impl Processor for CoinBalanceBuckets {
     const NAME: &'static str = "coin_balance_buckets";
     type Value = ProcessedCoinBalanceBucket;
 
-    async fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let cp_sequence_number = checkpoint.summary.sequence_number;
         let checkpoint_input_objects = checkpoint_input_objects(checkpoint)?;
-        let latest_live_output_objects: BTreeMap<_, _> = checkpoint
-            .latest_live_output_objects()
-            .into_iter()
-            .map(|o| (o.id(), o))
-            .collect();
+        let latest_live_output_objects = checkpoint.latest_live_output_objects();
+
         let mut values: BTreeMap<ObjectID, Self::Value> = BTreeMap::new();
         for (object_id, input_object) in checkpoint_input_objects.iter() {
             // This loop processes all coins that were owned by a single address prior to the checkpoint,
@@ -152,8 +149,6 @@ impl Processor for CoinBalanceBuckets {
 
 #[async_trait]
 impl Handler for CoinBalanceBuckets {
-    type Store = Db;
-
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         let stored = values
             .iter()
@@ -368,7 +363,7 @@ mod tests {
             digests::TransactionDigest,
             gas_coin::GAS,
             object::{MoveObject, Object},
-            test_checkpoint_data_builder::TestCheckpointDataBuilder,
+            test_checkpoint_data_builder::TestCheckpointBuilder,
         },
     };
     use sui_indexer_alt_schema::MIGRATIONS;
@@ -465,7 +460,7 @@ mod tests {
     async fn test_process_coin_balance_buckets_new_sui_coin() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder
             .start_transaction(0)
             .create_sui_object(0, 0)
@@ -509,7 +504,7 @@ mod tests {
     async fn test_process_coin_balance_buckets_new_other_coin() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         let coin_type = TypeTag::from_str("0x0::a::b").unwrap();
         builder = builder
             .start_transaction(0)
@@ -527,7 +522,7 @@ mod tests {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 1,
                 coin_type: coin_type.clone(),
-                owner_id: TestCheckpointDataBuilder::derive_address(0),
+                owner_id: TestCheckpointBuilder::derive_address(0),
                 created: true,
             }
         );
@@ -545,7 +540,7 @@ mod tests {
     async fn test_process_coin_balance_buckets_balance_change() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder
             .start_transaction(0)
             .create_sui_object(0, 10010)
@@ -563,7 +558,7 @@ mod tests {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 4,
                 coin_type: GAS::type_tag(),
-                owner_id: TestCheckpointDataBuilder::derive_address(0),
+                owner_id: TestCheckpointBuilder::derive_address(0),
                 created: true,
             }
         );
@@ -594,7 +589,7 @@ mod tests {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 1,
                 coin_type: GAS::type_tag(),
-                owner_id: TestCheckpointDataBuilder::derive_address(1),
+                owner_id: TestCheckpointBuilder::derive_address(1),
                 created: true
             }
         );
@@ -627,7 +622,7 @@ mod tests {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 3,
                 coin_type: GAS::type_tag(),
-                owner_id: TestCheckpointDataBuilder::derive_address(0),
+                owner_id: TestCheckpointBuilder::derive_address(0),
                 created: false,
             }));
         assert!(values.iter().any(|v| v.change
@@ -635,7 +630,7 @@ mod tests {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 0,
                 coin_type: GAS::type_tag(),
-                owner_id: TestCheckpointDataBuilder::derive_address(1),
+                owner_id: TestCheckpointBuilder::derive_address(1),
                 created: true,
             }));
         let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
@@ -654,10 +649,10 @@ mod tests {
         assert_eq!(
             all_balance_buckets[0],
             StoredCoinBalanceBucket {
-                object_id: TestCheckpointDataBuilder::derive_object_id(0).to_vec(),
+                object_id: TestCheckpointBuilder::derive_object_id(0).to_vec(),
                 cp_sequence_number: 2,
                 owner_kind: Some(StoredCoinOwnerKind::Fastpath),
-                owner_id: Some(TestCheckpointDataBuilder::derive_address(0).to_vec()),
+                owner_id: Some(TestCheckpointBuilder::derive_address(0).to_vec()),
                 coin_type: Some(bcs::to_bytes(&GAS::type_tag()).unwrap()),
                 coin_balance_bucket: Some(3),
             }
@@ -665,10 +660,10 @@ mod tests {
         assert_eq!(
             all_balance_buckets[1],
             StoredCoinBalanceBucket {
-                object_id: TestCheckpointDataBuilder::derive_object_id(1).to_vec(),
+                object_id: TestCheckpointBuilder::derive_object_id(1).to_vec(),
                 cp_sequence_number: 1,
                 owner_kind: Some(StoredCoinOwnerKind::Fastpath),
-                owner_id: Some(TestCheckpointDataBuilder::derive_address(1).to_vec()),
+                owner_id: Some(TestCheckpointBuilder::derive_address(1).to_vec()),
                 coin_type: Some(bcs::to_bytes(&GAS::type_tag()).unwrap()),
                 coin_balance_bucket: Some(1),
             }
@@ -676,10 +671,10 @@ mod tests {
         assert_eq!(
             all_balance_buckets[2],
             StoredCoinBalanceBucket {
-                object_id: TestCheckpointDataBuilder::derive_object_id(2).to_vec(),
+                object_id: TestCheckpointBuilder::derive_object_id(2).to_vec(),
                 cp_sequence_number: 2,
                 owner_kind: Some(StoredCoinOwnerKind::Fastpath),
-                owner_id: Some(TestCheckpointDataBuilder::derive_address(1).to_vec()),
+                owner_id: Some(TestCheckpointBuilder::derive_address(1).to_vec()),
                 coin_type: Some(bcs::to_bytes(&GAS::type_tag()).unwrap()),
                 coin_balance_bucket: Some(0),
             }
@@ -690,7 +685,7 @@ mod tests {
     async fn test_process_coin_balance_buckets_coin_deleted() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder
             .start_transaction(0)
             .create_owned_object(0)
@@ -726,7 +721,7 @@ mod tests {
         assert_eq!(
             all_balance_buckets[1],
             StoredCoinBalanceBucket {
-                object_id: TestCheckpointDataBuilder::derive_object_id(0).to_vec(),
+                object_id: TestCheckpointBuilder::derive_object_id(0).to_vec(),
                 cp_sequence_number: 1,
                 owner_kind: None,
                 owner_id: None,
@@ -746,7 +741,7 @@ mod tests {
     async fn test_process_coin_balance_buckets_owner_change() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder
             .start_transaction(0)
             .create_sui_object(0, 100)
@@ -777,7 +772,7 @@ mod tests {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 2,
                 coin_type: GAS::type_tag(),
-                owner_id: TestCheckpointDataBuilder::derive_address(1),
+                owner_id: TestCheckpointBuilder::derive_address(1),
                 created: false,
             }
         );
@@ -793,10 +788,10 @@ mod tests {
         assert_eq!(
             all_balance_buckets[0],
             StoredCoinBalanceBucket {
-                object_id: TestCheckpointDataBuilder::derive_object_id(0).to_vec(),
+                object_id: TestCheckpointBuilder::derive_object_id(0).to_vec(),
                 cp_sequence_number: 1,
                 owner_kind: Some(StoredCoinOwnerKind::Fastpath),
-                owner_id: Some(TestCheckpointDataBuilder::derive_address(1).to_vec()),
+                owner_id: Some(TestCheckpointBuilder::derive_address(1).to_vec()),
                 coin_type: Some(bcs::to_bytes(&GAS::type_tag()).unwrap()),
                 coin_balance_bucket: Some(2),
             }
@@ -807,7 +802,7 @@ mod tests {
     async fn test_process_coin_balance_buckets_object_owned() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
         builder = builder
             .start_transaction(0)
             .create_owned_object(0)
@@ -850,7 +845,7 @@ mod tests {
     async fn test_process_coin_balance_buckets_wrap_and_prune_after_unwrap() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
 
         // Create a coin in checkpoint 0
         builder = builder
@@ -902,7 +897,7 @@ mod tests {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 2,
                 coin_type: GAS::type_tag(),
-                owner_id: TestCheckpointDataBuilder::derive_address(0),
+                owner_id: TestCheckpointBuilder::derive_address(0),
                 created: true,
             }
         );
@@ -927,7 +922,7 @@ mod tests {
     async fn test_process_coin_balance_buckets_out_of_order_pruning() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
 
         // Create three coins in checkpoint 0
         builder = builder
@@ -1039,7 +1034,7 @@ mod tests {
     async fn test_process_coin_balance_buckets_concurrent_pruning() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
-        let mut builder = TestCheckpointDataBuilder::new(0);
+        let mut builder = TestCheckpointBuilder::new(0);
 
         // Create the same scenario as the out-of-order test
         builder = builder

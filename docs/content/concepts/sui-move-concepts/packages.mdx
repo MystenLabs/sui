@@ -3,30 +3,30 @@ title: Packages
 description: A Move package on Sui includes one or more modules that define that package's interaction with on-chain objects. Upgrading packages lets you improve code or add features without breaking packages that depend on them.
 ---
 
-A Move package on Sui includes one or more modules that define the package's interaction with on-chain objects. You develop the logic for those modules in Move, compile them into an object, and publish that package object to a Sui network. On-chain, anyone can view a package’s contents and see how its logic manipulates objects using a Sui Explorer.
+A Move package on Sui includes one or more modules that define the package's interaction with on-chain objects. You develop the logic for those modules in Move, compile them into an object, and publish that package object to a Sui network. On-chain, anyone can view a package's contents and see how its logic manipulates objects using a Sui Explorer.
 
 ## Packages are immutable
 
-After you publish a package object to a network, it lives there permanently. You cannot directly change the code of an on-chain package. Once published, other packages can import and use the modules it provides.  
+After you publish a package object to a network, it lives there permanently. You cannot directly change the code of an on-chain package. Once published, other packages can import and use the modules it provides.
 
 If developers could modify on-chain packages after publication, downstream behavior could change in unexpected ways. For example, a developer fixing an overlooked bug could unintentionally change the execution of every dependent package.
 
 ## Upgrading packages
 
-Although you cannot edit a published package directly, you can **upgrade** it. Upgrading creates a new package object on-chain, leaving the original intact. This lets you add features or fix issues without breaking existing dependencies.  
+Although you cannot edit a published package directly, you can **upgrade** it. Upgrading creates a new package object on-chain, leaving the original intact. This lets you add features or fix issues without breaking existing dependencies.
 
-See [Upgrading packages](./packages/upgrade.mdx) for details on the process.
+See [Upgrading packages](/concepts/sui-move-concepts/packages/upgrade.mdx) for details on the process.
 
 ## Using the Sui Client CLI
 
-The [Sui Client CLI](/references/cli/client.mdx) provides an approachable way to upgrade packages. If the CLI’s active address owns the `UpgradeCap` for a package, you can use the `upgrade` command to perform an upgrade.
+The [Sui Client CLI](/references/cli/client.mdx) provides an approachable way to upgrade packages. If the CLI's active address owns the `UpgradeCap` for a package, you can use the `upgrade` command to perform an upgrade.
 
-This workflow is convenient when you’re starting development or iterating quickly. However, protecting package upgrades with a single private key poses security risks:
+This workflow is convenient when you're starting development or iterating quickly. However, protecting package upgrades with a single private key poses security risks:
 
 <ImportContent source="upgrade-single-key-risk.mdx" mode="snippet" />
 
 ### Making packages immutable
 
-You can call the Move function `sui::package::make_immutable` to destroy a package’s `UpgradeCap` and make the package permanently immutable. This eliminates single-key risk but also prevents all future bug fixes and feature additions.
+You can call the Move function `sui::package::make_immutable` to destroy a package's `UpgradeCap` and make the package permanently immutable. This eliminates single-key risk but also prevents all future bug fixes and feature additions.
 
-For a more flexible approach, use [custom upgrade policies](./packages/custom-policies.mdx) to protect `UpgradeCap` access without giving up the ability to upgrade.
+For a more flexible approach, use [custom upgrade policies](/concepts/sui-move-concepts/packages/custom-policies.mdx) to protect `UpgradeCap` access without giving up the ability to upgrade.

@@ -47,7 +47,7 @@ jobs:
         id: diff
 
   external-crates-test:
-    needs: diff
+    needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     env:

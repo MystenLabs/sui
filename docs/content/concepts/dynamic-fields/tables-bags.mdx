@@ -3,9 +3,9 @@ title: Table and Bag
 description: Sui provides `Table` and `Bag` collections built using dynamic fields, but with additional support to count the number of entries they contain to protect against accidental deletion when non-empty.
 ---
 
-You can extend existing objects using [dynamic fields](../dynamic-fields.mdx). Note that it's possible to delete an object that still has (potentially non-drop) dynamic fields. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for on-chain collection types that could be holding unboundedly many key-value pairs as dynamic fields.
+You can extend existing objects using [dynamic fields](/concepts/dynamic-fields.mdx). It is possible to delete an object that still has (potentially non-drop) dynamic fields. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for on-chain collection types that could be holding unboundedly many key-value pairs as dynamic fields.
 
-This topic describes two such collections -- Table and Bag -- built using dynamic fields, but with additional support to count the number of entries they contain, and protect against accidental deletion when non-empty.
+This topic describes 2 such collections, table and bag, built using dynamic fields, but with additional support to count the number of entries they contain, and protect against accidental deletion when non-empty.
 
 The types and function discussed in this section are built into the Sui framework in modules [`table`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/table.move) and [`bag`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/bag.move). As with dynamic fields, there is also an `object_` variant of both: `ObjectTable` in [`object_table`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object_table.move) and `ObjectBag` in [`object_bag`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object_bag.move). The relationship between `Table` and `ObjectTable`, and `Bag` and `ObjectBag` is the same as between a field and an object field: The former can hold any `store` type as a value, but objects stored as values are hidden when viewed from external storage. The latter can only store objects as values, but keeps those objects visible at their ID in external storage.
 
@@ -36,7 +36,7 @@ public struct Bag has key, store { /* ... */ }
 public fun new(ctx: &mut TxContext): Bag;
 ```
 
-`Bag` is a *heterogeneous* map, so it can hold key-value pairs of arbitrary types (they don't need to match each other). Note that the `Bag` type does not have any type parameters for this reason. Like `Table`, `Bag` is also an object, so creating one with `sui::bag::new` requires supplying a `&mut TxContext` to generate an ID.
+`Bag` is a heterogeneous map, so it can hold key-value pairs of arbitrary types (they do not need to match each other). The `Bag` type does not have any type parameters for this reason. Like `Table`, `Bag` is also an object, so creating one with `sui::bag::new` requires supplying a `&mut TxContext` to generate an ID.
 
 See `sui::bag::ObjectBag` for the object-preserving version of `Bag`.
 
@@ -81,7 +81,7 @@ Like with dynamic fields, it is an error to attempt to overwrite an existing key
 
 :::
 
-The extra flexibility of `Bag`'s heterogeneity means the type system doesn't statically prevent attempts to add a value with one type, and then borrow or remove it at another type. This pattern fails at runtime, similar to the behavior for dynamic fields.
+The extra flexibility of `Bag` heterogeneity means the type system does not statically prevent attempts to add a value with one type, and then borrow or remove it at another type. This pattern fails at runtime, similar to the behavior for dynamic fields.
 
 ## Querying length
 
@@ -155,7 +155,7 @@ You can call the convenience function only for tables where the value type also 
 
 Note that `drop` is not called implicitly on eligible tables before they go out of scope. It must be called explicitly, but it is guaranteed to succeed at runtime.
 
-`Bag` and `ObjectBag` cannot support `drop` because they could be holding a variety of types, some of which may have `drop` and some which may not.
+`Bag` and `ObjectBag` cannot support `drop` because they could be holding a variety of types, some of which might have `drop` and some which might not.
 
 `ObjectTable` does not support `drop` because its values must be objects, which cannot be dropped (because they must contain an `id: UID` field and `UID` does not have `drop`).
 

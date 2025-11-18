@@ -1,0 +1,154 @@
+---
+title: Design
+description: Learn about DeepBook Margin design, including MarginPool, MarginManager, and MarginRegistry shared objects.
+keywords:
+  [
+    deepbook margin design,
+    margin pool,
+    margin manager,
+    margin registry,
+    leveraged trading,
+    lending protocol,
+    state,
+    interest accrual,
+  ]
+---
+
+At a high level, the DeepBook Margin design revolves around four main shared objects that work together to enable leveraged trading:
+
+- `MarginPool`: A shared object that manages liquidity for a specific asset, handling supply and borrow operations with interest accrual. See the [MarginPool shared object](#margin-pool) section to learn more.
+- `MarginManager`: A shared object that wraps a `BalanceManager` and provides capabilities for leveraged trading, including borrowing, repaying, and risk management. See the [MarginManager shared object](#margin-manager) section to learn more.
+- `MarginRegistry`: A central registry that manages all margin pools and margin managers, enforces system-wide configurations, and tracks enabled pools. See the [MarginRegistry](#margin-registry) section to learn more.
+- `BalanceManager`: Inherited from DeepBookV3, used to source funds for trading. See [BalanceManager](../deepbookv3/balance-manager.mdx) to learn more.
+
+## `MarginPool` shared object {#margin-pool}
+
+The `MarginPool` is responsible for managing liquidity for a single asset type. It consists of several key components:
+
+- [`State`](#state)
+- [`ProtocolConfig`](#protocol-config)
+- [`ProtocolFees`](#protocol-fees)
+- [`PositionManager`](#position-manager)
+
+### State
+
+The `State` component tracks the total supply and borrow amounts, along with their corresponding shares. It uses a shares-based accounting system where:
+
+- **Supply shares:** Represent a lender's proportional ownership of the total supplied assets.
+- **Borrow shares:** Represent a borrower's proportional debt obligation.
+
+Interest accrues continuously based on the utilization rate (ratio of borrowed to supplied assets). The state updates on every supply, borrow, repay, and withdraw operation, ensuring interest is always current.
+
+The interest rate is calculated dynamically based on the pool's utilization rate, following a piecewise linear model defined in the `InterestConfig`. Higher utilization leads to higher interest rates, incentivizing more supply and less borrowing.
+
+### Protocol config
+
+The `ProtocolConfig` stores critical parameters that govern the margin pool's behavior:
+
+- **Interest rate parameters:** Base rate, multipliers, and kink points that define the interest rate curve.
+- **Supply cap:** Maximum amount that can be supplied to the pool.
+- **Max utilization rate:** Upper bound on how much of the pool can be borrowed (ex., 80%).
+- **Min borrow amount:** Minimum loan size to prevent spam.
+- **Protocol spread:** Percentage of interest that goes to protocol fees.
+
+These parameters can be updated by the pool operator using the `MarginPoolCap`.
+
+### Protocol fees
+
+The `ProtocolFees` component manages the distribution of interest earned. When borrowers pay interest, the protocol spread (ex., 10%) is taken as fees, with the remaining portion (ex., 90%) distributed to suppliers based on their shares.
+
+The protocol spread is then distributed as follows:
+
+- **Referral fees:** 50% of the protocol spread goes to supply referrals who bring in liquidity.
+- **Protocol fees:** 25% of the protocol spread goes to the protocol treasury.
+- **Maintainer fees:** 25% of the protocol spread goes to the pool maintainer.
+
+For example, if 100 USDC in interest is paid, 10 USDC goes to protocol fees (at 10% spread) and 90 USDC goes to suppliers. The 10 USDC is then split: 5 USDC to referrals, 2.5 USDC to protocol, and 2.5 USDC to the maintainer.
+
+The protocol tracks shares owned by each referral and calculates their proportional fees based on the liquidity they've referred.
+
+### Position Manager
+
+The `PositionManager` tracks individual supplier positions, including:
+
+- Supply shares owned by each `SupplierCap`.
+- Referral associations for fee distribution.
+- Historical position data.
+
+## `MarginManager` shared object {#margin-manager}
+
+The `MarginManager` wraps a `BalanceManager` and adds margin trading capabilities. Each `MarginManager` is associated with a specific DeepBook pool and tracks:
+
+- **Borrowed shares:** Amount borrowed from base and quote asset margin pools.
+- **Margin pool ID:** Which margin pool the current loan is from (if any).
+- **DeepBook pool:** Which trading pool this manager is authorized to trade on.
+
+### Borrowing and risk management
+
+A `MarginManager` can only borrow from one margin pool at a time (either base or quote asset). This simplifies risk calculations and prevents complex cross-collateral scenarios.
+
+Risk is measured using a **risk ratio** calculated as:
+
+$$\text{Risk Ratio} = \frac{\text{Total Assets}}{\text{Total Debt}}$$
+
+Different risk ratio thresholds determine allowable actions:
+
+- **Withdraw threshold** (ex., 2.0): Minimum ratio to withdraw collateral.
+- **Borrow threshold** (ex., 1.25): Minimum ratio to take out new loans.
+- **Target liquidation ratio** (ex., 1.25): Target ratio after partial liquidation.
+- **Liquidation threshold** (ex., 1.15): Below this, the position can be liquidated.
+
+### Liquidation process
+
+When a `MarginManager` risk ratio falls below the liquidation threshold, anyone can liquidate the position:
+
+1. The liquidator provides repayment for the debt.
+2. The liquidator receives collateral plus a liquidation reward (ex., 5%).
+3. The margin pool may also receive a reward (ex., 3%).
+4. If assets are insufficient, the pool records bad debt.
+
+Liquidations can be partial or full, depending on the position's health and the liquidator's input.
+
+## `MarginRegistry` {#margin-registry}
+
+The `MarginRegistry` serves as the central coordination point for the margin system:
+
+- **Pool registration:** Tracks all margin pools by asset type.
+- **Pool enablement:** Determines which DeepBook pools are enabled for margin trading.
+- **Risk parameters:** Stores risk ratios and liquidation parameters per pool.
+- **Manager tracking:** Maintains a list of all margin managers.
+
+The registry enforces that only one margin pool can exist per asset type and ensures margin managers can only trade on enabled DeepBook pools.
+
+## Liquidation flow
+
+The following describes a typical liquidation scenario:
+
+1. **Risk calculation:** A `MarginManager` falls below the liquidation threshold due to price movements or interest accrual.
+2. **Liquidator action:** A liquidator calls `liquidate()` providing repayment coins.
+3. **Order cancellation:** All open orders for the manager are cancelled.
+4. **Debt calculation:** The system calculates the maximum debt that can be repaid.
+5. **Asset transfer:** Collateral assets are transferred to the liquidator with the reward.
+6. **Pool update:** The margin pool processes the repayment and any potential bad debt.
+7. **Position update:** The manager's borrowed shares are reduced or cleared.
+
+## Interest accrual
+
+Interest accrues continuously in DeepBook Margin based on the utilization rate:
+
+$$\text{Utilization Rate} = \frac{\text{Total Borrowed}}{\text{Total Supplied}}$$
+
+The interest rate follows a kinked model:
+
+- Below the kink (ex., 80% utilization): Linear growth at a moderate rate.
+- Above the kink: Steep linear growth to discourage over-borrowing.
+
+Interest compounds every time the state is updated (on any supply, borrow, repay, or withdraw operation). The protocol spread determines what portion of the interest goes to fees versus suppliers.
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3/tree/main/packages/deepbook_margin"
+	label="DeepBook Margin package"
+	desc="The DeepBook Margin package on GitHub."
+/>

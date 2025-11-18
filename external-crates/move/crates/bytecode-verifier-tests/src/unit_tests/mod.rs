@@ -55,6 +55,9 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             max_variants_in_enum: Some(DEFAULT_MAX_VARIANTS),
             additional_borrow_checks: true,
             better_loader_errors: true,
+            private_generics_verifier_v2: false,
+            sanity_check_with_regex_reference_safety: Some(2_200_000),
+            deprecate_global_storage_ops: true,
         },
         MeterConfig::old_default(),
     )

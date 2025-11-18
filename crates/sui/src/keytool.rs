@@ -1162,6 +1162,14 @@ impl KeyToolCommand {
                     "https://www.sui.io",
                     &jwt_randomness,
                 )?;
+                let url_17 = get_oidc_url(
+                    OIDCProvider::AwsTenant(("ap-southeast-1".to_string(), "decot".to_string())),
+                    &eph_pk_bytes,
+                    max_epoch,
+                    "42e9pih2409ktfhmkmo2ipup2h",
+                    "https://www.sui.io",
+                    &jwt_randomness,
+                )?;
                 // This is only for CLI testing. If frontend apps will be built, no need to add anything here.
                 println!("Visit URL (Google): {url}");
                 println!("Visit URL (Twitch): {url_2}");
@@ -1180,6 +1188,7 @@ impl KeyToolCommand {
                 println!("Visit URL (Arden): {url_14}");
                 println!("Visit URL (AWS - Trace): {url_15}");
                 println!("Visit URL (EveFrontier): {url_16}");
+                println!("Visit URL (AWS - Decot): {url_17}");
 
                 println!(
                     "Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):"

@@ -4,7 +4,7 @@ description: The `sui-indexer-alt-framework` provides two distinct pipeline arch
 keywords: [ indexer, index data, sui-indexer, custom indexer, sequential pipeline, concurrent pipeline ]
 ---
 
-The `sui-indexer-alt-framework` provides two distinct pipeline architectures. Understanding their differences is crucial for choosing the right approach.
+The `sui-indexer-alt-framework` provides 2 distinct pipeline architectures. Understanding their differences is crucial for choosing the right approach.
 
 ## Sequential versus concurrent pipelines
 
@@ -33,7 +33,7 @@ Consider implementing a concurrent pipeline when:
 
 <ul className="list-none pl-2">
 <li><span className="text-sui-success-dark">✓</span> Performance optimization is essential.</li>
-<li><span className="text-sui-success-dark">✓</span> Sequential processing can't keep up with your data volume.</li>
+<li><span className="text-sui-success-dark">✓</span> Sequential processing cannot keep up with your data volume.</li>
 <li><span className="text-sui-success-dark">✓</span> Your team is willing to handle the additional implementation complexity for the performance benefits.</li>
 </ul>
 
@@ -44,14 +44,14 @@ Supporting out-of-order commits introduces a few additional complexities to your
 
 ## Decision framework
 
-If you're unsure of which pipeline to choose for your project, start with a sequential pipeline as it's easier to implement and debug. Then, measure performance under a realistic load. If the sequential pipeline can't meet your project's requirements, then switch to a concurrent pipeline.
+If you are unsure of which pipeline to choose for your project, start with a sequential pipeline as it is easier to implement and debug. Then, measure performance under a realistic load. If the sequential pipeline cannot meet your project's requirements, then switch to a concurrent pipeline.
 
 While not an exhaustive list, some specific scenarios where a sequential pipeline might not meet requirements include:
 
 - Your pipeline produces data in each checkpoint that benefits from chunking and out-of-order commits. Individual checkpoints can produce lots of data or individual writes that might add latency.
-- You're producing a lot of data that needs pruning. In this case, you must use a concurrent pipeline.
+- You are producing a lot of data that needs pruning. In this case, you must use a concurrent pipeline.
 
-Beyond the decision of which pipeline to use, you also need to consider scaling. If you're indexing multiple kinds of data, then consider using multiple pipelines and watermarks.
+Beyond the decision of which pipeline to use, you also need to consider scaling. If you are indexing multiple kinds of data, then consider using multiple pipelines and watermarks.
 
 ## The watermark system {#watermark-system}
 
@@ -64,7 +64,7 @@ Optionally, the pipeline tracks `reader_lo` and `pruner_hi`, which define safe l
 The watermark system creates a robust data lifecycle management system:
 
 1. **Guaranteed data availability:** Enforcing checkpoint data availability rules ensures readers perform safe queries.    
-1. **Automatic cleanup process:** The pipeline frequently cleans unpruned checkpoints to ensure storage doesn't grow indefinitely while maintaining the retention guarantee. The pruning process runs with a safety delay to avoid race conditions.
+1. **Automatic cleanup process:** The pipeline frequently cleans unpruned checkpoints to ensure storage does not grow indefinitely while maintaining the retention guarantee. The pruning process runs with a safety delay to avoid race conditions.
 1. **Balanced approach:** The system strikes a balance between safety and efficiency.
     - Storage efficiency: Old data gets automatically deleted.
     - Data availability: Always maintains retention amount of complete data.
@@ -75,7 +75,7 @@ This watermark system is what makes concurrent pipelines both high-performance a
 
 ### Scenario 1: Basic watermark (no pruning)
 
-With pruning disabled, the indexer reports each pipeline's committer `checkpoint_hi_inclusive` only. Consider the following timeline, where a number of checkpoints are being processed and some are committed out of order.
+With pruning disabled, the indexer reports each pipeline committer `checkpoint_hi_inclusive` only. Consider the following timeline, where a number of checkpoints are being processed and some are committed out of order.
 
 ```sh
 Checkpoint Processing Timeline:
@@ -102,7 +102,7 @@ After the checkpoint 1002 is committed, you can safely read data up to 1003.
 
 ### Scenario 2: Pruning enabled
 
-Pruning is enabled for pipelines configured with a retention policy. For example, if your table is growing too large and you want to keep only the last four checkpoints, then `retention = 4`. This means that the indexer periodically updates `reader_lo` as the difference between `checkpoint_hi_inclusive` and the configured retention. A separate pruning task is responsible for pruning data between `[pruner_hi, reader_lo]`.
+Pruning is enabled for pipelines configured with a retention policy. For example, if your table is growing too large and you want to keep only the last 4 checkpoints, then `retention = 4`. This means that the indexer periodically updates `reader_lo` as the difference between `checkpoint_hi_inclusive` and the configured retention. A separate pruning task is responsible for pruning data between `[pruner_hi, reader_lo]`.
 
 ```sh
 [998] [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006]
@@ -151,7 +151,7 @@ Clear safe zones:
  pruner_hi = 1000
 ```
 
-With checkpoint 1004 now committed, `checkpoint_hi_inclusive` can advance from 1003 to 1004 because there are no gaps up to 1004. Note that `reader_lo` and `pruner_hi` haven't changed yet.
+With checkpoint 1004 now committed, `checkpoint_hi_inclusive` can advance from 1003 to 1004 because there are no gaps up to 1004. Note that `reader_lo` and `pruner_hi` have not changed yet.
 
 **Step 2:** Reader watermark updates periodically.
 
@@ -439,7 +439,6 @@ The framework automatically creates and manages a `Watermark` table in your data
 ###  Concurrent pipeline backpressure mechanisms {#concurrent-backpressure}
 
 With the component architecture detailed, let's examine how the pipeline prevents memory overflow through cascading backpressure using inter-component channels.
-
 ![Concurrent Backpressure Pipeline](./images/backpressure-concurrent.png)
 
 #### Channel-level blocking with fixed sizes
@@ -474,7 +473,7 @@ Database connection limits are also in place. The `Committer` blocks when all co
 
 #### Application-level coordination
 
-`Watermark` feedback provides application-level coordination by reporting progress to the `Regulator` through `Watermark` updates. Further coordination is provided via bounded ingestion, where the `Regulator` only signals fetches within a bounded range ahead of the current watermark.
+`Watermark` feedback provides application-level coordination by reporting progress to the `Regulator` through `Watermark` updates. Further coordination is provided through bounded ingestion, where the `Regulator` only signals fetches within a bounded range ahead of the current watermark.
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/regulator.rs" tag="bound" /> 
     
@@ -485,9 +484,9 @@ Finally, memory protection ensures the entire system operates within predictable
 Basic example: Slow database scenario
 
 1. **Initial state**: Your indexer is processing 100 checkpoints per second.
-1. **Bottleneck appears**: Database becomes slow (maybe high load, maintenance, or similar) and can now only handle 50 commits per second.
+1. **Bottleneck appears**: Database becomes slow (because of high load, maintenance, or similar) and can now only handle 50 commits per second.
 1. **Backpressure cascade**:
-    - `Committer` channel fills up (can't commit fast enough).
+    - `Committer` channel fills up (cannot commit fast enough).
     - `Collector` stops sending to `Committer` (channel full).
     - `Processor` workers stop sending to `Collector` (channel full).
     - `Broadcaster` stops sending to `Processors` (channel full).
@@ -496,7 +495,7 @@ Basic example: Slow database scenario
     - Indexer automatically slows to 50 checkpoints per second, matching database capacity.
     - Memory stays bounded, no runaway growth.
     - No data loss as everything just processes slower.
-    - System is stable at the bottleneck's pace.
+    - System is stable at the bottleneck pace.
 1. **Recovery**: When database speeds up, channels start draining and indexer automatically returns to full speed.
 
 What happens:
@@ -589,9 +588,9 @@ let pruner_config = PrunerConfig {
 
 Tuning guidelines:
 
-- **`retention`:** Balance storage costs vs. data availability needs.
+- **`retention`:** Balance storage costs versus data availability needs.
 - **`max_chunk_size`:** Larger values faster pruning, but longer database transactions.
-- **`prune_concurrency`:** Don't exceed database connection limits.
+- **`prune_concurrency`:** Do not exceed database connection limits.
 - **`delay_ms`:** Increase for safety, decrease for aggressive storage optimization.
 
 ## Related links

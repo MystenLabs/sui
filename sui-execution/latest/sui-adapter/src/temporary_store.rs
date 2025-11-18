@@ -513,6 +513,11 @@ impl<'backing> TemporaryStore<'backing> {
         self.mutate_input_object(system_state_wrapper);
     }
 
+    /// Add an accumulator event to the execution results
+    pub fn add_accumulator_event(&mut self, event: AccumulatorEvent) {
+        self.execution_results.accumulator_events.push(event);
+    }
+
     /// Given an object ID, if it's not modified, returns None.
     /// Otherwise returns its metadata, including version, digest, owner and storage rebate.
     /// A modified object must be either a mutable input, or a loaded child object.

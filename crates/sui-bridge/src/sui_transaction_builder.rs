@@ -50,6 +50,15 @@ pub fn build_sui_transaction(
             sui_token_type_tags,
             rgp,
         ),
+        BridgeAction::SuiToEthTokenTransfer(_) => build_token_bridge_approve_transaction(
+            client_address,
+            gas_object_ref,
+            action,
+            false,
+            bridge_object_arg,
+            sui_token_type_tags,
+            rgp,
+        ),
         BridgeAction::BlocklistCommitteeAction(_) => build_committee_blocklist_approve_transaction(
             client_address,
             gas_object_ref,
@@ -122,6 +131,15 @@ fn build_token_bridge_approve_transaction(
                     bridge_event.amount_sui_adjusted,
                 )
             }
+            BridgeAction::SuiToEthTokenTransfer(a) => (
+                a.sui_chain_id,
+                a.nonce,
+                a.sui_address.to_vec(),
+                a.eth_chain_id,
+                a.eth_address.to_fixed_bytes().to_vec(),
+                a.token_id,
+                a.amount_adjusted,
+            ),
             BridgeAction::EthToSuiBridgeAction(a) => {
                 let bridge_event = a.eth_bridge_event;
                 (

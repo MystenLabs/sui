@@ -859,6 +859,8 @@ pub struct TestClusterBuilder {
 
     chain_override: Option<Chain>,
 
+    execution_time_observer_config: Option<sui_config::node::ExecutionTimeObserverConfig>,
+
     #[cfg(msim)]
     inject_synthetic_execution_time: bool,
 }
@@ -896,9 +898,18 @@ impl TestClusterBuilder {
             ),
             indexer_backed_rpc: false,
             rpc_config: None,
+            execution_time_observer_config: None,
             #[cfg(msim)]
             inject_synthetic_execution_time: false,
         }
+    }
+
+    pub fn with_execution_time_observer_config(
+        mut self,
+        config: sui_config::node::ExecutionTimeObserverConfig,
+    ) -> Self {
+        self.execution_time_observer_config = Some(config);
+        self
     }
 
     pub fn with_fullnode_run_with_range(mut self, run_with_range: Option<RunWithRange>) -> Self {
@@ -1314,12 +1325,19 @@ impl TestClusterBuilder {
         }
 
         #[cfg(msim)]
-        if self.inject_synthetic_execution_time {
-            use sui_config::node::ExecutionTimeObserverConfig;
+        {
+            if let Some(mut config) = self.execution_time_observer_config.clone() {
+                if self.inject_synthetic_execution_time {
+                    config.inject_synthetic_execution_time = Some(true);
+                }
+                builder = builder.with_execution_time_observer_config(config);
+            } else if self.inject_synthetic_execution_time {
+                use sui_config::node::ExecutionTimeObserverConfig;
 
-            let mut config = ExecutionTimeObserverConfig::default();
-            config.inject_synthetic_execution_time = Some(true);
-            builder = builder.with_execution_time_observer_config(config);
+                let mut config = ExecutionTimeObserverConfig::default();
+                config.inject_synthetic_execution_time = Some(true);
+                builder = builder.with_execution_time_observer_config(config);
+            }
         }
 
         let mut swarm = builder.build();

@@ -136,7 +136,7 @@ fun test_backloaded_claimable() {
     now.increment_for_testing(100);
     assert!(wallet.claimable(&now) == FULLY_VESTED_AMOUNT - coin.value());
 
-    sui::test_utils::destroy(coin);
+    std::unit_test::destroy(coin);
     ts.return_to_sender(wallet);
     now.destroy_for_testing();
     let _end = ts::end(ts);

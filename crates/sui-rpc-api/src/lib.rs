@@ -135,6 +135,10 @@ impl RpcService {
                 crate::grpc::alpha::event_service_proto::event_service_server::EventServiceServer::new(
                     self.clone(),
                 );
+            let proof_service_alpha =
+                crate::grpc::alpha::proof_service_proto::proof_service_server::ProofServiceServer::new(
+                    crate::grpc::alpha::proof_service::ProofServiceImpl::new(self.clone()),
+                );
 
             let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -178,6 +182,7 @@ impl RpcService {
                 service_name(&move_package_service),
                 service_name(&name_service),
                 service_name(&event_service_alpha),
+                service_name(&proof_service_alpha),
                 service_name(&reflection_v1),
                 service_name(&reflection_v1alpha),
             ] {
@@ -196,6 +201,7 @@ impl RpcService {
                 .add_service(name_service)
                 // alpha
                 .add_service(event_service_alpha)
+                .add_service(proof_service_alpha)
                 // Reflection
                 .add_service(reflection_v1)
                 .add_service(reflection_v1alpha);

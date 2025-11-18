@@ -371,19 +371,13 @@ impl Store for RocksDBStore {
         Ok(Some(CommitRef::new(index, digest)))
     }
 
-    fn scan_finalized_commits(
+    fn read_rejected_transactions(
         &self,
-        range: CommitRange,
-    ) -> ConsensusResult<Vec<(CommitRef, BTreeMap<BlockRef, Vec<TransactionIndex>>)>> {
-        let mut finalized_commits = vec![];
-        for result in self.finalized_commits.safe_range_iter((
-            Included((range.start(), CommitDigest::MIN)),
-            Included((range.end(), CommitDigest::MAX)),
-        )) {
-            let ((index, digest), rejected_transactions) =
-                result.map_err(ConsensusError::RocksDBFailure)?;
-            finalized_commits.push((CommitRef::new(index, digest), rejected_transactions));
-        }
-        Ok(finalized_commits)
+        commit_ref: CommitRef,
+    ) -> ConsensusResult<Option<BTreeMap<BlockRef, Vec<TransactionIndex>>>> {
+        let result = self
+            .finalized_commits
+            .get(&(commit_ref.index, commit_ref.digest))?;
+        Ok(result)
     }
 }

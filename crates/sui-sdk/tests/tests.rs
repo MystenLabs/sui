@@ -4,11 +4,13 @@ use tempfile::TempDir;
 
 use fastcrypto::ed25519::Ed25519KeyPair;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
+use sui_config::{Config, SUI_CLIENT_CONFIG};
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, InMemKeystore, Keystore};
 use sui_macros::sim_test;
 use sui_sdk::{
+    sui_client_config::SuiClientConfig,
     verify_personal_message_signature::verify_personal_message_signature,
     wallet_context::WalletContext,
 };
@@ -22,6 +24,7 @@ use sui_types::{
     signature::GenericSignature,
     utils::sign_zklogin_personal_msg,
 };
+use test_cluster::TestClusterBuilder;
 
 #[tokio::test]
 async fn mnemonic_test() {
@@ -73,8 +76,6 @@ async fn test_verify_personal_message_signature() {
 
 #[sim_test]
 async fn test_verify_signature_zklogin() {
-    use test_cluster::TestClusterBuilder;
-
     if sui_simulator::has_mainnet_protocol_config_override() {
         return;
     }
@@ -234,4 +235,90 @@ async fn test_get_wallet_key() {
     signature
         .verify_secure(&intent_message, address, SignatureScheme::ED25519)
         .unwrap();
+}
+
+#[sim_test]
+async fn test_update_env_chain_id_new_chain_id() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+
+    let config = SuiClientConfig::load(&config_path)?;
+    let active_env = config.get_active_env()?;
+
+    assert!(
+        active_env.chain_id.is_none(),
+        "Chain ID should not be cached initially"
+    );
+
+    let chain_id = context.load_or_cache_chain_id(&client).await?;
+    assert!(!chain_id.is_empty(), "Chain ID should not be empty");
+
+    let reloaded_config = SuiClientConfig::load(&config_path)?;
+    let reloaded_env = reloaded_config.get_active_env()?;
+    assert_eq!(
+        reloaded_env.chain_id,
+        Some(chain_id),
+        "Chain ID should be persisted to config file"
+    );
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_update_env_chain_id_overwrite_existing() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+
+    let mut config = SuiClientConfig::load(&config_path)?;
+    let active_env_alias = config.get_active_env()?.alias.clone();
+    config.update_env_chain_id(&active_env_alias, "fake-chain-id".to_string())?;
+    config.persisted(&config_path).save()?;
+
+    let reloaded_config = SuiClientConfig::load(&config_path)?;
+    assert_eq!(
+        reloaded_config.get_active_env()?.chain_id,
+        Some("fake-chain-id".to_string()),
+        "Fake chain ID should be set"
+    );
+
+    let real_chain_id = context.cache_chain_id(&client).await?;
+    assert_ne!(
+        real_chain_id, "fake-chain-id",
+        "Real chain ID should be different from fake one"
+    );
+
+    let final_config = SuiClientConfig::load(&config_path)?;
+    assert_eq!(
+        final_config.get_active_env()?.chain_id,
+        Some(real_chain_id),
+        "Real chain ID should replace fake one"
+    );
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_chain_id_persistence() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
+
+    let chain_id = {
+        let context = &mut test_cluster.wallet;
+        let client = context.get_client().await?;
+        context.cache_chain_id(&client).await?
+    };
+
+    let new_context = WalletContext::new(&config_path)?;
+    let env = new_context.get_active_env()?;
+    assert_eq!(
+        env.chain_id,
+        Some(chain_id),
+        "Chain ID should persist across wallet context instances"
+    );
+
+    Ok(())
 }

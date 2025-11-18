@@ -102,7 +102,11 @@ fn unbalanced_stack_crash() {
     };
 
     module.function_defs.push(fun_def);
-    match crate::verify_module_unmetered(&module) {
+    let config = VerifierConfig {
+        deprecate_global_storage_ops: false,
+        ..VerifierConfig::default()
+    };
+    match crate::verify_module_with_config_unmetered(&config, &module) {
         Ok(_) => {}
         Err(e) => assert_eq!(e.major_status(), StatusCode::GLOBAL_REFERENCE_ERROR),
     }

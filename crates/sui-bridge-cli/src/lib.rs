@@ -611,7 +611,7 @@ async fn deposit_on_sui(
     sui_bridge_client: SuiBridgeClient,
 ) -> anyhow::Result<()> {
     let target_chain = target_chain as u8;
-    let sui_client = sui_bridge_client.sui_client();
+    let sui_client = sui_bridge_client.jsonrpc_client();
     let bridge_object_arg = sui_bridge_client
         .get_mutable_bridge_object_arg_must_succeed()
         .await;

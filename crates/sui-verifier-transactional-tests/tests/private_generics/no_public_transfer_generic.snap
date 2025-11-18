@@ -6,24 +6,24 @@ processed 5 tasks
 task 0, lines 8-17:
 //# publish
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::transfer' on an object of type 'T0'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_transfer'"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::transfer'. Type argument #0 must be a type defined in the current module, found 'T0'. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_transfer'."), command: Some(0) } }
 
 task 1, lines 19-28:
 //# publish
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::freeze_object' on an object of type 'T0'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_freeze_object'"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::freeze_object'. Type argument #0 must be a type defined in the current module, found 'T0'. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_freeze_object'."), command: Some(0) } }
 
 task 2, lines 30-39:
 //# publish
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::share_object' on an object of type 'T0'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_share_object'"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::share_object'. Type argument #0 must be a type defined in the current module, found 'T0'. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_share_object'."), command: Some(0) } }
 
 task 3, lines 41-52:
 //# publish
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::receive' on an object of type 'T0'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_receive'"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::receive'. Type argument #0 must be a type defined in the current module, found 'T0'. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_receive'."), command: Some(0) } }
 
 task 4, lines 54-64:
 //# publish
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::party_transfer' on an object of type 'T0'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_party_transfer'"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::party_transfer'. Type argument #0 must be a type defined in the current module, found 'T0'. If the type has the 'store' ability, use the public variant instead: 'sui::transfer::public_party_transfer'."), command: Some(0) } }

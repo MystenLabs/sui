@@ -74,7 +74,7 @@ pub fn verify_module_with_config_metered(
     module: &CompiledModule,
     meter: &mut (impl Meter + ?Sized),
 ) -> VMResult<()> {
-    BoundsChecker::verify_module(module).map_err(|e| {
+    BoundsChecker::verify_module(module, config.deprecate_global_storage_ops).map_err(|e| {
         // We can't point the error at the module, because if bounds-checking
         // failed, we cannot safely index into module's handle to itself.
         e.finish(Location::Undefined)

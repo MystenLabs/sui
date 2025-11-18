@@ -1139,7 +1139,8 @@ impl SuiClientCommands {
                     }
                 };
 
-                let signing_limits = Some(VerifierSigningConfig::default().limits_for_signing());
+                let limits = VerifierSigningConfig::default();
+                let signing_limits = Some(limits.limits_for_signing());
                 let mut verifier = sui_execution::verifier(
                     &protocol_config,
                     signing_limits,
@@ -1590,8 +1591,8 @@ impl SuiClientCommands {
             }
             SuiClientCommands::ChainIdentifier => {
                 let client = context.get_client().await?;
-                let ci = context.cache_chain_id(&client).await?;
-                SuiClientCommandResult::ChainIdentifier(ci)
+                let chain_id = client.read_api().get_chain_identifier().await?;
+                SuiClientCommandResult::ChainIdentifier(chain_id)
             }
             SuiClientCommands::SplitCoin {
                 coin_id,
@@ -1833,6 +1834,7 @@ impl SuiClientCommands {
                 skip_source: _,
                 address_override: _,
             } => {
+<<<<<<< HEAD
                 // let mode = match (!skip_source, verify_deps, address_override) {
                 //     (false, false, _) => {
                 //         bail!("Source skipped and not verifying deps: Nothing to verify.")
@@ -1866,6 +1868,37 @@ impl SuiClientCommands {
                 //     .verify(&compiled_package, mode)
                 //     .await?;
                 //
+=======
+                let mode = match (!skip_source, verify_deps, address_override) {
+                    (false, false, _) => {
+                        bail!("Source skipped and not verifying deps: Nothing to verify.")
+                    }
+
+                    (false, true, _) => ValidationMode::deps(),
+                    (true, false, None) => ValidationMode::root(),
+                    (true, true, None) => ValidationMode::root_and_deps(),
+                    (true, false, Some(at)) => ValidationMode::root_at(*at),
+                    (true, true, Some(at)) => ValidationMode::root_and_deps_at(*at),
+                };
+
+                build_config.implicit_dependencies = implicit_deps(latest_system_packages());
+                let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
+                let client = context.get_client().await?;
+                let chain_id = client.read_api().get_chain_identifier().await?;
+                let compiled_package = BuildConfig {
+                    config: build_config,
+                    run_bytecode_verifier: true,
+                    print_diags_to_stderr: true,
+                    chain_id: Some(chain_id),
+                }
+                .build(&package_path)?;
+
+                let client = context.get_client().await?;
+                BytecodeSourceVerifier::new(client.read_api())
+                    .verify(&compiled_package, mode)
+                    .await?;
+
+>>>>>>> origin/main
                 SuiClientCommandResult::VerifySource
             }
             SuiClientCommands::PartyTransfer {

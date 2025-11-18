@@ -7,11 +7,10 @@ module locked_stake::locked_stake_tests;
 
 use locked_stake::epoch_time_lock;
 use locked_stake::locked_stake as ls;
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, destroy};
 use sui::balance;
 use sui::coin;
 use sui::test_scenario;
-use sui::test_utils::destroy;
 use sui::vec_map;
 use sui_system::governance_test_utils::{advance_epoch, set_up_sui_system_state};
 use sui_system::sui_system::{Self, SuiSystemState};

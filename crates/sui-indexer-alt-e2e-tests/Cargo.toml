@@ -34,7 +34,7 @@ simulacrum.workspace = true
 sui-indexer-alt.workspace = true
 sui-indexer-alt-consistent-api.workspace = true
 sui-indexer-alt-consistent-store.workspace = true
-sui-indexer-alt-framework = { workspace = true, features = ["postgres"] }
+sui-indexer-alt-framework = { workspace = true, features = ["postgres", "cluster"] }
 sui-indexer-alt-graphql.workspace = true
 sui-indexer-alt-jsonrpc.workspace = true
 sui-indexer-alt-reader.workspace = true
@@ -59,8 +59,10 @@ jsonrpsee.workspace = true
 telemetry-subscribers.workspace = true
 tonic.workspace = true
 
+sui-field-count.workspace = true
 sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
+sui-sdk.workspace = true
 sui-swarm-config.workspace = true
 sui-test-transaction-builder.workspace = true
 sui-transactional-test-runner.workspace = true

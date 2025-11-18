@@ -18,6 +18,7 @@ macro_rules! fatal {
 }
 
 pub use antithesis_sdk::assert_reachable as assert_reachable_antithesis;
+pub use antithesis_sdk::assert_sometimes as assert_sometimes_antithesis;
 pub use antithesis_sdk::assert_unreachable as assert_unreachable_antithesis;
 
 pub use serde_json::json;
@@ -127,6 +128,19 @@ macro_rules! assert_reachable {
     }};
 }
 
+#[macro_export]
+macro_rules! assert_sometimes {
+    ($expr:expr, $message:literal) => {{
+        // calling in to antithesis sdk breaks determinisim in simtests (on linux only)
+        if !cfg!(msim) {
+            $crate::logging::assert_sometimes_antithesis!($expr, $message);
+        } else {
+            // evaluate the expression in case it has side effects
+            let _ = $expr;
+        }
+    }};
+}
+
 mod tests {
     #[test]
     #[should_panic]
@@ -149,5 +163,18 @@ mod tests {
     #[test]
     fn test_debug_fatal_release_mode() {
         debug_fatal!("This is a debug fatal error");
+    }
+
+    #[test]
+    fn test_assert_sometimes_side_effects() {
+        let mut x = 0;
+
+        let mut inc = || {
+            x += 1;
+            true
+        };
+
+        assert_sometimes!(inc(), "");
+        assert_eq!(x, 1);
     }
 }

@@ -33,7 +33,7 @@ pub fn executor(
 
 pub fn verifier<'m>(
     protocol_config: &ProtocolConfig,
-    signing_limits: Option<(usize, usize)>,
+    signing_limits: Option<(usize, usize, usize)>,
     metrics: &'m Arc<BytecodeVerifierMetrics>,
 ) -> Box<dyn Verifier + 'm> {
     let version = protocol_config.execution_version_as_option().unwrap_or(0);

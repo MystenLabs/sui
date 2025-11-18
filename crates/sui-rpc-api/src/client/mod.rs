@@ -80,16 +80,7 @@ impl Client {
         sequence_number: CheckpointSequenceNumber,
     ) -> Result<CheckpointData> {
         let request = proto::GetCheckpointRequest::by_sequence_number(sequence_number)
-            .with_read_mask(FieldMask::from_paths([
-                "summary.bcs",
-                "signature",
-                "contents.bcs",
-                "transactions.transaction.bcs",
-                "transactions.effects.bcs",
-                "transactions.effects.unchanged_loaded_runtime_objects",
-                "transactions.events.bcs",
-                "objects.objects.bcs",
-            ]));
+            .with_read_mask(checkpoint_data_field_mask());
 
         let (metadata, response, _extentions) = self
             .0
@@ -191,6 +182,21 @@ pub struct TransactionExecutionResponse {
     pub events: Option<TransactionEvents>,
     pub balance_changes: Vec<sui_sdk_types::BalanceChange>,
     pub objects: ObjectSet,
+}
+
+/// Field mask for checkpoint data requests.
+pub fn checkpoint_data_field_mask() -> FieldMask {
+    FieldMask::from_paths([
+        "sequence_number",
+        "summary.bcs",
+        "signature",
+        "contents.bcs",
+        "transactions.transaction.bcs",
+        "transactions.effects.bcs",
+        "transactions.effects.unchanged_loaded_runtime_objects",
+        "transactions.events.bcs",
+        "objects.objects.bcs",
+    ])
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint

@@ -9,8 +9,8 @@ use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     digests::{Digest, TransactionDigest},
     dynamic_field::{
-        DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME, DynamicFieldKey,
-        DynamicFieldObject, Field, UnboundedDynamicFieldID, serialize_dynamic_field,
+        BoundedDynamicFieldID, DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME,
+        DynamicFieldKey, DynamicFieldObject, Field, serialize_dynamic_field,
     },
     error::{SuiError, SuiErrorKind, SuiResult},
     object::{MoveObject, Object, Owner},
@@ -145,20 +145,22 @@ impl AccumulatorValue {
         .exists(child_object_resolver)
     }
 
-    pub fn load_latest_by_id<T>(
-        object_store: &dyn ObjectStore,
+    pub fn load_by_id<T>(
+        child_object_resolver: &dyn ChildObjectResolver,
+        version_bound: Option<SequenceNumber>,
         id: AccumulatorObjId,
-    ) -> SuiResult<Option<(T, SequenceNumber)>>
+    ) -> SuiResult<Option<T>>
     where
         T: Serialize + DeserializeOwned,
     {
-        UnboundedDynamicFieldID::<AccumulatorKey>::new(SUI_ACCUMULATOR_ROOT_OBJECT_ID, id.0)
-            .load_object(object_store)
-            .map(|o| {
-                let version = o.0.version();
-                o.load_value::<T>().map(|v| (v, version))
-            })
-            .transpose()
+        BoundedDynamicFieldID::<AccumulatorKey>::new(
+            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            id.0,
+            version_bound.unwrap_or(SequenceNumber::MAX),
+        )
+        .load_object(child_object_resolver)?
+        .map(|o| o.load_value::<T>())
+        .transpose()
     }
 
     pub fn load(

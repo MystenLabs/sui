@@ -18,6 +18,7 @@ exit_code: 0
 ----- stdout -----
 existing_ignore
 build/*
+traces/*
 .trace
 .coverage*
 Pub.*.toml

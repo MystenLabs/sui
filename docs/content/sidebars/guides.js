@@ -33,6 +33,7 @@ const guides = [
 			'guides/developer/getting-started/get-address',
 			'guides/developer/getting-started/get-coins',
 			'guides/developer/getting-started/hello-world',
+			'guides/developer/getting-started/app-frontends',
 			'guides/developer/getting-started/next-steps',
 		],
 	},

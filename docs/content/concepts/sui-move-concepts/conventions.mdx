@@ -12,11 +12,11 @@ While these conventions are recommendations rather than strict rules, they repre
 ### Package
 
 A Sui package consists of:
-- a `sources` directory containing the Move code to be uploaded to the blockchain
-- a `Move.toml` manifest file that declares dependencies and other information about the package
-- a `Move.lock` file that the Sui Move toolchain automatically generates to lock the versions of the dependencies and track the different published and upgraded versions of the package that exist on the different networks
+- `sources` directory containing the Move code to be uploaded to the blockchain.
+- `Move.toml` manifest file that declares dependencies and other information about the package.
+- `Move.lock` file that the Sui Move toolchain automatically generates to lock the versions of the dependencies and track the different published and upgraded versions of the package that exist on the different networks.
 
-For this reason, the `Move.lock` file should always be part of the package (don't add it to the `.gitignore` file). Use the [automated address management](https://docs.sui.io/concepts/sui-move-concepts/packages/automated-address-management) instead of the old `published-at` field in the manifest file.
+For this reason, the `Move.lock` file should always be part of the package (don't add it to the `.gitignore` file). Use the [automated address management](/concepts/sui-move-concepts/packages/automated-address-management.mdx) instead of the old `published-at` field in the manifest file.
 
 Optionally, you can add a `tests` directory to contain the tests for the package and an `examples` directory to provide use cases for the package. Neither directory is uploaded on chain when you publish the package.
 
