@@ -16,7 +16,6 @@ use crate::{
     ObjectProviderCache, SuiRpcModule, get_balance_changes_from_effect, get_object_changes,
     with_tracing,
 };
-use mysten_metrics::spawn_monitored_task;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
@@ -150,11 +149,10 @@ impl TransactionExecutionApi {
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();
         let orch_timer = self.metrics.orchestrator_latency_ms.start_timer();
-        let (response, is_executed_locally) = spawn_monitored_task!(
-            transaction_orchestrator.execute_transaction_block(request, request_type, None)
-        )
-        .await?
-        .map_err(Error::from)?;
+        let (response, is_executed_locally) = transaction_orchestrator
+            .execute_transaction_block(request, request_type, None)
+            .await
+            .map_err(Error::from)?;
         drop(orch_timer);
 
         self.handle_post_orchestration(
