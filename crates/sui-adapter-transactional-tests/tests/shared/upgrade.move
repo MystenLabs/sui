@@ -14,8 +14,8 @@ module t::m {
 
     public entry fun create(ctx: &mut TxContext) {
         let mut o = Obj { id: object::new(ctx) };
-        sui::dynamic_field::add(&mut o.id, 0, Obj { id: object::new(ctx) });
-        sui::dynamic_object_field::add(&mut o.id, 0, Obj { id: object::new(ctx) });
+        sui::dynamic_field::add(&mut o.id, 0u64, Obj { id: object::new(ctx) });
+        sui::dynamic_object_field::add(&mut o.id, 0u64, Obj { id: object::new(ctx) });
         transfer::public_transfer(o, ctx.sender())
     }
 
@@ -24,12 +24,12 @@ module t::m {
     }
 
     public entry fun share_wrapped(o: &mut Obj) {
-        let inner: Obj = sui::dynamic_field::remove(&mut o.id, 0);
+        let inner: Obj = sui::dynamic_field::remove(&mut o.id, 0u64);
         transfer::public_share_object(inner)
     }
 
     public entry fun share_child(o: &mut Obj) {
-        let inner: Obj = sui::dynamic_object_field::remove(&mut o.id, 0);
+        let inner: Obj = sui::dynamic_object_field::remove(&mut o.id, 0u64);
         transfer::public_share_object(inner)
     }
 

@@ -12,3 +12,4 @@ warning[W04039]: unable to determine princiapl type for literal
   │                           ^^^^^^^^^^^^^^^^^ Could not determine a concrete type for this string literal, so defaulting to 'vector<u8>'
   │
   = To avoid this warning, add an explicit annotation, e.g., 'b"<const>"'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

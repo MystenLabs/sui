@@ -47,42 +47,42 @@ entry fun t0(ctx: &mut TxContext) {
 
 entry fun t1(obj: &mut Obj, ctx: &mut TxContext) {
     let id = &mut obj.id;
-    add(id, 0, new(ctx));
+    add(id, 0u64, new(ctx));
     add(id, b"", new(ctx));
     add(id, false, new(ctx));
 }
 
 entry fun t2(obj: &Obj) {
     let id = &obj.id;
-    assert!(exists_<u64>(id, 0), 0);
+    assert!(exists_<u64>(id, 0u64), 0);
     assert!(exists_<vector<u8>>(id, b""), 0);
     assert!(exists_<bool>(id, false), 0);
 }
 
 entry fun t3(obj: &Obj) {
     let id = &obj.id;
-    assert!(count(borrow(id, 0)) == 0, 0);
+    assert!(count(borrow(id, 0u64)) == 0, 0);
     assert!(count(borrow(id, b"")) == 0, 0);
     assert!(count(borrow(id, false)) == 0, 0);
 }
 
 entry fun t4(obj: &mut Obj) {
     let id = &mut obj.id;
-    bump(borrow_mut(id, 0));
+    bump(borrow_mut(id, 0u64));
     bump(bump(borrow_mut(id, b"")));
     bump(bump(bump(borrow_mut(id, false))));
 }
 
 entry fun t5(obj: &mut Obj) {
     let id = &mut obj.id;
-    assert!(count(borrow(id, 0)) == 1, 0);
+    assert!(count(borrow(id, 0u64)) == 1, 0);
     assert!(count(borrow(id, b"")) == 2, 0);
     assert!(count(borrow(id, false)) == 3, 0);
 }
 
 entry fun t6(obj: &mut Obj) {
     let id = &mut obj.id;
-    assert!(destroy(remove(id, 0)) == 1, 0);
+    assert!(destroy(remove(id, 0u64)) == 1, 0);
     assert!(destroy(remove(id, b"")) == 2, 0);
     // do not remove at least one
 }

@@ -17,22 +17,22 @@ public struct Obj has key, store {
 
 entry fun mint(ctx: &mut TxContext) {
     let mut parent = object::new(ctx);
-    dynamic_field::add(&mut parent, 0, Obj { id: object::new(ctx) });
+    dynamic_field::add(&mut parent, 0u64, Obj { id: object::new(ctx) });
     sui::transfer::public_transfer(Obj { id: parent }, ctx.sender())
 }
 
 entry fun take_and_wrap(obj: &mut Obj) {
-    let v = dynamic_field::remove<u64, Obj>(&mut obj.id, 0);
-    dynamic_object_field::add(&mut obj.id, 0, v)
+    let v = dynamic_field::remove<u64, Obj>(&mut obj.id, 0u64);
+    dynamic_object_field::add(&mut obj.id, 0u64, v)
 }
 
 entry fun take_and_destroy(obj: &mut Obj) {
-    let Obj { id } = dynamic_field::remove(&mut obj.id, 0);
+    let Obj { id } = dynamic_field::remove(&mut obj.id, 0u64);
     object::delete(id)
 }
 
 entry fun take_and_take(obj: &mut Obj, ctx: &mut TxContext) {
-    let v = dynamic_field::remove<u64, Obj>(&mut obj.id, 0);
+    let v = dynamic_field::remove<u64, Obj>(&mut obj.id, 0u64);
     sui::transfer::public_transfer(v, ctx.sender())
 }
 

@@ -26,27 +26,27 @@ module test::m1 {
 
     public entry fun add_child(parent: &mut Object, ctx: &mut TxContext) {
         let child = Child { id: object::new(ctx) };
-        sui::dynamic_object_field::add(&mut parent.id, 0, child);
+        sui::dynamic_object_field::add(&mut parent.id, 0u64, child);
     }
 
     public fun transfer_child(parent: &mut Object, ctx: &TxContext) {
-        let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 0);
-        sui::dynamic_object_field::add(&mut parent.id, 1, child);
-        let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 1);
+        let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 0u64);
+        sui::dynamic_object_field::add(&mut parent.id, 1u64, child);
+        let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 1u64);
         transfer::public_transfer(child, tx_context::sender(ctx))
     }
 
     public fun delete_child(parent: &mut Object) {
-        let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 0);
-        sui::dynamic_object_field::add(&mut parent.id, 1, child);
-        let Child { id } = sui::dynamic_object_field::remove(&mut parent.id, 1);
+        let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 0u64);
+        sui::dynamic_object_field::add(&mut parent.id, 1u64, child);
+        let Child { id } = sui::dynamic_object_field::remove(&mut parent.id, 1u64);
         object::delete(id);
     }
 
     public fun wrap_child(parent: &mut Object) {
-        let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 0);
-        sui::dynamic_object_field::add(&mut parent.id, 1, child);
-        let child = sui::dynamic_object_field::remove(&mut parent.id, 1);
+        let child: Child = sui::dynamic_object_field::remove(&mut parent.id, 0u64);
+        sui::dynamic_object_field::add(&mut parent.id, 1u64, child);
+        let child = sui::dynamic_object_field::remove(&mut parent.id, 1u64);
         option::fill(&mut parent.wrapped, child);
     }
 }

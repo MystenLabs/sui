@@ -46,20 +46,20 @@ entry fun create(ctx: &mut TxContext) {
 }
 
 entry fun add_counter(obj: &mut Obj, ctx: &mut TxContext) {
-    add(&mut obj.id, 0, new(ctx))
+    add(&mut obj.id, 0u64, new(ctx))
 }
 
 entry fun obj_bump(obj: &mut Obj) {
-    bump(borrow_mut(&mut obj.id, 0));
+    bump(borrow_mut(&mut obj.id, 0u64));
 }
 
 entry fun assert_count(obj: &Obj, target: u64) {
-    assert!(count(borrow(&obj.id, 0)) == target, 0)
+    assert!(count(borrow(&obj.id, 0u64)) == target, 0)
 }
 
 entry fun transfer(o1: &mut Obj, o2: &mut Obj) {
-    let c: Counter = remove(&mut o1.id, 0);
-    add(&mut o2.id, 0, c)
+    let c: Counter = remove(&mut o1.id, 0u64);
+    add(&mut o2.id, 0u64, c)
 }
 
 }

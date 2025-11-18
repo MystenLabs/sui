@@ -23,7 +23,7 @@ module 0x1::references {
 
     #[test]
     fun test_vector_mut_borrow() {
-        let x = &mut 1;
+        let x = &mut 1u64;
         *x = 2;
         *x = 3;
         let mut y = vector[*x];
@@ -34,7 +34,7 @@ module 0x1::references {
 
     #[test]
     fun test_vector_mut_borrow_pop() {
-        let x = &mut 1;
+        let x = &mut 1u64;
         *x = 2;
         *x = 3;
         let mut y = vector[*x];

@@ -20,22 +20,22 @@ public struct Derived has key, store {
 
 entry fun ephemeral_parent_persistent_derived(ctx: &mut TxContext) {
   let mut parent_uid = object::new(ctx);
-  let derived = Derived { id: derived_object::claim(&mut parent_uid, 0) };
+  let derived = Derived { id: derived_object::claim(&mut parent_uid, 0u64) };
   parent_uid.delete();
   transfer::public_transfer(derived, ctx.sender());
 }
 
 entry fun ephemeral_parent_ephemeral_derived(ctx: &mut TxContext) {
   let mut parent_uid = object::new(ctx);
-  let derived_uid = derived_object::claim(&mut parent_uid, 0);
+  let derived_uid = derived_object::claim(&mut parent_uid, 0u64);
   parent_uid.delete();
   derived_uid.delete();
 }
 
 entry fun ephemeral_parent_ephemeral_intermediate_derived(ctx: &mut TxContext) {
   let mut parent_uid = object::new(ctx);
-  let mut derived_uid = derived_object::claim(&mut parent_uid, 0);
-  let nested_derived_uid = derived_object::claim(&mut derived_uid, 0);
+  let mut derived_uid = derived_object::claim(&mut parent_uid, 0u64);
+  let nested_derived_uid = derived_object::claim(&mut derived_uid, 0u64);
   parent_uid.delete();
   derived_uid.delete();
   transfer::public_transfer(Derived { id: nested_derived_uid }, ctx.sender());
