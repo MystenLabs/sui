@@ -13,6 +13,8 @@ use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_package_resolver::{Package, PackageStore, Resolver, error::Error as PackageResolverError};
+use sui_rpc::proto::sui::rpc::v2 as grpc;
+use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     object::Object as NativeObject,
@@ -47,9 +49,10 @@ pub(crate) struct Scope {
     root_version: Option<u64>,
 
     /// Cache of objects available in execution context (freshly executed transaction).
-    /// Maps (ObjectID, SequenceNumber) to the actual object data.
+    /// Maps (ObjectID, SequenceNumber) to optional object data.
+    /// None indicates the object was deleted or wrapped at that version.
     /// This enables any Object GraphQL type to access fresh data without database queries.
-    execution_objects: Arc<BTreeMap<(ObjectID, SequenceNumber), NativeObject>>,
+    execution_objects: Arc<BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>>,
 
     /// Access to packages for type resolution.
     package_store: Arc<dyn PackageStore>,
@@ -86,29 +89,6 @@ impl Scope {
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
-    }
-
-    /// Create a nested scope for execution context (freshly executed transaction).
-    /// This clears the checkpoint context to indicate fresh execution data and
-    /// sets execution objects from the transaction output.
-    pub(crate) fn with_execution_output<I>(&self, objects: I) -> Self
-    where
-        I: IntoIterator<Item = NativeObject>,
-    {
-        let execution_objects = Arc::new(
-            objects
-                .into_iter()
-                .map(|obj| ((obj.id(), obj.version()), obj))
-                .collect::<BTreeMap<_, _>>(),
-        );
-
-        Self {
-            checkpoint_viewed_at: None,
-            root_version: self.root_version,
-            execution_objects,
-            package_store: self.package_store.clone(),
-            resolver_limits: self.resolver_limits.clone(),
-        }
     }
 
     /// Create a nested scope with a root version set.
@@ -155,15 +135,20 @@ impl Scope {
     }
 
     /// Get an object from the execution context cache, if available.
+    ///
+    /// Returns None if the object doesn't exist in the cache or if it was deleted/wrapped.
     pub(crate) fn execution_output_object(
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> Option<&NativeObject> {
-        self.execution_objects.get(&(object_id, version))
+        self.execution_objects
+            .get(&(object_id, version))
+            .and_then(|opt| opt.as_ref())
     }
 
     /// Get the latest version of an object from the execution context cache, if available.
+    /// Returns None if the object doesn't exist in the cache or if it was deleted/wrapped.
     pub(crate) fn execution_output_object_latest(
         &self,
         object_id: ObjectID,
@@ -171,16 +156,23 @@ impl Scope {
         self.execution_objects
             .range(..=(object_id, SequenceNumber::MAX))
             .last()
-            .map(|(_, object)| object)
+            .and_then(|(_, opt)| opt.as_ref())
     }
 
     /// Create a nested scope with execution objects extracted from an ExecutedTransaction.
     pub(crate) fn with_executed_transaction(
         &self,
-        executed_transaction: &sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction,
+        executed_transaction: &grpc::ExecutedTransaction,
     ) -> Self {
-        let objects = extract_objects_from_executed_transaction(executed_transaction);
-        self.with_execution_output(objects)
+        let execution_objects = extract_objects_from_executed_transaction(executed_transaction);
+
+        Self {
+            checkpoint_viewed_at: None,
+            root_version: self.root_version,
+            execution_objects,
+            package_store: self.package_store.clone(),
+            resolver_limits: self.resolver_limits.clone(),
+        }
     }
 
     /// A package resolver with access to the packages known at this scope.
@@ -189,23 +181,44 @@ impl Scope {
     }
 }
 
-/// Extract input and output object contents from an ExecutedTransaction.
+/// Extract object contents from an ExecutedTransaction, including tombstones for deleted/wrapped objects.
+///
+/// Returns a BTreeMap mapping (ObjectID, SequenceNumber) to Option<NativeObject>,
+/// where None indicates the object was deleted or wrapped at that version.
 fn extract_objects_from_executed_transaction(
-    executed_transaction: &sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction,
-) -> Vec<NativeObject> {
-    let input_objects = executed_transaction
-        .input_objects
-        .iter()
-        .filter_map(|obj| obj.bcs.as_ref())
-        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
+    executed_transaction: &grpc::ExecutedTransaction,
+) -> Arc<BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>> {
+    let mut map = BTreeMap::new();
 
-    let output_objects = executed_transaction
-        .output_objects
-        .iter()
-        .filter_map(|obj| obj.bcs.as_ref())
-        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
+    // Extract all objects from the ObjectSet.
+    if let Some(object_set) = &executed_transaction.objects {
+        for obj in &object_set.objects {
+            if let Some(bcs) = &obj.bcs {
+                let native_obj: NativeObject =
+                    bcs.deserialize().expect("Object BCS should be valid");
+                map.insert((native_obj.id(), native_obj.version()), Some(native_obj));
+            }
+        }
+    }
 
-    input_objects.chain(output_objects).collect()
+    // Add tombstones for objects that no longer exist from effects
+    if let Some(effects) = &executed_transaction.effects {
+        for changed_obj in &effects.changed_objects {
+            if changed_obj.output_state() == OutputObjectState::DoesNotExist {
+                let object_id = changed_obj
+                    .object_id
+                    .as_ref()
+                    .and_then(|id_str| id_str.parse::<ObjectID>().ok())
+                    .expect("Changed object should have valid object_id");
+
+                // Use MAX as sentinel version for tombstones (e.g. deleted objects don't have output_version)
+                // This ensures execution_output_object_latest returns None for such objects
+                map.insert((object_id, SequenceNumber::MAX), None);
+            }
+        }
+    }
+
+    Arc::new(map)
 }
 
 impl Debug for Scope {
@@ -231,7 +244,8 @@ impl PackageStore for Scope {
                 .execution_objects
                 .range((object_id, SequenceNumber::MIN)..=(object_id, SequenceNumber::MAX))
                 .last()
-                .and_then(|(_, object)| {
+                .and_then(|(_, opt_object)| opt_object.as_ref())
+                .and_then(|object| {
                     // Check if this object is actually a package
                     object.data.try_as_package()
                 });
