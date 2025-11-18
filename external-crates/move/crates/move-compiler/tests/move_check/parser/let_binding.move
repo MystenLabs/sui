@@ -11,10 +11,10 @@ module 0x8675309::M {
         // Test with whitespace between parenthesis.
         let ( ) = ( );
         let ( ): ( ) = ( );
-        let v1 = 1;
+        let v1 = 1u64;
         let v2: u64 = 2;
-        let (v3) = 3; // for consistency, check a single variable inside parens
-        let (x1, x2) = (1, 2);
+        let (v3) = 3u64; // for consistency, check a single variable inside parens
+        let (x1, x2) = (1u64, 2u64);
         let (x3, x4): (u64, u64) = (3, 4);
         v1;
         v2;

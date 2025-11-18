@@ -7,10 +7,10 @@ module 0x8675309::M {
         r
     }
     fun t0() {
-        let v1 = 0;
-        let v2 = 0;
-        let v3 = 0;
-        let v4 = 0;
+        let v1 = 0u64;
+        let v2 = 0u64;
+        let v3 = 0u64;
+        let v4 = 0u64;
         let s1 = S { f: 0 };
         let s2 = S { f: 0 };
         let s3 = S { f: 0 };

@@ -21,7 +21,7 @@ module 0x8675309::M {
 
     fun t2() {
         foo({});
-        foo({ let _x = 0; });
+        foo({ let _x = 0u64; });
 
         let x = 0;
         bar({ x });
@@ -34,7 +34,7 @@ module 0x8675309::M {
 
     fun t3() {
         foo({});
-        foo({ let _x = 0; });
+        foo({ let _x = 0u64; });
 
         let x = 0;
         bar({ x });

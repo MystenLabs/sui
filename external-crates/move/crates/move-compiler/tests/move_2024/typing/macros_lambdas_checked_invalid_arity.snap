@@ -32,8 +32,8 @@ error[E04007]: incompatible types
 error[E04017]: too many arguments
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:3:9
    │
- 3 │         $f(0);
-   │         ^^^^^
+ 3 │         $f(0u64);
+   │         ^^^^^^^^
    │         │ │
    │         │ Found 1 argument(s) here
    │         Invalid lambda call of '$f'. The call expected 0 argument(s) but got 1
@@ -44,8 +44,8 @@ error[E04017]: too many arguments
 error[E04016]: too few arguments
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:3:9
    │
- 3 │         $f(0);
-   │         ^^^^^
+ 3 │         $f(0u64);
+   │         ^^^^^^^^
    │         │ │
    │         │ Found 1 argument(s) here
    │         Invalid lambda call of '$f'. The call expected 2 argument(s) but got 1
@@ -56,8 +56,8 @@ error[E04016]: too few arguments
 error[E04016]: too few arguments
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:4:9
    │
- 4 │         $g(0, 1);
-   │         ^^^^^^^^
+ 4 │         $g(0u64, 1u64);
+   │         ^^^^^^^^^^^^^^
    │         │ │
    │         │ Found 2 argument(s) here
    │         Invalid lambda call of '$g'. The call expected 3 argument(s) but got 2

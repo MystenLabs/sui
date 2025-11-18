@@ -2405,7 +2405,7 @@ pub fn solve_constraints(context: &mut Context) {
                         let mut diag = diag!(TypeSafety::MissingLiteralType, (loc, msg));
                         diag.add_note(
                             "To avoid this warning, add an explicit type annotation, \
-                                           e.g., '0u64'",
+                                           e.g., '<num>u64'",
                         );
                         context.add_diag(diag);
                     }
@@ -2426,8 +2426,8 @@ pub fn solve_constraints(context: &mut Context) {
                                        literal, so defaulting to 'vector<u8>'";
                         let mut diag = diag!(TypeSafety::MissingLiteralType, (loc, msg));
                         diag.add_note(
-                            "To avoid this warning, add an explicit type annotation, \
-                                       e.g., 'b\"hello\"'",
+                            "To avoid this warning, add an explicit annotation, \
+                                       e.g., 'b\"<const>\"'",
                         );
                         context.add_diag(diag);
                     }

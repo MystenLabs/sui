@@ -76,12 +76,12 @@ warning[Lint W04010]: unit `()` expression can be removed or simplified
    = This warning can be suppressed with '#[allow(lint(unnecessary_unit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04010]: unit `()` expression can be removed or simplified
-   ┌─ tests/linter/true_positive_unnecessary_unit.move:25:31
+   ┌─ tests/linter/true_positive_unnecessary_unit.move:25:34
    │
-25 │         if (b) { x = 1 } else { () };
-   │         ----------------------^^^^^^
-   │         │                     │
-   │         │                     Unnecessary 'else ()'.
+25 │         if (b) { x = 1u64 } else { () };
+   │         -------------------------^^^^^^
+   │         │                        │
+   │         │                        Unnecessary 'else ()'.
    │         An 'if' without an 'else' has an implicit 'else ()'. Consider removing the 'else' branch
    │
    = For example 'if (cond) e else ()' can be simplified to 'if (cond) e'

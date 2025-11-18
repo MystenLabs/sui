@@ -8,7 +8,7 @@ info:
 error[E01002]: unexpected token
   ┌─ tests/move_2024/ide_mode/use_incomplete.move:5:9
   │
-5 │         let _tmp = 42; // reset parser to see if the next line compiles
+5 │         let _tmp = 42u64; // reset parser to see if the next line compiles
   │         ^^^
   │         │
   │         Unexpected 'let'

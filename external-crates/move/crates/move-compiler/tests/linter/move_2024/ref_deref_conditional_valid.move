@@ -57,14 +57,14 @@ public fun get_resource(): MyResource {
 
 // Case 9
 public fun should_not_flag_value() {
-    let _ref = &0;
+    let _ref = &0u64;
 }
 
 // Case 10
 public fun should_not_flag_loop_mutation() {
     let mut resource = MyResource { value: 10 };
     let mut i = 0;
-    while (i < 5) {
+    while (i < 5u64) {
         let _ref = &copy resource; // Should be flagged regardless
         resource.value = resource.value + 1;
         i = i + 1;
@@ -81,5 +81,5 @@ public fun should_flag_constant() {
 
 // Case 12
 public fun should_not_flag_vector() {
-    let _ref = &vector[1, 2, 3]; // Should be flagged
+    let _ref = &vector[1,2u64,3]; // Should be flagged
 }

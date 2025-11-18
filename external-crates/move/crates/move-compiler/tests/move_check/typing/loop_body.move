@@ -12,7 +12,7 @@ module 0x8675309::M {
     }
 
     fun t3() {
-        loop { let x = 0; x; }
+        loop { let x = 0u64; x; }
     }
 
     fun t4() {

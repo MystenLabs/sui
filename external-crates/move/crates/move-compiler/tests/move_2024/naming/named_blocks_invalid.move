@@ -36,7 +36,7 @@ module 0x42::m {
             let _x = 'inner: {
                 if (cond) { return 'outer };
                 if (cond) { break 'inner 10 };
-                20
+                20u64
             };
         }
     }

@@ -16,7 +16,7 @@ module a::m {
     }
 
     public fun test_while() {
-        let n = (42 as u32);
+        let n = (42u64 as u32);
         while (n.
     }
 

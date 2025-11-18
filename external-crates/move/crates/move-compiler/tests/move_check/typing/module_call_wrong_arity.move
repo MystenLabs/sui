@@ -24,23 +24,23 @@ module M {
     }
 
     fun t0() {
-        X::foo(1);
-        X::foo(1, 2);
+        X::foo(1u64);
+        X::foo(1u64, 2u64);
         X::bar();
-        X::bar(1, 2);
+        X::bar(1, 2u64);
         X::baz<u64, u64>();
         X::baz<u64, u64>(1);
-        X::baz(1, 2, 3);
+        X::baz(1u64, 2u64, 3u64);
     }
 
     fun t1() {
-        foo(1);
-        foo(1, 2);
+        foo(1u64);
+        foo(1u64, 2u64);
         bar();
-        bar(1, 2);
+        bar(1, 2u64);
         baz<u64, u64>();
         baz<u64, u64>(1);
-        baz(1, 2, 3);
+        baz(1u64, 2u64, 3u64);
     }
 
 }
