@@ -31,6 +31,8 @@ mod streaming_client;
 #[cfg(test)]
 mod test_utils;
 
+pub(crate) const MAX_GRPC_MESSAGE_SIZE_BYTES: usize = 128 * 1024 * 1024;
+
 #[derive(clap::Args, Clone, Debug, Default)]
 #[group(required = true)]
 pub struct ClientArgs {
