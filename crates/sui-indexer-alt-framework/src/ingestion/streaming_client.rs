@@ -5,15 +5,18 @@ use anyhow::Context;
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
 use std::pin::Pin;
+use std::time::Duration;
 use sui_rpc::proto::sui::rpc::v2::{
     SubscribeCheckpointsRequest, subscription_service_client::SubscriptionServiceClient,
 };
 use sui_rpc_api::client::checkpoint_data_field_mask;
-use tonic::{Status, transport::Uri};
+use tonic::{Status, transport::Endpoint};
 
 use crate::ingestion::MAX_GRPC_MESSAGE_SIZE_BYTES;
 use crate::ingestion::error::{Error, Result};
 use crate::types::full_checkpoint_content::Checkpoint;
+
+const STREAMING_CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Type alias for a stream of checkpoint data.
 pub type CheckpointStream = Pin<Box<dyn Stream<Item = Result<Checkpoint>> + Send>>;
@@ -26,19 +29,22 @@ pub trait CheckpointStreamingClient {
 
 /// gRPC-based implementation of the CheckpointStreamingClient trait.
 pub struct GrpcStreamingClient {
-    uri: Uri,
+    endpoint: Endpoint,
 }
 
 impl GrpcStreamingClient {
-    pub fn new(uri: Uri) -> Self {
-        Self { uri }
+    pub fn new(uri: tonic::transport::Uri) -> Self {
+        let endpoint = Endpoint::from(uri)
+            .connect_timeout(STREAMING_CONNECTION_TIMEOUT)
+            .http2_keep_alive_interval(Duration::from_secs(5));
+        Self { endpoint }
     }
 }
 
 #[async_trait]
 impl CheckpointStreamingClient for GrpcStreamingClient {
     async fn connect(&mut self) -> Result<CheckpointStream> {
-        let mut client = SubscriptionServiceClient::connect(self.uri.clone())
+        let mut client = SubscriptionServiceClient::connect(self.endpoint.clone())
             .await
             .map_err(|err| Error::RpcClientError(Status::from_error(err.into())))?
             .max_decoding_message_size(MAX_GRPC_MESSAGE_SIZE_BYTES);
