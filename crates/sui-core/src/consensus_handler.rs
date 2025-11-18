@@ -1235,7 +1235,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         )
         .collect();
 
-        // DONE(commit-handler-rewrite): store all user signatures for use by checkpoint builder
         self.epoch_store.process_user_signatures(
             transactions_to_schedule
                 .iter()
@@ -1267,9 +1266,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &mut state.output,
             )
             .expect("failed to assign shared object versions");
-
-        self.epoch_store
-            .process_user_signatures(schedulables.iter().chain(randomness_schedulables.iter()));
 
         (schedulables, randomness_schedulables, assigned_versions)
     }
@@ -1462,29 +1458,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        // Extract inner transactions for reordering
-        let mut inner_txns: Vec<VerifiedExecutableTransaction> =
-            txns.into_iter().map(|tx| tx.into_tx()).collect();
         PostConsensusTxReorder::reorder(
-            &mut inner_txns,
+            &mut txns,
             protocol_config.consensus_transaction_ordering(),
         );
-        // Re-wrap with no aliases since we don't have the original aliases after extraction
-        let txns: Vec<VerifiedExecutableTransactionWithAliases> = inner_txns
-            .into_iter()
-            .map(VerifiedExecutableTransactionWithAliases::no_aliases)
-            .collect();
 
-        let mut inner_randomness_txns: Vec<VerifiedExecutableTransaction> =
-            randomness_txns.into_iter().map(|tx| tx.into_tx()).collect();
         PostConsensusTxReorder::reorder(
-            &mut inner_randomness_txns,
+            &mut randomness_txns,
             protocol_config.consensus_transaction_ordering(),
         );
-        let randomness_txns: Vec<VerifiedExecutableTransactionWithAliases> = inner_randomness_txns
-            .into_iter()
-            .map(VerifiedExecutableTransactionWithAliases::no_aliases)
-            .collect();
 
         (txns, randomness_txns, previously_deferred_tx_digests)
     }
@@ -3378,9 +3360,9 @@ mod tests {
         }
     }
 
-    fn to_short_strings(txs: Vec<VerifiedExecutableTransaction>) -> Vec<String> {
+    fn to_short_strings(txs: Vec<VerifiedExecutableTransactionWithAliases>) -> Vec<String> {
         txs.into_iter()
-            .map(|tx| format!("transaction({})", tx.data().transaction_data().gas_price()))
+            .map(|tx| format!("transaction({})", tx.tx().transaction_data().gas_price()))
             .collect()
     }
 
@@ -3677,13 +3659,7 @@ mod tests {
         );
     }
 
-    fn to_short_strings(v: Vec<VerifiedExecutableTransaction>) -> Vec<String> {
-        v.into_iter()
-            .map(|t| format!("transaction({})", t.transaction_data().gas_price()))
-            .collect()
-    }
-
-    fn user_txn(gas_price: u64) -> VerifiedExecutableTransaction {
+    fn user_txn(gas_price: u64) -> VerifiedExecutableTransactionWithAliases {
         let (committee, keypairs) = Committee::new_simple_test_committee();
         let data = SenderSignedData::new(
             TransactionData::new_transfer(
@@ -3696,8 +3672,11 @@ mod tests {
             ),
             vec![],
         );
-        VerifiedExecutableTransaction::new_from_certificate(VerifiedCertificate::new_unchecked(
-            CertifiedTransaction::new_from_keypairs_for_testing(data, &keypairs, &committee),
-        ))
+        let tx = VerifiedExecutableTransaction::new_from_certificate(
+            VerifiedCertificate::new_unchecked(
+                CertifiedTransaction::new_from_keypairs_for_testing(data, &keypairs, &committee),
+            ),
+        );
+        VerifiedExecutableTransactionWithAliases::no_aliases(tx)
     }
 }

@@ -2383,7 +2383,7 @@ impl AuthorityPerEpochStore {
 
     pub fn get_all_deferred_transactions_for_test(
         &self,
-    ) -> Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)> {
+    ) -> Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)> {
         self.consensus_output_cache
             .deferred_transactions_v2
             .lock()
@@ -2968,24 +2968,6 @@ impl AuthorityPerEpochStore {
             .write()
             .push_consensus_output(output, self)
             .expect("push_consensus_output should not fail");
-    }
-
-    // Implements user signature processing for old version of consesnus handler, where
-    // we can assume no aliases because the old consensus handler does not support aliases.
-    fn process_user_signatures_from_schedulables<'a>(
-        &self,
-        certificates: impl Iterator<Item = &'a Schedulable>,
-    ) {
-        let txs: Vec<_> = certificates
-            .filter_map(|s| match s {
-                Schedulable::Transaction(certificate) => Some(
-                    VerifiedExecutableTransactionWithAliases::no_aliases(certificate.to_owned()),
-                ),
-                Schedulable::RandomnessStateUpdate(_, _) => None,
-                Schedulable::AccumulatorSettlement(_, _) => None,
-            })
-            .collect();
-        self.process_user_signatures(txs.iter())
     }
 
     pub(crate) fn process_user_signatures<'a>(

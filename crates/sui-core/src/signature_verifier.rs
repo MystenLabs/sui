@@ -24,7 +24,6 @@ use sui_types::signature_verification::{
 };
 use sui_types::storage::ObjectStore;
 use sui_types::transaction::{SenderSignedData, TransactionDataAPI};
-use sui_types::{SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, derived_object};
 use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
@@ -412,7 +411,6 @@ impl SignatureVerifier {
         self.jwks.read().clone()
     }
 
-    #[must_use]
     pub fn verify_tx_with_current_aliases(
         &self,
         signed_tx: &SenderSignedData,
@@ -457,12 +455,11 @@ impl SignatureVerifier {
         Ok(NonEmpty::from_vec(versions).expect("must have at least one required_signer"))
     }
 
-    #[must_use]
     pub fn verify_tx_require_no_aliases(&self, signed_tx: &SenderSignedData) -> SuiResult {
         let current_aliases = self.verify_tx_with_current_aliases(signed_tx)?;
         for (_, version) in current_aliases {
             if version.is_some() {
-                return Err(SuiError::AliasesChanged);
+                return Err(SuiErrorKind::AliasesChanged.into());
             }
         }
         Ok(())

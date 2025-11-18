@@ -184,7 +184,7 @@ impl SuiTxValidator {
                 _ => continue,
             };
 
-            let tx_digest = *tx.digest();
+            let tx_digest = *tx.tx().digest();
             if let Err(error) = self.vote_transaction(&epoch_store, tx) {
                 debug!(?tx_digest, "Voting to reject transaction: {error}");
                 self.metrics
@@ -229,7 +229,7 @@ impl SuiTxValidator {
 
         let verified_tx = epoch_store.verify_transaction_with_current_aliases(tx)?;
         if *verified_tx.aliases() != aliases {
-            return Err(SuiError::AliasesChanged);
+            return Err(SuiErrorKind::AliasesChanged.into());
         }
 
         self.authority_state

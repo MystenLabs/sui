@@ -178,9 +178,10 @@ pub fn get_address_aliases_from_store(
         &key_bytes,
     ) else {
         debug_fatal!("failed to compute derived object id for alias state");
-        return Err(SuiError::Unknown(
+        return Err(SuiErrorKind::Unknown(
             "failed to compute derived object id for alias state".to_string(),
-        ));
+        )
+        .into());
     };
     let address_aliases = object_store.get_object(&address_aliases_id);
 
