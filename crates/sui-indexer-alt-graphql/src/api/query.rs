@@ -600,7 +600,6 @@ impl Query {
             }
             Err(GrpcExecutionError(status)) => Ok(SimulationResult {
                 effects: None,
-                events: None,
                 outputs: None,
                 error: Some(status.to_string()),
             }),

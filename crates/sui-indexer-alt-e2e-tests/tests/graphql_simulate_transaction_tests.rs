@@ -357,22 +357,6 @@ async fn test_simulate_transaction_with_events() {
                             }
                         }
                     }
-                    events {
-                        contents {
-                            json
-                        }
-                        transactionModule {
-                            package {
-                                version
-                                modules {
-                                    nodes {
-                                        name
-                                    }         
-                                }
-                            }
-                            name
-                        }
-                    }
                     error
                 }
             }
@@ -419,29 +403,6 @@ async fn test_simulate_transaction_with_events() {
           ]
         }
       },
-      "events": [
-        {
-          "contents": {
-            "json": {
-              "message": "Package published successfully!",
-              "value": "42"
-            }
-          },
-          "transactionModule": {
-            "package": {
-              "version": 1,
-              "modules": {
-                "nodes": [
-                  {
-                    "name": "emit_event"
-                  }
-                ]
-              }
-            },
-            "name": "emit_event"
-          }
-        }
-      ],
       "error": null
     }
     "#);
