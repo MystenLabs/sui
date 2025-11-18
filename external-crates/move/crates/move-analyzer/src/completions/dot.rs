@@ -43,7 +43,7 @@ pub fn dot_completions(
         return (completions, completion_finalized);
     };
     // we found auto-completion info, so don't look for any more completions
-    // even if if it does not contain any
+    // even if it does not contain any
     completion_finalized = true;
     for AutocompleteMethod {
         method_name,

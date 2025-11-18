@@ -1,0 +1,160 @@
+---
+title: EWMA Gas Price Penalty
+description: Learn about the DeepBook EWMA (Exponentially Weighted Moving Average) gas price penalty system.
+keywords:
+  [
+    ewma,
+    gas price,
+    taker fee,
+    penalty,
+    volatility,
+    z-score,
+    exponentially weighted moving average,
+    toxic takers,
+    deepbookv3,
+  ]
+---
+
+DeepBook implements an exponentially weighted moving average (EWMA) system to dynamically adjust taker fees based on network gas prices. This feature helps prevent toxic takers from using high gas prices to prioritize their transactions and pick off stale maker orders.
+
+## Overview
+
+The system tracks gas prices over time and applies a penalty fee to takers when the current gas price is unusually high compared to recent history. This protects makers from having their orders filled during periods of abnormal network activity where toxic takers might try to front-run or take advantage of stale orders.
+
+## How it works
+
+
+The EWMA system calculates a smoothed average and variance of recent gas prices, then compares the current gas price against this historical baseline. When the current gas price is significantly elevated (beyond a threshold measured in standard deviations), an additional taker fee penalty is applied.
+
+### Key components
+
+- **Mean (μ):** Smoothed average of recent gas prices.
+- **Variance (σ²):** Measure of gas price volatility.
+- **Standard Deviation (σ):** Square root of variance, used for z-score calculation.
+- **Z-Score:** How many standard deviations the current gas price is from the mean.
+- **Z-Score Threshold:** Trigger point for applying the penalty.
+
+### The formula
+
+```sh
+z_score = (current_gas_price - mean) / standard_deviation
+
+if z_score > z_score_threshold:
+    apply additional_taker_fee
+```
+
+## Configuration parameters
+
+The following table shows a sample configuration parameters for the EWMA system:
+
+| Parameter            | Value           | Meaning                                |
+| -------------------- | --------------- | -------------------------------------- |
+| Alpha                | 0.1 (100000000) | 10% weight on new data, 90% on history |
+| Mean                 | 1,478           | Average gas price (smoothed)           |
+| Variance             | 43,270,831      | Volatility measure                     |
+| Std deviation        | 6,578           | Calculated: √variance                  |
+| Z-score threshold    | 3.0             | Trigger: 3 standard deviations         |
+| Additional taker fee | 0.1% (1000000)  | Penalty fee added                      |
+
+## When does the penalty apply?
+
+The penalty is applied only when **all** of the following conditions are met:
+
+1. EWMA is enabled for the pool.
+2. Current gas price ≥ mean (must be above average).
+3. Z-Score > threshold (must exceed 3.0 standard deviations).
+
+### Penalty threshold calculation
+
+```sh
+Penalty Threshold = Mean + (Z-Score Threshold × Std Dev)
+Penalty Threshold = 1,478 + (3.0 × 6,578)
+Penalty Threshold = 1,478 + 19,734
+Penalty Threshold ≈ 21,212
+```
+
+## Practical examples
+
+### Example 1: Normal conditions (current)
+
+- **Gas price:** 1,000
+- **Calculation:** (1,000 - 1,478) / 6,578 = -0.073
+- **Z-score:** Negative, below mean
+- **Result:** No penalty - Base taker fee only
+
+### Example 2: Slightly elevated
+
+- **Gas price:** 5,000
+- **Calculation:** (5,000 - 1,478) / 6,578 = 0.54
+- **Z-score:** 0.54
+- **Result:** No penalty - Below 3.0 threshold
+
+### Example 3: High spike
+
+- **Gas price:** 15,000
+- **Calculation:** (15,000 - 1,478) / 6,578 = 2.06
+- **Z-score:** 2.06
+- **Result:** No penalty - Still below 3.0 threshold
+
+### Example 4: Extreme spike (penalty triggered)
+
+- **Gas price:** 25,000
+- **Calculation:** (25,000 - 1,478) / 6,578 = 3.58
+- **Z-score:** 3.58
+- **Result:** **Penalty applied** - Additional 0.1% fee added
+
+## Benefits
+
+- **Maker protection:** Discourages takers from picking off stale maker orders during network congestion.
+- **Dynamic adjustment:** Automatically adapts to changing gas price patterns over time.
+- **Fair pricing:** Only penalizes during extreme conditions (3 standard deviations).
+- **Statistical rigor:** Uses well-established statistical methods to identify outliers.
+
+## Technical notes
+
+- **Update frequency:** EWMA updates when an order is submitted. Only counts if the timestamp is different (multiple orders within the same transaction will only be counted once).
+- **Alpha value:** 0.1 means the system adapts relatively quickly to new price levels while maintaining historical context.
+- **3-sigma threshold:** Statistically, only ~0.3% of observations exceed 3 standard deviations in a normal distribution (~0.15% above 3 standard deviations).
+- **Pool-specific:** Each pool has its own EWMA state tracked independently.
+
+## API
+
+The following are the EWMA-related functions that DeepBook exposes.
+
+### Enable EWMA state
+
+Enable or disable the EWMA state for a pool. This allows the pool to use the EWMA state for volatility calculations and additional taker fees. Only an admin can call this function.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="enable_ewma_state"
+	noComments
+/>
+
+### Set EWMA parameters
+
+Configure the EWMA parameters for a pool. Only an admin can set these parameters. The parameters must meet the following constraints:
+
+- `alpha`: Must be ≤ maximum EWMA alpha.
+- `z_score_threshold`: Must be ≤ maximum z-score threshold.
+- `additional_taker_fee`: Must be ≤ maximum additional taker fee.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="set_ewma_params"
+	noComments
+/>
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3"
+	label="DeepBookV3 repository"
+	desc="The DeepBookV3 repository on GitHub."
+/>

@@ -2,34 +2,41 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(unused)]
 
-use std::{borrow::Cow, fmt::Write as _, str};
+use std::borrow::Cow;
+use std::fmt::Write as _;
+use std::str;
 
 use async_trait::async_trait;
-use base64::engine::{
-    Engine,
-    general_purpose::{STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD},
-};
-use chrono::{DateTime, Utc};
-use move_core_types::{
-    account_address::AccountAddress,
-    annotated_value::{MoveFieldLayout, MoveTypeLayout},
-    language_storage::{StructTag, TypeTag},
-    u256::U256,
-};
-use serde::{
-    Serialize,
-    ser::{SerializeSeq as _, SerializeTuple as _, SerializeTupleVariant},
-};
-use sui_types::{
-    MOVE_STDLIB_ADDRESS,
-    base_types::{
-        RESOLVED_UTF8_STR, STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME, move_ascii_str_layout,
-        move_utf8_str_layout, url_layout,
-    },
-    id::{ID, UID},
-};
+use base64::engine::Engine;
+use base64::engine::general_purpose::STANDARD;
+use base64::engine::general_purpose::STANDARD_NO_PAD;
+use base64::engine::general_purpose::URL_SAFE;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use chrono::DateTime;
+use chrono::Utc;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::annotated_value::MoveFieldLayout;
+use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
+use move_core_types::u256::U256;
+use serde::Serialize;
+use serde::ser::SerializeSeq as _;
+use serde::ser::SerializeTuple as _;
+use serde::ser::SerializeTupleVariant;
+use sui_types::MOVE_STDLIB_ADDRESS;
+use sui_types::base_types::RESOLVED_UTF8_STR;
+use sui_types::base_types::STD_OPTION_MODULE_NAME;
+use sui_types::base_types::STD_OPTION_STRUCT_NAME;
+use sui_types::base_types::move_ascii_str_layout;
+use sui_types::base_types::move_utf8_str_layout;
+use sui_types::base_types::url_layout;
+use sui_types::id::ID;
+use sui_types::id::UID;
 
-use super::{error::FormatError, parser::Transform, writer::BoundedWriter};
+use crate::v2::error::FormatError;
+use crate::v2::parser::Transform;
+use crate::v2::writer::BoundedWriter;
 
 /// Dynamically load objects by their ID. The output should be a `Slice` containing references to
 /// the raw BCS bytes and the corresponding `MoveTypeLayout` for the object. This implies the

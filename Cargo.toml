@@ -229,7 +229,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.61.0"
+version = "1.62.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -440,7 +440,7 @@ msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "427
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
-nonempty = "0.9.0"
+nonempty = { version = "0.9.0", features = ["serialize"] }
 nonzero_ext = "0.3.0"
 notify = "6.1.1"
 ntest = "0.9.0"

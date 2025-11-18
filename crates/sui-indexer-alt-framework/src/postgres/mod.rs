@@ -89,11 +89,8 @@ impl Indexer<Db> {
             store,
             IndexerArgs::default(),
             ClientArgs {
-                remote_store_url: None,
                 local_ingestion_path: Some(tempdir().unwrap().keep()),
-                rpc_api_url: None,
-                rpc_username: None,
-                rpc_password: None,
+                ..Default::default()
             },
             IngestionConfig::default(),
             None,

@@ -52,7 +52,7 @@ Refer to the [GitHub repository](https://github.com/MystenLabs/nautilus) for the
         /weather-example    # Example directory. Replace with your own application logic as needed.
           mod.rs            # Defines the process_data endpoint and related logic. Replace with your off-chain computation logic.
           allowed_endpoints.yaml  # Lists all endpoints the enclave can access. By default, the enclave has no internet access. During configuration, this file generates code for traffic forwarding.
-        /twitter-example    # Another example directory with similar structure. 
+        /twitter-example    # Another example directory with a similar structure. 
     run.sh           # Runs the Rust server inside the enclave. Do not modify.
     common.rs        # Common code for retrieving attestation. Do not modify. 
 ```
@@ -319,7 +319,7 @@ $ sui client call --function update_pcrs --module enclave --package $ENCLAVE_PAC
 # optional, give it a name you like
 $ sui client call --function update_name --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$APP_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID "weather enclave, updated 2025-05-13"
 
-# this script calls the get_attestation endpoint from your enclave url and use it to calls register_enclave on-chain to register the public key, results in the created enclave object
+# this script calls the get_attestation endpoint from your enclave url and uses it to call register_enclave on-chain to register the public key, resulting in the created enclave object
 $ sh ../../register_enclave.sh $ENCLAVE_PACKAGE_ID $APP_PACKAGE_ID $ENCLAVE_CONFIG_OBJECT_ID $ENCLAVE_URL $MODULE_NAME $OTW_NAME
 
 # record the created shared object ENCLAVE_OBJECT_ID as env var from register output

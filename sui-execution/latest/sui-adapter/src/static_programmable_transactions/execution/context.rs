@@ -382,10 +382,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let mut written_objects = BTreeMap::new();
 
         for (id, (recipient, ty, value)) in writes {
-            let ty: Type = env.load_type_from_struct(&ty.clone().into())?;
+            let (ty, layout) = env.load_type_and_layout_from_struct(&ty.clone().into())?;
             let abilities = ty.abilities();
             let has_public_transfer = abilities.has_store();
-            let Some(bytes) = value.serialize() else {
+            let Some(bytes) = value.typed_serialize(&layout) else {
                 invariant_violation!("Failed to serialize already deserialized Move value");
             };
             // safe because has_public_transfer has been determined by the abilities
@@ -453,7 +453,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let new_events = events
             .into_iter()
             .map(|(tag, value)| {
-                let Some(bytes) = value.serialize() else {
+                let layout = self.env.type_layout_for_struct(&tag)?;
+                let Some(bytes) = value.typed_serialize(&layout) else {
                     invariant_violation!("Failed to serialize Move event");
                 };
                 Ok((storage_id.clone(), tag, bytes))
@@ -1070,7 +1071,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 invariant_violation!("read should not return a reference")
             }
         };
-        let Some(bytes) = value.serialize() else {
+        let layout = self.env.runtime_layout(&ty)?;
+        let Some(bytes) = value.typed_serialize(&layout) else {
             invariant_violation!("Failed to serialize Move value");
         };
         let arg = match location {
@@ -1123,7 +1125,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             }
             _ => (result, ty),
         };
-        let Some(bytes) = v.serialize() else {
+        let layout = self.env.runtime_layout(&ty)?;
+        let Some(bytes) = v.typed_serialize(&layout) else {
             invariant_violation!("Failed to serialize Move value");
         };
         let Ok(tag): Result<TypeTag, _> = ty.try_into() else {

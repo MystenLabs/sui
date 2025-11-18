@@ -9,6 +9,7 @@ use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
 use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig, find::address_owned};
 
+use insta::assert_json_snapshot;
 use sui_indexer_alt_graphql::config::{RpcConfig as GraphQlConfig, WatermarkConfig};
 use sui_types::{
     base_types::SuiAddress,
@@ -146,6 +147,48 @@ async fn test_available_range_with_pipelines() {
 
     assert_sequence_numbers_eq!(1, 10, transasction_available_range);
 
+    cluster.stopped().await;
+}
+
+/// Test that querying available range for a pipeline that is not enabled returns an error
+#[tokio::test]
+async fn test_available_range_pipeline_unavailable() {
+    // Create a cluster without the consistent pipeline enabled
+    let cluster = cluster_with_pipelines(PipelineLayer {
+        cp_sequence_numbers: Some(ConcurrentLayer::default()),
+        ..Default::default()
+    })
+    .await;
+
+    // Query for objects, which requires the consistent pipeline
+    let response = execute_graphql_query(
+        &cluster,
+        AVAILABLE_RANGE_QUERY,
+        Some(json!({
+            "type": "Query",
+            "field": "objects",
+        })),
+    )
+    .await;
+    assert_json_snapshot!(response["errors"], @r###"
+    [
+      {
+        "message": "consistent queries across objects and balances not available",
+        "locations": [
+          {
+            "line": 4,
+            "column": 13
+          }
+        ],
+        "path": [
+          "serviceConfig",
+          "availableRange"
+        ],
+        "extensions": {
+          "code": "FEATURE_UNAVAILABLE"
+        }
+      }
+    ]"###);
     cluster.stopped().await;
 }
 

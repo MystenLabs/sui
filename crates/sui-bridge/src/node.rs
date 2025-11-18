@@ -104,7 +104,7 @@ pub async fn run_bridge_node(
     // Before reconfiguration happens we only set it once when the node starts
     let sui_system = server_config
         .sui_client
-        .sui_client()
+        .jsonrpc_client()
         .governance_api()
         .get_latest_sui_system_state()
         .await?;
@@ -143,7 +143,6 @@ pub async fn run_bridge_node(
             server_config.sui_client,
             server_config.eth_client,
             server_config.approved_governance_actions,
-            metrics.clone(),
         ),
         metrics,
         Arc::new(metadata),
@@ -245,7 +244,7 @@ async fn start_watchdog(
         && !watchdog_config.total_supplies.is_empty()
     {
         let total_supplies = TotalSupplies::new(
-            Arc::new(sui_client.sui_client().clone()),
+            Arc::new(sui_client.jsonrpc_client().clone()),
             watchdog_config.total_supplies,
             watchdog_metrics.total_supplies.clone(),
         );

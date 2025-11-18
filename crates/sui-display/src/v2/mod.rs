@@ -3,18 +3,22 @@
 
 use std::sync::Arc;
 
-use error::FormatError;
 use futures::future::try_join_all;
 use futures::join;
 use indexmap::IndexMap;
 use move_core_types::annotated_value::MoveTypeLayout;
-use sui_types::collection_types::{Entry, VecMap};
+use sui_types::collection_types::Entry;
+use sui_types::collection_types::VecMap;
 
 use self::error::Error;
+use self::error::FormatError;
 use self::interpreter::Interpreter;
-use self::meter::{Limits, Meter};
-use self::parser::{Parser, Strand};
-use self::value::{Slice, Store};
+use self::meter::Limits;
+use self::meter::Meter;
+use self::parser::Parser;
+use self::parser::Strand;
+use self::value::Slice;
+use self::value::Store;
 
 pub mod error;
 pub(crate) mod interpreter;

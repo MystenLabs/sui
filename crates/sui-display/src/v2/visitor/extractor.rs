@@ -6,11 +6,13 @@ use move_core_types::annotated_value as A;
 use move_core_types::annotated_visitor as AV;
 use move_core_types::u256::U256;
 
-use super::address::AddressExtractor;
-use super::option::OptionExtractor;
-use super::option::is_option;
 use crate::v2::error::FormatError;
-use crate::v2::value::{Accessor, Slice, Value};
+use crate::v2::value::Accessor;
+use crate::v2::value::Slice;
+use crate::v2::value::Value;
+use crate::v2::visitor::address::AddressExtractor;
+use crate::v2::visitor::option::OptionExtractor;
+use crate::v2::visitor::option::is_option;
 use crate::v2::visitor::vec_map::VecMapVisitor;
 use crate::v2::visitor::vec_map::is_vec_map;
 

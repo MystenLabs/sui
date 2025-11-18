@@ -97,7 +97,7 @@ impl AccumulatorEvent {
                     match value {
                         AccumulatorValue::Integer(v) => *v,
                         AccumulatorValue::IntegerTuple(_, _) => fatal!("invalid accumulator value"),
-                        AccumulatorValue::EventDigest(_, _) => fatal!("invalid accumulator value"),
+                        AccumulatorValue::EventDigest(_) => fatal!("invalid accumulator value"),
                     }
                 }
             }

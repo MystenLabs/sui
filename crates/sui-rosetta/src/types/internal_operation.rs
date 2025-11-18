@@ -4,13 +4,20 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
-use futures::StreamExt;
+use prost_types::FieldMask;
 use serde::{Deserialize, Serialize};
+use sui_rpc::client::Client;
+use sui_rpc::proto::sui::rpc::v2::{
+    BatchGetObjectsRequest, GetObjectRequest, Object, get_object_result,
+};
 
-use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
-use sui_sdk::SuiClient;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::{
+    GasPayment, ObjectReference, ProgrammableTransaction as ProtoProgrammableTransaction,
+    SimulateTransactionRequest, Transaction, TransactionKind,
+    simulate_transaction_request::TransactionChecks, transaction_kind,
+};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
-use sui_types::digests::ObjectDigest;
 use sui_types::transaction::{ProgrammableTransaction, TransactionData};
 
 use crate::errors::Error;
@@ -31,14 +38,15 @@ mod withdraw_stake;
 
 pub const MAX_GAS_COINS: usize = 255;
 const MAX_COMMAND_ARGS: usize = 511;
-const MAX_GAS_BUDGET: u64 = 50_000_000_000;
-/// Minimum gas-units a tx might need
-const START_GAS_UNITS: u64 = 1_000;
 
 pub struct TransactionObjectData {
     pub gas_coins: Vec<ObjectRef>,
-    pub extra_gas_coins: Vec<ObjectRef>,
+    /// For PaySui/Stake: extra gas coins to merge into gas
+    /// For PayCoin: payment coins of the specified type
+    /// For WithdrawStake: stake objects to withdraw
     pub objects: Vec<ObjectRef>,
+    /// Party-owned (ConsensusAddress) version of objects
+    pub party_objects: Vec<(ObjectID, SequenceNumber)>,
     /// Refers to the sum of the `Coin<SUI>` balance of the coins participating in the transaction;
     /// either as gas or as objects.
     pub total_sui_balance: i128,
@@ -50,7 +58,7 @@ pub struct TransactionObjectData {
 pub trait TryConstructTransaction {
     async fn try_fetch_needed_objects(
         self,
-        client: &SuiClient,
+        client: &mut Client,
         gas_price: Option<u64>,
         budget: Option<u64>,
     ) -> Result<TransactionObjectData, Error>;
@@ -82,7 +90,12 @@ impl InternalOperation {
                 recipients,
                 amounts,
                 ..
-            }) => pay_sui_pt(recipients, amounts, &metadata.extra_gas_coins)?,
+            }) => pay_sui_pt(
+                recipients,
+                amounts,
+                &metadata.objects,
+                &metadata.party_objects,
+            )?,
             Self::PayCoin(PayCoin {
                 recipients,
                 amounts,
@@ -91,7 +104,13 @@ impl InternalOperation {
                 let currency = &metadata
                     .currency
                     .ok_or(anyhow!("metadata.coin_type is needed to PayCoin"))?;
-                pay_coin_pt(recipients, amounts, &metadata.objects, currency)?
+                pay_coin_pt(
+                    recipients,
+                    amounts,
+                    &metadata.objects,
+                    &metadata.party_objects,
+                    currency,
+                )?
             }
             InternalOperation::Stake(Stake {
                 validator, amount, ..
@@ -108,7 +127,13 @@ impl InternalOperation {
                         (true, metadata.total_coin_value as u64 - metadata.budget)
                     }
                 };
-                stake_pt(validator, amount, stake_all, &metadata.extra_gas_coins)?
+                stake_pt(
+                    validator,
+                    amount,
+                    stake_all,
+                    &metadata.objects,
+                    &metadata.party_objects,
+                )?
             }
             InternalOperation::WithdrawStake(WithdrawStake { stake_ids, .. }) => {
                 let withdraw_all = stake_ids.is_empty();
@@ -126,92 +151,112 @@ impl InternalOperation {
     }
 }
 
-async fn budget_from_dry_run(
-    client: &SuiClient,
+/// RPC auto-selects gas coins if empty, uses reference gas price if None, and estimates budget if None.
+/// Returns the resolved budget and gas coins used by the transaction.
+async fn simulate_transaction(
+    client: &mut Client,
     pt: ProgrammableTransaction,
     sender: SuiAddress,
+    gas_coins: Vec<ObjectRef>,
     gas_price: Option<u64>,
-) -> Result<u64, Error> {
-    let gas_price = match gas_price {
-        Some(p) => p,
-        None => client.governance_api().get_reference_gas_price().await? + 100, // make sure it works over epoch changes
-    };
-    // We don't want dry run to fail due to budget, so we leave coins empty and set MAX_GAS_BUDGET
-    let dry_run = client
-        .read_api()
-        .dry_run_transaction_block(TransactionData::new_programmable(
-            sender,
-            vec![],
-            pt.clone(),
-            MAX_GAS_BUDGET,
-            gas_price,
-        ))
-        .await?;
-    let effects = dry_run.effects;
+    budget: Option<u64>,
+) -> Result<(u64, Vec<Object>), Error> {
+    let ptb_proto: ProtoProgrammableTransaction = pt.into();
+    let mut transaction = Transaction::default()
+        .with_kind(
+            TransactionKind::default()
+                .with_programmable_transaction(ptb_proto)
+                .with_kind(transaction_kind::Kind::ProgrammableTransaction),
+        )
+        .with_sender(sender.to_string());
 
-    if let SuiExecutionStatus::Failure { error } = effects.status() {
-        return Err(Error::TransactionDryRunError(error.to_string()));
+    let mut gas_payment = GasPayment::default();
+    gas_payment.objects = gas_coins
+        .into_iter()
+        .map(|gas_ref| {
+            let mut obj_ref = ObjectReference::default();
+            obj_ref.object_id = Some(gas_ref.0.to_string());
+            obj_ref.version = Some(gas_ref.1.value());
+            obj_ref.digest = Some(gas_ref.2.to_string());
+            obj_ref
+        })
+        .collect();
+    gas_payment.budget = budget;
+    gas_payment.price = gas_price;
+    gas_payment.owner = Some(sender.to_string());
+    transaction.gas_payment = Some(gas_payment);
+
+    let request = SimulateTransactionRequest::default()
+        .with_transaction(transaction)
+        .with_read_mask(FieldMask::from_paths([
+            "transaction.effects.status",
+            "transaction.transaction.gas_payment",
+        ]))
+        .with_checks(TransactionChecks::Enabled)
+        .with_do_gas_selection(true);
+
+    let response = client
+        .execution_client()
+        .simulate_transaction(request)
+        .await?
+        .into_inner();
+
+    let executed_tx = response.transaction();
+    let effects = executed_tx.effects();
+    if !effects.status().success() {
+        return Err(Error::TransactionDryRunError(Box::new(
+            effects.status().error().clone(),
+        )));
     }
-    // Update budget to be the result of the dry run
-    Ok(effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost)
-}
 
-async fn collect_coins_until_budget_met(
-    client: &SuiClient,
-    sender: SuiAddress,
-    pt: impl Fn(&[(ObjectID, SequenceNumber, ObjectDigest)]) -> anyhow::Result<ProgrammableTransaction>,
-    amount: u64,
-    gas_price: Option<u64>,
-) -> Result<TransactionObjectData, Error> {
-    let mut coins_stream = Box::pin(client.coin_read_api().get_coins_stream(sender, None));
-    // Fetch it once instead of fetching it again and again in the below loop.
-    let gas_price = match gas_price {
-        Some(p) => p,
-        None => client.governance_api().get_reference_gas_price().await? + 100, // make sure it works over epoch changes
-    };
+    let resolved_tx = executed_tx.transaction();
+    let gas_payment = resolved_tx.gas_payment();
 
-    let mut all_coins = vec![];
-    let mut gas_coins: Vec<_>;
-    let mut extra_gas_coins: Vec<_>;
-    let mut gathered = 0;
-    let mut budget = START_GAS_UNITS * gas_price;
-    // We need to dry-run in a loop, because depending on the amount of coins used the tx might
-    // differ slightly: (merge / no merge / number of merge-coins)
-    loop {
-        while let Some(coin) = coins_stream.next().await {
-            gathered += coin.balance;
-            all_coins.push(coin);
-            if gathered >= amount + budget {
-                break;
+    let mut batch_request =
+        BatchGetObjectsRequest::default().with_read_mask(FieldMask::from_paths([
+            "object_id",
+            "version",
+            "digest",
+            "balance",
+        ]));
+
+    for obj_ref in gas_payment.objects() {
+        let get_request = GetObjectRequest::default()
+            .with_object_id(obj_ref.object_id().to_string())
+            .with_version(obj_ref.version());
+        batch_request.requests.push(get_request);
+    }
+
+    let batch_response = client
+        .ledger_client()
+        .batch_get_objects(batch_request)
+        .await?
+        .into_inner();
+
+    let mut gas_coins = Vec::new();
+    for result in batch_response.objects {
+        match result.result {
+            Some(get_object_result::Result::Object(obj)) => {
+                gas_coins.push(obj);
+            }
+            Some(get_object_result::Result::Error(err)) => {
+                return Err(Error::DataError(format!(
+                    "Failed to fetch gas coin object: {:?}",
+                    err
+                )));
+            }
+            None => {
+                return Err(Error::DataError(
+                    "Failed to fetch gas coin object: no result returned".to_string(),
+                ));
+            }
+            Some(_) => {
+                return Err(Error::DataError(
+                    "Failed to fetch gas coin object: unexpected result type".to_string(),
+                ));
             }
         }
-        if gathered < amount + budget {
-            return Err(Error::InvalidInput(format!(
-                "Address {sender} does not have amount: {amount} + budget: {budget} balance. SUI balance: {gathered}."
-            )));
-        }
-
-        // The coins to merge should be used as transaction object inputs, as
-        // `TransactionData::new_programmable` used in `InternalOperation::try_into_data`,
-        // uses all coins passed as gas payment.
-        let mut iter = all_coins.iter().map(|c| c.object_ref());
-        gas_coins = iter.by_ref().take(MAX_GAS_COINS).collect();
-        extra_gas_coins = iter.collect();
-        let pt = pt(&extra_gas_coins)?;
-        budget = budget_from_dry_run(client, pt.clone(), sender, Some(gas_price)).await?;
-        // If we have already gathered the needed amount of coins we don't need to dry run again,
-        // as the transaction will be the same.
-        if budget + amount <= gathered {
-            break;
-        }
     }
 
-    let total_sui_balance = all_coins.iter().map(|c| c.balance).sum::<u64>() as i128;
-    Ok(TransactionObjectData {
-        gas_coins,
-        extra_gas_coins,
-        objects: vec![],
-        total_sui_balance,
-        budget,
-    })
+    Ok((gas_payment.budget(), gas_coins))
 }

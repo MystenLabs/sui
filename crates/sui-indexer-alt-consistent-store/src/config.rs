@@ -38,6 +38,8 @@ pub struct IngestionConfig {
     pub checkpoint_buffer_size: usize,
     pub ingest_concurrency: usize,
     pub retry_interval_ms: u64,
+    pub streaming_backoff_initial_batch_size: usize,
+    pub streaming_backoff_max_batch_size: usize,
 }
 
 #[DefaultConfig]
@@ -138,6 +140,8 @@ impl From<framework::ingestion::IngestionConfig> for IngestionConfig {
             checkpoint_buffer_size: config.checkpoint_buffer_size,
             ingest_concurrency: config.ingest_concurrency,
             retry_interval_ms: config.retry_interval_ms,
+            streaming_backoff_initial_batch_size: config.streaming_backoff_initial_batch_size,
+            streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
         }
     }
 }
@@ -148,6 +152,8 @@ impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
             checkpoint_buffer_size: config.checkpoint_buffer_size,
             ingest_concurrency: config.ingest_concurrency,
             retry_interval_ms: config.retry_interval_ms,
+            streaming_backoff_initial_batch_size: config.streaming_backoff_initial_batch_size,
+            streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
         }
     }
 }

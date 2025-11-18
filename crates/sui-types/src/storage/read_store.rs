@@ -164,13 +164,13 @@ pub trait ReadStore: ObjectStore {
     ) -> Option<FullCheckpointContents>;
 
     // Fetch all checkpoint data
-    // TODO fix return type to not be anyhow
     fn get_checkpoint_data(
         &self,
         checkpoint: VerifiedCheckpoint,
         checkpoint_contents: CheckpointContents,
-    ) -> anyhow::Result<Checkpoint> {
+    ) -> Result<Checkpoint> {
         use crate::effects::TransactionEffectsAPI;
+        use crate::storage::error::Error;
         use std::collections::HashMap;
 
         let transaction_digests = checkpoint_contents
@@ -181,15 +181,15 @@ pub trait ReadStore: ObjectStore {
             .multi_get_transactions(&transaction_digests)
             .into_iter()
             .map(|maybe_transaction| {
-                maybe_transaction.ok_or_else(|| anyhow::anyhow!("missing transaction"))
+                maybe_transaction.ok_or_else(|| Error::missing("missing transaction"))
             })
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
 
         let effects = self
             .multi_get_transaction_effects(&transaction_digests)
             .into_iter()
-            .map(|maybe_effects| maybe_effects.ok_or_else(|| anyhow::anyhow!("missing effects")))
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .map(|maybe_effects| maybe_effects.ok_or_else(|| Error::missing("missing effects")))
+            .collect::<Result<Vec<_>>>()?;
 
         let event_tx_digests = effects
             .iter()
@@ -202,10 +202,10 @@ pub trait ReadStore: ObjectStore {
             .zip(event_tx_digests)
             .map(|(maybe_event, tx_digest)| {
                 maybe_event
-                    .ok_or_else(|| anyhow::anyhow!("missing event for tx {tx_digest}"))
+                    .ok_or_else(|| Error::missing(format!("missing event for tx {tx_digest}")))
                     .map(|event| (tx_digest, event))
             })
-            .collect::<anyhow::Result<HashMap<_, _>>>()?;
+            .collect::<Result<HashMap<_, _>>>()?;
 
         let mut transactions = Vec::with_capacity(txns.len());
         for (tx, fx) in txns.into_iter().zip(effects) {
@@ -247,10 +247,7 @@ pub trait ReadStore: ObjectStore {
             let mut object_set = ObjectSet::default();
             for (idx, object) in objects.into_iter().enumerate() {
                 object_set.insert(object.ok_or_else(|| {
-                    crate::storage::error::Error::custom(format!(
-                        "unabled to load object {:?}",
-                        refs[idx]
-                    ))
+                    Error::missing(format!("unable to load object {:?}", refs[idx]))
                 })?);
             }
             object_set
@@ -380,7 +377,7 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
         &self,
         checkpoint: VerifiedCheckpoint,
         checkpoint_contents: CheckpointContents,
-    ) -> anyhow::Result<Checkpoint> {
+    ) -> Result<Checkpoint> {
         (*self).get_checkpoint_data(checkpoint, checkpoint_contents)
     }
 }
@@ -498,7 +495,7 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
         &self,
         checkpoint: VerifiedCheckpoint,
         checkpoint_contents: CheckpointContents,
-    ) -> anyhow::Result<Checkpoint> {
+    ) -> Result<Checkpoint> {
         (**self).get_checkpoint_data(checkpoint, checkpoint_contents)
     }
 }
@@ -616,7 +613,7 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
         &self,
         checkpoint: VerifiedCheckpoint,
         checkpoint_contents: CheckpointContents,
-    ) -> anyhow::Result<Checkpoint> {
+    ) -> Result<Checkpoint> {
         (**self).get_checkpoint_data(checkpoint, checkpoint_contents)
     }
 }

@@ -145,6 +145,7 @@
       { "source": "/guides/developer/stablecoins", "destination": "/guides/developer/coin/regulated"},
       { "source": "/standards/coin", "destination": "/standards/currency"},
       { "source": "/standards/deepbookv3", "destination": "/standards/deepbook"},
-      { "source": "/guides/developer/getting-started/graphql-rpc", "destination": "/guides/developer/advanced/graphql-rpc"}
+      { "source": "/guides/developer/getting-started/graphql-rpc", "destination": "/guides/developer/advanced/graphql-rpc"},
+      { "source": "/concepts/tokenomics/gas-pricing", "destination": "concepts/tokenomics/gas-in-sui"}
     ]
   }

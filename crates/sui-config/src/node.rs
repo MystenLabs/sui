@@ -235,6 +235,11 @@ pub struct TransactionDriverConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed_submission_validators: Vec<String>,
 
+    /// The list of validators that are blocked from submitting block transactions to (via the transaction driver).
+    /// Each entry is a validator display name.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked_submission_validators: Vec<String>,
+
     /// Enable early transaction validation before submission to consensus.
     /// This checks for non-retriable errors (like old object versions) and rejects
     /// transactions early to provide fast feedback to clients.
@@ -247,6 +252,7 @@ impl Default for TransactionDriverConfig {
     fn default() -> Self {
         Self {
             allowed_submission_validators: vec![],
+            blocked_submission_validators: vec![],
             enable_early_validation: true,
         }
     }
@@ -715,6 +721,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Arden".to_string(),                                                    // Arden partner
         "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
         "EveFrontier".to_string(),
+        "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz".to_string(), // Decot, external partner
     ]);
 
     // providers that are available for mainnet and testnet.
@@ -732,6 +739,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
         "Arden".to_string(),
         "FanTV".to_string(),
+        "EveFrontier".to_string(),
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
