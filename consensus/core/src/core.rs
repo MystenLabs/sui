@@ -625,15 +625,14 @@ impl Core {
             .take_commit_votes(MAX_COMMIT_VOTES_PER_BLOCK);
 
         let transaction_votes = if self.context.protocol_config.mysticeti_fastpath() {
-            let hard_linked_ancestors = {
+            let new_causal_history = {
                 let mut dag_state = self.dag_state.write();
                 ancestors
                     .iter()
                     .flat_map(|ancestor| dag_state.link_causal_history(ancestor.reference()))
                     .collect()
             };
-            self.transaction_certifier
-                .get_own_votes(hard_linked_ancestors)
+            self.transaction_certifier.get_own_votes(new_causal_history)
         } else {
             vec![]
         };
