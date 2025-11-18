@@ -16,6 +16,7 @@ use tracing::{debug, error, warn};
 use url::Url;
 
 use crate::ingestion::Error as IngestionError;
+use crate::ingestion::MAX_GRPC_MESSAGE_SIZE_BYTES;
 use crate::ingestion::Result as IngestionResult;
 use crate::ingestion::local_client::LocalIngestionClient;
 use crate::ingestion::remote_client::RemoteIngestionClient;
@@ -105,9 +106,12 @@ impl IngestionClient {
         let client = if let Some(username) = username {
             let mut headers = HeadersInterceptor::new();
             headers.basic_auth(username, password);
-            Client::new(url.to_string())?.with_headers(headers)
+            Client::new(url.to_string())?
+                .with_headers(headers)
+                .with_max_decoding_message_size(MAX_GRPC_MESSAGE_SIZE_BYTES)
         } else {
             Client::new(url.to_string())?
+                .with_max_decoding_message_size(MAX_GRPC_MESSAGE_SIZE_BYTES)
         };
         Ok(Self::new_impl(Arc::new(client), metrics))
     }
