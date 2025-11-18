@@ -90,12 +90,15 @@ impl InternalOperation {
                 recipients,
                 amounts,
                 ..
-            }) => pay_sui_pt(
-                recipients,
-                amounts,
-                &metadata.objects,
-                &metadata.party_objects,
-            )?,
+            }) => {
+                // For backwards compatibility: prefer objects (new format), fallback to extra_gas_coins (old format)
+                let coins_to_merge = if !metadata.objects.is_empty() {
+                    &metadata.objects
+                } else {
+                    &metadata.extra_gas_coins
+                };
+                pay_sui_pt(recipients, amounts, coins_to_merge, &metadata.party_objects)?
+            }
             Self::PayCoin(PayCoin {
                 recipients,
                 amounts,
@@ -127,11 +130,17 @@ impl InternalOperation {
                         (true, metadata.total_coin_value as u64 - metadata.budget)
                     }
                 };
+                // For backwards compatibility: prefer objects (new format), fallback to extra_gas_coins (old format)
+                let coins_to_merge = if !metadata.objects.is_empty() {
+                    &metadata.objects
+                } else {
+                    &metadata.extra_gas_coins
+                };
                 stake_pt(
                     validator,
                     amount,
                     stake_all,
-                    &metadata.objects,
+                    coins_to_merge,
                     &metadata.party_objects,
                 )?
             }
