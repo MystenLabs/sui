@@ -27,7 +27,7 @@ public fun is_blue(l0: enums::colors::Color): bool {
                 l1 = false;
             },
             Blue => {
-                0x0::colors::Color::Blue {} = &l2;
+                0x0::colors::Color::Blue {} = l2;
                 0x0::colors::Color::Blue {} = l3;
                 l1 = true;
             }
@@ -45,7 +45,7 @@ public fun is_green(l0: enums::colors::Color): bool {
                 let l1 = false;
             },
             Green => {
-                0x0::colors::Color::Green {} = &l2;
+                0x0::colors::Color::Green {} = l2;
                 0x0::colors::Color::Green {} = l3;
                 l1 = true;
             },
@@ -63,7 +63,7 @@ public fun is_red(l0: enums::colors::Color): bool {
         let l2 = &l3;
         switch 0x0::colors::Color (l2) {
             Red => {
-                0x0::colors::Color::Red {} = &l2;
+                0x0::colors::Color::Red {} = l2;
                 0x0::colors::Color::Red {} = l3;
                 let l1 = true;
             },

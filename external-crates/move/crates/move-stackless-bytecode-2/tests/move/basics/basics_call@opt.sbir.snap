@@ -1,0 +1,18 @@
+---
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
+---
+  Module: call
+    Function: call (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Move(lcl_0)
+        reg_1 : u64 = Move(lcl_1)
+        reg_2 : u64 = Add(reg_0 : u64, reg_1 : u64)
+        reg_3 : u64 = Move(lcl_2)
+        reg_4 : u64 = Add(reg_2 : u64, reg_3 : u64)
+        Return(reg_4 : u64)
+
+
+    Function: do_it (entry: LBL_0)
+      Label LBL_0:
+        reg_3 : u64 = Call 0x0::call::call(Immediate(0u64), Immediate(1u64), Immediate(2u64))
+        Return(reg_3 : u64)
