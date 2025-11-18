@@ -38,7 +38,13 @@ pub enum FundSource {
         /// If None, it will be set the same as the total transfer amount.
         reservation: Option<u64>,
     },
-    // TODO: Add object fund source
+    ObjectFund {
+        /// The ID of the object_balance package from examples.
+        /// We need this package to test object balance withdrawals.
+        package_id: ObjectID,
+        /// The ID of the object to withdraw funds from.
+        withdraw_object: ObjectRef,
+    },
 }
 
 impl FundSource {
@@ -53,6 +59,13 @@ impl FundSource {
     pub fn address_fund_with_reservation(reservation: u64) -> Self {
         Self::AddressFund {
             reservation: Some(reservation),
+        }
+    }
+
+    pub fn object_fund(package_id: ObjectID, withdraw_object: ObjectRef) -> Self {
+        Self::ObjectFund {
+            package_id,
+            withdraw_object,
         }
     }
 }
@@ -429,33 +442,35 @@ impl TestTransactionBuilder {
                 self.gas_price,
             ),
             TestTransactionData::TransferFundsToAddressBalance(data) => {
+                fn send_funds(
+                    builder: &mut ProgrammableTransactionBuilder,
+                    balance: Argument,
+                    recipient: SuiAddress,
+                    type_arg: TypeTag,
+                ) {
+                    let recipient_arg = builder.pure(recipient).unwrap();
+                    builder.programmable_move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        Identifier::new("balance").unwrap(),
+                        Identifier::new("send_funds").unwrap(),
+                        vec![type_arg],
+                        vec![balance, recipient_arg],
+                    );
+                }
                 let mut builder = ProgrammableTransactionBuilder::new();
-                let source = match data.source.clone() {
+                let total_amount = data
+                    .amounts_and_recipients
+                    .iter()
+                    .map(|(amount, _)| *amount)
+                    .sum::<u64>();
+                match data.source {
                     FundSource::Coin(coin) => {
-                        if coin == self.gas_object {
+                        let source = if coin == self.gas_object {
                             Argument::GasCoin
                         } else {
                             builder.obj(ObjectArg::ImmOrOwnedObject(coin)).unwrap()
-                        }
-                    }
-                    FundSource::AddressFund { reservation } => {
-                        let reservation = reservation.unwrap_or_else(|| {
-                            data.amounts_and_recipients
-                                .iter()
-                                .map(|(amount, _)| *amount)
-                                .sum::<u64>()
-                        });
-                        builder
-                            .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
-                                reservation,
-                                data.type_arg.clone().into(),
-                            ))
-                            .unwrap()
-                    }
-                };
-                for (amount, recipient) in data.amounts_and_recipients {
-                    let balance = match data.source.clone() {
-                        FundSource::Coin(_) => {
+                        };
+                        for (amount, recipient) in data.amounts_and_recipients {
                             let amount_arg = builder.pure(amount).unwrap();
                             let coin = builder.programmable_move_call(
                                 SUI_FRAMEWORK_PACKAGE_ID,
@@ -464,15 +479,25 @@ impl TestTransactionBuilder {
                                 vec![data.type_arg.clone()],
                                 vec![source, amount_arg],
                             );
-                            builder.programmable_move_call(
+                            let balance = builder.programmable_move_call(
                                 SUI_FRAMEWORK_PACKAGE_ID,
                                 Identifier::new("coin").unwrap(),
                                 Identifier::new("into_balance").unwrap(),
                                 vec![data.type_arg.clone()],
                                 vec![coin],
-                            )
+                            );
+                            send_funds(&mut builder, balance, recipient, data.type_arg.clone());
                         }
-                        FundSource::AddressFund { .. } => {
+                    }
+                    FundSource::AddressFund { reservation } => {
+                        let reservation = reservation.unwrap_or(total_amount);
+                        let source = builder
+                            .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
+                                reservation,
+                                data.type_arg.clone().into(),
+                            ))
+                            .unwrap();
+                        for (amount, recipient) in data.amounts_and_recipients {
                             let amount_arg = builder.pure(U256::from(amount)).unwrap();
                             let split = builder.programmable_move_call(
                                 SUI_FRAMEWORK_PACKAGE_ID,
@@ -481,24 +506,35 @@ impl TestTransactionBuilder {
                                 vec![Balance::type_tag(data.type_arg.clone())],
                                 vec![source, amount_arg],
                             );
-                            builder.programmable_move_call(
+                            let balance = builder.programmable_move_call(
                                 SUI_FRAMEWORK_PACKAGE_ID,
                                 Identifier::new("balance").unwrap(),
                                 Identifier::new("redeem_funds").unwrap(),
                                 vec![data.type_arg.clone()],
                                 vec![split],
-                            )
+                            );
+                            send_funds(&mut builder, balance, recipient, data.type_arg.clone());
                         }
-                    };
-
-                    let recipient_arg = builder.pure(recipient).unwrap();
-                    builder.programmable_move_call(
-                        SUI_FRAMEWORK_PACKAGE_ID,
-                        Identifier::new("balance").unwrap(),
-                        Identifier::new("send_funds").unwrap(),
-                        vec![data.type_arg.clone()],
-                        vec![balance, recipient_arg],
-                    );
+                    }
+                    FundSource::ObjectFund {
+                        package_id,
+                        withdraw_object,
+                    } => {
+                        let source = builder
+                            .obj(ObjectArg::ImmOrOwnedObject(withdraw_object))
+                            .unwrap();
+                        for (amount, recipient) in data.amounts_and_recipients {
+                            let amount_arg = builder.pure(amount).unwrap();
+                            let balance = builder.programmable_move_call(
+                                package_id,
+                                Identifier::new("object_balance").unwrap(),
+                                Identifier::new("withdraw_funds").unwrap(),
+                                vec![data.type_arg.clone()],
+                                vec![source, amount_arg],
+                            );
+                            send_funds(&mut builder, balance, recipient, data.type_arg.clone());
+                        }
+                    }
                 }
                 let pt = builder.finish();
                 TransactionData::new_programmable(

@@ -14,9 +14,13 @@ pub type ExecutionOrEarlyError = Result<(), ExecutionErrorKind>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BalanceWithdrawStatus {
-    NoWithdraw,
-    SufficientBalance,
+    /// We don't know the status of the balance withdrawals yet.
+    /// There is no need to distinguish between unknown and sufficient balance.
+    /// We only need to know if the balance withdrawals are guaranteed to be insufficient.
+    Unknown,
     // TODO(address-balances): Add information on the address and type?
+    /// We know for sure that the balance withdrawals in this transaction do not all have enough balance.
+    /// This takes account of both address and object balance withdrawals.
     InsufficientBalance,
 }
 
@@ -62,7 +66,7 @@ pub fn get_early_execution_error(
         balance_withdraw_status,
         BalanceWithdrawStatus::InsufficientBalance
     ) {
-        return Some(ExecutionErrorKind::InsufficientBalanceForWithdraw);
+        return Some(ExecutionErrorKind::InsufficientFunds);
     }
 
     None
@@ -136,17 +140,14 @@ mod tests {
             &deny_set,
             &BalanceWithdrawStatus::InsufficientBalance,
         );
-        assert_eq!(
-            result,
-            Some(ExecutionErrorKind::InsufficientBalanceForWithdraw)
-        );
+        assert_eq!(result, Some(ExecutionErrorKind::InsufficientFunds));
 
         // Test with sufficient balance
         let result = get_early_execution_error(
             &tx_digest,
             &input_objects,
             &deny_set,
-            &BalanceWithdrawStatus::SufficientBalance,
+            &BalanceWithdrawStatus::Unknown,
         );
         assert_eq!(result, None);
     }

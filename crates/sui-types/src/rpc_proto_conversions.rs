@@ -1162,7 +1162,7 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
                 ExecutionErrorKind::MoveRawValueTooBig
             }
             E::InvalidLinkage => ExecutionErrorKind::InvalidLinkage,
-            E::InsufficientBalanceForWithdraw => {
+            E::InsufficientFunds => {
                 todo!("Add InsufficientBalanceForWithdraw to rpc sdk")
             }
             E::NonExclusiveWriteInputObjectModified { .. } => {

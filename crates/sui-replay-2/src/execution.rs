@@ -125,7 +125,7 @@ pub fn execute_transaction_to_effects(
         &input_objects,
         &config_certificate_deny_set,
         // TODO(address-balances): Support balance withdraw status for replay
-        &BalanceWithdrawStatus::NoWithdraw,
+        &BalanceWithdrawStatus::Unknown,
     );
     let execution_params = match early_execution_error {
         Some(error) => ExecutionOrEarlyError::Err(error),
