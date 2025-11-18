@@ -57,6 +57,7 @@ const config = {
   clientModules: [require.resolve("./src/client/pushfeedback-toc.js")],
   plugins: [
     //require.resolve('./src/plugins/framework'),
+    "docusaurus-plugin-copy-page-button",
     [
       require.resolve("./src/plugins/plausible"),
       {
