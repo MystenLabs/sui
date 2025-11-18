@@ -9,6 +9,9 @@
 /.changeset/*.md
 CHANGELOG.md
 
+# Framework / System packages changes
+/crates/sui-framework/packages @damirka
+
 # When native functions change, so we can evaluate cost impact
 /crates/sui-framework/src/natives/ @dariorussi
 
