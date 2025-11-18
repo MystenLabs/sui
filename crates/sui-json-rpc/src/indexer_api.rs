@@ -3,7 +3,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::spawn_cancellable_monitored_task;
 use anyhow::bail;
 use async_trait::async_trait;
 use futures::{Stream, StreamExt, future};
@@ -13,6 +12,7 @@ use jsonrpsee::{
 };
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_core_types::language_storage::TypeTag;
+use mysten_metrics::spawn_monitored_task;
 use serde::Serialize;
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
@@ -53,7 +53,7 @@ pub fn spawn_subscription<S, T>(
     S: Stream<Item = T> + Unpin + Send + 'static,
     T: Serialize + Send,
 {
-    spawn_cancellable_monitored_task!(async move {
+    spawn_monitored_task!(async move {
         let Ok(sink) = sink.accept().await else {
             return;
         };

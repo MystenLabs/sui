@@ -14,7 +14,6 @@ use std::time::Duration;
 use sui_json_rpc_api::TRANSIENT_ERROR_CODE;
 use sui_json_rpc_api::{CLIENT_SDK_TYPE_HEADER, CLIENT_TARGET_API_VERSION_HEADER};
 use tokio::time::Instant;
-use tokio_util::sync::CancellationToken;
 
 const SPAM_LABEL: &str = "SPAM";
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -261,28 +260,14 @@ where
     type Future = futures::future::BoxFuture<'a, jsonrpsee::MethodResponse>;
 
     fn call(&self, req: jsonrpsee::types::Request<'a>) -> Self::Future {
-        let cancel_token = CancellationToken::new();
-        let timeout_duration = self.1;
-        let future = self.0.call(req);
-
+        let future = tokio::time::timeout(self.1, self.0.call(req));
         async move {
-            // Scope the cancellation token for this request
-            let result = crate::CANCELLATION_TOKEN
-                .scope(cancel_token.clone(), async move {
-                    tokio::time::timeout(timeout_duration, future).await
-                })
-                .await;
-
-            match result {
-                Ok(response) => response,
-                Err(_) => {
-                    // Timeout occurred - cancel all spawned tasks for this request
-                    cancel_token.cancel();
-                    jsonrpsee::MethodResponse::error(
-                        Id::Null,
-                        ErrorObject::from(ErrorCode::InternalError),
-                    )
-                }
+            match future.await {
+                Ok(res) => res,
+                Err(_) => jsonrpsee::MethodResponse::error(
+                    Id::Null,
+                    ErrorObject::from(ErrorCode::InternalError),
+                ),
             }
         }
         .boxed()

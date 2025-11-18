@@ -13,7 +13,7 @@ use jsonrpsee::RpcModule;
 use jsonrpsee::core::RpcResult;
 use tracing::{info, instrument};
 
-use crate::spawn_cancellable_monitored_task;
+use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::{GovernanceReadApiOpenRpc, GovernanceReadApiServer, JsonRpcMetrics};
 use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
@@ -50,8 +50,7 @@ impl GovernanceReadApi {
     async fn get_staked_sui(&self, owner: SuiAddress) -> Result<Vec<StakedSui>, Error> {
         let state = self.state.clone();
         let result =
-            spawn_cancellable_monitored_task!(async move { state.get_staked_sui(owner).await })
-                .await??;
+            spawn_monitored_task!(async move { state.get_staked_sui(owner).await }).await??;
 
         self.metrics
             .get_stake_sui_result_size
@@ -67,7 +66,7 @@ impl GovernanceReadApi {
         staked_sui_ids: Vec<ObjectID>,
     ) -> Result<Vec<DelegatedStake>, Error> {
         let state = self.state.clone();
-        let stakes_read = spawn_cancellable_monitored_task!(async move {
+        let stakes_read = spawn_monitored_task!(async move {
             staked_sui_ids
                 .iter()
                 .map(|id| state.get_object_read(id))
@@ -121,7 +120,7 @@ impl GovernanceReadApi {
         let _timer = self.metrics.get_delegated_sui_latency.start_timer();
 
         let self_clone = self.clone();
-        spawn_cancellable_monitored_task!(
+        spawn_monitored_task!(
             self_clone.get_delegated_stakes(stakes.into_iter().map(|s| (s, true)).collect())
         )
         .await?

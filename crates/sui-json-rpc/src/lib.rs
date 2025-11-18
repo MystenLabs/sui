@@ -44,35 +44,6 @@ mod traffic_control;
 pub mod transaction_builder_api;
 pub mod transaction_execution_api;
 
-tokio::task_local! {
-    static CANCELLATION_TOKEN: CancellationToken;
-}
-
-fn get_cancellation_token() -> CancellationToken {
-    CANCELLATION_TOKEN
-        .try_with(|token| token.clone())
-        .unwrap_or_default()
-}
-
-/// Spawn a monitored task with cancellation support for RPC requests.
-/// When the request times out, the spawned task will be cancelled at the next .await point.
-#[macro_export]
-macro_rules! spawn_cancellable_monitored_task {
-    ($fut: expr) => {{
-        let cancel_token = $crate::get_cancellation_token();
-        mysten_metrics::spawn_monitored_task!(async move {
-            tokio::select! {
-                result = $fut => result,
-                _ = cancel_token.cancelled() => {
-                    // Request cancelled - panic to abort the task
-                    // The JoinHandle will return Err(JoinError) which gets propagated via .await?
-                    panic!("RPC request cancelled due to timeout")
-                }
-            }
-        })
-    }};
-}
-
 pub const APP_NAME_HEADER: &str = "app-name";
 
 pub const MAX_REQUEST_SIZE: u32 = 2 << 30;
