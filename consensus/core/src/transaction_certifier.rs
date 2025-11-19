@@ -100,7 +100,7 @@ impl TransactionCertifier {
                 .scan_blocks_by_author(authority_index, recovery_start_round)
                 .unwrap();
             info!(
-                "Recovering and voting on {} blocks for authority {} {}",
+                "Recovered and voting on {} blocks from authority {} {}",
                 blocks.len(),
                 authority_index,
                 context.committee.authority(authority_index).hostname
@@ -109,24 +109,34 @@ impl TransactionCertifier {
         }
     }
 
-    /// Recovers and votes on the given blocks.
+    /// Recovers and potentially votes on the given blocks.
     ///
-    /// Reject votes contained in the input blocks are processed.
-    ///
-    /// Because own votes on blocks are not stored, input blocks are voted on if they can be
+    /// Because own votes on blocks are not stored, during recovery it is necessary to vote on
+    /// input blocks that are above GC round and have not been included before, which can be
     /// included in a future proposed block.
+    ///
+    /// In addition, add_voted_blocks() will eventually process reject votes contained in the input blocks.
     pub(crate) fn recover_and_vote_on_blocks(&self, blocks: Vec<VerifiedBlock>) {
-        let dag_state = self.dag_state.read();
+        let should_vote_blocks = {
+            let dag_state = self.dag_state.read();
+            let gc_round = dag_state.gc_round();
+            blocks
+                .iter()
+                // Must make sure the block is above GC round before calling has_been_included().
+                .map(|b| b.round() > gc_round && !dag_state.has_been_included(&b.reference()))
+                .collect::<Vec<_>>()
+        };
         let voted_blocks = blocks
             .into_iter()
-            .map(|b| {
-                if b.round() <= dag_state.gc_round() || dag_state.is_hard_linked(&b.reference()) {
+            .zip(should_vote_blocks)
+            .map(|(b, should_vote)| {
+                if !should_vote {
                     // Voting is unnecessary for blocks already included in own proposed blocks,
                     // or outside of local DAG GC bound.
                     (b, vec![])
                 } else {
-                    // Voting is needed for blocks not yet included in own proposed blocks.
-                    // When a block proposal includes the input block, votes on the input block will be added to the proposed block.
+                    // Voting is needed for blocks above GC round and not yet included in own proposed blocks.
+                    // A block proposal can include the input block later and retries own votes on it.
                     let reject_transaction_votes =
                         self.block_verifier.vote(&b).unwrap_or_else(|e| {
                             panic!("Failed to vote on block during recovery: {}", e)

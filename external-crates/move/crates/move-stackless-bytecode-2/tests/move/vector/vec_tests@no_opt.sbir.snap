@@ -1,0 +1,68 @@
+---
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
+---
+  Module: tests
+    Function: create (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u8 = Move(lcl_0)
+        reg_1 : u8 = Move(lcl_1)
+        reg_2 : u8 = VecPack<u8>(reg_0 : u8, reg_1 : u8)
+        Return(reg_2 : u8)
+
+
+    Function: create_empty (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : vector<bool> = Constant(Constant { type_: Vector(Bool), data: [0] })
+        Return(reg_0 : vector<bool>)
+
+
+    Function: create_vector_of_vectors (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : vector<vector<u8>> = Constant(Constant { type_: Vector(Vector(U8)), data: [2, 2, 10, 20, 2, 30, 40] })
+        Return(reg_0 : vector<vector<u8>>)
+
+
+    Function: create_with_elements (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : vector<u8> = Constant(Constant { type_: Vector(U8), data: [3, 10, 20, 30] })
+        Return(reg_0 : vector<u8>)
+
+
+    Function: push_and_pop (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : vector<u8> = Constant(Constant { type_: Vector(U8), data: [3, 1, 2, 3] })
+        lcl_1 = reg_0 : vector<u8>
+        reg_1 : &mut vector<u8> = MutBorrow(lcl_1)
+        reg_2 : u8 = Immediate(4u8)
+        VecPushBack<u8>(reg_1 : &mut vector<u8>, reg_2 : u8)
+        reg_3 : &mut vector<u8> = MutBorrow(lcl_1)
+        reg_4 : u8 = VecPopBack<u8>(reg_3 : &mut vector<u8>)
+        lcl_0 = reg_4 : u8
+        reg_5 : vector<u8> = Move(lcl_1)
+        reg_6 : u8 = Move(lcl_0)
+        Return(reg_5 : vector<u8>, reg_6 : u8)
+
+
+    Function: vec_imm_borrow (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : &vector<u8> = Move(lcl_0)
+        reg_1 : u64 = Immediate(1u64)
+        reg_2 : &u8 = VecImmBorrow<u8>(reg_0 : &vector<u8>, reg_1 : u64)
+        Return(reg_2 : &u8)
+
+
+    Function: vec_mut_borrow (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : &mut vector<u8> = Move(lcl_0)
+        reg_1 : u64 = Immediate(1u64)
+        reg_2 : &mut u8 = VecMutBorrow<u8>(reg_0 : &mut vector<u8>, reg_1 : u64)
+        Return(reg_2 : &mut u8)
+
+
+    Function: vec_swap (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : &mut vector<u8> = Move(lcl_0)
+        reg_1 : u64 = Immediate(0u64)
+        reg_2 : u64 = Immediate(1u64)
+        VecSwap<u8>(reg_0 : &mut vector<u8>, reg_1 : u64, reg_2 : u64)
+        Return()

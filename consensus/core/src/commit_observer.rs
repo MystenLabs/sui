@@ -77,9 +77,16 @@ impl CommitObserver {
         // Recover blocks needed for future commits (and block proposals).
         // Some blocks might have been recovered as committed blocks in recover_and_send_commits().
         // They will just be ignored.
-        observer
-            .transaction_certifier
-            .recover_blocks_after_round(observer.dag_state.read().gc_round());
+        tokio::runtime::Handle::current()
+            .spawn_blocking({
+                let transaction_certifier = observer.transaction_certifier.clone();
+                let gc_round = observer.dag_state.read().gc_round();
+                move || {
+                    transaction_certifier.recover_blocks_after_round(gc_round);
+                }
+            })
+            .await
+            .expect("Spawn blocking should not fail");
 
         observer
     }

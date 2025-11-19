@@ -153,6 +153,7 @@ mod tests {
     use std::sync::Arc;
 
     use sui_indexer_alt_framework::{
+        ingestion::ingestion_client::IngestionClientArgs,
         pipeline::Processor,
         types::{full_checkpoint_content::Checkpoint, object::Object},
     };
@@ -230,7 +231,10 @@ mod tests {
                 d.path().join("db"),
                 IndexerArgs::default(),
                 ClientArgs {
-                    local_ingestion_path: Some(d.path().join("checkpoints")),
+                    ingestion: IngestionClientArgs {
+                        local_ingestion_path: Some(d.path().join("checkpoints")),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 ConsistencyConfig::default(),
@@ -260,7 +264,10 @@ mod tests {
                 d.path().join("db"),
                 IndexerArgs::default(),
                 ClientArgs {
-                    local_ingestion_path: Some(d.path().join("checkpoints")),
+                    ingestion: IngestionClientArgs {
+                        local_ingestion_path: Some(d.path().join("checkpoints")),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 ConsistencyConfig::default(),

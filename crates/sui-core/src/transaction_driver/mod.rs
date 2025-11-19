@@ -55,6 +55,10 @@ pub struct SubmitTransactionOptions {
     /// When submitting a transaction, only the validators in the allowed validator list can be used to submit the transaction to.
     /// When the allowed validator list is empty, any validator can be used.
     pub allowed_validators: Vec<String>,
+
+    /// When submitting a transaction, the validators in the blocked validator list cannot be used to submit the transaction to.
+    /// When the blocked validator list is empty, no restrictions are applied.
+    pub blocked_validators: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -474,8 +478,7 @@ pub fn choose_transaction_driver_percentage(
 ) -> u8 {
     if let Ok(v) = std::env::var("TRANSACTION_DRIVER")
         && let Ok(tx_driver_percentage) = v.parse::<u8>()
-        && tx_driver_percentage > 0
-        && tx_driver_percentage <= 100
+        && (0..=100).contains(&tx_driver_percentage)
     {
         return tx_driver_percentage;
     }

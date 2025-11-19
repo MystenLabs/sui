@@ -9,7 +9,10 @@ use serde_json::{Value, json};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
-use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs};
+use sui_indexer_alt_framework::{
+    IndexerArgs,
+    ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
+};
 use sui_indexer_alt_graphql::{
     RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
 };
@@ -169,7 +172,12 @@ impl GraphQlTestCluster {
             fullnode_rpc_url: Some(validator_cluster.rpc_url().to_string()),
         };
         let client_args = ClientArgs {
-            rpc_api_url: Some(Url::parse(validator_cluster.rpc_url()).expect("Invalid RPC URL")),
+            ingestion: IngestionClientArgs {
+                rpc_api_url: Some(
+                    Url::parse(validator_cluster.rpc_url()).expect("Invalid RPC URL"),
+                ),
+                ..Default::default()
+            },
             ..Default::default()
         };
 

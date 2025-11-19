@@ -35,6 +35,7 @@
     "axios": "^1.6.8",
     "clsx": "^2.1.0",
     "copy-text-to-clipboard": "^3.2.0",
+    "docusaurus-plugin-copy-page-button": "^0.3.5",
     "docusaurus-theme-github-codeblock": "^2.0.2",
     "dotenv": "^16.4.5",
     "glob": "^11.0.3",

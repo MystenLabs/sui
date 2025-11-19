@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom, Write as IoWrite};
 use std::net::SocketAddr;
-use std::os::unix::prelude::FileExt;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use std::env;
@@ -2276,7 +2275,9 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         ),
     );
     let new = lines.join("\n");
-    move_toml.write_at(new.as_bytes(), 0).unwrap();
+    move_toml.seek(SeekFrom::Start(0))?;
+    move_toml.set_len(0)?; // Truncate the file
+    move_toml.write_all(new.as_bytes())?;
 
     // Now run the upgrade
     let build_config = BuildConfig::new_for_testing().config;
@@ -2568,7 +2569,9 @@ async fn test_package_management_on_upgrade_command_conflict() -> Result<(), any
     // Purposely add a conflicting `published-at` address to the Move manifest.
     lines.insert(idx + 1, "published-at = \"0xbad\"".to_string());
     let new = lines.join("\n");
-    move_toml.write_at(new.as_bytes(), 0).unwrap();
+    move_toml.seek(SeekFrom::Start(0))?;
+    move_toml.set_len(0)?; // Truncate the file
+    move_toml.write_all(new.as_bytes())?;
 
     // Create a new build config for the upgrade. Initialize its lock file to the package we published.
     let build_config_upgrade = BuildConfig::new_for_testing().config;

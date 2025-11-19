@@ -7,7 +7,7 @@ pub(crate) mod graph;
 pub(crate) mod term_reconstruction;
 
 use crate::{
-    config,
+    config::{self, print_heading},
     structuring::{ast as D, graph::Graph},
 };
 
@@ -32,17 +32,54 @@ pub(crate) fn structure(
 
     let mut structured_blocks: BTreeMap<D::Label, D::Structured> = BTreeMap::new();
 
+    if config.debug_print.structuring {
+        let mut post_order = DfsPostOrder::new(&graph.cfg, entry_node);
+        print_heading("post-order traversal");
+        println!("cfg: {:#?}", graph.cfg);
+        while let Some(node) = post_order.next(&graph.cfg) {
+            print!("{:?}  ", node.index());
+        }
+        println!();
+    }
+
+    structure_nodes(
+        config,
+        &mut input,
+        entry_node,
+        &mut graph,
+        &mut structured_blocks,
+    );
+
+    structured_blocks.remove(&entry_node).unwrap()
+}
+
+fn structure_nodes(
+    config: &config::Config,
+    input: &mut BTreeMap<NodeIndex, ast::Input>,
+    entry_node: NodeIndex,
+    graph: &mut Graph,
+    structured_blocks: &mut BTreeMap<NodeIndex, ast::Structured>,
+) {
     let mut post_order = DfsPostOrder::new(&graph.cfg, entry_node);
 
     while let Some(node) = post_order.next(&graph.cfg) {
+        if config.debug_print.structuring {
+            println!("Trying to structure node {node:#?}");
+            println!("  > cur blocks: {:?}", structured_blocks.keys());
+        }
         if graph.loop_heads.contains(&node) {
-            structure_loop(config, &mut graph, &mut structured_blocks, node, &mut input);
+            structure_loop(config, graph, structured_blocks, node, input);
         } else {
-            structure_acyclic(config, &mut graph, &mut structured_blocks, node, &mut input)
+            structure_acyclic(
+                config,
+                graph,
+                structured_blocks,
+                node,
+                input,
+                /*inside_loop*/ false,
+            );
         }
     }
-
-    structured_blocks.remove(&entry_node).unwrap()
 }
 
 fn structure_loop(
@@ -55,7 +92,14 @@ fn structure_loop(
     if config.debug_print.structuring {
         println!("structuring loop at node {loop_head:#?}");
     }
-    structure_acyclic(config, graph, structured_blocks, loop_head, input);
+    structure_acyclic(
+        config,
+        graph,
+        structured_blocks,
+        loop_head,
+        input,
+        /*inside_loop*/ true,
+    );
     let (loop_nodes, succ_nodes) = graph.find_loop_nodes(loop_head);
     if config.debug_print.structuring {
         println!("  loop nodes: {loop_nodes:#?}");
@@ -87,7 +131,12 @@ fn structure_loop(
             .all_children()
             .any(|child| child == succ_node)
     {
-        result = D::Structured::Seq(vec![result, structured_blocks.remove(&succ_node).unwrap()]);
+        result = D::Structured::Seq(vec![
+            result,
+            structured_blocks.remove(&succ_node).unwrap_or_else(|| {
+                panic!("Expected successor node {succ_node:?} to be structured")
+            }),
+        ]);
     }
     structured_blocks.insert(loop_head, result);
 }
@@ -229,13 +278,15 @@ fn structure_acyclic(
     structured_blocks: &mut BTreeMap<NodeIndex, D::Structured>,
     node: NodeIndex,
     input: &mut BTreeMap<D::Label, D::Input>,
+    inside_loop: bool,
 ) {
     let dom_node = graph.dom_tree.get(node);
     if graph.back_edges.contains_key(&node) {
         let result = structure_latch_node(config, graph, node, input.remove(&node).unwrap());
         structured_blocks.insert(node, result);
     } else if dom_node.all_children().count() > 0 {
-        let result = structure_acyclic_region(config, graph, structured_blocks, input, node);
+        let result =
+            structure_acyclic_region(config, graph, structured_blocks, input, node, inside_loop);
         structured_blocks.insert(node, result);
     } else {
         assert!(matches!(&input[&node], D::Input::Code(..)));
@@ -251,6 +302,7 @@ fn structure_acyclic_region(
     structured_blocks: &mut BTreeMap<NodeIndex, D::Structured>,
     input: &mut BTreeMap<D::Label, D::Input>,
     start: NodeIndex,
+    inside_loop: bool,
 ) -> D::Structured {
     let dom_node = graph.dom_tree.get(start);
     let ichildren = dom_node.immediate_children().collect::<HashSet<_>>();
@@ -346,7 +398,8 @@ fn structure_acyclic_region(
         .any(|child| child == post_dominator);
     let emit_post_dom_in_seq = ichildren.contains(&post_dominator)
         && !graph.back_edges.contains_key(&start)
-        && start_dominates_post_dom;
+        && start_dominates_post_dom
+        && !inside_loop;
 
     if config.debug_print.dominators {
         println!("  start dominates post-dominator: {start_dominates_post_dom}");

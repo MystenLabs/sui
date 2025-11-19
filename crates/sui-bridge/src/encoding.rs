@@ -272,7 +272,7 @@ impl BridgeMessageEncoding for AssetPriceUpdateAction {
         // Add message type
         bytes.push(BridgeActionType::AssetPriceUpdate as u8);
         // Add message version
-        bytes.push(EMERGENCY_BUTTON_MESSAGE_VERSION);
+        bytes.push(ASSET_PRICE_UPDATE_MESSAGE_VERSION);
         // Add nonce
         bytes.extend_from_slice(&self.nonce.to_be_bytes());
         // Add chain id
