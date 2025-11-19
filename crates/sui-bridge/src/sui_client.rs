@@ -22,9 +22,6 @@ use sui_rpc::proto::sui::rpc::v2::{
 };
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_sdk_types::Address;
-use sui_types::BRIDGE_PACKAGE_ID;
-use sui_types::SUI_BRIDGE_OBJECT_ID;
-use sui_types::TypeTag;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
 use sui_types::bridge::{
@@ -40,7 +37,10 @@ use sui_types::parse_sui_type_tag;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::Transaction;
-use sui_types::{Identifier, base_types::ObjectID, digests::TransactionDigest, event::EventID};
+use sui_types::TypeTag;
+use sui_types::BRIDGE_PACKAGE_ID;
+use sui_types::SUI_BRIDGE_OBJECT_ID;
+use sui_types::{base_types::ObjectID, digests::TransactionDigest, event::EventID, Identifier};
 use tokio::sync::OnceCell;
 use tracing::{error, warn};
 
@@ -150,13 +150,11 @@ where
         let events = self.inner.query_events(filter.clone(), cursor).await?;
 
         // Safeguard check that all events are emitted from requested package and module
-        assert!(
-            events
-                .data
-                .iter()
-                .all(|event| event.type_.address.as_ref() == package.as_ref()
-                    && event.type_.module == module)
-        );
+        assert!(events
+            .data
+            .iter()
+            .all(|event| event.type_.address.as_ref() == package.as_ref()
+                && event.type_.module == module));
         Ok(events)
     }
 
@@ -648,14 +646,16 @@ impl SuiClientInner for sui_rpc::Client {
     }
 
     async fn get_chain_identifier(&self) -> Result<String, BridgeError> {
-        Ok(self
+        let chain_id = self
             .clone()
             .ledger_client()
             .get_service_info(GetServiceInfoRequest::default())
             .await?
             .into_inner()
             .chain_id()
-            .into())
+            .parse::<sui_types::digests::CheckpointDigest>()?;
+
+        Ok(sui_types::digests::ChainIdentifier::from(chain_id).to_string())
     }
 
     async fn get_reference_gas_price(&self) -> Result<u64, BridgeError> {
@@ -1018,7 +1018,7 @@ mod tests {
     use sui_types::crypto::get_key_pair;
 
     use super::*;
-    use crate::events::{SuiToEthTokenBridgeV1, init_all_struct_tags};
+    use crate::events::{init_all_struct_tags, SuiToEthTokenBridgeV1};
 
     #[tokio::test]
     async fn get_bridge_action_by_tx_digest_and_event_idx_maybe() {
