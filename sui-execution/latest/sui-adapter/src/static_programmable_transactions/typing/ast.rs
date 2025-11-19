@@ -4,7 +4,7 @@
 use crate::static_programmable_transactions::{
     linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
 };
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use move_vm_types::values::VectorSpecialization;
 use std::{cell::OnceCell, vec};
 use sui_types::base_types::{ObjectID, ObjectRef};
@@ -23,6 +23,7 @@ pub struct Transaction {
     pub pure: Vec<PureInput>,
     /// All receiving inputs
     pub receiving: Vec<ReceivingInput>,
+    pub withdrawal_casts: IndexMap<Location, WithdrawalCast>,
     pub commands: Commands,
 }
 
@@ -58,6 +59,20 @@ pub struct ReceivingInput {
     pub ty: Type,
     // Information about where this constraint came from
     pub constraint: BytesConstraint,
+}
+
+#[derive(Debug)]
+pub struct WithdrawalCast {
+    // Result index to a call to `sui::funds_accumulator::withdrawal_owner`
+    pub owner_result: u16,
+    // Result index to cast call
+    pub cast_result: u16,
+    pub cast_kind: WithdrawalCastKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WithdrawalCastKind {
+    ToCoin,
 }
 
 pub type Commands = Vec<Command>;
