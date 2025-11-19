@@ -442,7 +442,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         linkage: &RootedLinkage,
     ) -> Result<(), ExecutionError> {
         let events = object_runtime_mut!(self)?.take_user_events();
-        let num_events = self.user_events.len() + events.len();
+        let Some(num_events) = self.user_events.len().checked_add(events.len()) else {
+            invariant_violation!("usize overflow, too many events emitted")
+        };
         let max_events = self.env.protocol_config.max_num_event_emit();
         if num_events as u64 > max_events {
             let err = max_event_error(max_events)
