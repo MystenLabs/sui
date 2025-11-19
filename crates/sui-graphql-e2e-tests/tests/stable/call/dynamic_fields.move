@@ -42,7 +42,7 @@ module Test::m {
 
     public entry fun add_dof(parent: &mut Parent, ctx: &mut TxContext) {
         let child = Child { id: object::new(ctx) };
-        ofield::add(&mut parent.id, 0, child);
+        ofield::add(&mut parent.id, 0u64, child);
     }
 
     public entry fun wrap(parent: Parent, ctx: &mut TxContext) {
