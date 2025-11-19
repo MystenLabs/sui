@@ -29,11 +29,11 @@ async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
     let fname = || path.file_name().unwrap().to_string_lossy().to_string();
     let file_contents = std::fs::read_to_string(path).unwrap();
     let file_contents = file_contents.trim();
-    let shlexed = shlex::split(file_contents)
+    let shlexed: Vec<_> = shlex::split(file_contents)
         .unwrap()
         .into_iter()
         .filter(|s| !s.trim().is_empty())
-        .collect::<Vec<String>>();
+        .collect();
     let file_contents = to_source_string(shlexed.clone());
 
     // Parsing
