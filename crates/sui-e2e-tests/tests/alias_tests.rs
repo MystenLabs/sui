@@ -301,7 +301,7 @@ async fn test_alias_race() {
         .authority_clients
         .iter()
         .next()
-        .map(|(name, client)| (name, client.clone()))
+        .map(|(name, client)| (name.to_owned(), client.to_owned()))
         .unwrap();
     // Names of all validators except the one to which we are submitting a tx.
     let other_validator_names: Vec<AuthorityName> = test_cluster
