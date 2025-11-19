@@ -294,6 +294,86 @@ $ sui-indexer-alt-consistent-store run \
 	<ImportContent source="examples/prod-config/consistent-store.toml" mode="code" />
 </details>
 
+## GraphQL server setup
+
+GraphQL server instances read data from the indexer db, the consistent store and the archival store. The number of instances is determined by the required read throughput.
+
+#### Hardware requirements
+
+- **CPU:** 8 cores
+- **Memory:** 32GB
+
+### Run command
+
+GraphQL server supports two ways to access the archival store: self-hosted Bigtable instance, or a managed archival service that exposes a LedgerService gRPC interface. See [Archival Store](/concepts/archival-store) for more information.
+
+#### Run command using Bigtable
+
+Each GraphQL instance is run using the same command below:
+```sh
+GOOGLE_APPLICATION_CREDENTIALS=<PATH_TO_BT_CREDENTIALS_JSON> sui-indexer-alt-graphql rpc \
+    --config CONFIG_FILE \
+    --indexer-config INDEXER_CONFIG_FILE \
+    --bigtable-instance BIGTABLE_INSTANCE \
+    --consistent-store-url CONSISTENT_STORE_URL \
+    --database-url DATABASE_URL \
+    --fullnode-rpc-url FULLNODE_RPC_URL
+```
+
+#### Run command using LedgerService gRPC
+
+:::info
+
+If you use Sui Foundation's public good archival service at archive.testnet.sui.io and archive.mainnet.sui.io, you may experience performance issues which will be addressed before GA release.
+:::
+
+Each GraphQL instance is run using the same command below:
+```sh
+sui-indexer-alt-graphql rpc \
+    --config CONFIG_FILE \
+    --indexer-config INDEXER_CONFIG_FILE \
+    --ledger-grpc-url LEDGER_GRPC_URL \
+    --consistent-store-url CONSISTENT_STORE_URL \
+    --database-url DATABASE_URL \
+    --fullnode-rpc-url FULLNODE_RPC_URL
+```
+
+
+| CLI param                        | Description                                                                        |
+|----------------------------------|------------------------------------------------------------------------------------|
+| `CONFIG_FILE`                    | Path to GraphQL configuration file                                                 |
+| `INDEXER_CONFIG_FILE`            | Path to indexer configuration file<br/>Can be set multiple times; once per indexer |
+| `BIGTABLE_INSTANCE`              | GCP Bigtable instance id                                                             |
+| `PATH_TO_BT_CREDENTIALS_JSON`    | Path to GCP Bigtable credentials JSON file                                       |
+| `LEDGER_GRPC_URL`                | URL to archival service's LedgerService gRPC API                                                        |
+| `CONSISTENT_STORE_URL`           | URL to [consistent store](#consistent-store-setup) API                             |
+| `DATABASE_URL`                   | Postgres database connection string                                                |
+| `FULLNODE_RPC_URL`               | URL to fullnode RPC API                                                            |
+
+
+Example:
+```sh
+sui-indexer-alt-graphql rpc \
+    --config graphql.toml \
+    --indexer-config events.toml \
+    --indexer-config misc.toml \
+    --indexer-config obj_versions.toml \
+    --indexer-config tx_affected_addresses.toml \
+    --indexer-config tx_affected_objects.toml \
+    --indexer-config tx_calls.toml \
+    --indexer-config tx_kinds.toml \
+    --ledger-grpc-url https://archive.mainnet.sui.io:443 \
+    --consistent-store-url https://localhost:7001 \
+    --database-url postgres://username:password@localhost:5432/database \
+    --fullnode-rpc-url https://localhost:9000
+```
+
+### Run config recommendations
+
+| Config TOML                                                                                   | Description                       |
+|-----------------------------------------------------------------------------------------------|-----------------------------------|
+| [graphql.toml](examples/prod-config/graphql.toml) | default GraphQL API configuration |
+
 ## Related links
 
 <RelatedLink to="/concepts/data-access/graphql-indexer" />
