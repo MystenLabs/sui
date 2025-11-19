@@ -12,7 +12,7 @@ use url::Url;
 
 use crate::{
     Indexer, IndexerArgs,
-    ingestion::{ClientArgs, IngestionConfig},
+    ingestion::{ClientArgs, IngestionConfig, ingestion_client::IngestionClientArgs},
 };
 
 pub use sui_pg_db::*;
@@ -89,7 +89,10 @@ impl Indexer<Db> {
             store,
             IndexerArgs::default(),
             ClientArgs {
-                local_ingestion_path: Some(tempdir().unwrap().keep()),
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some(tempdir().unwrap().keep()),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             IngestionConfig::default(),

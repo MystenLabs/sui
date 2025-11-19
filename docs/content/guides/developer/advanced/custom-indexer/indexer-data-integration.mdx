@@ -4,9 +4,9 @@ description: Learn how to integrate custom data sources and storage systems with
 keywords: [sui custom indexer, checkpoint data sources, custom storage backend, move event deserialization, BCS serialization, indexer integration, bring your own store, postgresql indexer, blockchain data ingestion, sui indexing framework]
 ---
 
-Building a custom indexer on Sui lets you take full control of data ingestion, storage, and processing. You can choose from multiple [checkpoint data sources](#checkpoint-data-sources) such as remote store, local files, or direct RPC API access, depending on whether you're indexing Mainnet data, testing against known checkpoints, or working on a local network. 
+Building a custom indexer on Sui lets you take full control of data ingestion, storage, and processing. You can choose from multiple [checkpoint data sources](#checkpoint-data-sources) such as remote store, local files, or direct RPC API access, depending on whether you're indexing Mainnet data, testing against known checkpoints, or working on a local network.
 
-For storage, you can either use the built-in `IndexerCluster` with PostgreSQL or implement your own [`Store` and `Connection` traits](#byos) to integrate a different database or storage backend. After connected, you can wire up a manual indexer, add your custom pipelines, and handle watermark coordination to keep data in sync. 
+For storage, you can either use the built-in `IndexerCluster` with PostgreSQL or implement your own [`Store` and `Connection` traits](#byos) to integrate a different database or storage backend. After connected, you can wire up a manual indexer, add your custom pipelines, and handle watermark coordination to keep data in sync.
 
 Finally, you need to [deserialize Move events](#deserialize) from raw BCS bytes into Rust structs, using `bcs` and `serde`, so that your pipelines can work with strongly-typed data. This gives you a reproducible, end-to-end setup that you can tune for performance, reliability, and custom analytics.
 
@@ -42,7 +42,7 @@ $ cargo run -- --local-ingestion-path /path/to/checkpoints
 
 RPC API access queries full nodes directly using gRPC:
 
-```sh 
+```sh
 $ cargo run -- --rpc-api-url https://fullnode.testnet.sui.io:443
 ```
 
@@ -142,7 +142,7 @@ impl Connection for MyCustomConnection<'_> {
         // Implementation depends on your database schema
         todo!("Implement based on your storage system")
     }
-    
+
 	  // Implement other required methods...
 }
 ```
@@ -157,22 +157,25 @@ Replace `IndexerCluster` with manual `Indexer`:
 
 ```rust
 use sui_indexer_alt_framework::{Indexer, IndexerArgs};
-use sui_indexer_alt_framework::ingestion::{ClientArgs, IngestionConfig};
+use sui_indexer_alt_framework::ingestion::{
+    ClientArgs, IngestionConfig,
+    ingestion_client::IngestionClientArgs,
+};
 
 async fn main() -> anyhow::Result<()> {
     // Initialize your custom store
     let store = MyCustomStore::new(config).await?;
-    
+
     // Configure indexer manually
     let indexer = Indexer::new(
         store,
         IndexerArgs::default(),
         ClientArgs {
-            remote_store_url: Some("https://checkpoints.testnet.sui.io".to_string()),
-            local_ingestion_path: None,
-            rpc_api_url: None,
-            rpc_username: None, 
-            rpc_password: None,
+            ingestion: IngestionClientArgs {
+                remote_store_url: Some("https://checkpoints.testnet.sui.io".to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
         },
         IngestionConfig::default(),
         &prometheus::Registry::new(),
@@ -252,7 +255,7 @@ use sui::event;
 public fun transfer_balance(...) {
     event::emit(BalanceEvent {
         balance_manager_id: id,
-        asset: asset_id, 
+        asset: asset_id,
         amount: 100,
         deposit: true
     });
@@ -300,19 +303,19 @@ But in checkpoint data, these events arrive as **raw BCS bytes** that need to be
     impl Processor for YourHandler {
         fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
             let mut results = Vec::new();
-            
+
             for transaction in &checkpoint.transactions {
                 for event in &transaction.events {
                     // Get the raw BCS bytes
                     let event_bytes = &event.contents;
-                    
+
                     // Deserialize to your Rust struct
                     if let Ok(balance_event) = bcs::from_bytes::<BalanceEvent>(event_bytes) {
                         // Do something
                     }
                 }
             }
-            
+
             Ok(results)
         }
     }

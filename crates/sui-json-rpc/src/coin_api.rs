@@ -14,7 +14,6 @@ use sui_core::jsonrpc_index::TotalBalance;
 use tap::TapFallible;
 use tracing::{debug, instrument};
 
-use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::{CoinReadApiOpenRpc, CoinReadApiServer, JsonRpcMetrics, cap_page_limit};
 use sui_json_rpc_types::Balance;
@@ -337,7 +336,7 @@ async fn find_package_object_id(
     object_struct_tag: StructTag,
     kv_store: Arc<TransactionKeyValueStore>,
 ) -> RpcInterimResult<ObjectID> {
-    spawn_monitored_task!(async move {
+    async move {
         let publish_txn_digest = state.find_publish_txn_digest(package_id)?;
 
         let effect = kv_store.get_fx_by_tx_digest(publish_txn_digest).await?;
@@ -355,8 +354,8 @@ async fn find_package_object_id(
             object_struct_tag, package_id,
         ))
         .into())
-    })
-    .await?
+    }
+    .await
 }
 
 /// CoinReadInternal trait to capture logic of interactions with AuthorityState and metrics
@@ -490,10 +489,7 @@ impl CoinReadInternal for CoinReadInternalImpl {
         let limit = cap_page_limit(limit);
         self.metrics.get_coins_limit.observe(limit as f64);
         let state = self.get_state();
-        let mut data = spawn_monitored_task!(async move {
-            state.get_owned_coins(owner, cursor, limit + 1, one_coin_type_only)
-        })
-        .await??;
+        let mut data = state.get_owned_coins(owner, cursor, limit + 1, one_coin_type_only)?;
 
         let has_next_page = data.len() > limit;
         data.truncate(limit);
@@ -1483,6 +1479,7 @@ mod tests {
         async fn test_object_not_found() {
             let transaction_digest = TransactionDigest::from([0; 32]);
             let transaction_effects = TransactionEffects::default();
+            let transaction_effects_clone = transaction_effects.clone();
 
             // Mock object store that returns None for registry lookup
             let mut mock_object_store = MockObjectStore::new();
@@ -1497,9 +1494,20 @@ mod tests {
                 .return_once(move |_| Ok(transaction_digest));
             mock_state
                 .expect_get_executed_transaction_and_effects()
-                .return_once(move |_, _| Ok((create_fake_transaction(), transaction_effects)));
+                .return_once(move |_, _| {
+                    Ok((create_fake_transaction(), transaction_effects.clone()))
+                });
 
-            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
+            let mut mock_kv_store = MockKeyValueStore::new();
+            mock_kv_store.expect_multi_get().return_once(move |_, _| {
+                Ok((
+                    vec![Some(create_fake_transaction())],
+                    vec![Some(transaction_effects_clone)],
+                ))
+            });
+
+            let coin_read_api =
+                CoinReadApi::new_for_tests(Arc::new(mock_state), Some(Arc::new(mock_kv_store)));
             let response = coin_read_api
                 .get_coin_metadata("0x2::sui::SUI".to_string())
                 .await;
@@ -1683,6 +1691,7 @@ mod tests {
             let (coin_name, _, _, _, _) = get_test_treasury_cap_peripherals(package_id);
             let transaction_digest = TransactionDigest::from([0; 32]);
             let transaction_effects = TransactionEffects::default();
+            let transaction_effects_clone = transaction_effects.clone();
 
             // Mock object store that returns None for registry lookup
             let mut mock_object_store = MockObjectStore::new();
@@ -1697,18 +1706,27 @@ mod tests {
                 .return_once(move |_| Ok(transaction_digest));
             mock_state
                 .expect_multi_get()
-                .return_once(move |_, _| Ok((vec![], vec![Some(transaction_effects)])));
+                .return_once(move |_, _| Ok((vec![], vec![Some(transaction_effects.clone())])));
 
-            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
+            let mut mock_kv_store = MockKeyValueStore::new();
+            mock_kv_store.expect_multi_get().return_once(move |_, _| {
+                Ok((
+                    vec![Some(create_fake_transaction())],
+                    vec![Some(transaction_effects_clone)],
+                ))
+            });
+
+            let coin_read_api =
+                CoinReadApi::new_for_tests(Arc::new(mock_state), Some(Arc::new(mock_kv_store)));
             let response = coin_read_api.get_total_supply(coin_name.clone()).await;
 
             assert!(response.is_err());
             let error_object = response.unwrap_err();
-            let expected = expect!["-32000"];
+            let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect![[
-                r#"task 1 panicked with message "MockKeyValueStore::multi_get(?, ?): No matching expectation found""#
-            ]];
+            let expected = expect![
+                "Cannot find object with type [0x2::coin::TreasuryCap<0xf::test_coin::TEST_COIN>] from [0x000000000000000000000000000000000000000000000000000000000000000f] package created objects."
+            ];
             expected.assert_eq(error_object.message());
         }
 

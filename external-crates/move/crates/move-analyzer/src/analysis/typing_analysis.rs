@@ -3,7 +3,7 @@
 
 use crate::{
     analysis::{DefMap, add_member_use_def, find_datatype},
-    compiler_info::CompilerInfo,
+    compiler_info::CompilerAnalysisInfo,
     symbols::{
         def_info::DefInfo,
         mod_defs::{MemberDefInfo, ModuleDefs},
@@ -61,7 +61,7 @@ pub struct TypingAnalysisContext<'a> {
     /// Current expression scope, for use when traversing expressions and recording usage.
     pub expression_scope: OrdMap<Symbol, LocalDef>,
     /// IDE Annotation Information from the Compiler
-    pub compiler_info: &'a mut CompilerInfo,
+    pub compiler_analysis_info: &'a CompilerAnalysisInfo,
 }
 
 /// Definition of a local (or parameter)
@@ -614,7 +614,7 @@ impl TypingAnalysisContext<'_> {
                 self.add_variant_use_def(mident, name, vname);
                 tyargs.iter().for_each(|t| self.visit_type(None, t));
                 for (fpos, fname, (_, (_, pat))) in fields.iter() {
-                    if self.compiler_info.ellipsis_binders.get(&fpos).is_none() {
+                    if !self.compiler_analysis_info.ellipsis_binders.contains(&fpos) {
                         self.add_field_use_def(
                             &mident.value,
                             &name.value(),
@@ -632,7 +632,7 @@ impl TypingAnalysisContext<'_> {
                 self.add_datatype_use_def(mident, name);
                 tyargs.iter().for_each(|t| self.visit_type(None, t));
                 for (fpos, fname, (_, (_, pat))) in fields.iter() {
-                    if self.compiler_info.ellipsis_binders.get(&fpos).is_none() {
+                    if !self.compiler_analysis_info.ellipsis_binders.contains(&fpos) {
                         self.add_field_use_def(
                             &mident.value,
                             &name.value(),
@@ -662,6 +662,9 @@ impl TypingAnalysisContext<'_> {
 
     fn process_match_arm(&mut self, sp!(_, arm): &T::MatchArm) {
         self.process_match_patterm(&arm.pattern);
+        // guard location is needed for on-hover to display correct type for variables
+        // bound in patterns (when used inside a guard expression they become
+        // immutable references)
         let guard_loc = arm.guard.as_ref().map(|exp| exp.exp.loc);
         arm.binders.iter().for_each(|(var, ty)| {
             self.add_local_def(
@@ -676,24 +679,6 @@ impl TypingAnalysisContext<'_> {
 
         if let Some(exp) = &arm.guard {
             self.visit_exp(exp);
-            // Enum guard variables have different type (immutable reference) than variables in
-            // patterns and in the RHS of the match arm. However, at the AST level they share
-            // the same definition, stored in the IDE in a map key-ed on the definition's location.
-            // In order to display (on hover) two different types for these variables, we do
-            // the following:
-            // - remember which `DefInfo::LocalDef`s represent match arm definition (above) and what
-            //   is the position of their arm's guard
-            // - remember which region represents a guard expression (below)
-            // - when processing on-hover, we see if for a given use the definition is a
-            //   match arm definition and if this use is inside a correct guard block; if both these
-            //   conditions hold, we change the displayed info for this variable to reflect
-            //   it being an immutable reference
-            let guard_loc = exp.exp.loc;
-            self.compiler_info
-                .guards
-                .entry(guard_loc.file_hash())
-                .or_default()
-                .insert(guard_loc);
         }
         self.visit_exp(&arm.rhs);
     }
@@ -1171,8 +1156,8 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
             }
         }
 
-        let expanded_lambda = self.compiler_info.is_expanded_lambda(&exp.exp.loc);
-        if let Some(macro_call_info) = self.compiler_info.get_macro_info(&exp.exp.loc) {
+        let expanded_lambda = self.compiler_analysis_info.is_expanded_lambda(&exp.exp.loc);
+        if let Some(macro_call_info) = self.compiler_analysis_info.get_macro_info(&exp.exp.loc) {
             debug_assert!(!expanded_lambda, "Compiler info issue");
             let MacroCallInfo {
                 module,
