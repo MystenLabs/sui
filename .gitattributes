@@ -7,4 +7,5 @@ crates/sui-core/tests/staged/sui.yaml text eol=lf
 crates/sui-open-rpc/spec/openrpc.json text eol=lf
 sui_core/tests/staged/sui.yaml text eol=lf
 crates/sui/tests/**/*.ptb text eol=lf
+crates/sui/tests/**/*.sh text eol=lf
 crates/sui/tests/snapshots/**/*.snap text eol=lf

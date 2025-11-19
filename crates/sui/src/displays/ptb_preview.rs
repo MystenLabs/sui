@@ -11,7 +11,7 @@ use crate::{
 use std::fmt::{Display, Formatter};
 use tabled::{
     builder::Builder as TableBuilder,
-    settings::{Panel as TablePanel, Style as TableStyle, style::HorizontalLine},
+    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
 };
 
 impl Display for PTBPreview<'_> {
@@ -82,8 +82,6 @@ impl Display for PTBPreview<'_> {
             HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
         ]));
         table.with(tabled::settings::style::BorderSpanCorrection);
-        let table = table.to_string();
-        let table = table.replace("\r\n", "\n");
 
         write!(f, "{}", table)
     }
