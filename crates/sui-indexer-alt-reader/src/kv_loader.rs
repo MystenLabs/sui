@@ -9,7 +9,7 @@ use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::{
     TransactionData as KVTransactionData, TransactionEventsData as KVTransactionEventsData,
 };
-use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_types::{
     base_types::ObjectID,
     crypto::AuthorityQuorumSignInfo,
@@ -218,7 +218,7 @@ impl KvLoader {
 impl TransactionContents {
     /// Create a TransactionContents from an ExecutedTransaction.
     pub fn from_executed_transaction(
-        executed_transaction: &ExecutedTransaction,
+        executed_transaction: &grpc::ExecutedTransaction,
         transaction_data: TransactionData,
         signatures: Vec<GenericSignature>,
     ) -> anyhow::Result<Self> {
