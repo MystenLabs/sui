@@ -648,14 +648,16 @@ impl SuiClientInner for sui_rpc::Client {
     }
 
     async fn get_chain_identifier(&self) -> Result<String, BridgeError> {
-        Ok(self
+        let chain_id = self
             .clone()
             .ledger_client()
             .get_service_info(GetServiceInfoRequest::default())
             .await?
             .into_inner()
             .chain_id()
-            .into())
+            .parse::<sui_types::digests::CheckpointDigest>()?;
+
+        Ok(sui_types::digests::ChainIdentifier::from(chain_id).to_string())
     }
 
     async fn get_reference_gas_price(&self) -> Result<u64, BridgeError> {
