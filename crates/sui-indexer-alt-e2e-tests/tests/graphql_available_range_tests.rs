@@ -185,7 +185,7 @@ async fn test_transaction_pagination_pruning() {
     let mut a_txs = vec![];
 
     // (1) Create 4 checkpoints with transactions from `a` and `b`. Each checkpoint contains one
-    // transactions from `a` to `b`.  We have 4 total transactions, one in each of the 4 checkpoints
+    // transactions from `a` to `b`.  We have 4 total transactions, one in each of the 4 checkpoints.
     for _ in 1..=4 {
         a_txs.push(transfer_dust(&mut cluster, a, &akp, b));
         cluster.create_checkpoint().await;
@@ -194,7 +194,7 @@ async fn test_transaction_pagination_pruning() {
     let transactions_in_range = query_transactions(&cluster, b).await;
     assert_tx_digests_eq(&a_txs, &transactions_in_range);
 
-    // (2) Add 2 more checkpoints, with 1 transaction eachnow the affected_addresses table is pruned, but the digests are not.
+    // (2) Add 2 more checkpoints, with 1 transaction each. The affected_addresses table is pruned, but the digests are not.
     for _ in 5..=6 {
         a_txs.push(transfer_dust(&mut cluster, a, &akp, b));
         cluster.create_checkpoint().await;
@@ -208,7 +208,7 @@ async fn test_transaction_pagination_pruning() {
     let transactions_in_range = query_transactions(&cluster, b).await;
     assert_tx_digests_eq(&a_txs[1..], &transactions_in_range);
 
-    // (3) Add 5 more checkpoints, now both tables have been pruned but we take the max reader_lo of the pipelines
+    // (3) Add 5 more checkpoints, now both tables have been pruned but we take the max reader_lo of the pipelines.
     for _ in 6..=10 {
         a_txs.push(transfer_dust(&mut cluster, a, &akp, b));
         cluster.create_checkpoint().await;
@@ -246,6 +246,9 @@ async fn test_events_pagination_pruning() {
     let pkg = publish_emit_event(&mut cluster).await;
 
     let mut tx_digests = vec![];
+
+    // 1) Create checkpoints 1 through 9, each containing one event emitted by the test package.
+    // The ev_emit_mod pipeline is pruned at this point, but the ev_struct_inst pipeline is not.
     for _ in 1..=9 {
         tx_digests.push(emit_test_event(&mut cluster, &pkg).await);
         cluster.create_checkpoint().await;
@@ -280,7 +283,7 @@ async fn test_checkpoint_pagination_pruning() {
         cp_sequence_numbers.push(cluster.create_checkpoint().await.sequence_number);
     }
 
-    // We only retain 5 checkpoints so only checkpoints 5 through 9 should be available after pruning
+    // We only retain 5 checkpoints so only checkpoints 5 through 9 should be available after pruning.
     cluster
         .wait_for_pruner("cp_sequence_numbers", 4, Duration::from_secs(10))
         .await
