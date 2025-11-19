@@ -7,6 +7,7 @@ use crate::{
     programmable_transactions::context::EitherError,
     sp,
     static_programmable_transactions::{
+        linkage::resolved_linkage::ResolvedLinkage,
         loading::ast::{self as L, Datatype, Type},
         spanned::sp,
         typing::ast::BytesConstraint,
@@ -15,12 +16,15 @@ use crate::{
 use indexmap::{IndexMap, IndexSet};
 use std::{collections::BTreeMap, rc::Rc};
 use sui_types::{
+    SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectRef, TxContextKind},
-    coin::RESOLVED_COIN_STRUCT,
+    coin::{COIN_MODULE_NAME, REDEEM_FUNDS_FUNC_NAME, RESOLVED_COIN_STRUCT},
     error::{ExecutionError, ExecutionErrorKind, command_argument_error},
     execution_status::CommandArgumentError,
-    funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
+    funds_accumulator::{
+        FUNDS_ACCUMULATOR_MODULE_NAME, RESOLVED_WITHDRAWAL_STRUCT, WITHDRAWAL_OWNER_FUNC_NAME,
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -907,7 +911,7 @@ fn apply_conversion(
 }
 
 /// Returns the inner type `T` if the type is `sui::coin::Coin<T>`, else `None`
-fn coin_inner_type(ty: &Type) -> Option<&Type> {
+pub(crate) fn coin_inner_type(ty: &Type) -> Option<&Type> {
     let Type::Datatype(dt) = ty else {
         return None;
     };
@@ -968,7 +972,11 @@ fn convert_withdrawal_to_coin(
     let withdrawl_ref_ty = Type::Reference(false, Rc::new(withdrawal_type.clone()));
     let withdrawal_borrow = sp(idx, (withdrawal_borrow_, withdrawl_ref_ty));
     let owner_command__ = T::Command__::MoveCall(Box::new(T::MoveCall {
-        function: todo!("call sui::funds_accumulator::withdrawal_owner"),
+        function: env.load_framework_function(
+            FUNDS_ACCUMULATOR_MODULE_NAME,
+            WITHDRAWAL_OWNER_FUNC_NAME,
+            vec![inner_ty.clone()],
+        )?,
         arguments: vec![withdrawal_borrow],
     }));
     let owner_command_ = T::Command_ {
@@ -985,7 +993,11 @@ fn convert_withdrawal_to_coin(
     let ctx_ty = Type::Reference(true, Rc::new(env.tx_context_type()?));
     let ctx_arg = sp(idx, (ctx_arg_, ctx_ty));
     let conversion_command__ = T::Command__::MoveCall(Box::new(T::MoveCall {
-        function: todo!("call sui::coin::redeem_funds"),
+        function: env.load_framework_function(
+            COIN_MODULE_NAME,
+            REDEEM_FUNDS_FUNC_NAME,
+            vec![inner_ty.clone()],
+        )?,
         arguments: vec![withdrawal_arg, ctx_arg],
     }));
     let coin_type = env.coin_type(inner_ty.clone())?;

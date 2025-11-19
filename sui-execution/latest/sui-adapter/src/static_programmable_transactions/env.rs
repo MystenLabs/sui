@@ -28,6 +28,7 @@ use move_binary_format::{
 };
 use move_core_types::{
     annotated_value,
+    identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
     runtime_value::{self, MoveTypeLayout},
     vm_status::StatusCode,
@@ -37,7 +38,7 @@ use move_vm_types::{data_store::DataStore, loaded_data::runtime_types as vm_runt
 use std::{cell::OnceCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    Identifier, TypeTag,
+    Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     base_types::{ObjectID, TxContext},
     coin::RESOLVED_COIN_STRUCT,
     error::{ExecutionError, ExecutionErrorKind},
@@ -160,6 +161,24 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             .get_runtime()
             .type_to_type_layout(&ty)
             .map_err(|e| self.convert_vm_error(e))
+    }
+
+    pub fn load_framework_function(
+        &self,
+        module: &IdentStr,
+        function: &IdentStr,
+        type_arguments: Vec<Type>,
+    ) -> Result<LoadedFunction, ExecutionError> {
+        let call_linkage = self
+            .linkage_analysis
+            .framework_call_linkage(&type_arguments, self.linkable_store)?;
+        self.load_function(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            module.to_string(),
+            function.to_string(),
+            type_arguments,
+            call_linkage,
+        )
     }
 
     pub fn load_function(
