@@ -77,7 +77,7 @@ where
     };
     let authorities_shuffled = committee.shuffle_by_stake(preference.as_ref(), None);
     let mut accumulated_state = initial_state;
-    let mut total_timeout = total_timeout;
+    let start_time = Instant::now();
 
     // First, execute in parallel for each authority FMap.
     let mut responses: futures::stream::FuturesUnordered<_> = authorities_shuffled
@@ -90,7 +90,6 @@ where
         })
         .collect();
     if let Some(prefetch_timeout) = prefetch_timeout {
-        let elapsed = Instant::now();
         let prefetch_sleep = tokio::time::sleep(prefetch_timeout);
         let mut authority_to_result: BTreeMap<K, Result<V, E>> = BTreeMap::new();
         tokio::pin!(prefetch_sleep);
@@ -139,11 +138,15 @@ where
         }
         // if we got here, fallback through the if statement to continue in arrival order on
         // the remaining validators
-        total_timeout = total_timeout.saturating_sub(elapsed.elapsed());
     }
 
     // As results become available fold them into the state using FReduce.
-    while let Ok(Some((authority_name, result))) = timeout(total_timeout, responses.next()).await {
+    while let Ok(Some((authority_name, result))) = timeout(
+        total_timeout.saturating_sub(start_time.elapsed()),
+        responses.next(),
+    )
+    .await
+    {
         let authority_weight = committee.weight(&authority_name);
         accumulated_state =
             match reduce_result(accumulated_state, authority_name, authority_weight, result).await {
