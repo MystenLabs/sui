@@ -15043,6 +15043,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.13",
  "toml 0.7.4",
+ "tonic 0.14.2",
  "tower-http",
  "tracing",
  "url",

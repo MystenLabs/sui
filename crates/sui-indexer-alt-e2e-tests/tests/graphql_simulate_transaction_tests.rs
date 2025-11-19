@@ -11,11 +11,11 @@ use std::path::PathBuf;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
 use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs};
 use sui_indexer_alt_graphql::{
-    RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
+    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, config::RpcConfig as GraphQlConfig,
+    start_rpc as start_graphql,
 };
 use sui_indexer_alt_reader::{
-    bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
-    fullnode_client::FullnodeArgs, ledger_grpc_reader::LedgerGrpcArgs,
+    consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs,
     system_package_task::SystemPackageTaskArgs,
 };
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
@@ -192,11 +192,9 @@ impl GraphQlTestCluster {
 
         let graphql_handle = start_graphql(
             Some(database_url),
-            None,
             fullnode_args,
             DbArgs::default(),
-            BigtableArgs::default(),
-            LedgerGrpcArgs::default(),
+            GraphQlKvArgs::default(),
             ConsistentReaderArgs::default(),
             GraphQlArgs {
                 rpc_listen_address: graphql_listen_address,

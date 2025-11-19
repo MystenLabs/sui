@@ -5,8 +5,8 @@ use anyhow::Context;
 use async_graphql::dataloader::DataLoader;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_types::{
-    effects::TransactionEffects, event::Event, signature::GenericSignature,
-    transaction::TransactionData,
+    effects::TransactionEffects, event::Event, messages_checkpoint::CheckpointSummary,
+    signature::GenericSignature, transaction::TransactionData,
 };
 use tonic::transport::{Channel, ClientTlsConfig, Uri};
 
@@ -14,7 +14,7 @@ use tonic::transport::{Channel, ClientTlsConfig, Uri};
 pub struct LedgerGrpcArgs {
     /// gRPC endpoint URL for the ledger service (e.g., archive.mainnet.sui.io)
     #[arg(long)]
-    pub ledger_grpc_uri: Option<Uri>,
+    pub ledger_grpc_url: Option<Uri>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,5 +49,34 @@ impl LedgerGrpcReader {
 
     pub fn as_data_loader(&self) -> DataLoader<Self> {
         DataLoader::new(self.clone(), tokio::spawn)
+    }
+
+    pub async fn checkpoint_watermark(&self) -> anyhow::Result<CheckpointSummary> {
+        use prost_types::FieldMask;
+        use sui_rpc::field::FieldMaskUtil;
+        use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
+
+        let request =
+            GetCheckpointRequest::default().with_read_mask(FieldMask::from_paths(["summary.bcs"]));
+
+        let response = self
+            .0
+            .clone()
+            .get_checkpoint(request)
+            .await
+            .context("Failed to get latest checkpoint")?;
+
+        let checkpoint = response
+            .into_inner()
+            .checkpoint
+            .context("No checkpoint returned")?;
+
+        checkpoint
+            .summary
+            .as_ref()
+            .and_then(|s| s.bcs.as_ref())
+            .context("Missing summary.bcs")?
+            .deserialize()
+            .context("Failed to deserialize checkpoint summary")
     }
 }

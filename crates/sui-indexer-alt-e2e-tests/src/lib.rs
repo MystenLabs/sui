@@ -25,7 +25,8 @@ use sui_indexer_alt_consistent_store::{
 };
 use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs, postgres::schema::watermarks};
 use sui_indexer_alt_graphql::{
-    RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
+    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, config::RpcConfig as GraphQlConfig,
+    start_rpc as start_graphql,
 };
 use sui_indexer_alt_jsonrpc::{
     NodeArgs as JsonRpcNodeArgs, RpcArgs as JsonRpcArgs, config::RpcConfig as JsonRpcConfig,
@@ -33,8 +34,7 @@ use sui_indexer_alt_jsonrpc::{
 };
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
-    fullnode_client::FullnodeArgs, ledger_grpc_reader::LedgerGrpcArgs,
-    system_package_task::SystemPackageTaskArgs,
+    fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
 };
 use sui_pg_db::{
     Db, DbArgs,
@@ -411,11 +411,9 @@ impl OffchainCluster {
 
         let graphql = start_graphql(
             Some(database_url.clone()),
-            None,
             fullnode_args,
             DbArgs::default(),
-            BigtableArgs::default(),
-            LedgerGrpcArgs::default(),
+            GraphQlKvArgs::default(),
             consistent_reader_args,
             graphql_args,
             SystemPackageTaskArgs::default(),

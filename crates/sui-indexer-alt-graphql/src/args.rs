@@ -10,9 +10,50 @@ use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
+use tonic::transport::Uri;
 use url::Url;
 
 use crate::RpcArgs;
+
+/// Arguments for configuring KV store access (either Bigtable or Ledger gRPC).
+///
+/// These options are mutually exclusive - only one KV store source can be configured at a time.
+#[derive(clap::Args, Debug, Clone, Default)]
+#[group(required = false)]
+pub struct KvArgs {
+    /// Bigtable instance ID to make KV store requests to.
+    #[arg(long, group = "kv_source")]
+    pub bigtable_instance: Option<String>,
+
+    /// Time spent waiting for a request to Bigtable to complete, in milliseconds.
+    #[arg(long)]
+    pub bigtable_statement_timeout_ms: Option<u64>,
+
+    /// App profile ID to use for Bigtable client. If not provided, the default profile will be used.
+    #[arg(long)]
+    pub bigtable_app_profile_id: Option<String>,
+
+    /// gRPC endpoint URL for the ledger service (e.g., archive.mainnet.sui.io)
+    #[arg(long, group = "kv_source")]
+    pub ledger_grpc_url: Option<Uri>,
+}
+
+impl KvArgs {
+    /// Extract BigtableArgs from KvArgs
+    pub fn bigtable_args(&self) -> BigtableArgs {
+        BigtableArgs {
+            bigtable_statement_timeout_ms: self.bigtable_statement_timeout_ms,
+            bigtable_app_profile_id: self.bigtable_app_profile_id.clone(),
+        }
+    }
+
+    /// Extract LedgerGrpcArgs from KvArgs
+    pub fn ledger_grpc_args(&self) -> LedgerGrpcArgs {
+        LedgerGrpcArgs {
+            ledger_grpc_url: self.ledger_grpc_url.clone(),
+        }
+    }
+}
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {
@@ -32,11 +73,6 @@ pub enum Command {
         )]
         database_url: Url,
 
-        /// Bigtable instance ID to make KV store requests to. If this is not provided, KV store
-        /// requests will be made to the database.
-        #[clap(long)]
-        bigtable_instance: Option<String>,
-
         #[command(flatten)]
         fullnode_args: FullnodeArgs,
 
@@ -44,10 +80,7 @@ pub enum Command {
         db_args: DbArgs,
 
         #[command(flatten)]
-        bigtable_args: BigtableArgs,
-
-        #[command(flatten)]
-        ledger_grpc_args: LedgerGrpcArgs,
+        kv_args: KvArgs,
 
         #[command(flatten)]
         consistent_reader_args: ConsistentReaderArgs,
