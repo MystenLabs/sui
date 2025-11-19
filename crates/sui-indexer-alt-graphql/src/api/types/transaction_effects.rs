@@ -221,8 +221,8 @@ impl EffectsContents {
         let limits = pagination.limits("TransactionEffects", "balanceChanges");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        // First try to get balance changes from execution context
-        if let Some(grpc_balance_changes) = content.balance_changes() {
+        // First try to get balance changes from execution context (scope)
+        if let Some(grpc_balance_changes) = self.scope.balance_changes() {
             return page
                 .paginate_indices(grpc_balance_changes.len(), |i| {
                     BalanceChange::from_grpc(self.scope.clone(), &grpc_balance_changes[i])
