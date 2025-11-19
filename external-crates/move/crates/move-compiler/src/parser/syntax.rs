@@ -4649,6 +4649,10 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
             consume_token(context.tokens, Tok::Semicolon)?;
             Ok(ModuleMember::Spec(spec_string))
         }
+        // If we find an `extend`, this is the start of an interior module.
+        Tok::Identifier if context.tokens.content() == EXTEND_MODIFIER => {
+            Err(ErrCase::ContinueToModule(attributes))
+        }
         Tok::Spec => {
             match context.tokens.lookahead() {
                 Ok(Tok::Fun) | Ok(Tok::Native) => {
@@ -4860,12 +4864,12 @@ fn parse_file_def(
             if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon)
                 && let Some(prev) = defs.last()
             {
-                let msg = "Cannot define a 'module' label form in a file with multiple modules";
+                let msg = "Cannot define an additional 'module' via label in a file with multiple modules";
                 let mut diag = diag!(Declarations::InvalidModule, (module.name.loc(), msg));
-                diag.add_secondary_label((prev.name_loc(), "Previous definition here"));
+                diag.add_secondary_label((prev.name_loc(), "Previous module defined here"));
                 diag.add_note(
-                    "Either move each 'module' label and definitions into its own file or \
-                            define each as 'module <name> { contents }'",
+                    "Either move each 'module' into its own file or \
+                            define each addiitional module as 'module <name> { contents }'",
                 );
                 context.add_diag(diag);
             }
