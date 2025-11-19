@@ -23,7 +23,7 @@ pub struct Transaction {
     pub pure: Vec<PureInput>,
     /// All receiving inputs
     pub receiving: Vec<ReceivingInput>,
-    pub withdrawal_casts: IndexMap<Location, WithdrawalCast>,
+    pub withdrawal_conversions: IndexMap<Location, WithdrawalConversion>,
     pub commands: Commands,
 }
 
@@ -61,17 +61,17 @@ pub struct ReceivingInput {
     pub constraint: BytesConstraint,
 }
 
-#[derive(Debug)]
-pub struct WithdrawalCast {
+#[derive(Debug, Clone, Copy)]
+pub struct WithdrawalConversion {
     // Result index to a call to `sui::funds_accumulator::withdrawal_owner`
     pub owner_result: u16,
-    // Result index to cast call
-    pub cast_result: u16,
-    pub cast_kind: WithdrawalCastKind,
+    // Result index to conversion call
+    pub conversion_result: u16,
+    pub conversion_kind: WithdrawalConversionKind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WithdrawalCastKind {
+pub enum WithdrawalConversionKind {
     ToCoin,
 }
 

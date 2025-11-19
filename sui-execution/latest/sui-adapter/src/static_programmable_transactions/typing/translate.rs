@@ -48,7 +48,7 @@ struct Context {
     objects: IndexMap<T::InputIndex, T::ObjectInput>,
     pure: IndexMap<(T::InputIndex, Type), T::PureInput>,
     receiving: IndexMap<(T::InputIndex, Type), T::ReceivingInput>,
-    withdrawal_casts: IndexMap<T::Location, T::WithdrawalCast>,
+    withdrawal_conversions: IndexMap<T::Location, T::WithdrawalConversion>,
     commands: Vec<T::Command>,
     // map from original result to the lifted result
     // the map should only be queried via a range, up to the current command index
@@ -67,7 +67,7 @@ impl Context {
             receiving_refs: IndexMap::new(),
             objects: IndexMap::new(),
             pure: IndexMap::new(),
-            withdrawal_casts: IndexMap::new(),
+            withdrawal_conversions: IndexMap::new(),
             receiving: IndexMap::new(),
             commands: vec![],
             result_index_lift: BTreeMap::new(),
@@ -139,7 +139,7 @@ impl Context {
             pure,
             receiving,
             commands,
-            withdrawal_casts,
+            withdrawal_conversions,
             ..
         } = self;
         let objects = objects.into_iter().map(|(_, o)| o).collect();
@@ -150,7 +150,7 @@ impl Context {
             objects,
             pure,
             receiving,
-            withdrawal_casts,
+            withdrawal_conversions,
             commands,
         }
     }
@@ -893,7 +893,7 @@ fn apply_conversion(
         && let Some(actual_inner) = balance_inner_type(actual_withdrawal_inner)
         && actual_inner == expected_inner
     {
-        cast_withdrawal_to_coin(
+        convert_withdrawal_to_coin(
             env,
             context,
             command_arg_idx,
@@ -954,7 +954,7 @@ fn withdrawal_inner_type(ty: &Type) -> Option<&Type> {
     }
 }
 
-fn cast_withdrawal_to_coin(
+fn convert_withdrawal_to_coin(
     env: &Env,
     context: &mut Context,
     command_arg_idx: usize,
@@ -978,39 +978,39 @@ fn cast_withdrawal_to_coin(
         consumed_shared_objects: vec![],
     };
     let owner_idx = context.push_generated_command(owner_command_)?;
-    // we need to insert a cast command before the current command
+    // we need to insert a conversion command before the current command
     let withdrawal_arg_ = T::Argument__::new_move(location);
     let withdrawal_arg = sp(idx, (withdrawal_arg_, withdrawal_type));
     let ctx_arg_ = T::Argument__::Borrow(true, T::Location::TxContext);
     let ctx_ty = Type::Reference(true, Rc::new(env.tx_context_type()?));
     let ctx_arg = sp(idx, (ctx_arg_, ctx_ty));
-    let cast_command__ = T::Command__::MoveCall(Box::new(T::MoveCall {
+    let conversion_command__ = T::Command__::MoveCall(Box::new(T::MoveCall {
         function: todo!("call sui::coin::redeem_funds"),
         arguments: vec![withdrawal_arg, ctx_arg],
     }));
     let coin_type = env.coin_type(inner_ty.clone())?;
-    let cast_command_ = T::Command_ {
-        command: cast_command__,
+    let conversion_command_ = T::Command_ {
+        command: conversion_command__,
         result_type: vec![env.coin_type(inner_ty.clone())?],
         drop_values: vec![],
         consumed_shared_objects: vec![],
     };
-    let cast_idx = context.push_generated_command(cast_command_)?;
+    let conversion_idx = context.push_generated_command(conversion_command_)?;
     // add mask
     context
         .location_masks
-        .insert(location, T::Location::Result(cast_idx, 0));
+        .insert(location, T::Location::Result(conversion_idx, 0));
     // manage metadata
-    context.withdrawal_casts.insert(
+    context.withdrawal_conversions.insert(
         location,
-        T::WithdrawalCast {
+        T::WithdrawalConversion {
             owner_result: owner_idx,
-            cast_result: cast_idx,
-            cast_kind: T::WithdrawalCastKind::ToCoin,
+            conversion_result: conversion_idx,
+            conversion_kind: T::WithdrawalConversionKind::ToCoin,
         },
     );
-    // the result of the cast is at (cast_idx, 0)
-    Ok((T::Location::Result(cast_idx, 0), coin_type))
+    // the result of the conversion is at (conversion_idx, 0)
+    Ok((T::Location::Result(conversion_idx, 0), coin_type))
 }
 
 //**************************************************************************************************
@@ -1183,7 +1183,7 @@ mod consumed_shared_objects {
                 objects,
                 pure: _,
                 receiving: _,
-                withdrawal_casts: _,
+                withdrawal_conversions: _,
                 commands: _,
             } = ast;
             let inputs = objects

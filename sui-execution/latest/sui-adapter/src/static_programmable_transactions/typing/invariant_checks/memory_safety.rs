@@ -295,6 +295,7 @@ impl Context {
             objects,
             pure,
             receiving,
+            withdrawal_conversions: _,
             commands: _,
         } = txn;
         let tx_context = Location::non_ref(T::Location::TxContext);
@@ -508,6 +509,7 @@ fn verify_(txn: &T::Transaction) -> anyhow::Result<()> {
         objects: _,
         pure: _,
         receiving: _,
+        withdrawal_conversions: _,
         commands,
     } = txn;
     for c in commands {

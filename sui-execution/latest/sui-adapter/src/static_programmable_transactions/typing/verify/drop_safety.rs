@@ -22,69 +22,158 @@ pub fn refine_and_verify<Mode: ExecutionMode>(
 mod refine {
     use crate::{
         sp,
-        static_programmable_transactions::typing::ast::{self as T},
+        static_programmable_transactions::{
+            spanned::sp,
+            typing::ast::{self as T, Type},
+        },
     };
     use std::collections::BTreeSet;
+
+    struct Context {
+        // All locations that were used
+        used: BTreeSet<T::Location>,
+        // All locations that were used via a Move
+        moved: BTreeSet<T::Location>,
+    }
+
+    impl Context {
+        fn new() -> Self {
+            Self {
+                used: BTreeSet::new(),
+                moved: BTreeSet::new(),
+            }
+        }
+    }
 
     /// After memory safety, we can switch the last usage of a `Copy` to a `Move` if it is not
     /// borrowed at the time of the last usage.
     pub fn transaction(ast: &mut T::Transaction) {
-        let mut used: BTreeSet<T::Location> = BTreeSet::new();
+        let mut context = Context::new();
         for c in ast.commands.iter_mut().rev() {
-            command(&mut used, c);
+            command(&mut context, c);
         }
     }
 
-    fn command(used: &mut BTreeSet<T::Location>, sp!(_, c): &mut T::Command) {
+    fn command(context: &mut Context, sp!(_, c): &mut T::Command) {
         match &mut c.command {
-            T::Command__::MoveCall(mc) => arguments(used, &mut mc.arguments),
+            T::Command__::MoveCall(mc) => arguments(context, &mut mc.arguments),
             T::Command__::TransferObjects(objects, recipient) => {
-                argument(used, recipient);
-                arguments(used, objects);
+                argument(context, recipient);
+                arguments(context, objects);
             }
             T::Command__::SplitCoins(_, coin, amounts) => {
-                arguments(used, amounts);
-                argument(used, coin);
+                arguments(context, amounts);
+                argument(context, coin);
             }
             T::Command__::MergeCoins(_, target, coins) => {
-                arguments(used, coins);
-                argument(used, target);
+                arguments(context, coins);
+                argument(context, target);
             }
-            T::Command__::MakeMoveVec(_, xs) => arguments(used, xs),
+            T::Command__::MakeMoveVec(_, xs) => arguments(context, xs),
             T::Command__::Publish(_, _, _) => (),
-            T::Command__::Upgrade(_, _, _, x, _) => argument(used, x),
+            T::Command__::Upgrade(_, _, _, x, _) => argument(context, x),
         }
     }
 
-    fn arguments(used: &mut BTreeSet<T::Location>, args: &mut [T::Argument]) {
+    fn arguments(context: &mut Context, args: &mut [T::Argument]) {
         for arg in args.iter_mut().rev() {
-            argument(used, arg)
+            argument(context, arg)
         }
     }
 
-    fn argument(used: &mut BTreeSet<T::Location>, arg: &mut T::Argument) {
+    fn argument(context: &mut Context, arg: &mut T::Argument) {
         let usage = match &mut arg.value.0 {
             T::Argument__::Use(u) | T::Argument__::Read(u) | T::Argument__::Freeze(u) => u,
             T::Argument__::Borrow(_, loc) => {
                 // mark location as used
-                used.insert(*loc);
+                context.used.insert(*loc);
                 return;
             }
         };
         match &usage {
             T::Usage::Move(loc) => {
                 // mark location as used
-                used.insert(*loc);
+                context.used.insert(*loc);
+                context.moved.insert(*loc);
             }
             T::Usage::Copy { location, borrowed } => {
                 // we are at the last usage of a reference result if it was not yet added to the set
                 let location = *location;
-                let last_usage = used.insert(location);
+                let last_usage = context.used.insert(location);
                 if last_usage && !borrowed.get().unwrap() {
                     // if it was the last usage, we need to change the Copy to a Move
                     *usage = T::Usage::Move(location);
+                    context.moved.insert(location);
                 }
             }
+        }
+    }
+
+    /// For any withdrawal conversion where the value was not moved, send it back to the original
+    /// owner
+    fn return_unused_withdrawal_conversions(
+        ast: &mut T::Transaction,
+        moved_locations: &BTreeSet<T::Location>,
+    ) {
+        for (unmoved_loc, conversion_info) in ast
+            .withdrawal_conversions
+            .iter()
+            .filter(|(l, _)| !moved_locations.contains(l))
+        {
+            let Some(cur_command) = ast.commands.len().checked_sub(1) else {
+                invariant_violation!("cannot be zero commands with a conversion")
+            };
+            let cur_command = cur_command as u16;
+            let T::WithdrawalConversion {
+                owner_result,
+                conversion_result,
+                conversion_kind,
+            } = *conversion_info;
+            // set owner result as used
+            let owner_command = &mut ast.commands[owner_result as usize];
+            assert_invariant!(
+                owner_command.value.drop_values.as_slice() == &[true],
+                "owner result should be unused thus far and should be dropped"
+            );
+            owner_command.value.drop_values[0] = false;
+            let owner_command = &*owner_command;
+            let conversion_command = &ast.commands[conversion_result as usize];
+            assert_invariant!(
+                conversion_command.value.result_type.len() == 1,
+                "conversion should have one result"
+            );
+            assert_invariant!(
+                owner_command.value.result_type.len() == 1,
+                "owner command should have one result"
+            );
+            assert_invariant!(
+                owner_command.value.result_type[0] == T::Type::Address,
+                "owner command should return an address"
+            );
+            assert_invariant!(
+                matches!(conversion_kind, T::WithdrawalConversionKind::ToCoin),
+                "only coin conversion supported"
+            );
+            let conversion_ty = &conversion_command.value.result_type[0];
+            let move_result_ = T::Argument__::new_move(T::Location::Result(conversion_result, 0));
+            let move_result = sp(cur_command, (move_result_, conversion_ty.clone()));
+            let owner_ty = Type::Address;
+            let owner_arg_ = T::Argument__::new_move(T::Location::Result(owner_result, 0));
+            let owner_arg = sp(cur_command, (owner_arg_, owner_ty));
+            let return_command__ = T::Command__::MoveCall(Box::new(T::MoveCall {
+                function: todo!("call sui::coin::send_funds"),
+                arguments: vec![move_result, owner_arg],
+            }));
+            let return_command = sp(
+                cur_command,
+                T::Command_ {
+                    command: return_command__,
+                    result_type: vec![],
+                    drop_values: vec![],
+                    consumed_shared_objects: vec![],
+                },
+            );
+            ast.commands.push(return_command);
         }
     }
 }
