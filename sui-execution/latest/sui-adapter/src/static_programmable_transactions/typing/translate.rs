@@ -15,6 +15,7 @@ use crate::{
 use indexmap::{IndexMap, IndexSet};
 use std::{collections::BTreeMap, rc::Rc};
 use sui_types::{
+    balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectRef, TxContextKind},
     coin::RESOLVED_COIN_STRUCT,
     error::{ExecutionError, ExecutionErrorKind, command_argument_error},
@@ -138,6 +139,7 @@ impl Context {
             pure,
             receiving,
             commands,
+            withdrawal_casts,
             ..
         } = self;
         let objects = objects.into_iter().map(|(_, o)| o).collect();
@@ -148,6 +150,7 @@ impl Context {
             objects,
             pure,
             receiving,
+            withdrawal_casts,
             commands,
         }
     }
@@ -197,10 +200,7 @@ impl Context {
     fn resolve_location_mask(
         &mut self,
         location: T::Location,
-    ) -> Result<Option<T::Location>, ExecutionError> {
-        if !self.location_masks.contains_key(&location) {
-            return Ok(None);
-        }
+    ) -> Result<T::Location, ExecutionError> {
         let mut cur = location;
         let mut visited = IndexSet::new();
         loop {
@@ -210,7 +210,7 @@ impl Context {
                 "Cycle detected when resolving fixed type for location {location:?}"
             );
             let Some(next) = self.location_masks.get(&cur).copied() else {
-                return Ok(Some(cur));
+                return Ok(cur);
             };
             cur = next;
         }
@@ -220,56 +220,70 @@ impl Context {
         self.commands.get(i as usize).map(|c| &c.value.result_type)
     }
 
+    fn fixed_location_type(
+        &mut self,
+        env: &Env,
+        location: T::Location,
+    ) -> Result<Option<Type>, ExecutionError> {
+        Ok(Some(match location {
+            T::Location::TxContext => env.tx_context_type()?,
+            T::Location::GasCoin => env.gas_coin_type()?,
+            T::Location::Result(i, j) => self.result_type(i).unwrap()[j as usize].clone(),
+            T::Location::ObjectInput(i) => {
+                let Some((_, object_input)) = self.objects.get_index(i as usize) else {
+                    invariant_violation!("Unbound object input {}", i)
+                };
+                object_input.ty.clone()
+            }
+            T::Location::PureInput(_) | T::Location::ReceivingInput(_) => return Ok(None),
+        }))
+    }
+
     // Get the fixed type of a location. Returns `None` for Pure and Receiving inputs,
     fn fixed_type(
         &mut self,
         env: &Env,
-        location: SplatLocation,
+        splat_location: SplatLocation,
     ) -> Result<Option<(T::Location, Type)>, ExecutionError> {
-        let (location, ty) = match location {
-            SplatLocation::GasCoin => (T::Location::GasCoin, env.gas_coin_type()?),
-            SplatLocation::Result(i, j) => (
-                T::Location::Result(i, j),
-                self.result_type(i).unwrap()[j as usize].clone(),
-            ),
+        let original_location = match splat_location {
+            SplatLocation::GasCoin => T::Location::GasCoin,
+            SplatLocation::Result(i, j) => T::Location::Result(i, j),
             SplatLocation::Input(i) => match &self.input_resolution[i.0 as usize] {
                 InputKind::Object => {
-                    let Some((object_index, _, object_input)) = self.objects.get_full(&i) else {
+                    let Some(index) = self.objects.get_index_of(&i) else {
                         invariant_violation!("Unbound object input {}", i.0)
                     };
-                    (
-                        T::Location::ObjectInput(object_index as u16),
-                        object_input.ty.clone(),
-                    )
+                    T::Location::ObjectInput(index as u16)
                 }
                 InputKind::Pure | InputKind::Receiving => return Ok(None),
             },
         };
-        let Some(new_location) = match location {
-            SplatLocation::GasCoin => T::Location::GasCoin,
-            SplatLocation::Result(i, j) => T::Location::Result(i, j),
-            SplatLocation::Input(i) => T::Location::Input(i),
+        let location = self.resolve_location_mask(original_location)?;
+        let Some(ty) = self.fixed_location_type(env, location)? else {
+            invariant_violation!(
+                "Location {original_location:?}=>{location:?} does not have a fixed type"
+            )
         };
-        let location = self.resolve_splat_location_mask(location)?;
-        Ok(Some())
+        Ok(Some((location, ty)))
     }
 
     fn resolve_location(
         &mut self,
         env: &Env,
-        location: SplatLocation,
+        splat_location: SplatLocation,
         expected_ty: &Type,
         bytes_constraint: BytesConstraint,
     ) -> Result<(T::Location, Type), ExecutionError> {
-        let location = self.resolve_splat_location_mask(location)?;
-        Ok(match location {
-            SplatLocation::GasCoin | SplatLocation::Result(_, _) => self
-                .fixed_type(env, location)?
-                .ok_or_else(|| make_invariant_violation!("Expected fixed type for {location:?}"))?,
+        let original_location = match splat_location {
+            SplatLocation::GasCoin => T::Location::GasCoin,
+            SplatLocation::Result(i, j) => T::Location::Result(i, j),
             SplatLocation::Input(i) => match &self.input_resolution[i.0 as usize] {
-                InputKind::Object => self.fixed_type(env, location)?.ok_or_else(|| {
-                    make_invariant_violation!("Expected fixed type for {location:?}")
-                })?,
+                InputKind::Object => {
+                    let Some(index) = self.objects.get_index_of(&i) else {
+                        invariant_violation!("Unbound object input {}", i.0)
+                    };
+                    T::Location::ObjectInput(index as u16)
+                }
                 InputKind::Pure => {
                     let ty = match expected_ty {
                         Type::Reference(_, inner) => (**inner).clone(),
@@ -289,7 +303,7 @@ impl Context {
                         self.pure.insert(k.clone(), pure);
                     }
                     let byte_index = self.pure.get_index_of(&k).unwrap();
-                    (T::Location::PureInput(byte_index as u16), ty)
+                    return Ok((T::Location::PureInput(byte_index as u16), ty));
                 }
                 InputKind::Receiving => {
                     let ty = match expected_ty {
@@ -310,10 +324,17 @@ impl Context {
                         self.receiving.insert(k.clone(), receiving);
                     }
                     let byte_index = self.receiving.get_index_of(&k).unwrap();
-                    (T::Location::ReceivingInput(byte_index as u16), ty)
+                    return Ok((T::Location::ReceivingInput(byte_index as u16), ty));
                 }
             },
-        })
+        };
+        let location = self.resolve_location_mask(original_location)?;
+        let Some(ty) = self.fixed_location_type(env, location)? else {
+            invariant_violation!(
+                "Location {original_location:?}=>{location:?} does not have a fixed type"
+            )
+        };
+        Ok((location, ty))
     }
 }
 
@@ -661,8 +682,16 @@ fn argument_(
         command: current_command,
         argument: command_arg_idx as u16,
     };
-    let (location, actual_ty): (T::Location, Type) =
+    let (location, actual_ty) =
         context.resolve_location(env, location, expected_ty, bytes_constraint)?;
+    let (location, actual_ty) = apply_conversion(
+        env,
+        context,
+        command_arg_idx,
+        location,
+        actual_ty,
+        expected_ty,
+    )?;
     Ok(match (actual_ty, expected_ty) {
         // Reference location types
         (Type::Reference(a_is_mut, a), Type::Reference(b_is_mut, b)) => {
@@ -676,7 +705,7 @@ fn argument_(
             };
             debug_assert!(expected_ty.abilities().has_copy());
             // unused since the type is fixed
-            let location = check_type(context, location, &a, b)?;
+            check_type(&a, b)?;
             if needs_freeze {
                 T::Argument__::Freeze(T::Usage::new_copy(location))
             } else {
@@ -684,7 +713,7 @@ fn argument_(
             }
         }
         (Type::Reference(_, a), b) => {
-            let location = check_type(context, location, &a, b)?;
+            check_type(&a, b)?;
             if !b.abilities().has_copy() {
                 // TODO this should be a different error for missing copy
                 return Err(CommandArgumentError::TypeMismatch.into());
@@ -694,11 +723,11 @@ fn argument_(
 
         // Non reference location types
         (actual_ty, Type::Reference(is_mut, inner)) => {
-            let location = check_type(context, location, &actual_ty, inner)?;
+            check_type(&actual_ty, inner)?;
             T::Argument__::Borrow(/* mut */ *is_mut, location)
         }
         (actual_ty, _) => {
-            let location = check_type(context, location, &actual_ty, expected_ty)?;
+            check_type(&actual_ty, expected_ty)?;
             T::Argument__::Use(if expected_ty.abilities().has_copy() {
                 T::Usage::new_copy(location)
             } else {
@@ -708,20 +737,9 @@ fn argument_(
     })
 }
 
-fn check_type(
-    context: &mut Context,
-    location: T::Location,
-    actual_ty: &Type,
-    expected_ty: &Type,
-) -> Result<T::Location, CommandArgumentError> {
+fn check_type(actual_ty: &Type, expected_ty: &Type) -> Result<(), CommandArgumentError> {
     if actual_ty == expected_ty {
-        Ok(location)
-    } else if let Some(expected_inner_t) = coin_inner_type(expected_ty)
-        && let Some(actual_inner_t) = withdrawal_inner_type(actual_ty)
-        && actual_inner_t == expected_inner_t
-    {
-        let cast_result = cast_withdrawl_to_coin(context, location, actual_inner_t);
-        Ok(cast_result)
+        Ok(())
     } else {
         Err(CommandArgumentError::TypeMismatch)
     }
@@ -857,6 +875,37 @@ fn check_coin_type(ty: &Type) -> Result<(), EitherError> {
     }
 }
 
+fn apply_conversion(
+    env: &Env,
+    context: &mut Context,
+    command_arg_idx: usize,
+    location: T::Location,
+    actual_ty: Type,
+    expected_ty: &Type,
+) -> Result<(T::Location, Type), ExecutionError> {
+    // check for withdrawal to coin conversion
+    let expected_ty = match expected_ty {
+        Type::Reference(_, inner) => &**inner,
+        ty => ty,
+    };
+    if let Some(expected_inner) = coin_inner_type(expected_ty)
+        && let Some(actual_withdrawal_inner) = withdrawal_inner_type(&actual_ty)
+        && let Some(actual_inner) = balance_inner_type(actual_withdrawal_inner)
+        && actual_inner == expected_inner
+    {
+        cast_withdrawal_to_coin(
+            env,
+            context,
+            command_arg_idx,
+            location,
+            actual_ty,
+            expected_inner,
+        )
+    } else {
+        Ok((location, actual_ty))
+    }
+}
+
 /// Returns the inner type `T` if the type is `sui::coin::Coin<T>`, else `None`
 fn coin_inner_type(ty: &Type) -> Option<&Type> {
     let Type::Datatype(dt) = ty else {
@@ -867,6 +916,22 @@ fn coin_inner_type(ty: &Type) -> Option<&Type> {
     }
     let resolved = dt.qualified_ident();
     if resolved == RESOLVED_COIN_STRUCT {
+        Some(&dt.type_arguments[0])
+    } else {
+        None
+    }
+}
+
+/// Returns the inner type `T` if the type is `sui::balance::Balance<T>`, else `None`
+fn balance_inner_type(ty: &Type) -> Option<&Type> {
+    let Type::Datatype(dt) = ty else {
+        return None;
+    };
+    if dt.type_arguments.len() != 1 {
+        return None;
+    }
+    let resolved = dt.qualified_ident();
+    if resolved == RESOLVED_BALANCE_STRUCT {
         Some(&dt.type_arguments[0])
     } else {
         None
@@ -892,11 +957,12 @@ fn withdrawal_inner_type(ty: &Type) -> Option<&Type> {
 fn cast_withdrawal_to_coin(
     env: &Env,
     context: &mut Context,
+    command_arg_idx: usize,
     location: T::Location,
-    withdrawal_type: &Type,
+    withdrawal_type: Type,
     inner_ty: &Type,
-) -> Result<T::Location, ExecutionError> {
-    let idx = todo!("actual arg index");
+) -> Result<(T::Location, Type), ExecutionError> {
+    let idx = command_arg_idx as u16;
     // first store the owner of the withdrawal
     let withdrawal_borrow_ = T::Argument__::Borrow(false, location);
     let withdrawl_ref_ty = Type::Reference(false, Rc::new(withdrawal_type.clone()));
@@ -914,7 +980,7 @@ fn cast_withdrawal_to_coin(
     let owner_idx = context.push_generated_command(owner_command_)?;
     // we need to insert a cast command before the current command
     let withdrawal_arg_ = T::Argument__::new_move(location);
-    let withdrawal_arg = sp(idx, (withdrawal_arg_, withdrawal_type.clone()));
+    let withdrawal_arg = sp(idx, (withdrawal_arg_, withdrawal_type));
     let ctx_arg_ = T::Argument__::Borrow(true, T::Location::TxContext);
     let ctx_ty = Type::Reference(true, Rc::new(env.tx_context_type()?));
     let ctx_arg = sp(idx, (ctx_arg_, ctx_ty));
@@ -922,6 +988,7 @@ fn cast_withdrawal_to_coin(
         function: todo!("call sui::coin::redeem_funds"),
         arguments: vec![withdrawal_arg, ctx_arg],
     }));
+    let coin_type = env.coin_type(inner_ty.clone())?;
     let cast_command_ = T::Command_ {
         command: cast_command__,
         result_type: vec![env.coin_type(inner_ty.clone())?],
@@ -930,29 +997,20 @@ fn cast_withdrawal_to_coin(
     };
     let cast_idx = context.push_generated_command(cast_command_)?;
     // add mask
-    let splat_location = match location {
-        T::Location::ObjectInput(_) => todo!(),
-        T::Location::Result(_, _) => todo!(),
-        T::Location::TxContext => todo!(),
-        T::Location::GasCoin => todo!(),
-        T::Location::ReceivingInput(_) => todo!(),
-        T::Location::PureInput(_) => todo!(),
-    };
     context
         .location_masks
-        .insert(splat_location, SplatLocation::Result(cast_idx, 0));
+        .insert(location, T::Location::Result(cast_idx, 0));
     // manage metadata
     context.withdrawal_casts.insert(
         location,
         T::WithdrawalCast {
-            owner_idx,
-            cast_idx,
+            owner_result: owner_idx,
+            cast_result: cast_idx,
             cast_kind: T::WithdrawalCastKind::ToCoin,
         },
     );
-
     // the result of the cast is at (cast_idx, 0)
-    T::Location::Result(cast_idx, 0)
+    Ok((T::Location::Result(cast_idx, 0), coin_type))
 }
 
 //**************************************************************************************************
@@ -1125,6 +1183,7 @@ mod consumed_shared_objects {
                 objects,
                 pure: _,
                 receiving: _,
+                withdrawal_casts: _,
                 commands: _,
             } = ast;
             let inputs = objects

@@ -24,7 +24,7 @@ use crate::{
 use move_binary_format::{
     CompiledModule,
     errors::{Location, PartialVMError, VMError},
-    file_format::{AbilitySet, TypeParameterIndex},
+    file_format::{Ability, AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
     annotated_value,
@@ -39,6 +39,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     Identifier, TypeTag,
     base_types::{ObjectID, TxContext},
+    coin::RESOLVED_COIN_STRUCT,
     error::{ExecutionError, ExecutionErrorKind},
     execution_status::TypeArgumentError,
     gas_coin::GasCoin,
@@ -291,6 +292,21 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
 
     pub fn tx_context_type(&self) -> Result<Type, ExecutionError> {
         get_or_init_ty!(self, tx_context_type, TxContext::type_())
+    }
+
+    pub fn coin_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
+        let Some(abilities) = AbilitySet::from_u8((Ability::Key as u8) | (Ability::Store as u8))
+        else {
+            invariant_violation!("Unable to create coin abilities");
+        };
+        let (a, m, n) = RESOLVED_COIN_STRUCT;
+        let module = ModuleId::new(*a, m.to_owned());
+        Ok(Type::Datatype(Rc::new(Datatype {
+            abilities,
+            module,
+            name: n.to_owned(),
+            type_arguments: vec![inner_type],
+        })))
     }
 
     pub fn vector_type(&self, element_type: Type) -> Result<Type, ExecutionError> {
