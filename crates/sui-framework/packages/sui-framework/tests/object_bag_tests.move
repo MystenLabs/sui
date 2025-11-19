@@ -30,27 +30,27 @@ fun simple_all_functions() {
     bag.add(1u64, counter2);
     // check they exist
     assert!(bag.contains(b"hello"));
-    assert!(bag.contains(1));
+    assert!(bag.contains(1u64));
     assert!(bag.contains_with_type<vector<u8>, Counter>(b"hello"));
     assert!(bag.contains_with_type<u64, Counter>(1));
     // check the IDs
     assert!(bag.value_id(b"hello").borrow() == &id1);
-    assert!(bag.value_id(1).borrow() == &id2);
+    assert!(bag.value_id(1u64).borrow() == &id2);
     // check the values
     assert!((&bag[b"hello"] : &Counter).count() == 0);
-    assert!((&bag[1] : &Counter).count() == 0);
+    assert!((&bag[1u64] : &Counter).count() == 0);
     // mutate them
     bump(&mut bag[b"hello"]);
-    bump(bump(&mut bag[1]));
+    bump(bump(&mut bag[1u64]));
     // check the new value
     assert!((&bag[b"hello"] : &Counter).count() == 1);
-    assert!((&bag[1] : &Counter).count() == 2);
+    assert!((&bag[1u64] : &Counter).count() == 2);
     // remove the value and check it
     assert!(bag.remove<vector<u8>, Counter>(b"hello").destroy() == 1);
     assert!(bag.remove<u64, Counter>(1).destroy() == 2);
     // verify that they are not there
     assert!(!bag.contains(b"hello"));
-    assert!(!bag.contains(1));
+    assert!(!bag.contains(1u64));
     scenario.end();
     bag.destroy_empty();
 }
@@ -72,7 +72,7 @@ fun borrow_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let bag = object_bag::new(scenario.ctx());
-    let _: &Counter = &bag[0];
+    let _: &Counter = &bag[0u64];
     abort 42
 }
 
@@ -82,7 +82,7 @@ fun borrow_mut_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut bag = object_bag::new(scenario.ctx());
-    let _: &mut Counter = &mut bag[0];
+    let _: &mut Counter = &mut bag[0u64];
     abort 42
 }
 
@@ -103,7 +103,7 @@ fun destroy_non_empty() {
     let mut scenario = test_scenario::begin(sender);
     let mut bag = object_bag::new(scenario.ctx());
     let counter = new(&mut scenario);
-    bag.add(0, counter);
+    bag.add(0u64, counter);
     bag.destroy_empty();
     scenario.end();
 }
@@ -114,10 +114,10 @@ fun sanity_check_contains() {
     let mut scenario = test_scenario::begin(sender);
     let mut bag = object_bag::new(scenario.ctx());
     let counter = new(&mut scenario);
-    assert!(!bag.contains(0));
-    bag.add(0, counter);
-    assert!(bag.contains(0));
-    assert!(!bag.contains(1));
+    assert!(!bag.contains(0u64));
+    bag.add(0u64, counter);
+    assert!(bag.contains(0u64));
+    assert!(!bag.contains(1u64));
     scenario.end();
     bag.remove<u64, Counter>(0).destroy();
     bag.destroy_empty()
@@ -131,7 +131,7 @@ fun sanity_check_contains_with_type() {
     let counter = new(&mut scenario);
     assert!(!bag.contains_with_type<u64, Counter>(0));
     assert!(!bag.contains_with_type<u64, Fake>(0));
-    bag.add(0, counter);
+    bag.add(0u64, counter);
     assert!(bag.contains_with_type<u64, Counter>(0));
     assert!(!bag.contains_with_type<u8, Counter>(0));
     assert!(!bag.contains_with_type<u8, Fake>(0));
@@ -149,10 +149,10 @@ fun sanity_check_size() {
     let counter2 = new(&mut scenario);
     assert!(bag.is_empty());
     assert!(bag.length() == 0);
-    bag.add(0, counter1);
+    bag.add(0u64, counter1);
     assert!(!bag.is_empty());
     assert!(bag.length() == 1);
-    bag.add(1, counter2);
+    bag.add(1u64, counter2);
     assert!(!bag.is_empty());
     assert!(bag.length() == 2);
     scenario.end();
@@ -168,18 +168,18 @@ fun transfer_object() {
     let mut scenario = test_scenario::begin(sender);
     let mut bag1 = object_bag::new(scenario.ctx());
     let mut bag2 = object_bag::new(scenario.ctx());
-    bag1.add(0, new(&mut scenario));
-    assert!(bag1.contains(0));
-    assert!(!bag2.contains(0));
-    bump(&mut bag1[0]);
+    bag1.add(0u64, new(&mut scenario));
+    assert!(bag1.contains(0u64));
+    assert!(!bag2.contains(0u64));
+    bump(&mut bag1[0u64]);
     let c = bag1.remove<u64, Counter>(0);
-    bag2.add(0, c);
-    assert!(!bag1.contains(0));
-    assert!(bag2.contains(0));
-    bump(&mut bag2[0]);
-    assert!((&bag2[0] : &Counter).count() == 2);
+    bag2.add(0u64, c);
+    assert!(!bag1.contains(0u64));
+    assert!(bag2.contains(0u64));
+    bump(&mut bag2[0u64]);
+    assert!((&bag2[0u64] : &Counter).count() == 2);
     scenario.end();
-    (bag2.remove(0): Counter).destroy();
+    (bag2.remove(0u64): Counter).destroy();
     bag1.destroy_empty();
     bag2.destroy_empty();
 }

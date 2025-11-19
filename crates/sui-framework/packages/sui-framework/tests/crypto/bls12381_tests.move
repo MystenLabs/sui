@@ -235,7 +235,7 @@ fun test_scalar_more_ops() {
     let z_scalar = bls12381::scalar_inv(&x_scalar);
     assert!(group_ops::equal(&bls12381::scalar_one(), &bls12381::scalar_mul(&x_scalar, &z_scalar)));
 
-    let mut i = 0;
+    let mut i = 0u64;
     let mut z = bls12381::scalar_add(&x_scalar, &y_scalar);
     while (i < 20) {
         let mut new_z = bls12381::scalar_mul(&z, &x_scalar);
@@ -460,7 +460,7 @@ fun test_uncompressed_g1_sum() {
     // Sum with random terms
     let mut gen = random::new_generator_for_testing();
     let mut elements = vector[];
-    let mut i = 100;
+    let mut i = 100u64;
     let mut expected_result = bls12381::g1_identity();
     while (i > 0) {
         let scalar = bls12381::scalar_from_u64(gen.generate_u64());
@@ -481,7 +481,7 @@ fun test_uncompressed_g1_sum_too_long() {
     // Sum with random terms
     let mut gen = random::new_generator_for_testing();
     let mut elements = vector[];
-    let mut i = 1201;
+    let mut i = 1201u64;
     while (i > 0) {
         let scalar = bls12381::scalar_from_u64(gen.generate_u64());
         let element = bls12381::g1_mul(&scalar, &bls12381::g1_generator());
