@@ -108,6 +108,7 @@ impl FullnodeClient {
         .with_signatures(signatures)
         .with_read_mask(FieldMask::from_paths([
             "effects.bcs",
+            "effects.lamport_version",
             "events.bcs",
             "balance_changes",
             "objects.objects.bcs",
