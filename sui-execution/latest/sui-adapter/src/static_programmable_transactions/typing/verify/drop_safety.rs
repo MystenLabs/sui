@@ -20,11 +20,21 @@ pub fn refine_and_verify<Mode: ExecutionMode>(
 }
 
 mod refine {
+    use sui_types::{
+        SUI_FRAMEWORK_PACKAGE_ID,
+        coin::{COIN_MODULE_NAME, SEND_FUNDS_FUNC_NAME},
+        error::ExecutionError,
+    };
+
     use crate::{
         sp,
         static_programmable_transactions::{
+            env::Env,
             spanned::sp,
-            typing::ast::{self as T, Type},
+            typing::{
+                ast::{self as T, Type},
+                translate::coin_inner_type,
+            },
         },
     };
     use std::collections::BTreeSet;
@@ -112,9 +122,10 @@ mod refine {
     /// For any withdrawal conversion where the value was not moved, send it back to the original
     /// owner
     fn return_unused_withdrawal_conversions(
+        env: &Env,
         ast: &mut T::Transaction,
         moved_locations: &BTreeSet<T::Location>,
-    ) {
+    ) -> Result<(), ExecutionError> {
         for (unmoved_loc, conversion_info) in ast
             .withdrawal_conversions
             .iter()
@@ -155,13 +166,20 @@ mod refine {
                 "only coin conversion supported"
             );
             let conversion_ty = &conversion_command.value.result_type[0];
+            let Some(inner_ty) = coin_inner_type(conversion_ty) else {
+                invariant_violation!("conversion result should be a coin type")
+            };
             let move_result_ = T::Argument__::new_move(T::Location::Result(conversion_result, 0));
             let move_result = sp(cur_command, (move_result_, conversion_ty.clone()));
             let owner_ty = Type::Address;
             let owner_arg_ = T::Argument__::new_move(T::Location::Result(owner_result, 0));
             let owner_arg = sp(cur_command, (owner_arg_, owner_ty));
             let return_command__ = T::Command__::MoveCall(Box::new(T::MoveCall {
-                function: todo!("call sui::coin::send_funds"),
+                function: env.load_framework_function(
+                    COIN_MODULE_NAME,
+                    SEND_FUNDS_FUNC_NAME,
+                    vec![inner_ty.clone()],
+                )?,
                 arguments: vec![move_result, owner_arg],
             }));
             let return_command = sp(
@@ -175,6 +193,7 @@ mod refine {
             );
             ast.commands.push(return_command);
         }
+        Ok(())
     }
 }
 
