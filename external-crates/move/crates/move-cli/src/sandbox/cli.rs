@@ -93,7 +93,7 @@ pub enum SandboxCommand {
         )]
         type_args: Vec<TypeTag>,
         /// Maximum number of gas units to be consumed by execution.
-        /// When the budget is exhaused, execution will abort.
+        /// When the budget is exhausted, execution will abort.
         /// By default, no `gas-budget` is specified and gas metering is disabled.
         #[clap(long = "gas-budget", short = 'g')]
         gas_budget: Option<u64>,
