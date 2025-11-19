@@ -219,7 +219,6 @@ jobs:
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
       # non-deterministic `test` job.
       SUI_SKIP_SIMTESTS: 1
-      RUST_MIN_STACK: 8388608  # 8 MB
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -230,33 +229,6 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-
-      - uses: al-cheb/configure-pagefile-action@v1.2
-        with:
-          minimum-size: 8GB
-          maximum-size: 32GB
-          disk-root: "C:"
-
-      # - name: Setup WSL
-      #   uses: Vampire/setup-wsl@v2
-      #   with:
-      #     distribution: Ubuntu-22.04
-      
-      # - name: Install Rust and dependencies in WSL
-      #   shell: wsl-bash {0}
-      #   run: |
-      #     sudo apt update
-      #     sudo apt install -y build-essential curl file git cmake llvm clang
-      #     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-      #     source $HOME/.cargo/env
-      #     rustup default stable
-      #     cargo install cargo-nextest --locked
-      # 
-      # - name: Run tests in WSL
-      #   shell: wsl-bash {0}
-      #   run: |
-      #     source $HOME/.cargo/env
-      #     cargo nextest run -p sui --no-fail-fast --profile ci
 
       - uses: taiki-e/install-action@nextest
 
