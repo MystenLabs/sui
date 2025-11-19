@@ -5,9 +5,11 @@ use std::sync::Arc;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::safe_client::SafeClient;
 use sui_keys::keystore::AccountKeystore;
-use sui_macros::sim_test;
+use sui_macros::{register_fail_point_arg, sim_test};
+use sui_swarm_config::genesis_config::AccountConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
+use sui_types::base_types::AuthorityName;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::{
     SubmitTxRequest, SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
@@ -58,7 +60,7 @@ async fn submit_and_wait_for_effects(
 
 #[sim_test]
 async fn test_alias_changes() {
-    use sui_swarm_config::genesis_config::AccountConfig;
+    telemetry_subscribers::init_for_testing();
 
     // Create accounts with more gas objects than the default
     let accounts = vec![
@@ -97,9 +99,20 @@ async fn test_alias_changes() {
         .await
         .unwrap();
 
-    // Use the custom accounts we added which have more gas objects
-    let (account1, gas_objects1) = &accounts[0];
-    let (account2, _gas_objects2) = &accounts[1];
+    // Use the custom account we added which has more gas objects
+    let (account1, gas_objects1, account1_index) = {
+        let mut result = None;
+        for (i, account) in accounts.iter().enumerate() {
+            if account.1.len() >= 10 {
+                result = Some((account.0, account.1, i));
+                break;
+            }
+        }
+        result.unwrap_or_else(|| {
+            unreachable!("Should have at least one account with 10+ gas objects")
+        })
+    };
+    let (account2, _gas_objects2) = &accounts[(account1_index + 1) % accounts.len()];
     let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
 
     let client = test_cluster
@@ -115,7 +128,7 @@ async fn test_alias_changes() {
     let init_aliases_tx = test_cluster
         .wallet
         .sign_transaction(
-            &TestTransactionBuilder::new(*account1, gas_objects1[0], gas_price)
+            &TestTransactionBuilder::new(account1, gas_objects1[0], gas_price)
                 .move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
                     "authenticator_state",
@@ -150,8 +163,8 @@ async fn test_alias_changes() {
     let post_init_tx = test_cluster
         .wallet
         .sign_transaction(
-            &TestTransactionBuilder::new(*account1, gas_objects1[1], gas_price)
-                .transfer_sui(None, *account1)
+            &TestTransactionBuilder::new(account1, gas_objects1[1], gas_price)
+                .transfer_sui(None, account1)
                 .build(),
         )
         .await;
@@ -163,7 +176,7 @@ async fn test_alias_changes() {
     let add_alias_tx = test_cluster
         .wallet
         .sign_transaction(
-            &TestTransactionBuilder::new(*account1, gas_objects1[2], gas_price)
+            &TestTransactionBuilder::new(account1, gas_objects1[2], gas_price)
                 .move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
                     "authenticator_state",
@@ -192,8 +205,8 @@ async fn test_alias_changes() {
         .keystore
         .export(account2)
         .unwrap();
-    let alias_signer_tx_data = TestTransactionBuilder::new(*account1, gas_objects1[3], gas_price)
-        .transfer_sui(None, *account1)
+    let alias_signer_tx_data = TestTransactionBuilder::new(account1, gas_objects1[3], gas_price)
+        .transfer_sui(None, account1)
         .build();
     let alias_signer_tx =
         Transaction::from_data_and_signer(alias_signer_tx_data, vec![account2_keypair]);
@@ -204,7 +217,7 @@ async fn test_alias_changes() {
     let remove_alias_tx = test_cluster
         .wallet
         .sign_transaction(
-            &TestTransactionBuilder::new(*account1, gas_objects1[4], gas_price)
+            &TestTransactionBuilder::new(account1, gas_objects1[4], gas_price)
                 .move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
                     "authenticator_state",
@@ -231,12 +244,12 @@ async fn test_alias_changes() {
         .wallet
         .config
         .keystore
-        .export(account1)
+        .export(&account1)
         .unwrap();
 
     let account1_self_signed_tx_data =
-        TestTransactionBuilder::new(*account1, gas_objects1[5], gas_price)
-            .transfer_sui(None, *account1)
+        TestTransactionBuilder::new(account1, gas_objects1[5], gas_price)
+            .transfer_sui(None, account1)
             .build();
 
     let account1_self_signed_tx =
@@ -255,8 +268,8 @@ async fn test_alias_changes() {
 
     // Resubmit a transaction with account1 as sender and account2 as signer
     // This should still work because account2 is still in the alias list
-    let alias_signer_tx_data2 = TestTransactionBuilder::new(*account1, gas_objects1[6], gas_price)
-        .transfer_sui(None, *account1)
+    let alias_signer_tx_data2 = TestTransactionBuilder::new(account1, gas_objects1[6], gas_price)
+        .transfer_sui(None, account1)
         .build();
 
     let alias_signer_tx2 =
@@ -264,4 +277,79 @@ async fn test_alias_changes() {
 
     let effects = submit_and_wait_for_effects(&client, alias_signer_tx2).await;
     assert!(effects.status().is_ok());
+}
+
+#[sim_test]
+async fn test_alias_race() {
+    telemetry_subscribers::init_for_testing();
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(3)
+        .build()
+        .await;
+
+    let accounts = test_cluster
+        .wallet
+        .get_all_accounts_and_gas_objects()
+        .await
+        .unwrap();
+    let (account, gas_objects) = &accounts[0];
+    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
+
+    let (client_name, client) = test_cluster
+        .authority_aggregator()
+        .authority_clients
+        .iter()
+        .next()
+        .map(|(name, client)| (name.clone(), client.clone()))
+        .unwrap();
+    // Names of all validators except the one to which we are submitting a tx.
+    let other_validator_names: Vec<AuthorityName> = test_cluster
+        .swarm
+        .validator_nodes()
+        .map(|node| node.name())
+        .filter(|name| name != &client_name)
+        .collect();
+    register_fail_point_arg(
+        "consensus-validator-always-report-aliases-changed",
+        move || Some(other_validator_names.clone()),
+    );
+
+    let tx = test_cluster
+        .wallet
+        .sign_transaction(
+            &TestTransactionBuilder::new(*account, gas_objects[1], gas_price)
+                .transfer_sui(None, *account)
+                .build(),
+        )
+        .await;
+
+    let digest = *tx.digest();
+
+    let results = client
+        .submit_transaction(SubmitTxRequest::new_transaction(tx), None)
+        .await
+        .expect("Failed to submit transaction");
+    assert_eq!(results.results.len(), 1);
+    let SubmitTxResult::Submitted { consensus_position } = results.results[0] else {
+        panic!("Expected Submitted result, got: {:?}", results.results[0]);
+    };
+
+    let effects = client
+        .wait_for_effects(
+            WaitForEffectsRequest {
+                transaction_digest: Some(digest),
+                consensus_position: Some(consensus_position),
+                include_details: true,
+                ping_type: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(
+        matches!(effects, WaitForEffectsResponse::Rejected { .. }),
+        "Expected Rejected response, got: {:?}",
+        effects
+    );
 }

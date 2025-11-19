@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
+use crate::{
+    authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
+    checkpoints::CheckpointServiceNotify,
+    consensus_adapter::ConsensusOverloadChecker,
+};
 use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto_tbls::dkg_v1;
@@ -11,6 +14,10 @@ use prometheus::{
     IntCounter, IntCounterVec, Registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry,
 };
+use std::sync::Arc;
+use sui_macros::fail_point_arg;
+#[cfg(msim)]
+use sui_types::base_types::AuthorityName;
 use sui_types::{
     error::{SuiError, SuiErrorKind, SuiResult},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
@@ -18,12 +25,6 @@ use sui_types::{
 };
 use tap::TapFallible;
 use tracing::{debug, info, instrument, warn};
-
-use crate::{
-    authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
-    checkpoints::CheckpointServiceNotify,
-    consensus_adapter::ConsensusOverloadChecker,
-};
 
 /// Allows verifying the validity of transactions
 #[derive(Clone)]
@@ -227,8 +228,20 @@ impl SuiTxValidator {
             self.authority_state.check_system_overload_at_signing(),
         )?;
 
+        #[allow(unused_mut)]
+        let mut fail_point_always_report_aliases_changed = false;
+        fail_point_arg!(
+            "consensus-validator-always-report-aliases-changed",
+            |for_validators: Vec<AuthorityName>| {
+                if for_validators.contains(&self.authority_state.name) {
+                    // always report aliases changed in simtests
+                    fail_point_always_report_aliases_changed = true;
+                }
+            }
+        );
+
         let verified_tx = epoch_store.verify_transaction_with_current_aliases(tx)?;
-        if *verified_tx.aliases() != aliases {
+        if *verified_tx.aliases() != aliases || fail_point_always_report_aliases_changed {
             return Err(SuiErrorKind::AliasesChanged.into());
         }
 
