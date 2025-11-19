@@ -16,7 +16,7 @@ The following table summarizes the main storage components:
 | Pruning full nodes  | RocksDB, SSD storage | Pruning full nodes maintain unpruned RocksDB indexes for efficient querying.                                                                                                 | 2.5TB                                 |
 | Unpruned full nodes | RocksDB, SSD storage | Unpruned full nodes retain full object and transaction history for complete archival.                                                                                        | 16TB                               |
 | Full node snapshots | Cloud storage        | Snapshots of full node data are stored in cloud storage for validator or full node backup and recovery.                                                                      | ~1.6TB                                 |
-| Checkpoints bucket | Cloud storage        | Stores blockchain state data in cloud storage to support syncing of historical objects that might have been pruned.                                        | ~30TB                                |
+| Checkpoints bucket  | Cloud storage        | Stores blockchain state data in cloud storage to support syncing of historical objects that might have been pruned.                                                          | ~30TB                                |
 
 
 ### Validators

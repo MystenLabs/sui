@@ -4,19 +4,19 @@ description: Overview of the Sui consensus mechanism.
 keywords: [ consensus, mysticeti, delegated proof of stake, proof of stake, dpos ]
 ---
 
-**Consensus** is the process by which the majority of nodes on a blockchain network agree on the current state of the network and which transactions to finalize and commit to the permanent chain history. This process prevents malicious nodes from altering the network, such as modifying transactions to steal assets.
+_Consensus_ is the process by which the majority of nodes on a blockchain network agree on the current state of the network, including which transactions to finalize and commit to the chain's permanent history. This process prevents malicious or faulty nodes from altering the network incorrectly.
 
 ## Validator nodes
 
-To participate in consensus, validators must stake SUI tokens on the network. Sui uses Delegated Proof-of-Stake (DPoS) to determine which validators operate the network and their voting power. Validators are incentivized to participate in good faith through a share of transaction fees, staking rewards, and slashing of stake and staking rewards in case of misbehavior.
+To participate in consensus, validators must [stake SUI tokens](/guides/operator/validator/validator-rewards.mdx) on the network. Sui uses delegated roof-of-stake (DPoS) to determine which validators operate the network and their voting power. Validators are incentivized to participate in good faith through a share of transaction fees, [staking rewards](/guides/operator/validator/validator-rewards.mdx), and slashing of stake and staking rewards in case of misbehavior.
 
 ### Epochs
 
-An _epoch_ is a duration of time where the Sui validators and their stakes do not change. An epoch is about 24 hours on both Mainnet and Testnet. At an epoch boundary, reconfiguration might occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as genesis and the new set of validators as the operators. Besides validator set changes, tokenomics operations such as staking and un-staking, and distribution of staking rewards are also processed at epoch boundaries.
+An [_epoch_](/concepts/sui-architecture/epochs.mdx) is a duration of time where the Sui validators and their stakes do not change. An epoch is about 24 hours on both [Mainnet](/concepts/sui-architecture/networks.mdx) and [Testnet](/concepts/sui-architecture/networks.mdx). At an epoch boundary, [reconfiguration](/concepts/sui-architecture/epochs.mdx) might occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as genesis and the new set of validators as the operators. Besides validator set changes, [tokenomics](/concepts/tokenomics.mdx) operations such as staking and un-staking, and distribution of staking rewards are also processed at epoch boundaries.
 
 ### Quorums
 
-A _quorum_ is a set of validators whose combined voting power is greater than two-thirds (>2/3) of the total during a particular epoch. For example, in a Sui instance operated by 4 validators that all have the same voting power, any group containing 3 validators is a quorum.
+A _quorum_ is a set of [validators](/guides/operator/validator/validator-config.mdx) whose combined voting power is greater than two-thirds (>2/3) of the total during a particular epoch. For example, in a Sui instance operated by 4 validators that all have the same voting power, any group containing 3 validators is a quorum.
 
 The quorum size of >2/3 ensures Byzantine fault tolerance (BFT). A validator commits a transaction only if the transaction is accompanied by cryptographic signatures from a quorum. Sui calls the combination of the transaction and the quorum signatures on its bytes a _certificate_. The policy of committing only certificates ensures Byzantine fault tolerance: if >2/3 of the validators faithfully follow the protocol, they are guaranteed to eventually agree on both the set of committed certificates and their effects.
 
@@ -30,7 +30,7 @@ A validator can handle 2 types of write requests: transactions and certificates.
 
 ### Transactions
 
-When a validator receives a transaction from a client, it first performs transaction validity checks to verify the sender's signature. If the checks pass, the validator locks all owned-objects and signs the transaction bytes, then returns the signature to the client. The client repeats this process with multiple validators until it has collected signatures on its transaction from a quorum, thereby forming a certificate.
+When a validator receives a transaction from a client, it first performs transaction validity checks to verify the sender's signature. If the checks pass, the validator locks all [owned-objects](/concepts/object-ownership/address-owned.mdx) and signs the transaction bytes, then returns the signature to the client. The client repeats this process with multiple validators until it has collected signatures on its transaction from a quorum, thereby forming a certificate.
 
 The process of collecting validator signatures on a transaction into a certificate and the process of submitting certificates can be performed in parallel. The client can simultaneously multicast transactions and certificates to an arbitrary number of validators. Alternatively, a client can outsource either or both of these tasks to a third-party service provider. This provider must be trusted for liveness, as it can refuse to form a certificate, but not for safety, as it cannot change the effects of the transaction and does not need the user's secret key.
 
@@ -74,6 +74,8 @@ For more details, including correctness proofs, see the [MYSTICETI: Reaching the
 
 ## Related links
 
-<RelatedLink to="/concepts/sui-architecture/transaction-lifecycle.mdx" />
+<RelatedLink to="/concepts/transactions/transaction-lifecycle.mdx" />
+
 <RelatedLink to="/concepts/sui-architecture/sui-security.mdx" />
+
 <RelatedLink href="https://docs.sui.io/paper/mysticeti.pdf" label="MYSTICETI: Reaching the Latency Limits with Uncertified DAGs" desc="Whitepaper that documents the Mysticeti protocol." />
