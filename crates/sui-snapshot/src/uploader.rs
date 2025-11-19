@@ -123,18 +123,45 @@ impl StateSnapshotUploader {
 
     async fn upload_state_snapshot_to_object_store(&self, missing_epochs: Vec<u64>) -> Result<()> {
         let last_missing_epoch = missing_epochs.last().cloned().unwrap_or(0);
+        info!(
+            "upload_state_snapshot_to_object_store called with {} missing epochs, last_missing_epoch: {}",
+            missing_epochs.len(),
+            last_missing_epoch
+        );
+
         let local_checkpoints_by_epoch =
             find_all_dirs_with_epoch_prefix(&self.db_checkpoint_store, None).await?;
+        info!(
+            "Found {} local checkpoint directories on disk",
+            local_checkpoints_by_epoch.len()
+        );
+
         let mut dirs: Vec<_> = local_checkpoints_by_epoch.iter().collect();
         dirs.sort_by_key(|(epoch_num, _path)| *epoch_num);
+
+        if !dirs.is_empty() {
+            let first_epoch = dirs.first().map(|(e, _)| **e).unwrap_or(0);
+            let last_epoch = dirs.last().map(|(e, _)| **e).unwrap_or(0);
+            info!(
+                "Local checkpoint epoch range: {} to {} ({} epochs)",
+                first_epoch,
+                last_epoch,
+                dirs.len()
+            );
+        }
+
         for (epoch, db_path) in dirs {
             if missing_epochs.contains(epoch) || *epoch >= last_missing_epoch {
                 // TEMPORARY: Only upload epochs divisible by archive_interval_epochs for backfill
                 if self.archive_interval_epochs > 0 && !epoch.is_multiple_of(self.archive_interval_epochs) {
-                    info!("Skipping epoch {} (not divisible by {})", *epoch, self.archive_interval_epochs);
+                    debug!("Skipping epoch {} (not divisible by {})", *epoch, self.archive_interval_epochs);
                     continue;
                 }
-                info!("Starting state snapshot creation for epoch: {}", *epoch);
+                info!(
+                    "Starting state snapshot creation for epoch: {} (db_path: {})",
+                    *epoch,
+                    db_path.as_ref()
+                );
                 let state_snapshot_writer = StateSnapshotWriterV1::new_from_store(
                     &self.staging_path,
                     &self.staging_store,
@@ -148,18 +175,71 @@ impl StateSnapshotUploader {
                     None,
                     None,
                 ));
-                let commitments = self
-                    .checkpoint_store
-                    .get_epoch_state_commitments(*epoch)
-                    .expect("Expected last checkpoint of epoch to have end of epoch data")
-                    .expect("Expected end of epoch data to be present");
-                let state_hash_commitment = match commitments
-                    .last()
-                    .expect("Expected at least one commitment")
-                    .clone()
-                {
-                    ECMHLiveObjectSetDigest(digest) => digest,
-                    _ => return Err(anyhow::anyhow!("Expected ECMHLiveObjectSetDigest")),
+
+                // Get epoch state commitments, skip if not available
+                let commitments = match self.checkpoint_store.get_epoch_state_commitments(*epoch) {
+                    Ok(Some(commitments)) => {
+                        info!(
+                            "Successfully retrieved {} commitment(s) for epoch {}",
+                            commitments.len(),
+                            *epoch
+                        );
+                        commitments
+                    }
+                    Ok(None) => {
+                        // Check if we have the last checkpoint sequence number for this epoch
+                        match self.checkpoint_store.get_epoch_last_checkpoint_seq_number(*epoch) {
+                            Ok(Some(seq)) => {
+                                error!(
+                                    "Epoch {} has last checkpoint seq {} in checkpoint store but get_epoch_last_checkpoint returned None",
+                                    *epoch, seq
+                                );
+                                // Try to get the checkpoint directly to see what's missing
+                                match self.checkpoint_store.get_checkpoint_by_sequence_number(seq) {
+                                    Ok(Some(checkpoint)) => {
+                                        error!(
+                                            "Checkpoint {} exists (epoch: {}, end_of_epoch: {}), but commitments unavailable",
+                                            seq,
+                                            checkpoint.epoch(),
+                                            checkpoint.end_of_epoch_data.is_some()
+                                        );
+                                    }
+                                    Ok(None) => {
+                                        error!("Checkpoint {} not found in checkpoint store", seq);
+                                    }
+                                    Err(e) => {
+                                        error!("Error fetching checkpoint {}: {:?}", seq, e);
+                                    }
+                                }
+                            }
+                            Ok(None) => {
+                                info!(
+                                    "Epoch {} has no entry in epoch_last_checkpoint_map, checkpoint data not synced yet",
+                                    *epoch
+                                );
+                            }
+                            Err(e) => {
+                                error!("Failed to check last checkpoint for epoch {}: {:?}", *epoch, e);
+                            }
+                        }
+                        continue;
+                    }
+                    Err(e) => {
+                        error!("Failed to get epoch state commitments for epoch {}: {:?}", *epoch, e);
+                        continue;
+                    }
+                };
+
+                let state_hash_commitment = match commitments.last().cloned() {
+                    Some(ECMHLiveObjectSetDigest(digest)) => digest,
+                    Some(_) => {
+                        error!("Expected ECMHLiveObjectSetDigest for epoch {}, skipping", *epoch);
+                        continue;
+                    }
+                    None => {
+                        info!("No commitments found for epoch {}, skipping", *epoch);
+                        continue;
+                    }
                 };
                 state_snapshot_writer
                     .write(*epoch, db, state_hash_commitment, self.chain_identifier)
@@ -188,6 +268,10 @@ impl StateSnapshotUploader {
                     );
                 }
             } else {
+                debug!(
+                    "Skipping epoch {} (not in missing_epochs list and < last_missing_epoch {})",
+                    *epoch, last_missing_epoch
+                );
                 let bytes = Bytes::from_static(b"success");
                 let state_snapshot_completed_marker =
                     db_path.child(STATE_SNAPSHOT_COMPLETED_MARKER);
@@ -197,9 +281,9 @@ impl StateSnapshotUploader {
                     bytes.clone(),
                 )
                 .await?;
-                info!("State snapshot skipped for epoch: {epoch}");
             }
         }
+        info!("upload_state_snapshot_to_object_store completed");
         Ok(())
     }
 
