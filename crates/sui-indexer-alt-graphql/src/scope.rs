@@ -22,6 +22,10 @@ use sui_types::{
 
 use crate::{config::Limits, error::RpcError, task::watermark::Watermarks};
 
+/// A map of objects from an executed transaction, keyed by (ObjectID, SequenceNumber).
+/// None values indicate tombstones for deleted/wrapped objects.
+type ExecutionObjectMap = Arc<BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>>;
+
 /// A way to share information between fields in a request, similar to [Context].
 ///
 /// Unlike [Context], [Scope] is not referenced by every field resolver. Instead, fields must
@@ -52,7 +56,7 @@ pub(crate) struct Scope {
     /// Maps (ObjectID, SequenceNumber) to optional object data.
     /// None indicates the object was deleted or wrapped at that version.
     /// This enables any Object GraphQL type to access fresh data without database queries.
-    execution_objects: Arc<BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>>,
+    execution_objects: ExecutionObjectMap,
 
     /// Access to packages for type resolution.
     package_store: Arc<dyn PackageStore>,
@@ -163,16 +167,16 @@ impl Scope {
     pub(crate) fn with_executed_transaction(
         &self,
         executed_transaction: &grpc::ExecutedTransaction,
-    ) -> Self {
-        let execution_objects = extract_objects_from_executed_transaction(executed_transaction);
+    ) -> Result<Self, RpcError> {
+        let execution_objects = extract_objects_from_executed_transaction(executed_transaction)?;
 
-        Self {
+        Ok(Self {
             checkpoint_viewed_at: None,
             root_version: self.root_version,
             execution_objects,
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
-        }
+        })
     }
 
     /// A package resolver with access to the packages known at this scope.
@@ -187,15 +191,18 @@ impl Scope {
 /// where None indicates the object was deleted or wrapped at that version.
 fn extract_objects_from_executed_transaction(
     executed_transaction: &grpc::ExecutedTransaction,
-) -> Arc<BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>> {
+) -> Result<ExecutionObjectMap, RpcError> {
+    use anyhow::Context;
+
     let mut map = BTreeMap::new();
 
     // Extract all objects from the ObjectSet.
     if let Some(object_set) = &executed_transaction.objects {
         for obj in &object_set.objects {
             if let Some(bcs) = &obj.bcs {
-                let native_obj: NativeObject =
-                    bcs.deserialize().expect("Object BCS should be valid");
+                let native_obj: NativeObject = bcs
+                    .deserialize()
+                    .context("Failed to deserialize object BCS")?;
                 map.insert((native_obj.id(), native_obj.version()), Some(native_obj));
             }
         }
@@ -203,22 +210,30 @@ fn extract_objects_from_executed_transaction(
 
     // Add tombstones for objects that no longer exist from effects
     if let Some(effects) = &executed_transaction.effects {
+        // Get lamport version directly from gRPC effects
+        let lamport_version = SequenceNumber::from_u64(
+            effects
+                .lamport_version
+                .context("Effects should have lamport_version")?,
+        );
+
         for changed_obj in &effects.changed_objects {
             if changed_obj.output_state() == OutputObjectState::DoesNotExist {
                 let object_id = changed_obj
                     .object_id
                     .as_ref()
-                    .and_then(|id_str| id_str.parse::<ObjectID>().ok())
-                    .expect("Changed object should have valid object_id");
+                    .and_then(|id| id.parse().ok())
+                    .context("ChangedObject should have valid object_id")?;
 
-                // Use MAX as sentinel version for tombstones (e.g. deleted objects don't have output_version)
-                // This ensures execution_output_object_latest returns None for such objects
-                map.insert((object_id, SequenceNumber::MAX), None);
+                // Deleted/wrapped objects don't have an output_version, so we use the transaction's
+                // lamport version as the tombstone version. This ensures execution_output_object_latest
+                // returns None for these objects.
+                map.insert((object_id, lamport_version), None);
             }
         }
     }
 
-    Arc::new(map)
+    Ok(Arc::new(map))
 }
 
 impl Debug for Scope {

@@ -82,7 +82,9 @@ impl Mutation {
                     .as_ref()
                     .ok_or_else(|| anyhow!("ExecuteTransactionResponse should have transaction"))?;
 
-                let scope = Scope::new(ctx)?.with_executed_transaction(executed_transaction);
+                let scope = Scope::new(ctx)?
+                    .with_executed_transaction(executed_transaction)
+                    .map_err(crate::error::upcast)?;
                 let effects = TransactionEffects::from_executed_transaction(
                     scope,
                     executed_transaction,
