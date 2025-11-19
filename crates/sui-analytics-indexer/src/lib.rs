@@ -581,17 +581,26 @@ pub mod indexer_alt {
         };
 
         let client_args = sui_indexer_alt_framework::ingestion::ClientArgs {
-            remote_store_url: Some(url::Url::parse(&config.job_config.remote_store_url)?),
-            local_ingestion_path: None,
-            rpc_api_url: None,
-            rpc_username: None,
-            rpc_password: None,
+            ingestion:
+                sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs {
+                    remote_store_url: Some(url::Url::parse(&config.job_config.remote_store_url)?),
+                    local_ingestion_path: None,
+                    rpc_api_url: None,
+                    rpc_username: None,
+                    rpc_password: None,
+                },
+            streaming:
+                sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs {
+                    streaming_url: None,
+                },
         };
 
         let ingestion_config = IngestionConfig {
             checkpoint_buffer_size: config.job_config.data_limit,
             ingest_concurrency: config.job_config.batch_size,
             retry_interval_ms: 5000,
+            streaming_backoff_initial_batch_size: 10,
+            streaming_backoff_max_batch_size: 10000,
         };
 
         let concurrent_config = ConcurrentConfig {
