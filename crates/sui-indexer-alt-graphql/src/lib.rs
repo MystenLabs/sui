@@ -317,7 +317,7 @@ pub async fn start_rpc(
     };
 
     let ledger_grpc_reader = if let Some(ledger_grpc_url) = kv_args.ledger_grpc_url.as_ref() {
-        let reader = LedgerGrpcReader::new(ledger_grpc_url.clone())
+        let reader = LedgerGrpcReader::new(ledger_grpc_url.clone(), kv_args.ledger_grpc_args())
             .await
             .context("Failed to create Ledger gRPC reader")?;
         Some(reader)

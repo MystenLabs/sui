@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use anyhow::Context;
 use async_graphql::dataloader::DataLoader;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
@@ -12,9 +14,9 @@ use tonic::transport::{Channel, ClientTlsConfig, Uri};
 
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct LedgerGrpcArgs {
-    /// gRPC endpoint URL for the ledger service (e.g., archive.mainnet.sui.io)
+    /// Timeout for gRPC statements to the ledger service, in milliseconds.
     #[arg(long)]
-    pub ledger_grpc_url: Option<Uri>,
+    pub ledger_grpc_statement_timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -34,10 +36,22 @@ pub struct CheckpointedTransaction {
 #[derive(Clone)]
 pub struct LedgerGrpcReader(pub(crate) LedgerServiceClient<Channel>);
 
+impl LedgerGrpcArgs {
+    pub fn statement_timeout(&self) -> Option<std::time::Duration> {
+        self.ledger_grpc_statement_timeout_ms
+            .map(Duration::from_millis)
+    }
+}
+
 impl LedgerGrpcReader {
-    pub async fn new(uri: Uri) -> anyhow::Result<Self> {
+    pub async fn new(uri: Uri, args: LedgerGrpcArgs) -> anyhow::Result<Self> {
         let tls_config = ClientTlsConfig::new().with_native_roots();
-        let channel = Channel::builder(uri)
+
+        let mut endpoint = Channel::builder(uri);
+        if let Some(timeout) = args.statement_timeout() {
+            endpoint = endpoint.timeout(timeout);
+        }
+        let channel = endpoint
             .tls_config(tls_config)?
             .connect()
             .await

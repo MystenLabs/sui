@@ -25,10 +25,6 @@ pub struct KvArgs {
     #[arg(long, group = "kv_source")]
     pub bigtable_instance: Option<String>,
 
-    /// Time spent waiting for a request to Bigtable to complete, in milliseconds.
-    #[arg(long)]
-    pub bigtable_statement_timeout_ms: Option<u64>,
-
     /// App profile ID to use for Bigtable client. If not provided, the default profile will be used.
     #[arg(long)]
     pub bigtable_app_profile_id: Option<String>,
@@ -36,13 +32,17 @@ pub struct KvArgs {
     /// gRPC endpoint URL for the ledger service (e.g., archive.mainnet.sui.io)
     #[arg(long, group = "kv_source")]
     pub ledger_grpc_url: Option<Uri>,
+
+    /// Time spent waiting for a request to the kv store to complete, in milliseconds.
+    #[arg(long)]
+    pub kv_statement_timeout_ms: Option<u64>,
 }
 
 impl KvArgs {
     /// Extract BigtableArgs from KvArgs
     pub fn bigtable_args(&self) -> BigtableArgs {
         BigtableArgs {
-            bigtable_statement_timeout_ms: self.bigtable_statement_timeout_ms,
+            bigtable_statement_timeout_ms: self.kv_statement_timeout_ms,
             bigtable_app_profile_id: self.bigtable_app_profile_id.clone(),
         }
     }
@@ -50,7 +50,7 @@ impl KvArgs {
     /// Extract LedgerGrpcArgs from KvArgs
     pub fn ledger_grpc_args(&self) -> LedgerGrpcArgs {
         LedgerGrpcArgs {
-            ledger_grpc_url: self.ledger_grpc_url.clone(),
+            ledger_grpc_statement_timeout_ms: self.kv_statement_timeout_ms,
         }
     }
 }
