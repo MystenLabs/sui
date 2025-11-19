@@ -23,7 +23,7 @@ use parking_lot::RwLock;
 use sui_http::ServerHandle;
 use sui_tls::AllowPublicKeys;
 use tokio_stream::{Iter, iter};
-use tonic::{Request, Response, Streaming, codec::CompressionEncoding};
+use tonic::{Request, Response, Streaming};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
 use tracing::{debug, error, info, trace, warn};
 
@@ -83,9 +83,7 @@ impl TonicClient {
             .await?;
         let client = ConsensusServiceClient::new(channel)
             .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit)
-            .send_compressed(CompressionEncoding::Zstd)
-            .accept_compressed(CompressionEncoding::Zstd);
+            .max_decoding_message_size(config.message_size_limit);
         Ok(client)
     }
 }
@@ -750,9 +748,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
 
         let consensus_service_server = ConsensusServiceServer::new(service)
             .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit)
-            .send_compressed(CompressionEncoding::Zstd)
-            .accept_compressed(CompressionEncoding::Zstd);
+            .max_decoding_message_size(config.message_size_limit);
 
         let consensus_service = tonic::service::Routes::new(consensus_service_server)
             .into_axum_router()
