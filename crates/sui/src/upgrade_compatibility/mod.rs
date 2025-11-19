@@ -805,12 +805,23 @@ fn compare_packages(
     if diags.is_empty() {
         Ok(())
     } else {
+        // Sort diagnostics to ensure consistent error ordering across platforms
+        // Diagnostic implements Ord, so sorting will be deterministic
+        let mut sorted_diags_vec = diags.into_vec();
+        sorted_diags_vec.sort();
+
+        // Rebuild Diagnostics from sorted vector
+        let mut sorted_diags = Diagnostics::new();
+        for diag in sorted_diags_vec {
+            sorted_diags.add(diag);
+        }
+
         Err(anyhow!(
             "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
             Its upgrade policy is set to '{}'.",
             String::from_utf8(report_diagnostics_to_buffer(
                 &new_package.package.file_map,
-                diags,
+                sorted_diags,
                 use_colors()
             ))
             .context("Unable to convert buffer to string")?,

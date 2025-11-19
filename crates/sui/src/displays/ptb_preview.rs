@@ -82,8 +82,6 @@ impl Display for PTBPreview<'_> {
             HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
         ]));
         table.with(tabled::settings::style::BorderSpanCorrection);
-        let table = table.to_string();
-        let table = table.replace("\r\n", "\n");
 
         write!(f, "{}", table)
     }
