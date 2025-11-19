@@ -104,7 +104,7 @@ async fn test_alias_changes() {
         let mut result = None;
         for (i, account) in accounts.iter().enumerate() {
             if account.1.len() >= 10 {
-                result = Some((account.0, account.1, i));
+                result = Some((account.0, account.1.clone(), i));
                 break;
             }
         }
