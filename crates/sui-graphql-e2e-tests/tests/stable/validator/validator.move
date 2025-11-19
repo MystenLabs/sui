@@ -20,7 +20,7 @@ module P0::m {
         let mut i = 0u64;
         let mut v = vector[];
         while (i < 248 * 1024) {
-            vector::push_back(&mut v, 42u64);
+            vector::push_back(&mut v, 42);
             i = i + 1;
         };
         v
