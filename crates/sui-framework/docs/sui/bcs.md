@@ -488,7 +488,7 @@ See more here: https://en.wikipedia.org/wiki/LEB128
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_vec_length">peel_vec_length</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>): u64 {
-    <b>let</b> (<b>mut</b> total, <b>mut</b> shift, <b>mut</b> len) = (0u64, 0, 0);
+    <b>let</b> (<b>mut</b> total, <b>mut</b> shift, <b>mut</b> len) = (0u64, 0u8, 0u64);
     <b>loop</b> {
         <b>assert</b>!(len &lt;= 4, <a href="../sui/bcs.md#sui_bcs_ELenOutOfRange">ELenOutOfRange</a>);
         <b>let</b> byte = <a href="../sui/bcs.md#sui_bcs">bcs</a>.bytes.pop_back() <b>as</b> u64;

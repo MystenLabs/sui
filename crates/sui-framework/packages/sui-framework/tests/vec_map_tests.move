@@ -10,14 +10,14 @@ use sui::vec_map::{Self, VecMap};
 #[test, expected_failure(abort_code = vec_map::EKeyAlreadyExists)]
 fun duplicate_key_abort() {
     let mut m = vec_map::empty();
-    m.insert(1, true);
+    m.insert(1u64, true);
     m.insert(1, false);
 }
 
 #[test, expected_failure(abort_code = vec_map::EKeyDoesNotExist)]
 fun nonexistent_key_get() {
     let mut m = vec_map::empty();
-    m.insert(1, true);
+    m.insert(1u64, true);
     let k = 2;
     let _v = &m[&k];
 }
@@ -26,14 +26,14 @@ fun nonexistent_key_get() {
 fun nonexistent_key_get_idx_or_abort() {
     let mut m = vec_map::empty();
     m.insert(1, true);
-    let k = 2;
+    let k = 2u64;
     let _idx = m.get_idx(&k);
 }
 
 #[test, expected_failure(abort_code = vec_map::EIndexOutOfBounds)]
 fun out_of_bounds_get_entry_by_idx() {
     let mut m = vec_map::empty();
-    m.insert(1, true);
+    m.insert(1u64, true);
     let idx = 1;
     let (_key, _val) = m.get_entry_by_idx(idx);
 }
@@ -41,7 +41,7 @@ fun out_of_bounds_get_entry_by_idx() {
 #[test, expected_failure(abort_code = vec_map::EIndexOutOfBounds)]
 fun out_of_bounds_remove_entry_by_idx() {
     let mut m = vec_map::empty();
-    m.insert(10, true);
+    m.insert(10u64, true);
     let idx = 1;
     let (_key, _val) = m.remove_entry_by_idx(idx);
 }
@@ -49,7 +49,7 @@ fun out_of_bounds_remove_entry_by_idx() {
 #[test]
 fun remove_entry_by_idx() {
     let mut m = vec_map::empty();
-    m.insert(5, 50);
+    m.insert(5u64, 50u64);
     m.insert(6, 60);
     m.insert(7, 70);
 
@@ -67,7 +67,7 @@ fun remove_entry_by_idx() {
 #[test, expected_failure(abort_code = vec_map::EMapNotEmpty)]
 fun destroy_non_empty() {
     let mut m = vec_map::empty();
-    m.insert(1, true);
+    m.insert(1u64, true);
     m.destroy_empty()
 }
 
@@ -117,7 +117,7 @@ fun return_list_of_keys() {
 
     assert_eq!(m.keys(), vector[]);
 
-    m.insert(1, true);
+    m.insert(1u64, true);
     m.insert(5, false);
 
     assert_eq!(m.keys(), vector[1, 5]);

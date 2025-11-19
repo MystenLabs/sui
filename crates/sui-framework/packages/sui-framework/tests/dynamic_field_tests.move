@@ -21,21 +21,21 @@ fun simple_all_functions() {
     assert!(exists_with_type<vector<u8>, u64>(&id, b""));
     assert!(exists_with_type<bool, u64>(&id, false));
     // check the values
-    assert!(*borrow(&id, 0) == 0);
-    assert!(*borrow(&id, b"") == 1);
-    assert!(*borrow(&id, false) == 2);
+    assert!(*borrow(&id, 0u64) == 0u64);
+    assert!(*borrow(&id, b"") == 1u64);
+    assert!(*borrow(&id, false) == 2u64);
     // mutate them
-    *borrow_mut(&mut id, 0) = 3 + *borrow(&id, 0);
-    *borrow_mut(&mut id, b"") = 4 + *borrow(&id, b"");
-    *borrow_mut(&mut id, false) = 5 + *borrow(&id, false);
+    *borrow_mut(&mut id, 0u64) = 3u64 + *borrow(&id, 0u64);
+    *borrow_mut(&mut id, b"") = 4u64 + *borrow(&id, b"");
+    *borrow_mut(&mut id, false) = 5u64 + *borrow(&id, false);
     // check the new value
-    assert!(*borrow(&id, 0) == 3);
-    assert!(*borrow(&id, b"") == 5);
-    assert!(*borrow(&id, false) == 7);
+    assert!(*borrow(&id, 0u64) == 3u64);
+    assert!(*borrow(&id, b"") == 5u64);
+    assert!(*borrow(&id, false) == 7u64);
     // remove the value and check it
-    assert!(remove(&mut id, 0) == 3);
-    assert!(remove(&mut id, b"") == 5);
-    assert!(remove(&mut id, false) == 7);
+    assert!(remove(&mut id, 0u64) == 3u64);
+    assert!(remove(&mut id, b"") == 5u64);
+    assert!(remove(&mut id, false) == 7u64);
     // verify that they are not there
     assert!(!exists_with_type<u64, u64>(&id, 0));
     assert!(!exists_with_type<vector<u8>, u64>(&id, b""));
@@ -82,7 +82,7 @@ fun borrow_wrong_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    add(&mut id, 0, 0);
+    add(&mut id, 0u64, 0u64);
     borrow<u64, u8>(&id, 0);
     abort 42
 }
@@ -103,7 +103,7 @@ fun borrow_mut_wrong_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    add(&mut id, 0, 0);
+    add(&mut id, 0u64, 0u64);
     borrow_mut<u64, u8>(&mut id, 0);
     abort 42
 }
@@ -124,7 +124,7 @@ fun remove_wrong_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    add(&mut id, 0, 0);
+    add(&mut id, 0u64, 0u64);
     remove<u64, u8>(&mut id, 0);
     abort 42
 }
@@ -135,7 +135,7 @@ fun sanity_check_exists() {
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     assert!(!exists_with_type<u64, u64>(&id, 0));
-    add(&mut id, 0, 0);
+    add(&mut id, 0u64, 0u64);
     assert!(exists_with_type<u64, u64>(&id, 0));
     assert!(!exists_with_type<u64, u8>(&id, 0));
     scenario.end();
@@ -148,7 +148,7 @@ fun delete_uid_with_fields() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    add(&mut id, 0, 0);
+    add(&mut id, 0u64, 0u64);
     assert!(exists_with_type<u64, u64>(&id, 0));
     scenario.end();
     id.delete();

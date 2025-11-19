@@ -690,7 +690,7 @@ Generate a boolean.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_bool">generate_bool</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>): bool {
-    (<a href="../sui/random.md#sui_random_uint_from_bytes">uint_from_bytes</a>!(g, 1) & 1) == 1
+    (<a href="../sui/random.md#sui_random_uint_from_bytes">uint_from_bytes</a>!(g, 1) & 1u64) == 1
 }
 </code></pre>
 

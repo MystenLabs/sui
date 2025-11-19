@@ -14,14 +14,14 @@ public struct NotDroppable {}
 
 #[test]
 fun test_singleton_contains() {
-    assert_eq!(vector[0][0], 0);
+    assert_eq!(vector[0u64][0], 0);
     assert_eq!(vector[true][0], true);
     assert_eq!(vector[@0x1][0], @0x1);
 }
 
 #[test]
 fun test_singleton_len() {
-    assert_eq!(vector[0].length(), 1);
+    assert_eq!(vector[0u64].length(), 1);
     assert_eq!(vector[true].length(), 1);
     assert_eq!(vector[@0x1].length(), 1);
 }
@@ -41,7 +41,7 @@ fun append_empties_is_empty() {
 
 #[test]
 fun append_singletons() {
-    let mut v1 = vector[0];
+    let mut v1 = vector[0u64];
     let v2 = vector[1];
     v1.append(v2);
     assert_eq!(v1.length(), 2);
@@ -53,7 +53,7 @@ fun append_singletons() {
 fun append_respects_order_empty_lhs() {
     let mut v1 = vector[];
     let mut v2 = vector[];
-    v2.push_back(0);
+    v2.push_back(0u64);
     v2.push_back(1);
     v2.push_back(2);
     v2.push_back(3);
@@ -70,7 +70,7 @@ fun append_respects_order_empty_lhs() {
 fun append_respects_order_empty_rhs() {
     let mut v1 = vector[];
     let v2 = vector[];
-    v1.push_back(0);
+    v1.push_back(0u64);
     v1.push_back(1);
     v1.push_back(2);
     v1.push_back(3);
@@ -108,14 +108,14 @@ fun append_respects_order_nonempty_rhs_lhs() {
 #[test, expected_failure(vector_error, minor_status = 1, location = Self)]
 fun borrow_out_of_range() {
     let mut v = vector[];
-    v.push_back(7);
+    v.push_back(7u64);
     &v[1];
 }
 
 #[test]
 fun vector_contains() {
     let mut vec = vector[];
-    assert!(!vec.contains(&0));
+    assert!(!vec.contains(&0u64));
 
     vec.push_back(0);
     assert!(vec.contains(&0));
@@ -144,7 +144,7 @@ fun destroy_empty() {
 #[test]
 fun destroy_empty_with_pops() {
     let mut v = vector[];
-    v.push_back(42);
+    v.push_back(42u64);
     v.pop_back();
     v.destroy_empty();
 }
@@ -152,14 +152,14 @@ fun destroy_empty_with_pops() {
 #[test, expected_failure(vector_error, minor_status = 3, location = Self)]
 fun destroy_non_empty() {
     let mut v = vector[];
-    v.push_back(42);
+    v.push_back(42u64);
     v.destroy_empty();
 }
 
 #[test]
 fun get_set_work() {
     let mut vec = vector[];
-    vec.push_back(0);
+    vec.push_back(0u64);
     vec.push_back(1);
     assert_eq!(vec[1], 1);
     assert_eq!(vec[0], 0);
@@ -178,7 +178,7 @@ fun pop_out_of_range() {
 #[test]
 fun swap_different_indices() {
     let mut vec = vector[];
-    vec.push_back(0);
+    vec.push_back(0u64);
     vec.push_back(1);
     vec.push_back(2);
     vec.push_back(3);
@@ -193,7 +193,7 @@ fun swap_different_indices() {
 #[test]
 fun swap_same_index() {
     let mut vec = vector[];
-    vec.push_back(0);
+    vec.push_back(0u64);
     vec.push_back(1);
     vec.push_back(2);
     vec.push_back(3);
@@ -207,7 +207,7 @@ fun swap_same_index() {
 #[test]
 fun remove_singleton_vector() {
     let mut v = vector[];
-    v.push_back(0);
+    v.push_back(0u64);
     assert_eq!(v.remove(0), 0);
     assert_eq!(v.length(), 0);
 }
@@ -215,7 +215,7 @@ fun remove_singleton_vector() {
 #[test]
 fun remove_nonsingleton_vector() {
     let mut v = vector[];
-    v.push_back(0);
+    v.push_back(0u64);
     v.push_back(1);
     v.push_back(2);
     v.push_back(3);
@@ -230,7 +230,7 @@ fun remove_nonsingleton_vector() {
 #[test]
 fun remove_nonsingleton_vector_last_elem() {
     let mut v = vector[];
-    v.push_back(0);
+    v.push_back(0u64);
     v.push_back(1);
     v.push_back(2);
     v.push_back(3);
@@ -266,7 +266,7 @@ fun reverse_vector_empty() {
 #[test]
 fun reverse_singleton_vector() {
     let mut v = vector[];
-    v.push_back(0);
+    v.push_back(0u64);
     assert_eq!(v[0], 0);
     v.reverse();
     assert_eq!(v[0], 0);
@@ -275,7 +275,7 @@ fun reverse_singleton_vector() {
 #[test]
 fun reverse_vector_nonempty_even_length() {
     let mut v = vector[];
-    v.push_back(0);
+    v.push_back(0u64);
     v.push_back(1);
     v.push_back(2);
     v.push_back(3);
@@ -296,7 +296,7 @@ fun reverse_vector_nonempty_even_length() {
 #[test]
 fun reverse_vector_nonempty_odd_length_non_singleton() {
     let mut v = vector[];
-    v.push_back(0);
+    v.push_back(0u64);
     v.push_back(1);
     v.push_back(2);
 
@@ -346,7 +346,7 @@ fun swap_remove_singleton() {
 #[test]
 fun swap_remove_inside_vector() {
     let mut v = vector[];
-    v.push_back(0);
+    v.push_back(0u64);
     v.push_back(1);
     v.push_back(2);
     v.push_back(3);
@@ -367,7 +367,7 @@ fun swap_remove_inside_vector() {
 #[test]
 fun swap_remove_end_of_vector() {
     let mut v = vector[];
-    v.push_back(0);
+    v.push_back(0u64);
     v.push_back(1);
     v.push_back(2);
     v.push_back(3);
@@ -388,34 +388,34 @@ fun swap_remove_end_of_vector() {
 #[test, expected_failure(vector_error, minor_status = 1, location = std::vector)]
 fun swap_remove_out_of_range() {
     let mut v = vector[];
-    v.push_back(0);
+    v.push_back(0u64);
     v.swap_remove(1);
 }
 
 #[test]
 fun skip() {
-    assert_eq!(vector[0, 1, 2].skip(2), vector[2]);
-    assert_eq!(vector[0, 1, 2].skip(0), vector[0, 1, 2]);
-    assert_eq!(vector[0, 1, 2].skip(3), vector[]);
+    assert_eq!(vector[0, 1, 2u64].skip(2), vector[2]);
+    assert_eq!(vector[0, 1, 2u64].skip(0), vector[0, 1, 2]);
+    assert_eq!(vector[0u64, 1, 2].skip(3), vector[]);
 }
 
 #[test]
 fun take() {
-    assert_eq!(vector[0, 1, 2].take(0), vector[]);
-    assert_eq!(vector[0, 1, 2].take(1), vector[0]);
-    assert_eq!(vector[0, 1, 2].take(2), vector[0, 1]);
-    assert_eq!(vector[0, 1, 2].take(3), vector[0, 1, 2]);
+    assert_eq!(vector[0, 1, 2u64].take(0), vector[]);
+    assert_eq!(vector[0, 1, 2].take(1), vector[0u64]);
+    assert_eq!(vector[0, 1, 2u64].take(2), vector[0, 1]);
+    assert_eq!(vector[0, 1, 2].take(3), vector[0, 1u64, 2]);
 }
 
 #[test, expected_failure]
 fun take_fail() {
-    vector[0, 1, 2].take(4); // out of bounds (taking 4 elements)
+    vector[0, 1u64, 2].take(4); // out of bounds (taking 4 elements)
 }
 
 #[test]
 fun push_back_and_borrow() {
     let mut v = vector[];
-    v.push_back(7);
+    v.push_back(7u64);
     assert!(!v.is_empty());
     assert_eq!(v.length(), 1);
     assert_eq!(v[0], 7);
@@ -486,7 +486,7 @@ fun pop_push_back() {
 
     while (i < max_len) {
         v.push_back(i);
-        i = i + 1;
+        i = i + 1u64;
     };
 
     while (i > 0) {
@@ -537,25 +537,25 @@ fun test_natives_with_different_instantiations() {
 fun test_insert() {
     let mut v = vector[7];
     v.insert(6, 0);
-    assert_eq!(v, vector[6, 7]);
+    assert_eq!(v, vector[6, 7u64]);
 
-    let mut v = vector[7, 9];
+    let mut v = vector[7, 9u64];
     v.insert(8, 1);
     assert_eq!(v, vector[7, 8, 9]);
 
     let mut v = vector[6, 7];
     v.insert(5, 0);
-    assert_eq!(v, vector[5, 6, 7]);
+    assert_eq!(v, vector[5u64, 6, 7]);
 
     let mut v = vector[5, 6, 8];
     v.insert(7, 2);
-    assert_eq!(v, vector[5, 6, 7, 8]);
+    assert_eq!(v, vector[5, 6, 7, 8u64]);
 }
 
 #[test]
 fun insert_at_end() {
     let mut v = vector[];
-    v.insert(6, 0);
+    v.insert(6u64, 0);
     assert_eq!(v, vector[6]);
 
     v.insert(7, 1);
@@ -564,7 +564,7 @@ fun insert_at_end() {
 
 #[test, expected_failure(abort_code = std::vector::EINDEX_OUT_OF_BOUNDS)]
 fun insert_out_of_range() {
-    let mut v = vector[7];
+    let mut v = vector[7u64];
     v.insert(6, 2);
 }
 
@@ -573,7 +573,7 @@ fun size_limit_ok() {
     let mut v = vector[];
     let mut i = 0;
     // Limit is currently 1024 * 54
-    let max_len = 1024 * 53;
+    let max_len = 1024 * 53u64;
 
     while (i < max_len) {
         v.push_back(i);
@@ -586,7 +586,7 @@ fun size_limit_fail() {
     let mut v = vector[];
     let mut i = 0;
     // Choose value beyond limit
-    let max_len = 1024 * 1024;
+    let max_len = 1024u64 * 1024;
 
     while (i < max_len) {
         v.push_back(i);
@@ -610,18 +610,18 @@ fun test_destroy_macro() {
     vector<u8>[].destroy!(|_| assert!(false)); // very funky
 
     let mut acc = 0;
-    vector[10, 20, 30, 40].destroy!(|e| acc = acc + e);
+    vector[10, 20, 30, 40u64].destroy!(|e| acc = acc + e);
     assert_eq!(acc, 100);
 
-    vector[10, 20, 30, 40].destroy!(|e| e); // return value
-    vector[10, 20, 30, 40].destroy!(|_| {}); // no return
+    vector[10, 20u64, 30, 40].destroy!(|e| e); // return value
+    vector[10, 20, 30u64, 40].destroy!(|_| {}); // no return
 }
 
 #[test]
 fun test_count_macro() {
     assert_eq!(vector<u8>[].count!(|e| *e == 2), 0);
-    assert_eq!(vector[0, 1, 2, 3].count!(|e| *e == 2), 1);
-    assert_eq!(vector[0, 1, 2, 3].count!(|e| *e % 2 == 0), vector[0, 2].length());
+    assert_eq!(vector[0, 1, 2, 3u64].count!(|e| *e == 2), 1);
+    assert_eq!(vector[0, 1, 2, 3].count!(|e| *e % 2 == 0u64), vector[0u64, 2u64].length());
 }
 
 #[test]
@@ -646,26 +646,26 @@ fun test_do_macro() {
     vector[10, 20, 30, 40].do!(|e| acc = acc + e);
     assert_eq!(acc, 100);
 
-    let vec = vector[10, 20];
+    let vec = vector[10, 20u64];
     vec.do!(|e| acc = acc + e);
     assert_eq!(vector[10, 20], vec);
 
     let mut acc = 0;
     vector[10, 20, 30, 40].do_ref!(|e| acc = acc + *e);
-    assert_eq!(acc, 100);
+    assert_eq!(acc, 100u64);
 
     let mut vec = vector[10, 20, 30, 40];
-    vec.do_mut!(|e| *e = *e + 1);
+    vec.do_mut!(|e| *e = *e + 1u64);
     assert_eq!(vec, vector[11, 21, 31, 41]);
 
-    vector[10].do!(|e| e); // return value
-    vector[10].do!(|_| {}); // no return
+    vector[10u64].do!(|e| e); // return value
+    vector[10u64].do!(|_| {}); // no return
 
-    vector[10].do_ref!(|e| *e); // return value
-    vector[10].do_ref!(|_| {}); // no return
+    vector[10u64].do_ref!(|e| *e); // return value
+    vector[10u64].do_ref!(|_| {}); // no return
 
-    vector[10].do_mut!(|e| *e); // return value
-    vector[10].do_mut!(|_| {}); // no return
+    vector[10u64].do_mut!(|e| *e); // return value
+    vector[10u64].do_mut!(|_| {}); // no return
 }
 
 #[test]
@@ -674,10 +674,10 @@ fun test_map_macro() {
     assert_eq!(e.map!(|e| e + 1), vector[]);
 
     let r = vector[0, 1, 2, 3];
-    assert_eq!(r.map!(|e| e + 1), vector[1, 2, 3, 4]);
+    assert_eq!(r.map!(|e| e + 1), vector[1, 2, 3u64, 4]);
 
     let r = vector[0, 1, 2, 3];
-    assert_eq!(r.map_ref!(|e| *e * 2), vector[0, 2, 4, 6]);
+    assert_eq!(r.map_ref!(|e| *e * 2u64), vector[0, 2, 4, 6]);
 }
 
 #[test]
@@ -686,7 +686,7 @@ fun filter_macro() {
     assert_eq!(e.filter!(|e| *e % 2 == 0), vector[]);
 
     let r = vector[0, 1, 2, 3];
-    assert_eq!(r.filter!(|e| *e % 2 == 0), vector[0, 2]);
+    assert_eq!(r.filter!(|e| *e % 2u64 == 0), vector[0, 2]);
 }
 
 #[test]
@@ -710,7 +710,7 @@ fun find_index_macro() {
 
     let r = vector[0, 10, 100, 1_000];
     assert_eq!(r.find_index!(|e| *e == 100).destroy_some(), 2);
-    assert!(r.find_index!(|e| *e == 10_000).is_none());
+    assert!(r.find_index!(|e| *e == 10_000u64).is_none());
 
     let v = vector[Droppable {}, Droppable {}];
     let idx = v.find_index!(|e| e == Droppable{});
@@ -724,7 +724,7 @@ fun find_indices_macro() {
     assert_eq!(e.find_indices!(|e| *e == 0), vector[]);
     assert_eq!(e.find_indices!(|_| true), vector[]);
 
-    let r = vector[0, 10, 100, 1_000];
+    let r = vector[0u64, 10, 100, 1_000];
     assert_eq!(r.find_indices!(|e| *e == 100), vector[2]);
     assert_eq!(r.find_indices!(|e| *e == 10_000), vector[]);
     assert_eq!(r.find_indices!(|e| *e / 10 > 0), vector[1, 2, 3]);
@@ -735,7 +735,7 @@ fun fold_macro() {
     let e = vector<u8>[];
     assert!(e.fold!(0, |acc, e| acc + e) == 0);
 
-    let r = vector[0, 1, 2, 3];
+    let r = vector[0, 1, 2, 3u64];
     assert!(r.fold!(10, |acc, e| acc + e) == 16);
 }
 
@@ -743,20 +743,20 @@ fun fold_macro() {
 fun test_flatten() {
     assert!(vector<vector<u8>>[].flatten().is_empty());
     assert!(vector<vector<u8>>[vector[], vector[]].flatten().is_empty());
-    assert!(vector[vector[1]].flatten() == vector[1]);
-    assert!(vector[vector[1], vector[]].flatten() == vector[1]);
-    assert!(vector[vector[1], vector[2]].flatten() == vector[1, 2]);
-    assert!(vector[vector[1], vector[2, 3]].flatten() == vector[1, 2, 3]);
+    assert!(vector[vector[1u64]].flatten() == vector[1]);
+    assert!(vector[vector[1], vector[]].flatten() == vector[1u64]);
+    assert!(vector[vector[1], vector[2u64]].flatten() == vector[1, 2]);
+    assert!(vector[vector[1u64], vector[2, 3]].flatten() == vector[1, 2, 3]);
 }
 
 #[test]
 fun any_all_macro() {
     assert!(vector<u8>[].any!(|e| *e == 2) == false);
     assert!(vector<u8>[].all!(|e| *e == 2) == true);
-    assert!(vector[0, 1, 2, 3].any!(|e| *e == 2));
-    assert!(!vector[0, 1, 2, 3].any!(|e| *e == 4));
-    assert!(vector[0, 1, 2, 3].all!(|e| *e < 4));
-    assert!(!vector[0, 1, 2, 3].all!(|e| *e < 3));
+    assert!(vector[0u64, 1, 2, 3].any!(|e| *e == 2));
+    assert!(!vector[0, 1, 2, 3u64].any!(|e| *e == 4));
+    assert!(vector[0, 1u64, 2, 3].all!(|e| *e < 4));
+    assert!(!vector[0, 1, 2u64, 3].all!(|e| *e < 3));
 }
 
 #[test, expected_failure]
@@ -775,8 +775,8 @@ fun zip_do_macro() {
     v1.zip_do!(v2, |a, b| res.push_back(a + b));
     assert!(res == vector[5, 7, 9]);
 
-    vector[1].zip_do!(vector[2], |a, b| a + b); // return value
-    vector[1].zip_do!(vector[2], |_, _| {}); // no return
+    vector[1].zip_do!(vector[2u64], |a, b| a + b); // return value
+    vector[1u64].zip_do!(vector[2u64], |_, _| {}); // no return
 }
 
 #[test]
@@ -806,8 +806,8 @@ fun zip_do_reverse_macro() {
     v2.zip_do_reverse!(v1, |a, b| res.push_back(a + b));
     assert!(res == vector[9, 7, 5]);
 
-    vector[1].zip_do_reverse!(vector[2], |a, b| a + b); // return value
-    vector[1].zip_do_reverse!(vector[2], |_, _| {}); // no return
+    vector[1].zip_do_reverse!(vector[2u64], |a, b| a + b); // return value
+    vector[1u64].zip_do_reverse!(vector[2u64], |_, _| {}); // no return
 }
 
 #[test, expected_failure]
@@ -1014,10 +1014,10 @@ fun test_is_sorted_by() {
     assert!(vector<u8>[].is_sorted_by!(|a, b| *a <= *b));
     assert!(vector<u8>[].is_sorted_by!(|a, b| *a <= *b));
     assert!(vector<u8>[].is_sorted_by!(|_, _| false));
-    assert!(vector[0].is_sorted_by!(|a, b| *a <= *b));
-    assert!(vector[0].is_sorted_by!(|a, b| *a <= *b));
-    assert!(vector[0].is_sorted_by!(|_, _| false));
-    assert!(!vector[1, 2, 4, 3].is_sorted_by!(|a, b| *a < *b));
+    assert!(vector[0u64].is_sorted_by!(|a, b| *a <= *b));
+    assert!(vector[0u64].is_sorted_by!(|a, b| *a <= *b));
+    assert!(vector[0u64].is_sorted_by!(|_, _| false));
+    assert!(!vector[1, 2, 4, 3u64].is_sorted_by!(|a, b| *a < *b));
 
     assert!(!UNSORTED_30.is_sorted_by!(|a, b| *a <= *b));
     assert!(!UNSORTED_40.is_sorted_by!(|a, b| *a <= *b));
@@ -1027,21 +1027,21 @@ fun test_is_sorted_by() {
 
 #[test]
 fun take_while() {
-    assert_eq!(vector[0, 1, 2].take_while!(|e| *e > 0), vector[]);
-    assert_eq!(vector[0, 1, 2].take_while!(|e| *e < 2), vector[0, 1]);
-    assert_eq!(vector[0, 1, 2].take_while!(|e| *e == 0), vector[0]);
-    assert_eq!(vector[0, 1, 2].take_while!(|e| *e < 3), vector[0, 1, 2]);
+    assert_eq!(vector[0, 1, 2u64].take_while!(|e| *e > 0), vector[]);
+    assert_eq!(vector[0, 1, 2u64].take_while!(|e| *e < 2), vector[0, 1]);
+    assert_eq!(vector[0, 1, 2u64].take_while!(|e| *e == 0), vector[0]);
+    assert_eq!(vector[0, 1, 2].take_while!(|e| *e < 3), vector[0u64, 1, 2]);
 }
 
 #[test]
 fun skip_while() {
-    assert_eq!(vector[0, 1, 2].skip_while!(|e| *e > 0), vector[0, 1, 2]);
-    assert_eq!(vector[0, 1, 2].skip_while!(|e| *e < 2), vector[2]);
-    assert_eq!(vector[0, 1, 2].skip_while!(|e| *e == 0), vector[1, 2]);
+    assert_eq!(vector[0, 1, 2].skip_while!(|e| *e > 0), vector[0u64, 1, 2]);
+    assert_eq!(vector[0, 1, 2u64].skip_while!(|e| *e < 2), vector[2]);
+    assert_eq!(vector[0, 1, 2u64].skip_while!(|e| *e == 0), vector[1, 2]);
 
     let v = vector[1, 1, 1, 2, 2, 2, 3, 3, 3];
     assert_eq!(v.skip_while!(|_| false), v);
-    assert_eq!(v.skip_while!(|e| *e == 1), vector[2, 2, 2, 3, 3, 3]);
+    assert_eq!(v.skip_while!(|e| *e == 1u64), vector[2, 2, 2, 3, 3, 3]);
     assert_eq!(v.skip_while!(|e| *e <= 2), vector[3, 3, 3]);
     assert_eq!(v.skip_while!(|_| true), vector[]);
 }
