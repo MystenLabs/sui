@@ -152,6 +152,11 @@ fn test_address_balance_payment_single_epoch_validation() {
 
     let result = tx_data.validity_check(&config);
     assert!(result.is_ok(), "Single epoch expiration should be valid");
+}
+
+#[test]
+fn test_address_balance_payment_one_epoch_range_validation() {
+    let config = create_config_with_address_balance_gas_payments_enabled();
 
     let tx_data = create_test_transaction_data(
         vec![],
@@ -166,12 +171,35 @@ fn test_address_balance_payment_single_epoch_validation() {
     );
 
     let result = tx_data.validity_check(&config);
+    assert!(
+        result.is_ok(),
+        "1-epoch range (min_epoch to min_epoch+1) should be valid"
+    );
+}
+
+#[test]
+fn test_address_balance_payment_multi_epoch_range_rejected() {
+    let config = create_config_with_address_balance_gas_payments_enabled();
+
+    let tx_data = create_test_transaction_data(
+        vec![],
+        TransactionExpiration::ValidDuring {
+            min_epoch: Some(5),
+            max_epoch: Some(7),
+            min_timestamp_seconds: None,
+            max_timestamp_seconds: None,
+            chain: ChainIdentifier::from(CheckpointDigest::default()),
+            nonce: 999,
+        },
+    );
+
+    let result = tx_data.validity_check(&config);
     assert!(result.is_err());
     match result.unwrap_err() {
         UserInputError::Unsupported(msg) => {
-            assert!(msg.contains("Multi-epoch transaction expiration is not yet supported"));
+            assert!(msg.contains("max_epoch must be at most min_epoch + 1"));
         }
-        _ => panic!("Expected Unsupported error for multi-epoch expiration"),
+        _ => panic!("Expected Unsupported error for epoch range > 1"),
     }
 }
 

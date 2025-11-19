@@ -8,6 +8,7 @@ use crate::congestion_tracker::CongestionTracker;
 use crate::consensus_adapter::ConsensusOverloadChecker;
 use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
+use crate::execution_cache::writeback_cache::WritebackCache;
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::SchedulingSource;
 use crate::jsonrpc_index::CoinIndexKey2;
@@ -3636,6 +3637,12 @@ impl AuthorityState {
         self.execution_cache_trait_pointers
             .testing_api
             .database_for_testing()
+    }
+
+    pub fn cache_for_testing(&self) -> &WritebackCache {
+        self.execution_cache_trait_pointers
+            .testing_api
+            .cache_for_testing()
     }
 
     pub async fn prune_checkpoints_for_eligible_epochs_for_testing(

@@ -1049,3 +1049,105 @@ async fn test_transaction_expiration_edge_cases() {
         Ok(_) => panic!("Transaction should be rejected when max_epoch is in the past"),
     }
 }
+
+#[sim_test]
+async fn test_reject_transaction_executed_in_previous_epoch() {
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let (sender, gas) = get_sender_and_gas(&mut test_cluster.wallet).await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let chain_id = test_cluster
+        .fullnode_handle
+        .sui_node
+        .with_async(|node| async { node.state().get_chain_identifier() })
+        .await;
+
+    let current_epoch = test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.state().epoch_store_for_testing().epoch());
+
+    let tx = create_transaction_with_expiration(
+        sender,
+        gas,
+        rgp,
+        Some(current_epoch),
+        Some(current_epoch + 1),
+        chain_id,
+        100,
+    );
+
+    let signed_tx = test_cluster.sign_transaction(&tx).await;
+
+    let response = test_cluster
+        .wallet
+        .execute_transaction_may_fail(signed_tx.clone())
+        .await
+        .unwrap();
+
+    assert!(
+        response.effects.unwrap().status().is_ok(),
+        "First execution should succeed"
+    );
+
+    let tx_digest = *signed_tx.digest();
+
+    test_cluster.trigger_reconfiguration().await;
+
+    for handle in test_cluster.swarm.validator_node_handles() {
+        handle.with(|node| {
+            node.state()
+                .database_for_testing()
+                .remove_executed_effects_for_testing(&tx_digest)
+                .unwrap();
+            node.state()
+                .cache_for_testing()
+                .evict_executed_effects_from_cache_for_testing(&tx_digest);
+        });
+    }
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .database_for_testing()
+            .remove_executed_effects_for_testing(&tx_digest)
+            .unwrap();
+        node.state()
+            .cache_for_testing()
+            .evict_executed_effects_from_cache_for_testing(&tx_digest);
+    });
+
+    let result = test_cluster
+        .wallet
+        .execute_transaction_may_fail(signed_tx.clone())
+        .await;
+
+    match result {
+        Err(e) => {
+            let err_str = e.to_string();
+            assert!(
+                err_str.contains("was already executed"),
+                "Expected 'was already executed' error, got: {}",
+                err_str
+            );
+        }
+        Ok(response) => {
+            if let Some(effects) = response.effects {
+                if effects.status().is_err() {
+                    panic!(
+                        "Transaction returned effects with error status instead of being rejected: {:?}",
+                        effects.status()
+                    );
+                } else {
+                    panic!(
+                        "Transaction should be rejected as already executed in previous epoch, but it succeeded"
+                    );
+                }
+            } else {
+                panic!("Transaction succeeded but no effects returned");
+            }
+        }
+    }
+}
