@@ -135,6 +135,7 @@ impl FullnodeClient {
         request.transaction = Some(transaction);
         request.read_mask = Some(FieldMask::from_paths([
             "transaction.effects.bcs",
+            "transaction.effects.lamport_version",
             "transaction.events.bcs",
             "transaction.balance_changes",
             "transaction.objects.objects.bcs",

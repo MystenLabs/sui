@@ -40,7 +40,7 @@ impl SimulationResult {
             .context("SimulateTransactionResponse should have transaction")?;
 
         // Create scope with execution objects
-        let scope = scope.with_executed_transaction(executed_transaction);
+        let scope = scope.with_executed_transaction(executed_transaction)?;
 
         let effects = TransactionEffects::from_executed_transaction(
             scope.clone(),
