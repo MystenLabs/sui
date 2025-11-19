@@ -916,22 +916,59 @@ impl FullCheckpointContents {
     }
 
     pub fn checkpoint_contents(&self) -> CheckpointContents {
-        CheckpointContents::V1(CheckpointContentsV1 {
+        // TODO: Must create a new version of FullCheckpointContents to support V2.
+        // This hack is incorrect, only using to see effect on test failures in CI.
+        // Must be fixed before merging.
+        // CheckpointContents::V1(CheckpointContentsV1 {
+        //     digest: Default::default(),
+        //     transactions: self.transactions.iter().map(|tx| tx.digests()).collect(),
+        //     user_signatures: self.user_signatures.clone(),
+        // })
+        CheckpointContents::V2(CheckpointContentsV2 {
             digest: Default::default(),
-            transactions: self.transactions.iter().map(|tx| tx.digests()).collect(),
-            user_signatures: self.user_signatures.clone(),
+            transactions: self
+                .transactions
+                .iter()
+                .zip(self.user_signatures.iter())
+                .map(|(tx, user_signatures)| CheckpointTransactionContents {
+                    digest: tx.digests(),
+                    user_signatures: user_signatures
+                        .iter()
+                        .map(|sig| (sig.clone(), None))
+                        .collect(),
+                })
+                .collect(),
         })
     }
 
     pub fn into_checkpoint_contents(self) -> CheckpointContents {
-        CheckpointContents::V1(CheckpointContentsV1 {
+        // TODO: Must create a new version of FullCheckpointContents to support V2.
+        // This hack is incorrect, only using to see effect on test failures in CI.
+        // Must be fixed before merging.
+        // CheckpointContents::V1(CheckpointContentsV1 {
+        //     digest: Default::default(),
+        //     transactions: self
+        //         .transactions
+        //         .into_iter()
+        //         .map(|tx| tx.digests())
+        //         .collect(),
+        //     user_signatures: self.user_signatures,
+        // })
+        CheckpointContents::V2(CheckpointContentsV2 {
             digest: Default::default(),
             transactions: self
                 .transactions
                 .into_iter()
-                .map(|tx| tx.digests())
+                .zip(self.user_signatures)
+                .map(|(tx, user_signatures)| CheckpointTransactionContents {
+                    digest: tx.digests(),
+                    user_signatures: user_signatures
+                        .into_iter()
+                        // TODO: this is wrong to always use None but testing for now
+                        .map(|sig| (sig, None))
+                        .collect(),
+                })
                 .collect(),
-            user_signatures: self.user_signatures,
         })
     }
 
