@@ -30,6 +30,7 @@ enum SplatLocation {
 #[derive(Debug, Clone, Copy)]
 enum InputKind {
     Object,
+    Withdrawal,
     Pure,
     Receiving,
 }
@@ -43,6 +44,7 @@ struct Context {
     bytes_idx_remapping: IndexMap<T::InputIndex, T::ByteIndex>,
     receiving_refs: IndexMap<T::InputIndex, ObjectRef>,
     objects: IndexMap<T::InputIndex, T::ObjectInput>,
+    withdrawals: IndexMap<T::InputIndex, T::WithdrawalInput>,
     pure: IndexMap<(T::InputIndex, Type), T::PureInput>,
     receiving: IndexMap<(T::InputIndex, Type), T::ReceivingInput>,
     results: Vec<T::ResultType>,
@@ -57,6 +59,7 @@ impl Context {
             bytes_idx_remapping: IndexMap::new(),
             receiving_refs: IndexMap::new(),
             objects: IndexMap::new(),
+            withdrawals: IndexMap::new(),
             pure: IndexMap::new(),
             receiving: IndexMap::new(),
             results: vec![],
@@ -89,6 +92,18 @@ impl Context {
                     };
                     context.objects.insert(idx, o);
                     InputKind::Object
+                }
+                (L::InputArg::FundsWithdrawal(withdrawal), L::InputType::Fixed(input_ty)) => {
+                    let L::FundsWithdrawalArg { ty, owner, amount } = withdrawal;
+                    debug_assert!(ty == input_ty);
+                    let withdrawal = T::WithdrawalInput {
+                        original_input_index: idx,
+                        ty,
+                        owner,
+                        amount,
+                    };
+                    context.withdrawals.insert(idx, withdrawal);
+                    InputKind::Withdrawal
                 }
                 (arg, ty) => invariant_violation!(
                     "Input arg, type mismatch. Unexpected {arg:?} with type {ty:?}"
@@ -124,16 +139,19 @@ impl Context {
         let Self {
             bytes,
             objects,
+            withdrawals,
             pure,
             receiving,
             ..
         } = self;
         let objects = objects.into_iter().map(|(_, o)| o).collect();
+        let withdrawals = withdrawals.into_iter().map(|(_, w)| w).collect();
         let pure = pure.into_iter().map(|(_, p)| p).collect();
         let receiving = receiving.into_iter().map(|(_, r)| r).collect();
         T::Transaction {
             bytes,
             objects,
+            withdrawals,
             pure,
             receiving,
             commands,
@@ -162,6 +180,17 @@ impl Context {
                         object_input.ty.clone(),
                     )
                 }
+                InputKind::Withdrawal => {
+                    let Some((withdrawal_index, _, withdrawal_input)) =
+                        self.withdrawals.get_full(&i)
+                    else {
+                        invariant_violation!("Unbound withdrawal input {}", i.0)
+                    };
+                    (
+                        T::Location::WithdrawalInput(withdrawal_index as u16),
+                        withdrawal_input.ty.clone(),
+                    )
+                }
                 InputKind::Pure | InputKind::Receiving => return Ok(None),
             },
         }))
@@ -179,9 +208,11 @@ impl Context {
                 .fixed_type(env, location)?
                 .ok_or_else(|| make_invariant_violation!("Expected fixed type for {location:?}"))?,
             SplatLocation::Input(i) => match &self.input_resolution[i.0 as usize] {
-                InputKind::Object => self.fixed_type(env, location)?.ok_or_else(|| {
-                    make_invariant_violation!("Expected fixed type for {location:?}")
-                })?,
+                InputKind::Object | InputKind::Withdrawal => {
+                    self.fixed_type(env, location)?.ok_or_else(|| {
+                        make_invariant_violation!("Expected fixed type for {location:?}")
+                    })?
+                }
                 InputKind::Pure => {
                     let ty = match expected_ty {
                         Type::Reference(_, inner) => (**inner).clone(),
@@ -944,6 +975,7 @@ mod consumed_shared_objects {
             let T::Transaction {
                 bytes: _,
                 objects,
+                withdrawals: _,
                 pure: _,
                 receiving: _,
                 commands: _,
@@ -1046,6 +1078,7 @@ mod consumed_shared_objects {
             // no shared objects in these locations
             T::Location::TxContext
             | T::Location::GasCoin
+            | T::Location::WithdrawalInput(_)
             | T::Location::PureInput(_)
             | T::Location::ReceivingInput(_) => (),
             T::Location::ObjectInput(i) => {

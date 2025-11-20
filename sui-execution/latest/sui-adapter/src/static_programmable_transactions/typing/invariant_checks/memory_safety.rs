@@ -59,6 +59,7 @@ struct Context {
     tx_context: Location,
     gas: Location,
     object_inputs: Vec<Location>,
+    withdrawal_inputs: Vec<Location>,
     pure_inputs: Vec<Location>,
     receiving_inputs: Vec<Location>,
     results: Vec<Vec<Location>>,
@@ -293,6 +294,7 @@ impl Context {
         let T::Transaction {
             bytes: _,
             objects,
+            withdrawals,
             pure,
             receiving,
             commands: _,
@@ -301,6 +303,9 @@ impl Context {
         let gas = Location::non_ref(T::Location::GasCoin);
         let object_inputs = (0..objects.len())
             .map(|i| Location::non_ref(T::Location::ObjectInput(i as u16)))
+            .collect();
+        let withdrawal_inputs = (0..withdrawals.len())
+            .map(|i| Location::non_ref(T::Location::WithdrawalInput(i as u16)))
             .collect();
         let pure_inputs = (0..pure.len())
             .map(|i| Location::non_ref(T::Location::PureInput(i as u16)))
@@ -312,6 +317,7 @@ impl Context {
             tx_context,
             gas,
             object_inputs,
+            withdrawal_inputs,
             pure_inputs,
             receiving_inputs,
             results: vec![],
@@ -345,6 +351,10 @@ impl Context {
                 .object_inputs
                 .get(i as usize)
                 .ok_or_else(|| anyhow::anyhow!("Object input index out of bounds {i}"))?,
+            T::Location::WithdrawalInput(i) => self
+                .withdrawal_inputs
+                .get(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Withdrawal input index out of bounds {i}"))?,
             T::Location::PureInput(i) => self
                 .pure_inputs
                 .get(i as usize)
@@ -369,6 +379,10 @@ impl Context {
                 .object_inputs
                 .get_mut(i as usize)
                 .ok_or_else(|| anyhow::anyhow!("Object input index out of bounds {i}"))?,
+            T::Location::WithdrawalInput(i) => self
+                .withdrawal_inputs
+                .get_mut(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Withdrawal input index out of bounds {i}"))?,
             T::Location::PureInput(i) => self
                 .pure_inputs
                 .get_mut(i as usize)
@@ -452,6 +466,7 @@ impl Context {
             tx_context,
             gas,
             object_inputs,
+            withdrawal_inputs,
             pure_inputs,
             receiving_inputs,
             results,
@@ -460,6 +475,7 @@ impl Context {
         std::iter::once(tx_context)
             .chain(std::iter::once(gas))
             .chain(object_inputs)
+            .chain(withdrawal_inputs)
             .chain(pure_inputs)
             .chain(receiving_inputs)
             .chain(results.iter().flatten())
@@ -506,6 +522,7 @@ fn verify_(txn: &T::Transaction) -> anyhow::Result<()> {
     let T::Transaction {
         bytes: _,
         objects: _,
+        withdrawals: _,
         pure: _,
         receiving: _,
         commands,

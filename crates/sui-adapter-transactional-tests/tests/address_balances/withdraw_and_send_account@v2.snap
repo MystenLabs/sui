@@ -23,8 +23,9 @@ task 3, lines 17-19:
 //# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(500) @A
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
-Error: Transaction Effects Status: Attempted to used feature that is not supported yet
-Debug of error: FeatureNotYetSupported at command None
+mutated: object(0,1)
+accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Split), (object(3,0), A, sui::balance::Balance<sui::sui::SUI>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 4, lines 21-23:
 //# create-checkpoint
@@ -34,5 +35,6 @@ task 5, lines 24-26:
 //# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(500) @B
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
-Error: Transaction Effects Status: Attempted to used feature that is not supported yet
-Debug of error: FeatureNotYetSupported at command None
+mutated: object(0,1)
+accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

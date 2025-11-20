@@ -118,6 +118,8 @@ struct Locations {
     /// The runtime value for the input objects args
     input_object_metadata: Vec<(T::InputIndex, InputObjectMetadata)>,
     object_inputs: Locals,
+    input_withdrawal_metadata: Vec<T::WithdrawalInput>,
+    withdrawal_inputs: Locals,
     pure_input_bytes: IndexSet<Vec<u8>>,
     pure_input_metadata: Vec<T::PureInput>,
     pure_inputs: Locals,
@@ -170,6 +172,9 @@ impl Locations {
                 ResolvedLocation::Local(gas_locals.local(0)?)
             }
             T::Location::ObjectInput(i) => ResolvedLocation::Local(self.object_inputs.local(i)?),
+            T::Location::WithdrawalInput(i) => {
+                ResolvedLocation::Local(self.withdrawal_inputs.local(i)?)
+            }
             T::Location::Result(i, j) => {
                 let result = unwrap!(self.results.get_mut(i as usize), "bounds already verified");
                 ResolvedLocation::Local(result.local(j)?)
@@ -210,6 +215,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         gas_charger: &'gas mut GasCharger,
         pure_input_bytes: IndexSet<Vec<u8>>,
         object_inputs: Vec<T::ObjectInput>,
+        input_withdrawal_metadata: Vec<T::WithdrawalInput>,
         pure_input_metadata: Vec<T::PureInput>,
         receiving_input_metadata: Vec<T::ReceivingInput>,
     ) -> Result<Self, ExecutionError>
@@ -225,6 +231,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             object_values.push(Some(v));
         }
         let object_inputs = Locals::new(object_values)?;
+        let mut withdrawal_values = Vec::with_capacity(input_withdrawal_metadata.len());
+        for withdrawal_input in &input_withdrawal_metadata {
+            let v = load_withdrawal_arg(gas_charger, env, withdrawal_input)?;
+            withdrawal_values.push(Some(v));
+        }
+        let withdrawal_inputs = Locals::new(withdrawal_values)?;
         let pure_inputs = Locals::new_invalid(pure_input_metadata.len())?;
         let receiving_inputs = Locals::new_invalid(receiving_input_metadata.len())?;
         let gas = match gas_charger.gas_coin() {
@@ -272,6 +284,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 gas,
                 input_object_metadata,
                 object_inputs,
+                input_withdrawal_metadata,
+                withdrawal_inputs,
                 pure_input_bytes,
                 pure_input_metadata,
                 pure_inputs,
@@ -1087,6 +1101,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             T::Location::ObjectInput(i) => {
                 TxArgument::Input(self.locations.input_object_metadata[i as usize].0.0)
             }
+            T::Location::WithdrawalInput(i) => TxArgument::Input(
+                self.locations.input_withdrawal_metadata[i as usize]
+                    .original_input_index
+                    .0,
+            ),
             T::Location::PureInput(i) => TxArgument::Input(
                 self.locations.pure_input_metadata[i as usize]
                     .original_input_index
@@ -1228,6 +1247,22 @@ fn load_object_arg_impl(
     let v = Value::deserialize(env, move_obj.contents(), ty)?;
     charge_gas_!(meter, env, charge_copy_loc, &v)?;
     Ok((object_metadata, v))
+}
+
+fn load_withdrawal_arg(
+    meter: &mut GasCharger,
+    env: &Env,
+    withdrawal: &T::WithdrawalInput,
+) -> Result<Value, ExecutionError> {
+    let T::WithdrawalInput {
+        original_input_index: _,
+        ty: _,
+        owner,
+        amount,
+    } = withdrawal;
+    let loaded = Value::funds_accumulator_withdrawal(*owner, *amount);
+    charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
+    Ok(loaded)
 }
 
 fn load_pure_value(
