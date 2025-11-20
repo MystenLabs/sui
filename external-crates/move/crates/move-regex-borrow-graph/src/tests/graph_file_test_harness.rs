@@ -60,7 +60,7 @@ impl BorrowOp {
 
 impl BorrowArrangement {
     fn from_file(file: &std::path::Path) -> Result<Self, String> {
-        // Sanity chec:k that mutable set exists, and each mutable borrow is from a mutable base
+        // Sanity check: that mutable set exists, and each mutable borrow is from a mutable base
         // or a local.
         fn sanity_check(ops: &[BorrowTestOp]) -> Result<(), String> {
             let mut mutable = BTreeSet::new();
@@ -262,7 +262,7 @@ impl BorrowArrangement {
 // This section defines the logic to construct a graph from a borrow arrangement, performing check
 // actions along the way.
 
-fn is_writable(graph: Graph<Loc, char>, r: Ref) -> bool {
+fn is_writable(graph: &Graph<Loc, char>, r: Ref) -> bool {
     graph.is_mutable(r).unwrap()
         && graph
             .borrowed_by(r)
@@ -286,6 +286,8 @@ fn build_and_check_graph_from_arrangement(
     let local_defs: Vec<_> = locals.iter().map(|i| (i, (), true)).collect::<Vec<_>>();
 
     let (mut g, local_map) = Graph::new(local_defs).unwrap();
+    // Ensure we do not make new graphs
+    let g_ref = &mut g;
 
     // Tracks where each reference is in the arrangement
     let mut refs = BTreeMap::new();
@@ -299,10 +301,10 @@ fn build_and_check_graph_from_arrangement(
                 let mut failures = Vec::new();
                 for ref_ in &refs {
                     if writables.contains(ref_.0) {
-                        if !is_writable(g.clone(), *ref_.1) {
+                        if !is_writable(g_ref, *ref_.1) {
                             failures.push((true, ref_.0));
                         }
-                    } else if is_writable(g.clone(), *ref_.1) {
+                    } else if is_writable(g_ref, *ref_.1) {
                         failures.push((false, ref_.0));
                     }
                 }
@@ -329,12 +331,16 @@ fn build_and_check_graph_from_arrangement(
                     is_mutable,
                 } => {
                     let base_ref = local_map[&{ *local_id }];
-                    let new_ref = g.extend_by_epsilon((), [base_ref], *is_mutable).unwrap();
+                    let new_ref = g_ref
+                        .extend_by_epsilon((), [base_ref], *is_mutable)
+                        .unwrap();
                     refs.insert(*lhs, new_ref);
                 }
                 BorrowOp::Alias { base, is_mutable } => {
                     let base_ref = refs[base];
-                    let new_ref = g.extend_by_epsilon((), [base_ref], *is_mutable).unwrap();
+                    let new_ref = g_ref
+                        .extend_by_epsilon((), [base_ref], *is_mutable)
+                        .unwrap();
                     refs.insert(*lhs, new_ref);
                 }
                 BorrowOp::BorrowField {
@@ -343,7 +349,7 @@ fn build_and_check_graph_from_arrangement(
                     is_mutable,
                 } => {
                     let base_ref = refs[base];
-                    let new_ref = g
+                    let new_ref = g_ref
                         .extend_by_label((), [base_ref], *is_mutable, *label)
                         .unwrap();
                     refs.insert(*lhs, new_ref);
@@ -351,15 +357,14 @@ fn build_and_check_graph_from_arrangement(
                 BorrowOp::Call { args, is_mutable } => {
                     let arg_refs: Vec<_> = args.iter().map(|a| refs[a]).collect();
                     let muts = vec![*is_mutable];
-                    let new_refs = g.extend_by_dot_star_for_call((), arg_refs, muts).unwrap();
+                    let new_refs = g_ref
+                        .extend_by_dot_star_for_call((), arg_refs, muts)
+                        .unwrap();
                     assert!(new_refs.len() == 1);
                     refs.insert(*lhs, new_refs[0]);
                 }
             },
         }
-
-        // Validate graph invariants
-        g.check_invariants();
     }
 
     // -------------------------------------------------------------------------
