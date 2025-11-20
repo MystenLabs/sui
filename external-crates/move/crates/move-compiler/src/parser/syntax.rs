@@ -4675,8 +4675,9 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
         }
         // If we find `extend` or `module`, bail out.
         Tok::Module => Err(ErrCase::ContinueToModule(attributes)),
-        Tok::Identifier if context.tokens.content() == EXTEND_MODIFIER =>
-            Err(ErrCase::ContinueToModule(attributes)),
+        Tok::Identifier if context.tokens.content() == EXTEND_MODIFIER => {
+            Err(ErrCase::ContinueToModule(attributes))
+        }
         // Regular move constructs
         Tok::Friend => Ok(ModuleMember::Friend(parse_friend_decl(
             attributes, context,
