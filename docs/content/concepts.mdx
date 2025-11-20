@@ -1,41 +1,86 @@
 ---
 title: Sui Concepts Overview
 sidebar_label: Overview
-description: Learn about how Sui is different from other blockchains. 
-keywords: [ app developers, move, move book, objects, cryptography, tokenomics ]
+description: Learn about the fundamental concepts and architecture that make Sui unique among blockchains.
+keywords: [ sui blockchain, architecture, move, objects, transactions, tokenomics, cryptography ]
 ---
 
-Sui is different than other blockchains. The concepts explored in this section provide a background to the Sui blockchain and Web3 in general.
+Sui introduces innovative approaches to blockchain architecture and development. The concepts explored in this section provide comprehensive coverage of Sui's design, from core architecture to advanced features.
 
-## App developers
+## Architecture
 
 <Cards>
-<Card title="Move overview" href="/concepts/sui-move-concepts"/>
-<Card title="Package upgrades" href="/concepts/sui-move-concepts/packages/upgrade"/>
-<Card title="Gaming on Sui" href="/concepts/gaming"/>
+<Card title="Networks" href="/concepts/architecture/networks"/>
+<Card title="Storage" href="/concepts/architecture/storage"/>
+<Card title="Consensus" href="/concepts/architecture/consensus"/>
+<Card title="Epochs and Reconfiguration" href="/concepts/architecture/epochs"/>
+<Card title="Security" href="/concepts/architecture/security"/>
+<Card title="Protocol Upgrades" href="/concepts/architecture/protocol-upgrades"/>
+</Cards>
+
+## Transactions
+
+<Cards>
+<Card title="Life of a Transaction" href="/concepts/transactions/lifecycle"/>
+<Card title="Programmable Transaction Blocks" href="/concepts/transactions/ptb"/>
+<Card title="Sponsored Transactions" href="/concepts/transactions/sponsored"/>
+<Card title="Gas Smashing" href="/concepts/transactions/gas-smashing"/>
+<Card title="Transaction Authentication" href="/concepts/cryptography/transaction-auth"/>
+</Cards>
+
+## Object Model
+
+<Cards>
+<Card title="Object Ownership" href="/concepts/object-model/ownership"/>
+<Card title="Transfers" href="/concepts/transfers"/>
+<Card title="Transfer to Object" href="/concepts/transfers/transfer-to-object"/>
+<Card title="Object and Package Versioning" href="/concepts/object-model/versioning"/>
+</Cards>
+
+## Move
+
+<Cards>
+<Card title="Move Overview" href="/concepts/sui-move-concepts"/>
+<Card title="Package Upgrades" href="/concepts/sui-move-concepts/packages/upgrade"/>
+<Card title="Dynamic Fields" href="/concepts/sui-move-concepts/dynamic-fields"/>
+<Card title="Move Conventions" href="/concepts/sui-move-concepts/conventions"/>
 <Card title="The Move Book" href="https://move-book.com">
 A comprehensive guide to the Move programming language on the Sui blockchain.
 </Card>
 </Cards>
 
-## Objects
+## Data Access
 
 <Cards>
-<Card title="Object Model" href="concepts/object-model"/>
-<Card title="Transfer to Object" href="concepts/transfers/transfer-to-object"/>
+<Card title="gRPC Overview" href="/concepts/data-access/grpc"/>
+<Card title="GraphQL for Sui RPC" href="/concepts/data-access/graphql"/>
+<Card title="Custom Indexing Framework" href="/concepts/data-access/indexer"/>
+<Card title="Archival Store and Service" href="/concepts/data-access/archival"/>
 </Cards>
 
 ## Cryptography
 
 <Cards>
-<Card title="zkLogin" href="concepts/cryptography/zklogin"/>
-<Card title="Transaction authentication" href="concepts/cryptography/transaction-auth"/>
+<Card title="zkLogin" href="/concepts/cryptography/zklogin"/>
+<Card title="Passkey" href="/concepts/cryptography/passkey"/>
+<Card title="Nautilus" href="/concepts/cryptography/nautilus"/>
+<Card title="Checkpoint Verification" href="/concepts/cryptography/checkpoint-verification"/>
 </Cards>
 
 ## Tokenomics
 
 <Cards>
-<Card title="SUI tokenomics" href="concepts/tokenomics" />
-<Card title="Gas in Sui" href="concepts/tokenomics/gas-in-sui" />
-<Card title="Vesting strategies" href="concepts/tokenomics/vesting-strategies" />
+<Card title="SUI Tokenomics" href="/concepts/tokenomics"/>
+<Card title="Staking and Unstaking" href="/concepts/tokenomics/staking"/>
+<Card title="Gas Fees" href="/concepts/tokenomics/gas-in-sui"/>
+<Card title="SUI Bridging" href="/concepts/tokenomics/bridging"/>
+<Card title="Vesting Strategies" href="/concepts/tokenomics/vesting-strategies"/>
+</Cards>
+
+## Additional Resources
+
+<Cards>
+<Card title="Ethereum to Sui" href="/concepts/ethereum-to-sui"/>
+<Card title="Gaming on Sui" href="/concepts/gaming"/>
+<Card title="Research Papers" href="/concepts/research-papers"/>
 </Cards>

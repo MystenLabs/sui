@@ -31,6 +31,20 @@ If you want to use a specific gas coin, first find the gas coin object ID to be 
 
 :::
 
+## Process multiple transactions from the same address
+
+The Sui SDK offers transaction executors to help process multiple transactions from the same address.
+
+### `SerialTransactionExecutor`
+
+Use the `SerialTransactionExecutor` when you process transactions one after another. The executor grabs all the coins from the sender and combines them into a single coin that is used for all transactions.
+
+Using the `SerialTransactionExecutor` prevents `SequenceNumber` errors by handling the versioning of object inputs across a PTB.
+
+### `ParallelTransactionExecutor`
+
+Use the `ParallelTransactionExecutor` when you want to process transactions with the same sender at the same time. This class creates a pool of gas coins that it manages to ensure parallel transactions don't equivocate those coins. The class tracks objects used across transactions and orders their processing so that the object inputs are also not equivocated.
+
 ## Examples
 
 The following examples demonstrate how to sign and execute transactions using Rust, TypeScript, or the Sui CLI.

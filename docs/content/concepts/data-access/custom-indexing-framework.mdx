@@ -23,15 +23,15 @@ Leveraging the custom indexing framework is necessary for projects and use cases
 
 At a high level, the indexing framework is a streaming pipeline that continuously polls for the latest available checkpoints from a pre-defined data source and streams that checkpoint data to your pipeline's processing logic.
 
-Checkpoints on Sui are batches of transactions that represent consistent blockchain state snapshots. Each checkpoint contains complete transaction details, events, object changes, and execution results with guaranteed ordering. See [Life of a Transaction](./sui-architecture/transaction-lifecycle.mdx#checkpoints) for more information on checkpoints.
+Checkpoints on Sui are batches of transactions that represent consistent blockchain state snapshots. Each checkpoint contains complete transaction details, events, object changes, and execution results with guaranteed ordering. See [Life of a Transaction](/concepts/transactions/transaction-lifecycle.mdx#checkpoints) for more information on checkpoints.
 
-![Overview](./custom-indexer/images/overview.png)
+![Overview](./images/overview.png)
 
 ## Detailed architecture
 
 The following diagram details the custom indexer architecture.
 
-![Custom indexer architecture](./custom-indexer/images/architecture.png)
+![Custom indexer architecture](./images/architecture.png)
 
 ### Data sources
 
@@ -61,7 +61,7 @@ The framework then exposes specific interfaces that you implement to define your
 - `commit()`: Store your processed data to the database with proper transaction handling. The framework calls this with batches of processed data for efficient bulk operations.
 - `prune()`: Clean up old data based on your retention policies (optional). Useful for managing database size by removing outdated records while preserving recent data.
 
-Sequential and concurrent pipeline types and their trade-offs are detailed in [Pipeline Architecture](./custom-indexer/pipeline-architecture.mdx).
+Sequential and concurrent pipeline types and their trade-offs are detailed in [Pipeline Architecture](/concepts/data-access/pipeline-architecture.mdx).
 
 <details>
 
@@ -85,6 +85,6 @@ Your indexer runs as one executable program with multiple coordinated background
 
 ## Related links
 
-<RelatedLink to="/concepts/custom-indexer/pipeline-architecture.mdx" />
-<RelatedLink to="/concepts/sui-architecture/transaction-lifecycle.mdx" />
+<RelatedLink to="/concepts/data-access/pipeline-architecture.mdx" />
+<RelatedLink to="/concepts/transactions/transaction-lifecycle.mdx" />
 <RelatedLink to="/guides/developer/advanced/custom-indexer.mdx" />

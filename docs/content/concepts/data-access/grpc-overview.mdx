@@ -4,7 +4,7 @@ description: Overview of the gRPC API to access Sui network data.
 keywords: [ grpc, g rpc, RPC, sui full node grpc, full node rpc, what is grpc, grpc on sui ]
 ---
 
-The [Sui Full Node gRPC API](../references/fullnode-protocol.mdx) provides a fast, type-safe, and efficient interface for interacting with the Sui blockchain. Designed for power users, indexers, explorers, and decentralized apps, this API enables access to Sui data with high performance and low latency.
+The [Sui Full Node gRPC API](/references/fullnode-protocol.mdx) provides a fast, type-safe, and efficient interface for interacting with the Sui blockchain. Designed for power users, indexers, explorers, and decentralized apps, this API enables access to Sui data with high performance and low latency.
 
 :::info
 
@@ -24,7 +24,7 @@ gRPC offers a high-performance, efficient communication protocol that uses [Prot
 
 In addition to request-response calls, gRPC supports server-side streaming, enabling real-time data delivery without constant polling. This is especially useful in environments where you need to track events and transactions live. gRPC's binary format is significantly faster and lighter than JSON, saving bandwidth and improving latency.
 
-Refer to [when to use gRPC vs GraphQL](../guides/developer/sui-101/data-serving#when-to-use-grpc-vs-graphql-with-general-purpose-indexer) to access Sui data.
+Refer to [when to use gRPC vs GraphQL](/concepts/data-access/data-serving#when-to-use-grpc-vs-graphql-with-general-purpose-indexer) to access Sui data.
 
 ## gRPC on Sui
 
@@ -37,7 +37,7 @@ Protocol buffers define the gRPC interface. You can find the relevant `.proto` f
 | `StateService` | `sui/rpc/v2/state_service.proto` | Query up-to-date on-chain data like balances, coin metadata, dynamic fields, or owned objects. Also supports dry-run simulations for transactions. |
 | `SubscriptionService` | `sui/rpc/v2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. Refer to [Subscriptions for streaming data](#subscriptions-for-streaming-data). |
 | `MovePackageService` | `sui/rpc/v2/move_package_service.proto` | Access metadata and content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection. |
-| `SignatureVerificationService` | `sui/rpc/v2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that may include [zklogin](./cryptography/zklogin.mdx) or other signatures, simulate authentication, or build custom signing workflows. |
+| `SignatureVerificationService` | `sui/rpc/v2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that may include [zklogin](/concepts/cryptography/zklogin.mdx) or other signatures, simulate authentication, or build custom signing workflows. |
 | `NameService` | `sui/rpc/v2/name_service.proto` | Resolve human-readable SuiNS names to their underlying name records, and perform reverse lookups from Sui addresses back to linked names. |
 
 Use these definitions to generate client libraries in various programming languages.
@@ -134,7 +134,7 @@ Streaming APIs are useful for building indexers, dashboards, or bots that need t
 
 ## Handling pruned data
 
-If a full node doesn’t return a specific object, transaction, or event, it’s likely that the data has been pruned based on the node’s retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store & Service](/concepts/archival-store.mdx). The Archival Store retains historical data for the network.
+If a full node doesn’t return a specific object, transaction, or event, it’s likely that the data has been pruned based on the node’s retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store & Service](/concepts/data-access/archival-store.mdx). The Archival Store retains historical data for the network.
 
 You can reuse the same gRPC `LedgerService` methods for this lookup. Simply change the endpoint in your client from the full node’s address to the archival service endpoint.
 

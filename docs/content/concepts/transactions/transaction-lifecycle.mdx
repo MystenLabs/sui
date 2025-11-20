@@ -19,7 +19,7 @@ The following steps align with those in the preceding image.
 
 1. The client then collects the responses from a set of validators that account for at least 2/3 stake on Sui (a supermajority) to form a transaction certificate. As a result, unlike consensus-based blockchains, Sui validators do not need to propagate signatures on a best-effort basis (gossip signatures) or aggregate certificates. This effort is now the responsibility of the client or gateway.
 
-1. After assembling the certificate, the client sends it back to all validators, who check its validity and acknowledge its receipt to the client. If the transaction involves owned objects exclusively, Sui can process the transaction certificate immediately and execute it without waiting for the [consensus engine](./consensus.mdx) (**direct fast path**). All certificates are forwarded to the Sui DAG-based consensus protocol (also operated by the Sui validators).
+1. After assembling the certificate, the client sends it back to all validators, who check its validity and acknowledge its receipt to the client. If the transaction involves owned objects exclusively, Sui can process the transaction certificate immediately and execute it without waiting for the [consensus engine](/concepts/sui-architecture/consensus.mdx) (**direct fast path**). All certificates are forwarded to the Sui DAG-based consensus protocol (also operated by the Sui validators).
 
 1. Consensus eventually outputs a total order of certificates; the validators check and execute those that contain shared objects.
 
