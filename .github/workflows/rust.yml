@@ -210,6 +210,33 @@ jobs:
         run: |
           cargo build --all-features
 
+  windows-cli-tests:
+    needs: [diff, windows-build]
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 120
+    env:
+      # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
+      # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
+      # non-deterministic `test` job.
+      SUI_SKIP_SIMTESTS: 1
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [ windows-ghcloud ]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+
+      - uses: taiki-e/install-action@nextest
+
+      - name: cargo test Sui CLI
+        shell: bash
+        run: |
+          cargo nextest run -p sui --no-fail-fast --profile ci
+
   simtest:
     needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
