@@ -1,0 +1,25 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/git/git_example.sh
+---
+----- script -----
+# This is just here as an example of a shell test that creates a git repo to work against
+
+# Set up git repo for `a`
+export GIT_CONFIG_GLOBAL=""
+
+git init -q -b main a
+git -C a add .
+git -C a -c user.email=test@test.com -c user.name=test commit -q -m "initial revision"
+
+HASH=$(git -C a log --pretty=format:%H)
+
+sui move cache-package testnet 4c78adac "{ git = \"$(pwd)/a\", rev = \"${HASH}\", subdir = \".\" }"
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+{"name":"a","chain_id":"4c78adac"}
+
+----- stderr -----

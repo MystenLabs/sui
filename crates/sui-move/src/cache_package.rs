@@ -6,7 +6,8 @@ use move_package_alt::{
 use serde::Deserialize;
 use sui_package_alt::SuiFlavor;
 
-/// Download a package and return information about it
+/// Download a package and return information about it. Note that local packages must use the
+/// absolute path.
 #[derive(Parser)]
 pub struct CachePackage {
     /// The environment name to use for resolution
@@ -15,7 +16,8 @@ pub struct CachePackage {
     /// The chain ID to use for resolution
     environment_id: String,
 
-    /// A string containing the dependency as it would appear in Move.toml (e.g. `{ local = "../dep" }`)
+    /// A string containing the dependency as it would appear in Move.toml (e.g. `{ git = "...",
+    /// rev = "...", subdir = "..." }`)
     dependency: String,
 }
 

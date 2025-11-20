@@ -480,7 +480,7 @@ mod tests {
           |
         7 |             foo = { rename-from = "Foo", override = true, rev = "releases/v1" }
           |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        Invalid dependency; dependencies must have exactly one of the following fields: `git`, `r.<resolver>`, `local`, or `on-chain`.
+        Invalid dependency; dependencies must have exactly one of the following fields: `system`, `git`, `r.<resolver>`, `local`, or `on-chain`.
         "###);
     }
 
@@ -504,7 +504,7 @@ mod tests {
           |
         7 |             foo = {}
           |                   ^^
-        Invalid dependency; dependencies must have exactly one of the following fields: `git`, `r.<resolver>`, `local`, or `on-chain`.
+        Invalid dependency; dependencies must have exactly one of the following fields: `system`, `git`, `r.<resolver>`, `local`, or `on-chain`.
         "###);
     }
 
@@ -687,7 +687,7 @@ mod tests {
         assert_snapshot!(error, @r###"
         TOML parse error at line 1, column 1
           |
-        1 |
+        1 | 
           | ^
         missing field `package`
         "###);
