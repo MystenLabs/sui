@@ -764,7 +764,11 @@ fn compare_packages(
         Arc::clone(&move_toml_contents),
     );
 
-    for existing_module in existing_modules {
+    // Sort modules by name to ensure consistent error ordering across platforms
+    let mut sorted_existing_modules = existing_modules;
+    sorted_existing_modules.sort_by(|a, b| a.self_id().name().cmp(b.self_id().name()));
+
+    for existing_module in sorted_existing_modules {
         let name = existing_module.self_id().name().to_owned();
         match new_modules_map.get_mut(&name) {
             Some(new_module) => {
