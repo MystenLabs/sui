@@ -115,6 +115,7 @@ pub fn simulate_transaction(
         {
             let mut estimation_transaction = transaction.clone();
             estimation_transaction.gas_data_mut().payment = Vec::new();
+            estimation_transaction.gas_data_mut().budget = protocol_config.max_tx_gas();
 
             let simulation_result = executor
                 .simulate_transaction(estimation_transaction, TransactionChecks::Enabled)
