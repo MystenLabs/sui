@@ -4547,10 +4547,12 @@ fn parse_module(
     let mut stop_parsing = false;
     while context.tokens.peek() != Tok::RBrace {
         // If we are in semicolon mode, EOF is a fine place to stop.
-        // If we see the `module` keyword, this is most-likely someone defining a second module
-        // (erroneously), so we also bail in that case.
+        // If we see the `module` keyword, we are defining a second module, so bail
         if matches!(definition_mode, ModuleDefinitionMode::Semicolon)
-            && (context.tokens.peek() == Tok::EOF || context.tokens.peek() == Tok::Module)
+            && (context.tokens.peek() == Tok::EOF
+                || context.tokens.peek() == Tok::Module
+                || (context.tokens.peek() == Tok::Identifier
+                    && context.tokens.content() == EXTEND_MODIFIER))
         {
             stop_parsing = true;
             break;
@@ -4649,10 +4651,6 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
             consume_token(context.tokens, Tok::Semicolon)?;
             Ok(ModuleMember::Spec(spec_string))
         }
-        // If we find an `extend`, this is the start of an interior module.
-        Tok::Identifier if context.tokens.content() == EXTEND_MODIFIER => {
-            Err(ErrCase::ContinueToModule(attributes))
-        }
         Tok::Spec => {
             match context.tokens.lookahead() {
                 Ok(Tok::Fun) | Ok(Tok::Native) => {
@@ -4675,6 +4673,10 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                 }
             }
         }
+        // If we find `extend` or `module`, bail out.
+        Tok::Module => Err(ErrCase::ContinueToModule(attributes)),
+        Tok::Identifier if context.tokens.content() == EXTEND_MODIFIER =>
+            Err(ErrCase::ContinueToModule(attributes)),
         // Regular move constructs
         Tok::Friend => Ok(ModuleMember::Friend(parse_friend_decl(
             attributes, context,
@@ -4759,14 +4761,7 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                             ),
                         )
                     };
-                    if tok == Tok::Module
-                        || (tok == Tok::Identifier && context.tokens.content() == EXTEND_MODIFIER)
-                    {
-                        context.add_diag(*diag);
-                        Err(ErrCase::ContinueToModule(attributes))
-                    } else {
-                        Err(ErrCase::Unknown(diag))
-                    }
+                    Err(ErrCase::Unknown(diag))
                 }
             }
         }
