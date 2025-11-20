@@ -213,7 +213,7 @@ jobs:
   windows-cli-tests:
     needs: [diff, windows-build]
     if: needs.diff.outputs.isRust == 'true'
-    timeout-minutes: 120
+    timeout-minutes: 45 
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
