@@ -16,7 +16,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Instant,
 };
-use sui_indexer_alt_framework::task::TrySpawnStreamExt;
+use sui_futures::stream::TrySpawnStreamExt;
 use tokio::time::timeout;
 use tracing::{debug, info, warn};
 
