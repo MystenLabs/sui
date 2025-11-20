@@ -2602,7 +2602,6 @@ async fn init_sim_executor(
     AccountSetup,
     Option<Arc<dyn RpcStateReader + Send + Sync>>,
 ) {
-    dbg!(protocol_config.enable_ptb_execution_v2());
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
     let mut account_objects = BTreeMap::new();
