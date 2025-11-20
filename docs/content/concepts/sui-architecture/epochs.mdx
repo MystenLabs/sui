@@ -4,7 +4,7 @@ description: Epochs define time periods on Sui where the validator set remains u
 keywords: [ epochs, equivocation, reconfiguration, validators, object versioning ]
 ---
 
-On Sui, an _epoch_ is a certain period of time on the network. During this time, the Sui [validator](/guides/operator/validator/validator-config.mdx) set and their stakes remain unchanged. On both [Mainnet](/concepts/sui-architecture/networks.mdx) and [Testnet](/concepts/sui-architecture/networks.mdx), an epoch is about 24 hours. This timeframe allows validators to process transactions efficiently without worrying about ad hoc validator changes.
+On Sui, an _epoch_ is a period of time defined by the network. During this time, the Sui [validator](/guides/operator/validator/validator-config.mdx) set and their stakes remain unchanged. On both [Mainnet](/concepts/sui-architecture/networks.mdx) and [Testnet](/concepts/sui-architecture/networks.mdx), an epoch is about 24 hours. Epochs on Devnet are 1 hour. This timeframe allows validators to process transactions efficiently without worrying about ad hoc validator changes.
 
 Epoch values are included in the metadata of all [transactions](/concepts/transactions.mdx). A transaction is only valid if executed before a set epoch.
 
@@ -42,7 +42,7 @@ The Sui network has safeguards to punish validators who engage in equivocation. 
 
 1. For most smart contracts, equivocation is not an intended behavior. A common source of unintentional equivocation comes from multiple transactions performed by the same address. If you don't take care to handle the gas fees properly, you could lock up your smart contract by trying to use the same [coin](/standards/coin.mdx) (and version) for more than one transaction.
 
-    **Recommendation**: If you use a single thread, serialize transactions that use the same owned object. [PTBs](/guides/developer/sui-101/building-ptb.mdx) allow your transactions to use multiple operations against the same owned object. A PTB is essentially a single, serialized transaction, which can prevent `SequenceNumber` errors.
+    **Recommendation**: If you use a single thread, serialize transactions that use the same owned object. [Programmable transaction blocks](/guides/developer/sui-101/building-ptb.mdx) allow your transactions to use multiple operations against the same owned object. A PTB is essentially a single, serialized transaction, which can prevent `SequenceNumber` errors.
 
     **Recommendation**: Always take advantage of the inherent batching that PTBs provide. For example, consider an airdrop scenario where you want to mint and transfer an object to many users. Because PTBs allow up to 1,024 operations in a single PTB, you can mint and transfer the airdrop object to 512 users in a single transaction. This approach is much more cost efficient than looping over 512 individual transactions that mint and transfer to a single user each time. Batching transactions might remove the need for parallel execution, but you must consider the atomic nature of PTBs; if one instruction fails, the whole PTB fails. Consequently, parallel transactions might be preferred for some use cases.
 

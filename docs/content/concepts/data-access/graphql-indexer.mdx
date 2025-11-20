@@ -366,7 +366,7 @@ Retaining long-term historical data in Postgres is not recommended unless requir
 
 ### Use the Archival Service and Store for historical lookups
 
-For all production deployments, you are strongly encouraged to pair Postgres with the [Archival Service](./archival-store.mdx) to support point lookups of transactions, objects, and checkpoints when relevant data does not exist in Postgres.
+For all production deployments, you are strongly encouraged to pair Postgres with the [Archival Service](/concepts/data-access/archival-store.mdx) to support point lookups of transactions, objects, and checkpoints when relevant data does not exist in Postgres.
 
 - The Archival Service serves as the backend for historical versions and checkpoint data, reducing pressure on your Postgres instance.
 - While not strictly required, it is strongly recommended that you use the Archival Service in any production setup that aims to support `high-retention` GraphQL or gRPC workloads.

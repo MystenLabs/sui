@@ -42,10 +42,9 @@ If a client collects a quorum of signatures on the effects of the transaction, t
 
 ## Mysticeti
 
-Sui uses a DAG-based consensus protocol called _Mysticeti_ that optimizes for both low latency and high throughput. Mysticeti supports multiple validators proposing blocks in parallel, which uses the full bandwidth of the network and provides censorship resistance. Mysticeti only requires 3 rounds of messages to commit blocks from the DAGs. This is the same as practical BFT and matches the theoretical minimum.
+Sui uses a [directed acyclic graph](https://en.wikipedia.org/wiki/Directed_acyclic_graph)-based consensus protocol called _Mysticeti_ that optimizes for both low latency and high throughput. Mysticeti supports multiple validators proposing blocks in parallel, which uses the full bandwidth of the network and provides censorship resistance. Mysticeti only requires 3 rounds of messages to commit blocks from the DAGs. This is the same as practical BFT and matches the theoretical minimum.
 
 Mysticeti also allows voting and certifying leaders on blocks in parallel, which reduces median and tail latencies, and tolerates unavailable leaders without significantly increasing commit latencies.
-
 
 The order of transactions in the consensus output determines the relative order in which they can operate on each shared object. Executions of transactions touching different shared objects are parallelized on multiple cores.
 
