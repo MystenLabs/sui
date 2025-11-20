@@ -4568,6 +4568,9 @@ impl ProtocolConfig {
             }
             self.feature_flags.abstract_size_in_object_runtime = true;
             self.feature_flags.object_runtime_charge_cache_load_gas = true;
+            self.dynamic_field_add_child_object_value_cost_per_byte = Some(1);
+            self.dynamic_field_borrow_child_object_child_ref_cost_per_byte = Some(1);
+            self.dynamic_field_remove_child_object_child_cost_per_byte = Some(1);
         }
     }
 

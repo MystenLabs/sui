@@ -13526,6 +13526,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "serde",
  "serde_json",
+ "similar",
  "sui-macros",
  "sui-move-natives-latest",
  "sui-protocol-config",
