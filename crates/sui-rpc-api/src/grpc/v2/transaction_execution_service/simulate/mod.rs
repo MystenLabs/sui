@@ -363,7 +363,7 @@ fn estimate_gas_budget_from_gas_cost(
     gas_cost_summary: &sui_types::gas::GasCostSummary,
     reference_gas_price: u64,
 ) -> u64 {
-    const GAS_SAFE_OVERHEAD: u64 = 1000;
+    const GAS_SAFE_OVERHEAD: u64 = 10000;
 
     let safe_overhead = GAS_SAFE_OVERHEAD * reference_gas_price;
     let computation_cost_with_overhead = gas_cost_summary.computation_cost + safe_overhead;
