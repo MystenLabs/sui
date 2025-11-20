@@ -67,6 +67,19 @@ mod validator_tests;
 
 const DEFAULT_GAS_BUDGET: u64 = 200_000_000; // 0.2 SUI
 
+/// Arguments related to transaction processing
+#[derive(Args, Debug, Default)]
+pub struct TxProcessingArgs {
+    /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
+    /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+    /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
+    #[arg(long)]
+    pub serialize_unsigned_transaction: bool,
+    /// Gas budget for this transaction
+    #[clap(name = "gas-budget", long)]
+    pub gas_budget: Option<u64>,
+}
+
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum SuiValidatorCommand {
@@ -83,32 +96,18 @@ pub enum SuiValidatorCommand {
     BecomeCandidate {
         #[clap(name = "validator-info-path")]
         file: PathBuf,
-        #[clap(name = "gas-budget", long)]
-        gas_budget: Option<u64>,
-        /// If true, only print the unsigned transaction and do not execute it.
-        /// This is useful for offline signing.
-        #[clap(name = "serialize-unsigned-transaction", long, default_value = "false")]
-        serialize_unsigned_transaction: bool,
+        #[clap(flatten)]
+        tx_args: TxProcessingArgs,
     },
     #[clap(name = "join-committee")]
     JoinCommittee {
-        /// Gas budget for this transaction.
-        #[clap(name = "gas-budget", long)]
-        gas_budget: Option<u64>,
-        /// If true, only print the unsigned transaction and do not execute it.
-        /// This is useful for offline signing.
-        #[clap(name = "serialize-unsigned-transaction", long, default_value = "false")]
-        serialize_unsigned_transaction: bool,
+        #[clap(flatten)]
+        tx_args: TxProcessingArgs,
     },
     #[clap(name = "leave-committee")]
     LeaveCommittee {
-        /// Gas budget for this transaction.
-        #[clap(name = "gas-budget", long)]
-        gas_budget: Option<u64>,
-        /// If true, only print the unsigned transaction and do not execute it.
-        /// This is useful for offline signing.
-        #[clap(name = "serialize-unsigned-transaction", long, default_value = "false")]
-        serialize_unsigned_transaction: bool,
+        #[clap(flatten)]
+        tx_args: TxProcessingArgs,
     },
     #[clap(name = "display-metadata")]
     DisplayMetadata {
@@ -121,13 +120,8 @@ pub enum SuiValidatorCommand {
     UpdateMetadata {
         #[clap(subcommand)]
         metadata: MetadataUpdate,
-        /// Gas budget for this transaction.
-        #[clap(name = "gas-budget", long)]
-        gas_budget: Option<u64>,
-        /// If true, only print the unsigned transaction and do not execute it.
-        /// This is useful for offline signing.
-        #[clap(name = "serialize-unsigned-transaction", long, default_value = "false")]
-        serialize_unsigned_transaction: bool,
+        #[clap(flatten)]
+        tx_args: TxProcessingArgs,
     },
     /// Update gas price that is used to calculate Reference Gas Price
     #[clap(name = "update-gas-price")]
@@ -139,14 +133,10 @@ pub enum SuiValidatorCommand {
         operation_cap_id: Option<ObjectID>,
         #[clap(name = "gas-price")]
         gas_price: u64,
-        /// Gas budget for this transaction.
-        #[clap(name = "gas-budget", long)]
-        gas_budget: Option<u64>,
-        /// If true, only print the unsigned transaction and do not execute it.
-        /// This is useful for offline signing.
-        #[clap(name = "serialize-unsigned-transaction", long, default_value = "false")]
-        serialize_unsigned_transaction: bool,
+        #[clap(flatten)]
+        tx_args: TxProcessingArgs,
     },
+    /// Report or un-report a validator.
     /// Report or un-report a validator.
     #[clap(name = "report-validator")]
     ReportValidator {
@@ -161,13 +151,8 @@ pub enum SuiValidatorCommand {
         /// If true, undo an existing report.
         #[clap(name = "undo-report", long)]
         undo_report: Option<bool>,
-        /// Gas budget for this transaction.
-        #[clap(name = "gas-budget", long)]
-        gas_budget: Option<u64>,
-        /// If true, only print the unsigned transaction and do not execute it.
-        /// This is useful for offline signing.
-        #[clap(name = "serialize-unsigned-transaction", long, default_value = "false")]
-        serialize_unsigned_transaction: bool,
+        #[clap(flatten)]
+        tx_args: TxProcessingArgs,
     },
     /// Serialize the payload that is used to generate Proof of Possession.
     /// This is useful to take the payload offline for an Authority protocol keypair to sign.
@@ -388,12 +373,8 @@ impl SuiValidatorCommand {
                 );
                 SuiValidatorCommandResponse::MakeValidatorInfo
             }
-            SuiValidatorCommand::BecomeCandidate {
-                file,
-                gas_budget,
-                serialize_unsigned_transaction,
-            } => {
-                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+            SuiValidatorCommand::BecomeCandidate { file, tx_args } => {
+                let gas_budget = tx_args.gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let validator_info_bytes = fs::read(file)?;
                 // Note: we should probably rename the struct or evolve it accordingly.
                 let validator_info: GenesisValidatorInfo =
@@ -441,7 +422,7 @@ impl SuiValidatorCommand {
                     "request_add_validator_candidate",
                     args,
                     gas_budget,
-                    serialize_unsigned_transaction,
+                    tx_args.serialize_unsigned_transaction,
                 )
                 .await?;
                 SuiValidatorCommandResponse::BecomeCandidate {
@@ -450,17 +431,14 @@ impl SuiValidatorCommand {
                 }
             }
 
-            SuiValidatorCommand::JoinCommittee {
-                gas_budget,
-                serialize_unsigned_transaction,
-            } => {
-                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+            SuiValidatorCommand::JoinCommittee { tx_args } => {
+                let gas_budget = tx_args.gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let (response, serialized_unsigned_transaction) = call_0x5(
                     context,
                     "request_add_validator",
                     vec![],
                     gas_budget,
-                    serialize_unsigned_transaction,
+                    tx_args.serialize_unsigned_transaction,
                 )
                 .await?;
                 SuiValidatorCommandResponse::JoinCommittee {
@@ -469,20 +447,17 @@ impl SuiValidatorCommand {
                 }
             }
 
-            SuiValidatorCommand::LeaveCommittee {
-                gas_budget,
-                serialize_unsigned_transaction,
-            } => {
+            SuiValidatorCommand::LeaveCommittee { tx_args } => {
                 // Only an active validator can leave committee.
                 let _status =
                     check_status(context, HashSet::from([ValidatorStatus::Active])).await?;
-                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let gas_budget = tx_args.gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let (response, serialized_unsigned_transaction) = call_0x5(
                     context,
                     "request_remove_validator",
                     vec![],
                     gas_budget,
-                    serialize_unsigned_transaction,
+                    tx_args.serialize_unsigned_transaction,
                 )
                 .await?;
                 SuiValidatorCommandResponse::LeaveCommittee {
@@ -502,15 +477,15 @@ impl SuiValidatorCommand {
                 SuiValidatorCommandResponse::DisplayMetadata
             }
 
-            SuiValidatorCommand::UpdateMetadata {
-                metadata,
-                gas_budget,
-                serialize_unsigned_transaction,
-            } => {
-                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
-                let (response, serialized_unsigned_transaction) =
-                    update_metadata(context, metadata, gas_budget, serialize_unsigned_transaction)
-                        .await?;
+            SuiValidatorCommand::UpdateMetadata { metadata, tx_args } => {
+                let gas_budget = tx_args.gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let (response, serialized_unsigned_transaction) = update_metadata(
+                    context,
+                    metadata,
+                    gas_budget,
+                    tx_args.serialize_unsigned_transaction,
+                )
+                .await?;
                 SuiValidatorCommandResponse::UpdateMetadata {
                     response,
                     serialized_unsigned_transaction,
@@ -520,16 +495,15 @@ impl SuiValidatorCommand {
             SuiValidatorCommand::UpdateGasPrice {
                 operation_cap_id,
                 gas_price,
-                gas_budget,
-                serialize_unsigned_transaction,
+                tx_args,
             } => {
-                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let gas_budget = tx_args.gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let (response, serialized_unsigned_transaction) = update_gas_price(
                     context,
                     operation_cap_id,
                     gas_price,
                     gas_budget,
-                    serialize_unsigned_transaction,
+                    tx_args.serialize_unsigned_transaction,
                 )
                 .await?;
                 SuiValidatorCommandResponse::UpdateGasPrice {
@@ -542,10 +516,9 @@ impl SuiValidatorCommand {
                 operation_cap_id,
                 reportee_address,
                 undo_report,
-                gas_budget,
-                serialize_unsigned_transaction,
+                tx_args,
             } => {
-                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let gas_budget = tx_args.gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let undo_report = undo_report.unwrap_or(false);
                 let (response, serialized_unsigned_transaction) = report_validator(
                     context,
@@ -553,7 +526,7 @@ impl SuiValidatorCommand {
                     operation_cap_id,
                     undo_report,
                     gas_budget,
-                    serialize_unsigned_transaction,
+                    tx_args.serialize_unsigned_transaction,
                 )
                 .await?;
                 SuiValidatorCommandResponse::ReportValidator {
