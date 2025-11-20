@@ -2122,10 +2122,14 @@ impl AuthorityState {
                     error!("Error dumping state for transaction {}: {e}", tx_digest);
                 }
             }
+            let expected_effects = self
+                .get_transaction_cache_reader()
+                .get_effects(&expected_effects_digest);
             error!(
                 ?tx_digest,
                 ?expected_effects_digest,
                 actual_effects = ?effects,
+                expected_effects = ?expected_effects,
                 "fork detected!"
             );
             if let Err(e) = self.checkpoint_store.record_transaction_fork_detected(
