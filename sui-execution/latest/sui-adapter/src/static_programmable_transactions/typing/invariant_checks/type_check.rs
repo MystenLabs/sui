@@ -96,7 +96,7 @@ fn withdrawal_input(ty: &T::Type) -> anyhow::Result<()> {
     );
     anyhow::ensure!(
         dt.qualified_ident() == RESOLVED_WITHDRAWAL_STRUCT,
-        "withdrawal input must sui::funds_accumulator::Withdrawal, got {:?}",
+        "withdrawal input must be sui::funds_accumulator::Withdrawal, got {:?}",
         dt.qualified_ident()
     );
     Ok(())

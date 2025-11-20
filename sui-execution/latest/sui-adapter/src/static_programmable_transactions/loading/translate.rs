@@ -11,7 +11,6 @@ use move_core_types::{account_address::AccountAddress, language_storage::StructT
 use sui_types::{
     base_types::TxContext,
     error::ExecutionError,
-    execution_status::ExecutionFailureStatus,
     object::Owner,
     transaction::{self as P, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability},
 };

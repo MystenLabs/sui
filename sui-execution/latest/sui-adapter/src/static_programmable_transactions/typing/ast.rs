@@ -69,7 +69,7 @@ pub struct WithdrawalInput {
     /// The full type `sui::funds_accumulator::Withdrawal<T>`
     pub ty: Type,
     pub owner: AccountAddress,
-    /// This amount is verified to be <= the max for the type described by `funds_ty`
+    /// This amount is verified to be <= the max for the type described by the `T` in `ty`
     pub amount: U256,
 }
 
