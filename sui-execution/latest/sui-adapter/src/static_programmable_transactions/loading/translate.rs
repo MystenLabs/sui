@@ -133,7 +133,7 @@ fn input(
                     ty: ty.clone(),
                     owner,
                 }),
-                L::InputType::Fixed(env.withdrawal_type(ty)?),
+                L::InputType::Fixed(ty),
             )
         }
     })
