@@ -15618,6 +15618,7 @@ dependencies = [
  "tempfile",
  "tikv-jemalloc-ctl",
  "tokio",
+ "toml 0.7.4",
  "tracing",
  "walkdir",
 ]
