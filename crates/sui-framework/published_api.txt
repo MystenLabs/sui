@@ -2563,6 +2563,12 @@ new_treasury_cap
 allow_global_pause
 	public(package) fun
 	0x2::coin
+new_coin_metadata
+	public(package) fun
+	0x2::coin
+update_coin_metadata
+	public(package) fun
+	0x2::coin
 supply
 	public fun
 	0x2::coin
