@@ -807,14 +807,9 @@ fn compare_packages(
     } else {
         // Sort diagnostics to ensure consistent error ordering across platforms
         // Diagnostic implements Ord, so sorting will be deterministic
-        let mut sorted_diags_vec = diags.into_vec();
-        sorted_diags_vec.sort();
-
-        // Rebuild Diagnostics from sorted vector
-        let mut sorted_diags = Diagnostics::new();
-        for diag in sorted_diags_vec {
-            sorted_diags.add(diag);
-        }
+        let mut sorted_vec = diags.into_vec();
+        sorted_vec.sort();
+        let sorted_diags: Diagnostics = sorted_vec.into_iter().collect();
 
         Err(anyhow!(
             "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
