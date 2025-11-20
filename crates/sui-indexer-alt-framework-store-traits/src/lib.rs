@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Result;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use scoped_futures::ScopedBoxFuture;
@@ -187,18 +188,25 @@ impl PrunerWatermark {
     }
 }
 
-/// Construct the string used for tracking a pipeline's watermarks in the store. This is either the
-/// pipeline name itself, or `{pipeline}{Store::DELIMITER}{task}` if a task name is provided.
-pub fn pipeline_task<S: Store>(pipeline_name: &'static str, task_name: Option<&str>) -> String {
-    match task_name {
+/// Check that the pipeline name does not contain the store's delimiter, and construct the string
+/// used for tracking a pipeline's watermarks in the store. This is either the pipeline name itself,
+/// or `{pipeline}{Store::DELIMITER}{task}` if a task name is provided.
+pub fn pipeline_task<S: Store>(
+    pipeline_name: &'static str,
+    task_name: Option<&str>,
+) -> Result<String> {
+    if pipeline_name.contains(S::DELIMITER) {
+        anyhow::bail!(
+            "Pipeline name '{}' contains invalid delimiter '{}'",
+            pipeline_name,
+            S::DELIMITER
+        );
+    }
+
+    Ok(match task_name {
         Some(task_name) => format!("{}{}{}", pipeline_name, S::DELIMITER, task_name),
         None => pipeline_name.to_string(),
-    }
-}
-
-/// Check that the pipeline name does not contain the store's delimiter.
-pub fn is_valid_pipeline<S: Store>(pipeline_name: &'static str) -> bool {
-    !pipeline_name.contains(S::DELIMITER)
+    })
 }
 
 #[cfg(test)]

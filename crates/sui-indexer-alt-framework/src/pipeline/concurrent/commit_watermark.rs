@@ -51,7 +51,8 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    let pipeline_task = pipeline_task::<H::Store>(H::NAME, task.as_deref());
+    // SAFETY: on indexer instantiation, we've checked that the pipeline name is valid.
+    let pipeline_task = pipeline_task::<H::Store>(H::NAME, task.as_deref()).unwrap();
     tokio::spawn(async move {
         let mut poll = interval(config.watermark_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
