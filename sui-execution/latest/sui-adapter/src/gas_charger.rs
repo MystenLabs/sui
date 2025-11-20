@@ -382,12 +382,15 @@ pub mod checked {
                 let cost_summary = self.gas_status.summary();
                 let gas_used = cost_summary.net_gas_usage();
 
-                let mut gas_object = temporary_store.read_object(&gas_object_id).unwrap().clone();
-                deduct_gas(&mut gas_object, gas_used);
-                #[skip_checked_arithmetic]
-                trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
+                if !self.skip_all_checks {
+                    let mut gas_object =
+                        temporary_store.read_object(&gas_object_id).unwrap().clone();
+                    deduct_gas(&mut gas_object, gas_used);
+                    #[skip_checked_arithmetic]
+                    trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
 
-                temporary_store.mutate_input_object(gas_object);
+                    temporary_store.mutate_input_object(gas_object);
+                }
                 cost_summary
             } else {
                 GasCostSummary::default()
