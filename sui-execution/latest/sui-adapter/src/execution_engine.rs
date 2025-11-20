@@ -101,6 +101,7 @@ mod checked {
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        skip_all_checks: bool,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -149,6 +150,7 @@ mod checked {
             gas_status,
             protocol_config,
             address_balance_gas_payer,
+            skip_all_checks,
         );
 
         let tx_ctx = TxContext::new_from_components(

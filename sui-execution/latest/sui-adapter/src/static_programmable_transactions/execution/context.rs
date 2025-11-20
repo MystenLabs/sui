@@ -241,9 +241,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 let mut gas_locals = Locals::new([Some(gas_value)])?;
                 let gas_local = gas_locals.local(0)?;
                 let gas_ref = gas_local.borrow()?;
-                // We have already checked that the gas balance is enough to cover the gas budget
-                let max_gas_in_balance = gas_charger.gas_budget();
-                gas_ref.coin_ref_subtract_balance(max_gas_in_balance)?;
+                if !gas_charger.skip_all_checks() {
+                    let max_gas_in_balance = gas_charger.gas_budget();
+                    gas_ref.coin_ref_subtract_balance(max_gas_in_balance)?;
+                }
                 Some((gas_metadata, gas_locals))
             }
             None => None,
@@ -372,9 +373,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             remaining_events.is_empty(),
             "Events should be taken after every Move call"
         );
-        // Refund unused gas
         if let Some(gas_id) = gas_id_opt {
-            refund_max_gas_budget(&mut writes, gas_charger, gas_id)?;
+            if !gas_charger.skip_all_checks() {
+                refund_max_gas_budget(&mut writes, gas_charger, gas_id)?;
+            }
         }
 
         loaded_runtime_objects.extend(loaded_child_objects);

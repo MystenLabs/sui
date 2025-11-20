@@ -114,11 +114,10 @@ pub fn simulate_transaction(
             && request.transaction().bcs_opt().is_none()
         {
             let mut estimation_transaction = transaction.clone();
-            estimation_transaction.gas_data_mut().payment = Vec::new();
             estimation_transaction.gas_data_mut().budget = protocol_config.max_tx_gas();
 
             let simulation_result = executor
-                .simulate_transaction(estimation_transaction, TransactionChecks::Enabled)
+                .simulate_transaction(estimation_transaction, TransactionChecks::Disabled)
                 .map_err(anyhow::Error::from)?;
 
             if !simulation_result.effects.status().is_ok() {
@@ -187,11 +186,13 @@ pub fn simulate_transaction(
         .simulate_transaction(transaction.clone(), checks)
         .map_err(anyhow::Error::from)?;
 
-    eprintln!("Final simulation - Budget: {}, Computation: {}, Gas used: {}, Net gas usage: {}",
-              transaction.gas_data().budget,
-              effects.gas_cost_summary().computation_cost,
-              effects.gas_cost_summary().gas_used(),
-              effects.gas_cost_summary().net_gas_usage());
+    eprintln!(
+        "Final simulation - Budget: {}, Computation: {}, Gas used: {}, Net gas usage: {}",
+        transaction.gas_data().budget,
+        effects.gas_cost_summary().computation_cost,
+        effects.gas_cost_summary().gas_used(),
+        effects.gas_cost_summary().net_gas_usage()
+    );
 
     let transaction = if let Some(submask) = read_mask.subtree("transaction") {
         let mut message = ExecutedTransaction::default();

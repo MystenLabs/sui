@@ -197,21 +197,24 @@ mod checked {
                 // subtract the max gas budget. This amount is off limits in the programmable transaction,
                 // so to mimic this "off limits" behavior, we act as if the coin has less balance than
                 // it really does
-                let Some(Value::Object(ObjectValue {
-                    contents: ObjectContents::Coin(coin),
-                    ..
-                })) = &mut gas.inner.value
-                else {
-                    invariant_violation!("Gas object should be a populated coin")
-                };
+                if !gas_charger.skip_all_checks() {
+                    let Some(Value::Object(ObjectValue {
+                        contents: ObjectContents::Coin(coin),
+                        ..
+                    })) = &mut gas.inner.value
+                    else {
+                        invariant_violation!("Gas object should be a populated coin")
+                    };
 
-                let max_gas_in_balance = gas_charger.gas_budget();
-                let Some(new_balance) = coin.balance.value().checked_sub(max_gas_in_balance) else {
-                    invariant_violation!(
-                        "Transaction input checker should check that there is enough gas"
-                    );
-                };
-                coin.balance = Balance::new(new_balance);
+                    let max_gas_in_balance = gas_charger.gas_budget();
+                    let Some(new_balance) = coin.balance.value().checked_sub(max_gas_in_balance)
+                    else {
+                        invariant_violation!(
+                            "Transaction input checker should check that there is enough gas"
+                        );
+                    };
+                    coin.balance = Balance::new(new_balance);
+                }
                 gas
             } else {
                 InputValue {
@@ -917,9 +920,10 @@ mod checked {
                 let owner = Owner::AddressOwner(recipient);
                 add_additional_write(&mut additional_writes, owner, object_value)?;
             }
-            // Refund unused gas
             if let Some(gas_id) = gas_id_opt {
-                refund_max_gas_budget(&mut additional_writes, gas_charger, gas_id)?;
+                if !gas_charger.skip_all_checks() {
+                    refund_max_gas_budget(&mut additional_writes, gas_charger, gas_id)?;
+                }
             }
 
             let object_runtime: ObjectRuntime = native_extensions.remove().map_err(|e| {

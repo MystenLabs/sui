@@ -100,6 +100,7 @@ impl executor::Executor for Executor {
             enable_expensive_checks,
             execution_params,
             trace_builder_opt,
+            false,
         )
     }
 
@@ -142,6 +143,7 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
                 &mut None,
+                skip_all_checks,
             )
         } else {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
@@ -160,6 +162,7 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
                 &mut None,
+                skip_all_checks,
             )
         };
         (inner_temp_store, gas_status, effects, result)

@@ -45,6 +45,7 @@ pub mod checked {
         gas_status: SuiGasStatus,
         // For address balance payments: sender or sponsor address to charge
         address_balance_gas_payer: Option<SuiAddress>,
+        skip_all_checks: bool,
     }
 
     impl GasCharger {
@@ -54,6 +55,7 @@ pub mod checked {
             gas_status: SuiGasStatus,
             protocol_config: &ProtocolConfig,
             address_balance_gas_payer: Option<SuiAddress>,
+            skip_all_checks: bool,
         ) -> Self {
             let gas_model_version = protocol_config.gas_model_version();
             Self {
@@ -63,6 +65,7 @@ pub mod checked {
                 smashed_gas_coin: None,
                 gas_status,
                 address_balance_gas_payer,
+                skip_all_checks,
             }
         }
 
@@ -74,6 +77,7 @@ pub mod checked {
                 smashed_gas_coin: None,
                 gas_status: SuiGasStatus::new_unmetered(),
                 address_balance_gas_payer: None,
+                skip_all_checks: false,
             }
         }
 
@@ -105,6 +109,10 @@ pub mod checked {
 
         pub fn is_unmetered(&self) -> bool {
             self.gas_status.is_unmetered()
+        }
+
+        pub fn skip_all_checks(&self) -> bool {
+            self.skip_all_checks
         }
 
         pub fn move_gas_status(&self) -> &GasStatus {
