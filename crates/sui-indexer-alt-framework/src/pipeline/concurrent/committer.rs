@@ -4,6 +4,7 @@
 use std::{sync::Arc, time::Duration};
 
 use backoff::ExponentialBackoff;
+use sui_futures::stream::TrySpawnStreamExt;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -13,7 +14,6 @@ use crate::{
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{Break, CommitterConfig, WatermarkPart},
     store::Store,
-    task::TrySpawnStreamExt,
 };
 
 use super::{BatchedRows, Handler};

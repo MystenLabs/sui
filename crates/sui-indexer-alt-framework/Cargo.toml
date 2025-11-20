@@ -34,6 +34,7 @@ tracing-subscriber = { workspace = true, optional = true }
 url.workspace = true
 
 sui-field-count.workspace = true
+sui-futures.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true
 sui-indexer-alt-metrics.workspace = true
 sui-rpc.workspace = true
