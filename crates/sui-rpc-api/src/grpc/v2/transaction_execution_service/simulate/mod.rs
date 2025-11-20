@@ -33,8 +33,7 @@ use sui_types::transaction_executor::TransactionChecks;
 
 mod resolve;
 
-const GAS_COIN_SIZE: u64 = 40;
-const MAX_GAS_OBJECTS: u64 = 255;
+const GAS_COIN_SIZE_BYTES: u64 = 40;
 
 pub fn simulate_transaction(
     service: &RpcService,
@@ -382,7 +381,7 @@ fn estimate_gas_budget_from_gas_cost(
     // Subtract 1 because the simulation already loaded one ephemeral gas coin.
     let num_payment_objects_for_estimation = {
         let total = if num_payment_objects_on_request == 0 {
-            MAX_GAS_OBJECTS
+            protocol_config.max_gas_payment_objects() as u64
         } else {
             num_payment_objects_on_request as u64
         };
@@ -390,7 +389,7 @@ fn estimate_gas_budget_from_gas_cost(
     };
 
     let gas_loading_cost = num_payment_objects_for_estimation
-        .saturating_mul(GAS_COIN_SIZE)
+        .saturating_mul(GAS_COIN_SIZE_BYTES)
         .saturating_mul(protocol_config.obj_access_cost_read_per_byte())
         .saturating_mul(reference_gas_price);
 
