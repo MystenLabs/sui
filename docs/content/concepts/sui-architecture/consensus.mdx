@@ -36,17 +36,16 @@ The process of collecting validator signatures on a transaction into a certifica
 
 ### Certificates and certified transactions {#certificates}
 
-After the client forms a certificate, it submits it to the validators, which perform certificate validity checks. These checks ensure the signers are validators in the current epoch and the signatures are cryptographically valid. If the checks pass, the validators execute the transaction inside the certificate. Execution of a transaction either succeeds and commits all of its effects or aborts and has no effect other than debiting the transaction's gas input. Some reasons a transaction might abort include an explicit abort instruction, a runtime error such as division by zero, or exceeding the maximum gas budget. Whether it succeeds or aborts, the validator durably stores the certificate indexed by the hash of its inner transaction.
+After the client forms a certificate, it submits it to the validators, which perform certificate validity checks. These checks ensure the signers are validators in the current epoch and the signatures are cryptographically valid. If the checks pass, the validators execute the transaction inside the certificate. Execution of a transaction either succeeds and commits all of its effects, or aborts and has no effect other than debiting the transaction's gas input. Some reasons a transaction might abort include an explicit abort instruction, a runtime error such as division by zero, or exceeding the maximum gas budget. Whether it succeeds or aborts, the validator durably stores the certificate indexed by the hash of its inner transaction.
 
 If a client collects a quorum of signatures on the effects of the transaction, then the client has a promise of finality. This means that transaction effects persist on the shared database and are committed and visible to everyone by the end of the epoch. This does not mean that the latency is a full epoch, because you can use the effects certificate to convince anyone of the transaction's finality, as well as to access the effects and issue new transactions. As with transactions, you can parallelize the process of sharing a certificate with validators and (if desired) outsource to a third-party service provider.
 
 ## Mysticeti
 
-Sui uses a DAG-based consensus protocol called _Mysticeti_ that optimizes for both low latency and high throughput. Mysticeti supports multiple validators proposing blocks in parallel, which uses the full bandwidth of the network and provides censorship resistance. Mysticeti only requires 3 rounds of messages to commit blocks from the DAGs. This is the same as practical Byzantine Fault Tolerance and matches the theoretical minimum.
+Sui uses a DAG-based consensus protocol called _Mysticeti_ that optimizes for both low latency and high throughput. Mysticeti supports multiple validators proposing blocks in parallel, which uses the full bandwidth of the network and provides censorship resistance. Mysticeti only requires 3 rounds of messages to commit blocks from the DAGs. This is the same as practical BFT and matches the theoretical minimum.
 
 Mysticeti also allows voting and certifying leaders on blocks in parallel, which reduces median and tail latencies, and tolerates unavailable leaders without significantly increasing commit latencies.
 
-Sui uses a DAG-based consensus engine implementing the Mysticeti algorithm to sequence certified transactions. Consensus produces a series of commits. In each commit, there is a sequence of certified transactions.
 
 The order of transactions in the consensus output determines the relative order in which they can operate on each shared object. Executions of transactions touching different shared objects are parallelized on multiple cores.
 
