@@ -224,6 +224,7 @@ impl AuthorityPerpetualTables {
         let pruner_watermark = pruner_watermark.unwrap_or(Arc::new(AtomicU64::new(0)));
 
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
+        let lru_only_config = KeySpaceConfig::new().with_value_cache_size(value_cache_size);
         let objects_compactor = |index: &mut BTreeMap<Bytes, IndexWalPosition>| {
             let mut retain = HashSet::new();
             let mut previous: Option<&[u8]> = None;
@@ -256,7 +257,8 @@ impl AuthorityPerpetualTables {
                     object_indexing,
                     mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
-                    KeySpaceConfig::new()
+                    lru_only_config
+                        .clone()
                         .disable_unload()
                         .with_max_dirty_keys(4048)
                         .with_compactor(Box::new(objects_compactor)),
