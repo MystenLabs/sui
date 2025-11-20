@@ -71,7 +71,7 @@ public fun withdrawal_join<T: store>(withdrawal: &mut Withdrawal<T>, other: With
 // TODO When this becomes `public` we need
 // - custom verifier rules for `T`
 // - private generic rules for `T`
-public fun redeem</* internal */ T: store>(withdrawal: Withdrawal<T>): T {
+public(package) fun redeem</* internal */ T: store>(withdrawal: Withdrawal<T>): T {
     let Withdrawal { owner, limit: value } = withdrawal;
     withdraw_impl(owner, value)
 }

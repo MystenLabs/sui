@@ -1817,7 +1817,7 @@ withdrawal_join
 	public fun
 	0x2::funds_accumulator
 redeem
-	public fun
+	public(package) fun
 	0x2::funds_accumulator
 withdraw_from_object
 	public(package) fun

@@ -17,7 +17,7 @@ public fun new(ctx: &mut TxContext) {
 }
 
 public fun withdraw_funds<T>(vault: &mut Vault, amount: u64): Balance<T> {
-    sui::balance::withdraw_funds_from_object(
+    sui::balance::redeem_funds(sui::balance::withdraw_funds_from_object(
         &mut vault.id, amount
-    ).redeem()
+    ))
 }
