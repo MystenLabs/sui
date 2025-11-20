@@ -764,11 +764,7 @@ fn compare_packages(
         Arc::clone(&move_toml_contents),
     );
 
-    // Sort modules by name to ensure consistent error ordering across platforms
-    let mut sorted_existing_modules = existing_modules;
-    sorted_existing_modules.sort_by(|a, b| a.self_id().name().cmp(b.self_id().name()));
-
-    for existing_module in sorted_existing_modules {
+    for existing_module in existing_modules {
         let name = existing_module.self_id().name().to_owned();
         match new_modules_map.get_mut(&name) {
             Some(new_module) => {
@@ -809,12 +805,23 @@ fn compare_packages(
     if diags.is_empty() {
         Ok(())
     } else {
+        // Sort diagnostics to ensure consistent error ordering across platforms
+        // Diagnostic implements Ord, so sorting will be deterministic
+        let mut sorted_diags_vec = diags.into_vec();
+        sorted_diags_vec.sort();
+
+        // Rebuild Diagnostics from sorted vector
+        let mut sorted_diags = Diagnostics::new();
+        for diag in sorted_diags_vec {
+            sorted_diags.add(diag);
+        }
+
         Err(anyhow!(
             "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
             Its upgrade policy is set to '{}'.",
             String::from_utf8(report_diagnostics_to_buffer(
                 &new_package.package.file_map,
-                diags,
+                sorted_diags,
                 use_colors()
             ))
             .context("Unable to convert buffer to string")?,
