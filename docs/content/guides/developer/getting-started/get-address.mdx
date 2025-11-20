@@ -71,10 +71,14 @@ Store recovery phrases securely and do not share them with anyone, as they provi
 To recover an address using the recovery phrase, use the command:
 
 ```
-$ sui client import-address
+$ sui keytool import '<RECOVERY_PHRASE>' <KEY_SCHEME>
 ```
 
-Then, enter the 12-word recovery phrase. You must enter the words in the correct order. If successful, the CLI restores your address and prints it in the CLI output.
+Replace '`<RECOVERY_PHRASE>`' with your 12-word recovery phrase. The entire recovery phrase must be enclosed in single quotation marks `'`. You must enter the words in the correct order.
+
+Replace `<KEY_SCHEME>` with the type of encryption used to originally create the address, such as `ed25519`.
+
+If successful, the CLI restores your address and prints it in the CLI output.
 
 ## `sui.keystore`
 
