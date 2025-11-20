@@ -382,7 +382,7 @@ pub mod checked {
                 let cost_summary = self.gas_status.summary();
                 let gas_used = cost_summary.net_gas_usage();
 
-                if !self.skip_all_checks {
+                if !self.skip_all_checks() {
                     let mut gas_object =
                         temporary_store.read_object(&gas_object_id).unwrap().clone();
                     deduct_gas(&mut gas_object, gas_used);
