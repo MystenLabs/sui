@@ -8,11 +8,17 @@ mod checked {
 
     use crate::execution_mode::{self, ExecutionMode};
     use crate::execution_value::SuiResolver;
+    use csv::Writer;
+    use lz4_flex::frame::FrameEncoder;
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
     use mysten_common::debug_fatal;
+    use once_cell::sync::Lazy;
     use similar::TextDiff;
+    use std::fs::File;
+    use std::io::BufWriter;
+    use std::sync::Mutex;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
     use sui_types::balance::{
@@ -62,8 +68,8 @@ mod checked {
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::{ExecutionTiming, ResultWithTimings};
     use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
-    use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
+    use sui_types::gas::{GasCostSummary, GasUsageReport};
     use sui_types::id::UID;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::storage::BackingStore;
@@ -84,6 +90,53 @@ mod checked {
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
+
+    static CSV_WRITER: Lazy<Mutex<csv::Writer<FrameEncoder<std::io::BufWriter<std::fs::File>>>>> =
+        once_cell::sync::Lazy::new(|| {
+            let file = File::create("/opt/sui/gas.csv.lz4").expect("failed to create file");
+            let enc = BufWriter::new(file);
+            let enc = FrameEncoder::new(enc);
+            let mut writer = Writer::from_writer(enc);
+            writer
+                .write_record(&[
+                    "tx_digest",
+                    "new_computation_cost",
+                    "old_computation_cost",
+                    "new_storage_cost",
+                    "old_storage_cost",
+                    "new_storage_rebate",
+                    "old_storage_rebate",
+                    "old_gas_used",
+                    "new_gas_used",
+                ])
+                .expect("failed to write gas header");
+            Mutex::new(writer)
+        });
+
+    fn write_gas_row(
+        transaction_digest: String,
+        new_gas: &GasUsageReport,
+        old_gas: &GasUsageReport,
+    ) {
+        if new_gas.cost_summary == old_gas.cost_summary {
+            return;
+        }
+        let mut writer = CSV_WRITER.lock().unwrap();
+        writer
+            .write_record(&[
+                &transaction_digest,
+                &new_gas.cost_summary.computation_cost.to_string(),
+                &old_gas.cost_summary.computation_cost.to_string(),
+                &new_gas.cost_summary.storage_cost.to_string(),
+                &old_gas.cost_summary.storage_cost.to_string(),
+                &new_gas.cost_summary.storage_rebate.to_string(),
+                &old_gas.cost_summary.storage_rebate.to_string(),
+                &old_gas.gas_used.to_string(),
+                &new_gas.gas_used.to_string(),
+            ])
+            .expect("failed to write gas row");
+        writer.flush().expect("failed to flush gas writer");
+    }
 
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
@@ -391,6 +444,12 @@ mod checked {
             ) => true,
             _ => false,
         };
+
+        write_gas_row(
+            normal_effects.2.transaction_digest().to_string(),
+            &new_effects.1.gas_usage_report(),
+            &normal_effects.1.gas_usage_report(),
+        );
 
         if !ok {
             tracing::warn!(
