@@ -281,8 +281,12 @@ fn command<Mode: ExecutionMode>(
             let parameter_tys = match tx_context_kind {
                 TxContextKind::None => &function.signature.parameters,
                 TxContextKind::Mutable | TxContextKind::Immutable => {
-                    let n = function.signature.parameters.len();
-                    &function.signature.parameters[0..n - 1]
+                    let Some(n_) = function.signature.parameters.len().checked_sub(1) else {
+                        invariant_violation!(
+                            "A function with a TxContext should have at least one parameter"
+                        )
+                    };
+                    &function.signature.parameters[0..n_]
                 }
             };
             let num_args = arg_locs.len();
@@ -523,8 +527,12 @@ where
     let _args_len = args.len();
     let mut res = vec![];
     for (arg_idx, arg) in args.enumerate() {
-        splat_arg(context, &mut res, arg)
-            .map_err(|e| e.into_execution_error(start_idx + arg_idx))?;
+        splat_arg(context, &mut res, arg).map_err(|e| {
+            let Some(idx) = start_idx.checked_add(arg_idx) else {
+                return make_invariant_violation!("usize overflow when calculating argument index");
+            };
+            e.into_execution_error(idx)
+        })?
     }
     debug_assert_eq!(res.len(), _args_len);
     Ok(res)
@@ -542,7 +550,10 @@ fn arguments(
         .zip(expected_tys)
         .enumerate()
         .map(|(i, (location, expected_ty))| {
-            argument(env, context, start_idx + i, location, expected_ty)
+            let Some(idx) = start_idx.checked_add(i) else {
+                invariant_violation!("usize overflow when calculating argument index");
+            };
+            argument(env, context, idx, location, expected_ty)
         })
         .collect()
 }
@@ -640,7 +651,10 @@ fn constrained_arguments<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
         .into_iter()
         .enumerate()
         .map(|(i, location)| {
-            constrained_argument_(env, context, start_idx + i, location, is_valid, err_case)
+            let Some(idx) = start_idx.checked_add(i) else {
+                invariant_violation!("usize overflow when calculating argument index");
+            };
+            constrained_argument_(env, context, idx, location, is_valid, err_case)
         })
         .collect()
 }

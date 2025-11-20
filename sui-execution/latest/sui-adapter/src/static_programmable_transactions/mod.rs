@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![deny(clippy::arithmetic_side_effects)]
+
 use crate::{
     data_store::cached_package_store::CachedPackageStore,
     execution_mode::ExecutionMode,
