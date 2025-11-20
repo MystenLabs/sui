@@ -701,7 +701,7 @@ mod tests {
 
     #[tokio::test]
     async fn deterministic_genesis() {
-        let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::MAX);
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         let rng = StdRng::from_seed([9; 32]);
         let chain1 = PersistedStore::new_sim_with_protocol_version_and_accounts(
             rng,
