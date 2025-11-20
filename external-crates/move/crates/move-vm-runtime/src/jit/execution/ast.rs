@@ -51,6 +51,7 @@ pub struct Package {
 }
 
 impl Drop for Package {
+    #![allow(unsafe_code)]
     fn drop(&mut self) {
         // Manually drop all NativeFunction Arc references to prevent memory leaks.
         //
@@ -58,7 +59,9 @@ impl Drop for Package {
         // This means Function.native (which contains Arc<UnboxedNativeFunction>)
         // would leak if we don't explicitly handle it.
         for module in self.loaded_modules.values_mut() {
-            module.drop_native_functions();
+            unsafe {
+                std::ptr::drop_in_place(module);
+            }
         }
     }
 }
@@ -127,10 +130,11 @@ pub struct Module {
     pub constants: ArenaVec<Constant>,
 }
 
-impl Module {
-    pub(crate) fn drop_native_functions(&mut self) {
+impl Drop for Module {
+    fn drop(&mut self) {
         for function in self.functions.iter_mut() {
-            let _ = std::mem::take(&mut function.native);
+            // Take ownership of the Arc and drop it
+            drop(std::mem::take(&mut function.native));
         }
     }
 }
