@@ -45,7 +45,6 @@ pub mod checked {
         gas_status: SuiGasStatus,
         // For address balance payments: sender or sponsor address to charge
         address_balance_gas_payer: Option<SuiAddress>,
-        skip_all_checks: bool,
     }
 
     impl GasCharger {
@@ -55,7 +54,6 @@ pub mod checked {
             gas_status: SuiGasStatus,
             protocol_config: &ProtocolConfig,
             address_balance_gas_payer: Option<SuiAddress>,
-            skip_all_checks: bool,
         ) -> Self {
             let gas_model_version = protocol_config.gas_model_version();
             Self {
@@ -65,7 +63,6 @@ pub mod checked {
                 smashed_gas_coin: None,
                 gas_status,
                 address_balance_gas_payer,
-                skip_all_checks,
             }
         }
 
@@ -77,7 +74,6 @@ pub mod checked {
                 smashed_gas_coin: None,
                 gas_status: SuiGasStatus::new_unmetered(),
                 address_balance_gas_payer: None,
-                skip_all_checks: false,
             }
         }
 
@@ -109,10 +105,6 @@ pub mod checked {
 
         pub fn is_unmetered(&self) -> bool {
             self.gas_status.is_unmetered()
-        }
-
-        pub fn skip_all_checks(&self) -> bool {
-            self.skip_all_checks
         }
 
         pub fn move_gas_status(&self) -> &GasStatus {
@@ -382,15 +374,12 @@ pub mod checked {
                 let cost_summary = self.gas_status.summary();
                 let gas_used = cost_summary.net_gas_usage();
 
-                if !self.skip_all_checks() {
-                    let mut gas_object =
-                        temporary_store.read_object(&gas_object_id).unwrap().clone();
-                    deduct_gas(&mut gas_object, gas_used);
-                    #[skip_checked_arithmetic]
-                    trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
+                let mut gas_object = temporary_store.read_object(&gas_object_id).unwrap().clone();
+                deduct_gas(&mut gas_object, gas_used);
+                #[skip_checked_arithmetic]
+                trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
 
-                    temporary_store.mutate_input_object(gas_object);
-                }
+                temporary_store.mutate_input_object(gas_object);
                 cost_summary
             } else {
                 GasCostSummary::default()

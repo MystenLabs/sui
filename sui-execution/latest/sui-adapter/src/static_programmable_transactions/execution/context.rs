@@ -242,10 +242,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 let gas_local = gas_locals.local(0)?;
                 let gas_ref = gas_local.borrow()?;
                 // We have already checked that the gas balance is enough to cover the gas budget
-                if !gas_charger.skip_all_checks() {
-                    let max_gas_in_balance = gas_charger.gas_budget();
-                    gas_ref.coin_ref_subtract_balance(max_gas_in_balance)?;
-                }
+                let max_gas_in_balance = gas_charger.gas_budget();
+                gas_ref.coin_ref_subtract_balance(max_gas_in_balance)?;
                 Some((gas_metadata, gas_locals))
             }
             None => None,
@@ -375,9 +373,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             "Events should be taken after every Move call"
         );
         // Refund unused gas
-        if let Some(gas_id) = gas_id_opt
-            && !gas_charger.skip_all_checks()
-        {
+        if let Some(gas_id) = gas_id_opt {
             refund_max_gas_budget(&mut writes, gas_charger, gas_id)?;
         }
 

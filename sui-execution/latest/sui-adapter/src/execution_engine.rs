@@ -149,7 +149,6 @@ mod checked {
             gas_status,
             protocol_config,
             address_balance_gas_payer,
-            Mode::skip_gas_reservation(),
         );
 
         let tx_ctx = TxContext::new_from_components(
