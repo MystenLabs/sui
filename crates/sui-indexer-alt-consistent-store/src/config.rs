@@ -40,6 +40,8 @@ pub struct IngestionConfig {
     pub retry_interval_ms: u64,
     pub streaming_backoff_initial_batch_size: usize,
     pub streaming_backoff_max_batch_size: usize,
+    pub streaming_connection_timeout_ms: u64,
+    pub streaming_statement_timeout_ms: u64,
 }
 
 #[DefaultConfig]
@@ -142,6 +144,8 @@ impl From<framework::ingestion::IngestionConfig> for IngestionConfig {
             retry_interval_ms: config.retry_interval_ms,
             streaming_backoff_initial_batch_size: config.streaming_backoff_initial_batch_size,
             streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
+            streaming_connection_timeout_ms: config.streaming_connection_timeout_ms,
+            streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
         }
     }
 }
@@ -154,6 +158,8 @@ impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
             retry_interval_ms: config.retry_interval_ms,
             streaming_backoff_initial_batch_size: config.streaming_backoff_initial_batch_size,
             streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
+            streaming_connection_timeout_ms: config.streaming_connection_timeout_ms,
+            streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
         }
     }
 }
