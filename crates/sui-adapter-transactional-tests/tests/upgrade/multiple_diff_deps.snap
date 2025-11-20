@@ -21,4 +21,4 @@ gas summary: computation_cost: 1000000, storage_cost: 5563200,  storage_rebate: 
 task 4, lines 19-23:
 //# publish --upgradeable --sender A --dependencies A1 A2
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: None, command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly A1 (version std) and A2 (version sui) to be used in the same transaction"), command: Some(0) } }
