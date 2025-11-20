@@ -370,9 +370,9 @@ fn estimate_gas_budget_from_gas_cost(
 ) -> u64 {
     const GAS_SAFE_OVERHEAD: u64 = 1000;
 
-    // Calculate base estimate from gas cost summary
+    // Calculate base estimate from gas cost summary (in MIST)
     let gas_usage = gas_cost_summary.net_gas_usage();
-    let base_estimate =
+    let base_estimate_mist =
         gas_cost_summary
             .computation_cost
             .max(if gas_usage < 0 { 0 } else { gas_usage as u64 });
@@ -388,36 +388,41 @@ fn estimate_gas_budget_from_gas_cost(
         total.saturating_sub(1)
     };
 
-    let gas_loading_cost = num_payment_objects_for_estimation
+    // Calculate gas loading cost in gas units
+    let gas_loading_cost_units = num_payment_objects_for_estimation
         .saturating_mul(GAS_COIN_SIZE_BYTES)
-        .saturating_mul(protocol_config.obj_access_cost_read_per_byte())
-        .saturating_mul(reference_gas_price);
+        .saturating_mul(protocol_config.obj_access_cost_read_per_byte());
 
-    let estimate_with_loading = base_estimate.saturating_add(gas_loading_cost);
+    // Round up to the nearest gas rounding step (in gas units)
+    let rounded_gas_loading_cost_units =
+        if let Some(step) = protocol_config.gas_rounding_step_as_option() {
+            round_up_to_nearest(gas_loading_cost_units, step)
+        } else {
+            gas_loading_cost_units
+        };
 
-    // Round up to the nearest gas rounding step (typically 1000 MIST)
-    let rounded_estimate = if let Some(step) = protocol_config.gas_rounding_step_as_option() {
-        round_up_to_nearest(estimate_with_loading, step).unwrap_or(u64::MAX)
-    } else {
-        estimate_with_loading
-    };
+    // Convert gas loading cost to MIST
+    let gas_loading_cost_mist = rounded_gas_loading_cost_units.saturating_mul(reference_gas_price);
 
-    // Add safe overhead buffer after rounding
-    let safe_overhead = GAS_SAFE_OVERHEAD.saturating_mul(reference_gas_price);
-    let estimate_with_overhead = rounded_estimate.saturating_add(safe_overhead);
+    // Calculate safe overhead buffer in MIST
+    let safe_overhead_mist = GAS_SAFE_OVERHEAD.saturating_mul(reference_gas_price);
+
+    // Add all together: base (MIST) + loading (MIST) + overhead (MIST)
+    let estimate_mist = base_estimate_mist
+        .saturating_add(gas_loading_cost_mist)
+        .saturating_add(safe_overhead_mist);
 
     // Clamp to max_tx_gas to ensure we don't exceed the protocol limit
-    estimate_with_overhead.min(protocol_config.max_tx_gas())
+    estimate_mist.min(protocol_config.max_tx_gas())
 }
 
-/// Round up a value to the nearest multiple of `step` using checked arithmetic.
-/// Returns None if overflow would occur.
-fn round_up_to_nearest(value: u64, step: u64) -> Option<u64> {
+/// Round up a value to the nearest multiple of `step` using saturating arithmetic.
+fn round_up_to_nearest(value: u64, step: u64) -> u64 {
     let remainder = value % step;
     if remainder == 0 {
-        Some(value)
+        value
     } else {
-        value.checked_add(step - remainder)
+        value.saturating_add(step - remainder)
     }
 }
 
