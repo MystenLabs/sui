@@ -352,13 +352,8 @@ fn to_command_output(
 
 /// Estimate the gas budget using the gas_cost_summary from a previous DryRun
 ///
-/// The estimated gas budget is computed as following:
-/// * the maximum between A and B, where:
-///   A = computation cost + GAS_SAFE_OVERHEAD * reference gas price
-///   B = computation cost + storage cost - storage rebate + GAS_SAFE_OVERHEAD * reference gas price
-///   overhead
-///
-/// This gas estimate is computed similarly as in the TypeScript SDK
+/// The estimated gas budget is:
+///   computation cost + storage cost + GAS_SAFE_OVERHEAD * reference gas price
 fn estimate_gas_budget_from_gas_cost(
     gas_cost_summary: &sui_types::gas::GasCostSummary,
     reference_gas_price: u64,
@@ -366,10 +361,10 @@ fn estimate_gas_budget_from_gas_cost(
     const GAS_SAFE_OVERHEAD: u64 = 1000;
 
     let safe_overhead = GAS_SAFE_OVERHEAD * reference_gas_price;
-    let computation_cost_with_overhead = gas_cost_summary.computation_cost + safe_overhead;
 
-    let gas_usage = gas_cost_summary.net_gas_usage() + safe_overhead as i64;
-    computation_cost_with_overhead.max(if gas_usage < 0 { 0 } else { gas_usage as u64 })
+    // Use gas_used() instead of net_gas_usage() because we need enough budget upfront
+    // to cover costs BEFORE storage rebates are applied (rebates only happen at the end)
+    gas_cost_summary.gas_used() + safe_overhead
 }
 
 fn select_gas(
