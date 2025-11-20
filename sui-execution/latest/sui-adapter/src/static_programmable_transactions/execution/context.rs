@@ -375,10 +375,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             "Events should be taken after every Move call"
         );
         // Refund unused gas
-        if let Some(gas_id) = gas_id_opt {
-            if !gas_charger.skip_all_checks() {
-                refund_max_gas_budget(&mut writes, gas_charger, gas_id)?;
-            }
+        if let Some(gas_id) = gas_id_opt
+            && !gas_charger.skip_all_checks()
+        {
+            refund_max_gas_budget(&mut writes, gas_charger, gas_id)?;
         }
 
         loaded_runtime_objects.extend(loaded_child_objects);

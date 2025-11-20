@@ -920,10 +920,10 @@ mod checked {
                 let owner = Owner::AddressOwner(recipient);
                 add_additional_write(&mut additional_writes, owner, object_value)?;
             }
-            if let Some(gas_id) = gas_id_opt {
-                if !gas_charger.skip_all_checks() {
-                    refund_max_gas_budget(&mut additional_writes, gas_charger, gas_id)?;
-                }
+            if let Some(gas_id) = gas_id_opt
+                && !gas_charger.skip_all_checks()
+            {
+                refund_max_gas_budget(&mut additional_writes, gas_charger, gas_id)?;
             }
 
             let object_runtime: ObjectRuntime = native_extensions.remove().map_err(|e| {
