@@ -14,7 +14,7 @@ use pipeline::{
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework_store_traits::{
-    Connection, Store, TransactionalStore, is_valid_pipeline, pipeline_task,
+    Connection, Store, TransactionalStore, pipeline_task,
 };
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -342,13 +342,6 @@ impl<S: Store> Indexer<S> {
             P::NAME,
         );
 
-        ensure!(
-            is_valid_pipeline::<S>(P::NAME),
-            "Pipeline {:?} name contains delimiter {}",
-            P::NAME,
-            S::DELIMITER,
-        );
-
         if let Some(enabled_pipelines) = &mut self.enabled_pipelines
             && !enabled_pipelines.remove(P::NAME)
         {
@@ -363,12 +356,12 @@ impl<S: Store> Indexer<S> {
             .context("Failed to establish connection to store")?;
 
         let pipeline_task =
-            pipeline_task::<S>(P::NAME, self.task.as_ref().map(|t| t.task.as_str()));
+            pipeline_task::<S>(P::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
 
         let watermark = conn
             .committer_watermark(&pipeline_task)
             .await
-            .with_context(|| format!("Failed to get watermark for {}", pipeline_task))?;
+            .with_context(|| format!("Failed to get watermark for {pipeline_task}"))?;
 
         let next_checkpoint = watermark
             .as_ref()
@@ -1984,10 +1977,13 @@ mod tests {
         // Lenient check that not all checkpoints < 250 were committed.
         assert!(lt_250 < 250);
         assert_eq!(
-            conn.committer_watermark(&pipeline_task::<MockStore>(
-                MockCheckpointSequenceNumberHandler::NAME,
-                Some("task")
-            ))
+            conn.committer_watermark(
+                &pipeline_task::<MockStore>(
+                    MockCheckpointSequenceNumberHandler::NAME,
+                    Some("task")
+                )
+                .unwrap()
+            )
             .await
             .unwrap()
             .unwrap()

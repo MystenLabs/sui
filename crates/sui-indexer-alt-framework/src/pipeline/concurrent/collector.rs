@@ -787,8 +787,7 @@ mod tests {
     /// essentially stall the commit_watermark task indefinitely as the latter waits for the
     /// remaining checkpoint parts.
     #[tokio::test(start_paused = true)]
-    async fn test_collector_does_not_drop_partially_batched_checkpoints_when_eventually_le_main_reader_lo()
-     {
+    async fn test_collector_only_filters_whole_checkpoints() {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
         let cancel = CancellationToken::new();
