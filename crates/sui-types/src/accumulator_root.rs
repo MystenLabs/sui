@@ -101,6 +101,12 @@ impl AccumulatorObjId {
     }
 }
 
+impl std::fmt::Display for AccumulatorObjId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl AccumulatorValue {
     pub fn get_field_id(owner: SuiAddress, type_: &TypeTag) -> SuiResult<AccumulatorObjId> {
         if !Balance::is_balance_type(type_) {
