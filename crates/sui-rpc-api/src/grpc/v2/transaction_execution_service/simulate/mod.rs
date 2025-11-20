@@ -113,22 +113,9 @@ pub fn simulate_transaction(
         if request.transaction().gas_payment().budget.is_none()
             && request.transaction().bcs_opt().is_none()
         {
-            let mut estimation_transaction = transaction.clone();
-            estimation_transaction.gas_data_mut().payment = Vec::new();
-
             let simulation_result = executor
-                .simulate_transaction(estimation_transaction, TransactionChecks::Enabled)
+                .simulate_transaction(transaction.clone(), TransactionChecks::Enabled)
                 .map_err(anyhow::Error::from)?;
-
-            if !simulation_result.effects.status().is_ok() {
-                return Err(RpcError::new(
-                    tonic::Code::InvalidArgument,
-                    format!(
-                        "Budget estimation failed with status: {:?}.",
-                        simulation_result.effects.status()
-                    ),
-                ));
-            }
 
             let estimate = estimate_gas_budget_from_gas_cost(
                 simulation_result.effects.gas_cost_summary(),
