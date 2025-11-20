@@ -6,6 +6,7 @@ use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::safe_client::SafeClient;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::{register_fail_point_arg, sim_test};
+use sui_protocol_config::ProtocolConfig;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
@@ -62,6 +63,11 @@ async fn submit_and_wait_for_effects(
 async fn test_alias_changes() {
     telemetry_subscribers::init_for_testing();
 
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_account_aliases_for_testing(true);
+        config
+    });
+
     // Create accounts with more gas objects than the default
     let accounts = vec![
         AccountConfig {
@@ -77,6 +83,10 @@ async fn test_alias_changes() {
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(3)
         .with_additional_accounts(accounts)
+        .with_state_sync_config(sui_config::p2p::StateSyncConfig {
+            use_get_checkpoint_contents_v2: Some(true),
+            ..Default::default()
+        })
         .build()
         .await;
 
@@ -283,8 +293,17 @@ async fn test_alias_changes() {
 async fn test_alias_race() {
     telemetry_subscribers::init_for_testing();
 
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_account_aliases_for_testing(true);
+        config
+    });
+
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(3)
+        .with_state_sync_config(sui_config::p2p::StateSyncConfig {
+            use_get_checkpoint_contents_v2: Some(true),
+            ..Default::default()
+        })
         .build()
         .await;
 

@@ -276,7 +276,7 @@ const MAX_PROTOCOL_VERSION: u64 = 104;
 // Version 101: Framework update
 //              Set max updates per settlement txn to 100.
 // Version 103: Framework update: internal Coin methods
-// Version 104: Add account aliases feature on devnet.
+// Version 104: Framework update: address aliases
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4284,11 +4284,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.deprecate_global_storage_ops = true;
                 }
                 103 => {}
-                104 => {
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.account_aliases = true;
-                    }
-                }
+                104 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4551,6 +4547,10 @@ impl ProtocolConfig {
 
     pub fn set_correct_gas_payment_limit_check_for_testing(&mut self, val: bool) {
         self.feature_flags.correct_gas_payment_limit_check = val;
+    }
+
+    pub fn set_account_aliases_for_testing(&mut self, val: bool) {
+        self.feature_flags.account_aliases = val;
     }
 
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {

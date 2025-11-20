@@ -9,7 +9,8 @@ use sui_storage::verify_checkpoint;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CertifiedCheckpointSummary;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
-use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
+use sui_types::messages_checkpoint::VerifiedCheckpointContents;
+use sui_types::messages_checkpoint::VersionedFullCheckpointContents;
 use sui_types::storage::WriteStore;
 
 pub(crate) struct StateSyncWorker<S>(pub(crate) S, pub(crate) Metrics);
@@ -24,7 +25,7 @@ impl<S: WriteStore + Clone + Send + Sync + 'static> Worker for StateSyncWorker<S
             checkpoint.checkpoint_summary.clone(),
             true,
         )?;
-        let full_contents = FullCheckpointContents::from_contents_and_execution_data(
+        let full_contents = VersionedFullCheckpointContents::from_contents_and_execution_data(
             checkpoint.checkpoint_contents.clone(),
             checkpoint.transactions.iter().map(|t| t.execution_data()),
         );

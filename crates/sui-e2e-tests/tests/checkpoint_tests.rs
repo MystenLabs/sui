@@ -9,6 +9,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use sui_macros::register_fail_point_arg;
 use sui_macros::sim_test;
+use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
@@ -232,8 +233,17 @@ async fn test_checkpoint_fork_detection_storage() {
 
 #[sim_test]
 async fn test_checkpoint_contents_v2_alias_versions() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_account_aliases_for_testing(true);
+        config
+    });
+
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(2)
+        .with_state_sync_config(sui_config::p2p::StateSyncConfig {
+            use_get_checkpoint_contents_v2: Some(true),
+            ..Default::default()
+        })
         .build()
         .await;
 

@@ -8,8 +8,8 @@ use crate::committee::Committee;
 use crate::digests::{CheckpointContentsDigest, CheckpointDigest};
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
-    VerifiedCheckpointContents,
+    CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint, VerifiedCheckpointContents,
+    VersionedFullCheckpointContents,
 };
 use crate::storage::{ReadStore, WriteStore};
 use crate::transaction::VerifiedTransaction;
@@ -69,7 +69,7 @@ impl ReadStore for SharedInMemoryStore {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Option<VersionedFullCheckpointContents> {
         self.inner()
             .get_full_checkpoint_contents(sequence_number, digest)
     }
@@ -190,7 +190,7 @@ pub struct InMemoryStore {
     highest_verified_checkpoint: Option<(CheckpointSequenceNumber, CheckpointDigest)>,
     highest_synced_checkpoint: Option<(CheckpointSequenceNumber, CheckpointDigest)>,
     checkpoints: HashMap<CheckpointDigest, VerifiedCheckpoint>,
-    full_checkpoint_contents: HashMap<CheckpointSequenceNumber, FullCheckpointContents>,
+    full_checkpoint_contents: HashMap<CheckpointSequenceNumber, VersionedFullCheckpointContents>,
     contents_digest_to_sequence_number: HashMap<CheckpointContentsDigest, CheckpointSequenceNumber>,
     sequence_number_to_digest: HashMap<CheckpointSequenceNumber, CheckpointDigest>,
     checkpoint_contents: HashMap<CheckpointContentsDigest, CheckpointContents>,
@@ -236,7 +236,8 @@ impl InMemoryStore {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Option<VersionedFullCheckpointContents> {
+        // TODO fix this!
         let contents = sequence_number
             .or_else(|| self.get_sequence_number_by_contents_digest(digest))
             .and_then(|seq_num| self.full_checkpoint_contents.get(&seq_num).cloned());
@@ -259,10 +260,12 @@ impl InMemoryStore {
             }
         }
 
-        Some(FullCheckpointContents::from_contents_and_execution_data(
-            contents.to_owned(),
-            transactions.into_iter(),
-        ))
+        Some(
+            VersionedFullCheckpointContents::from_contents_and_execution_data(
+                contents.to_owned(),
+                transactions.into_iter(),
+            ),
+        )
     }
 
     pub fn get_sequence_number_by_contents_digest(
@@ -513,7 +516,7 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Option<VersionedFullCheckpointContents> {
         self.0.get_full_checkpoint_contents(sequence_number, digest)
     }
 

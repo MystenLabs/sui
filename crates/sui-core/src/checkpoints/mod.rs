@@ -38,7 +38,9 @@ use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::base_types::{ConciseableName, SequenceNumber};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution::ExecutionTimeObservationKey;
-use sui_types::messages_checkpoint::{CheckpointArtifacts, CheckpointCommitment};
+use sui_types::messages_checkpoint::{
+    CheckpointArtifacts, CheckpointCommitment, VersionedFullCheckpointContents,
+};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::{mpsc, watch};
 use typed_store::rocks::{DBOptions, ReadWriteOptions, default_db_options};
@@ -135,7 +137,11 @@ pub struct CheckpointStoreTables {
     /// efficient reads of full checkpoints. Entries from this table are deleted after state
     /// accumulation has completed.
     #[default_options_override_fn = "full_checkpoint_content_table_default_config"]
+    // TODO: Once the switch to `full_checkpoint_content_v2` is fully active on mainnet,
+    // deprecate this table (and remove when possible).
     full_checkpoint_content: DBMap<CheckpointSequenceNumber, FullCheckpointContents>,
+    #[default_options_override_fn = "full_checkpoint_content_table_default_config"]
+    full_checkpoint_content_v2: DBMap<CheckpointSequenceNumber, VersionedFullCheckpointContents>,
 
     /// Stores certified checkpoints
     pub(crate) certified_checkpoints: DBMap<CheckpointSequenceNumber, TrustedCheckpoint>,
@@ -572,8 +578,8 @@ impl CheckpointStore {
     pub fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         seq: CheckpointSequenceNumber,
-    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
-        self.tables.full_checkpoint_content.get(&seq)
+    ) -> Result<Option<VersionedFullCheckpointContents>, TypedStoreError> {
+        self.tables.full_checkpoint_content_v2.get(&seq)
     }
 
     fn prune_local_summaries(&self) -> SuiResult {
@@ -929,14 +935,14 @@ impl CheckpointStore {
         checkpoint: &VerifiedCheckpoint,
         full_contents: VerifiedCheckpointContents,
     ) -> Result<(), TypedStoreError> {
-        let mut batch = self.tables.full_checkpoint_content.batch();
+        let mut batch = self.tables.full_checkpoint_content_v2.batch();
         batch.insert_batch(
             &self.tables.checkpoint_sequence_by_contents_digest,
             [(&checkpoint.content_digest, checkpoint.sequence_number())],
         )?;
         let full_contents = full_contents.into_inner();
         batch.insert_batch(
-            &self.tables.full_checkpoint_content,
+            &self.tables.full_checkpoint_content_v2,
             [(checkpoint.sequence_number(), &full_contents)],
         )?;
 
@@ -955,7 +961,8 @@ impl CheckpointStore {
         &self,
         seq: CheckpointSequenceNumber,
     ) -> Result<(), TypedStoreError> {
-        self.tables.full_checkpoint_content.remove(&seq)
+        self.tables.full_checkpoint_content.remove(&seq)?;
+        self.tables.full_checkpoint_content_v2.remove(&seq)
     }
 
     pub fn get_epoch_last_checkpoint(

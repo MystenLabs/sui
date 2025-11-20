@@ -187,6 +187,12 @@ pub struct StateSyncConfig {
     /// If unspecified, this will set to default value
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wait_interval_when_no_peer_to_sync_content_ms: Option<u64>,
+
+    /// If true, the v2 version of get_checkpoint_contents will be used.
+    ///
+    /// If unspecified, this will default to false.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub use_get_checkpoint_contents_v2: Option<bool>,
 }
 
 impl StateSyncConfig {
@@ -258,6 +264,13 @@ impl StateSyncConfig {
         } else {
             Duration::from_secs(10)
         }
+    }
+
+    pub fn use_get_checkpoint_contents_v2(&self) -> bool {
+        const DEFAULT_USE_GET_CHECKPOINT_CONTENTS_V2: bool = false;
+
+        self.use_get_checkpoint_contents_v2
+            .unwrap_or(DEFAULT_USE_GET_CHECKPOINT_CONTENTS_V2)
     }
 }
 
