@@ -160,9 +160,11 @@ impl AliasMap {
         let (name, entry) = MemberEntry::find(self, name)?;
         match &entry {
             MemberEntry::Member(_, _, _) => Some((name, entry)),
-            // For code legacy reasons, don't resolve type parameters, they are just here for
-            // shadowing
+            // Do not resolve to type parameters; they are kept as names during expansion.
             MemberEntry::TypeParam => None,
+            // Do not resolve to lambeda parameters; they are kept as names during expansion and
+            // handled during name resolution.
+            MemberEntry::LambdaParam => None,
         }
     }
 
@@ -182,6 +184,21 @@ impl AliasMap {
             }
         }
         None
+    }
+
+    /// Determines if the provided name is a bound as a lambda parameter in the current or any
+    /// previous scope.
+    pub fn is_lambda_parameter(&self, name: &Name) -> bool {
+        let mut current_scope = Some(self);
+        loop {
+            let Some(scope) = current_scope else {
+                break false;
+            };
+            if let Some(entry) = scope.module_members.get(name) {
+                return matches!(entry, MemberEntry::LambdaParam);
+            }
+            current_scope = scope.previous.as_deref();
+        }
     }
 
     /// Finds a suggestion for a leading access name that is close to the given name.
@@ -316,6 +333,26 @@ impl AliasMap {
         self.previous = Some(Box::new(previous));
     }
 
+    /// Similar to add_and_shadow but just hides aliases now shadowed by a lambda parameter.
+    /// Lambda parameters are never resolved. We track them to apply appropriate shadowing to make
+    /// suggetions better.
+    pub fn push_lambda_parameters<'a, I: IntoIterator<Item = &'a Name>>(&mut self, lparams: I)
+    where
+        I::IntoIter: ExactSizeIterator,
+    {
+        let mut new_map = Self::new();
+        for lparam in lparams {
+            // ignore duplicates, they will be checked in naming
+            let _ = new_map
+                .module_members
+                .add(*lparam, MemberEntry::LambdaParam);
+        }
+
+        // set the previous scope
+        let previous = std::mem::replace(self, new_map);
+        self.previous = Some(Box::new(previous));
+    }
+
     /// Resets the alias map to the previous scope, and returns the set of unused aliases
     pub fn pop_scope(&mut self) -> AliasSet {
         let previous = self
@@ -329,7 +366,9 @@ impl AliasMap {
             match alias_entry {
                 AliasEntry::Module(name, _) => result.modules.add(name).unwrap(),
                 AliasEntry::Member(name, _, _) => result.members.add(name).unwrap(),
-                AliasEntry::Address(_, _) | AliasEntry::TypeParam(_) => (),
+                AliasEntry::Address(_, _)
+                | AliasEntry::TypeParam(_)
+                | AliasEntry::LambdaParam(_) => (),
             }
         }
         result

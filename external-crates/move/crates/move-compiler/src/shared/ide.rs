@@ -259,6 +259,7 @@ impl
                 MemberEntry::TypeParam => {
                     type_params.insert(*symbol);
                 }
+                MemberEntry::LambdaParam => (),
             }
         }
 

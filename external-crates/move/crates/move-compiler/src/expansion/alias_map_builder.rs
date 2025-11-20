@@ -38,6 +38,7 @@ pub enum AliasEntry {
     Module(Name, ModuleIdent),
     Member(Name, ModuleIdent, Name),
     TypeParam(Name),
+    LambdaParam(Name),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -53,6 +54,7 @@ pub enum LeadingAccessEntry {
 pub enum MemberEntry {
     Member(ModuleIdent, Name, ModuleMemberKind),
     TypeParam,
+    LambdaParam,
 }
 
 #[derive(Clone, Copy)]
@@ -82,7 +84,8 @@ impl AliasEntry {
             AliasEntry::Address(n, _)
             | AliasEntry::Module(n, _)
             | AliasEntry::Member(n, _, _)
-            | AliasEntry::TypeParam(n) => n.loc,
+            | AliasEntry::TypeParam(n)
+            | AliasEntry::LambdaParam(n) => n.loc,
         }
     }
 }
@@ -302,6 +305,7 @@ impl From<(Name, MemberEntry)> for AliasEntry {
         match entry {
             MemberEntry::Member(mident, member, _) => AliasEntry::Member(name, mident, member),
             MemberEntry::TypeParam => AliasEntry::TypeParam(name),
+            MemberEntry::LambdaParam => AliasEntry::LambdaParam(name),
         }
     }
 }
@@ -346,6 +350,7 @@ impl fmt::Debug for AliasEntry {
             AliasEntry::Address(alias, addr) => write!(f, "({alias}, @{addr})"),
             AliasEntry::Member(alias, mident, name) => write!(f, "({alias},{mident}::{name})"),
             AliasEntry::TypeParam(alias) => write!(f, "({alias},[tparam])"),
+            AliasEntry::LambdaParam(alias) => write!(f, "({alias},[lparam])"),
         }
     }
 }
@@ -366,6 +371,7 @@ impl fmt::Debug for MemberEntry {
         match self {
             MemberEntry::Member(mident, name, _) => write!(f, "{mident}::{name}"),
             MemberEntry::TypeParam => write!(f, "[tparam]"),
+            MemberEntry::LambdaParam => write!(f, "[lparam]"),
         }
     }
 }

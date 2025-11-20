@@ -171,6 +171,13 @@ pub trait PathExpander {
     // never resolved, but are tracked to apply appropriate shadowing.
     fn push_type_parameters(&mut self, tparams: Vec<&Name>);
 
+    // Push a number of type parameters onto the alias information in the path expander. They are
+    // never resolved, but are tracked to apply appropriate shadowing and suggestions.
+    // NB: The namespace here should _not_ overlap with the existing callable namespace, but that
+    // is only because we require `$` prefixes for lambda parameters. This could also be useful in
+    // those cases.
+    fn push_lambda_parameters(&mut self, lparams: Vec<&Name>);
+
     // Pop the innermost alias scope
     fn pop_alias_scope(&mut self) -> AliasSet;
 
@@ -663,8 +670,10 @@ fn make_module_member_filter_fn<'access>(
     fn filter_module_member(access: &Access, entry: &MemberEntry) -> bool {
         use ModuleMemberKind as K;
         let kind = match entry {
-            // Bail on type parameters
+            // Bail on bound parameters
             MemberEntry::TypeParam => return false,
+            // Suggest lambda params only for call positions
+            MemberEntry::LambdaParam => return matches!(access, Access::ApplyPositional),
             MemberEntry::Member(_, _, kind) => kind,
         };
         match (access, kind) {
@@ -758,6 +767,19 @@ impl Move2024PathExpander {
         let NR::UnresolvedName(_, _) = result else {
             return result;
         };
+
+        // Return early in two cases:
+        // (A) If it looks like a variable usage, name resolution will handle suggestions, so we do
+        //     not suggest anything.
+        // (B) If this looks like a function call and it is lambda-bound, name resolution will
+        //     handle suggestions, so we do not suggest anything.
+        if matches!(access, Access::Term)
+            || (matches!(access, Access::ApplyPositional)
+                && self.aliases.is_lambda_parameter(&name))
+        {
+            return result;
+        }
+
         // We ignore macro arguments, since they produce really unusual and useless suggestions.
         // We also ignore `_` as a name, since it is a special case and takes different error paths.
         let name_str = name.value.as_str();
@@ -816,10 +838,10 @@ impl Move2024PathExpander {
             Some(AliasEntry::Address(_, address)) => {
                 NR::Address(name.loc, make_address(context, name, name.loc, address))
             }
-            Some(AliasEntry::TypeParam(_)) => {
+            Some(entry @ AliasEntry::TypeParam(_)) | Some(entry @ AliasEntry::LambdaParam(_)) => {
                 context.add_diag(ice!((
                     name.loc,
-                    "ICE alias map misresolved name as type param"
+                    format!("ICE alias map misresolved name as {:?}", entry),
                 )));
                 NR::UnresolvedName(name.loc, name)
             }
@@ -839,10 +861,10 @@ impl Move2024PathExpander {
                         AliasEntry::Member(_, mident, mem) => {
                             NR::ModuleAccess(name.loc, mident, mem)
                         }
-                        AliasEntry::TypeParam(_) => {
+                        entry @ (AliasEntry::TypeParam(_) | AliasEntry::LambdaParam(_)) => {
                             context.add_diag(ice!((
                                 name.loc,
-                                "ICE alias map misresolved name as type param"
+                                format!("ICE alias map misresolved name as {:?}", entry),
                             )));
                             NR::UnresolvedName(name.loc, name)
                         }
@@ -1067,6 +1089,10 @@ impl PathExpander for Move2024PathExpander {
 
     fn push_type_parameters(&mut self, tparams: Vec<&Name>) {
         self.aliases.push_type_parameters(tparams)
+    }
+
+    fn push_lambda_parameters(&mut self, lparams: Vec<&Name>) {
+        self.aliases.push_lambda_parameters(lparams)
     }
 
     fn pop_alias_scope(&mut self) -> AliasSet {
@@ -1416,6 +1442,13 @@ impl PathExpander for LegacyPathExpander {
     fn push_type_parameters(&mut self, tparams: Vec<&Name>) {
         self.old_alias_maps
             .push(self.aliases.shadow_for_type_parameters(tparams));
+    }
+
+    // Do nothing here -- lambdas are not supported legacy Move
+    fn push_lambda_parameters(&mut self, _lparams: Vec<&Name>) {
+        // We have to push _something_ here to keep the stack balanced
+        self.old_alias_maps
+            .push(self.aliases.shadow_for_type_parameters(vec![]));
     }
 
     fn pop_alias_scope(&mut self) -> AliasSet {
