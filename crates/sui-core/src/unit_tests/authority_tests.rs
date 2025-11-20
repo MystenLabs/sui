@@ -806,7 +806,7 @@ async fn test_dev_inspect_gas_coin_argument() {
     };
     let kind = TransactionKind::programmable(pt);
     let results = fullnode
-        .dev_inspect_transaction_block(sender, kind, None, None, None, None, None, None)
+        .dev_inspect_transaction_block(sender, kind, None, None, None, None, None, Some(false))
         .await
         .unwrap()
         .results
