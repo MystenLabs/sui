@@ -36,6 +36,7 @@ use sui_types::{
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
     execution::DynamicallyLoadedObjectMetadata,
+    fork_test_support::get_fork_loaded_objects,
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
@@ -382,6 +383,15 @@ pub fn take_from_address_by_id(
     pop_arg!(args, StructRef);
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
+
+    // Try to load object from storage if not in inventory (for fork testing)
+    try_load_object_from_storage(
+        context,
+        id,
+        specified_obj_ty.clone(),
+        Owner::AddressOwner(account),
+    )?;
+
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
@@ -415,6 +425,15 @@ pub fn ids_for_address(
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
+
+    // Try to populate fork inventories (will load objects from storage on-demand)
+    try_populate_fork_inventories_for_address(
+        context,
+        &specified_ty,
+        specified_obj_ty.clone(),
+        account,
+    )?;
+
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let ids = inventories
@@ -437,6 +456,15 @@ pub fn most_recent_id_for_address(
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
+
+    // Try to populate fork inventories (will load objects from storage on-demand)
+    try_populate_fork_inventories_for_address(
+        context,
+        &specified_ty,
+        specified_obj_ty.clone(),
+        account,
+    )?;
+
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = match inventories.address_inventories.get(&account) {
@@ -568,6 +596,15 @@ pub fn take_shared_by_id(
     pop_arg!(args, StructRef);
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
+    
+    // Try to load object from storage if not in inventory (for fork testing)
+    try_load_object_from_storage(
+        context,
+        id,
+        specified_obj_ty.clone(),
+        Owner::Shared { initial_shared_version: SequenceNumber::new() },
+    )?;
+    
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
@@ -599,6 +636,14 @@ pub fn most_recent_id_shared(
     let specified_ty = get_specified_ty(ty_args);
     assert!(args.is_empty());
     let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
+    
+    // Try to populate fork inventories for shared objects (will load objects from storage on-demand)
+    try_populate_fork_inventories_for_shared(
+        context,
+        &specified_ty,
+        specified_obj_ty.clone(),
+    )?;
+
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = most_recent_at_ty(
@@ -757,6 +802,299 @@ pub fn deallocate_receiving_ticket_for_object(
 }
 
 // impls
+
+// Check if two MoveObjectTypes match, ignoring package addresses
+// This is needed because test code uses 0x0 for local packages, but deployed objects have real addresses
+fn types_match_ignoring_package_address(type1: &MoveObjectType, type2: &MoveObjectType) -> bool {
+    let tag1 = TypeTag::from(type1.clone());
+    let tag2 = TypeTag::from(type2.clone());
+
+    types_match_recursive(&tag1, &tag2)
+}
+
+fn types_match_recursive(tag1: &TypeTag, tag2: &TypeTag) -> bool {
+    match (tag1, tag2) {
+        (TypeTag::Struct(s1), TypeTag::Struct(s2)) => {
+            // Compare module and name, but ignore address if one is 0x0
+            let addrs_match = s1.address == s2.address
+                || s1.address == AccountAddress::ZERO
+                || s2.address == AccountAddress::ZERO;
+
+            let modules_match = s1.module == s2.module;
+            let names_match = s1.name == s2.name;
+            let type_params_match = s1.type_params.len() == s2.type_params.len()
+                && s1
+                    .type_params
+                    .iter()
+                    .zip(&s2.type_params)
+                    .all(|(t1, t2)| types_match_recursive(t1, t2));
+
+            addrs_match && modules_match && names_match && type_params_match
+        }
+        (TypeTag::Vector(t1), TypeTag::Vector(t2)) => types_match_recursive(t1, t2),
+        _ => tag1 == tag2,
+    }
+}
+
+// Try to load a specific object from storage if it's not in the inventory
+// This is called when test code requests an object by ID
+fn try_load_object_from_storage(
+    context: &mut NativeContext,
+    obj_id: ObjectID,
+    specified_obj_ty: MoveObjectType,
+    expected_owner: Owner,
+) -> PartialVMResult<()> {
+    // Always try to populate child object inventories from fork loaded objects
+    try_populate_fork_inventories_for_child_objects(context)?;
+    
+    // Check if object is already in inventory
+    {
+        let object_runtime: &ObjectRuntime = get_extension!(context)?;
+        if object_runtime
+            .test_inventories
+            .objects
+            .contains_key(&obj_id)
+        {
+            return Ok(());
+        }
+    }
+
+    // Try to get the object from storage
+    let store: &&InMemoryTestStore = get_extension!(context)?;
+    let obj_opt = store
+        .0
+        .with_borrow(|store| store.get_object(&obj_id).cloned());
+
+    if let Some(obj) = obj_opt {
+        // Verify owner matches
+        if obj.owner != expected_owner {
+            return Ok(()); // Object exists but wrong owner, let normal error handling proceed
+        }
+
+        // Get the Move object data
+        if let Some(move_obj) = obj.data.try_as_move() {
+            let type_tag = TypeTag::from(move_obj.type_().clone());
+
+            // Get layout for deserialization - types should be loaded by now
+            let layout = match context.type_tag_to_layout_for_test_scenario_only(&type_tag) {
+                Ok(Some(l)) => l,
+                _ => return Ok(()), // Type not available yet, let normal error handling proceed
+            };
+
+            // Deserialize BCS bytes to Move Value
+            if let Some(value) = Value::simple_deserialize(move_obj.contents(), &layout) {
+                // Add to inventories
+                let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
+                let inventories = &mut object_runtime.test_inventories;
+
+                inventories.objects.insert(obj_id, value);
+
+                match obj.owner {
+                    Owner::AddressOwner(addr) => {
+                        inventories
+                            .address_inventories
+                            .entry(addr)
+                            .or_default()
+                            .entry(specified_obj_ty)
+                            .or_default()
+                            .insert(obj_id);
+                    }
+                    Owner::ConsensusAddressOwner { owner, .. } => {
+                        inventories
+                            .address_inventories
+                            .entry(owner)
+                            .or_default()
+                            .entry(specified_obj_ty)
+                            .or_default()
+                            .insert(obj_id);
+                    }
+                    Owner::Shared { .. } => {
+                        inventories
+                            .shared_inventory
+                            .entry(specified_obj_ty)
+                            .or_default()
+                            .insert(obj_id);
+                    }
+                    Owner::Immutable => {
+                        inventories
+                            .immutable_inventory
+                            .entry(specified_obj_ty)
+                            .or_default()
+                            .insert(obj_id);
+                    }
+                    Owner::ObjectOwner(_) => {}
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// Try to populate inventories for a specific address by scanning fork objects
+// This is called when test code asks for "most recent" object (doesn't know the ID yet)
+fn try_populate_fork_inventories_for_address(
+    context: &mut NativeContext,
+    _specified_ty: &Type,
+    specified_obj_ty: MoveObjectType,
+    account: SuiAddress,
+) -> PartialVMResult<()> {
+    // Check if we already have objects for this address/type
+    {
+        let object_runtime: &ObjectRuntime = get_extension!(context)?;
+        if let Some(inv) = object_runtime
+            .test_inventories
+            .address_inventories
+            .get(&account)
+        {
+            if inv.contains_key(&specified_obj_ty) {
+                return Ok(()); // Already populated
+            }
+        }
+    }
+
+    // Get fork objects from global storage
+    let fork_objects = get_fork_loaded_objects();
+    if fork_objects.is_empty() {
+        return Ok(());
+    }
+
+    // Get layout for the requested type
+    let type_tag = TypeTag::from(specified_obj_ty.clone());
+    let layout = match context.type_tag_to_layout_for_test_scenario_only(&type_tag) {
+        Ok(Some(l)) => l,
+        _ => return Ok(()), // Type not available yet
+    };
+
+    // Filter fork objects for this address and type, then deserialize and add to inventory
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
+    let inventories = &mut object_runtime.test_inventories;
+
+    for (obj_id, obj_type, owner, _version, bcs_bytes) in fork_objects {
+        // Check if types match, allowing for package address differences
+        // (test code uses 0x0, but deployed objects have actual package address)
+        let type_matches = types_match_ignoring_package_address(&obj_type, &specified_obj_ty);
+        let owner_matches = matches!(owner, Owner::AddressOwner(addr) if addr == account);
+
+        if type_matches && owner_matches {
+            if let Some(value) = Value::simple_deserialize(&bcs_bytes, &layout) {
+                inventories.objects.insert(obj_id, value);
+                // IMPORTANT: Store using the REQUESTED type (with 0x0 address for test packages),
+                // not the actual deployed type, so test code can find it
+                inventories
+                    .address_inventories
+                    .entry(account)
+                    .or_default()
+                    .entry(specified_obj_ty.clone()) // Use specified_obj_ty, not obj_type
+                    .or_default()
+                    .insert(obj_id);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// Try to populate inventories for shared objects by scanning fork objects
+// This is called when test code asks for "most recent" shared object
+fn try_populate_fork_inventories_for_shared(
+    context: &mut NativeContext,
+    _specified_ty: &Type,
+    specified_obj_ty: MoveObjectType,
+) -> PartialVMResult<()> {
+    // Check if we already have shared objects for this type
+    {
+        let object_runtime: &ObjectRuntime = get_extension!(context)?;
+        if object_runtime
+            .test_inventories
+            .shared_inventory
+            .contains_key(&specified_obj_ty)
+        {
+            return Ok(()); // Already populated
+        }
+    }
+
+    // Get fork objects from global storage
+    let fork_objects = get_fork_loaded_objects();
+    if fork_objects.is_empty() {
+        return Ok(());
+    }
+
+    // Get layout for the requested type
+    let type_tag = TypeTag::from(specified_obj_ty.clone());
+    let layout = match context.type_tag_to_layout_for_test_scenario_only(&type_tag) {
+        Ok(Some(l)) => l,
+        _ => return Ok(()), // Type not available yet
+    };
+
+    // Filter fork objects for shared objects of this type, then deserialize and add to inventory
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
+    let inventories = &mut object_runtime.test_inventories;
+
+    for (obj_id, obj_type, owner, _version, bcs_bytes) in fork_objects {
+        // Check if types match, allowing for package address differences
+        let type_matches = types_match_ignoring_package_address(&obj_type, &specified_obj_ty);
+        let owner_is_shared = matches!(owner, Owner::Shared { .. });
+
+        if type_matches && owner_is_shared {
+            if let Some(value) = Value::simple_deserialize(&bcs_bytes, &layout) {
+                inventories.objects.insert(obj_id, value);
+                // IMPORTANT: Store using the REQUESTED type (with 0x0 address for test packages),
+                // not the actual deployed type, so test code can find it
+                inventories
+                    .shared_inventory
+                    .entry(specified_obj_ty.clone()) // Use specified_obj_ty, not obj_type
+                    .or_default()
+                    .insert(obj_id);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// Try to populate inventories for child objects (dynamic fields) by scanning fork objects
+// This is called when dynamic field native functions try to access child objects
+fn try_populate_fork_inventories_for_child_objects(
+    context: &mut NativeContext,
+) -> PartialVMResult<()> {
+    // Get fork objects from global storage
+    let fork_objects = get_fork_loaded_objects();
+    
+    if fork_objects.is_empty() {
+        return Ok(());
+    }
+
+    // Process child objects and collect them
+    let mut child_objects_to_insert = Vec::new();
+    
+    for (obj_id, obj_type, owner, _version, bcs_bytes) in fork_objects {
+        // Only process objects owned by other objects (dynamic fields)
+        if let Owner::ObjectOwner(_parent_id) = owner {
+            // Get layout for this object type
+            let type_tag = TypeTag::from(obj_type.clone());
+            
+            match context.type_tag_to_layout_for_test_scenario_only(&type_tag) {
+                Ok(Some(layout)) => {
+                    if let Some(value) = Value::simple_deserialize(&bcs_bytes, &layout) {
+                        child_objects_to_insert.push((obj_id, _parent_id, value));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Insert all child objects into the object runtime's inventories
+    let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
+    
+    for (obj_id, _parent_id, value) in child_objects_to_insert {
+        // Add to test inventories for general object access
+        object_runtime.test_inventories.objects.insert(obj_id, value);
+    }
+
+    Ok(())
+}
 
 fn take_from_inventory(
     is_in_inventory: impl FnOnce(&ObjectID) -> bool,
