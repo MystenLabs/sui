@@ -1,3 +1,6 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 # This is just here as an example of a shell test that creates a git repo to work against
 
 # use default git settings
