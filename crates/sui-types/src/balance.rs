@@ -5,6 +5,7 @@ use crate::SUI_FRAMEWORK_ADDRESS;
 use crate::error::{ExecutionError, ExecutionErrorKind};
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout};
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -13,9 +14,15 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::serde_as;
+
 pub const SUI_MODULE_NAME: &IdentStr = ident_str!("sui");
 pub const BALANCE_MODULE_NAME: &IdentStr = ident_str!("balance");
 pub const BALANCE_STRUCT_NAME: &IdentStr = ident_str!("Balance");
+pub const RESOLVED_BALANCE_STRUCT: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &SUI_FRAMEWORK_ADDRESS,
+    BALANCE_MODULE_NAME,
+    BALANCE_STRUCT_NAME,
+);
 pub const BALANCE_CREATE_REWARDS_FUNCTION_NAME: &IdentStr = ident_str!("create_staking_rewards");
 pub const BALANCE_DESTROY_REBATES_FUNCTION_NAME: &IdentStr = ident_str!("destroy_storage_rebates");
 
