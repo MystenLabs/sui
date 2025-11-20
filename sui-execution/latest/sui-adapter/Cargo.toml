@@ -18,6 +18,9 @@ tracing.workspace = true
 serde.workspace = true
 indexmap.workspace = true
 serde_json.workspace = true
+once_cell.workspace = true
+csv.workspace = true
+lz4_flex = "0.10.0"
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

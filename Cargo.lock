@@ -7558,6 +7558,15 @@ dependencies = [
 
 [[package]]
 name = "lz4_flex"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b8c72594ac26bfd34f2d99dfced2edfaddfe8a476e3ff2ca0eb293d925c4f83"
+dependencies = [
+ "twox-hash",
+]
+
+[[package]]
+name = "lz4_flex"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "912b45c753ff5f7f5208307e8ace7d2a2e30d024e26d3509f3dce546c044ce15"
@@ -9900,7 +9909,7 @@ dependencies = [
  "flate2",
  "half 2.3.1",
  "hashbrown 0.15.2",
- "lz4_flex",
+ "lz4_flex 0.11.2",
  "num",
  "num-bigint 0.4.4",
  "paste",
@@ -13508,8 +13517,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "csv",
  "indexmap 2.8.0",
  "leb128",
+ "lz4_flex 0.10.0",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
@@ -13524,6 +13535,7 @@ dependencies = [
  "mysten-common",
  "mysten-metrics",
  "nonempty",
+ "once_cell",
  "parking_lot 0.12.3",
  "serde",
  "serde_json",
