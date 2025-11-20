@@ -14636,6 +14636,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-futures"
+version = "1.63.0"
+dependencies = [
+ "futures",
+ "tokio",
+]
+
+[[package]]
 name = "sui-genesis-builder"
 version = "0.0.0"
 dependencies = [
@@ -14956,6 +14964,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sui-default-config",
+ "sui-futures",
  "sui-indexer-alt-consistent-api",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-metrics",
@@ -15053,6 +15062,7 @@ dependencies = [
  "scoped-futures",
  "serde",
  "sui-field-count",
+ "sui-futures",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
  "sui-pg-db",
@@ -15284,7 +15294,7 @@ dependencies = [
  "sui-core",
  "sui-data-ingestion-core",
  "sui-field-count",
- "sui-indexer-alt-framework",
+ "sui-futures",
  "sui-indexer-alt-schema",
  "sui-pg-db",
  "sui-snapshot",
@@ -16441,7 +16451,7 @@ dependencies = [
  "reqwest 0.12.9",
  "serde",
  "serde_json",
- "sui-indexer-alt-framework",
+ "sui-futures",
  "telemetry-subscribers",
  "tokio",
  "tokio-postgres",
@@ -16658,7 +16668,7 @@ dependencies = [
  "serde_json",
  "sui-config",
  "sui-core",
- "sui-indexer-alt-framework",
+ "sui-futures",
  "sui-protocol-config",
  "sui-storage",
  "sui-types",

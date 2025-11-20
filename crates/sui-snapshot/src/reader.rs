@@ -27,7 +27,7 @@ use std::time::Duration;
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_core::authority::AuthorityStore;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
-use sui_indexer_alt_framework::task::TrySpawnStreamExt;
+use sui_futures::stream::TrySpawnStreamExt;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::http::HttpDownloaderBuilder;
 use sui_storage::object_store::util::{copy_files, path_to_filesystem};

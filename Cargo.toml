@@ -123,6 +123,7 @@ members = [
   "crates/sui-framework",
   "crates/sui-framework-snapshot",
   "crates/sui-framework-tests",
+  "crates/sui-futures",
   "crates/sui-genesis-builder",
   "crates/sui-graphql-e2e-tests",
   "crates/sui-graphql-rpc",
@@ -707,6 +708,7 @@ sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }
 sui-field-count = { path = "crates/sui-field-count" }
 sui-field-count-derive = { path = "crates/sui-field-count-derive" }
+sui-futures = { path = "crates/sui-futures" }
 sui-framework = { path = "crates/sui-framework" }
 sui-framework-snapshot = { path = "crates/sui-framework-snapshot" }
 sui-framework-tests = { path = "crates/sui-framework-tests" }

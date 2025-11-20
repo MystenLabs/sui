@@ -13,7 +13,8 @@ use std::{
 use anyhow::Context as _;
 use backoff::{Error as BE, ExponentialBackoff};
 use futures::{future::try_join_all, stream};
-use sui_indexer_alt_framework::task::{TrySpawnStreamExt, with_slow_future_monitor};
+use sui_futures::future::with_slow_future_monitor;
+use sui_futures::stream::TrySpawnStreamExt;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
