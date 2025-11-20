@@ -10,6 +10,7 @@ use crate::static_programmable_transactions::{
 use move_core_types::language_storage::StructTag;
 use sui_types::{
     error::ExecutionError,
+    execution_status::ExecutionFailureStatus,
     object::Owner,
     transaction::{self as P, CallArg, ObjectArg, SharedObjectMutability},
 };
@@ -90,7 +91,10 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
         }
         CallArg::FundsWithdrawal(_) => {
             // TODO(address-balances): Add support for balance withdraws.
-            todo!("Load balance withdraw call arg")
+            return Err(ExecutionError::new_with_source(
+                ExecutionFailureStatus::FeatureNotYetSupported,
+                "Load balance withdraw call arg",
+            ));
         }
     })
 }

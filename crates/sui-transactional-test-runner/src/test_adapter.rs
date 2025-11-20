@@ -2602,6 +2602,7 @@ async fn init_sim_executor(
     AccountSetup,
     Option<Arc<dyn RpcStateReader + Send + Sync>>,
 ) {
+    dbg!(protocol_config.enable_ptb_execution_v2());
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
     let mut account_objects = BTreeMap::new();
@@ -2665,7 +2666,7 @@ async fn init_sim_executor(
         PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
             rng,
             DEFAULT_CHAIN_START_TIMESTAMP,
-            protocol_config.version,
+            protocol_config,
             acc_cfgs,
             addr_keys
                 .iter()
@@ -2673,8 +2674,6 @@ async fn init_sim_executor(
                 .collect(),
             reference_gas_price,
             None,
-            protocol_config.enable_accumulators(),
-            protocol_config.enable_authenticated_event_streams(),
         );
 
     sim.set_data_ingestion_path(data_ingestion_path.clone());
