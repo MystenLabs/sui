@@ -13,7 +13,7 @@ use crate::{
         env::Env,
         execution::values::{Local, Locals, Value},
         linkage::resolved_linkage::{ResolvedLinkage, RootedLinkage},
-        loading::ast::ObjectMutability,
+        loading::ast::{Datatype, ObjectMutability},
         typing::ast::{self as T, Type},
     },
 };
@@ -1229,6 +1229,7 @@ fn load_object_arg_impl(
     else {
         invariant_violation!("Expected a Move object");
     };
+    assert_expected_move_object_type(&object_metadata.type_, move_obj.type_())?;
     let contained_uids = {
         let fully_annotated_layout = env.fully_annotated_layout(&ty)?;
         get_all_uids(&fully_annotated_layout, move_obj.contents()).map_err(|e| {
@@ -1360,4 +1361,95 @@ unsafe fn create_written_object<Mode: ExecutionMode>(
             Mode::packages_are_predefined(),
         )
     }
+}
+
+/// Assert the type inferred matches the object's type. This has already been done during loading,
+/// but is checked again as an invariant. This may be removed safely at a later time if needed.
+fn assert_expected_move_object_type(
+    actual: &Type,
+    expected: &MoveObjectType,
+) -> Result<(), ExecutionError> {
+    let Type::Datatype(actual) = actual else {
+        invariant_violation!("Expected a datatype for a Move object");
+    };
+    let (a, m, n) = actual.qualified_ident();
+    assert_invariant!(
+        a == &expected.address(),
+        "Actual address does not match expected. actual: {actual:?} vs expected: {expected:?}"
+    );
+    assert_invariant!(
+        m == expected.module(),
+        "Actual module does not match expected. actual: {actual:?} vs expected: {expected:?}"
+    );
+    assert_invariant!(
+        n == expected.name(),
+        "Actual struct does not match expected. actual: {actual:?} vs expected: {expected:?}"
+    );
+    let actual_type_arguments = &actual.type_arguments;
+    let expected_type_arguments = expected.type_params();
+    assert_invariant!(
+        actual_type_arguments.len() == expected_type_arguments.len(),
+        "Actual type arg length does not match expected. \
+       actual: {actual:?} vs expected: {expected:?}",
+    );
+    for (actual_ty, expected_ty) in actual_type_arguments.iter().zip(&expected_type_arguments) {
+        assert_expected_type(actual_ty, expected_ty)?;
+    }
+    Ok(())
+}
+
+/// Assert the type inferred matches the expected type. This has already been done during typing,
+/// but is checked again as an invariant. This may be removed safely at a later time if needed.
+fn assert_expected_type(actual: &Type, expected: &TypeTag) -> Result<(), ExecutionError> {
+    match (actual, expected) {
+        (Type::Bool, TypeTag::Bool)
+        | (Type::U8, TypeTag::U8)
+        | (Type::U16, TypeTag::U16)
+        | (Type::U32, TypeTag::U32)
+        | (Type::U64, TypeTag::U64)
+        | (Type::U128, TypeTag::U128)
+        | (Type::U256, TypeTag::U256)
+        | (Type::Address, TypeTag::Address)
+        | (Type::Signer, TypeTag::Signer) => Ok(()),
+        (Type::Vector(inner_actual), TypeTag::Vector(inner_expected)) => {
+            assert_expected_type(&inner_actual.element_type, inner_expected)
+        }
+        (Type::Datatype(actual_dt), TypeTag::Struct(expected_st)) => {
+            assert_expected_data_type(actual_dt, expected_st)
+        }
+        _ => invariant_violation!(
+            "Type mismatch between actual: {actual:?} and expected: {expected:?}"
+        ),
+    }
+}
+/// Assert the type inferred matches the expected type. This has already been done during typing,
+/// but is checked again as an invariant. This may be removed safely at a later time if needed.
+fn assert_expected_data_type(
+    actual: &Datatype,
+    expected: &StructTag,
+) -> Result<(), ExecutionError> {
+    let (a, m, n) = actual.qualified_ident();
+    assert_invariant!(
+        a == &expected.address,
+        "Actual address does not match expected. actual: {actual:?} vs expected: {expected:?}"
+    );
+    assert_invariant!(
+        m == expected.module.as_ident_str(),
+        "Actual module does not match expected. actual: {actual:?} vs expected: {expected:?}"
+    );
+    assert_invariant!(
+        n == expected.name.as_ident_str(),
+        "Actual struct does not match expected. actual: {actual:?} vs expected: {expected:?}"
+    );
+    let actual_type_arguments = &actual.type_arguments;
+    let expected_type_arguments = &expected.type_params;
+    assert_invariant!(
+        actual_type_arguments.len() == expected_type_arguments.len(),
+        "Actual type arg length does not match expected. \
+       actual: {actual:?} vs expected: {expected:?}",
+    );
+    for (actual_ty, expected_ty) in actual_type_arguments.iter().zip(expected_type_arguments) {
+        assert_expected_type(actual_ty, expected_ty)?;
+    }
+    Ok(())
 }
