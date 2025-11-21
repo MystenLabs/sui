@@ -76,7 +76,7 @@ pub struct TransactionOrchestrator<A: Clone> {
     pending_tx_log: Arc<WritePathPendingTransactionLog>,
     notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
     metrics: Arc<TransactionOrchestratorMetrics>,
-    transaction_driver: Option<Arc<TransactionDriver<A>>>,
+    transaction_driver: Arc<TransactionDriver<A>>,
     td_percentage: u8,
     td_allowed_submission_list: Vec<String>,
     td_blocked_submission_list: Vec<String>,
@@ -133,40 +133,23 @@ where
                 .start(),
         );
 
-        let effects_receiver = quorum_driver_handler.subscribe_to_effects();
-        let metrics = Arc::new(TransactionOrchestratorMetrics::new(prometheus_registry));
-        let pending_tx_log = Arc::new(WritePathPendingTransactionLog::new(
-            parent_path.join("fullnode_pending_transactions"),
-        ));
-        let _local_executor_handle = {
-            let pending_tx_log = pending_tx_log.clone();
-            spawn_monitored_task!(async move {
-                Self::loop_pending_transaction_log(effects_receiver, pending_tx_log).await;
-            })
-        };
-        Self::schedule_txes_in_log(pending_tx_log.clone(), quorum_driver_handler.clone());
+        let td_metrics = Arc::new(TransactionDriverMetrics::new(prometheus_registry));
+        let client_metrics = Arc::new(
+            crate::validator_client_monitor::ValidatorClientMetrics::new(prometheus_registry),
+        );
+        let transaction_driver = TransactionDriver::new(
+            validators.clone(),
+            reconfig_observer.clone(),
+            td_metrics,
+            Some(node_config),
+            client_metrics,
+        );
 
         let epoch_store = validator_state.load_epoch_store_one_call_per_task();
         let td_percentage = if !epoch_store.protocol_config().mysticeti_fastpath() {
             0
         } else {
             choose_transaction_driver_percentage(Some(epoch_store.get_chain_identifier()))
-        };
-
-        let transaction_driver = if td_percentage > 0 {
-            let td_metrics = Arc::new(TransactionDriverMetrics::new(prometheus_registry));
-            let client_metrics = Arc::new(
-                crate::validator_client_monitor::ValidatorClientMetrics::new(prometheus_registry),
-            );
-            Some(TransactionDriver::new(
-                validators.clone(),
-                reconfig_observer.clone(),
-                td_metrics,
-                Some(node_config),
-                client_metrics,
-            ))
-        } else {
-            None
         };
 
         let td_allowed_submission_list = node_config
@@ -187,6 +170,19 @@ where
                 td_allowed_submission_list, td_blocked_submission_list
             );
         }
+
+        let effects_receiver = quorum_driver_handler.subscribe_to_effects();
+        let metrics = Arc::new(TransactionOrchestratorMetrics::new(prometheus_registry));
+        let pending_tx_log = Arc::new(WritePathPendingTransactionLog::new(
+            parent_path.join("fullnode_pending_transactions"),
+        ));
+        let _local_executor_handle = {
+            let pending_tx_log = pending_tx_log.clone();
+            spawn_monitored_task!(async move {
+                Self::loop_pending_transaction_log(effects_receiver, pending_tx_log).await;
+            })
+        };
+        Self::recover_txes_in_log(pending_tx_log.clone(), transaction_driver.clone());
 
         let enable_early_validation = node_config
             .transaction_driver_config
@@ -601,15 +597,14 @@ where
         });
 
         // Select TransactionDriver or QuorumDriver for submission.
-        let (response, driver_type) = if self.transaction_driver.is_some()
-            && self.should_use_transaction_driver(epoch_store, tx_digest)
+        let (response, driver_type) = if self.should_use_transaction_driver(epoch_store, tx_digest)
         {
             // Mark that we're using TD before submitting.
             using_td.store(true, Ordering::Release);
 
             (
                 self.submit_with_transaction_driver(
-                    self.transaction_driver.as_ref().unwrap(),
+                    &self.transaction_driver,
                     &request,
                     client_addr,
                     &verified_transaction,
@@ -881,7 +876,7 @@ where
     }
 
     pub fn clone_authority_aggregator(&self) -> Arc<AuthorityAggregator<A>> {
-        self.quorum_driver().authority_aggregator().load_full()
+        self.transaction_driver.authority_aggregator().load_full()
     }
 
     fn update_metrics<'a>(
@@ -910,9 +905,9 @@ where
         )
     }
 
-    fn schedule_txes_in_log(
+    fn recover_txes_in_log(
         pending_tx_log: Arc<WritePathPendingTransactionLog>,
-        quorum_driver: Arc<QuorumDriverHandler<A>>,
+        transaction_driver: Arc<TransactionDriver<A>>,
     ) {
         spawn_logged_monitored_task!(async move {
             if std::env::var("SKIP_LOADING_FROM_PENDING_TX_LOG").is_ok() {
@@ -933,32 +928,30 @@ where
                 let tx_digest = *tx.digest();
                 // It's not impossible we fail to enqueue a task but that's not the end of world.
                 // TODO(william) correctly extract client_addr from logs
-                if let Err(err) = quorum_driver
-                    .submit_transaction_no_ticket(
-                        ExecuteTransactionRequestV3 {
-                            transaction: tx,
-                            include_events: true,
-                            include_input_objects: false,
-                            include_output_objects: false,
-                            include_auxiliary_data: false,
-                        },
-                        None,
+                if let Err(err) = transaction_driver
+                    .drive_transaction(
+                        SubmitTxRequest::new_transaction(tx),
+                        SubmitTransactionOptions::default(),
+                        Some(Duration::from_secs(30)),
                     )
                     .await
                 {
-                    warn!(
-                        ?tx_digest,
-                        "Failed to enqueue transaction from pending_tx_log, err: {err:?}"
-                    );
+                    warn!(?tx_digest, "Failed to execute recovered transaction: {err}");
                 } else {
-                    debug!("Enqueued transaction from pending_tx_log");
+                    debug!(?tx_digest, "Executed recovered transaction");
                     if (i + 1) % 1000 == 0 {
-                        info!("Enqueued {} transactions from pending_tx_log.", i + 1);
+                        info!("Executed {} transactions from pending_tx_log.", i + 1);
                     }
                 }
+                if let Err(err) = pending_tx_log.finish_transaction(&tx_digest) {
+                    warn!(
+                        ?tx_digest,
+                        "Failed to clean up transaction in pending log: {err}"
+                    );
+                } else {
+                    debug!(?tx_digest, "Cleaned up transaction in pending log");
+                }
             }
-            // Transactions will be cleaned up in loop_execute_finalized_tx_locally() after they
-            // produce effects.
         });
     }
 
