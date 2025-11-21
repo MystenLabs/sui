@@ -22,6 +22,7 @@ use bridge::treasury::{Self, BridgeTreasury};
 use sui::address;
 use sui::clock::Clock;
 use sui::coin::{Coin, TreasuryCap, CoinMetadata};
+use sui::coin_registry::Currency;
 use sui::event;
 use sui::linked_table::{Self, LinkedTable};
 use sui::package::UpgradeCap;
@@ -193,6 +194,7 @@ public fun update_node_url(bridge: &mut Bridge, new_url: vector<u8>, ctx: &TxCon
     load_inner_mut(bridge).committee.update_node_url(new_url, ctx);
 }
 
+#[deprecated(note = b"Use `register_foreign_token_v2` instead")]
 public fun register_foreign_token<T>(
     bridge: &mut Bridge,
     tc: TreasuryCap<T>,
@@ -200,6 +202,15 @@ public fun register_foreign_token<T>(
     metadata: &CoinMetadata<T>,
 ) {
     load_inner_mut(bridge).treasury.register_foreign_token<T>(tc, uc, metadata)
+}
+
+public fun register_foreign_token_v2<T>(
+    bridge: &mut Bridge,
+    tc: TreasuryCap<T>,
+    uc: UpgradeCap,
+    currency: &Currency<T>,
+) {
+    load_inner_mut(bridge).treasury.register_foreign_token_v2<T>(tc, uc, currency)
 }
 
 // Create bridge request to send token to other chain, the request will be in
@@ -216,7 +227,9 @@ public fun send_token<T>(
     assert!(chain_ids::is_valid_route(inner.chain_id, target_chain), EInvalidBridgeRoute);
     assert!(target_address.length() == EVM_ADDRESS_LENGTH, EInvalidEvmAddress);
 
-    let bridge_seq_num = inner.get_current_seq_num_and_increment(message_types::token());
+    let bridge_seq_num = inner.get_current_seq_num_and_increment(
+        message_types::token(),
+    );
     let token_id = inner.treasury.token_id<T>();
     let token_amount = token.balance().value();
     assert!(token_amount > 0, ETokenValueIsZero);
@@ -276,7 +289,8 @@ public fun approve_token_transfer(
     let token_payload = message.extract_token_bridge_payload();
     let target_chain = token_payload.token_target_chain();
     assert!(
-        message.source_chain() == inner.chain_id || target_chain == inner.chain_id,
+        message.source_chain() == inner.chain_id ||
+        target_chain == inner.chain_id,
         EUnexpectedChainID,
     );
 
@@ -352,7 +366,12 @@ public fun claim_and_transfer_token<T>(
     bridge_seq_num: u64,
     ctx: &mut TxContext,
 ) {
-    let (token, owner) = bridge.claim_token_internal<T>(clock, source_chain, bridge_seq_num, ctx);
+    let (token, owner) = bridge.claim_token_internal<T>(
+        clock,
+        source_chain,
+        bridge_seq_num,
+        ctx,
+    );
     if (token.is_some()) {
         transfer::public_transfer(token.destroy_some(), owner)
     } else {
@@ -374,7 +393,9 @@ public fun execute_system_message(
     assert!(message.source_chain() == inner.chain_id, EUnexpectedChainID);
 
     // check system ops seq number and increment it
-    let expected_seq_num = inner.get_current_seq_num_and_increment(message_type);
+    let expected_seq_num = inner.get_current_seq_num_and_increment(
+        message_type,
+    );
     assert!(message.seq_num() == expected_seq_num, EUnexpectedSeqNum);
 
     inner.committee.verify_signatures(message, signatures);
@@ -484,7 +505,11 @@ fun claim_token_internal<T>(
     let inner = load_inner_mut(bridge);
     assert!(!inner.paused, EBridgeUnavailable);
 
-    let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
+    let key = message::create_key(
+        source_chain,
+        message_types::token(),
+        bridge_seq_num,
+    );
     assert!(inner.token_transfer_records.contains(key), EMessageNotFoundInRecords);
 
     // retrieve approved bridge message
