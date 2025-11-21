@@ -5,7 +5,9 @@ pub mod deserialization;
 pub mod verification;
 
 use crate::{
-    dbg_println, natives::functions::NativeFunctions, shared::types::OriginalId,
+    dbg_println,
+    natives::functions::NativeFunctions,
+    shared::types::{OriginalId, VersionId},
     validation::verification::linkage::verify_linkage_and_cyclic_checks_for_publication,
 };
 
@@ -31,7 +33,7 @@ pub fn validate_for_publish(
     vm_config: &VMConfig,
     original_id: OriginalId,
     package: SerializedPackage,
-    dependencies: BTreeMap<OriginalId, &verification::ast::Package>,
+    dependencies: BTreeMap<VersionId, &verification::ast::Package>,
 ) -> VMResult<verification::ast::Package> {
     dbg_println!(
         "doing verification with linkage context {:#?}\nand type origins {:#?}",
@@ -59,17 +61,9 @@ pub fn validate_for_publish(
     Ok(validated_package)
 }
 
-pub fn validate_for_upgrade(
-    _previous: verification::ast::Package,
-    _package: SerializedPackage,
-    _dependencies: BTreeMap<OriginalId, verification::ast::Package>,
-) -> VMResult<verification::ast::Package> {
-    todo!()
-}
-
 /// Verify a set of packages for VM execution, ensuring linkage is correct and there are no cycles.
 pub fn validate_for_vm_execution(
-    packages: BTreeMap<OriginalId, &verification::ast::Package>,
+    packages: BTreeMap<VersionId, &verification::ast::Package>,
 ) -> VMResult<()> {
     verify_linkage_and_cyclic_checks(&packages)
 }
