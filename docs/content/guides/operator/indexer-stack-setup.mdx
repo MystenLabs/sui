@@ -294,9 +294,9 @@ $ sui-indexer-alt-consistent-store run \
 	<ImportContent source="examples/prod-config/consistent-store.toml" mode="code" />
 </details>
 
-## GraphQL server setup
+## GraphQL RPC server setup
 
-GraphQL server instances read data from the indexer db, the consistent store and the archival store. The number of instances is determined by the required read throughput.
+GraphQL RPC server reads data from the general-purpose indexer's database (Postgres), the consistent store, and the [archival service](/concepts/archival-store).
 
 #### Hardware requirements
 
@@ -305,7 +305,7 @@ GraphQL server instances read data from the indexer db, the consistent store and
 
 ### Run command
 
-GraphQL server supports two ways to access the archival store: self-hosted Bigtable instance, or a managed archival service that exposes a LedgerService gRPC interface. See [Archival Store](/concepts/archival-store) for more information.
+GraphQL RPC server can access the [Archival Service](https://github.com/concepts/archival-store) by connecting either to a self-hosted service backed by your own Bigtable cluster or to a managed service operated by an RPC provider.
 
 #### Run command using Bigtable
 
@@ -370,7 +370,9 @@ sui-indexer-alt-graphql rpc \
 
 ### Run config recommendations
 
-| Config TOML                                                                                   | Description                       |
+The default GraphQL API configuration is provided in the `examples` directory of the Sui repo.
+
+<ImportContent source="examples/prod-config/graphql.toml" mode="code" />
 |-----------------------------------------------------------------------------------------------|-----------------------------------|
 | [graphql.toml](examples/prod-config/graphql.toml) | default GraphQL API configuration |
 
