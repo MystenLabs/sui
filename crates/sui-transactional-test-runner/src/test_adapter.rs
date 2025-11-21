@@ -269,7 +269,7 @@ impl AdapterInitConfig {
             ProtocolConfig::get_for_max_version_UNSAFE()
         };
         if enable_accumulators {
-            protocol_config.enable_accumulators_for_testing();
+            protocol_config.set_enable_accumulators_for_testing(true);
         }
         if enable_authenticated_event_streams {
             protocol_config.enable_authenticated_event_streams_for_testing();

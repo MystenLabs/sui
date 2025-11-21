@@ -1880,7 +1880,7 @@ redeem_funds
 	public fun
 	0x2::balance
 withdraw_funds_from_object
-	public(package) fun
+	public fun
 	0x2::balance
 create_supply_internal
 	public(package) fun

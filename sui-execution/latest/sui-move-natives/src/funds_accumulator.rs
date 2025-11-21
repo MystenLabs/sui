@@ -138,7 +138,14 @@ pub fn withdraw_from_accumulator_address(
         return Ok(NativeResult::err(context.gas_used(), E_OVERFLOW));
     };
 
+    let cost = context.gas_used();
+
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+
+    if !obj_runtime.protocol_config.enable_accumulators() {
+        return Ok(NativeResult::err(cost, E_ADDRESS_BALANCE_NOT_ENABLED));
+    }
+
     obj_runtime.emit_accumulator_event(
         accumulator,
         MoveAccumulatorAction::Split,

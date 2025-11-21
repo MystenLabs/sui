@@ -1014,7 +1014,7 @@ mod tests {
             // Create a shared object for testing
             let shared_objects = vec![Object::shared_for_testing()];
             let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-            config.enable_accumulators_for_testing();
+            config.set_enable_accumulators_for_testing(true);
             let authority = TestAuthorityBuilder::new()
                 .with_starting_objects(&shared_objects)
                 .with_protocol_config(config)

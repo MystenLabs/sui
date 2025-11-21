@@ -16,7 +16,7 @@ use crate::{
 
 fn protocol_config() -> ProtocolConfig {
     let mut cfg = ProtocolConfig::get_for_max_version_UNSAFE();
-    cfg.enable_accumulators_for_testing();
+    cfg.set_enable_accumulators_for_testing(true);
     cfg
 }
 

@@ -105,7 +105,7 @@ async fn test_accumulators_root_created() {
             cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
         }
         if version == ProtocolVersion::MAX_ALLOWED {
-            cfg.enable_accumulators_for_testing();
+            cfg.set_enable_accumulators_for_testing(true);
         }
         cfg
     });
@@ -176,7 +176,7 @@ async fn test_accumulators_disabled() {
             cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
         }
         if version == ProtocolVersion::MAX_ALLOWED {
-            cfg.enable_accumulators_for_testing();
+            cfg.set_enable_accumulators_for_testing(true);
         }
         cfg
     });
@@ -293,7 +293,7 @@ async fn test_accumulators_disabled() {
 async fn test_deposits() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
+        cfg.set_enable_accumulators_for_testing(true);
         cfg
     });
 
@@ -347,7 +347,7 @@ async fn test_deposits() {
 #[sim_test]
 async fn test_multiple_settlement_txns() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_accumulators_for_testing();
+        cfg.set_enable_accumulators_for_testing(true);
         cfg.set_max_updates_per_settlement_txn_for_testing(3);
         cfg
     });
@@ -463,7 +463,7 @@ fn verify_accumulator_exists(
 async fn test_deposit_and_withdraw() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
+        cfg.set_enable_accumulators_for_testing(true);
         cfg
     });
 
@@ -510,7 +510,7 @@ async fn test_deposit_and_withdraw() {
 async fn test_deposit_and_withdraw_with_larger_reservation() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
+        cfg.set_enable_accumulators_for_testing(true);
         cfg
     });
 
@@ -543,7 +543,7 @@ async fn test_deposit_and_withdraw_with_larger_reservation() {
 async fn test_withdraw_non_existent_balance() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
+        cfg.set_enable_accumulators_for_testing(true);
         cfg
     });
 
@@ -572,7 +572,7 @@ async fn test_withdraw_non_existent_balance() {
 async fn test_withdraw_insufficient_balance() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
+        cfg.set_enable_accumulators_for_testing(true);
         cfg
     });
 
@@ -2287,7 +2287,7 @@ async fn test_soft_bundle_different_gas_payers() {
 async fn test_multiple_deposits_merged_in_effects() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
+        cfg.set_enable_accumulators_for_testing(true);
         cfg
     });
 
