@@ -8,17 +8,20 @@ use std::{
 };
 
 use derive_where::derive_where;
+use tempfile::tempdir;
 use tracing::debug;
 
 use super::manifest::Manifest;
 use super::paths::PackagePath;
 use super::{compute_digest, package_lock::PackageSystemLock};
-use crate::compatibility::legacy::LegacyData;
 use crate::dependency::FetchedDependency;
 use crate::errors::FileHandle;
 use crate::{
+    compatibility::legacy::LegacyData,
     dependency::Pinned,
-    schema::{ParsedManifest, Publication},
+    schema::{
+        CachedPackageInfo, DefaultDependency, ManifestDependencyInfo, ParsedManifest, Publication,
+    },
 };
 use crate::{
     dependency::{CombinedDependency, PinnedDependencyInfo},
@@ -286,6 +289,51 @@ impl<F: MoveFlavor> Package<F> {
     }
 }
 
+/// Ensure that the dependency given by `dep_info` is cached on disk, and return information
+/// about its publication in `env`
+pub async fn cache_package<F: MoveFlavor>(
+    env: &Environment,
+    manifest_dep: &ManifestDependencyInfo,
+) -> PackageResult<CachedPackageInfo> {
+    // We need some file handles and things to give context to the dep loading system
+    let tempdir = tempdir().expect("can create a temporary directory");
+    let toml_path = tempdir.path().join("Move.toml");
+    std::fs::write(&toml_path, "").expect("can write to temporary file");
+
+    let toml_handle = FileHandle::new(toml_path).expect("can load a newly created tempfile");
+    let dummy_path = PackagePath::new(tempdir.path().to_path_buf())
+        .expect("temporary directory is a valid package");
+
+    let mtx = dummy_path.lock().expect("can lock the temporary directory");
+    let package = PackageName::new("unknown").expect("`unknown` is a valid identifier");
+
+    // Create the manifest dependency
+    let default_dep = DefaultDependency {
+        dependency_info: manifest_dep.clone(),
+        is_override: false,
+        rename_from: None,
+        modes: None,
+    };
+
+    // convert to a combined dependency
+    let combined =
+        CombinedDependency::from_default(toml_handle, package, env.name().clone(), default_dep);
+
+    // pin
+    let root = Pinned::Root(dummy_path);
+    let deps = PinnedDependencyInfo::pin::<F>(&root, vec![combined], env.id()).await?;
+
+    // load
+    let package = Package::<F>::load(deps[0].as_ref().clone(), env, &mtx).await?;
+
+    // summarize
+    Ok(CachedPackageInfo {
+        name: package.name().clone(),
+        addresses: package.publication().map(|p| p.addresses.clone()),
+        chain_id: env.id.clone(),
+    })
+}
+
 /// Return a fresh OriginalID
 fn create_dummy_addr() -> OriginalID {
     let lock = DUMMY_ADDRESSES.lock();
@@ -325,9 +373,12 @@ fn check_for_environment<F: MoveFlavor>(
 #[cfg(test)]
 mod tests {
     use crate::{
-        flavor::vanilla::{DEFAULT_ENV_ID, DEFAULT_ENV_NAME, default_environment},
+        flavor::vanilla::{DEFAULT_ENV_ID, DEFAULT_ENV_NAME, Vanilla, default_environment},
         package::RootPackage,
-        schema::{LocalDepInfo, LockfileDependencyInfo, ReplacementDependency, SystemDepName},
+        schema::{
+            LocalDepInfo, LockfileDependencyInfo, PublishAddresses, ReplacementDependency,
+            SystemDepName,
+        },
         test_utils::graph_builder::TestPackageGraph,
     };
 
@@ -479,5 +530,36 @@ mod tests {
 
     fn new_package_name(name: &str) -> PackageName {
         PackageName::new(name.to_string()).unwrap()
+    }
+
+    /// Create a basic package and then call cache_package on a local dependency to it; check that
+    /// the returned fields are correct
+    #[test(tokio::test)]
+    async fn test_cache_package() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_published("a", OriginalID::from(1), PublishedID::from(2))
+            .build();
+
+        let path = scenario.path_for("a");
+        let env = default_environment();
+        let dep = &ManifestDependencyInfo::Local(LocalDepInfo { local: path });
+
+        let info = cache_package::<Vanilla>(&env, dep).await.unwrap();
+
+        let CachedPackageInfo {
+            name,
+            addresses,
+            chain_id,
+        } = info;
+
+        let PublishAddresses {
+            published_at,
+            original_id,
+        } = addresses.unwrap();
+
+        assert_eq!(name.as_str(), "a");
+        assert_eq!(published_at, PublishedID::from(2));
+        assert_eq!(original_id, OriginalID::from(1));
+        assert_eq!(chain_id, DEFAULT_ENV_ID);
     }
 }

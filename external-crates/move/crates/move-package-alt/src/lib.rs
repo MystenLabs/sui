@@ -17,5 +17,5 @@ pub mod package;
 pub mod schema;
 pub mod test_utils;
 
-pub use dependency::cache_package;
+pub use package::package_impl::cache_package;
 pub use package::paths::read_name_from_manifest;

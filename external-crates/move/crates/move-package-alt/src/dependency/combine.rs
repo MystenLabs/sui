@@ -83,7 +83,7 @@ impl CombinedDependency {
 
     /// Specialize an entry in the `[dependencies]` section, for the environment named
     /// `source_env_name`
-    pub fn from_default(
+    pub(crate) fn from_default(
         file: FileHandle,
         name: PackageName,
         source_env_name: EnvironmentName,
