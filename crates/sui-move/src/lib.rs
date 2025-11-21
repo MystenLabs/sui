@@ -7,6 +7,7 @@ use move_package_alt_compilation::build_config::BuildConfig;
 use std::path::Path;
 
 pub mod build;
+pub mod cache_package;
 pub mod coverage;
 pub mod disassemble;
 pub mod migrate;
@@ -19,6 +20,8 @@ pub mod update_deps;
 pub enum Command {
     Build(build::Build),
     Coverage(coverage::Coverage),
+    #[command(hide = true)]
+    CachePackage(cache_package::CachePackage),
     Disassemble(disassemble::Disassemble),
     Migrate(migrate::Migrate),
     New(new::New),
@@ -41,6 +44,7 @@ pub async fn execute_move_command(
 ) -> anyhow::Result<()> {
     match command {
         Command::Build(c) => c.execute(package_path, build_config),
+        Command::CachePackage(c) => c.execute().await,
         Command::Coverage(c) => c.execute(package_path, build_config).await,
         Command::Disassemble(c) => c.execute(package_path, build_config).await,
         Command::Migrate(c) => c.execute(package_path, build_config).await,

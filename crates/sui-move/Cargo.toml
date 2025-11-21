@@ -19,6 +19,7 @@ prometheus.workspace = true
 bin-version.workspace = true
 serde.workspace = true
 futures.workspace = true
+toml.workspace = true
 
 move-binary-format.workspace = true
 move-cli.workspace = true

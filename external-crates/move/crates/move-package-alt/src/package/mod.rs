@@ -4,7 +4,7 @@
 pub mod layout;
 pub mod lockfile;
 pub mod manifest;
-mod package_impl;
+pub mod package_impl;
 pub mod package_lock;
 pub mod paths;
 pub mod root_package;

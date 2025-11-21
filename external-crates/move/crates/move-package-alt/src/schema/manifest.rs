@@ -189,6 +189,9 @@ impl<'de> Deserialize<'de> for ManifestDependencyInfo {
             if tbl.contains_key("git") {
                 let dep = ManifestGitDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(ManifestDependencyInfo::Git(dep))
+            } else if tbl.contains_key("system") {
+                let dep = SystemDependency::deserialize(data).map_err(de::Error::custom)?;
+                Ok(ManifestDependencyInfo::System(dep))
             } else if tbl.contains_key("r") {
                 let dep = ExternalDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(ManifestDependencyInfo::External(dep))
@@ -200,7 +203,7 @@ impl<'de> Deserialize<'de> for ManifestDependencyInfo {
                 Ok(ManifestDependencyInfo::OnChain(dep))
             } else {
                 Err(de::Error::custom(
-                    "Invalid dependency; dependencies must have exactly one of the following fields: `git`, `r.<resolver>`, `local`, or `on-chain`.",
+                    "Invalid dependency; dependencies must have exactly one of the following fields: `system`, `git`, `r.<resolver>`, `local`, or `on-chain`.",
                 ))
             }
         } else {
@@ -333,6 +336,7 @@ mod tests {
             foo = { git = "https://example.com/foo.git", rev = "releases/v1", rename-from = "Foo", override = true}
             qwer = { r.mvr = "@pkg/qwer" }
             tester = { local = "../tester", modes = ["test"] }
+            system = { system = "foo" }
 
             [dep-replacements]
             # used to replace dependencies for specific environments
@@ -476,7 +480,7 @@ mod tests {
           |
         7 |             foo = { rename-from = "Foo", override = true, rev = "releases/v1" }
           |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        Invalid dependency; dependencies must have exactly one of the following fields: `git`, `r.<resolver>`, `local`, or `on-chain`.
+        Invalid dependency; dependencies must have exactly one of the following fields: `system`, `git`, `r.<resolver>`, `local`, or `on-chain`.
         "###);
     }
 
@@ -500,7 +504,7 @@ mod tests {
           |
         7 |             foo = {}
           |                   ^^
-        Invalid dependency; dependencies must have exactly one of the following fields: `git`, `r.<resolver>`, `local`, or `on-chain`.
+        Invalid dependency; dependencies must have exactly one of the following fields: `system`, `git`, `r.<resolver>`, `local`, or `on-chain`.
         "###);
     }
 
