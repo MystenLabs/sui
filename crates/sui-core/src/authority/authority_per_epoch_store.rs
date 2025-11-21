@@ -1327,6 +1327,12 @@ impl AuthorityPerEpochStore {
         self.epoch_start_configuration.bridge_committee_initiated()
     }
 
+    pub fn alias_state_exists(&self) -> bool {
+        self.epoch_start_configuration
+            .alias_state_obj_initial_shared_version()
+            .is_some()
+    }
+
     pub fn get_parent_path(&self) -> PathBuf {
         self.parent_path.clone()
     }

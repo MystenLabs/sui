@@ -79,6 +79,9 @@ pub const REGISTRY_CREATE_FUNCTION_NAME: Symbol = symbol!("create");
 
 pub const DISPLAY_REGISTRY_MODULE_NAME: Symbol = symbol!("display_registry");
 
+pub const ALIAS_MODULE_NAME: Symbol = symbol!("alias");
+pub const ALIAS_CREATE: Symbol = symbol!("create");
+
 pub const TRANSFER_MODULE_NAME: Symbol = symbol!("transfer");
 pub const TRANSFER_FUNCTION_NAME: Symbol = symbol!("transfer");
 pub const FREEZE_FUNCTION_NAME: Symbol = symbol!("freeze_object");

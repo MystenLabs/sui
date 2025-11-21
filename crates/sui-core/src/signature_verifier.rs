@@ -15,7 +15,7 @@ use parking_lot::{Mutex, MutexGuard, RwLock};
 use prometheus::{IntCounter, Registry, register_int_counter_with_registry};
 use shared_crypto::intent::Intent;
 use std::sync::Arc;
-use sui_types::authenticator_state;
+use sui_types::alias;
 use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::digests::SenderSignedDataDigest;
 use sui_types::digests::ZKLoginInputsDigest;
@@ -426,10 +426,8 @@ impl SignatureVerifier {
                 aliases.push((signer, NonEmpty::singleton(signer)));
             } else {
                 // Look up aliases for the signer using the derived object address.
-                let address_aliases = authenticator_state::get_address_aliases_from_store(
-                    &self.object_store,
-                    signer,
-                )?;
+                let address_aliases =
+                    alias::get_address_aliases_from_store(&self.object_store, signer)?;
 
                 versions.push((signer, address_aliases.as_ref().map(|(_, v)| *v)));
                 aliases.push((

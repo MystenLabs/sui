@@ -483,6 +483,7 @@ pub enum EndOfEpochTransactionKind {
     AccumulatorRootCreate,
     CoinRegistryCreate,
     DisplayRegistryCreate,
+    AliasStateCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -542,6 +543,10 @@ impl EndOfEpochTransactionKind {
         Self::DenyListStateCreate
     }
 
+    pub fn new_alias_state_create() -> Self {
+        Self::AliasStateCreate
+    }
+
     pub fn new_bridge_create(chain_identifier: ChainIdentifier) -> Self {
         Self::BridgeStateCreate(chain_identifier)
     }
@@ -598,6 +603,7 @@ impl EndOfEpochTransactionKind {
             Self::AccumulatorRootCreate => vec![],
             Self::CoinRegistryCreate => vec![],
             Self::DisplayRegistryCreate => vec![],
+            Self::AliasStateCreate => vec![],
         }
     }
 
@@ -635,6 +641,7 @@ impl EndOfEpochTransactionKind {
             Self::AccumulatorRootCreate => Either::Right(iter::empty()),
             Self::CoinRegistryCreate => Either::Right(iter::empty()),
             Self::DisplayRegistryCreate => Either::Right(iter::empty()),
+            Self::AliasStateCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -709,6 +716,13 @@ impl EndOfEpochTransactionKind {
                 if !config.enable_display_registry() {
                     return Err(UserInputError::Unsupported(
                         "display registry not enabled".to_string(),
+                    ));
+                }
+            }
+            Self::AliasStateCreate => {
+                if !config.account_aliases() {
+                    return Err(UserInputError::Unsupported(
+                        "account aliases not enabled".to_string(),
                     ));
                 }
             }

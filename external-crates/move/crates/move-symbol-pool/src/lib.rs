@@ -105,6 +105,7 @@ static_symbols!(
     "test",
     "utf8",
     "display_registry",
+    "alias",
 );
 
 /// The global, unique cache of strings.

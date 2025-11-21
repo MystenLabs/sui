@@ -9020,7 +9020,8 @@
               "StoreExecutionTimeObservations",
               "AccumulatorRootCreate",
               "CoinRegistryCreate",
-              "DisplayRegistryCreate"
+              "DisplayRegistryCreate",
+              "AliasStateCreate"
             ]
           },
           {

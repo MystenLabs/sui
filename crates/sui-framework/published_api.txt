@@ -1351,6 +1351,9 @@ sui_coin_registry_address
 bridge
 	fun
 	0x2::object
+alias_state
+	public(package) fun
+	0x2::object
 uid_as_inner
 	public fun
 	0x2::object
@@ -1801,6 +1804,30 @@ exists
 derive_address
 	public fun
 	0x2::derived_object
+AliasState
+	public struct
+	0x2::alias
+AddressAliases
+	public struct
+	0x2::alias
+AliasKey
+	public struct
+	0x2::alias
+create
+	fun
+	0x2::alias
+init_aliases
+	entry fun
+	0x2::alias
+add_alias
+	entry fun
+	0x2::alias
+set_aliases
+	entry fun
+	0x2::alias
+remove_alias
+	entry fun
+	0x2::alias
 AuthenticatorState
 	public struct
 	0x2::authenticator_state
@@ -1814,12 +1841,6 @@ JwkId
 	public struct
 	0x2::authenticator_state
 ActiveJwk
-	public struct
-	0x2::authenticator_state
-AddressAliases
-	public struct
-	0x2::authenticator_state
-AliasKey
 	public struct
 	0x2::authenticator_state
 active_jwk_equal
@@ -1860,18 +1881,6 @@ expire_jwks
 	0x2::authenticator_state
 get_active_jwks
 	fun
-	0x2::authenticator_state
-init_aliases
-	entry fun
-	0x2::authenticator_state
-add_alias
-	entry fun
-	0x2::authenticator_state
-set_aliases
-	entry fun
-	0x2::authenticator_state
-remove_alias
-	entry fun
 	0x2::authenticator_state
 Withdrawal
 	public struct
