@@ -43,6 +43,8 @@ struct BigTableTaskConfig {
     instance_id: String,
     timeout_secs: usize,
     credentials: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    app_profile_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -129,7 +131,7 @@ async fn main() -> Result<()> {
                 Some(Duration::from_secs(kv_config.timeout_secs as u64)),
                 "ingestion".to_string(),
                 None,
-                None,
+                kv_config.app_profile_id.clone(),
             )
             .await?;
             bigtable_store = Some(BigTableProgressStore::new(bigtable_client));
@@ -163,7 +165,7 @@ async fn main() -> Result<()> {
                     Some(Duration::from_secs(kv_config.timeout_secs as u64)),
                     "ingestion".to_string(),
                     None,
-                    None,
+                    kv_config.app_profile_id,
                 )
                 .await?;
                 let worker_pool = WorkerPool::new(

@@ -35,7 +35,8 @@ use sui_types::{
 
 use crate::authority::authority_test_utils::send_batch_consensus_no_execution;
 use crate::authority::authority_tests::{call_move_, create_gas_objects, publish_object_basics};
-use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
+use crate::consensus_test_utils::make_consensus_adapter_for_test;
+use crate::consensus_test_utils::setup_consensus_handler_for_testing;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
@@ -2206,8 +2207,18 @@ async fn test_handle_soft_bundle_certificates_errors() {
             let signed = to_sender_signed_transaction(data, &senders[9].1);
             signed_tx_into_certificate(signed).await
         };
-        send_batch_consensus_no_execution(&authority, &vec![cert0.clone(), cert1.clone()], true)
-            .await;
+        // Set up ConsensusHandler for testing
+        let consensus_setup = setup_consensus_handler_for_testing(&authority).await;
+        let mut consensus_handler = consensus_setup.consensus_handler;
+        let captured_transactions = consensus_setup.captured_transactions;
+
+        send_batch_consensus_no_execution(
+            &authority,
+            &vec![cert0.clone(), cert1.clone()],
+            &mut consensus_handler,
+            &captured_transactions,
+        )
+        .await;
         let response = client
             .handle_soft_bundle_certificates_v3(
                 HandleSoftBundleCertificatesRequestV3 {

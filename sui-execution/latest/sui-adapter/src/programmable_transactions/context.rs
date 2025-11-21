@@ -45,6 +45,7 @@ mod checked {
     };
     use move_vm_types::loaded_data::runtime_types::Type;
     use mysten_common::debug_fatal;
+    use nonempty::nonempty;
     use std::{
         borrow::Borrow,
         cell::RefCell,
@@ -1551,7 +1552,7 @@ mod checked {
                             );
                         };
                         let digest = event.digest();
-                        AccumulatorValue::EventDigest(event_idx, digest)
+                        AccumulatorValue::EventDigest(nonempty![(event_idx, digest)])
                     }
                 };
 
@@ -1916,6 +1917,12 @@ mod checked {
                 };
                 let owner = match withdraw_from {
                     WithdrawFrom::Sender => tx_context.sender(),
+                    WithdrawFrom::Sponsor => {
+                        invariant_violation!(
+                            "WithdrawFrom::Sponsor call arg not supported, \
+                            should have been checked at signing"
+                        );
+                    }
                 };
                 // After this point, we can treat this like any other returned/loaded value, e.g.
                 // from a Move call. As such, sanity check Withdrawal should have only drop.

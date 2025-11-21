@@ -234,17 +234,27 @@ fn compute_post_dominators<N, E>(
         graph.edge_references().map(|e| (e.target(), e.source())),
     );
     let return_: NodeIndex = graph.add_node(());
+    if config.debug_print.control_flow_graph {
+        println!("Return node: {return_:?}");
+    }
     for node in graph.node_indices() {
+        // Skip nodes that don't exist in the input
+        if !input.contains_key(&node) {
+            continue;
+        }
+        // Skip the return node and nodes that have outgoing edges
         if node != return_
             && graph
                 .neighbors_directed(node, petgraph::Direction::Incoming)
                 .count()
                 == 0
         {
+            // If this node has no outgoing edges in the original graph, it should point to the
+            // return node in the reversed graph
             if !(matches!(input.get(&node), Some(D::Input::Code(_, _, None))))
                 && config.debug_print.control_flow_graph
             {
-                println!("Node {node:?} with no outs: {:#?}", input.get(&node));
+                println!("Node {node:?} with no outs");
             }
             graph.add_edge(return_, node, ());
         }

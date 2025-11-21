@@ -24,10 +24,9 @@ use bridge::committee::{
 };
 use bridge::crypto;
 use bridge::message;
-use std::unit_test::assert_eq;
+use std::unit_test::{destroy, assert_eq};
 use sui::hex;
 use sui::test_scenario;
-use sui::test_utils;
 use sui::vec_map;
 use sui_system::governance_test_utils::{
     advance_epoch_with_reward_amounts,
@@ -65,7 +64,7 @@ fun test_verify_signatures_good_path() {
     );
 
     // Clean up
-    test_utils::destroy(committee)
+    destroy(committee)
 }
 
 #[test, expected_failure(abort_code = bridge::committee::EDuplicatedSignature)]
@@ -165,7 +164,7 @@ fun test_init_committee() {
     let members = committee.members();
     assert!(members.length() == 2); // must succeed
 
-    test_utils::destroy(committee);
+    destroy(committee);
     test_scenario::return_shared(system_state);
     test_scenario::end(scenario);
 }
@@ -210,7 +209,7 @@ fun test_update_node_url() {
     let (_, member) = members.get_entry_by_idx(0);
     assert_eq!(member.http_rest_url(), b"test url 2");
 
-    test_utils::destroy(committee);
+    destroy(committee);
     test_scenario::return_shared(system_state);
     test_scenario::end(scenario);
 }
@@ -278,7 +277,7 @@ fun test_init_committee_not_validator() {
     // validator registration
     committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xD, 0));
 
-    test_utils::destroy(committee);
+    destroy(committee);
     test_scenario::return_shared(system_state);
     test_scenario::end(scenario);
 }
@@ -303,7 +302,7 @@ fun test_init_committee_dup_pubkey() {
     committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
     committee.register(&mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xC, 0));
 
-    test_utils::destroy(committee);
+    destroy(committee);
     test_scenario::return_shared(system_state);
     test_scenario::end(scenario);
 }
@@ -349,7 +348,7 @@ fun test_init_committee_validator_become_inactive() {
 
     assert!(committee.members().is_empty());
 
-    test_utils::destroy(committee);
+    destroy(committee);
     test_scenario::return_shared(system_state);
     test_scenario::end(scenario);
 }
@@ -389,7 +388,7 @@ fun test_update_committee_registration() {
     assert!(&hex::decode(VALIDATOR2_PUBKEY) == registration.bridge_pubkey_bytes(), 0);
 
     // teardown
-    test_utils::destroy(committee);
+    destroy(committee);
     test_scenario::return_shared(system_state);
     test_scenario::end(scenario);
 }
@@ -423,7 +422,7 @@ fun test_init_committee_not_enough_stake() {
     // committee should be empty because registration did not reach min stake threshold.
     assert!(committee.members().is_empty());
 
-    test_utils::destroy(committee);
+    destroy(committee);
     test_scenario::return_shared(system_state);
     test_scenario::end(scenario);
 }
@@ -531,7 +530,7 @@ fun test_verify_signatures_with_blocked_committee_member() {
     );
 
     // Clean up
-    test_utils::destroy(committee);
+    destroy(committee);
 }
 
 #[test, expected_failure(abort_code = bridge::committee::EValidatorBlocklistContainsUnknownKey)]
@@ -558,7 +557,7 @@ fun test_execute_blocklist_abort_upon_unknown_validator() {
     execute_blocklist(&mut committee, blocklist);
 
     // Clean up
-    test_utils::destroy(committee);
+    destroy(committee);
 }
 
 #[test]
@@ -619,7 +618,7 @@ fun test_execute_blocklist() {
     assert!(!blocked_member.blocklisted());
 
     // Clean up
-    test_utils::destroy(committee);
+    destroy(committee);
 }
 
 fun setup_test(): BridgeCommittee {

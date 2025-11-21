@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    compiler_info::CompilerInfo,
+    compiler_info::CompilerAnalysisInfo,
     symbols::{
         compilation::{CompiledPkgInfo, ParsedDefinitions, SymbolsComputationData},
         cursor::CursorContext,
@@ -62,7 +62,7 @@ pub fn run_parsing_analysis(
 pub fn run_typing_analysis(
     mut computation_data: SymbolsComputationData,
     mapped_files: &MappedFiles,
-    compiler_info: &mut CompilerInfo,
+    compiler_analysis_info: &CompilerAnalysisInfo,
     typed_program_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
 ) -> SymbolsComputationData {
     let mut typing_symbolicator = typing_analysis::TypingAnalysisContext {
@@ -74,7 +74,7 @@ pub fn run_typing_analysis(
         current_mod_ident_str: None,
         alias_lengths: &BTreeMap::new(),
         traverse_only: false,
-        compiler_info,
+        compiler_analysis_info,
         type_params: BTreeMap::new(),
         expression_scope: OrdMap::new(),
     };

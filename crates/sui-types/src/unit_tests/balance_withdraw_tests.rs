@@ -3,6 +3,8 @@
 
 use std::collections::BTreeMap;
 
+use sui_protocol_config::ProtocolConfig;
+
 use crate::{
     accumulator_root::AccumulatorValue,
     base_types::{SuiAddress, random_object_ref},
@@ -11,6 +13,12 @@ use crate::{
     transaction::{FundsWithdrawalArg, TransactionData, TransactionDataAPI, WithdrawalTypeArg},
     type_input::TypeInput,
 };
+
+fn protocol_config() -> ProtocolConfig {
+    let mut cfg = ProtocolConfig::get_for_max_version_UNSAFE();
+    cfg.enable_accumulators_for_testing();
+    cfg
+}
 
 #[test]
 fn test_withdraw_max_amount() {
@@ -21,7 +29,7 @@ fn test_withdraw_max_amount() {
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
     assert!(tx.has_funds_withdrawals());
-    let withdraws = tx.process_funds_withdrawals().unwrap();
+    let withdraws = tx.process_funds_withdrawals_for_signing().unwrap();
     let account_id = AccumulatorValue::get_field_id(
         sender,
         &WithdrawalTypeArg::Balance(GAS::type_tag().into())
@@ -43,7 +51,7 @@ fn test_multiple_withdraws_same_account() {
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
     assert!(tx.has_funds_withdrawals());
-    let withdraws = tx.process_funds_withdrawals().unwrap();
+    let withdraws = tx.process_funds_withdrawals_for_signing().unwrap();
     let account_id = AccumulatorValue::get_field_id(
         sender,
         &WithdrawalTypeArg::Balance(GAS::type_tag().into())
@@ -65,7 +73,7 @@ fn test_multiple_withdraws_different_accounts() {
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
     assert!(tx.has_funds_withdrawals());
-    let withdraws = tx.process_funds_withdrawals().unwrap();
+    let withdraws = tx.process_funds_withdrawals_for_signing().unwrap();
     let account_id1 = AccumulatorValue::get_field_id(
         sender,
         &WithdrawalTypeArg::Balance(GAS::type_tag().into())
@@ -94,7 +102,7 @@ fn test_withdraw_zero_amount() {
     let sender = SuiAddress::random_for_testing_only();
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
-    assert!(tx.process_funds_withdrawals().is_err());
+    assert!(tx.validity_check(&protocol_config()).is_err());
 }
 
 #[test]
@@ -110,5 +118,5 @@ fn test_withdraw_too_many_withdraws() {
     let sender = SuiAddress::random_for_testing_only();
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
-    assert!(tx.process_funds_withdrawals().is_err());
+    assert!(tx.validity_check(&protocol_config()).is_err());
 }

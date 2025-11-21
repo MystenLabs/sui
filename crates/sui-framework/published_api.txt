@@ -712,6 +712,9 @@ current_epoch_subsidy_amount
 get_distribution_counter
 	public(package) fun
 	0x3::stake_subsidy
+ExecutionTimeObservationChunkKey
+	public struct
+	0x3::sui_system_state_inner
 SystemParameters
 	public struct
 	0x3::sui_system_state_inner
@@ -898,6 +901,9 @@ extract_coin_balance
 store_execution_time_estimates
 	public(package) fun
 	0x3::sui_system_state_inner
+store_execution_time_estimates_v2
+	public(package) fun
+	0x3::sui_system_state_inner
 validators
 	public(package) fun
 	0x3::sui_system_state_inner
@@ -1055,6 +1061,9 @@ validator_voting_powers
 	fun
 	0x3::sui_system
 store_execution_time_estimates
+	fun
+	0x3::sui_system
+store_execution_time_estimates_v2
 	fun
 	0x3::sui_system
 GenesisValidatorMetadata
@@ -2554,6 +2563,12 @@ new_treasury_cap
 allow_global_pause
 	public(package) fun
 	0x2::coin
+new_coin_metadata
+	public(package) fun
+	0x2::coin
+update_coin_metadata
+	public(package) fun
+	0x2::coin
 supply
 	public fun
 	0x2::coin
@@ -2596,7 +2611,13 @@ ExtraField
 CurrencyKey
 	public struct
 	0x2::coin_registry
+LegacyMetadataKey
+	public struct
+	0x2::coin_registry
 MetadataCap
+	public struct
+	0x2::coin_registry
+Borrow
 	public struct
 	0x2::coin_registry
 Currency
@@ -2641,6 +2662,9 @@ make_supply_burn_only
 finalize
 	public fun
 	0x2::coin_registry
+finalize_and_delete_metadata_cap
+	public fun
+	0x2::coin_registry
 finalize_registration
 	public fun
 	0x2::coin_registry
@@ -2678,6 +2702,12 @@ migrate_regulated_state_by_metadata
 	public fun
 	0x2::coin_registry
 migrate_regulated_state_by_cap
+	public fun
+	0x2::coin_registry
+borrow_legacy_metadata
+	public fun
+	0x2::coin_registry
+return_borrowed_legacy_metadata
 	public fun
 	0x2::coin_registry
 decimals
@@ -2724,6 +2754,12 @@ total_supply
 	0x2::coin_registry
 exists
 	public fun
+	0x2::coin_registry
+is_migrated_from_legacy
+	fun
+	0x2::coin_registry
+to_legacy_metadata
+	fun
 	0x2::coin_registry
 create
 	fun

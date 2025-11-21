@@ -12,10 +12,14 @@ use crate::{
         typing::{ast as T, verify::input_arguments},
     },
 };
-use sui_types::{coin::RESOLVED_COIN_STRUCT, error::ExecutionError};
+use sui_types::{
+    coin::RESOLVED_COIN_STRUCT, error::ExecutionError,
+    funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
+};
 
 struct Context<'txn> {
     objects: Vec<&'txn T::Type>,
+    withdrawals: Vec<&'txn T::Type>,
     pure: Vec<&'txn T::Type>,
     receiving: Vec<&'txn T::Type>,
     result_types: Vec<&'txn [T::Type]>,
@@ -25,6 +29,7 @@ impl<'txn> Context<'txn> {
     fn new(txn: &'txn T::Transaction) -> Self {
         Self {
             objects: txn.objects.iter().map(|o| &o.ty).collect(),
+            withdrawals: txn.withdrawals.iter().map(|w| &w.ty).collect(),
             pure: txn.pure.iter().map(|p| &p.ty).collect(),
             receiving: txn.receiving.iter().map(|r| &r.ty).collect(),
             result_types: txn
@@ -51,12 +56,16 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
     let T::Transaction {
         bytes: _,
         objects,
+        withdrawals,
         pure,
         receiving,
         commands,
     } = txn;
     for obj in objects {
         object_input(obj)?;
+    }
+    for w in withdrawals {
+        withdrawal_input(&w.ty)?;
     }
     for p in pure {
         pure_input::<Mode>(p)?;
@@ -72,6 +81,24 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
 
 fn object_input(obj: &T::ObjectInput) -> anyhow::Result<()> {
     anyhow::ensure!(obj.ty.abilities().has_key(), "object type must have key");
+    Ok(())
+}
+
+fn withdrawal_input(ty: &T::Type) -> anyhow::Result<()> {
+    anyhow::ensure!(ty.abilities().has_drop(), "withdrawal type must have drop");
+    let T::Type::Datatype(dt) = ty else {
+        anyhow::bail!("withdrawal input must be a datatype, got {ty:?}");
+    };
+    anyhow::ensure!(
+        dt.type_arguments.len() == 1,
+        "withdrawal input must have exactly one type argument, got {}",
+        dt.type_arguments.len()
+    );
+    anyhow::ensure!(
+        dt.qualified_ident() == RESOLVED_WITHDRAWAL_STRUCT,
+        "withdrawal input must be sui::funds_accumulator::Withdrawal, got {:?}",
+        dt.qualified_ident()
+    );
     Ok(())
 }
 
@@ -346,6 +373,12 @@ fn location(env: &Env, context: &Context, l: T::Location) -> anyhow::Result<T::T
             .get(i as usize)
             .copied()
             .ok_or_else(|| anyhow::anyhow!("object input {i} out of bounds"))?
+            .clone(),
+        T::Location::WithdrawalInput(i) => context
+            .withdrawals
+            .get(i as usize)
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("withdrawal input {i} out of bounds"))?
             .clone(),
         T::Location::PureInput(i) => context
             .pure

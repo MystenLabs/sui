@@ -16,7 +16,7 @@ use reqwest::{Client, header::HeaderName};
 use serde_json::{Value, json};
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, Merge, PipelineLayer, PrunerLayer};
 use sui_indexer_alt_e2e_tests::{OffchainCluster, OffchainClusterConfig};
-use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::{ClientArgs, ingestion_client::IngestionClientArgs};
 use sui_transactional_test_runner::{
     create_adapter,
     offchain_state::{OffchainStateReader, TestResponse},
@@ -133,7 +133,10 @@ impl OffchainStateReader for OffchainReader {
 
 async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
     let client_args = ClientArgs {
-        local_ingestion_path: Some(config.data_ingestion_path.clone()),
+        ingestion: IngestionClientArgs {
+            local_ingestion_path: Some(config.data_ingestion_path.clone()),
+            ..Default::default()
+        },
         ..Default::default()
     };
 

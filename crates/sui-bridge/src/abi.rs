@@ -14,7 +14,7 @@ use crate::types::ParsedTokenTransferMessage;
 use crate::types::{
     AddTokensOnEvmAction, AssetPriceUpdateAction, BlocklistCommitteeAction, BridgeAction,
     BridgeActionType, EmergencyAction, EthLog, EthToSuiBridgeAction, EvmContractUpgradeAction,
-    LimitUpdateAction, SuiToEthBridgeAction,
+    LimitUpdateAction, SuiToEthBridgeAction, SuiToEthTokenTransfer,
 };
 use ethers::types::Log;
 use ethers::{
@@ -215,6 +215,23 @@ impl TryFrom<SuiToEthBridgeAction> for eth_sui_bridge::Message {
             version: TOKEN_TRANSFER_MESSAGE_VERSION,
             nonce: action.sui_bridge_event.nonce,
             chain_id: action.sui_bridge_event.sui_chain_id as u8,
+            payload: action
+                .as_payload_bytes()
+                .map_err(|e| BridgeError::Generic(format!("Failed to encode payload: {}", e)))?
+                .into(),
+        })
+    }
+}
+
+impl TryFrom<SuiToEthTokenTransfer> for eth_sui_bridge::Message {
+    type Error = BridgeError;
+
+    fn try_from(action: SuiToEthTokenTransfer) -> BridgeResult<Self> {
+        Ok(eth_sui_bridge::Message {
+            message_type: BridgeActionType::TokenTransfer as u8,
+            version: TOKEN_TRANSFER_MESSAGE_VERSION,
+            nonce: action.nonce,
+            chain_id: action.sui_chain_id as u8,
             payload: action
                 .as_payload_bytes()
                 .map_err(|e| BridgeError::Generic(format!("Failed to encode payload: {}", e)))?

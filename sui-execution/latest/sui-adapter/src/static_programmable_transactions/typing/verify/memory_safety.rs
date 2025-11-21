@@ -38,6 +38,7 @@ struct Context {
     tx_context: Option<Value>,
     gas_coin: Option<Value>,
     objects: Vec<Option<Value>>,
+    withdrawals: Vec<Option<Value>>,
     pure: Vec<Option<Value>>,
     receiving: Vec<Option<Value>>,
     results: Vec<Vec<Option<Value>>>,
@@ -69,6 +70,11 @@ impl Value {
 impl Context {
     fn new(ast: &T::Transaction) -> Result<Self, ExecutionError> {
         let objects = ast.objects.iter().map(|_| Some(Value::NonRef)).collect();
+        let withdrawals = ast
+            .withdrawals
+            .iter()
+            .map(|_| Some(Value::NonRef))
+            .collect::<Vec<_>>();
         let pure = ast
             .pure
             .iter()
@@ -89,6 +95,7 @@ impl Context {
             tx_context: Some(Value::NonRef),
             gas_coin: Some(Value::NonRef),
             objects,
+            withdrawals,
             pure,
             receiving,
             results: Vec::with_capacity(ast.commands.len()),
@@ -100,6 +107,7 @@ impl Context {
             T::Location::TxContext => &mut self.tx_context,
             T::Location::GasCoin => &mut self.gas_coin,
             T::Location::ObjectInput(i) => &mut self.objects[i as usize],
+            T::Location::WithdrawalInput(i) => &mut self.withdrawals[i as usize],
             T::Location::PureInput(i) => &mut self.pure[i as usize],
             T::Location::ReceivingInput(i) => &mut self.receiving[i as usize],
             T::Location::Result(i, j) => &mut self.results[i as usize][j as usize],
@@ -563,6 +571,7 @@ impl fmt::Display for Location {
             T::Location::TxContext => write!(f, "TxContext"),
             T::Location::GasCoin => write!(f, "GasCoin"),
             T::Location::ObjectInput(idx) => write!(f, "ObjectInput({idx})"),
+            T::Location::WithdrawalInput(idx) => write!(f, "WithdrawalInput({idx})"),
             T::Location::PureInput(idx) => write!(f, "PureInput({idx})"),
             T::Location::ReceivingInput(idx) => write!(f, "ReceivingInput({idx})"),
             T::Location::Result(i, j) => write!(f, "Result({i}, {j})"),

@@ -12,6 +12,7 @@ pub mod error;
 pub mod events;
 pub mod fullnode_client;
 pub mod kv_loader;
+pub mod ledger_grpc_reader;
 pub(crate) mod metrics;
 pub mod object_versions;
 pub mod objects;

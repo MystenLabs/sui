@@ -1,12 +1,14 @@
-# Rosetta API for Sui
+# Mesh API for Sui
 
-[Rosetta](https://www.rosetta-api.org/docs/welcome.html) is an open-source specification and set of tools for blockchain
-integration. Rosetta’s goal is to make blockchain integration simpler, faster, and more reliable than using a native
+> **Note:** Mesh is the new name for the Rosetta API. The Rosetta API was rebranded to Mesh API by Coinbase.
+
+[Mesh](https://docs.cdp.coinbase.com/mesh/product-overview/welcome) (formerly known as Rosetta) is an open-source specification and set of tools for blockchain
+integration. Mesh's goal is to make blockchain integration simpler, faster, and more reliable than using a native
 integration.
 
 ## Overview
 
-Sui-Rosetta is an implementation of the Rosetta API for the Sui network, the Sui-Rosetta server uses the Sui fullnode to
+Sui-Rosetta is an implementation of the Mesh API (f.k.a. Rosetta API) for the Sui network, the Sui-Rosetta server uses the Sui Full Node to
 read and write transactions to the Sui network.
 
 ## Local network quick start

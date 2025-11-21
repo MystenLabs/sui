@@ -1,7 +1,28 @@
 ---
 title: Orders
-description: Use DeepBookV3 to create limit and market orders, modify orders, or cancel orders. 
-keywords: [ limit orders, market orders, modify orders, cancel orders, balancemanager, deepbookv3, pay_with_deep, DEEP token, reduce order size, lower expiration time, order options, self-matching options, orderinfo, orderdeepprice, fill, events, place market order, withdraw amount, withdraw settled amount ]
+description: Use DeepBookV3 to create limit and market orders, modify orders, or cancel orders.
+keywords:
+  [
+    limit orders,
+    market orders,
+    modify orders,
+    cancel orders,
+    balancemanager,
+    deepbookv3,
+    pay_with_deep,
+    DEEP token,
+    reduce order size,
+    lower expiration time,
+    order options,
+    self-matching options,
+    orderinfo,
+    orderdeepprice,
+    fill,
+    events,
+    place market order,
+    withdraw amount,
+    withdraw settled amount,
+  ]
 ---
 
 Users can create limit or market orders, modify orders, and cancel orders. The `BalanceManager` must have the necessary funds to process orders. DeepBookV3 has four order options and three self matching options. If you set the `pay_with_deep` flag to `true`, trading fees are paid with the DEEP token. If you set the `pay_with_deep` flag to `false`, trading fees are paid with the input token.
@@ -18,64 +39,132 @@ Following are the order related endpoints that `Pool` exposes.
 
 The following constants define the options available for orders.
 
-<ImportContent source="packages/deepbook/sources/helper/constants.move" mode="code" org="MystenLabs" repo="deepbookv3" variable="NO_RESTRICTION,IMMEDIATE_OR_CANCEL,FILL_OR_KILL,POST_ONLY" />
+<ImportContent
+	source="packages/deepbook/sources/helper/constants.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	variable="NO_RESTRICTION,IMMEDIATE_OR_CANCEL,FILL_OR_KILL,POST_ONLY"
+/>
 
 ### Self-matching options
 
 The following constants define the options available for self-matching orders.
 
-<ImportContent source="packages/deepbook/sources/helper/constants.move" mode="code" org="MystenLabs" repo="deepbookv3" variable="SELF_MATCHING_ALLOWED,CANCEL_TAKER,CANCEL_MAKER" />
+<ImportContent
+	source="packages/deepbook/sources/helper/constants.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	variable="SELF_MATCHING_ALLOWED,CANCEL_TAKER,CANCEL_MAKER"
+/>
 
 ### OrderInfo struct
 
 Placing a limit order or a market order creates and returns an `OrderInfo` object. DeepBookV3 automatically drops this object after the order completes or is placed in the book. Use `OrderInfo` to inspect the execution details of the request as it represents all order information. DeepBookV3 does not catch any errors, so if there’s a failure of any kind, then the entire transaction fails.
 
-<ImportContent source="packages/deepbook/sources/book/order_info.move" org="MystenLabs" repo="deepbookv3" mode="code" struct="OrderInfo" />
+<ImportContent
+	source="packages/deepbook/sources/book/order_info.move"
+	org="MystenLabs"
+	repo="deepbookv3"
+	mode="code"
+	struct="OrderInfo"
+/>
 
 ### OrderDeepPrice struct
 
 The `OrderDeepPrice` struct represents the conversion rate of DEEP at the time the order was placed.
 
-<ImportContent source="packages/deepbook/sources/vault/deep_price.move" mode="code" org="MystenLabs" repo="deepbookv3" struct="OrderDeepPrice" />
+<ImportContent
+	source="packages/deepbook/sources/vault/deep_price.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="OrderDeepPrice"
+/>
 
 ### Fill struct
 
 The `Fill` struct represents the results of a match between two orders. Use this struct to update the state.
 
-<ImportContent source="packages/deepbook/sources/book/fill.move" mode="code" org="MystenLabs" repo="deepbookv3" struct="Fill" />
+<ImportContent
+	source="packages/deepbook/sources/book/fill.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="Fill"
+/>
 
 ### Events
 
 DeepBookV3 emits `OrderFilled` when a maker order is filled.
 
-<ImportContent source="packages/deepbook/sources/book/order_info.move" mode="code" org="MystenLabs" repo="deepbookv3" struct="OrderFilled" />
+<ImportContent
+	source="packages/deepbook/sources/book/order_info.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="OrderFilled"
+/>
 
 DeepBookV3 emits `OrderCanceled` when a maker order is canceled.
 
-<ImportContent source="packages/deepbook/sources/book/order.move" mode="code" org="MystenLabs" repo="deepbookv3" struct="OrderCanceled" />
+<ImportContent
+	source="packages/deepbook/sources/book/order.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="OrderCanceled"
+/>
 
 DeepBookV3 emits `OrderModified` on modification of a maker order.
 
-<ImportContent source="packages/deepbook/sources/book/order.move" mode="code" org="MystenLabs" repo="deepbookv3" struct="OrderModified" />
+<ImportContent
+	source="packages/deepbook/sources/book/order.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="OrderModified"
+/>
 
 DeepBookV3 emits `OrderPlaced` when it injects a maker order into the order book.
 
-<ImportContent source="packages/deepbook/sources/book/order_info.move" mode="code" org="MystenLabs" repo="deepbookv3" struct="OrderPlaced" />
+<ImportContent
+	source="packages/deepbook/sources/book/order_info.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="OrderPlaced"
+/>
 
 ### Place limit order
 
-Place a limit order. Quantity is in base asset terms. For current version `pay_with_deep` must be true, so the 
-fee is paid with DEEP tokens. 
+Place a limit order. Quantity is in base asset terms. For current version `pay_with_deep` must be true, so the
+fee is paid with DEEP tokens.
 
 You must combine a `BalanceManager` call of generating a `TradeProof` before placing orders.
 
-<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="place_limit_order" noComments />
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="place_limit_order"
+	noComments
+/>
 
 ### Place market order
 
 Place a market order. Quantity is in base asset terms. Calls `place_limit_order` with a price of `MAX_PRICE` for bids and `MIN_PRICE` for asks. DeepBookV3 cancels the order for any quantity not filled.
 
-<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="place_market_order" noComments />
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="place_market_order"
+	noComments
+/>
 
 ### Modify order
 
@@ -83,7 +172,14 @@ Modifies an order given `order_id` and `new_quantity`. New quantity must be less
 
 The `modify_order` function does not return anything. If the transaction is successful, then assume the modification was successful.
 
-<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="modify_order" noComments />
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="modify_order"
+	noComments
+/>
 
 ### Cancel order
 
@@ -91,14 +187,71 @@ Cancel an order. The order must be owned by the `balance_manager`. The order is 
 
 Similar to modify, `cancel_order` does not return anything. DeepBookV3 emits `OrderCanceled` event.
 
-<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="cancel_order" noComments />
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="cancel_order"
+	noComments
+/>
+
+### Cancel multiple orders
+
+Cancel multiple orders within a vector. The orders must be owned by the `balance_manager`. The orders are removed from the book and the `balance_manager` open orders. If any order fails to cancel, no orders will be cancelled (atomic operation).
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="cancel_orders"
+	noComments
+/>
+
+### Cancel all orders
+
+Cancel all open orders placed by the balance manager in the pool. This is a convenience function that cancels every order associated with the balance manager.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="cancel_all_orders"
+	noComments
+/>
 
 ### Withdraw settled amounts
 
 Withdraw settled amounts to the `balance_manager`. All orders automatically withdraw settled amounts. This can be called explicitly to withdraw all settled funds from the pool.
 
-<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="withdraw_settled_amounts" noComments />
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="withdraw_settled_amounts"
+	noComments
+/>
+
+### Withdraw settled amounts permissionless
+
+Withdraw settled amounts to the `balance_manager` without requiring a `TradeProof`. This is a permissionless version that anyone can call to settle a balance manager's funds.
+
+<ImportContent
+	source="packages/deepbook/sources/pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="withdraw_settled_amounts_permissionless"
+	noComments
+/>
 
 ## Related links
 
-<RelatedLink href="https://github.com/MystenLabs/deepbookv3" label="DeepBookV3 repository" desc="The DeepBookV3 repository on GitHub." />
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3"
+	label="DeepBookV3 repository"
+	desc="The DeepBookV3 repository on GitHub."
+/>

@@ -1,0 +1,46 @@
+---
+title: DeepBook Margin
+description: Leveraged trading capabilities for DeepBookV3, enabling users to trade with borrowed funds and increase their buying power.
+keywords:
+  [
+    deepbook margin,
+    margin trading,
+    leveraged trading,
+    deepbookv3,
+    collateral,
+    liquidation,
+    isolated margin,
+    deep book,
+  ]
+---
+
+DeepBook Margin extends the trading capabilities of DeepBookV3 by enabling leveraged trading positions. With margin trading, users can borrow funds to increase their buying power.
+
+## Key features
+
+DeepBook Margin provides the following capabilities:
+
+- **Leveraged positions**: Trade with borrowed funds to increase position sizes beyond available capital
+- **Risk management**: Built-in liquidation mechanisms to protect lenders and maintain system solvency
+- **Collateral flexibility**: Support for multiple assets as collateral for isolated margin positions
+- **Interest accrual**: Transparent interest rate calculations for borrowed funds
+
+## Risk considerations
+
+Margin trading carries additional risks, including the potential for liquidation if positions move against the trader. Users should understand these risks before engaging in margin trading on DeepBookV3.
+
+### Liquidation mechanisms
+
+When a margin position falls below the maintenance margin requirement, the position will be liquidated to protect lenders and maintain system solvency. The liquidation engine operates on-chain through smart contracts, ensuring transparent and fair execution.
+
+### Interest rates
+
+Interest rates for borrowed funds are calculated transparently based on utilization rates and market conditions.
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3/tree/main/packages/deepbook_margin"
+	label="DeepBook Margin package"
+	desc="The DeepBook Margin package on GitHub."
+/>

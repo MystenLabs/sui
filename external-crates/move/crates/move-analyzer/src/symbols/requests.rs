@@ -369,13 +369,30 @@ pub fn maybe_convert_for_guard(
     position: &Position,
     symbols: &Symbols,
 ) -> Option<DefInfo> {
+    // In Move match expressions with guards, variables bound in patterns have their original
+    // type (T) at the binding site, but when accessed within the guard expression, they
+    // appear as immutable references (&T).
+    //
+    // Example:
+    //   match (value) {
+    //       MyEnum::Variant(x) if x > 10 => { ... }
+    //   }
+    // In the pattern MyEnum::Variant(x): x is bound as type T
+    // In the guard (if x > 10): x is accessed as type &T
+    //
+    // This function checks if the cursor is within the guard expression and converts
+    // the type accordingly.
+
     let DefInfo::Local(name, ty, is_let, is_mut, guard_loc) = def_info else {
         return None;
     };
+    // If this local has an associated guard location, check if cursor is inside it
     let gloc = (*guard_loc)?;
     let fhash = symbols.file_hash(use_fpath)?;
     let loc = lsp_position_to_loc(&symbols.files, fhash, position)?;
-    if symbols.compiler_info.inside_guard(fhash, &loc, &gloc) {
+
+    // If the cursor position is within the guard expression, convert type to &T
+    if gloc.contains(&loc) {
         let new_ty = sp(
             ty.loc,
             Type_::Ref(false, Box::new(sp(ty.loc, ty.value.base_type_()))),

@@ -9,10 +9,7 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::{
-    FieldCount, metrics::IndexerMetrics, store::Store,
-    types::full_checkpoint_content::CheckpointData,
-};
+use crate::{metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::Checkpoint};
 
 use super::{CommitterConfig, PIPELINE_BUFFER, Processor, WatermarkPart, processor::processor};
 
@@ -26,6 +23,15 @@ mod commit_watermark;
 mod committer;
 mod pruner;
 mod reader_watermark;
+
+/// Status returned by `Handler::batch` to indicate whether the batch is ready to be committed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BatchStatus {
+    /// The batch can accept more values.
+    Pending,
+    /// The batch is full and should be committed.
+    Ready,
+}
 
 /// Handlers implement the logic for a given indexing pipeline: How to process checkpoint data (by
 /// implementing [Processor]) into rows for their table, and how to write those rows to the database.
@@ -47,8 +53,9 @@ mod reader_watermark;
 /// build up, the collector will stop accepting new checkpoints, which will eventually propagate
 /// back to the ingestion service.
 #[async_trait]
-pub trait Handler: Processor<Value: FieldCount> {
+pub trait Handler: Processor {
     type Store: Store;
+    type Batch: Default + Send + Sync + 'static;
 
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
@@ -61,10 +68,24 @@ pub trait Handler: Processor<Value: FieldCount> {
     /// checkpoints -- the size of these pipeline's batches will be dominated by watermark updates.
     const MAX_WATERMARK_UPDATES: usize = 10_000;
 
-    /// Take a chunk of values and commit them to the database, returning the number of rows
-    /// affected.
+    /// Add values from the iterator to the batch. The implementation may take all, some, or none
+    /// of the values from the iterator by calling `.next()`.
+    ///
+    /// Returns `BatchStatus::Ready` if the batch is full and should be committed,
+    /// or `BatchStatus::Pending` if the batch can accept more values.
+    ///
+    /// Note: The handler can signal batch readiness via `BatchStatus::Ready`, but the framework
+    /// may also decide to commit a batch based on the trait parameters above.
+    fn batch(
+        &self,
+        batch: &mut Self::Batch,
+        values: &mut std::vec::IntoIter<Self::Value>,
+    ) -> BatchStatus;
+
+    /// Commit the batch to the database, returning the number of rows affected.
     async fn commit<'a>(
-        values: &[Self::Value],
+        &self,
+        batch: &Self::Batch,
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize>;
 
@@ -115,10 +136,27 @@ pub struct PrunerConfig {
 /// Values inside each batch may or may not be from the same checkpoint. Values in the same
 /// checkpoint can also be split across multiple batches.
 struct BatchedRows<H: Handler> {
-    /// The rows to write
-    values: Vec<H::Value>,
+    /// The batch to write
+    batch: H::Batch,
+    /// Number of rows in the batch
+    batch_len: usize,
     /// Proportions of all the watermarks that are represented in this chunk
     watermark: Vec<WatermarkPart>,
+}
+
+impl<H, V> BatchedRows<H>
+where
+    H: Handler<Batch = Vec<V>, Value = V>,
+{
+    #[cfg(test)]
+    pub fn from_vec(batch: Vec<V>, watermark: Vec<WatermarkPart>) -> Self {
+        let batch_len = batch.len();
+        Self {
+            batch,
+            batch_len,
+            watermark,
+        }
+    }
 }
 
 impl PrunerConfig {
@@ -128,27 +166,6 @@ impl PrunerConfig {
 
     pub fn delay(&self) -> Duration {
         Duration::from_millis(self.delay_ms)
-    }
-}
-
-impl<H: Handler> BatchedRows<H> {
-    fn new() -> Self {
-        Self {
-            values: vec![],
-            watermark: vec![],
-        }
-    }
-
-    /// Number of rows in this batch.
-    fn len(&self) -> usize {
-        self.values.len()
-    }
-
-    /// The batch is full if it has more than enough values to write to the database, or more than
-    /// enough watermarks to update.
-    fn is_full(&self) -> bool {
-        self.values.len() >= max_chunk_rows::<H>()
-            || self.watermark.len() >= H::MAX_WATERMARK_UPDATES
     }
 }
 
@@ -190,7 +207,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     config: ConcurrentConfig,
     skip_watermark: bool,
     store: H::Store,
-    checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
+    checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -227,6 +244,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let collector = collector::<H>(
+        handler.clone(),
         committer_config.clone(),
         collector_rx,
         collector_tx,
@@ -235,6 +253,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let committer = committer::<H>(
+        handler.clone(),
         committer_config.clone(),
         skip_watermark,
         committer_rx,
@@ -277,14 +296,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     })
 }
 
-const fn max_chunk_rows<H: Handler>() -> usize {
-    if H::Value::FIELD_COUNT == 0 {
-        i16::MAX as usize
-    } else {
-        i16::MAX as usize / H::Value::FIELD_COUNT
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::{sync::Arc, time::Duration};
@@ -299,8 +310,8 @@ mod tests {
         mocks::store::{MockConnection, MockStore},
         pipeline::Processor,
         types::{
-            full_checkpoint_content::CheckpointData,
-            test_checkpoint_data_builder::TestCheckpointDataBuilder,
+            full_checkpoint_content::Checkpoint,
+            test_checkpoint_data_builder::TestCheckpointBuilder,
         },
     };
 
@@ -323,11 +334,8 @@ mod tests {
         const FANOUT: usize = 2;
         type Value = TestValue;
 
-        async fn process(
-            &self,
-            checkpoint: &Arc<CheckpointData>,
-        ) -> anyhow::Result<Vec<Self::Value>> {
-            let cp_num = checkpoint.checkpoint_summary.sequence_number;
+        async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
+            let cp_num = checkpoint.summary.sequence_number;
 
             // Every checkpoint will come with 2 processed values
             Ok(vec![
@@ -346,18 +354,31 @@ mod tests {
     #[async_trait]
     impl Handler for DataPipeline {
         type Store = MockStore;
+        type Batch = Vec<TestValue>;
+
         const MIN_EAGER_ROWS: usize = 1000; // High value to disable eager batching
         const MAX_PENDING_ROWS: usize = 4; // Small value to trigger back pressure quickly
         const MAX_WATERMARK_UPDATES: usize = 1; // Each batch will have 1 checkpoint for an ease of testing.
 
+        fn batch(
+            &self,
+            batch: &mut Self::Batch,
+            values: &mut std::vec::IntoIter<Self::Value>,
+        ) -> BatchStatus {
+            // Take all values
+            batch.extend(values);
+            BatchStatus::Pending
+        }
+
         async fn commit<'a>(
-            values: &[Self::Value],
+            &self,
+            batch: &Self::Batch,
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
             // Group values by checkpoint
             let mut grouped: std::collections::HashMap<u64, Vec<u64>> =
                 std::collections::HashMap::new();
-            for value in values {
+            for value in batch {
                 grouped
                     .entry(value.checkpoint)
                     .or_default()
@@ -380,7 +401,7 @@ mod tests {
 
     struct TestSetup {
         store: MockStore,
-        checkpoint_tx: mpsc::Sender<Arc<CheckpointData>>,
+        checkpoint_tx: mpsc::Sender<Arc<Checkpoint>>,
         pipeline_handle: JoinHandle<()>,
         cancel: CancellationToken,
     }
@@ -413,7 +434,7 @@ mod tests {
 
         async fn send_checkpoint(&self, checkpoint: u64) -> anyhow::Result<()> {
             let checkpoint = Arc::new(
-                TestCheckpointDataBuilder::new(checkpoint)
+                TestCheckpointBuilder::new(checkpoint)
                     .with_epoch(1)
                     .with_network_total_transactions(checkpoint * 2)
                     .with_timestamp_ms(1000000000 + checkpoint * 1000)

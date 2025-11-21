@@ -32,9 +32,9 @@ public fun equal<G>(e1: &Element<G>, e2: &Element<G>): bool {
 }
 
 // Fails if the bytes are not a valid group element and 'is_trusted' is false.
-public(package) fun from_bytes<G>(type_: u8, bytes: &vector<u8>, is_trusted: bool): Element<G> {
-    assert!(is_trusted || internal_validate(type_, bytes), EInvalidInput);
-    Element<G> { bytes: *bytes }
+public(package) fun from_bytes<G>(type_: u8, bytes: vector<u8>, is_trusted: bool): Element<G> {
+    assert!(is_trusted || internal_validate(type_, &bytes), EInvalidInput);
+    Element<G> { bytes }
 }
 
 public(package) fun add<G>(type_: u8, e1: &Element<G>, e2: &Element<G>): Element<G> {

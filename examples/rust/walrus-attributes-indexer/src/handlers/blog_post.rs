@@ -113,7 +113,10 @@ impl Handler for BlogPostPipeline {
     type Store = postgres::Db;
     type Batch = BTreeMap<ObjectID, Self::Value>;
 
-    fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+    fn batch(
+        batch: &mut Self::Batch,
+        values: impl IntoIterator<Item = Self::Value>,
+    ) -> sui_indexer_alt_framework::pipeline::BatchStatus {
         for value in values {
             match value {
                 ProcessedWalrusMetadata::Upsert {
@@ -126,6 +129,7 @@ impl Handler for BlogPostPipeline {
                 }
             }
         }
+        sui_indexer_alt_framework::pipeline::BatchStatus::Pending
     }
 
     async fn commit<'a>(batch: &Self::Batch, conn: &mut postgres::Connection<'a>) -> Result<usize> {

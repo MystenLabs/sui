@@ -6,6 +6,7 @@ use anyhow::Result;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use tracing::trace;
 
@@ -138,7 +139,7 @@ where
         debug!("Writing config with lock to {}", path.display());
         let config_str = serde_yaml::to_string(&self)?;
 
-        let file = fs::OpenOptions::new()
+        let mut file = fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
@@ -153,7 +154,7 @@ where
         file.lock()
             .with_context(|| format!("Unable to acquire exclusive lock on {}", path.display()))?;
 
-        fs::write(path, config_str)
+        file.write_all(config_str.as_bytes())
             .with_context(|| format!("Unable to save config to {}", path.display()))?;
 
         file.unlock()?;

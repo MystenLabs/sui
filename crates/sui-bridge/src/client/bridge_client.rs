@@ -37,7 +37,9 @@ impl BridgeClient {
         // Unwrap safe: we passed the `is_active_member` check above
         let member = committee.member(&authority_name).unwrap();
         Ok(Self {
-            inner: reqwest::Client::new(),
+            inner: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()?,
             authority: authority_name.clone(),
             base_url: Url::from_str(&member.base_url).ok(),
             committee,
@@ -55,6 +57,12 @@ impl BridgeClient {
             BridgeAction::SuiToEthBridgeAction(e) => format!(
                 "sign/bridge_tx/sui/eth/{}/{}",
                 e.sui_tx_digest, e.sui_tx_event_index
+            ),
+            BridgeAction::SuiToEthTokenTransfer(_action) => format!(
+                "/sign/bridge_action/sui/eth/{source_chain}/{message_type}/{bridge_seq_num}",
+                source_chain = event.chain_id() as u8,
+                message_type = event.action_type() as u8,
+                bridge_seq_num = event.seq_number(),
             ),
             BridgeAction::EthToSuiBridgeAction(e) => format!(
                 "sign/bridge_tx/eth/sui/{}/{}",

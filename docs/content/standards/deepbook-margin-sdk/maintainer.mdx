@@ -1,0 +1,245 @@
+---
+title: Maintainer SDK
+sidebar_label: Maintainer
+description: Learn how to use the DeepBook Margin SDK to manage margin pools and system configuration.
+keywords:
+  [
+    maintainer,
+    margin pool admin,
+    pool configuration,
+    interest rates,
+    protocol config,
+    deepbook margin sdk,
+  ]
+---
+
+The Maintainer SDK provides administrative functions for managing margin pools, configuring interest rates, and controlling which DeepBook pools can access margin lending. These functions are restricted to maintainers with the appropriate capabilities.
+
+## Maintainer functions
+
+The DeepBook Margin SDK provides the following functions for pool administration and configuration.
+
+### `createMarginPool`
+
+Use `createMarginPool` to create a new margin pool for a specific asset. Requires the maintainer capability. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `coinKey`: String that identifies the asset type.
+- `poolConfig`: `TransactionArgument` representing the protocol configuration.
+
+<ImportContent source="/packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="createMarginPool" org="MystenLabs" repo="ts-sdks" signatureOnly />
+
+### `newProtocolConfig`
+
+Use `newProtocolConfig` to create a new protocol configuration object combining margin pool settings and interest parameters. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `coinKey`: String that identifies the asset type.
+- `marginPoolConfig`: `MarginPoolConfigParams` object with pool settings.
+- `interestConfig`: `InterestConfigParams` object with interest rate parameters.
+
+<ImportContent source="/packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="newProtocolConfig" org="MystenLabs" repo="ts-sdks" signatureOnly />
+
+### `newMarginPoolConfig`
+
+Use `newMarginPoolConfig` to create a margin pool configuration object. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `coinKey`: String that identifies the asset type.
+- `marginPoolConfig`: `MarginPoolConfigParams` object containing:
+  - `supplyCap`: Number representing maximum supply allowed
+  - `maxUtilizationRate`: Number representing maximum utilization (e.g., 0.8 for 80%)
+  - `referralSpread`: Number representing protocol spread percentage
+  - `minBorrow`: Number representing minimum borrow amount
+
+<ImportContent source="/packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="newMarginPoolConfig" org="MystenLabs" repo="ts-sdks" signatureOnly />
+
+### `newInterestConfig`
+
+Use `newInterestConfig` to create an interest configuration object. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `interestConfig`: `InterestConfigParams` object containing:
+  - `baseRate`: Number representing base interest rate
+  - `baseSlope`: Number representing interest rate slope before kink
+  - `optimalUtilization`: Number representing the kink point (e.g., 0.8)
+  - `excessSlope`: Number representing interest rate slope after kink
+
+<ImportContent source="/packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="newInterestConfig" org="MystenLabs" repo="ts-sdks" signatureOnly />
+
+### `enableDeepbookPoolForLoan`, `disableDeepbookPoolForLoan`
+
+Use these functions to control which DeepBook pools can borrow from the margin pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `deepbookPoolKey`: String that identifies the DeepBook pool.
+- `coinKey`: String that identifies the margin pool asset.
+- `marginPoolCap`: String representing the margin pool capability ID.
+
+<ImportContent source="/packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="enableDeepbookPoolForLoan,disableDeepbookPoolForLoan" org="MystenLabs" repo="ts-sdks" signatureOnly />
+
+### `updateInterestParams`
+
+Use `updateInterestParams` to update the interest rate parameters for a margin pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `coinKey`: String that identifies the margin pool asset.
+- `marginPoolCap`: String representing the margin pool capability ID.
+- `interestConfig`: `InterestConfigParams` object with new interest parameters.
+
+<ImportContent source="/packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="updateInterestParams" org="MystenLabs" repo="ts-sdks" signatureOnly />
+
+### `updateMarginPoolConfig`
+
+Use `updateMarginPoolConfig` to update the configuration settings for a margin pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `coinKey`: String that identifies the margin pool asset.
+- `marginPoolCap`: String representing the margin pool capability ID.
+- `marginPoolConfig`: `MarginPoolConfigParams` object with new pool settings.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="updateMarginPoolConfig" org="MystenLabs" repo="ts-sdks" signatureOnly />
+
+## Examples
+
+The following examples demonstrate common maintainer operations.
+
+### Create a margin pool
+
+```tsx
+// Example: Create a USDC margin pool
+createUsdcMarginPool = (tx: Transaction) => {
+	const coinKey = 'USDC';
+
+	// Create pool configuration
+	const poolConfig = tx.add(
+		this.maintainerContract.newProtocolConfig(
+			coinKey,
+			{
+				supplyCap: 10_000_000, // 10M USDC
+				maxUtilizationRate: 0.8, // 80%
+				referralSpread: 0.1, // 10% protocol spread
+				minBorrow: 100, // 100 USDC minimum
+			},
+			{
+				baseRate: 0.02, // 2% base rate
+				baseSlope: 0.1, // 10% slope before kink
+				optimalUtilization: 0.8, // 80% kink point
+				excessSlope: 1.0, // 100% slope after kink
+			},
+		),
+	);
+
+	// Create the pool
+	tx.add(this.maintainerContract.createMarginPool(coinKey, poolConfig));
+};
+```
+
+### Enable a DeepBook pool for borrowing
+
+```tsx
+// Example: Allow SUI/USDC pool to borrow from USDC margin pool
+enablePoolForBorrowing = (tx: Transaction) => {
+	const deepbookPoolKey = 'SUI_DBUSDC';
+	const coinKey = 'USDC';
+	const marginPoolCapId = '0x...'; // Margin pool cap ID
+
+	tx.add(
+		this.maintainerContract.enableDeepbookPoolForLoan(deepbookPoolKey, coinKey, marginPoolCapId),
+	);
+};
+```
+
+### Update interest rate parameters
+
+```tsx
+// Example: Update USDC margin pool interest rates
+updateInterestRates = (tx: Transaction) => {
+	const coinKey = 'USDC';
+	const marginPoolCapId = '0x...';
+
+	tx.add(
+		this.maintainerContract.updateInterestParams(coinKey, marginPoolCapId, {
+			baseRate: 0.03, // Increase to 3% base rate
+			baseSlope: 0.12, // Increase slope
+			optimalUtilization: 0.75, // Lower kink to 75%
+			excessSlope: 1.5, // Steeper excess slope
+		}),
+	);
+};
+```
+
+### Update margin pool configuration
+
+```tsx
+// Example: Update USDC margin pool limits
+updatePoolConfig = (tx: Transaction) => {
+	const coinKey = 'USDC';
+	const marginPoolCapId = '0x...';
+
+	tx.add(
+		this.maintainerContract.updateMarginPoolConfig(coinKey, marginPoolCapId, {
+			supplyCap: 20_000_000, // Increase to 20M USDC
+			maxUtilizationRate: 0.85, // Allow 85% utilization
+			referralSpread: 0.12, // Increase protocol spread
+			minBorrow: 50, // Lower minimum to 50 USDC
+		}),
+	);
+};
+```
+
+### Complete pool setup workflow
+
+```tsx
+// Example: Complete workflow for setting up a new margin pool
+setupNewMarginPool = (tx: Transaction) => {
+	const coinKey = 'SUI';
+
+	// Step 1: Create protocol config
+	const poolConfig = tx.add(
+		this.maintainerContract.newProtocolConfig(
+			coinKey,
+			{
+				supplyCap: 1_000_000, // 1M SUI
+				maxUtilizationRate: 0.75,
+				referralSpread: 0.1,
+				minBorrow: 10,
+			},
+			{
+				baseRate: 0.01,
+				baseSlope: 0.08,
+				optimalUtilization: 0.8,
+				excessSlope: 0.8,
+			},
+		),
+	);
+
+	// Step 2: Create the margin pool
+	tx.add(this.maintainerContract.createMarginPool(coinKey, poolConfig));
+
+	// Step 3: Enable specific DeepBook pools for borrowing
+	const marginPoolCapId = '0x...'; // Get from pool creation event
+	tx.add(this.maintainerContract.enableDeepbookPoolForLoan('SUI_DBUSDC', coinKey, marginPoolCapId));
+	tx.add(this.maintainerContract.enableDeepbookPoolForLoan('SUI_USDT', coinKey, marginPoolCapId));
+};
+```
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3/tree/main/packages/deepbook_margin"
+	label="DeepBook Margin package"
+	desc="The DeepBook Margin package on GitHub."
+/>
+<RelatedLink
+	href="https://www.npmjs.com/package/@mysten/deepbook-v3"
+	label="DeepBookV3 SDK node package"
+	desc="The DeepBookV3 SDK node package on NPM."
+/>

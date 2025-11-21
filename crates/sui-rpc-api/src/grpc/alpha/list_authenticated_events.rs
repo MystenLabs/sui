@@ -21,10 +21,9 @@ const MAX_PAGE_SIZE_BYTES: usize = 512 * 1024; // 512KiB
 #[derive(serde::Serialize, serde::Deserialize)]
 struct PageToken {
     stream_id: SuiAddress,
-    start_checkpoint: u64,
-    last_event_checkpoint: u64,
-    last_event_transaction_idx: u32,
-    last_event_index: u32,
+    next_checkpoint: u64,
+    next_transaction_idx: u32,
+    next_event_idx: u32,
 }
 
 fn to_grpc_event(ev: &sui_types::event::Event) -> Event {
@@ -153,59 +152,66 @@ pub fn list_authenticated_events(
         return Ok(response);
     }
 
-    let start_transaction_idx = page_token.as_ref().map(|t| t.last_event_transaction_idx);
-    let start_event_idx = page_token.as_ref().map(|t| t.last_event_index);
+    let (actual_start, start_transaction_idx, start_event_idx) = if let Some(token) = &page_token {
+        (
+            token.next_checkpoint,
+            Some(token.next_transaction_idx),
+            Some(token.next_event_idx),
+        )
+    } else {
+        (start, None, None)
+    };
 
     let iter = indexes
         .authenticated_event_iter(
             stream_addr,
-            start,
+            actual_start,
             start_transaction_idx,
             start_event_idx,
             highest_indexed,
-            page_size,
+            page_size + 1,
         )
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
     let mut events = Vec::new();
     let mut size_bytes = 0;
-    let mut events_processed: u32 = 0;
-    let mut last_event_info: Option<(u64, u32, u32)> = None;
+    let mut next_page_token = None;
 
-    for event_result in iter {
+    for (i, event_result) in iter.enumerate() {
         let (cp, transaction_idx, event_idx, ev) =
             event_result.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
-        // Check if we've reached our size limit
-        if size_bytes >= MAX_PAGE_SIZE_BYTES {
+        if i >= page_size as usize {
+            next_page_token = Some(encode_page_token(PageToken {
+                stream_id: stream_addr,
+                next_checkpoint: cp,
+                next_transaction_idx: transaction_idx,
+                next_event_idx: event_idx,
+            }));
             break;
         }
 
         let authenticated_event =
             to_authenticated_event(&stream_id, cp, transaction_idx, event_idx, &ev);
-        size_bytes += authenticated_event.encoded_len();
-        events.push(authenticated_event);
-        last_event_info = Some((cp, transaction_idx, event_idx));
-        events_processed += 1;
-    }
+        let event_size = authenticated_event.encoded_len();
 
-    let next_page_token = if events_processed == page_size {
-        last_event_info.map(|(last_cp, last_tx_idx, last_ev_idx)| {
-            encode_page_token(PageToken {
+        if i > 0 && size_bytes + event_size > MAX_PAGE_SIZE_BYTES {
+            next_page_token = Some(encode_page_token(PageToken {
                 stream_id: stream_addr,
-                start_checkpoint: start,
-                last_event_checkpoint: last_cp,
-                last_event_transaction_idx: last_tx_idx,
-                last_event_index: last_ev_idx,
-            })
-        })
-    } else {
-        None
-    };
+                next_checkpoint: cp,
+                next_transaction_idx: transaction_idx,
+                next_event_idx: event_idx,
+            }));
+            break;
+        }
+
+        size_bytes += event_size;
+        events.push(authenticated_event);
+    }
 
     let mut response = ListAuthenticatedEventsResponse::default();
     response.events = events;
     response.highest_indexed_checkpoint = Some(highest_indexed);
-    response.next_page_token = next_page_token.map(|token| token.to_vec());
+    response.next_page_token = next_page_token.map(|t| t.into());
     Ok(response)
 }

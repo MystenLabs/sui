@@ -1301,9 +1301,10 @@ async fn sync_checkpoint_contents<S>(
         {
             let next_checkpoint = store
                 .get_checkpoint_by_sequence_number(current_sequence)
-                .expect(
-                    "BUG: store should have all checkpoints older than highest_verified_checkpoint",
-                );
+                .unwrap_or_else(|| panic!(
+                    "BUG: store should have all checkpoints older than highest_verified_checkpoint (checkpoint {})",
+                    current_sequence
+                ));
 
             // Enforce transaction count concurrency limit.
             let tx_count = next_checkpoint.network_total_transactions

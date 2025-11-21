@@ -3,7 +3,7 @@
 
 use crate::config::WatchdogConfig;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
-use crate::metered_eth_provider::MeteredEthHttpProvier;
+use crate::metered_eth_provider::MeteredEthHttpProvider;
 use crate::sui_bridge_watchdog::eth_bridge_status::EthBridgeStatus;
 use crate::sui_bridge_watchdog::eth_vault_balance::{EthereumVaultBalance, VaultAsset};
 use crate::sui_bridge_watchdog::metrics::WatchdogMetrics;
@@ -104,7 +104,7 @@ pub async fn run_bridge_node(
     // Before reconfiguration happens we only set it once when the node starts
     let sui_system = server_config
         .sui_client
-        .sui_client()
+        .jsonrpc_client()
         .governance_api()
         .get_latest_sui_system_state()
         .await?;
@@ -143,7 +143,6 @@ pub async fn run_bridge_node(
             server_config.sui_client,
             server_config.eth_client,
             server_config.approved_governance_actions,
-            metrics.clone(),
         ),
         metrics,
         Arc::new(metadata),
@@ -153,7 +152,7 @@ pub async fn run_bridge_node(
 async fn start_watchdog(
     watchdog_config: Option<WatchdogConfig>,
     registry: &prometheus::Registry,
-    eth_provider: Arc<Provider<MeteredEthHttpProvier>>,
+    eth_provider: Arc<Provider<MeteredEthHttpProvider>>,
     eth_bridge_proxy_address: EthAddress,
     sui_client: Arc<SuiBridgeClient>,
 ) {
@@ -245,7 +244,7 @@ async fn start_watchdog(
         && !watchdog_config.total_supplies.is_empty()
     {
         let total_supplies = TotalSupplies::new(
-            Arc::new(sui_client.sui_client().clone()),
+            Arc::new(sui_client.jsonrpc_client().clone()),
             watchdog_config.total_supplies,
             watchdog_metrics.total_supplies.clone(),
         );

@@ -213,6 +213,7 @@ impl MoveValue {
     where
         V::Error: std::error::Error + Send + Sync + 'static,
     {
+        // TODO: Don't simplify error to anyhow::Error
         let mut bytes = Cursor::new(blob);
         let res = visit_value(&mut bytes, ty, visitor)?;
         if bytes.position() as usize == blob.len() {

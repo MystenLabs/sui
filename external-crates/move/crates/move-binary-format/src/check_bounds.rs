@@ -17,6 +17,7 @@ use crate::{
         VariantInstantiationHandle, VariantJumpTable,
     },
     internals::ModuleIndex,
+    safe_assert,
 };
 use move_core_types::vm_status::StatusCode;
 
@@ -27,13 +28,18 @@ enum BoundsCheckingContext {
 pub struct BoundsChecker<'a> {
     module: &'a CompiledModule,
     context: BoundsCheckingContext,
+    deprecate_global_storage_ops: bool,
 }
 
 impl<'a> BoundsChecker<'a> {
-    pub fn verify_module(module: &'a CompiledModule) -> PartialVMResult<()> {
+    pub fn verify_module(
+        module: &'a CompiledModule,
+        deprecate_global_storage_ops: bool,
+    ) -> PartialVMResult<()> {
         let mut bounds_check = Self {
             module,
             context: BoundsCheckingContext::Module,
+            deprecate_global_storage_ops,
         };
         if bounds_check.module.module_handles().is_empty() {
             let status =
@@ -512,24 +518,48 @@ impl<'a> BoundsChecker<'a> {
                         }
                     }
                 }
-                Pack(idx)
-                | Unpack(idx)
-                | ExistsDeprecated(idx)
-                | ImmBorrowGlobalDeprecated(idx)
-                | MutBorrowGlobalDeprecated(idx)
-                | MoveFromDeprecated(idx)
-                | MoveToDeprecated(idx) => self.check_code_unit_bounds_impl(
+                Pack(idx) | Unpack(idx) => self.check_code_unit_bounds_impl(
                     self.module.struct_defs(),
                     *idx,
                     bytecode_offset,
                 )?,
-                PackGeneric(idx)
-                | UnpackGeneric(idx)
-                | ExistsGenericDeprecated(idx)
+                ExistsDeprecated(idx)
+                | ImmBorrowGlobalDeprecated(idx)
+                | MutBorrowGlobalDeprecated(idx)
+                | MoveFromDeprecated(idx)
+                | MoveToDeprecated(idx) => {
+                    safe_assert!(!self.deprecate_global_storage_ops);
+                    self.check_code_unit_bounds_impl(
+                        self.module.struct_defs(),
+                        *idx,
+                        bytecode_offset,
+                    )?
+                }
+                PackGeneric(idx) | UnpackGeneric(idx) => {
+                    self.check_code_unit_bounds_impl(
+                        self.module.struct_instantiations(),
+                        *idx,
+                        bytecode_offset,
+                    )?;
+                    // check type parameters in type operations are bound to the function type parameters
+                    if let Some(struct_inst) =
+                        self.module.struct_instantiations().get(idx.into_index())
+                        && let Some(sig) = self
+                            .module
+                            .signatures()
+                            .get(struct_inst.type_parameters.into_index())
+                    {
+                        for ty in &sig.0 {
+                            self.check_type_parameter(ty, type_param_count)?
+                        }
+                    }
+                }
+                ExistsGenericDeprecated(idx)
                 | ImmBorrowGlobalGenericDeprecated(idx)
                 | MutBorrowGlobalGenericDeprecated(idx)
                 | MoveFromGenericDeprecated(idx)
                 | MoveToGenericDeprecated(idx) => {
+                    safe_assert!(!self.deprecate_global_storage_ops);
                     self.check_code_unit_bounds_impl(
                         self.module.struct_instantiations(),
                         *idx,

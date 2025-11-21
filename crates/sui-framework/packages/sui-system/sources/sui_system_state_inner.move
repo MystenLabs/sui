@@ -38,6 +38,11 @@ const ANY_VALIDATOR: u8 = 3;
 const SYSTEM_STATE_VERSION_V1: u64 = 1;
 
 const EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY: u64 = 0;
+const EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY: u64 = 1;
+
+public struct ExecutionTimeObservationChunkKey has copy, drop, store {
+    chunk_index: u64,
+}
 
 /// A list of system config parameters.
 public struct SystemParameters has store {
@@ -1098,11 +1103,47 @@ public(package) fun store_execution_time_estimates(
     self: &mut SuiSystemStateInnerV2,
     estimates: vector<u8>,
 ) {
-    let key = EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY;
-    if (self.extra_fields.contains(key)) {
-        self.extra_fields.remove<_, vector<u8>>(key);
+    if (self.extra_fields.contains(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY)) {
+        self.extra_fields.remove<_, vector<u8>>(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY);
     };
-    self.extra_fields.add(key, estimates);
+    self.extra_fields.add(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY, estimates);
+}
+
+public(package) fun store_execution_time_estimates_v2(
+    self: &mut SuiSystemStateInnerV2,
+    estimate_chunks: vector<vector<u8>>,
+) {
+    if (self.extra_fields.contains(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY)) {
+        self.extra_fields.remove<_, vector<u8>>(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY);
+    };
+
+    if (self.extra_fields.contains(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY)) {
+        let existing_chunk_count: u64 = self
+            .extra_fields
+            .remove<_, u64>(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY);
+
+        let mut chunk_idx = 0;
+        while (chunk_idx < existing_chunk_count) {
+            let chunk_key = ExecutionTimeObservationChunkKey { chunk_index: chunk_idx };
+            if (self.extra_fields.contains(chunk_key)) {
+                self.extra_fields.remove<ExecutionTimeObservationChunkKey, vector<u8>>(chunk_key);
+            };
+            chunk_idx = chunk_idx + 1;
+        };
+    };
+
+    let total_chunks = estimate_chunks.length();
+    if (total_chunks > 0) {
+        self.extra_fields.add(EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY, total_chunks);
+
+        let mut i = 0;
+        while (i < total_chunks) {
+            let chunk_key = ExecutionTimeObservationChunkKey { chunk_index: i };
+            let chunk_data = estimate_chunks[i];
+            self.extra_fields.add(chunk_key, chunk_data);
+            i = i + 1;
+        };
+    };
 }
 
 /// Return the current validator set

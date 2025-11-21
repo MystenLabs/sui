@@ -2,7 +2,28 @@
 title: Orders SDK
 sidebar_label: Orders
 description: Learn how to use the DeepBookV3 SDK to leverage orders against pools.
-keywords: [ limit orders, market orders, modify orders, cancel orders, balancemanager, deepbookv3, pay_with_deep, DEEP token, reduce order size, lower expiration time, order options, self-matching options, orderinfo, orderdeepprice, fill, events, place market order, withdraw amount, withdraw settled amount ]
+keywords:
+  [
+    limit orders,
+    market orders,
+    modify orders,
+    cancel orders,
+    balancemanager,
+    deepbookv3,
+    pay_with_deep,
+    DEEP token,
+    reduce order size,
+    lower expiration time,
+    order options,
+    self-matching options,
+    orderinfo,
+    orderdeepprice,
+    fill,
+    events,
+    place market order,
+    withdraw amount,
+    withdraw settled amount,
+  ]
 ---
 
 Placing orders is a main function of any DeepBook integration. Before you can place orders, though, you must first set up a balance manager. See [DeepBookV3 SDK](../deepbookv3-sdk.mdx) for information on setting up a balance manager.
@@ -19,9 +40,7 @@ Use `placeLimitOrder` to place limit orders. The call returns a function that ta
 
 - `params`: `SwapParams` object that represents the parameters for the swap.
 
-```tsx
-placeLimitOrder({ params: PlaceLimitOrderParams });
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="placeLimitOrder" signatureOnly/>
 
 ### placeMarketOrder
 
@@ -31,9 +50,7 @@ Use `placeMarketOrder` to place market orders. The call returns a function that 
 
 - `params`: `SwapParams` object that represents the parameters for the swap.
 
-```tsx
-placeMarketOrder({ params: PlaceMarketOrderParams });
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="placeMarketOrder" signatureOnly/>
 
 ### cancelOrder
 
@@ -47,11 +64,9 @@ The `orderId` is the protocol `orderId` generated during order placement, which 
 
 - `poolKey`: String that identifies the pool from which to borrow.
 - `balanceManagerKey`: String that identifies the `BalanceManager`.
-- `orderId`: String of the protocol order ID that identifies the order to cancel. 
+- `orderId`: String of the protocol order ID that identifies the order to cancel.
 
-```tsx
-cancelOrder(poolKey: string, balanceManagerKey: string, orderId: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="cancelOrder" signatureOnly/>
 
 ### cancelAllOrders
 
@@ -62,9 +77,31 @@ Use `cancelAllOrders` to cancel every order for the balance manager whose key yo
 - `poolKey`: String that identifies the pool from which to borrow.
 - `balanceManagerKey`: String that identifies the `BalanceManager`.
 
-```tsx
-cancelAllOrders(poolKey: string, balanceManagerKey: string);
-```
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="cancelAllOrders" signatureOnly/>
+
+### `modifyOrder`
+
+Use `modifyOrder` to modify an existing order by changing its quantity. The new quantity must be less than the original quantity and more than the filled quantity. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `balanceManagerKey`: String that identifies the `BalanceManager`.
+- `orderId`: String of the protocol order ID to modify.
+- `newQuantity`: Number representing the new quantity for the order.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="modifyOrder" signatureOnly/>
+
+### `withdrawSettledAmounts`
+
+Use `withdrawSettledAmounts` to withdraw all settled amounts for a balance manager in a specific pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `balanceManagerKey`: String that identifies the `BalanceManager`.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="withdrawSettledAmounts" signatureOnly/>
 
 ## Examples
 
@@ -73,45 +110,45 @@ The following examples demonstrate some custom functions for DeepBookV3 orders.
 ### Limit orders
 
 See the [Order API](../deepbookv3/orders) for the different order types and self matching options.
-    
+
 ```tsx
 // Params for limit order
 interface PlaceLimitOrderParams {
-    poolKey: string;
-    balanceManagerKey: string;
-    clientOrderId: string;
-    price: number;
-    quantity: number;
-    isBid: boolean;
-    expiration?: number | bigint; // Default no expiration
-    orderType?: OrderType; // Default no restrictions
-    selfMatchingOption?: SelfMatchingOptions; // Default self matching allowed
-    payWithDeep?: boolean; // Default true
+	poolKey: string;
+	balanceManagerKey: string;
+	clientOrderId: string;
+	price: number;
+	quantity: number;
+	isBid: boolean;
+	expiration?: number | bigint; // Default no expiration
+	orderType?: OrderType; // Default no restrictions
+	selfMatchingOption?: SelfMatchingOptions; // Default self matching allowed
+	payWithDeep?: boolean; // Default true
 }
 
 /**
-  * @description Place a limit order
-  * @param {PlaceLimitOrderParams} params Parameters for placing a limit order
-  * @returns A function that takes a Transaction object
-  */
-placeLimitOrder = (params: PlaceLimitOrderParams) => (tx: Transaction) => {}
+ * @description Place a limit order
+ * @param {PlaceLimitOrderParams} params Parameters for placing a limit order
+ * @returns A function that takes a Transaction object
+ */
+placeLimitOrder = (params: PlaceLimitOrderParams) => (tx: Transaction) => {};
 
 // Example usage in DeepBookMarketMaker class
 // Place a bid of 10 DEEP at $0.1
 customPlaceLimitOrder = (tx: Transaction) => {
-  const poolKey = 'DEEP_DBUSDC'; // Pool key, check constants.ts for more
-  const managerKey = 'MANAGER_1'; // Balance manager key, initialized during client creation by user
-  tx.add(
-    this.deepBook.placeLimitOrder({
-      poolKey: poolKey,
-      balanceManagerKey: managerKey,
-      clientOrderId: '1',
-      price: 0.1,
-      quantity: 10,
-      isBid: true,
-      payWithDeep: true,
-    }),
-  );
+	const poolKey = 'DEEP_DBUSDC'; // Pool key, check constants.ts for more
+	const managerKey = 'MANAGER_1'; // Balance manager key, initialized during client creation by user
+	tx.add(
+		this.deepBook.placeLimitOrder({
+			poolKey: poolKey,
+			balanceManagerKey: managerKey,
+			clientOrderId: '1',
+			price: 0.1,
+			quantity: 10,
+			isBid: true,
+			payWithDeep: true,
+		}),
+	);
 };
 ```
 
@@ -122,87 +159,93 @@ Example of placing a market order.
 ```tsx
 // Params for market order
 interface PlaceMarketOrderParams {
-    poolKey: string;
-    balanceManagerKey: string;
-    clientOrderId: string;
-    quantity: number;
-    isBid: boolean;
-    selfMatchingOption?: SelfMatchingOptions;
-    payWithDeep?: boolean;
+	poolKey: string;
+	balanceManagerKey: string;
+	clientOrderId: string;
+	quantity: number;
+	isBid: boolean;
+	selfMatchingOption?: SelfMatchingOptions;
+	payWithDeep?: boolean;
 }
 
 // Example usage in DeepBookMarketMaker class
 // Place a market sell of 10 SUI in the SUI_DBUSDC pool
 customPlaceMarketOrder = (tx: Transaction) => {
-  const poolKey = 'SUI_DBUSDC'; // Pool key, check constants.ts for more
-  const managerKey = 'MANAGER_1'; // Balance manager key, initialized during client creation by user
-  tx.add(
-    this.deepBook.placeMarketOrder({
-      poolKey: poolKey,
-      balanceManagerKey: managerKey,
-      clientOrderId: '2',
-      quantity: 10,
-      isBid: true,
-      payWithDeep: true,
-    }),
-  );
+	const poolKey = 'SUI_DBUSDC'; // Pool key, check constants.ts for more
+	const managerKey = 'MANAGER_1'; // Balance manager key, initialized during client creation by user
+	tx.add(
+		this.deepBook.placeMarketOrder({
+			poolKey: poolKey,
+			balanceManagerKey: managerKey,
+			clientOrderId: '2',
+			quantity: 10,
+			isBid: true,
+			payWithDeep: true,
+		}),
+	);
 };
 ```
-    
+
 ### Cancel an order
 
-Example of canceling a single order in a pool for a balance manager. 
-    
+Example of canceling a single order in a pool for a balance manager.
+
 ```tsx
 /**
-  * @description Cancel an existing order
-  * @param {string} poolKey The key to identify the pool
-  * @param {string} balanceManagerKey The key to identify the BalanceManager
-  * @param {number} orderId Order ID to cancel
-  * @returns A function that takes a Transaction object
-  */
-cancelOrder = (
-  poolKey: string, 
-  balanceManagerKey: string, 
-  orderId: number
-) => (tx: Transaction) => {}
+ * @description Cancel an existing order
+ * @param {string} poolKey The key to identify the pool
+ * @param {string} balanceManagerKey The key to identify the BalanceManager
+ * @param {number} orderId Order ID to cancel
+ * @returns A function that takes a Transaction object
+ */
+cancelOrder =
+	(poolKey: string, balanceManagerKey: string, orderId: number) => (tx: Transaction) => {};
 
 // Example usage in DeepBookMarketMaker class
 // Cancel order 12345678 in SUI_DBUSDC pool
 cancelOrder = (tx: Transaction) => {
-  const poolKey = 'SUI_DBUSDC'; // Pool key, check constants.ts for more
-  const managerKey = 'MANAGER_1'; // Balance manager key, initialized during client creation by user
-  tx.add(this.deepBook.cancelOrder(poolKey, managerKey, 12345678));
+	const poolKey = 'SUI_DBUSDC'; // Pool key, check constants.ts for more
+	const managerKey = 'MANAGER_1'; // Balance manager key, initialized during client creation by user
+	tx.add(this.deepBook.cancelOrder(poolKey, managerKey, 12345678));
 };
 ```
 
 ### Cancel all orders
 
 Example of canceling all orders in a pool for a balance manager.
-    
+
 ```tsx
 /**
-  * @description Cancel all open orders for a balance manager
-  * @param {string} poolKey The key to identify the pool
-  * @param {string} balanceManagerKey The key to identify the BalanceManager
-  * @returns A function that takes a Transaction object
-  */
-cancelAllOrders = (
-  poolKey: string, 
-  balanceManagerKey: string
-) => (tx: Transaction) => {}
+ * @description Cancel all open orders for a balance manager
+ * @param {string} poolKey The key to identify the pool
+ * @param {string} balanceManagerKey The key to identify the BalanceManager
+ * @returns A function that takes a Transaction object
+ */
+cancelAllOrders = (poolKey: string, balanceManagerKey: string) => (tx: Transaction) => {};
 
 // Example usage in DeepBookMarketMaker class
 // Cancel order 12345678 in SUI_DBUSDC pool
 cancelOrder = (tx: Transaction) => {
-  const poolKey = 'SUI_DBUSDC'; // Pool key, check constants.ts for more
-  const managerKey = 'MANAGER_1'; // Balance manager key, initialized during client creation by user
-  tx.add(this.deepBook.cancelAllOrders(poolKey, managerKey));
+	const poolKey = 'SUI_DBUSDC'; // Pool key, check constants.ts for more
+	const managerKey = 'MANAGER_1'; // Balance manager key, initialized during client creation by user
+	tx.add(this.deepBook.cancelAllOrders(poolKey, managerKey));
 };
 ```
 
 ## Related links
 
-<RelatedLink href="https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3" label="DeepBookV3 Indexer repository" desc="The DeepBookV3 SDK repository on GitHub." />
-<RelatedLink href="https://www.npmjs.com/package/@mysten/deepbook-v3" label="DeepBookV3 SDK node package" desc="The DeepBookV3 SDK node package on NPM." />
-<RelatedLink href="https://github.com/MystenLabs/deepbookv3" label="DeepBookV3 repository" desc="The DeepBookV3 repository on GitHub." />
+<RelatedLink
+	href="https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3"
+	label="DeepBookV3 Indexer repository"
+	desc="The DeepBookV3 SDK repository on GitHub."
+/>
+<RelatedLink
+	href="https://www.npmjs.com/package/@mysten/deepbook-v3"
+	label="DeepBookV3 SDK node package"
+	desc="The DeepBookV3 SDK node package on NPM."
+/>
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3"
+	label="DeepBookV3 repository"
+	desc="The DeepBookV3 repository on GitHub."
+/>

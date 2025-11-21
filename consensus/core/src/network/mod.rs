@@ -5,7 +5,7 @@
 //! consensus protocol.
 //!
 //! Having an abstract network interface allows
-//! - simplying the semantics of sending data and serving requests over the network
+//! - simplifying the semantics of sending data and serving requests over the network
 //! - hiding implementation specific types and semantics from the consensus protocol
 //! - allowing easy swapping of network implementations, for better performance or testing
 //!
@@ -31,20 +31,11 @@ use crate::{
     error::ConsensusResult,
 };
 
-// Anemo generated RPC stubs.
-mod anemo_gen {
-    include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusRpc.rs"));
-}
-
 // Tonic generated RPC stubs.
 mod tonic_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusService.rs"));
 }
 
-pub mod connection_monitor;
-
-pub(crate) mod anemo_network;
-pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
 mod metrics_layer;
 #[cfg(all(test, not(msim)))]
@@ -67,17 +58,6 @@ pub(crate) type BlockStream = Pin<Box<dyn Stream<Item = ExtendedSerializedBlock>
 /// - To bound server resources, server should implement own timeout for incoming requests.
 #[async_trait]
 pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
-    // Whether the network client streams blocks to subscribed peers.
-    const SUPPORT_STREAMING: bool;
-
-    /// Sends a serialized SignedBlock to a peer.
-    async fn send_block(
-        &self,
-        peer: AuthorityIndex,
-        block: &VerifiedBlock,
-        timeout: Duration,
-    ) -> ConsensusResult<()>;
-
     /// Subscribes to blocks from a peer after last_received round.
     async fn subscribe_blocks(
         &self,
@@ -126,11 +106,18 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
         peer: AuthorityIndex,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
+
+    /// Sends a serialized SignedBlock to a peer.
+    #[cfg(test)]
+    async fn send_block(
+        &self,
+        peer: AuthorityIndex,
+        block: &VerifiedBlock,
+        timeout: Duration,
+    ) -> ConsensusResult<()>;
 }
 
 /// Network service for handling requests from peers.
-/// NOTE: using `async_trait` macro because `NetworkService` methods are called in the trait impl
-/// of `anemo_gen::ConsensusRpc`, which itself is annotated with `async_trait`.
 #[async_trait]
 pub(crate) trait NetworkService: Send + Sync + 'static {
     /// Handles the block sent from the peer via either unicast RPC or subscription stream.

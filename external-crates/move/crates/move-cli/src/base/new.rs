@@ -54,12 +54,13 @@ impl New {
     /// add the following to `{path}/.gitignore` if it doesn't already have them:
     /// ```gitignore
     ///     build/*
+    ///     traces/*
     ///     .trace
     ///     .coverage*
     ///     Pub.*.toml
     /// ```
     fn write_gitignore(&self, path: &Option<&Path>) -> anyhow::Result<()> {
-        let mut entries = vec!["build/*", ".trace", ".coverage*", "Pub.*.toml"];
+        let mut entries = vec!["build/*", "traces/*", ".trace", ".coverage*", "Pub.*.toml"];
 
         let mut file = std::fs::OpenOptions::new()
             .create(true)

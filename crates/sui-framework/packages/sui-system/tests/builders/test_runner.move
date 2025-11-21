@@ -333,7 +333,7 @@ public fun mint(amount: u64): Balance<SUI> {
 
 /// Destroy an object.
 public fun destroy<T>(v: T) {
-    sui::test_utils::destroy(v);
+    std::unit_test::destroy(v);
 }
 
 /// Finish the test runner.

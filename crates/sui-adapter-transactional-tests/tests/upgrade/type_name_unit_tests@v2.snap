@@ -32,4 +32,4 @@ gas summary: computation_cost: 3000000, storage_cost: 988000,  storage_rebate: 0
 task 6, line 177:
 //# run A2::m::generic_cases --args @A0 @A1
 mutated: object(0,1)
-gas summary: computation_cost: 246000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 196000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
