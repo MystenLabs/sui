@@ -1995,7 +1995,6 @@
                 "transfer_transfer_internal_cost_base": {
                   "u64": "52"
                 },
-                "translation_metering_step_resolution": null,
                 "translation_per_command_base_charge": null,
                 "translation_per_input_base_charge": null,
                 "translation_per_linkage_entry_charge": null,
