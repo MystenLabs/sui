@@ -21,10 +21,8 @@ use crate::store::{Connection, Store};
 
 use super::Handler;
 
-/// Starts a task for a tasked pipeline to track the main reader lo. This task is responsible for
-/// managing the watch channel so consumers know when the sender has been dropped and break
-/// accordingly. The existence of `reader_interval` indicates whether the indexer was tasked,
-/// necessitating this task, or not.
+/// Starts a task for a tasked pipeline to track the main reader lo. The existence of
+/// `reader_interval` indicates whether the indexer was tasked, necessitating this task, or not.
 pub(super) fn track_main_reader_lo<H: Handler + 'static>(
     reader_lo: Arc<SetOnce<AtomicU64>>,
     reader_interval: Option<Duration>,
