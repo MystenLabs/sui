@@ -16,7 +16,7 @@ use crate::{
 };
 use move_binary_format::{
     errors::VMError,
-    file_format::{AbilitySet, TypeParameterIndex},
+    file_format::{Ability, AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
     annotated_value,
@@ -33,9 +33,11 @@ use std::{cell::OnceCell, rc::Rc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     Identifier, TypeTag,
+    balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectID, TxContext},
     error::{ExecutionError, ExecutionErrorKind},
     execution_status::TypeArgumentError,
+    funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
     gas_coin::GasCoin,
     move_package::{UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::Object,
@@ -360,6 +362,34 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
 
     pub fn tx_context_type(&self) -> Result<Type, ExecutionError> {
         get_or_init_ty!(self, tx_context_type, TxContext::type_())
+    }
+
+    pub fn balance_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
+        let Some(abilities) = AbilitySet::from_u8(Ability::Store as u8) else {
+            invariant_violation!("Unable to create balance abilities");
+        };
+        let (a, m, n) = RESOLVED_BALANCE_STRUCT;
+        let module = ModuleId::new(*a, m.to_owned());
+        Ok(Type::Datatype(Rc::new(Datatype {
+            abilities,
+            module,
+            name: n.to_owned(),
+            type_arguments: vec![inner_type],
+        })))
+    }
+
+    pub fn withdrawal_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
+        let Some(abilities) = AbilitySet::from_u8(Ability::Drop as u8) else {
+            invariant_violation!("Unable to create withdrawal abilities");
+        };
+        let (a, m, n) = RESOLVED_WITHDRAWAL_STRUCT;
+        let module = ModuleId::new(*a, m.to_owned());
+        Ok(Type::Datatype(Rc::new(Datatype {
+            abilities,
+            module,
+            name: n.to_owned(),
+            type_arguments: vec![inner_type],
+        })))
     }
 
     pub fn vector_type(&self, element_type: Type) -> Result<Type, ExecutionError> {

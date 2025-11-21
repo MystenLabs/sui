@@ -16,6 +16,8 @@ use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSi
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
 use crate::gas_coin::GAS;
+use crate::gas_model::gas_predicates::check_for_gas_price_too_high;
+use crate::gas_model::gas_v2::SuiCostTable;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::{
@@ -42,7 +44,6 @@ use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use nonempty::{NonEmpty, nonempty};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use std::collections::btree_map::Entry;
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::iter::once;
@@ -210,6 +211,13 @@ impl FundsWithdrawalArg {
             reservation: Reservation::MaxAmountU64(amount),
             type_arg: WithdrawalTypeArg::Balance(balance_type),
             withdraw_from: WithdrawFrom::Sponsor,
+        }
+    }
+
+    fn owner_for_withdrawal(&self, tx: &impl TransactionDataAPI) -> SuiAddress {
+        match self.withdraw_from {
+            WithdrawFrom::Sender => tx.sender(),
+            WithdrawFrom::Sponsor => tx.gas_owner(),
         }
     }
 }
@@ -1638,6 +1646,19 @@ impl TransactionKind {
         Ok(input_objects)
     }
 
+    fn get_funds_withdrawals<'a>(&'a self) -> impl Iterator<Item = &'a FundsWithdrawalArg> + 'a {
+        let TransactionKind::ProgrammableTransaction(pt) = &self else {
+            return Either::Left(iter::empty());
+        };
+        Either::Right(pt.inputs.iter().filter_map(|input| {
+            if let CallArg::FundsWithdrawal(withdraw) = input {
+                Some(withdraw)
+            } else {
+                None
+            }
+        }))
+    }
+
     pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             TransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
@@ -2051,6 +2072,29 @@ impl TransactionData {
         )
     }
 
+    pub fn new_transfer_funds_to_address_balance(
+        recipient: SuiAddress,
+        sender: SuiAddress,
+        amount: u64,
+        type_arg: TypeTag,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> anyhow::Result<Self> {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_balance(recipient, amount, type_arg)?;
+            builder.finish()
+        };
+        Ok(Self::new_programmable(
+            sender,
+            vec![gas_payment],
+            pt,
+            gas_budget,
+            gas_price,
+        ))
+    }
+
     pub fn new_transfer_sui_allow_sponsor(
         recipient: SuiAddress,
         sender: SuiAddress,
@@ -2335,7 +2379,16 @@ pub trait TransactionDataAPI {
     /// reserved amount. This method aggregates all withdraw operations for the same account by
     /// merging their reservations. Each account object ID is derived from the type parameter of
     /// each withdraw operation.
-    fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>>;
+    ///
+    /// This method is used at signing time, and can reject a transaction if it contains
+    /// invalid reservations.
+    fn process_funds_withdrawals_for_signing(
+        &self,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>>;
+
+    /// Like `process_funds_withdrawals_for_signing`, but must only be called on a certified
+    /// transaction, i.e. one that is known to be valid.
+    fn process_funds_withdrawals_for_execution(&self) -> BTreeMap<AccumulatorObjId, u64>;
 
     // A cheap way to quickly check if the transaction has funds withdraws.
     fn has_funds_withdrawals(&self) -> bool;
@@ -2468,87 +2521,72 @@ impl TransactionDataAPI for TransactionDataV1 {
         Ok((move_objects, packages, receiving_objects))
     }
 
-    fn process_funds_withdrawals(&self) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
+    fn process_funds_withdrawals_for_signing(
+        &self,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
         let mut withdraws = self.get_funds_withdrawals();
 
-        for withdraw in &withdraws {
-            if matches!(withdraw.withdraw_from, WithdrawFrom::Sponsor) {
-                return Err(UserInputError::InvalidWithdrawReservation {
-                    error: "Explicit sponsor withdrawals are not yet supported".to_string(),
-                });
-            }
-        }
-
-        if self.is_gas_paid_from_address_balance() {
-            let gas_withdraw = if self.sender() != self.gas_owner() {
-                FundsWithdrawalArg::balance_from_sponsor(
-                    self.gas_data().budget,
-                    TypeInput::from(GAS::type_tag()),
-                )
-            } else {
-                FundsWithdrawalArg::balance_from_sender(
-                    self.gas_data().budget,
-                    TypeInput::from(GAS::type_tag()),
-                )
-            };
-            withdraws.push(gas_withdraw);
-        }
-
-        // TODO(address-balances): Use a protocol config parameter for max_withdraws.
-        let max_withdraws = 10;
-        if withdraws.len() > max_withdraws {
-            return Err(UserInputError::InvalidWithdrawReservation {
-                error: format!(
-                    "Maximum number of balance withdraw reservations is {max_withdraws}"
-                ),
-            });
-        }
+        withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
 
         // Accumulate all withdraws per account.
-        let mut withdraw_map = BTreeMap::new();
+        let mut withdraw_map: BTreeMap<_, u64> = BTreeMap::new();
         for withdraw in withdraws {
             let reserved_amount = match &withdraw.reservation {
-                Reservation::MaxAmountU64(amount) => *amount,
-                Reservation::EntireBalance => {
-                    return Err(UserInputError::InvalidWithdrawReservation {
-                        error: "Reserving the entire balance is not supported".to_string(),
-                    });
+                Reservation::MaxAmountU64(amount) => {
+                    assert!(*amount > 0, "verified in validity check");
+                    *amount
                 }
+                Reservation::EntireBalance => unreachable!("verified in validity check"),
             };
-            // Reserving an amount of 0 is meaningless, and potentially
-            // add various edge cases, which is error prone.
-            if reserved_amount == 0 {
-                return Err(UserInputError::InvalidWithdrawReservation {
-                    error: "Balance withdraw reservation amount must be non-zero".to_string(),
-                });
-            }
-            let account_address = match withdraw.withdraw_from {
-                WithdrawFrom::Sender => self.sender(),
-                WithdrawFrom::Sponsor => self.gas_owner(),
-            };
+
+            let account_address = withdraw.owner_for_withdrawal(self);
             let account_id =
                 AccumulatorValue::get_field_id(account_address, &withdraw.type_arg.to_type_tag()?)
                     .map_err(|e| UserInputError::InvalidWithdrawReservation {
                         error: e.to_string(),
                     })?;
-            let entry = withdraw_map.entry(account_id);
-            match entry {
-                Entry::Vacant(vacant) => {
-                    vacant.insert(reserved_amount);
-                }
-                Entry::Occupied(mut occupied) => {
-                    let current_amount = *occupied.get();
-                    let new_amount = current_amount.checked_add(reserved_amount).ok_or(
-                        UserInputError::InvalidWithdrawReservation {
-                            error: "Balance withdraw reservation overflow".to_string(),
-                        },
-                    )?;
-                    occupied.insert(new_amount);
-                }
-            }
+
+            let current_amount = withdraw_map.entry(account_id).or_default();
+            *current_amount = current_amount.checked_add(reserved_amount).ok_or(
+                UserInputError::InvalidWithdrawReservation {
+                    error: "Balance withdraw reservation overflow".to_string(),
+                },
+            )?;
         }
 
         Ok(withdraw_map)
+    }
+
+    fn process_funds_withdrawals_for_execution(&self) -> BTreeMap<AccumulatorObjId, u64> {
+        let mut withdraws = self.get_funds_withdrawals();
+        withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
+
+        // Accumulate all withdraws per account.
+        let mut withdraw_map: BTreeMap<AccumulatorObjId, u64> = BTreeMap::new();
+        for withdraw in withdraws {
+            let reserved_amount = match &withdraw.reservation {
+                Reservation::MaxAmountU64(amount) => {
+                    assert!(*amount > 0, "verified in validity check");
+                    *amount
+                }
+                Reservation::EntireBalance => unreachable!("verified in validity check"),
+            };
+
+            let withdrawal_owner = withdraw.owner_for_withdrawal(self);
+
+            // unwrap checked at signing time
+            let account_id = AccumulatorValue::get_field_id(
+                withdrawal_owner,
+                &withdraw.type_arg.to_type_tag().unwrap(),
+            )
+            .unwrap();
+
+            let value = withdraw_map.entry(account_id).or_default();
+            // overflow checked at signing time
+            *value = value.checked_add(reserved_amount).unwrap();
+        }
+
+        withdraw_map
     }
 
     fn has_funds_withdrawals(&self) -> bool {
@@ -2566,19 +2604,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn get_funds_withdrawals(&self) -> Vec<FundsWithdrawalArg> {
-        let TransactionKind::ProgrammableTransaction(pt) = &self.kind else {
-            return vec![];
-        };
-        pt.inputs
-            .iter()
-            .filter_map(|input| {
-                if let CallArg::FundsWithdrawal(withdraw) = input {
-                    Some(withdraw.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
+        self.kind.get_funds_withdrawals().cloned().collect()
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
@@ -2611,6 +2637,57 @@ impl TransactionDataAPI for TransactionDataV1 {
                         "Both min_epoch and max_epoch must be specified and equal".to_string(),
                     ));
                 }
+            }
+        }
+
+        if self.has_funds_withdrawals() {
+            fp_ensure!(
+                !self.gas().is_empty() || config.enable_address_balance_gas_payments(),
+                UserInputError::MissingGasPayment
+            );
+            fp_ensure!(
+                config.enable_accumulators(),
+                UserInputError::Unsupported("Address balance withdraw is not enabled".to_string())
+            );
+
+            // TODO(address-balances): Use a protocol config parameter for max_withdraws.
+            let max_withdraws = 10;
+
+            for (count, withdraw) in self.kind.get_funds_withdrawals().enumerate() {
+                fp_ensure!(
+                    count < max_withdraws,
+                    UserInputError::InvalidWithdrawReservation {
+                        error: format!(
+                            "Maximum number of balance withdraw reservations is {max_withdraws}"
+                        ),
+                    }
+                );
+
+                match withdraw.withdraw_from {
+                    WithdrawFrom::Sender => (),
+                    WithdrawFrom::Sponsor => {
+                        return Err(UserInputError::InvalidWithdrawReservation {
+                            error: "Explicit sponsor withdrawals are not yet supported".to_string(),
+                        });
+                    }
+                }
+
+                match withdraw.reservation {
+                    Reservation::MaxAmountU64(amount) => {
+                        fp_ensure!(
+                            amount > 0,
+                            UserInputError::InvalidWithdrawReservation {
+                                error: "Balance withdraw reservation amount must be non-zero"
+                                    .to_string(),
+                            }
+                        );
+                    }
+                    Reservation::EntireBalance => {
+                        return Err(UserInputError::InvalidWithdrawReservation {
+                            error: "Reserving the entire balance is not supported".to_string(),
+                        });
+                    }
+                };
             }
         }
 
@@ -2650,6 +2727,33 @@ impl TransactionDataAPI for TransactionDataV1 {
                 value: config.max_gas_payment_objects().to_string()
             }
         );
+
+        if !self.is_system_tx() {
+            let cost_table = SuiCostTable::new(config, self.gas_data.price);
+
+            fp_ensure!(
+                !check_for_gas_price_too_high(config.gas_model_version())
+                    || self.gas_data.price < config.max_gas_price(),
+                UserInputError::GasPriceTooHigh {
+                    max_gas_price: config.max_gas_price(),
+                }
+            );
+
+            fp_ensure!(
+                self.gas_data.budget <= cost_table.max_gas_budget,
+                UserInputError::GasBudgetTooHigh {
+                    gas_budget: self.gas_data().budget,
+                    max_budget: cost_table.max_gas_budget,
+                }
+            );
+            fp_ensure!(
+                self.gas_data.budget >= cost_table.min_transaction_cost,
+                UserInputError::GasBudgetTooLow {
+                    gas_budget: self.gas_data.budget,
+                    min_budget: cost_table.min_transaction_cost,
+                }
+            );
+        }
 
         self.validity_check_no_gas_check(config)
     }
@@ -2727,7 +2831,25 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 }
 
-impl TransactionDataV1 {}
+impl TransactionDataV1 {
+    fn get_funds_withdrawal_for_gas_payment(&self) -> Option<FundsWithdrawalArg> {
+        if self.is_gas_paid_from_address_balance() {
+            Some(if self.sender() != self.gas_owner() {
+                FundsWithdrawalArg::balance_from_sponsor(
+                    self.gas_data().budget,
+                    TypeInput::from(GAS::type_tag()),
+                )
+            } else {
+                FundsWithdrawalArg::balance_from_sender(
+                    self.gas_data().budget,
+                    TypeInput::from(GAS::type_tag()),
+                )
+            })
+        } else {
+            None
+        }
+    }
+}
 
 pub struct TxValidityCheckContext<'a> {
     pub config: &'a ProtocolConfig,
@@ -3011,27 +3133,6 @@ impl SenderSignedData {
                     return Err(SuiErrorKind::TransactionExpired.into());
                 }
             }
-        }
-
-        if tx_data.has_funds_withdrawals() {
-            fp_ensure!(
-                !tx_data.gas().is_empty() || context.config.enable_address_balance_gas_payments(),
-                SuiErrorKind::UserInputError {
-                    error: UserInputError::MissingGasPayment
-                }
-                .into()
-            );
-            fp_ensure!(
-                context.config.enable_accumulators()
-                    && context.accumulator_object_init_shared_version.is_some(),
-                SuiErrorKind::UserInputError {
-                    error: UserInputError::Unsupported(
-                        "Address balance withdraw is not enabled".to_string()
-                    )
-                }
-                .into()
-            );
-            tx_data.process_funds_withdrawals()?;
         }
 
         // Enforce overall transaction size limit.

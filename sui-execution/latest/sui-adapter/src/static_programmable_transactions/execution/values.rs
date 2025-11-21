@@ -7,6 +7,7 @@ use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
 use move_binary_format::errors::PartialVMError;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::runtime_value::MoveTypeLayout;
+use move_core_types::u256::U256;
 use move_vm_runtime::execution::interpreter::locals::{BaseHeap as VMBaseHeap, BaseHeapId};
 use move_vm_runtime::shared::views::ValueVisitor;
 use move_vm_runtime::{
@@ -245,6 +246,18 @@ impl Value {
         Self(VMValue::struct_(Struct::pack([
             Self::uid(id.into()).0,
             Self::balance(amount).0,
+        ])))
+    }
+
+    /// Constructs a `sui::funds_accumulator::Withdrawal` value
+    pub fn funds_accumulator_withdrawal(owner: AccountAddress, limit: U256) -> Self {
+        // public struct Withdrawal has drop {
+        //     owner: address,
+        //     limit: u256,
+        // }
+        Self(VMValue::struct_(Struct::pack([
+            VMValue::address(owner),
+            VMValue::u256(limit),
         ])))
     }
 

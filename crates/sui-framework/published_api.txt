@@ -2611,7 +2611,13 @@ ExtraField
 CurrencyKey
 	public struct
 	0x2::coin_registry
+LegacyMetadataKey
+	public struct
+	0x2::coin_registry
 MetadataCap
+	public struct
+	0x2::coin_registry
+Borrow
 	public struct
 	0x2::coin_registry
 Currency
@@ -2656,6 +2662,9 @@ make_supply_burn_only
 finalize
 	public fun
 	0x2::coin_registry
+finalize_and_delete_metadata_cap
+	public fun
+	0x2::coin_registry
 finalize_registration
 	public fun
 	0x2::coin_registry
@@ -2693,6 +2702,12 @@ migrate_regulated_state_by_metadata
 	public fun
 	0x2::coin_registry
 migrate_regulated_state_by_cap
+	public fun
+	0x2::coin_registry
+borrow_legacy_metadata
+	public fun
+	0x2::coin_registry
+return_borrowed_legacy_metadata
 	public fun
 	0x2::coin_registry
 decimals
@@ -2739,6 +2754,12 @@ total_supply
 	0x2::coin_registry
 exists
 	public fun
+	0x2::coin_registry
+is_migrated_from_legacy
+	fun
+	0x2::coin_registry
+to_legacy_metadata
+	fun
 	0x2::coin_registry
 create
 	fun

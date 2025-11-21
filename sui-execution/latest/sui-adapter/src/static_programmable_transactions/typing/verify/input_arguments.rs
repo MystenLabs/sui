@@ -75,6 +75,7 @@ pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(
     let T::Transaction {
         bytes,
         objects: _,
+        withdrawals: _,
         pure,
         receiving,
         commands,
@@ -299,7 +300,8 @@ fn check_obj_by_mut_ref(
     location: &T::Location,
 ) -> Result<(), ExecutionError> {
     match location {
-        T::Location::PureInput(_)
+        T::Location::WithdrawalInput(_)
+        | T::Location::PureInput(_)
         | T::Location::ReceivingInput(_)
         | T::Location::TxContext
         | T::Location::GasCoin
@@ -327,6 +329,7 @@ fn check_by_value(
         T::Location::GasCoin
         | T::Location::Result(_, _)
         | T::Location::TxContext
+        | T::Location::WithdrawalInput(_)
         | T::Location::PureInput(_)
         | T::Location::ReceivingInput(_) => Ok(()),
         T::Location::ObjectInput(idx) => {
@@ -369,6 +372,7 @@ fn check_gas_by_value_loc(idx: u16, location: &T::Location) -> Result<(), Execut
         )),
         T::Location::TxContext
         | T::Location::ObjectInput(_)
+        | T::Location::WithdrawalInput(_)
         | T::Location::PureInput(_)
         | T::Location::ReceivingInput(_)
         | T::Location::Result(_, _) => Ok(()),

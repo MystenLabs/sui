@@ -180,7 +180,7 @@ where
             .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
 
         bridge_event
-            .try_into_bridge_action(*tx_digest, event_idx)
+            .try_into_bridge_action()
             .ok_or(BridgeError::BridgeEventNotActionable)
     }
 
@@ -648,14 +648,16 @@ impl SuiClientInner for sui_rpc::Client {
     }
 
     async fn get_chain_identifier(&self) -> Result<String, BridgeError> {
-        Ok(self
+        let chain_id = self
             .clone()
             .ledger_client()
             .get_service_info(GetServiceInfoRequest::default())
             .await?
             .into_inner()
             .chain_id()
-            .into())
+            .parse::<sui_types::digests::CheckpointDigest>()?;
+
+        Ok(sui_types::digests::ChainIdentifier::from(chain_id).to_string())
     }
 
     async fn get_reference_gas_price(&self) -> Result<u64, BridgeError> {
@@ -999,6 +1001,7 @@ impl SuiClientInner for SuiClientInternal {
 mod tests {
     use crate::crypto::BridgeAuthorityKeyPair;
     use crate::e2e_tests::test_utils::TestClusterWrapperBuilder;
+    use crate::types::SuiToEthTokenTransfer;
     use crate::{
         events::{EmittedSuiToEthTokenBridgeV1, MoveTokenDepositedEvent},
         sui_mock_client::SuiMockClient,
@@ -1006,7 +1009,6 @@ mod tests {
             approve_action_with_validator_secrets, bridge_token, get_test_eth_to_sui_bridge_action,
             get_test_sui_to_eth_bridge_action,
         },
-        types::SuiToEthBridgeAction,
     };
     use ethers::types::Address as EthAddress;
     use move_core_types::account_address::AccountAddress;
@@ -1079,29 +1081,28 @@ mod tests {
                 sui_event_3.clone(),
             ],
         );
-        let expected_action_1 = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
-            sui_tx_digest: tx_digest,
-            sui_tx_event_index: 0,
-            sui_bridge_event: sanitized_event_1.clone(),
+        let expected_action = BridgeAction::SuiToEthTokenTransfer(SuiToEthTokenTransfer {
+            nonce: sanitized_event_1.nonce,
+            sui_chain_id: sanitized_event_1.sui_chain_id,
+            eth_chain_id: sanitized_event_1.eth_chain_id,
+            sui_address: sanitized_event_1.sui_address,
+            eth_address: sanitized_event_1.eth_address,
+            token_id: sanitized_event_1.token_id,
+            amount_adjusted: sanitized_event_1.amount_sui_adjusted,
         });
         assert_eq!(
             sui_client
                 .get_bridge_action_by_tx_digest_and_event_idx_maybe(&tx_digest, 0)
                 .await
                 .unwrap(),
-            expected_action_1,
+            expected_action,
         );
-        let expected_action_2 = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
-            sui_tx_digest: tx_digest,
-            sui_tx_event_index: 2,
-            sui_bridge_event: sanitized_event_1.clone(),
-        });
         assert_eq!(
             sui_client
                 .get_bridge_action_by_tx_digest_and_event_idx_maybe(&tx_digest, 2)
                 .await
                 .unwrap(),
-            expected_action_2,
+            expected_action,
         );
         assert!(matches!(
             sui_client

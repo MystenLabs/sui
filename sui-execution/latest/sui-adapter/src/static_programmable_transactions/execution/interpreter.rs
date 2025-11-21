@@ -69,6 +69,7 @@ where
     let T::Transaction {
         bytes,
         objects,
+        withdrawals,
         pure,
         receiving,
         commands,
@@ -80,6 +81,7 @@ where
         gas_charger,
         bytes,
         objects,
+        withdrawals,
         pure,
         receiving,
     )?;

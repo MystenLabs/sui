@@ -2681,7 +2681,7 @@ async fn init_sim_executor(
         PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
             rng,
             DEFAULT_CHAIN_START_TIMESTAMP,
-            protocol_config.version,
+            protocol_config,
             acc_cfgs,
             addr_keys
                 .iter()
@@ -2689,8 +2689,6 @@ async fn init_sim_executor(
                 .collect(),
             reference_gas_price,
             None,
-            protocol_config.enable_accumulators(),
-            protocol_config.enable_authenticated_event_streams(),
         );
 
     sim.set_data_ingestion_path(data_ingestion_path.clone());

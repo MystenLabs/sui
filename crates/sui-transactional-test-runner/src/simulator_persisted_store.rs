@@ -11,7 +11,7 @@ use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use simulacrum::Simulacrum;
 use std::num::NonZeroUsize;
 use sui_config::genesis;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::ProtocolConfig;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::{ConfigBuilder, KeyPairWrapper};
 use sui_types::error::SuiErrorKind;
@@ -105,24 +105,24 @@ impl PersistedStore {
     pub fn new_sim_replica_with_protocol_version_and_accounts<R>(
         mut rng: R,
         chain_start_timestamp_ms: u64,
-        protocol_version: ProtocolVersion,
+        protocol_config: &ProtocolConfig,
         account_configs: Vec<AccountConfig>,
         key_pair_wrappers: Vec<KeyPairWrapper>,
         reference_gas_price: Option<u64>,
         path: Option<PathBuf>,
-        enable_accumulators: bool,
-        enable_authenticated_event_streams: bool,
     ) -> (Simulacrum<R, Self>, PersistedStoreInnerReadOnlyWrapper)
     where
         R: rand::RngCore + rand::CryptoRng,
     {
+        let leaked: &'static ProtocolConfig = Box::leak(Box::new(protocol_config.clone()));
+        let _override_guard = ProtocolConfig::apply_overrides_for_testing(|_, _| leaked.clone());
         let path: PathBuf = path.unwrap_or(tempdir().unwrap().keep());
 
         let mut builder = ConfigBuilder::new_with_temp_dir()
             .rng(&mut rng)
             .with_chain_start_timestamp_ms(chain_start_timestamp_ms)
             .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
-            .with_protocol_version(protocol_version)
+            .with_protocol_version(protocol_config.version)
             .with_accounts(account_configs);
 
         if !key_pair_wrappers.is_empty() {
@@ -130,23 +130,6 @@ impl PersistedStore {
         };
         if let Some(reference_gas_price) = reference_gas_price {
             builder = builder.with_reference_gas_price(reference_gas_price)
-        };
-
-        let _override_guard = if enable_accumulators || enable_authenticated_event_streams {
-            Some(ProtocolConfig::apply_overrides_for_testing(
-                move |_, cfg| {
-                    let mut c = cfg;
-                    if enable_accumulators {
-                        c.enable_accumulators_for_testing();
-                    }
-                    if enable_authenticated_event_streams {
-                        c.enable_authenticated_event_streams_for_testing();
-                    }
-                    c
-                },
-            ))
-        } else {
-            None
         };
 
         let config = builder.build();
@@ -164,11 +147,9 @@ impl PersistedStore {
     pub fn new_sim_with_protocol_version_and_accounts<R>(
         rng: R,
         chain_start_timestamp_ms: u64,
-        protocol_version: ProtocolVersion,
+        protocol_config: &ProtocolConfig,
         account_configs: Vec<AccountConfig>,
         path: Option<PathBuf>,
-        enable_accumulators: bool,
-        enable_authenticated_event_streams: bool,
     ) -> Simulacrum<R, Self>
     where
         R: rand::RngCore + rand::CryptoRng,
@@ -176,13 +157,11 @@ impl PersistedStore {
         Self::new_sim_replica_with_protocol_version_and_accounts(
             rng,
             chain_start_timestamp_ms,
-            protocol_version,
+            protocol_config,
             account_configs,
             vec![],
             None,
             path,
-            enable_accumulators,
-            enable_authenticated_event_streams,
         )
         .0
     }
@@ -749,15 +728,14 @@ mod tests {
 
     #[tokio::test]
     async fn deterministic_genesis() {
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         let rng = StdRng::from_seed([9; 32]);
         let chain1 = PersistedStore::new_sim_with_protocol_version_and_accounts(
             rng,
             0,
-            ProtocolVersion::MAX,
+            &protocol_config,
             vec![],
             None,
-            false,
-            false,
         );
         let genesis_checkpoint_digest1 = *chain1
             .store()
@@ -769,11 +747,9 @@ mod tests {
         let chain2 = PersistedStore::new_sim_with_protocol_version_and_accounts(
             rng,
             0,
-            ProtocolVersion::MAX,
+            &protocol_config,
             vec![],
             None,
-            false,
-            false,
         );
         let genesis_checkpoint_digest2 = *chain2
             .store()
@@ -788,11 +764,9 @@ mod tests {
         let chain3 = PersistedStore::new_sim_with_protocol_version_and_accounts(
             rng,
             0,
-            ProtocolVersion::MAX,
+            &protocol_config,
             vec![],
             None,
-            false,
-            false,
         );
 
         assert_ne!(

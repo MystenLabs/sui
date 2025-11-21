@@ -1,27 +1,65 @@
 ---
-title: Epochs and Reconfiguration
+title: Epochs, Equivocation, and Reconfiguration
+description: Epochs define time periods on Sui where the validator set remains unchanged. Equivocation occurs when objects are used incorrectly across transactions. Reconfiguration adjusts network parameters at epoch boundaries.
+keywords: [ epochs, equivocation, reconfiguration, validators, object versioning ]
 ---
 
-In a simplified view, epochs are to the Sui network what individual days are to a calendar. Reconfiguration, then, is a process at the end of each epoch where that day's activity is tallied and the next day's parameters are set.
+On Sui, an _epoch_ is a period of time defined by the network. During this time, the Sui [validator](/guides/operator/validator/validator-config.mdx) set and their stakes remain unchanged. On both [Mainnet](/concepts/sui-architecture/networks.mdx) and [Testnet](/concepts/sui-architecture/networks.mdx), an epoch is about 24 hours. Epochs on Devnet are 1 hour. This timeframe allows validators to process transactions efficiently without worrying about ad hoc validator changes.
 
-## Epoch
+Epoch values are included in the metadata of all [transactions](/concepts/transactions.mdx). A transaction is only valid if executed before a set epoch.
 
-An epoch is a duration of time where the Sui validator set and their stakes remain unchanged. On both Mainnet and Testnet, an epoch is about 24 hours. This timeframe allows validators to process transactions efficiently without worrying about ad hoc validator changes during the middle of an epoch.
+## Equivocation
 
-Epoch values are included in the metadata of transactions on the Sui network, but the average user is unaffected by its value. The only time a user might need to know about epochs is in the case of expiring transactions, where a transaction is only valid if executed before a set epoch. See [Transactions](../transactions.mdx) for more information about transactions on Sui.
+On Sui, [object versioning](/concepts/versioning.mdx) ensures that each [object](/concepts/object-model.mdx) is referenced by a unique (`ObjectId`, `SequenceNumber`) pair, where `SequenceNumber` refers to the object's version. Only a single transaction can modify an object at a specific version. After a transaction modifies an object, the version is incremented. Only the latest version can be used in subsequent transactions. Object versioning tracks the state of objects across transactions and epochs.
+
+_Equivocation_ occurs when an owned object pair (`ObjectId`, `SequenceNumber`) is used concurrently in multiple non-finalized transactions. Any object used in multiple transactions can become a source of equivocation if not managed correctly.
+
+Equivocation can occur when:
+
+- A user or smart contract submits two transactions using the same (`ObjectId`, `SequenceNumber`) before the first is finalized.
+
+- Inadvertent logic traps in [smart contract](/guides/developer/getting-started/hello-world.mdx) code, for example, when handling [sponsored transactions](/guides/developer/sui-101/sponsor-txn.mdx#client-equivocation-risk).
+
+### Locked objects
+
+Even though both transactions aren't finalized, submitting equivocated transactions still causes other problems for both developers and users. For example, when equivocation is detected, the involved objects are locked until the end of the current epoch. Neither transaction can proceed, and the objects cannot be used in any other transaction. Bad actors could intentionally submit equivocated transactions to lock up important objects and intentionally disrupt dApps.
+
+If you find your smart contracts [unintentionally locking objects](/guides/developer/sui-101/common-errors#transaction-errors) you can install the [`sui-tool`](https://github.com/MystenLabs/sui/tree/main/crates/sui-tool) utility and use the `locked-object` command to check the locked status of the passed asset on a specific RPC network (`--fullnode-rpc-url` value). If you provide an address, `locked-object` checks if all the gas objects owned by that address are locked. Pass an object ID to check if that specific object is locked. Include the `--rescue` flag to try and unlock the object the command targets. Rescue is possible if the object isn't already locked by a majority of validators.
+
+### Double spending
+
+Equivocation might also occur when a user attempts to pay for gas with the same coin object across multiple transactions.
+
+Sui's versioning architecture enables the safe reuse of the same gas coin across a series of transactions. Among other processing, the first transaction advances the version number of the coin and returns it to the sender. The next transaction can then use the updated version of that coin to pay for gas. This prevents equivocation because each transaction references a different version of the same coin.
+
+To prevent double spending, validators lock objects as they validate transactions.
+
+### Punishment for equivocation
+
+The Sui network has safeguards to punish validators who engage in equivocation. While Sui's object versioning is designed to prevent equivocation, punishment is still necessary. Prevention does not stop users from submitting transactions that attempt equivocation, which lock objects and degrade network usability. Punishing equivocation also discourages both accidental and intentional abuse, motivating developers to ensure their code does not accidentally cause equivocation.
+
+## Common pitfalls to avoid
+
+1. For most smart contracts, equivocation is not an intended behavior. A common source of unintentional equivocation comes from multiple transactions performed by the same address. If you don't take care to handle the gas fees properly, you could lock up your smart contract by trying to use the same [coin](/standards/coin.mdx) (and version) for more than one transaction.
+
+    **Recommendation**: If you use a single thread, serialize transactions that use the same owned object. [Programmable transaction blocks](/guides/developer/sui-101/building-ptb.mdx) allow your transactions to use multiple operations against the same owned object. A PTB is essentially a single, serialized transaction, which can prevent `SequenceNumber` errors.
+
+    **Recommendation**: Always take advantage of the inherent batching that PTBs provide. For example, consider an airdrop scenario where you want to mint and transfer an object to many users. Because PTBs allow up to 1,024 operations in a single PTB, you can mint and transfer the airdrop object to 512 users in a single transaction. This approach is much more cost efficient than looping over 512 individual transactions that mint and transfer to a single user each time. Batching transactions might remove the need for parallel execution, but you must consider the atomic nature of PTBs; if one instruction fails, the whole PTB fails. Consequently, parallel transactions might be preferred for some use cases.
+
+2. Parallel transactions from multiple threads can cause unintentional equivocation errors if not managed properly. A way to avoid owned object equivocation is to create a separate owned object for each transaction thread. This ensures that each thread uses the correct version of its object input.
+
+    **Recommendation**: In cases where creating multiple owned objects is not practical or desired, you can create a wrapper around an object used across threads. The wrapper is a shared object that authorizes access to its object through an allowlist. Any time a transaction needs to access the wrapped object, it gets permission from the wrapper in the same PTB. When authorization needs transferring, the allowlist for the wrapper gets updated accordingly. This approach can create a latency bottleneck as the object wrapper creates sequentialized transactions that rely on its object for input. The Sui TypeScript SDK provides an executor class, `ParallelTransactionExecutor`, to process parallel transactions efficiently.
 
 ## Reconfiguration
 
 Reconfiguration is a critical process occurring at the end of each epoch. It involves several key steps to adjust the network for the upcoming epoch:
 
-1. **Finalizing transactions and checkpoints**
-    - The network reaches consensus on the final set of transactions and checkpoints for the current epoch. This ensures all validators have an identical state at epoch conclusion.
+1. **Finalizing transactions and checkpoints:** The network reaches consensus on the final set of transactions and checkpoints for the current epoch. This ensures all validators have an identical state at epoch conclusion.
+
     - **Synchronous moment:** This is the only fully synchronous event in the network, crucial for maintaining consistency.
-1. **Distribution of gas rewards**
-    - Computation gas fees are distributed to the validator staking reward pool, from which stakers can withdraw.
-    - Storage fees are allocated to a storage fund, playing a vital role in the Sui tokenomics, as explained in [Tokenomics](../tokenomics.mdx).
-1. **Validator set change**
-    - Any pending staking and unstaking requests during the epoch are finalized and reflected in validators stake distribution.
-    - Any pending validator change requests are also processed, including adding new validators and removing existing validators. This is the sole opportunity for altering the validator set and stake distribution.
-1. **Protocol upgrade**
-    - If agreed upon by 2f+1 validators, the network might upgrade to a new protocol version, encompassing new features, bug fixes, and updates to Move framework libraries.
+
+1. **Distribution of gas rewards:** Computation gas fees are distributed to the validator staking reward pool, from which stakers can withdraw. Storage fees are allocated to a storage fund, playing a vital role in the [Sui tokenomics](/concepts/tokenomics.mdx).
+
+1. **Validator set change:** Any pending staking and unstaking requests during the epoch are finalized and reflected in the validators' stake distribution. Any pending validator change requests are processed, including adding new validators and removing existing validators. This is the sole opportunity for altering the validator set and stake distribution.
+
+1. **Protocol upgrade:** If agreed upon by 2f+1 validators, the network might upgrade to a new protocol version, encompassing new features, bug fixes, and updates to Move framework libraries.

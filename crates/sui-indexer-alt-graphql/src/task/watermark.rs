@@ -17,10 +17,11 @@ use futures::future::OptionFuture;
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableReader,
     consistent_reader::{self, ConsistentReader, proto::AvailableRangeResponse},
+    ledger_grpc_reader::LedgerGrpcReader,
     pg_reader::PgReader,
 };
 use sui_sql_macro::query;
-use tokio::{join, sync::RwLock, task::JoinHandle, time};
+use tokio::{sync::RwLock, task::JoinHandle, time};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
@@ -44,6 +45,9 @@ pub(crate) struct WatermarkTask {
 
     /// Access to Bigtable.
     bigtable_reader: Option<BigtableReader>,
+
+    /// Access to the Ledger gRPC service.
+    ledger_grpc_reader: Option<LedgerGrpcReader>,
 
     /// Access to the Consistent Store
     consistent_reader: ConsistentReader,
@@ -118,6 +122,7 @@ impl WatermarkTask {
         pg_pipelines: Vec<String>,
         pg_reader: PgReader,
         bigtable_reader: Option<BigtableReader>,
+        ledger_grpc_reader: Option<LedgerGrpcReader>,
         consistent_reader: ConsistentReader,
         metrics: Arc<RpcMetrics>,
         cancel: CancellationToken,
@@ -130,6 +135,7 @@ impl WatermarkTask {
             watermarks: Default::default(),
             pg_reader,
             bigtable_reader,
+            ledger_grpc_reader,
             consistent_reader,
             interval: watermark_polling_interval,
             pg_pipelines,
@@ -153,6 +159,7 @@ impl WatermarkTask {
                 watermarks,
                 pg_reader,
                 bigtable_reader,
+                ledger_grpc_reader,
                 consistent_reader,
                 interval,
                 pg_pipelines,
@@ -172,7 +179,7 @@ impl WatermarkTask {
                     }
 
                     _ = interval.tick() => {
-                        let rows = match WatermarkRow::read(&pg_reader, bigtable_reader.as_ref(), &pg_pipelines).await {
+                        let rows = match WatermarkRow::read(&pg_reader, bigtable_reader.as_ref(), ledger_grpc_reader.as_ref(), &pg_pipelines).await {
                             Ok(rows) => rows,
                             Err(e) => {
                                 warn!("Failed to read watermarks: {e:#}");
@@ -274,18 +281,27 @@ impl WatermarkRow {
     async fn read(
         pg_reader: &PgReader,
         bigtable_reader: Option<&BigtableReader>,
+        ledger_grpc_reader: Option<&LedgerGrpcReader>,
         pg_pipelines: &[String],
     ) -> anyhow::Result<Vec<WatermarkRow>> {
         let rows = watermarks_from_pg(pg_reader, pg_pipelines);
-        let last: OptionFuture<_> = bigtable_reader.map(watermark_from_bigtable).into();
+        let bigtable: OptionFuture<_> = bigtable_reader.map(watermark_from_bigtable).into();
+        let ledger_grpc: OptionFuture<_> =
+            ledger_grpc_reader.map(watermark_from_ledger_grpc).into();
 
-        let (rows, last) = join!(rows, last);
+        let (rows, bigtable, ledger_grpc) = tokio::join!(rows, bigtable, ledger_grpc);
         let mut rows = rows.context("Failed to read watermarks from Postgres")?;
-        let last = last
+
+        let bigtable = bigtable
             .transpose()
             .context("Failed to read watermarks from Bigtable")?;
+        rows.extend(bigtable);
 
-        rows.extend(last);
+        let ledger_grpc = ledger_grpc
+            .transpose()
+            .context("Failed to read watermarks from Ledger gRPC")?;
+        rows.extend(ledger_grpc);
+
         Ok(rows)
     }
 
@@ -350,6 +366,26 @@ async fn watermark_from_bigtable(bigtable_reader: &BigtableReader) -> anyhow::Re
 
     Ok(WatermarkRow {
         pipeline: "bigtable".to_owned(),
+        epoch_hi_inclusive: summary.epoch as i64,
+        checkpoint_hi_inclusive: summary.sequence_number as i64,
+        tx_hi: summary.network_total_transactions as i64,
+        timestamp_ms_hi_inclusive: summary.timestamp_ms as i64,
+        epoch_lo: 0,
+        checkpoint_lo: 0,
+        tx_lo: 0,
+    })
+}
+
+async fn watermark_from_ledger_grpc(
+    ledger_grpc_reader: &LedgerGrpcReader,
+) -> anyhow::Result<WatermarkRow> {
+    let summary = ledger_grpc_reader
+        .checkpoint_watermark()
+        .await
+        .context("Failed to get checkpoint watermark")?;
+
+    Ok(WatermarkRow {
+        pipeline: "ledger_grpc".to_owned(),
         epoch_hi_inclusive: summary.epoch as i64,
         checkpoint_hi_inclusive: summary.sequence_number as i64,
         tx_hi: summary.network_total_transactions as i64,
