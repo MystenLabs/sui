@@ -5,9 +5,6 @@ use move_core_types::{identifier::Identifier, u256::U256};
 use shared_crypto::intent::Intent;
 use std::path::PathBuf;
 use sui_core::accumulators::balances::get_currency_types_for_owner;
-use sui_core::authority::authority_test_utils::{
-    make_coin_reservation_tx_with_split, make_send_to_account_tx, make_send_to_multi_account_tx,
-};
 use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse};
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -18,7 +15,7 @@ use sui_types::{
     accumulator_metadata::AccumulatorOwner,
     accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
-    base_types::{dbg_addr, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
+    base_types::{dbg_addr, FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     coin_reservation::ParsedObjectRefWithdrawal,
     digests::{ChainIdentifier, CheckpointDigest},
     effects::{InputConsensusObject, TransactionEffectsAPI},
@@ -725,55 +722,6 @@ async fn test_withdraw_insufficient_balance() {
 
     // ensure that no conservation failures are detected during reconfig.
     test_cluster.trigger_reconfiguration().await;
-}
-
-fn withdraw_from_balance_tx(
-    amount: u64,
-    sender: SuiAddress,
-    gas: ObjectRef,
-    rgp: u64,
-) -> TransactionData {
-    withdraw_from_balance_tx_with_reservation(amount, amount, sender, gas, rgp)
-}
-
-fn withdraw_from_balance_tx_with_reservation(
-    amount: u64,
-    reservation_amount: u64,
-    sender: SuiAddress,
-    gas: ObjectRef,
-    rgp: u64,
-) -> TransactionData {
-    let mut builder = ProgrammableTransactionBuilder::new();
-
-    // Add withdraw reservation
-    let withdraw_arg = sui_types::transaction::FundsWithdrawalArg::balance_from_sender(
-        reservation_amount,
-        sui_types::type_input::TypeInput::from(sui_types::gas_coin::GAS::type_tag()),
-    );
-    let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
-
-    let amount_arg = builder.pure(U256::from(amount)).unwrap();
-
-    let split_withdraw_arg = builder.programmable_move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("funds_accumulator").unwrap(),
-        Identifier::new("withdrawal_split").unwrap(),
-        vec!["0x2::balance::Balance<0x2::sui::SUI>".parse().unwrap()],
-        vec![withdraw_arg, amount_arg],
-    );
-
-    let coin = builder.programmable_move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("coin").unwrap(),
-        Identifier::new("redeem_funds").unwrap(),
-        vec!["0x2::sui::SUI".parse().unwrap()],
-        vec![split_withdraw_arg],
-    );
-
-    builder.transfer_arg(sender, coin);
-
-    let tx = TransactionKind::ProgrammableTransaction(builder.finish());
-    TransactionData::new(tx, sender, gas, 10000000, rgp)
 }
 
 #[sim_test]
@@ -3437,7 +3385,9 @@ async fn test_coin_reservation_validation() {
     let (sender2, gas2) = get_nth_sender_and_one_gas(context, 1).await;
 
     // send 1000 gas from the gas coins to the balances
-    let tx = make_send_to_account_tx(1000, sender1, sender1, gas1, rgp);
+    let tx = TestTransactionBuilder::new(sender1, gas1, rgp)
+        .transfer_sui_to_address_balance(FundSource::coin(gas1), vec![(1000, sender1)])
+        .build();
 
     let (_, effects) = test_cluster
         .sign_and_execute_transaction_directly(&tx)
@@ -3538,6 +3488,37 @@ async fn test_coin_reservation_validation() {
             .to_string()
             .contains("Gas object is not an owned object"));
     }
+
+    // Verify that total reservation limit is enforced for coin reservations.
+    {
+        // 1 regular reservation
+        let mut tx_builder = TestTransactionBuilder::new(sender1, gas1, rgp)
+            .transfer_sui_to_address_balance(
+                FundSource::address_fund_with_reservation(1),
+                vec![(1, sender1)],
+            );
+
+        // plus 10 coin reservations
+        for _ in 0..10 {
+            let random_object_id = ObjectID::random();
+
+            let coin = ParsedObjectRefWithdrawal::new(random_object_id, 0, 100)
+                .encode(SequenceNumber::new(), chain_id);
+
+            tx_builder = tx_builder.transfer(FullObjectRef::from_fastpath_ref(coin), sender1);
+        }
+
+        let tx = tx_builder.build();
+
+        let err = test_cluster
+            .sign_and_execute_transaction_directly(&tx)
+            .await
+            .unwrap_err();
+
+        assert!(err
+            .to_string()
+            .contains("Maximum number of balance withdraw reservations is 10"));
+    }
 }
 
 #[sim_test]
@@ -3590,27 +3571,12 @@ async fn try_coin_reservation_tx(
     recipient: SuiAddress,
     gas: ObjectRef,
 ) -> anyhow::Result<SuiTransactionBlockResponse> {
-    try_coin_reservation_tx_with_split(test_cluster, coin_reservation, sender, recipient, gas, None)
-        .await
-}
-
-async fn try_coin_reservation_tx_with_split(
-    test_cluster: &mut TestCluster,
-    coin_reservation: ObjectRef,
-    sender: SuiAddress,
-    recipient: SuiAddress,
-    gas: ObjectRef,
-    split_amount: Option<u64>,
-) -> anyhow::Result<SuiTransactionBlockResponse> {
     let rgp = test_cluster.get_reference_gas_price().await;
-    let tx = make_coin_reservation_tx_with_split(
-        coin_reservation,
-        sender,
-        recipient,
-        gas,
-        rgp,
-        split_amount,
-    );
+
+    let tx = TestTransactionBuilder::new(sender, gas, rgp)
+        .transfer_sui_to_address_balance(FundSource::coin(coin_reservation), vec![(1, recipient)])
+        .build();
+
     let signed_tx = test_cluster.wallet.sign_transaction(&tx).await;
     test_cluster
         .wallet
