@@ -1223,6 +1223,7 @@ async fn start(
     if let Some(input) = with_faucet {
         let faucet_address = parse_host_port(input, DEFAULT_FAUCET_PORT)
             .map_err(|_| anyhow!("Invalid faucet host and port"))?;
+
         info!("Starting the faucet service at {faucet_address}");
 
         let host_ip = match faucet_address {
@@ -1247,12 +1248,18 @@ async fn start(
                 .import(None, SuiKeyPair::Ed25519(kp))
                 .await
                 .unwrap();
+            let localnet_ip = if fullnode_rpc_address.ip() == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))
+            {
+                format!("http://127.0.0.1:{}", fullnode_rpc_address.port())
+            } else {
+                fullnode_rpc_url
+            };
             SuiClientConfig {
                 keystore,
                 external_keys: None,
                 envs: vec![SuiEnv {
                     alias: "localnet".to_string(),
-                    rpc: fullnode_rpc_url,
+                    rpc: localnet_ip,
                     ws: None,
                     basic_auth: None,
                     chain_id: None,
