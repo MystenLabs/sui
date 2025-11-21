@@ -407,7 +407,7 @@ impl FileBasedKeystore {
             });
 
             let reader =
-                BufReader::new(std::fs::File::open(path).with_context(|| {
+                BufReader::new(fs::File::open(path).with_context(|| {
                     format!("Cannot open the keystore file: {}", path.display())
                 })?);
             let kp_strings: Vec<String> = serde_json::from_reader(reader).with_context(|| {
@@ -430,7 +430,7 @@ impl FileBasedKeystore {
         aliases_path.set_extension(ALIASES_FILE_EXTENSION);
 
         let aliases = if aliases_path.exists() {
-            let reader = BufReader::new(std::fs::File::open(&aliases_path).with_context(|| {
+            let reader = BufReader::new(fs::File::open(&aliases_path).with_context(|| {
                 format!(
                     "Cannot open aliases file in keystore: {}",
                     aliases_path.display()
@@ -484,7 +484,7 @@ impl FileBasedKeystore {
                     )
                 })?;
 
-            std::fs::write(aliases_path, aliases_store)?;
+            fs::write(aliases_path, aliases_store)?;
             aliases
         };
 
@@ -513,7 +513,7 @@ impl FileBasedKeystore {
             let mut aliases_path = path.clone();
             aliases_path.set_extension(ALIASES_FILE_EXTENSION);
             // no reactor for tokio::fs::write in simtest, so we use spawn_blocking
-            tokio::task::spawn_blocking(move || std::fs::write(aliases_path, aliases_store))
+            tokio::task::spawn_blocking(move || fs::write(aliases_path, aliases_store))
                 .await?
                 .with_context(|| format!("Cannot write aliases to file: {}", path.display()))?;
         }
@@ -536,7 +536,7 @@ impl FileBasedKeystore {
             let keystore_path = path.clone();
             // no reactor for tokio::fs::write in simtest, so we use spawn_blocking
             tokio::task::spawn_blocking(move || {
-                let ret = std::fs::write(&keystore_path, store);
+                let ret = fs::write(&keystore_path, store);
                 #[cfg(unix)]
                 if ret.is_ok() {
                     let _ = set_reduced_file_permissions(&keystore_path).inspect_err(|error| {
