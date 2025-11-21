@@ -461,7 +461,7 @@ pub fn ptb_description() -> clap::Command {
             \n --assign sender\
             \n --publish \".\"\
             \n --assign upgrade_cap\
-            \n --transfer-objects sender \"[upgrade_cap]\""
+            \n --transfer-objects \"[upgrade_cap]\" sender"
         ).value_hint(ValueHint::DirPath))
         .arg(arg!(
             --"upgrade" <MOVE_PACKAGE_PATH>
