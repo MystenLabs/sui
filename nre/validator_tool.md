@@ -181,6 +181,30 @@ $SUI_BINARY validator leave-committee
 
 Then you will be removed from committee starting from next epoch.
 
+#### Offline Signing
+For security reasons, you may want to sign transactions on a separate machine (e.g., an air-gapped machine). You can use the `--serialize-unsigned-transaction` flag with the following commands to get the base64 encoded transaction data without executing it:
+- `become-candidate`
+- `join-committee`
+- `leave-committee`
+- `update-metadata`
+- `update-gas-price`
+- `report-validator`
+
+Example:
+```bash
+$SUI_BINARY validator update-gas-price 1000 --serialize-unsigned-transaction
+```
+Output:
+```
+Serialized transaction for signing: <BASE64_STRING>
+```
+You can then sign this payload using `sui keytool sign` and execute it using `sui client execute-signed-tx`.
+
+**Note:** If you are using a multisig account, ensure that your active address in the Sui CLI is set to your multisig address before running these commands. You can set it using:
+```bash
+$SUI_BINARY client switch --address <MULTISIG_ADDRESS>
+```
+
 ### Generate the payload to create PoP
 
 Serialize the payload that is used to generate Proof of Possession. This allows the signer to take the payload offline for an Authority protocol BLS keypair to sign.

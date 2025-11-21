@@ -12,7 +12,7 @@ Finally, you need to [deserialize Move events](#deserialize) from raw BCS bytes 
 
 ## Checkpoint data sources {#checkpoint-data-sources}
 
-The `sui-indexer-alt-framework` supports three data sources for accessing Sui blockchain data. For all data sources, the [indexing framework](/concepts/custom-indexing-framework.mdx) is using a polling technique to check for new checkpoints. Data sources are configured through command-line arguments.
+The `sui-indexer-alt-framework` supports three data sources for accessing Sui blockchain data. For all data sources, the [indexing framework](/concepts/data-access/custom-indexing-framework.mdx) is using a polling technique to check for new checkpoints. Data sources are configured through command-line arguments.
 
 ### Remote store
 
@@ -323,5 +323,5 @@ But in checkpoint data, these events arrive as **raw BCS bytes** that need to be
 
 ## Related links
 
-<RelatedLink to="/concepts/custom-indexing-framework.mdx" />
+<RelatedLink to="/concepts/data-access/custom-indexing-framework.mdx" />
 <RelatedLink to="/guides/developer/advanced/custom-indexer.mdx" />

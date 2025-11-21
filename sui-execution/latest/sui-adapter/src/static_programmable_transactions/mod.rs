@@ -57,8 +57,11 @@ pub fn execute<Mode: ExecutionMode>(
     let mut translation_meter =
         translation_meter::TranslationMeter::new(protocol_config, gas_charger);
 
-    let txn = loading::translate::transaction(&mut translation_meter, &env, txn)
-        .map_err(|e| (e, vec![]))?;
+    let txn = {
+        let tx_context_ref = tx_context.borrow();
+        loading::translate::transaction(&mut translation_meter, &env, &tx_context_ref, txn)
+            .map_err(|e| (e, vec![]))?
+    };
     let txn = typing::translate_and_verify::<Mode>(&mut translation_meter, &env, txn)
         .map_err(|e| (e, vec![]))?;
     execution::interpreter::execute::<Mode>(

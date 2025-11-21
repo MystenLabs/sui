@@ -143,7 +143,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_with_accumulator_v2_partial_upgrade() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = init_test_cluster_builder(4, 1000)
+        let test_cluster = init_test_cluster_builder(4, 10000)
             .with_authority_overload_config(AuthorityOverloadConfig {
                 // Disable system overload checks for the test - during tests with crashes,
                 // it is possible for overload protection to trigger due to validators
@@ -368,7 +368,7 @@ mod test {
         register_fail_point_if("select-random-cache", || true);
 
         let test_cluster = Arc::new(
-            init_test_cluster_builder(4, 1000)
+            init_test_cluster_builder(4, 10000)
                 .with_num_unpruned_validators(4)
                 .build()
                 .await,
@@ -695,7 +695,7 @@ mod test {
         let network_config = ConfigBuilder::new_with_temp_dir()
             .committee_size(NonZeroUsize::new(4).unwrap())
             .with_policy_config(Some(policy_config))
-            .with_epoch_duration(5000)
+            .with_epoch_duration(10000)
             .build();
         let test_cluster = Arc::new(
             TestClusterBuilder::new()
@@ -741,7 +741,7 @@ mod test {
     async fn test_data_ingestion_pipeline() {
         let path = nondeterministic!(TempDir::new().unwrap()).keep();
         let test_cluster = Arc::new(
-            init_test_cluster_builder(4, 5000)
+            init_test_cluster_builder(4, 10000)
                 .with_data_ingestion_dir(path.clone())
                 .build()
                 .await,

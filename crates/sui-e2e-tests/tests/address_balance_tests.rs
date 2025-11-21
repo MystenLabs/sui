@@ -25,12 +25,12 @@ use sui_types::{
     supported_protocol_versions::SupportedProtocolVersions,
     transaction::{
         Argument, Command, FundsWithdrawalArg, GasData, Transaction, TransactionData,
-        TransactionDataV1, TransactionExpiration, TransactionKind,
+        TransactionDataAPI, TransactionDataV1, TransactionExpiration, TransactionKind,
     },
 };
 use test_cluster::TestClusterBuilder;
 
-async fn get_sender_and_gas(context: &mut WalletContext) -> (SuiAddress, ObjectRef) {
+async fn get_sender_and_all_gas(context: &mut WalletContext) -> (SuiAddress, Vec<ObjectRef>) {
     let sender = context
         .config
         .keystore
@@ -43,12 +43,16 @@ async fn get_sender_and_gas(context: &mut WalletContext) -> (SuiAddress, ObjectR
         .gas_objects(sender)
         .await
         .unwrap()
-        .pop()
-        .unwrap()
-        .1
-        .object_ref();
+        .into_iter()
+        .map(|(_, obj)| obj.object_ref())
+        .collect();
 
     (sender, gas)
+}
+
+async fn get_sender_and_one_gas(context: &mut WalletContext) -> (SuiAddress, ObjectRef) {
+    let (sender, gas) = get_sender_and_all_gas(context).await;
+    (sender, gas.into_iter().next().unwrap())
 }
 
 fn create_transaction_with_expiration(
@@ -178,6 +182,7 @@ async fn test_accumulators_disabled() {
     });
 
     let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
             ProtocolVersion::MAX.as_u64(),
             ProtocolVersion::MAX_ALLOWED.as_u64(),
@@ -186,7 +191,7 @@ async fn test_accumulators_disabled() {
         .await;
     let rgp = test_cluster.get_reference_gas_price().await;
 
-    let (sender, gas) = get_sender_and_gas(&mut test_cluster.wallet).await;
+    let (sender, gas) = get_sender_and_one_gas(&mut test_cluster.wallet).await;
 
     let recipient = SuiAddress::random_for_testing_only();
 
@@ -296,7 +301,7 @@ async fn test_deposits() {
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas) = get_sender_and_gas(context).await;
+    let (sender, gas) = get_sender_and_one_gas(context).await;
 
     let recipient = SuiAddress::random_for_testing_only();
 
@@ -351,7 +356,7 @@ async fn test_multiple_settlement_txns() {
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas) = get_sender_and_gas(context).await;
+    let (sender, gas) = get_sender_and_one_gas(context).await;
 
     let recipient = SuiAddress::random_for_testing_only();
 
@@ -466,7 +471,7 @@ async fn test_deposit_and_withdraw() {
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas) = get_sender_and_gas(context).await;
+    let (sender, gas) = get_sender_and_one_gas(context).await;
 
     let tx = make_send_to_account_tx(1000, sender, sender, gas, rgp);
     let res = test_cluster.sign_and_execute_transaction(&tx).await;
@@ -513,7 +518,7 @@ async fn test_deposit_and_withdraw_with_larger_reservation() {
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas) = get_sender_and_gas(context).await;
+    let (sender, gas) = get_sender_and_one_gas(context).await;
 
     let tx = make_send_to_account_tx(1000, sender, sender, gas, rgp);
     let res = test_cluster.sign_and_execute_transaction(&tx).await;
@@ -542,60 +547,81 @@ async fn test_withdraw_non_existent_balance() {
         cfg
     });
 
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas) = get_sender_and_gas(context).await;
+    let (sender, gas) = get_sender_and_one_gas(context).await;
 
     // Settlement transaction fails with EInvalidSplitAmount because
     let tx = withdraw_from_balance_tx(1000, sender, gas, rgp);
     let signed_tx = test_cluster.sign_transaction(&tx).await;
-    let (effects, _) = test_cluster
-        .execute_transaction_return_raw_effects(signed_tx)
+    let err = test_cluster
+        .wallet
+        .execute_transaction_may_fail(signed_tx)
         .await
-        .unwrap();
+        .unwrap_err();
 
-    assert!(
-        effects.status().is_err(),
-        "Expected transaction to fail due to underflow"
-    );
-
-    // ensure that no conservation failures are detected during reconfig.
-    test_cluster.trigger_reconfiguration().await;
+    assert!(err.to_string().contains("is less than requested"));
 }
 
 #[sim_test]
-async fn test_withdraw_underflow() {
+async fn test_withdraw_insufficient_balance() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.create_root_accumulator_object_for_testing();
         cfg.enable_accumulators_for_testing();
         cfg
     });
 
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas) = get_sender_and_gas(context).await;
+    let (sender, mut gas) = get_sender_and_all_gas(context).await;
+
+    let gas1 = gas.pop().unwrap();
+    let gas2 = gas.pop().unwrap();
 
     // send 1000 from our gas coin to our balance
-    let tx = make_send_to_account_tx(1000, sender, sender, gas, rgp);
+    let tx = make_send_to_account_tx(1000, sender, sender, gas1, rgp);
     let res = test_cluster.sign_and_execute_transaction(&tx).await;
-    let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
+    let gas1 = res.effects.unwrap().gas_object().reference.to_object_ref();
 
-    // Withdraw 1001 from balance
-    // Settlement transaction fails due to underflow (MovePrimitiveRuntimeError)
-    let tx = withdraw_from_balance_tx(1001, sender, gas, rgp);
+    // Try to withdraw 1001 from balance
+    // Transaction fails at signing time
+    let tx = withdraw_from_balance_tx(1001, sender, gas1, rgp);
     let signed_tx = test_cluster.sign_transaction(&tx).await;
-    let (effects, _) = test_cluster
-        .execute_transaction_return_raw_effects(signed_tx)
+    let err = test_cluster
+        .wallet
+        .execute_transaction_may_fail(signed_tx)
+        .await
+        .unwrap_err();
+
+    assert!(err.to_string().contains("is less than requested"));
+
+    // Now exceed the balance with two transactions, each of which can be certified
+    // The second one will fail at execution time
+    let tx1 = withdraw_from_balance_tx(500, sender, gas1, rgp);
+    let tx2 = withdraw_from_balance_tx(501, sender, gas2, rgp);
+
+    let mut effects = test_cluster
+        .sign_and_execute_txns_in_soft_bundle(&[tx1, tx2])
         .await
         .unwrap();
 
+    let effects2 = effects.pop().unwrap().1;
+    let effects1 = effects.pop().unwrap().1;
+
+    assert!(effects1.status().is_ok(), "Expected transaction to succeed");
     assert!(
-        effects.status().is_err(),
-        "Expected transaction to fail due to underflow"
+        effects2.status().is_err(),
+        "Expected transaction to fail due to insufficient balance"
     );
 
     // ensure that no conservation failures are detected during reconfig.
@@ -704,8 +730,8 @@ async fn test_address_balance_gas() {
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas) = get_sender_and_gas(context).await;
     let gas_package_id = setup_test_package(context).await;
+    let (sender, gas) = get_sender_and_one_gas(context).await;
 
     let deposit_tx = make_send_to_account_tx(10_000_000, sender, sender, gas, rgp);
     test_cluster.sign_and_execute_transaction(&deposit_tx).await;
@@ -717,6 +743,26 @@ async fn test_address_balance_gas() {
     });
 
     let chain_id = test_cluster.get_chain_identifier();
+
+    // check that a transaction with a zero gas budget is rejected
+    {
+        let mut tx = create_storage_test_transaction_address_balance(
+            sender,
+            gas_package_id,
+            rgp,
+            chain_id,
+            None,
+            0,
+        );
+        tx.gas_data_mut().budget = 0;
+        let signed_tx = test_cluster.sign_transaction(&tx).await;
+        let err = test_cluster
+            .wallet
+            .execute_transaction_may_fail(signed_tx)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("Gas budget: 0 is lower than min:"));
+    }
 
     let tx = create_storage_test_transaction_address_balance(
         sender,
@@ -766,7 +812,10 @@ async fn test_sponsored_address_balance_storage_rebates() {
         cfg
     });
 
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let addresses = test_cluster.wallet.get_addresses();
     let sender = addresses[0];
@@ -1241,12 +1290,15 @@ fn create_regular_gas_transaction_with_current_epoch(
 
 #[sim_test]
 async fn test_regular_gas_payment_with_valid_during_current_epoch() {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let chain_id = test_cluster.get_chain_identifier();
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas_coin) = get_sender_and_gas(context).await;
+    let (sender, gas_coin) = get_sender_and_one_gas(context).await;
     let current_epoch = 0;
 
     let tx = create_regular_gas_transaction_with_current_epoch(
@@ -1272,12 +1324,15 @@ async fn test_regular_gas_payment_with_valid_during_current_epoch() {
 
 #[sim_test]
 async fn test_transaction_expired_too_early() {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let chain_id = test_cluster.get_chain_identifier();
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas_coin) = get_sender_and_gas(context).await;
+    let (sender, gas_coin) = get_sender_and_one_gas(context).await;
     let future_epoch = 10;
 
     let tx = create_regular_gas_transaction_with_current_epoch(
@@ -1308,12 +1363,15 @@ async fn test_transaction_expired_too_early() {
 
 #[sim_test]
 async fn test_transaction_expired_too_late() {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let chain_id = test_cluster.get_chain_identifier();
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas_coin) = get_sender_and_gas(context).await;
+    let (sender, gas_coin) = get_sender_and_one_gas(context).await;
 
     let past_epoch = 0;
 
@@ -1344,11 +1402,14 @@ async fn test_transaction_expired_too_late() {
 
 #[sim_test]
 async fn test_transaction_invalid_chain_id() {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas_coin) = get_sender_and_gas(context).await;
+    let (sender, gas_coin) = get_sender_and_one_gas(context).await;
     let current_epoch = 0;
 
     let wrong_chain_id = ChainIdentifier::from(CheckpointDigest::default());
@@ -1381,12 +1442,15 @@ async fn test_transaction_invalid_chain_id() {
 
 #[sim_test]
 async fn test_transaction_expiration_min_none_max_some() {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let chain_id = test_cluster.get_chain_identifier();
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas_coin) = get_sender_and_gas(context).await;
+    let (sender, gas_coin) = get_sender_and_one_gas(context).await;
     let current_epoch = 0;
 
     let tx = create_transaction_with_expiration(
@@ -1415,11 +1479,14 @@ async fn test_transaction_expiration_min_none_max_some() {
 
 #[sim_test]
 async fn test_transaction_expiration_edge_cases() {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let chain_id = test_cluster.get_chain_identifier();
 
-    let (sender, gas_coin1) = get_sender_and_gas(&mut test_cluster.wallet).await;
+    let (sender, gas_coin1) = get_sender_and_one_gas(&mut test_cluster.wallet).await;
     let current_epoch = 0;
 
     // Test case 1: min_epoch = max_epoch (single epoch window)
@@ -1442,7 +1509,7 @@ async fn test_transaction_expiration_edge_cases() {
     );
 
     // Test case 2: Transaction with min_epoch in the future should be rejected as not yet valid
-    let (_, gas_coin2) = get_sender_and_gas(&mut test_cluster.wallet).await;
+    let (_, gas_coin2) = get_sender_and_one_gas(&mut test_cluster.wallet).await;
     let tx2 = create_transaction_with_expiration(
         sender,
         gas_coin2,
@@ -1465,7 +1532,7 @@ async fn test_transaction_expiration_edge_cases() {
     );
 
     // Test case 3: min_epoch: Some(past), max_epoch: Some(past) - expired
-    let (_, gas_coin3) = get_sender_and_gas(&mut test_cluster.wallet).await;
+    let (_, gas_coin3) = get_sender_and_one_gas(&mut test_cluster.wallet).await;
 
     // First trigger an epoch change to make current_epoch "past"
     test_cluster.trigger_reconfiguration().await;
@@ -1503,14 +1570,17 @@ async fn test_address_balance_gas_cost_parity() {
         cfg
     });
 
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let rgp = test_cluster.get_reference_gas_price().await;
     let chain_id = test_cluster.get_chain_identifier();
 
     let gas_test_package_id = setup_test_package(&mut test_cluster.wallet).await;
 
-    let (sender, gas_for_deposit) = get_sender_and_gas(&mut test_cluster.wallet).await;
+    let (sender, gas_for_deposit) = get_sender_and_one_gas(&mut test_cluster.wallet).await;
 
     let deposit_tx = make_send_to_account_tx(100_000_000, sender, sender, gas_for_deposit, rgp);
     test_cluster.sign_and_execute_transaction(&deposit_tx).await;
@@ -1661,13 +1731,16 @@ async fn test_address_balance_gas_charged_on_move_abort() {
         cfg
     });
 
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let chain_id = test_cluster.get_chain_identifier();
 
     let gas_test_package_id = setup_test_package(&mut test_cluster.wallet).await;
 
-    let (sender, gas_for_deposit) = get_sender_and_gas(&mut test_cluster.wallet).await;
+    let (sender, gas_for_deposit) = get_sender_and_one_gas(&mut test_cluster.wallet).await;
 
     let deposit_tx = make_send_to_account_tx(10_000_000, sender, sender, gas_for_deposit, rgp);
     test_cluster.sign_and_execute_transaction(&deposit_tx).await;
@@ -1729,6 +1802,7 @@ async fn test_explicit_sponsor_withdrawal_banned() {
     });
 
     let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
         .with_protocol_version(ProtocolConfig::get_for_max_version_UNSAFE().version)
         .with_epoch_duration_ms(600000)
         .build()
@@ -1983,7 +2057,7 @@ async fn test_insufficient_balance_charges_zero_gas() {
     let rgp = test_cluster.get_reference_gas_price().await;
     let chain_id = test_cluster.get_chain_identifier();
 
-    let (sender, gas_for_deposit) = get_sender_and_gas(&mut test_cluster.wallet).await;
+    let (sender, gas_for_deposit) = get_sender_and_one_gas(&mut test_cluster.wallet).await;
 
     let initial_balance = 30_000_000u64;
     let withdraw_amount = 15_000_000u64;
@@ -2221,7 +2295,7 @@ async fn test_multiple_deposits_merged_in_effects() {
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &mut test_cluster.wallet;
 
-    let (sender, gas) = get_sender_and_gas(context).await;
+    let (sender, gas) = get_sender_and_one_gas(context).await;
     let recipient = sender;
 
     let initial_deposit = make_send_to_account_tx(10000, recipient, sender, gas, rgp);

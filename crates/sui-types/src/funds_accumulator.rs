@@ -5,6 +5,7 @@
 
 use crate::SUI_FRAMEWORK_ADDRESS;
 use crate::base_types::SuiAddress;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout};
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -15,6 +16,11 @@ use serde::Serialize;
 
 pub const FUNDS_ACCUMULATOR_MODULE_NAME: &IdentStr = ident_str!("funds_accumulator");
 pub const WITHDRAWAL_STRUCT_NAME: &IdentStr = ident_str!("Withdrawal");
+pub const RESOLVED_WITHDRAWAL_STRUCT: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &SUI_FRAMEWORK_ADDRESS,
+    FUNDS_ACCUMULATOR_MODULE_NAME,
+    WITHDRAWAL_STRUCT_NAME,
+);
 
 /// Rust bindings for the Move struct `sui::funds_accumulator::Withdrawal`.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]

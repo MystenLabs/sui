@@ -7,24 +7,25 @@ use crate::static_programmable_transactions::{
     loading::ast as L,
     metering::{self, translation_meter::TranslationMeter},
 };
-use move_core_types::language_storage::StructTag;
+use move_core_types::{account_address::AccountAddress, language_storage::StructTag, u256::U256};
 use sui_types::{
+    base_types::TxContext,
     error::ExecutionError,
-    execution_status::ExecutionFailureStatus,
     object::Owner,
-    transaction::{self as P, CallArg, ObjectArg, SharedObjectMutability},
+    transaction::{self as P, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability},
 };
 
 pub fn transaction(
     meter: &mut TranslationMeter<'_, '_>,
     env: &Env,
+    tx_context: &TxContext,
     pt: P::ProgrammableTransaction,
 ) -> Result<L::Transaction, ExecutionError> {
     metering::pre_translation::meter(meter, &pt)?;
     let P::ProgrammableTransaction { inputs, commands } = pt;
     let inputs = inputs
         .into_iter()
-        .map(|arg| input(env, arg))
+        .map(|arg| input(env, tx_context, arg))
         .collect::<Result<Vec<_>, _>>()?;
     let commands = commands
         .into_iter()
@@ -36,7 +37,11 @@ pub fn transaction(
     Ok(loaded_tx)
 }
 
-fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), ExecutionError> {
+fn input(
+    env: &Env,
+    tx_context: &TxContext,
+    arg: CallArg,
+) -> Result<(L::InputArg, L::InputType), ExecutionError> {
     Ok(match arg {
         CallArg::Pure(bytes) => (L::InputArg::Pure(bytes), L::InputType::Bytes),
         CallArg::Object(ObjectArg::Receiving(oref)) => {
@@ -89,12 +94,47 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
                 L::InputType::Fixed(ty),
             )
         }
-        CallArg::FundsWithdrawal(_) => {
-            // TODO(address-balances): Add support for balance withdraws.
-            return Err(ExecutionError::new_with_source(
-                ExecutionFailureStatus::FeatureNotYetSupported,
-                "Load balance withdraw call arg",
-            ));
+        CallArg::FundsWithdrawal(f) => {
+            let FundsWithdrawalArg {
+                reservation,
+                type_arg,
+                withdraw_from,
+            } = f;
+            let amount = match reservation {
+                P::Reservation::EntireBalance => {
+                    invariant_violation!("Entire balance reservation amount is not yet supported")
+                }
+                P::Reservation::MaxAmountU64(u) => U256::from(u),
+                // TODO when types other than u64 are supported, we must check that this is a
+                // valid amount for the type
+            };
+            let funds_ty = match type_arg {
+                P::WithdrawalTypeArg::Balance(inner) => {
+                    let inner = env.load_type_input(0, inner)?;
+                    env.balance_type(inner)?
+                }
+            };
+            let ty = env.withdrawal_type(funds_ty.clone())?;
+            let owner: AccountAddress = match withdraw_from {
+                P::WithdrawFrom::Sender => tx_context.sender().into(),
+                P::WithdrawFrom::Sponsor => tx_context
+                    .sponsor()
+                    .ok_or_else(|| {
+                        make_invariant_violation!(
+                            "A sponsor withdrawal requires a sponsor and should have been \
+                            checked at signing"
+                        )
+                    })?
+                    .into(),
+            };
+            (
+                L::InputArg::FundsWithdrawal(L::FundsWithdrawalArg {
+                    amount,
+                    ty: ty.clone(),
+                    owner,
+                }),
+                L::InputType::Fixed(ty),
+            )
         }
     })
 }

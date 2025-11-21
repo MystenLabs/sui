@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::abi::EthBridgeEvent;
 use crate::error::{BridgeError, BridgeResult};
-use crate::metered_eth_provider::{MeteredEthHttpProvier, new_metered_eth_provider};
+use crate::metered_eth_provider::{MeteredEthHttpProvider, new_metered_eth_provider};
 use crate::metrics::BridgeMetrics;
 use crate::types::{BridgeAction, EthLog, RawEthLog};
 use ethers::providers::{JsonRpcClient, Middleware, Provider};
@@ -22,7 +22,7 @@ pub struct EthClient<P> {
     contract_addresses: HashSet<EthAddress>,
 }
 
-impl EthClient<MeteredEthHttpProvier> {
+impl EthClient<MeteredEthHttpProvider> {
     pub async fn new(
         provider_url: &str,
         contract_addresses: HashSet<EthAddress>,
@@ -37,7 +37,7 @@ impl EthClient<MeteredEthHttpProvier> {
         Ok(self_)
     }
 
-    pub fn provider(&self) -> Arc<Provider<MeteredEthHttpProvier>> {
+    pub fn provider(&self) -> Arc<Provider<MeteredEthHttpProvider>> {
         Arc::new(self.provider.clone())
     }
 }
