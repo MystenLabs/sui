@@ -100,6 +100,9 @@ fn create_transaction_with_expiration(
 async fn test_accumulators_root_created() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut cfg| {
         if version >= ProtocolVersion::MAX {
+            // accumulators are enabled for devnet/tests, so we need to disable them to run
+            // this test
+            cfg.disable_accumulators_for_testing();
             cfg.create_root_accumulator_object_for_testing();
             // for some reason all 4 nodes are not reliably submitting capability messages
             cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
@@ -171,6 +174,9 @@ async fn test_accumulators_root_created() {
 async fn test_accumulators_disabled() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut cfg| {
         if version >= ProtocolVersion::MAX {
+            // accumulators are enabled for devnet/tests, so we need to disable them to run
+            // this test
+            cfg.disable_accumulators_for_testing();
             cfg.create_root_accumulator_object_for_testing();
             // for some reason all 4 nodes are not reliably submitting capability messages
             cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);

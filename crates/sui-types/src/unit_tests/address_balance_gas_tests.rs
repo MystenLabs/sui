@@ -40,8 +40,9 @@ fn create_test_transaction_data(
 
 #[test]
 fn test_address_balance_payment_requires_accumulators_enabled() {
-    let config = ProtocolConfig::get_for_max_version_UNSAFE();
+    let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
     // accumulators not enabled
+    config.disable_accumulators_for_testing();
 
     let tx_data = create_test_transaction_data(
         vec![],
@@ -67,6 +68,7 @@ fn test_address_balance_payment_requires_accumulators_enabled() {
 fn test_address_balance_payment_requires_feature_flag() {
     let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
     config.enable_accumulators_for_testing();
+    config.disable_address_balance_gas_payments_for_testing();
 
     let tx_data = create_test_transaction_data(
         vec![],
