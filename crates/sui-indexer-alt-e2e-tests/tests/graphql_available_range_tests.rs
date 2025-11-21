@@ -4,14 +4,15 @@
 use std::str::FromStr;
 use std::time::Duration;
 
+use insta::assert_json_snapshot;
 use move_core_types::ident_str;
 use reqwest::Client;
 use serde_json::{Value, json};
 use simulacrum::Simulacrum;
+use tokio_util::sync::CancellationToken;
+
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
 use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig, find::address_owned};
-
-use insta::assert_json_snapshot;
 use sui_indexer_alt_graphql::config::{RpcConfig as GraphQlConfig, WatermarkConfig};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
@@ -23,7 +24,6 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{Transaction, TransactionData},
 };
-use tokio_util::sync::CancellationToken;
 
 /// 5 SUI gas budget
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
@@ -96,7 +96,10 @@ async fn test_available_range_with_pipelines() {
     let affected_addresses_available_range =
         query_available_range(&cluster, "transactions", Some(&["affectedAddress"])).await;
 
-    assert_sequence_numbers_eq(0, 4, &affected_addresses_available_range);
+    let (first, last) = collect_sequence_numbers(&affected_addresses_available_range);
+
+    assert_eq!(first, 0);
+    assert_eq!(last, 4);
 
     // (2) Add 1 more checkpoint, now the affected_addresses table is pruned, but the digests are not.
     transfer_dust(&mut cluster, a, &akp, b);
@@ -110,7 +113,9 @@ async fn test_available_range_with_pipelines() {
     let affected_addresses_available_range =
         query_available_range(&cluster, "transactions", Some(&["affectedAddress"])).await;
 
-    assert_sequence_numbers_eq(1, 5, &affected_addresses_available_range);
+    let (first, last) = collect_sequence_numbers(&affected_addresses_available_range);
+    assert_eq!(first, 1);
+    assert_eq!(last, 5);
 
     // (3) Add 5 more checkpoints, now both tables have been pruned.
     for _ in 6..=10 {
@@ -130,7 +135,9 @@ async fn test_available_range_with_pipelines() {
 
     let transasction_available_range = query_available_range(&cluster, "transactions", None).await;
 
-    assert_sequence_numbers_eq(1, 10, &transasction_available_range);
+    let (first, last) = collect_sequence_numbers(&transasction_available_range);
+    assert_eq!(first, 1);
+    assert_eq!(last, 10);
 
     cluster.stopped().await;
 }
@@ -192,7 +199,8 @@ async fn test_transaction_pagination_pruning() {
     }
 
     let transactions_in_range = query_transactions(&cluster, b).await;
-    assert_tx_digests_eq(&a_txs, &transactions_in_range);
+    let actual = collect_digests(&transactions_in_range);
+    assert_eq!(&a_txs, &actual);
 
     // (2) Add 2 more checkpoints, with 1 transaction each. The affected_addresses table is pruned, but the digests are not.
     for _ in 5..=6 {
@@ -206,7 +214,8 @@ async fn test_transaction_pagination_pruning() {
         .unwrap();
 
     let transactions_in_range = query_transactions(&cluster, b).await;
-    assert_tx_digests_eq(&a_txs[1..], &transactions_in_range);
+    let actual = collect_digests(&transactions_in_range);
+    assert_eq!(&a_txs[1..], &actual);
 
     // (3) Add 5 more checkpoints, now both tables have been pruned but we take the max reader_lo of the pipelines.
     for _ in 6..=10 {
@@ -225,7 +234,8 @@ async fn test_transaction_pagination_pruning() {
         .unwrap();
 
     let transactions_in_range = query_transactions(&cluster, b).await;
-    assert_tx_digests_eq(&a_txs[6..], &transactions_in_range);
+    let actual = collect_digests(&transactions_in_range);
+    assert_eq!(&a_txs[6..], &actual);
 
     cluster.stopped().await;
 }
@@ -260,10 +270,12 @@ async fn test_events_pagination_pruning() {
         .unwrap();
 
     let events_in_range = query_events(&cluster, json!({ "module": pkg.to_string() })).await;
-    assert_ev_tx_digests_eq(&tx_digests[4..], &events_in_range);
+    let actual = collect_digests(&events_in_range);
+    assert_eq!(&tx_digests[4..], &actual);
 
     let events_in_range = query_events(&cluster, json!({ "type": pkg.to_string() })).await;
-    assert_ev_tx_digests_eq(&tx_digests, &events_in_range);
+    let actual = collect_digests(&events_in_range);
+    assert_eq!(&tx_digests, &actual);
 
     cluster.stopped().await;
 }
@@ -330,49 +342,39 @@ async fn cluster_with_pipelines(pipeline: PipelineLayer) -> FullCluster {
     .expect("Failed to create cluster")
 }
 
-fn extract_digests(resp: &Value, path: &[&str], is_event: bool) -> Vec<TransactionDigest> {
-    path.iter()
-        .fold(&resp["data"], |acc, &key| &acc[key])
+fn collect_digests(resp: &Value) -> Vec<TransactionDigest> {
+    const RESPONSE_PATHS: &[(&str, &str)] = &[
+        ("/data/events/nodes", "/transaction/digest"),
+        ("/data/transactions/nodes", "/digest"),
+    ];
+
+    let (nodes, digest_path) = RESPONSE_PATHS
+        .iter()
+        .find_map(|(nodes_path, digest_path)| {
+            resp.pointer(nodes_path).map(|nodes| (nodes, *digest_path))
+        })
+        .expect("Response must contain events or transactions");
+
+    nodes
         .as_array()
-        .unwrap()
+        .expect("nodes must be an array")
         .iter()
         .map(|node| {
-            let digest = if is_event {
-                node["transaction"]["digest"].as_str()
-            } else {
-                node["digest"].as_str()
-            };
-            TransactionDigest::from_str(digest.unwrap()).unwrap()
+            let digest = node
+                .pointer(digest_path)
+                .and_then(Value::as_str)
+                .expect("node must contain digest");
+            TransactionDigest::from_str(digest).expect("invalid digest format")
         })
         .collect()
 }
 
-fn assert_tx_digests_eq(expected: &[TransactionDigest], resp: &Value) {
-    assert_eq!(
-        expected,
-        extract_digests(resp, &["transactions", "nodes"], false)
-    );
-}
-
-fn assert_ev_tx_digests_eq(expected: &[TransactionDigest], resp: &Value) {
-    assert_eq!(expected, extract_digests(resp, &["events", "nodes"], true));
-}
-
-fn assert_sequence_numbers_eq(expected_first: u64, expected_last: u64, resp: &Value) {
+fn collect_sequence_numbers(resp: &Value) -> (u64, u64) {
     let range = &resp["data"]["serviceConfig"]["availableRange"];
-    let (first, last) = (
+    (
         range["first"]["sequenceNumber"].as_u64().unwrap(),
         range["last"]["sequenceNumber"].as_u64().unwrap(),
-    );
-
-    assert_eq!(
-        expected_first, first,
-        "Expected first sequence number {expected_first}, got {resp:#?}"
-    );
-    assert_eq!(
-        expected_last, last,
-        "Expected last sequence number {expected_last}, got {resp:#?}"
-    );
+    )
 }
 
 async fn publish_emit_event(cluster: &mut FullCluster) -> ObjectID {
