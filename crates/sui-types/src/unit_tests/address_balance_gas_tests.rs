@@ -41,13 +41,14 @@ fn create_test_transaction_data(
 #[test]
 fn test_address_balance_payment_requires_accumulators_enabled() {
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
+
     // accumulators not enabled
 
     let tx_data = create_test_transaction_data(
         vec![],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(1),
-            max_epoch: Some(1),
+            min_epoch: Some(0),
+            max_epoch: Some(0),
             min_timestamp_seconds: None,
             max_timestamp_seconds: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
@@ -57,7 +58,7 @@ fn test_address_balance_payment_requires_accumulators_enabled() {
 
     let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err().into_inner() {
+    match dbg!(result.unwrap_err()).into_inner() {
         SuiErrorKind::UserInputError {
             error: UserInputError::MissingGasPayment,
         } => {}
@@ -73,8 +74,8 @@ fn test_address_balance_payment_requires_feature_flag() {
     let tx_data = create_test_transaction_data(
         vec![],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(1),
-            max_epoch: Some(1),
+            min_epoch: Some(0),
+            max_epoch: Some(0),
             min_timestamp_seconds: None,
             max_timestamp_seconds: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
@@ -99,8 +100,8 @@ fn test_address_balance_payment_valid() {
     let tx_data = create_test_transaction_data(
         vec![],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(1),
-            max_epoch: Some(1),
+            min_epoch: Some(0),
+            max_epoch: Some(0),
             min_timestamp_seconds: None,
             max_timestamp_seconds: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
@@ -149,8 +150,8 @@ fn test_address_balance_payment_single_epoch_validation() {
     let tx_data = create_test_transaction_data(
         vec![],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(5),
-            max_epoch: Some(5),
+            min_epoch: Some(0),
+            max_epoch: Some(0),
             min_timestamp_seconds: None,
             max_timestamp_seconds: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
@@ -164,8 +165,8 @@ fn test_address_balance_payment_single_epoch_validation() {
     let tx_data = create_test_transaction_data(
         vec![],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(5),
-            max_epoch: Some(6),
+            min_epoch: Some(0),
+            max_epoch: Some(1),
             min_timestamp_seconds: None,
             max_timestamp_seconds: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
@@ -192,8 +193,8 @@ fn test_address_balance_payment_timestamp_validation() {
     let tx_data = create_test_transaction_data(
         vec![],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(1),
-            max_epoch: Some(1),
+            min_epoch: Some(0),
+            max_epoch: Some(0),
             min_timestamp_seconds: Some(1000),
             max_timestamp_seconds: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
@@ -295,8 +296,8 @@ fn test_regular_gas_payment_with_valid_during_expiration() {
     let tx_data = create_test_transaction_data(
         vec![random_object_ref()],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(1),
-            max_epoch: Some(1),
+            min_epoch: Some(0),
+            max_epoch: Some(0),
             min_timestamp_seconds: None,
             max_timestamp_seconds: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
