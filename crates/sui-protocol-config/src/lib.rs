@@ -4591,6 +4591,11 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators = true;
     }
 
+    pub fn disable_accumulators_for_testing(&mut self) {
+        self.feature_flags.enable_accumulators = false;
+        self.feature_flags.enable_address_balance_gas_payments = false;
+    }
+
     pub fn create_root_accumulator_object_for_testing(&mut self) {
         self.feature_flags.create_root_accumulator_object = true;
     }
@@ -4599,6 +4604,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
         self.feature_flags.enable_address_balance_gas_payments = true;
+    }
+
+    pub fn disable_address_balance_gas_payments_for_testing(&mut self) {
+        self.feature_flags.enable_address_balance_gas_payments = false;
     }
 
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
@@ -4826,9 +4835,10 @@ mod test {
         );
 
         // We didnt have this in version 1
-        assert!(prot
-            .lookup_attr("max_move_identifier_len".to_string())
-            .is_none());
+        assert!(
+            prot.lookup_attr("max_move_identifier_len".to_string())
+                .is_none()
+        );
 
         // But we did in version 9
         let prot: ProtocolConfig =
@@ -4841,11 +4851,12 @@ mod test {
         let prot: ProtocolConfig =
             ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // We didnt have this in version 1
-        assert!(prot
-            .attr_map()
-            .get("max_move_identifier_len")
-            .unwrap()
-            .is_none());
+        assert!(
+            prot.attr_map()
+                .get("max_move_identifier_len")
+                .unwrap()
+                .is_none()
+        );
         // We had this in version 1
         assert!(
             prot.attr_map().get("max_arguments").unwrap()
@@ -4856,14 +4867,17 @@ mod test {
         let prot: ProtocolConfig =
             ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // Does not exist
-        assert!(prot
-            .feature_flags
-            .lookup_attr("some random string".to_owned())
-            .is_none());
-        assert!(!prot
-            .feature_flags
-            .attr_map()
-            .contains_key("some random string"));
+        assert!(
+            prot.feature_flags
+                .lookup_attr("some random string".to_owned())
+                .is_none()
+        );
+        assert!(
+            !prot
+                .feature_flags
+                .attr_map()
+                .contains_key("some random string")
+        );
 
         // Was false in v1
         assert!(
