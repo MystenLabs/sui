@@ -127,10 +127,10 @@ pub fn type_<W: fmt::Write>(
         TypeInput::Address => write!(buf, "address"),
         TypeInput::Signer => write!(buf, "signer"),
         TypeInput::Bool => write!(buf, "bool"),
-        TypeInput::Struct(s) => struct_type_(named_addresses, buf, &*s),
+        TypeInput::Struct(s) => struct_type_(named_addresses, buf, s),
         TypeInput::Vector(ty) => {
             write!(buf, "vector<")?;
-            type_(named_addresses, buf, &*ty)?;
+            type_(named_addresses, buf, ty)?;
             write!(buf, ">")
         }
     }

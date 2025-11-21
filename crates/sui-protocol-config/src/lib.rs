@@ -1739,10 +1739,6 @@ pub struct ProtocolConfig {
     /// checking.
     translation_per_reference_node_charge: Option<u64>,
 
-    /// The metering step resolution for translation costs. This is the granularity at which we
-    /// step up the metering for translation costs.
-    translation_metering_step_resolution: Option<u64>,
-
     /// The multiplier for each linkage entry when charging for linkage tables that we have
     /// created.
     translation_per_linkage_entry_charge: Option<u64>,
@@ -2295,7 +2291,6 @@ impl ProtocolConfig {
             debug_assert!(self.translation_pure_input_per_byte_charge.is_some());
             debug_assert!(self.translation_per_type_node_charge.is_some());
             debug_assert!(self.translation_per_reference_node_charge.is_some());
-            debug_assert!(self.translation_metering_step_resolution.is_some());
             debug_assert!(self.translation_per_linkage_entry_charge.is_some());
             debug_assert!(self.feature_flags.abstract_size_in_object_runtime);
             debug_assert!(self.feature_flags.object_runtime_charge_cache_load_gas);
@@ -2981,7 +2976,6 @@ impl ProtocolConfig {
             translation_pure_input_per_byte_charge: None,
             translation_per_type_node_charge: None,
             translation_per_reference_node_charge: None,
-            translation_metering_step_resolution: None,
             translation_per_linkage_entry_charge: None,
 
             max_updates_per_settlement_txn: None,
@@ -4563,7 +4557,6 @@ impl ProtocolConfig {
             self.translation_pure_input_per_byte_charge = Some(1);
             self.translation_per_type_node_charge = Some(1);
             self.translation_per_reference_node_charge = Some(1);
-            self.translation_metering_step_resolution = Some(1000);
             self.translation_per_linkage_entry_charge = Some(10);
             if self.gas_model_version.is_some_and(|version| version <= 10) {
                 self.gas_model_version = Some(11);
