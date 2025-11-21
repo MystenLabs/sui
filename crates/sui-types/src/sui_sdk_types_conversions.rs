@@ -763,15 +763,17 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
             crate::execution_status::CommandArgumentError::InvalidObjectByMutRef => Self::InvalidObjectByMutRef,
             crate::execution_status::CommandArgumentError::SharedObjectOperationNotAllowed => Self::ConsensusObjectOperationNotAllowed,
             crate::execution_status::CommandArgumentError::InvalidArgumentArity => Self::InvalidArgumentArity,
-            crate::execution_status::CommandArgumentError::InvalidTransferObject |
-            crate::execution_status::CommandArgumentError::InvalidMakeMoveVecNonObjectArgument |
-            crate::execution_status::CommandArgumentError::ArgumentWithoutValue |
-            crate::execution_status::CommandArgumentError::CannotMoveBorrowedValue |
-            crate::execution_status::CommandArgumentError::CannotWriteToExtendedReference |
-            crate::execution_status::CommandArgumentError::InvalidReferenceArgument => {
-                    todo!("New errors need to be added to SDK once stabilized")
-            }
-
+            crate::execution_status::CommandArgumentError::InvalidTransferObject  => Self::InvalidTransferObject,
+            crate::execution_status::CommandArgumentError::InvalidMakeMoveVecNonObjectArgument =>
+                Self::InvalidMakeMoveVecNonObjectArgument,
+            crate::execution_status::CommandArgumentError::ArgumentWithoutValue  =>
+                Self::ArgumentWithoutValue,
+            crate::execution_status::CommandArgumentError::CannotMoveBorrowedValue =>
+                Self::CannotMoveBorrowedValue,
+            crate::execution_status::CommandArgumentError::CannotWriteToExtendedReference =>
+                Self::CannotWriteToExtendedReference,
+            crate::execution_status::CommandArgumentError::InvalidReferenceArgument =>
+                Self::InvalidReferenceArgument,
         }
     }
 }
@@ -805,6 +807,16 @@ impl From<CommandArgumentError> for crate::execution_status::CommandArgumentErro
                 Self::SharedObjectOperationNotAllowed
             }
             CommandArgumentError::InvalidArgumentArity => Self::InvalidArgumentArity,
+            CommandArgumentError::InvalidTransferObject => Self::InvalidTransferObject,
+            CommandArgumentError::InvalidMakeMoveVecNonObjectArgument => {
+                Self::InvalidMakeMoveVecNonObjectArgument
+            }
+            CommandArgumentError::ArgumentWithoutValue => Self::ArgumentWithoutValue,
+            CommandArgumentError::CannotMoveBorrowedValue => Self::CannotMoveBorrowedValue,
+            CommandArgumentError::CannotWriteToExtendedReference => {
+                Self::CannotWriteToExtendedReference
+            }
+            CommandArgumentError::InvalidReferenceArgument => Self::InvalidReferenceArgument,
             _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
