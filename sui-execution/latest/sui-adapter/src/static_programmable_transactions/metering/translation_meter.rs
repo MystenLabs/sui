@@ -118,12 +118,12 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
             .checked_div(self.protocol_config.translation_metering_step_resolution())
             .unwrap_or(0)
             .max(1);
+        self.charged = self.charged.saturating_add(amount);
         debug_assert!(point_multiplier > 0);
         debug_assert!(amount > 0);
         let point_charge = point_multiplier
             .saturating_mul(point_multiplier)
             .saturating_mul(amount);
-        self.charged = self.charged.saturating_add(point_charge);
         point_charge
     }
 
