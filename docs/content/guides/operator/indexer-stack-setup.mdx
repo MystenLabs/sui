@@ -305,6 +305,16 @@ GraphQL RPC server reads data from the general-purpose indexer's database (Postg
 
 Scale the number of nodes based on the desired read throughput requirements of your client applications.
 
+### Dependencies of the GraphQL RPC server
+
+The GraphQL RPC server relies on multiple backend services to fulfill different types of queries:
+- Archival service (`--ledger-grpc-url`) provides historical data required for most GraphQL queries involving the contents of checkpoint, objects, and transactions.
+- Consistent store (`--consistent-store-url`) serves live data for queries related to current object and balance ownership.
+- Postgres database (`--database-url`) is the backing store for all queries, except for direct object and transaction lookups, which are handled by the archival service.
+- Fullnode RPC (`--fullnode-rpc-url`) is used for transaction simulation and execution.
+
+Make sure to supply the appropriate service URLs in your run command based on the types of queries you want the GraphQL server to support.
+
 ### Run command
 
 :::info
