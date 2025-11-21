@@ -67,6 +67,7 @@ validator_configs:
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
+      archive-interval-epochs: 0
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: "https://transactions.sui.io/"
@@ -234,6 +235,7 @@ validator_configs:
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
+      archive-interval-epochs: 0
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: "https://transactions.sui.io/"
@@ -401,6 +403,7 @@ validator_configs:
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
+      archive-interval-epochs: 0
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: "https://transactions.sui.io/"
@@ -568,6 +571,7 @@ validator_configs:
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
+      archive-interval-epochs: 0
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: "https://transactions.sui.io/"
@@ -735,6 +739,7 @@ validator_configs:
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
+      archive-interval-epochs: 0
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: "https://transactions.sui.io/"
@@ -902,6 +907,7 @@ validator_configs:
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
+      archive-interval-epochs: 0
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: "https://transactions.sui.io/"
@@ -1069,6 +1075,7 @@ validator_configs:
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
+      archive-interval-epochs: 0
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: "https://transactions.sui.io/"
