@@ -524,13 +524,14 @@ impl MockStore {
         checkpoint: u64,
         timeout_duration: Duration,
     ) -> MockWatermark {
-        let start = std::time::Instant::now();
+        let start = tokio::time::Instant::now();
         while start.elapsed() < timeout_duration {
             if let Some(watermark) = self.watermark(pipeline_task)
                 && watermark.checkpoint_hi_inclusive >= checkpoint
             {
                 return watermark;
             }
+
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
         panic!(

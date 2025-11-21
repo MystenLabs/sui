@@ -244,11 +244,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let handler = Arc::new(handler);
 
     let main_reader_lo = Arc::new(SetOnce::<AtomicU64>::new());
-    // The collector does not need to be lower-bounded by the main reader lo task if it is not part
-    // of a tasked indexer. Set to 0 so the collector does not have to wait for initialization.
-    if task.is_none() {
-        main_reader_lo.set(AtomicU64::new(0)).ok();
-    }
 
     let main_reader_lo_task = track_main_reader_lo::<H>(
         main_reader_lo.clone(),

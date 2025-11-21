@@ -83,6 +83,9 @@ pub(super) fn collector<H: Handler + 'static>(
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         // Wait for the main reader lo to be initialized before proceeding to the main loop.
+        //
+        // TODO: without this init, if the processor shuts down while the collector is still waiting
+        // for `main_reader_lo` to be initialized, the indexer will stall forever.
         let atomic_reader_lo = loop {
             tokio::select! {
                 _ = cancel.cancelled() => {

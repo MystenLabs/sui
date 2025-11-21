@@ -217,8 +217,6 @@ impl<S: Store> Indexer<S> {
             cancel.clone(),
         )?;
 
-        let task = task.into_task();
-
         Ok(Self {
             store,
             metrics,
@@ -235,7 +233,7 @@ impl<S: Store> Indexer<S> {
             first_ingestion_checkpoint: u64::MAX,
             next_sequential_checkpoint: None,
             handles: vec![],
-            task,
+            task: task.into_task(),
         })
     }
 
@@ -453,11 +451,13 @@ mod tests {
 
     use async_trait::async_trait;
     use sui_synthetic_ingestion::synthetic_ingestion;
+    use tokio::sync::watch;
     use tokio_util::sync::CancellationToken;
 
     use crate::FieldCount;
     use crate::ingestion::ingestion_client::IngestionClientArgs;
     use crate::mocks::store::MockStore;
+    use crate::pipeline::CommitterConfig;
     use crate::pipeline::{Processor, concurrent::ConcurrentConfig};
     use crate::store::CommitterWatermark;
 
@@ -466,6 +466,69 @@ mod tests {
     #[allow(dead_code)]
     #[derive(Clone, FieldCount)]
     struct MockValue(u64);
+
+    /// A handler that can be controlled externally to block checkpoint processing.
+    struct ControllableHandler {
+        /// Process checkpoints less than or equal to this value.
+        process_below: watch::Receiver<u64>,
+    }
+
+    impl ControllableHandler {
+        fn with_limit(limit: u64) -> (Self, watch::Sender<u64>) {
+            let (tx, rx) = watch::channel(limit);
+            (Self { process_below: rx }, tx)
+        }
+    }
+
+    #[async_trait]
+    impl Processor for ControllableHandler {
+        const NAME: &'static str = "controllable";
+        type Value = MockValue;
+
+        async fn process(
+            &self,
+            checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
+        ) -> anyhow::Result<Vec<Self::Value>> {
+            let cp_num = checkpoint.summary.sequence_number;
+
+            // Wait until the checkpoint is allowed to be processed
+            self.process_below
+                .clone()
+                .wait_for(|&limit| cp_num <= limit)
+                .await
+                .ok();
+
+            Ok(vec![MockValue(cp_num)])
+        }
+    }
+
+    #[async_trait]
+    impl crate::pipeline::concurrent::Handler for ControllableHandler {
+        type Store = MockStore;
+        type Batch = Vec<MockValue>;
+
+        fn batch(
+            &self,
+            batch: &mut Self::Batch,
+            values: &mut std::vec::IntoIter<Self::Value>,
+        ) -> crate::pipeline::concurrent::BatchStatus {
+            batch.extend(values);
+            crate::pipeline::concurrent::BatchStatus::Ready
+        }
+
+        async fn commit<'a>(
+            &self,
+            batch: &Self::Batch,
+            conn: &mut <Self::Store as Store>::Connection<'a>,
+        ) -> anyhow::Result<usize> {
+            for value in batch {
+                conn.0
+                    .commit_data(Self::NAME, value.0, vec![value.0])
+                    .await?;
+            }
+            Ok(batch.len())
+        }
+    }
 
     macro_rules! test_pipeline {
         ($handler:ident, $name:literal) => {
@@ -1735,7 +1798,10 @@ mod tests {
         .await;
 
         let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -1760,11 +1826,12 @@ mod tests {
             )
             .await;
 
-        let metrics = tasked_indexer.metrics().clone();
+        let ingestion_metrics = tasked_indexer.ingestion_metrics().clone();
+        let metrics = tasked_indexer.indexer_metrics().clone();
 
         tasked_indexer.run().await.unwrap().await.unwrap();
 
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 16);
+        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 16);
         assert_eq!(
             metrics
                 .total_collector_skipped_checkpoints
@@ -1823,7 +1890,10 @@ mod tests {
         .await;
 
         let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -1848,11 +1918,12 @@ mod tests {
             )
             .await;
 
-        let metrics = tasked_indexer.metrics().clone();
+        let ingestion_metrics = tasked_indexer.ingestion_metrics().clone();
+        let metrics = tasked_indexer.indexer_metrics().clone();
 
         tasked_indexer.run().await.unwrap().await.unwrap();
 
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 17);
+        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 17);
         assert_eq!(
             metrics
                 .total_watermarks_out_of_order
@@ -1896,22 +1967,13 @@ mod tests {
         let store = MockStore::default();
 
         let mut conn = store.connect().await.unwrap();
-        conn.set_committer_watermark(
-            MockCheckpointSequenceNumberHandler::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
 
         // Start a tasked indexer that will ingest from genesis to checkpoint 500.
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(0),
             last_checkpoint: Some(500),
             pipeline: vec![],
-            task: TaskArgs::tasked("task".to_string(), 10),
+            task: TaskArgs::tasked("task".to_string(), 10 /* reader_interval_ms */),
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -1923,7 +1985,10 @@ mod tests {
         .await;
 
         let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -1941,31 +2006,41 @@ mod tests {
         .await
         .unwrap();
 
+        let (controllable_handler, process_below) = ControllableHandler::with_limit(100);
+
         let _ = tasked_indexer
             .concurrent_pipeline(
-                MockCheckpointSequenceNumberHandler,
-                ConcurrentConfig::default(),
+                controllable_handler,
+                ConcurrentConfig {
+                    committer: CommitterConfig {
+                        collect_interval_ms: 10,
+                        watermark_interval_ms: 10,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
             )
             .await;
 
-        let metrics = tasked_indexer.metrics().clone();
+        let ingestion_metrics = tasked_indexer.ingestion_metrics().clone();
+        let metrics = tasked_indexer.indexer_metrics().clone();
 
         let indexer_handle = tokio::spawn(async move {
             tasked_indexer.run().await.unwrap().await.unwrap();
         });
 
-        // This wait ensures that the tasked pipeline has started committing data.
         store
-            .wait_for_any_data(
-                MockCheckpointSequenceNumberHandler::NAME,
-                std::time::Duration::from_millis(5000),
+            .wait_for_watermark(
+                &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap(),
+                100,
+                std::time::Duration::from_secs(10),
             )
             .await;
 
-        // Artificially bump the reader watermark to checkpoint 250. The tasked pipeline should only
-        // commit checkpoints >= 250 once it ticks.
+        // Bump the reader watermark to checkpoint 250. The tasked pipeline should only commit
+        // checkpoints >= 250 once it ticks.
         conn.set_committer_watermark(
-            MockCheckpointSequenceNumberHandler::NAME,
+            ControllableHandler::NAME,
             CommitterWatermark {
                 checkpoint_hi_inclusive: 300,
                 ..Default::default()
@@ -1973,18 +2048,30 @@ mod tests {
         )
         .await
         .unwrap();
-        conn.set_reader_watermark(MockCheckpointSequenceNumberHandler::NAME, 250)
+        conn.set_reader_watermark(ControllableHandler::NAME, 250)
             .await
             .unwrap();
 
+        // Sleep so that the new reader watermark can be picked up by the tasked indexer. Given the
+        // `reader_interval_ms` is 10 ms, 1000 ms should be plenty of time.
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        // Allow the processor to resume.
+        process_below.send(501).ok();
+
         indexer_handle.await.unwrap();
 
-        let data = store
-            .data
-            .get(MockCheckpointSequenceNumberHandler::NAME)
-            .unwrap();
+        let data = store.data.get(ControllableHandler::NAME).unwrap();
         // All 500+1 checkpoints should have been ingested.
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 501);
+        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 501);
+        // Checkpoints 101 to 249 should have been skipped.
+        assert_eq!(
+            metrics
+                .total_collector_skipped_checkpoints
+                .get_metric_with_label_values(&[ControllableHandler::NAME])
+                .unwrap()
+                .get(),
+            149
+        );
 
         let ge_250 = data.iter().filter(|e| *e.key() >= 250).count();
         let lt_250 = data.iter().filter(|e| *e.key() < 250).count();
@@ -1994,11 +2081,7 @@ mod tests {
         assert!(lt_250 < 250);
         assert_eq!(
             conn.committer_watermark(
-                &pipeline_task::<MockStore>(
-                    MockCheckpointSequenceNumberHandler::NAME,
-                    Some("task")
-                )
-                .unwrap()
+                &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap()
             )
             .await
             .unwrap()
