@@ -253,6 +253,17 @@ impl AdapterInitConfig {
             .unwrap_or_default();
 
         let mut protocol_config = if let Some(protocol_version) = protocol_version {
+            assert!(
+                protocol_version <= ProtocolVersion::max().as_u64(),
+                "Cannot set the protocol version to {}, since it is higher than the max version {}",
+                protocol_version,
+                ProtocolVersion::max().as_u64(),
+            );
+            assert!(
+                protocol_version != ProtocolVersion::max().as_u64(),
+                "Do not set the protocol version to the max {}. It can lead to unanticipated test changes once the max version is bumped. Instead, leave it unset to always use the max version.",
+                protocol_version,
+            );
             ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
         } else {
             ProtocolConfig::get_for_max_version_UNSAFE()
@@ -390,7 +401,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
             None => AdapterInitConfig::default(),
         };
-        let enabled_ptb_v2 = protocol_config.version >= ProtocolVersion::max()
+        let enabled_ptb_v2 = protocol_config.version == ProtocolVersion::max()
             && ENABLE_PTB_V2.get().copied().unwrap_or(false);
         protocol_config.set_enable_ptb_execution_v2_for_testing(enabled_ptb_v2);
 
@@ -890,7 +901,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     current_epoch, round
                 )))
             }
-            SuiSubcommand::ViewObject(ViewObjectCommand { id: fake_id }) => {
+            SuiSubcommand::ViewObject(ViewObjectCommand {
+                id: fake_id,
+                hide_contents,
+            }) => {
                 let obj = get_obj!(fake_id);
                 Ok(Some(match &obj.data {
                     object::Data::Move(move_obj) => {
@@ -899,12 +913,14 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                             BoundedVisitor::deserialize_struct(move_obj.contents(), &layout)
                                 .unwrap();
 
-                        self.stabilize_str(format!(
-                            "Owner: {}\nVersion: {}\nContents: {:#}",
-                            &obj.owner,
-                            obj.version().value(),
-                            move_struct
-                        ))
+                        let msg =
+                            format!("Owner: {}\nVersion: {}", &obj.owner, obj.version().value());
+                        let msg = if hide_contents {
+                            format!("{msg}\nType: {:#}", &move_struct.type_)
+                        } else {
+                            format!("{msg}\nContents: {move_struct:#}",)
+                        };
+                        self.stabilize_str(msg)
                     }
                     object::Data::Package(package) => {
                         let num_modules = package.serialized_module_map().len();
@@ -1306,6 +1322,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     }
                     SuiValue::NonExclusiveWrite(_, _) => {
                         bail!("non-exclusive write object is not supported as an input")
+                    }
+                    SuiValue::Withdraw(_, _) => {
+                        bail!("withdraw reservation is not supported as an input for set-address")
                     }
                 };
                 let value = NumericalAddress::new(value.into_bytes(), NumberFormat::Hex);
@@ -2646,7 +2665,7 @@ async fn init_sim_executor(
         PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
             rng,
             DEFAULT_CHAIN_START_TIMESTAMP,
-            protocol_config.version,
+            protocol_config,
             acc_cfgs,
             addr_keys
                 .iter()
@@ -2654,8 +2673,6 @@ async fn init_sim_executor(
                 .collect(),
             reference_gas_price,
             None,
-            protocol_config.enable_accumulators(),
-            protocol_config.enable_authenticated_event_streams(),
         );
 
     sim.set_data_ingestion_path(data_ingestion_path.clone());
@@ -2872,5 +2889,12 @@ impl ReadStore for SuiTestAdapter {
         digest: &TransactionDigest,
     ) -> Option<Vec<sui_types::storage::ObjectKey>> {
         self.executor.get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<CheckpointSequenceNumber> {
+        self.executor.get_transaction_checkpoint(digest)
     }
 }

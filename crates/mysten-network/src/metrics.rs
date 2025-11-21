@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anemo_tower::callback::{MakeCallbackHandler, ResponseHandler};
+use mysten_metrics::{BYTES_BUCKETS, LATENCY_SEC_BUCKETS};
 use prometheus::{
     HistogramTimer, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
@@ -16,20 +17,6 @@ use tonic::{Code, Status};
 use tower_http::classify::GrpcFailureClass;
 use tower_http::trace::{OnFailure, OnRequest, OnResponse};
 use tracing::{Span, warn};
-
-const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
-];
-
-// Arbitrarily chosen buckets for message size, with gradually-lowering exponent to give us
-// better resolution at high sizes.
-const SIZE_BYTE_BUCKETS: &[f64] = &[
-    2048., 8192., // *4
-    16384., 32768., 65536., 131072., 262144., 524288., 1048576., // *2
-    1572864., 2359256., 3538944., // *1.5
-    4600627., 5980815., 7775060., 10107578., 13139851., 17081807., 22206349., 28868253., 37528729.,
-    48787348., 63423553., // *1.3
-];
 
 pub static GRPC_ENDPOINT_PATH_HEADER: HeaderName = HeaderName::from_static("grpc-path-req");
 
@@ -167,7 +154,7 @@ impl NetworkMetrics {
             format!("{node}_{direction}_request_size"),
             "Size of a request by route",
             &["route"],
-            SIZE_BYTE_BUCKETS.to_vec(),
+            BYTES_BUCKETS.to_vec(),
             registry,
         )
         .unwrap();
@@ -176,7 +163,7 @@ impl NetworkMetrics {
             format!("{node}_{direction}_response_size"),
             "Size of a response by route",
             &["route"],
-            SIZE_BYTE_BUCKETS.to_vec(),
+            BYTES_BUCKETS.to_vec(),
             registry,
         )
         .unwrap();

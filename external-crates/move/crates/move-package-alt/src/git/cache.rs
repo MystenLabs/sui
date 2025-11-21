@@ -230,7 +230,6 @@ impl GitTree {
     /// Return true if the directory exists and is dirty
     async fn is_dirty(&self) -> bool {
         if !self.path_to_repo.join(".git").exists() {
-            // git directory has been removed - it's dirty!
             return true;
         }
 

@@ -66,7 +66,7 @@ For more on passkey signature, see [SIP-8](https://github.com/sui-foundation/sip
 
 ## Authority signature
 
-The Authority on Sui (collection of validators) holds three distinctive key pairs:
+The Authority on Sui (collection of validators) holds 3 distinctive key pairs:
 
 1.  [Protocol key pair](#protocol-pair)
 1.  [Account key pair](#account-pair)
@@ -74,11 +74,11 @@ The Authority on Sui (collection of validators) holds three distinctive key pair
 
 ### Protocol key pair {#protocol-pair}
 
-The protocol key pair provides authority signatures on user-signed transactions if they are verified. When a stake of the authorities that provide signatures on user transactions passes the required two-thirds threshold, Sui executes the transaction. Sui uses the BLS12381 scheme for its fast verification on aggregated signatures for a given number of authorities. In particular, Sui uses the minSig BLS mode, where each individual public key is 96 bytes, while the signature is 48 bytes. The latter is important as typically validators register their keys once at the beginning of each epoch and then they continuously sign transactions; thus, we optimize on minimum signature size.
+The protocol key pair provides authority signatures on user-signed transactions if they are verified. When a stake of the authorities that provide signatures on user transactions passes the required two-thirds threshold, Sui executes the transaction. Sui uses the BLS12381 scheme for its fast verification on aggregated signatures for a given number of authorities. In particular, Sui uses the minSig BLS mode, where each individual public key is 96 bytes, while the signature is 48 bytes. The latter is important as typically validators register their keys once at the beginning of each epoch and then they continuously sign transactions; thus, Sui optimizes on minimum signature size.
 
-As with the BLS scheme, you can aggregate independent signatures resulting in a single BLS signature payload. Sui also accompanies the aggregated signature with a bitmap to denote which of the validators signed. This effectively reduces the authorities' signature size from (2f + 1) × `BLS_sig` size to just one `BLS_sig` payload, which in turn has significant network cost benefits resulting in compressed transaction certificates independently on the validators set size.
+As with the BLS scheme, you can aggregate independent signatures resulting in a single BLS signature payload. Sui also accompanies the aggregated signature with a bitmap to denote which of the validators signed. This effectively reduces the authorities signature size from (2f + 1) × `BLS_sig` size to just one `BLS_sig` payload. This has significant network cost benefits resulting in compressed transaction certificates independently on the validators set size.
 
-To counter potential rogue key attacks on BLS12381 aggregated signatures, proof of knowledge of the secret key (KOSK) is used during authority registration. When an authority requests to be added to the validator set, a proof of possession is submitted and verified. See [Intent Signing](../transaction-auth/intent-signing.mdx) on how to create a proof of possession. Unlike most standards, the Sui proof of knowledge scheme commits to the address as well, which offers an extra protection against adversarial reuse of a validator's BLS key from another malicious validator.
+To counter potential rogue key attacks on BLS12381 aggregated signatures, proof of knowledge of the secret key (KOSK) is used during authority registration. When an authority requests to be added to the validator set, a proof of possession is submitted and verified. See [Intent Signing](/concepts/cryptography/transaction-auth/intent-signing.mdx) on how to create a proof of possession. Unlike most standards, the Sui proof of knowledge scheme commits to the address as well, which offers an extra protection against adversarial reuse of a validator BLS key from another malicious validator.
 
 ### Account key pair {#account-pair}
 

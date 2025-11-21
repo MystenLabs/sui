@@ -1,9 +1,23 @@
 {
-  "name": "move-trace-adapter",
-  "displayName": "move-trace-adapter",
-  "description": "A Debug Adapter Protocol implementation for visualizing Move VM traces",
-  "version": "0.0.1",
-  "main": "./out/server.js",
+  "name": "@mysten/move-debug-trace-adapter",
+  "description": "A Debug Adapter Protocol implementation for visualizing both Move function call and external event traces",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "author": "Mysten Labs <build@mystenlabs.com>",
+  "main": "./out/adapter.js",
+  "types": "./out/adapter.d.ts",
+  "files": [
+    "out/**/*.js",
+    "out/**/*.d.ts",
+    "out/**/*.js.map"
+  ],
+  "exports": {
+    ".": "./out/adapter.js",
+    "./server": "./out/server.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "compile": "tsc -p ./",
     "lint": "eslint src --ext ts",
@@ -14,9 +28,7 @@
     "@types/node": "20.x",
     "@typescript-eslint/eslint-plugin": "^7.14.1",
     "@typescript-eslint/parser": "^7.11.0",
-    "@vscode/debugadapter": "^1.56.0",
     "@vscode/debugadapter-testsupport": "^1.56.0",
-    "@vscode/debugprotocol": "1.66.0",
     "eslint": "^8.57.0",
     "line-diff": "^2.1.1",
     "mocha": "10.2.0",
@@ -24,6 +36,8 @@
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",
+    "@vscode/debugadapter": "^1.56.0",
+    "@vscode/debugprotocol": "1.66.0",
     "fzstd": "^0.1.1",
     "lodash.snakecase": "^4.1.1"
   }

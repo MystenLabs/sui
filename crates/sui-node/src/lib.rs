@@ -254,7 +254,7 @@ pub struct SuiNode {
     checkpoint_metrics: Arc<CheckpointMetrics>,
 
     _discovery: discovery::Handle,
-    _connection_monitor_handle: consensus_core::ConnectionMonitorHandle,
+    _connection_monitor_handle: mysten_network::anemo_connection_monitor::ConnectionMonitorHandle,
     state_sync_handle: state_sync::Handle,
     randomness_handle: randomness::Handle,
     checkpoint_store: Arc<CheckpointStore>,
@@ -845,18 +845,19 @@ impl SuiNode {
             .epoch_start_state()
             .get_authority_names_to_peer_ids();
 
-        let network_connection_metrics = consensus_core::QuinnConnectionMetrics::new(
+        let network_connection_metrics = mysten_network::quinn_metrics::QuinnConnectionMetrics::new(
             "sui",
             &registry_service.default_registry(),
         );
 
         let authority_names_to_peer_ids = ArcSwap::from_pointee(authority_names_to_peer_ids);
 
-        let connection_monitor_handle = consensus_core::AnemoConnectionMonitor::spawn(
-            p2p_network.downgrade(),
-            Arc::new(network_connection_metrics),
-            known_peers,
-        );
+        let connection_monitor_handle =
+            mysten_network::anemo_connection_monitor::AnemoConnectionMonitor::spawn(
+                p2p_network.downgrade(),
+                Arc::new(network_connection_metrics),
+                known_peers,
+            );
 
         let connection_monitor_status = ConnectionMonitorStatus {
             connection_statuses: connection_monitor_handle.connection_statuses(),
@@ -1129,9 +1130,12 @@ impl SuiNode {
             let routes = routes.merge(randomness_router);
 
             let inbound_network_metrics =
-                consensus_core::NetworkRouteMetrics::new("sui", "inbound", prometheus_registry);
-            let outbound_network_metrics =
-                consensus_core::NetworkRouteMetrics::new("sui", "outbound", prometheus_registry);
+                mysten_network::metrics::NetworkMetrics::new("sui", "inbound", prometheus_registry);
+            let outbound_network_metrics = mysten_network::metrics::NetworkMetrics::new(
+                "sui",
+                "outbound",
+                prometheus_registry,
+            );
 
             let service = ServiceBuilder::new()
                 .layer(
@@ -1140,7 +1144,7 @@ impl SuiNode {
                         .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
                 )
                 .layer(CallbackLayer::new(
-                    consensus_core::MetricsMakeCallbackHandler::new(
+                    mysten_network::metrics::MetricsMakeCallbackHandler::new(
                         Arc::new(inbound_network_metrics),
                         config.p2p_config.excessive_message_size(),
                     ),
@@ -1154,7 +1158,7 @@ impl SuiNode {
                         .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
                 )
                 .layer(CallbackLayer::new(
-                    consensus_core::MetricsMakeCallbackHandler::new(
+                    mysten_network::metrics::MetricsMakeCallbackHandler::new(
                         Arc::new(outbound_network_metrics),
                         config.p2p_config.excessive_message_size(),
                     ),

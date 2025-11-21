@@ -15,7 +15,7 @@ use sui_types::Identifier;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::bridge::{
-    BridgeCommitteeSummary, BridgeSummary, MoveTypeParsedTokenTransferMessage,
+    BridgeCommitteeSummary, BridgeSummary, MoveTypeBridgeRecord, MoveTypeParsedTokenTransferMessage,
 };
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
@@ -25,7 +25,7 @@ use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
 
 use crate::sui_client::SuiClientInner;
-use crate::types::{BridgeAction, BridgeActionStatus, IsBridgePaused};
+use crate::types::{BridgeAction, BridgeActionStatus, IsBridgePaused, SuiEvents};
 
 /// Mock client used in test environments.
 #[allow(clippy::type_complexity)]
@@ -150,15 +150,13 @@ impl SuiMockClient {
 
 #[async_trait]
 impl SuiClientInner for SuiMockClient {
-    type Error = sui_sdk::error::Error;
-
     // Unwraps in this function: We assume the responses are pre-populated
     // by the test before calling into this function.
     async fn query_events(
         &self,
         query: EventFilter,
         cursor: Option<EventID>,
-    ) -> Result<EventPage, Self::Error> {
+    ) -> Result<EventPage, BridgeError> {
         let events = self.events.lock().unwrap();
         match query {
             EventFilter::MoveEventModule { package, module } => {
@@ -184,38 +182,43 @@ impl SuiClientInner for SuiMockClient {
     async fn get_events_by_tx_digest(
         &self,
         tx_digest: TransactionDigest,
-    ) -> Result<Vec<SuiEvent>, Self::Error> {
+    ) -> Result<SuiEvents, BridgeError> {
         let events = self.events_by_tx_digest.lock().unwrap();
 
         match events
             .get(&tx_digest)
             .unwrap_or_else(|| panic!("No preset events found for tx_digest: {:?}", tx_digest))
         {
-            Ok(events) => Ok(events.clone()),
+            Ok(events) => Ok(SuiEvents {
+                transaction_digest: tx_digest,
+                checkpoint: None,
+                timestamp_ms: None,
+                events: events.clone(),
+            }),
             // sui_sdk::error::Error is not Clone
-            Err(_) => Err(sui_sdk::error::Error::DataError("".to_string())),
+            Err(_) => Err(sui_sdk::error::Error::DataError("".to_string()).into()),
         }
     }
 
-    async fn get_chain_identifier(&self) -> Result<String, Self::Error> {
+    async fn get_chain_identifier(&self) -> Result<String, BridgeError> {
         Ok(self.chain_identifier.clone())
     }
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, Self::Error> {
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, BridgeError> {
         Ok(self
             .latest_checkpoint_sequence_number
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, Self::Error> {
+    async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, BridgeError> {
         Ok(DUMMY_MUTALBE_BRIDGE_OBJECT_ARG)
     }
 
-    async fn get_reference_gas_price(&self) -> Result<u64, Self::Error> {
+    async fn get_reference_gas_price(&self) -> Result<u64, BridgeError> {
         Ok(1000)
     }
 
-    async fn get_bridge_summary(&self) -> Result<BridgeSummary, Self::Error> {
+    async fn get_bridge_summary(&self) -> Result<BridgeSummary, BridgeError> {
         Ok(BridgeSummary {
             bridge_version: 0,
             message_version: 0,
@@ -265,6 +268,14 @@ impl SuiClientInner for SuiMockClient {
         _seq_number: u64,
     ) -> Result<Option<MoveTypeParsedTokenTransferMessage>, BridgeError> {
         unimplemented!()
+    }
+
+    async fn get_bridge_record(
+        &self,
+        _source_chain_id: u8,
+        _seq_number: u64,
+    ) -> Result<Option<MoveTypeBridgeRecord>, BridgeError> {
+        todo!()
     }
 
     async fn execute_transaction_block_with_effects(

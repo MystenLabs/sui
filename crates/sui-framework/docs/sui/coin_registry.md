@@ -11,7 +11,9 @@ supply information, regulatory status, and metadata capabilities.
 -  [Struct `CoinRegistry`](#sui_coin_registry_CoinRegistry)
 -  [Struct `ExtraField`](#sui_coin_registry_ExtraField)
 -  [Struct `CurrencyKey`](#sui_coin_registry_CurrencyKey)
+-  [Struct `LegacyMetadataKey`](#sui_coin_registry_LegacyMetadataKey)
 -  [Struct `MetadataCap`](#sui_coin_registry_MetadataCap)
+-  [Struct `Borrow`](#sui_coin_registry_Borrow)
 -  [Struct `Currency`](#sui_coin_registry_Currency)
 -  [Struct `CurrencyInitializer`](#sui_coin_registry_CurrencyInitializer)
 -  [Enum `SupplyState`](#sui_coin_registry_SupplyState)
@@ -27,6 +29,7 @@ supply information, regulatory status, and metadata capabilities.
 -  [Function `make_supply_fixed`](#sui_coin_registry_make_supply_fixed)
 -  [Function `make_supply_burn_only`](#sui_coin_registry_make_supply_burn_only)
 -  [Function `finalize`](#sui_coin_registry_finalize)
+-  [Function `finalize_and_delete_metadata_cap`](#sui_coin_registry_finalize_and_delete_metadata_cap)
 -  [Function `finalize_registration`](#sui_coin_registry_finalize_registration)
 -  [Function `delete_metadata_cap`](#sui_coin_registry_delete_metadata_cap)
 -  [Function `burn`](#sui_coin_registry_burn)
@@ -40,6 +43,8 @@ supply information, regulatory status, and metadata capabilities.
 -  [Function `delete_migrated_legacy_metadata`](#sui_coin_registry_delete_migrated_legacy_metadata)
 -  [Function `migrate_regulated_state_by_metadata`](#sui_coin_registry_migrate_regulated_state_by_metadata)
 -  [Function `migrate_regulated_state_by_cap`](#sui_coin_registry_migrate_regulated_state_by_cap)
+-  [Function `borrow_legacy_metadata`](#sui_coin_registry_borrow_legacy_metadata)
+-  [Function `return_borrowed_legacy_metadata`](#sui_coin_registry_return_borrowed_legacy_metadata)
 -  [Function `decimals`](#sui_coin_registry_decimals)
 -  [Function `name`](#sui_coin_registry_name)
 -  [Function `symbol`](#sui_coin_registry_symbol)
@@ -55,7 +60,11 @@ supply information, regulatory status, and metadata capabilities.
 -  [Function `is_regulated`](#sui_coin_registry_is_regulated)
 -  [Function `total_supply`](#sui_coin_registry_total_supply)
 -  [Function `exists`](#sui_coin_registry_exists)
+-  [Function `is_migrated_from_legacy`](#sui_coin_registry_is_migrated_from_legacy)
+-  [Function `to_legacy_metadata`](#sui_coin_registry_to_legacy_metadata)
 -  [Function `create`](#sui_coin_registry_create)
+-  [Macro function `finalize_impl`](#sui_coin_registry_finalize_impl)
+-  [Macro function `migrate_legacy_metadata_impl`](#sui_coin_registry_migrate_legacy_metadata_impl)
 -  [Macro function `is_ascii_printable`](#sui_coin_registry_is_ascii_printable)
 
 
@@ -181,6 +190,28 @@ Key used to derive addresses when creating <code><a href="../sui/coin_registry.m
 
 </details>
 
+<a name="sui_coin_registry_LegacyMetadataKey"></a>
+
+## Struct `LegacyMetadataKey`
+
+Key used to store the legacy <code>CoinMetadata</code> for a <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code>.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+</dl>
+
+
+</details>
+
 <a name="sui_coin_registry_MetadataCap"></a>
 
 ## Struct `MetadataCap`
@@ -205,6 +236,28 @@ be deleted to prevent changes to the <code><a href="../sui/coin_registry.md#sui_
 </dt>
 <dd>
 </dd>
+</dl>
+
+
+</details>
+
+<a name="sui_coin_registry_Borrow"></a>
+
+## Struct `Borrow`
+
+Potato callback for the legacy <code>CoinMetadata</code> borrowing.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/coin_registry.md#sui_coin_registry_Borrow">Borrow</a>&lt;<b>phantom</b> T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
 </dl>
 
 
@@ -533,7 +586,7 @@ Metadata cap already claimed
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EMetadataCapAlreadyClaimed">EMetadataCapAlreadyClaimed</a>: vector&lt;u8&gt; = b"Metadata cap already claimed.";
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EMetadataCapAlreadyClaimed">EMetadataCapAlreadyClaimed</a>: vector&lt;u8&gt; = b"Metadata cap already claimed";
 </code></pre>
 
 
@@ -579,7 +632,7 @@ claimed or deleted.
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_ECannotUpdateManagedMetadata">ECannotUpdateManagedMetadata</a>: vector&lt;u8&gt; = b"Cannot update metadata whose `<a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a>` <b>has</b> already been claimed.";
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_ECannotUpdateManagedMetadata">ECannotUpdateManagedMetadata</a>: vector&lt;u8&gt; = b"Cannot update metadata whose `<a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a>` <b>has</b> already been claimed";
 </code></pre>
 
 
@@ -590,7 +643,7 @@ Attempt to set the symbol to a non-ASCII printable character
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EInvalidSymbol">EInvalidSymbol</a>: vector&lt;u8&gt; = b"Symbol <b>has</b> to be ASCII printable.";
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EInvalidSymbol">EInvalidSymbol</a>: vector&lt;u8&gt; = b"Symbol <b>has</b> to be ASCII printable";
 </code></pre>
 
 
@@ -600,7 +653,7 @@ Attempt to set the symbol to a non-ASCII printable character
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EDenyCapAlreadyCreated">EDenyCapAlreadyCreated</a>: vector&lt;u8&gt; = b"Cannot claim the deny cap twice.";
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EDenyCapAlreadyCreated">EDenyCapAlreadyCreated</a>: vector&lt;u8&gt; = b"Cannot claim the deny cap twice";
 </code></pre>
 
 
@@ -611,7 +664,7 @@ Attempt to migrate legacy metadata for a <code><a href="../sui/coin_registry.md#
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_ECurrencyAlreadyRegistered">ECurrencyAlreadyRegistered</a>: vector&lt;u8&gt; = b"<a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a> already registered.";
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_ECurrencyAlreadyRegistered">ECurrencyAlreadyRegistered</a>: vector&lt;u8&gt; = b"<a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a> already registered";
 </code></pre>
 
 
@@ -621,7 +674,7 @@ Attempt to migrate legacy metadata for a <code><a href="../sui/coin_registry.md#
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EEmptySupply">EEmptySupply</a>: vector&lt;u8&gt; = b"Supply cannot be empty.";
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EEmptySupply">EEmptySupply</a>: vector&lt;u8&gt; = b"Supply cannot be empty";
 </code></pre>
 
 
@@ -631,7 +684,7 @@ Attempt to migrate legacy metadata for a <code><a href="../sui/coin_registry.md#
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_ESupplyNotBurnOnly">ESupplyNotBurnOnly</a>: vector&lt;u8&gt; = b"Cannot <a href="../sui/coin_registry.md#sui_coin_registry_burn">burn</a> on a non <a href="../sui/coin_registry.md#sui_coin_registry_burn">burn</a>-only supply.";
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_ESupplyNotBurnOnly">ESupplyNotBurnOnly</a>: vector&lt;u8&gt; = b"Cannot <a href="../sui/coin_registry.md#sui_coin_registry_burn">burn</a> on a non <a href="../sui/coin_registry.md#sui_coin_registry_burn">burn</a>-only supply";
 </code></pre>
 
 
@@ -641,7 +694,7 @@ Attempt to migrate legacy metadata for a <code><a href="../sui/coin_registry.md#
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EInvariantViolation">EInvariantViolation</a>: vector&lt;u8&gt; = b"Code <b>invariant</b> violation.";
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EInvariantViolation">EInvariantViolation</a>: vector&lt;u8&gt; = b"Code <b>invariant</b> violation";
 </code></pre>
 
 
@@ -651,7 +704,37 @@ Attempt to migrate legacy metadata for a <code><a href="../sui/coin_registry.md#
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EDeletionNotSupported">EDeletionNotSupported</a>: vector&lt;u8&gt; = b"Deleting legacy metadata is not supported.";
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EDeletionNotSupported">EDeletionNotSupported</a>: vector&lt;u8&gt; = b"Deleting legacy metadata is not supported";
+</code></pre>
+
+
+
+<a name="sui_coin_registry_ENotOneTimeWitness"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_ENotOneTimeWitness">ENotOneTimeWitness</a>: vector&lt;u8&gt; = b"Type is expected to be OTW";
+</code></pre>
+
+
+
+<a name="sui_coin_registry_EBorrowLegacyMetadata"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EBorrowLegacyMetadata">EBorrowLegacyMetadata</a>: vector&lt;u8&gt; = b"Cannot <a href="../sui/borrow.md#sui_borrow">borrow</a> legacy metadata <b>for</b> migrated currency";
+</code></pre>
+
+
+
+<a name="sui_coin_registry_EDuplicateBorrow"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/coin_registry.md#sui_coin_registry_EDuplicateBorrow">EDuplicateBorrow</a>: vector&lt;u8&gt; = b"Attempt to <b>return</b> duplicate borrowed CoinMetadata";
 </code></pre>
 
 
@@ -758,7 +841,7 @@ This is a two-step operation:
     <a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>: String,
     ctx: &<b>mut</b> TxContext,
 ): (<a href="../sui/coin_registry.md#sui_coin_registry_CurrencyInitializer">CurrencyInitializer</a>&lt;T&gt;, TreasuryCap&lt;T&gt;) {
-    <b>assert</b>!(<a href="../sui/types.md#sui_types_is_one_time_witness">sui::types::is_one_time_witness</a>(&otw));
+    <b>assert</b>!(<a href="../sui/types.md#sui_types_is_one_time_witness">sui::types::is_one_time_witness</a>(&otw), <a href="../sui/coin_registry.md#sui_coin_registry_ENotOneTimeWitness">ENotOneTimeWitness</a>);
     <b>assert</b>!(<a href="../sui/coin_registry.md#sui_coin_registry_is_ascii_printable">is_ascii_printable</a>!(&<a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>), <a href="../sui/coin_registry.md#sui_coin_registry_EInvalidSymbol">EInvalidSymbol</a>);
     <b>let</b> treasury_cap = <a href="../sui/coin.md#sui_coin_new_treasury_cap">coin::new_treasury_cap</a>(ctx);
     <b>let</b> currency = <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt; {
@@ -991,21 +1074,45 @@ Finalize the coin initialization, returning <code><a href="../sui/coin_registry.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_finalize">finalize</a>&lt;T&gt;(builder: <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyInitializer">CurrencyInitializer</a>&lt;T&gt;, ctx: &<b>mut</b> TxContext): <a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a>&lt;T&gt; {
-    <b>let</b> <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyInitializer">CurrencyInitializer</a> { <b>mut</b> currency, is_otw, extra_fields } = builder;
-    extra_fields.destroy_empty();
-    <b>let</b> id = <a href="../sui/object.md#sui_object_new">object::new</a>(ctx);
-    currency.<a href="../sui/coin_registry.md#sui_coin_registry_metadata_cap_id">metadata_cap_id</a> = MetadataCapState::Claimed(id.to_inner());
-    // Mark the currency <b>as</b> new, so in the future we can support borrowing of the
-    // legacy metadata.
-    currency
-        .extra_fields
-        .insert(
-            <a href="../sui/coin_registry.md#sui_coin_registry_NEW_CURRENCY_MARKER">NEW_CURRENCY_MARKER</a>.to_string(),
-            <a href="../sui/coin_registry.md#sui_coin_registry_ExtraField">ExtraField</a>(type_name::with_original_ids&lt;bool&gt;(), <a href="../sui/coin_registry.md#sui_coin_registry_NEW_CURRENCY_MARKER">NEW_CURRENCY_MARKER</a>),
-        );
+    <b>let</b> is_otw = builder.is_otw;
+    <b>let</b> (currency, metadata_cap) = <a href="../sui/coin_registry.md#sui_coin_registry_finalize_impl">finalize_impl</a>!(builder, ctx);
+    // Either share directly (`<a href="../sui/coin_registry.md#sui_coin_registry_new_currency">new_currency</a>` scenario), or <a href="../sui/transfer.md#sui_transfer">transfer</a> <b>as</b> TTO to `<a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a>`.
     <b>if</b> (is_otw) <a href="../sui/transfer.md#sui_transfer_transfer">transfer::transfer</a>(currency, <a href="../sui/object.md#sui_object_sui_coin_registry_address">object::sui_coin_registry_address</a>())
     <b>else</b> <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(currency);
-    <a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a>&lt;T&gt; { id }
+    metadata_cap
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_registry_finalize_and_delete_metadata_cap"></a>
+
+## Function `finalize_and_delete_metadata_cap`
+
+Does the same as <code><a href="../sui/coin_registry.md#sui_coin_registry_finalize">finalize</a></code>, but also deletes the <code><a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a></code> after finalization.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_finalize_and_delete_metadata_cap">finalize_and_delete_metadata_cap</a>&lt;T&gt;(builder: <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyInitializer">sui::coin_registry::CurrencyInitializer</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_finalize_and_delete_metadata_cap">finalize_and_delete_metadata_cap</a>&lt;T&gt;(
+    builder: <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyInitializer">CurrencyInitializer</a>&lt;T&gt;,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> is_otw = builder.is_otw;
+    <b>let</b> (<b>mut</b> currency, metadata_cap) = <a href="../sui/coin_registry.md#sui_coin_registry_finalize_impl">finalize_impl</a>!(builder, ctx);
+    currency.<a href="../sui/coin_registry.md#sui_coin_registry_delete_metadata_cap">delete_metadata_cap</a>(metadata_cap);
+    // Either share directly (`<a href="../sui/coin_registry.md#sui_coin_registry_new_currency">new_currency</a>` scenario), or <a href="../sui/transfer.md#sui_transfer">transfer</a> <b>as</b> TTO to `<a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a>`.
+    <b>if</b> (is_otw) <a href="../sui/transfer.md#sui_transfer_transfer">transfer::transfer</a>(currency, <a href="../sui/object.md#sui_object_sui_coin_registry_address">object::sui_coin_registry_address</a>())
+    <b>else</b> <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(currency);
 }
 </code></pre>
 
@@ -1282,24 +1389,8 @@ Register <code>CoinMetadata</code> in the <code><a href="../sui/coin_registry.md
     legacy: &CoinMetadata&lt;T&gt;,
     _ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(!registry.<a href="../sui/coin_registry.md#sui_coin_registry_exists">exists</a>&lt;T&gt;(), <a href="../sui/coin_registry.md#sui_coin_registry_ECurrencyAlreadyRegistered">ECurrencyAlreadyRegistered</a>);
-    <b>assert</b>!(<a href="../sui/coin_registry.md#sui_coin_registry_is_ascii_printable">is_ascii_printable</a>!(&legacy.get_symbol().to_string()), <a href="../sui/coin_registry.md#sui_coin_registry_EInvalidSymbol">EInvalidSymbol</a>);
-    <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt; {
-        id: <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>(&<b>mut</b> registry.id, <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyKey">CurrencyKey</a>&lt;T&gt;()),
-        <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>: legacy.get_decimals(),
-        <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>: legacy.get_name(),
-        <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: legacy.get_symbol().to_string(),
-        <a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>: legacy.get_description(),
-        <a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>: legacy
-            .get_icon_url()
-            .map!(|<a href="../sui/url.md#sui_url">url</a>| <a href="../sui/url.md#sui_url">url</a>.inner_url().to_string())
-            .destroy_or!(b"".to_string()),
-        supply: option::some(SupplyState::Unknown),
-        regulated: RegulatedState::Unknown, // We don't know <b>if</b> it's regulated or not!
-        <a href="../sui/coin_registry.md#sui_coin_registry_treasury_cap_id">treasury_cap_id</a>: option::none(),
-        <a href="../sui/coin_registry.md#sui_coin_registry_metadata_cap_id">metadata_cap_id</a>: MetadataCapState::Unclaimed,
-        extra_fields: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
-    });
+    <b>let</b> currency = <a href="../sui/coin_registry.md#sui_coin_registry_migrate_legacy_metadata_impl">migrate_legacy_metadata_impl</a>!(registry, legacy);
+    <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(currency);
 }
 </code></pre>
 
@@ -1422,6 +1513,91 @@ Mark regulated state by showing the <code>DenyCapV2</code> object for the <code>
             allow_global_pause: option::some(cap.allow_global_pause()),
             variant: <a href="../sui/coin_registry.md#sui_coin_registry_REGULATED_COIN_VERSION">REGULATED_COIN_VERSION</a>,
         };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_registry_borrow_legacy_metadata"></a>
+
+## Function `borrow_legacy_metadata`
+
+Borrow the legacy <code>CoinMetadata</code> from a new <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code>. To preserve the <code>ID</code>
+of the legacy <code>CoinMetadata</code>, we create it on request and then store it as a
+dynamic field for future borrows.
+
+<code><a href="../sui/coin_registry.md#sui_coin_registry_Borrow">Borrow</a>&lt;T&gt;</code> ensures that the <code>CoinMetadata</code> is returned in the same transaction.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_borrow_legacy_metadata">borrow_legacy_metadata</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_Borrow">sui::coin_registry::Borrow</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_borrow_legacy_metadata">borrow_legacy_metadata</a>&lt;T&gt;(
+    currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;,
+    ctx: &<b>mut</b> TxContext,
+): (CoinMetadata&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_Borrow">Borrow</a>&lt;T&gt;) {
+    <b>assert</b>!(!currency.<a href="../sui/coin_registry.md#sui_coin_registry_is_migrated_from_legacy">is_migrated_from_legacy</a>(), <a href="../sui/coin_registry.md#sui_coin_registry_EBorrowLegacyMetadata">EBorrowLegacyMetadata</a>);
+    <b>if</b> (!df::exists_(&currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>())) {
+        <b>let</b> legacy = currency.<a href="../sui/coin_registry.md#sui_coin_registry_to_legacy_metadata">to_legacy_metadata</a>(ctx);
+        df::add(&<b>mut</b> currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>(), legacy);
+    };
+    <b>let</b> <b>mut</b> legacy: CoinMetadata&lt;T&gt; = df::remove(&<b>mut</b> currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>());
+    legacy.update_coin_metadata(
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>,
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>.to_ascii(),
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>,
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>.to_ascii(),
+    );
+    (legacy, <a href="../sui/coin_registry.md#sui_coin_registry_Borrow">Borrow</a> {})
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_registry_return_borrowed_legacy_metadata"></a>
+
+## Function `return_borrowed_legacy_metadata`
+
+Return the borrowed <code>CoinMetadata</code> and the <code><a href="../sui/coin_registry.md#sui_coin_registry_Borrow">Borrow</a></code> potato to the <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code>.
+
+Note to self: Borrow requirement prevents deletion through this method.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_return_borrowed_legacy_metadata">return_borrowed_legacy_metadata</a>&lt;T&gt;(currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, legacy: <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, <a href="../sui/borrow.md#sui_borrow">borrow</a>: <a href="../sui/coin_registry.md#sui_coin_registry_Borrow">sui::coin_registry::Borrow</a>&lt;T&gt;, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_return_borrowed_legacy_metadata">return_borrowed_legacy_metadata</a>&lt;T&gt;(
+    currency: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;,
+    <b>mut</b> legacy: CoinMetadata&lt;T&gt;,
+    <a href="../sui/borrow.md#sui_borrow">borrow</a>: <a href="../sui/coin_registry.md#sui_coin_registry_Borrow">Borrow</a>&lt;T&gt;,
+    _ctx: &<b>mut</b> TxContext,
+) {
+    <b>assert</b>!(!df::exists_(&currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>()), <a href="../sui/coin_registry.md#sui_coin_registry_EDuplicateBorrow">EDuplicateBorrow</a>);
+    <b>let</b> <a href="../sui/coin_registry.md#sui_coin_registry_Borrow">Borrow</a> {} = <a href="../sui/borrow.md#sui_borrow">borrow</a>;
+    // Always store up to date value.
+    legacy.update_coin_metadata(
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>,
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>.to_ascii(),
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>,
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>.to_ascii(),
+    );
+    df::add(&<b>mut</b> currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>(), legacy);
 }
 </code></pre>
 
@@ -1823,6 +1999,63 @@ Check if coin data exists for the given type T in the registry.
 
 </details>
 
+<a name="sui_coin_registry_is_migrated_from_legacy"></a>
+
+## Function `is_migrated_from_legacy`
+
+Whether the currency is migrated from legacy.
+
+
+<pre><code><b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_is_migrated_from_legacy">is_migrated_from_legacy</a>&lt;T&gt;(currency: &<a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_is_migrated_from_legacy">is_migrated_from_legacy</a>&lt;T&gt;(currency: &<a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;): bool {
+    !currency.extra_fields.contains(&<a href="../sui/coin_registry.md#sui_coin_registry_NEW_CURRENCY_MARKER">NEW_CURRENCY_MARKER</a>.to_string())
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_registry_to_legacy_metadata"></a>
+
+## Function `to_legacy_metadata`
+
+Create a new legacy <code>CoinMetadata</code> from a <code><a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a></code>.
+
+
+<pre><code><b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_to_legacy_metadata">to_legacy_metadata</a>&lt;T&gt;(currency: &<a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_to_legacy_metadata">to_legacy_metadata</a>&lt;T&gt;(currency: &<a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;T&gt;, ctx: &<b>mut</b> TxContext): CoinMetadata&lt;T&gt; {
+    <a href="../sui/coin.md#sui_coin_new_coin_metadata">coin::new_coin_metadata</a>(
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>,
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>,
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>.to_ascii(),
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>,
+        currency.<a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>.to_ascii(),
+        ctx,
+    )
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_coin_registry_create"></a>
 
 ## Function `create`
@@ -1846,6 +2079,93 @@ Only the system address (0x0) can create the registry.
     <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a> {
         id: <a href="../sui/object.md#sui_object_sui_coin_registry_object_id">object::sui_coin_registry_object_id</a>(),
     });
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_registry_finalize_impl"></a>
+
+## Macro function `finalize_impl`
+
+Internal macro to keep implementation between build and test modes.
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_finalize_impl">finalize_impl</a>&lt;$T&gt;($builder: <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyInitializer">sui::coin_registry::CurrencyInitializer</a>&lt;$T&gt;, $ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;$T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">sui::coin_registry::MetadataCap</a>&lt;$T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_finalize_impl">finalize_impl</a>&lt;$T&gt;(
+    $builder: <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyInitializer">CurrencyInitializer</a>&lt;$T&gt;,
+    $ctx: &<b>mut</b> TxContext,
+): (<a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;$T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a>&lt;$T&gt;) {
+    <b>let</b> <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyInitializer">CurrencyInitializer</a> { <b>mut</b> currency, extra_fields, is_otw: _ } = $builder;
+    extra_fields.destroy_empty();
+    <b>let</b> id = <a href="../sui/object.md#sui_object_new">object::new</a>($ctx);
+    currency.<a href="../sui/coin_registry.md#sui_coin_registry_metadata_cap_id">metadata_cap_id</a> = MetadataCapState::Claimed(id.to_inner());
+    // Mark the currency <b>as</b> new, so in the future we can support borrowing of the
+    // legacy metadata.
+    currency
+        .extra_fields
+        .insert(
+            <a href="../sui/coin_registry.md#sui_coin_registry_NEW_CURRENCY_MARKER">NEW_CURRENCY_MARKER</a>.to_string(),
+            <a href="../sui/coin_registry.md#sui_coin_registry_ExtraField">ExtraField</a>(type_name::with_original_ids&lt;bool&gt;(), <a href="../sui/coin_registry.md#sui_coin_registry_NEW_CURRENCY_MARKER">NEW_CURRENCY_MARKER</a>),
+        );
+    (currency, <a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">MetadataCap</a>&lt;$T&gt; { id })
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_registry_migrate_legacy_metadata_impl"></a>
+
+## Macro function `migrate_legacy_metadata_impl`
+
+Internal macro to keep implementation between build and test modes.
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_migrate_legacy_metadata_impl">migrate_legacy_metadata_impl</a>&lt;$T&gt;($registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>, $legacy: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;$T&gt;): <a href="../sui/coin_registry.md#sui_coin_registry_Currency">sui::coin_registry::Currency</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_migrate_legacy_metadata_impl">migrate_legacy_metadata_impl</a>&lt;$T&gt;(
+    $registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a>,
+    $legacy: &CoinMetadata&lt;$T&gt;,
+): <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;$T&gt; {
+    <b>let</b> registry = $registry;
+    <b>let</b> legacy = $legacy;
+    <b>assert</b>!(!registry.<a href="../sui/coin_registry.md#sui_coin_registry_exists">exists</a>&lt;$T&gt;(), <a href="../sui/coin_registry.md#sui_coin_registry_ECurrencyAlreadyRegistered">ECurrencyAlreadyRegistered</a>);
+    <b>assert</b>!(<a href="../sui/coin_registry.md#sui_coin_registry_is_ascii_printable">is_ascii_printable</a>!(&legacy.get_symbol().to_string()), <a href="../sui/coin_registry.md#sui_coin_registry_EInvalidSymbol">EInvalidSymbol</a>);
+    <a href="../sui/coin_registry.md#sui_coin_registry_Currency">Currency</a>&lt;$T&gt; {
+        id: <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>(&<b>mut</b> registry.id, <a href="../sui/coin_registry.md#sui_coin_registry_CurrencyKey">CurrencyKey</a>&lt;$T&gt;()),
+        <a href="../sui/coin_registry.md#sui_coin_registry_decimals">decimals</a>: legacy.get_decimals(),
+        <a href="../sui/coin_registry.md#sui_coin_registry_name">name</a>: legacy.get_name(),
+        <a href="../sui/coin_registry.md#sui_coin_registry_symbol">symbol</a>: legacy.get_symbol().to_string(),
+        <a href="../sui/coin_registry.md#sui_coin_registry_description">description</a>: legacy.get_description(),
+        <a href="../sui/coin_registry.md#sui_coin_registry_icon_url">icon_url</a>: legacy
+            .get_icon_url()
+            .map!(|<a href="../sui/url.md#sui_url">url</a>| <a href="../sui/url.md#sui_url">url</a>.inner_url().to_string())
+            .destroy_or!(b"".to_string()),
+        supply: option::some(SupplyState::Unknown),
+        regulated: RegulatedState::Unknown,
+        <a href="../sui/coin_registry.md#sui_coin_registry_treasury_cap_id">treasury_cap_id</a>: option::none(),
+        <a href="../sui/coin_registry.md#sui_coin_registry_metadata_cap_id">metadata_cap_id</a>: MetadataCapState::Unclaimed,
+        extra_fields: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
+    }
 }
 </code></pre>
 

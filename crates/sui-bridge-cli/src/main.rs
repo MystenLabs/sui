@@ -17,7 +17,7 @@ use sui_bridge::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use sui_bridge::crypto::{BridgeAuthorityPublicKey, BridgeAuthorityPublicKeyBytes};
 use sui_bridge::eth_transaction_builder::build_eth_transaction;
 use sui_bridge::metrics::BridgeMetrics;
-use sui_bridge::sui_client::SuiClient;
+use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::sui_transaction_builder::build_sui_transaction;
 use sui_bridge::types::BridgeActionType;
 use sui_bridge::utils::{EthBridgeContracts, get_eth_contracts};
@@ -30,7 +30,6 @@ use sui_bridge_cli::{
     SEPOLIA_BRIDGE_PROXY_ADDR, make_action, select_contract_address,
 };
 use sui_config::Config;
-use sui_sdk::SuiClient as SuiSdkClient;
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeChainId;
@@ -84,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
             let config = LoadedBridgeCliConfig::load(config).await?;
             let metrics = Arc::new(BridgeMetrics::new_for_testing());
             let sui_bridge_client =
-                SuiClient::<SuiSdkClient>::new(&config.sui_rpc_url, metrics.clone()).await?;
+                SuiBridgeClient::new(&config.sui_rpc_url, metrics.clone()).await?;
 
             let (sui_key, sui_address, gas_object_ref) = config
                 .get_sui_account_info()
@@ -282,7 +281,7 @@ async fn main() -> anyhow::Result<()> {
 
         BridgeCommand::ViewBridgeRegistration { sui_rpc_url } => {
             let metrics = Arc::new(BridgeMetrics::new_for_testing());
-            let sui_bridge_client = SuiClient::<SuiSdkClient>::new(&sui_rpc_url, metrics).await?;
+            let sui_bridge_client = SuiBridgeClient::new(&sui_rpc_url, metrics).await?;
             let bridge_summary = sui_bridge_client
                 .get_bridge_summary()
                 .await
@@ -368,7 +367,7 @@ async fn main() -> anyhow::Result<()> {
             ping,
         } => {
             let metrics = Arc::new(BridgeMetrics::new_for_testing());
-            let sui_bridge_client = SuiClient::<SuiSdkClient>::new(&sui_rpc_url, metrics).await?;
+            let sui_bridge_client = SuiBridgeClient::new(&sui_rpc_url, metrics).await?;
             let bridge_summary = sui_bridge_client
                 .get_bridge_summary()
                 .await
@@ -516,8 +515,7 @@ async fn main() -> anyhow::Result<()> {
             let config = BridgeCliConfig::load(config_path).expect("Couldn't load BridgeCliConfig");
             let config = LoadedBridgeCliConfig::load(config).await?;
             let metrics = Arc::new(BridgeMetrics::new_for_testing());
-            let sui_bridge_client =
-                SuiClient::<SuiSdkClient>::new(&config.sui_rpc_url, metrics).await?;
+            let sui_bridge_client = SuiBridgeClient::new(&config.sui_rpc_url, metrics).await?;
             cmd.handle(&config, sui_bridge_client).await?;
             return Ok(());
         }

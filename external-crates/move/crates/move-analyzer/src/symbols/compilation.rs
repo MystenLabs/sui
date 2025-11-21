@@ -5,7 +5,7 @@
 //! to a represenatation that can be used for computing symbols.
 
 use crate::{
-    compiler_info::CompilerInfo,
+    compiler_info::{CompilerAnalysisInfo, CompilerAutocompleteInfo, process_ide_annotations},
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
     symbols::{
         def_info::DefInfo,
@@ -101,8 +101,10 @@ pub struct CompiledPkgInfo {
     pub mapped_files: MappedFiles,
     /// Edition of the compiler
     pub edition: Option<Edition>,
-    /// Compiler info
-    pub compiler_info: Option<CompilerInfo>,
+    /// Compiler analysis info
+    pub compiler_analysis_info: Option<CompilerAnalysisInfo>,
+    /// Compiler autocomplete info
+    pub compiler_autocomplete_info: Option<CompilerAutocompleteInfo>,
     /// IDE diagnostics related to the package
     pub lsp_diags: Arc<BTreeMap<PathBuf, Vec<Diagnostic>>>,
 }
@@ -129,8 +131,8 @@ pub struct CachedPkgInfo {
     pub user_file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
     /// Edition of the compiler used to build this package
     pub edition: Option<Edition>,
-    /// Compiler info
-    pub compiler_info: Option<CompilerInfo>,
+    /// Compiler analysis info (cached)
+    pub compiler_analysis_info: Option<CompilerAnalysisInfo>,
     /// IDE diagnostics related to the package
     pub lsp_diags: Arc<BTreeMap<PathBuf, Vec<Diagnostic>>>,
 }
@@ -185,7 +187,7 @@ struct MappedFilesData {
 struct CachingResult {
     pkg_deps: Option<AnalyzedPkgInfo>,
     edition: Option<Edition>,
-    compiler_info: Option<CompilerInfo>,
+    compiler_analysis_info: Option<CompilerAnalysisInfo>,
 }
 
 impl CachedPackages {
@@ -223,6 +225,7 @@ impl AnalyzedPkgInfo {
     pub fn new_precompiled_only(
         program_deps: Arc<PreCompiledProgramInfo>,
         dep_names: BTreeSet<Symbol>,
+        dep_hashes: Vec<FileHash>,
     ) -> Self {
         Self {
             program_deps,
@@ -231,7 +234,7 @@ impl AnalyzedPkgInfo {
             program: None,
             file_paths: Arc::new(BTreeMap::new()),
             user_file_hashes: Arc::new(BTreeMap::new()),
-            dep_hashes: vec![],
+            dep_hashes,
         }
     }
 }
@@ -274,12 +277,12 @@ impl CachingResult {
     pub fn new(
         pkg_deps: Option<AnalyzedPkgInfo>,
         edition: Option<Edition>,
-        compiler_info: Option<CompilerInfo>,
+        compiler_analysis_info: Option<CompilerAnalysisInfo>,
     ) -> Self {
         Self {
             pkg_deps,
             edition,
-            compiler_info,
+            compiler_analysis_info,
         }
     }
 
@@ -287,7 +290,7 @@ impl CachingResult {
         Self {
             pkg_deps: None,
             edition: None,
-            compiler_info: None,
+            compiler_analysis_info: None,
         }
     }
 }
@@ -301,6 +304,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     pkg_path: &Path,
     lint: LintLevel,
     flavor: Option<Flavor>,
+    cursor_file_opt: Option<&PathBuf>,
 ) -> Result<(Option<CompiledPkgInfo>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     let cached_deps_exist = has_precompiled_deps(pkg_path, packages_info.clone());
     let build_config = move_package_alt_compilation::build_config::BuildConfig {
@@ -354,6 +358,8 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     let mut parsed_ast = None;
     let mut typed_ast = None;
     let mut diagnostics = None;
+    let mut compiler_analysis_info_opt = None;
+    let mut compiler_autocomplete_info_opt = None;
 
     // TODO: we need to rework on loading the root pkg only once.
     let dependencies = root_pkg.packages();
@@ -425,7 +431,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 CachingResult::new(
                     Some(analyzed_pkg_info),
                     cached_pkg_info.edition,
-                    cached_pkg_info.compiler_info.clone(),
+                    cached_pkg_info.compiler_analysis_info.clone(),
                 )
             }
             None => {
@@ -440,8 +446,11 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                     compiler_flags,
                     overlay_fs_root.clone(),
                 ) {
-                    let analyzed_pkg_info =
-                        AnalyzedPkgInfo::new_precompiled_only(program_deps, dep_names);
+                    let analyzed_pkg_info = AnalyzedPkgInfo::new_precompiled_only(
+                        program_deps,
+                        dep_names,
+                        mapped_files_data.dep_hashes.clone(),
+                    );
                     CachingResult::new(Some(analyzed_pkg_info), None, None)
                 } else {
                     CachingResult::empty()
@@ -476,6 +485,11 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                     // File exists and has same hash (unchanged) - do nothing
                     Some(_) => {}
                 }
+            }
+
+            // Add cursor file to force incremental compilation for autocomplete
+            if let Some(cursor_file) = cursor_file_opt {
+                modified_files.insert(cursor_file.clone());
             }
 
             (false, modified_files)
@@ -541,9 +555,23 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 eprintln!("compiled to typed AST");
                 let (compiler, typed_program) = compiler.into_ast();
                 typed_ast = Some(typed_program.clone());
-                caching_result.compiler_info = Some(CompilerInfo::from(
-                    compiler.compilation_env().ide_information().clone(),
-                ));
+                let (analysis_info, autocomplete_info) =
+                    process_ide_annotations(compiler.compilation_env().ide_information().clone());
+                // Don't update caching_result here - will be merged in conditional below
+                compiler_analysis_info_opt = Some(analysis_info);
+
+                // Filter autocomplete info based on cursor file
+                // - If cursor_file_opt is None: no autocomplete needed, use empty info
+                // - If cursor_file_opt is Some: only keep autocomplete info for that file
+                compiler_autocomplete_info_opt = Some(if let Some(cursor_file) = cursor_file_opt {
+                    filter_autocomplete_for_file(
+                        autocomplete_info,
+                        cursor_file,
+                        mapped_files_data.files.file_name_mapping(),
+                    )
+                } else {
+                    CompilerAutocompleteInfo::new()
+                });
                 caching_result.edition =
                     Some(compiler.compilation_env().edition(Some(root_pkg_name)));
 
@@ -582,14 +610,18 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     }
     // uwrap's are safe - this function returns earlier (during diagnostics processing)
     // when failing to produce the ASTs
-    let (parsed_definitions, typed_modules) = if full_compilation {
+    let (parsed_definitions, typed_modules, compiler_analysis_info) = if full_compilation {
         let parsed_program = parsed_ast.unwrap();
         let parsed_definitions = ParsedDefinitions {
             source_definitions: parsed_program.source_definitions,
             lib_definitions: parsed_program.lib_definitions,
         };
         let typed_modules = typed_ast.unwrap().modules;
-        (parsed_definitions, typed_modules)
+        (
+            parsed_definitions,
+            typed_modules,
+            compiler_analysis_info_opt,
+        )
     } else if files_to_compile.is_empty() {
         // no compilation happened, so we get everything from the cache, and
         // the unwraps are safe because the cache is guaranteed to exist (otherwise
@@ -599,15 +631,25 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
         (
             compiled_program.parsed_definitions.clone(),
             compiled_program.typed_modules.clone(),
+            caching_result.compiler_analysis_info.clone(),
         )
     } else {
-        merge_user_programs(
+        let (parsed_defs, typed_mods) = merge_user_programs(
             caching_result.pkg_deps.clone(),
             parsed_ast.unwrap(),
             typed_ast.unwrap().modules,
-            file_paths,
-            files_to_compile,
-        )
+            file_paths.clone(),
+            files_to_compile.clone(),
+        );
+
+        let merged_analysis_info = Some(merge_compiler_analysis_info(
+            caching_result.compiler_analysis_info.clone().unwrap(),
+            compiler_analysis_info_opt.unwrap(),
+            &file_paths,
+            &files_to_compile,
+        ));
+
+        (parsed_defs, typed_mods, merged_analysis_info)
     };
 
     // There may be diagnostics from other packages that still need to be displayed
@@ -635,7 +677,8 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
         },
         mapped_files: mapped_files_data.files,
         edition: caching_result.edition,
-        compiler_info: caching_result.compiler_info,
+        compiler_analysis_info,
+        compiler_autocomplete_info: compiler_autocomplete_info_opt,
         lsp_diags: Arc::new(lsp_diags),
     };
     Ok((Some(compiled_pkg_info), ide_diags))
@@ -902,6 +945,77 @@ fn merge_user_programs(
     }
 
     (result_parsed_definitions, result_typed_modules)
+}
+
+/// Merges cached CompilerAnalysisInfo with newly compiled info during incremental compilation.
+/// Filters out entries from modified files from the cache, then adds new entries.
+fn merge_compiler_analysis_info(
+    cached_info: CompilerAnalysisInfo,
+    new_info: CompilerAnalysisInfo,
+    file_paths: &BTreeMap<FileHash, PathBuf>,
+    modified_files: &BTreeSet<PathBuf>,
+) -> CompilerAnalysisInfo {
+    let mut result = cached_info;
+
+    // Helper to check if a location is in a modified file
+    let is_modified = |loc: &Loc| -> bool {
+        file_paths
+            .get(&loc.file_hash())
+            .map(|path| modified_files.contains(path))
+            .unwrap_or(false)
+    };
+
+    // Remove entries from modified files
+    result.macro_info.retain(|loc, _| !is_modified(loc));
+    result.expanded_lambdas.retain(|loc| !is_modified(loc));
+    result.ellipsis_binders.retain(|loc| !is_modified(loc));
+
+    // Add new entries - no additional filtering needed
+    // as incremental compilation produced these
+    // only for modified files
+    result.macro_info.extend(new_info.macro_info);
+    result.expanded_lambdas.extend(new_info.expanded_lambdas);
+    result.ellipsis_binders.extend(new_info.ellipsis_binders);
+
+    result
+}
+
+/// Filters CompilerAutocompleteInfo to only include entries for the specified file.
+/// Used when cursor is in a specific file - we only need autocomplete info for that file.
+fn filter_autocomplete_for_file(
+    autocomplete_info: CompilerAutocompleteInfo,
+    cursor_file: &PathBuf,
+    file_paths: &BTreeMap<FileHash, PathBuf>,
+) -> CompilerAutocompleteInfo {
+    // Find the FileHash for the cursor file
+    let cursor_fhash = file_paths
+        .iter()
+        .find(|(_, path)| *path == cursor_file)
+        .map(|(fhash, _)| *fhash);
+
+    let Some(cursor_fhash) = cursor_fhash else {
+        // Cursor file not in mapped files - return empty
+        return CompilerAutocompleteInfo::new();
+    };
+
+    // Filter dot_autocomplete_info: keep only the cursor file's entry
+    let filtered_dot = autocomplete_info
+        .dot_autocomplete_info
+        .into_iter()
+        .filter(|(fhash, _)| *fhash == cursor_fhash)
+        .collect();
+
+    // Filter path_autocomplete_info: keep only entries whose Loc is in cursor file
+    let filtered_path = autocomplete_info
+        .path_autocomplete_info
+        .into_iter()
+        .filter(|(loc, _)| loc.file_hash() == cursor_fhash)
+        .collect();
+
+    CompilerAutocompleteInfo {
+        dot_autocomplete_info: filtered_dot,
+        path_autocomplete_info: filtered_path,
+    }
 }
 
 /// Checks if a parsed module is modified by getting

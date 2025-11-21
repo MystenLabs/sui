@@ -55,6 +55,13 @@ impl AbstractValue {
     }
 }
 
+/// ValueKind is used for specifying the type of value expected to be returned
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ValueKind {
+    Reference(/* is_mut */ bool),
+    NonReference,
+}
+
 /// Label is an element of a label on an edge in the borrow graph.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Label {
@@ -752,6 +759,58 @@ impl AbstractState {
                             self.add_borrow(*parent, id, meter)?;
                         }
                         returned_refs += 1;
+                        AbstractValue::Reference(id)
+                    }
+                    _ => AbstractValue::NonReference,
+                })
+            })
+            .collect::<PartialVMResult<_>>()?;
+
+        // Release input references
+        for id in all_references_to_borrow_from {
+            self.release(id, meter)?
+        }
+        Ok(return_values)
+    }
+
+    pub fn call_v2(
+        &mut self,
+        offset: CodeOffset,
+        arguments: Vec<AbstractValue>,
+        return_: &[ValueKind],
+        meter: &mut (impl Meter + ?Sized),
+        code: StatusCode,
+    ) -> PartialVMResult<Vec<AbstractValue>> {
+        // Check mutable references can be transferred
+        let mut all_references_to_borrow_from = BTreeSet::new();
+        let mut mutable_references_to_borrow_from = BTreeSet::new();
+        for id in arguments.iter().filter_map(|v| v.ref_id()) {
+            if self.borrow_graph.is_mutable(id) {
+                if !self.is_writable(id, meter)? {
+                    return Err(self.error(code, offset));
+                }
+                mutable_references_to_borrow_from.insert(id);
+            }
+            all_references_to_borrow_from.insert(id);
+        }
+
+        // Track borrow relationships of return values on inputs
+        let return_values = return_
+            .iter()
+            .map(|value_kind| {
+                Ok(match value_kind {
+                    ValueKind::Reference(/* is_mut */ true) => {
+                        let id = self.new_ref(true);
+                        for parent in &mutable_references_to_borrow_from {
+                            self.add_borrow(*parent, id, meter)?;
+                        }
+                        AbstractValue::Reference(id)
+                    }
+                    ValueKind::Reference(/* is_mut */ false) => {
+                        let id = self.new_ref(false);
+                        for parent in &all_references_to_borrow_from {
+                            self.add_borrow(*parent, id, meter)?;
+                        }
                         AbstractValue::Reference(id)
                     }
                     _ => AbstractValue::NonReference,

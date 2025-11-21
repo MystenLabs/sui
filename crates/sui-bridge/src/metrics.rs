@@ -46,9 +46,6 @@ pub struct BridgeMetrics {
 
     pub(crate) last_observed_actions_seq_num: IntGaugeVec,
 
-    pub(crate) signer_with_cache_hit: IntCounterVec,
-    pub(crate) signer_with_cache_miss: IntCounterVec,
-
     pub(crate) eth_rpc_queries: IntCounterVec,
     pub(crate) eth_rpc_queries_latency: HistogramVec,
 
@@ -245,20 +242,6 @@ impl BridgeMetrics {
                 "bridge_last_observed_actions_seq_num",
                 "The latest observed action sequence number per chain_id and action_type",
                 &["chain_id", "action_type"],
-                registry,
-            )
-            .unwrap(),
-            signer_with_cache_hit: register_int_counter_vec_with_registry!(
-                "bridge_signer_with_cache_hit",
-                "Total number of hit in signer's cache, by verifier type",
-                &["type"],
-                registry,
-            )
-            .unwrap(),
-            signer_with_cache_miss: register_int_counter_vec_with_registry!(
-                "bridge_signer_with_cache_miss",
-                "Total number of miss in signer's cache, by verifier type",
-                &["type"],
                 registry,
             )
             .unwrap(),

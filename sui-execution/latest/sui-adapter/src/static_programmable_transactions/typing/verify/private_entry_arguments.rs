@@ -52,6 +52,7 @@ struct Context {
     tx_context: Option<Value>,
     gas_coin: Option<Value>,
     objects: Vec<Option<Value>>,
+    withdrawals: Vec<Option<Value>>,
     pure: Vec<Option<Value>>,
     receiving: Vec<Option<Value>>,
     results: Vec<Vec<Option<Value>>>,
@@ -224,6 +225,9 @@ impl Context {
         let objects = (0..txn.objects.len())
             .map(|_| Some(cliques.input_value()))
             .collect();
+        let withdrawals = (0..txn.withdrawals.len())
+            .map(|_| Some(cliques.input_value()))
+            .collect();
         let pure = (0..txn.pure.len())
             .map(|_| Some(cliques.input_value()))
             .collect();
@@ -235,6 +239,7 @@ impl Context {
             cliques,
             gas_coin,
             objects,
+            withdrawals,
             pure,
             receiving,
             results: vec![],
@@ -248,6 +253,7 @@ impl Context {
             tx_context,
             gas_coin,
             objects,
+            withdrawals,
             pure,
             receiving,
             results,
@@ -258,6 +264,7 @@ impl Context {
             .into_iter()
             .chain(gas_coin)
             .chain(objects.into_iter().flatten())
+            .chain(withdrawals.into_iter().flatten())
             .chain(pure.into_iter().flatten())
             .chain(receiving.into_iter().flatten())
             .chain(results.into_iter().flatten().flatten());
@@ -285,6 +292,7 @@ impl Context {
         match location {
             T::Location::GasCoin => &mut self.gas_coin,
             T::Location::ObjectInput(i) => &mut self.objects[*i as usize],
+            T::Location::WithdrawalInput(i) => &mut self.withdrawals[*i as usize],
             T::Location::PureInput(i) => &mut self.pure[*i as usize],
             T::Location::ReceivingInput(i) => &mut self.receiving[*i as usize],
             T::Location::Result(i, j) => &mut self.results[*i as usize][*j as usize],

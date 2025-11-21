@@ -23,9 +23,14 @@ use sui_indexer_alt_consistent_store::{
     args::RpcArgs as ConsistentArgs, args::TlsArgs as ConsistentTlsArgs,
     config::ServiceConfig as ConsistentConfig, start_service as start_consistent_store,
 };
-use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs, postgres::schema::watermarks};
+use sui_indexer_alt_framework::{
+    IndexerArgs,
+    ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
+    postgres::schema::watermarks,
+};
 use sui_indexer_alt_graphql::{
-    RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
+    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, config::RpcConfig as GraphQlConfig,
+    start_rpc as start_graphql,
 };
 use sui_indexer_alt_jsonrpc::{
     NodeArgs as JsonRpcNodeArgs, RpcArgs as JsonRpcArgs, config::RpcConfig as JsonRpcConfig,
@@ -40,7 +45,7 @@ use sui_pg_db::{
     temp::{TempDb, get_available_port},
 };
 use sui_storage::blob::{Blob, BlobEncoding};
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::full_checkpoint_content::{Checkpoint, CheckpointData};
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
@@ -410,10 +415,9 @@ impl OffchainCluster {
 
         let graphql = start_graphql(
             Some(database_url.clone()),
-            None,
             fullnode_args,
             DbArgs::default(),
-            BigtableArgs::default(),
+            GraphQlKvArgs::default(),
             consistent_reader_args,
             graphql_args,
             SystemPackageTaskArgs::default(),
@@ -693,17 +697,20 @@ pub fn local_ingestion_client_args() -> (ClientArgs, TempDir) {
         .context("Failed to create data ingestion path")
         .unwrap();
     let client_args = ClientArgs {
-        local_ingestion_path: Some(temp_dir.path().to_owned()),
-        remote_store_url: None,
-        rpc_api_url: None,
-        rpc_username: None,
-        rpc_password: None,
+        ingestion: IngestionClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ..Default::default()
+        },
+        ..Default::default()
     };
     (client_args, temp_dir)
 }
 
 /// Writes a checkpoint file to the given path.
-pub async fn write_checkpoint(path: &Path, checkpoint_data: CheckpointData) -> anyhow::Result<()> {
+pub async fn write_checkpoint(path: &Path, checkpoint: Checkpoint) -> anyhow::Result<()> {
+    // Convert to CheckpointData for serialization
+    // TODO: Change to proto format once we merge pull/24066
+    let checkpoint_data: CheckpointData = checkpoint.into();
     let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
     let file_path = path.join(file_name);
     let blob = Blob::encode(&checkpoint_data, BlobEncoding::Bcs)?;

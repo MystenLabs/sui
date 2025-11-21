@@ -1593,16 +1593,17 @@ export class Runtime extends EventEmitter {
         if ('globalIndex' in indexedLoc.loc) {
             // global location
             const globalValue = moveCallStack.globals.get(indexedLoc.loc.globalIndex);
-            if (globalValue) {
-                const indexPath = [...indexedLoc.indexPath];
-                return this.valueToString(tabs, globalValue, name, indexPath, type);
+            if (!globalValue) {
+                return 'INCORRECT REF VALUE (NO GLOBAL VALUE)';
             }
+            const indexPath = [...indexedLoc.indexPath];
+            return this.valueToString(tabs, globalValue, name, indexPath, type);
         } else if ('frameID' in indexedLoc.loc && 'localIndex' in indexedLoc.loc) {
             const frameID = indexedLoc.loc.frameID;
             const frame = moveCallStack.frames.find(frame => frame.id === frameID);
             let local = undefined;
             if (!frame) {
-                return res;
+                return 'INCORRECT REF VALUE (NO FRAME)';
             }
             for (const scope of frame.locals) {
                 local = scope[indexedLoc.loc.localIndex];
@@ -1611,12 +1612,12 @@ export class Runtime extends EventEmitter {
                 }
             }
             if (!local) {
-                return res;
+                return 'INCORRECT REF VALUE (NO LOCAL)';
             }
             const indexPath = [...indexedLoc.indexPath];
             return this.valueToString(tabs, local.value, name, indexPath, type);
         }
-        return res;
+        return 'INCORRECT REF VALUE (NO GLOBAL OR LOCAL)';
     }
 
     /**
@@ -1638,6 +1639,9 @@ export class Runtime extends EventEmitter {
     ): string {
         let res = '';
         if (typeof value === 'string') {
+            if (indexPath.length > 0) {
+                return 'INCORRECT VALUE (INVALID INDEX FOR STRING)';
+            }
             res += tabs + name + ' : ' + value + '\n';
             if (type) {
                 res += tabs + 'type: ' + type + '\n';
@@ -1645,9 +1649,10 @@ export class Runtime extends EventEmitter {
         } else if (Array.isArray(value)) {
             if (indexPath.length > 0) {
                 const index = indexPath.pop();
-                if (index !== undefined) {
-                    res += this.valueToString(tabs, value[index], name, indexPath, type);
+                if (index === undefined || index >= value.length) {
+                    return 'INCORRECT VALUE (INVALID INDEX)';
                 }
+                res += this.valueToString(tabs, value[index], name, indexPath, type);
             } else {
                 res += tabs + name + ' : [\n';
                 for (let i = 0; i < value.length; i++) {
@@ -1661,9 +1666,10 @@ export class Runtime extends EventEmitter {
         } else if ('fields' in value) {
             if (indexPath.length > 0) {
                 const index = indexPath.pop();
-                if (index !== undefined) {
-                    res += this.valueToString(tabs, value.fields[index][1], name, indexPath, type);
+                if (index === undefined || index >= value.fields.length) {
+                    return 'INCORRECT VALUE (INVALID INDEX)';
                 }
+                res += this.valueToString(tabs, value.fields[index][1], name, indexPath, type);
             } else {
                 res += tabs + name + ' : ' + this.compoundValueToString(tabs, value);
                 if (type) {
@@ -1671,6 +1677,9 @@ export class Runtime extends EventEmitter {
                 }
             }
         } else {
+            if (indexPath.length > 0) {
+                return 'INCORRECT VALUE (INVALID INDEX FOR REFERENCE VALUE)';
+            }
             res += this.refValueToString(tabs, value, name, type);
         }
         return res;

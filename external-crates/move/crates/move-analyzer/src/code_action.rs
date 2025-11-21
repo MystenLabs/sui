@@ -144,6 +144,7 @@ fn access_chain_autofix_actions<F: MoveFlavor>(
         &pkg_path,
         LintLevel::None,
         flavor,
+        None,
     ) else {
         return code_actions;
     };

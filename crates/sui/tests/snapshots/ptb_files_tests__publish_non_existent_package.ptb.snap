@@ -1,6 +1,6 @@
 ---
 source: crates/sui/tests/ptb_files_tests.rs
-expression: "results.join(\"\\n\")"
+expression: "&String::from_iter(normalized(results.join(\"\\n\").chars()))"
 ---
  === PREVIEW === 
 ╭───────────────────────────╮
@@ -15,5 +15,5 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ --publish not_a_valid_pkg 
    · ────────────┬────────────
-   ·             ╰── Cannot compile package: Invalid directory at `not_a_valid_pkg`
+   ·             ╰── Package path 'not_a_valid_pkg' does not exist
    ╰────

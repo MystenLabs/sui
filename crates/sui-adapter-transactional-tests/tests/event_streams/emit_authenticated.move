@@ -4,7 +4,7 @@
 // Exercise test functions that emit authenticated events
 
 // Protocol version pinned to avoid snapshot churn from genesis changes
-//# init --addresses test=0x0 --accounts A B --simulator --enable-authenticated-event-streams --protocol-version 101
+//# init --addresses test=0x0 --accounts A B --simulator --enable-authenticated-event-streams
 
 //# publish
 
@@ -43,35 +43,35 @@ module test::event_streams {
 
 //# create-checkpoint
 
-//# view-object 2,0
+//# view-object 2,0 --hide-contents
 
 // Checkpoint 2: Add second event - should trigger MMR merge at height 1
 //# run test::event_streams::emit_event --sender A --args 20
 
 //# create-checkpoint
 
-//# view-object 2,0
+//# view-object 2,0 --hide-contents
 
 // Checkpoint 3: Add third event - should place at MMR[0]
 //# run test::event_streams::emit_event --sender A --args 30
 
 //# create-checkpoint
 
-//# view-object 2,0
+//# view-object 2,0 --hide-contents
 
 // Checkpoint 4: Add fourth event - should trigger cascade merge to MMR[2]
 //# run test::event_streams::emit_event --sender A --args 40
 
 //# create-checkpoint
 
-//# view-object 2,0
+//# view-object 2,0 --hide-contents
 
 // Test minting an object and emitting an event in the same transaction
 //# run test::event_streams::mint_and_emit --sender A --args 50
 
 //# create-checkpoint
 
-//# view-object 2,0
+//# view-object 2,0 --hide-contents
 
 // Run the test with:
 // $ cargo nextest run -p sui-adapter-transactional-tests emit_authenticated

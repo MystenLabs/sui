@@ -92,10 +92,6 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_commit_sync_batches_ahead")]
     pub commit_sync_batches_ahead: usize,
 
-    /// Anemo network settings.
-    #[serde(default = "AnemoParameters::default")]
-    pub anemo: AnemoParameters,
-
     /// Tonic network settings.
     #[serde(default = "TonicParameters::default")]
     pub tonic: TonicParameters,
@@ -213,32 +209,7 @@ impl Default for Parameters {
             commit_sync_parallel_fetches: Parameters::default_commit_sync_parallel_fetches(),
             commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
-            anemo: AnemoParameters::default(),
             tonic: TonicParameters::default(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct AnemoParameters {
-    /// Size in bytes above which network messages are considered excessively large. Excessively
-    /// large messages will still be handled, but logged and reported in metrics for debugging.
-    ///
-    /// If unspecified, this will default to 8 MiB.
-    #[serde(default = "AnemoParameters::default_excessive_message_size")]
-    pub excessive_message_size: usize,
-}
-
-impl AnemoParameters {
-    fn default_excessive_message_size() -> usize {
-        8 << 20
-    }
-}
-
-impl Default for AnemoParameters {
-    fn default() -> Self {
-        Self {
-            excessive_message_size: AnemoParameters::default_excessive_message_size(),
         }
     }
 }

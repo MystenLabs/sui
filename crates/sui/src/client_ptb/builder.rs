@@ -923,6 +923,14 @@ impl<'a> PTBBuilder<'a> {
             }
             ParsedPTBCommand::Publish(sp!(pkg_loc, package_path)) => {
                 let package_path = Path::new(&package_path);
+                if !package_path.exists() {
+                    error!(
+                        pkg_loc,
+                        "Package path '{}' does not exist",
+                        package_path.display()
+                    );
+                }
+
                 let build_config = MoveBuildConfig::default();
                 let chain_id = self
                     .reader
@@ -958,6 +966,15 @@ impl<'a> PTBBuilder<'a> {
             }
             // Update this command to not do as many things. It should result in a single command.
             ParsedPTBCommand::Upgrade(sp!(path_loc, package_path), mut arg) => {
+                let package_path = Path::new(&package_path);
+                if !package_path.exists() {
+                    error!(
+                        path_loc,
+                        "Package path '{}' does not exist",
+                        package_path.display()
+                    );
+                }
+
                 if let sp!(loc, PTBArg::Identifier(id)) = arg {
                     arg = self
                         .arguments_to_resolve
@@ -992,7 +1009,6 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .await?;
 
-                // TODO fix this call - env_alias might be wrong
                 let (upgrade_policy, compiled_package) = upgrade_package(
                     self.reader,
                     &root_pkg,

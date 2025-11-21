@@ -1,11 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, fmt, iter::Peekable};
+use std::borrow::Cow;
+use std::fmt;
+use std::iter::Peekable;
 
-use move_core_types::{annotated_extractor::Element, identifier};
+use move_core_types::annotated_extractor::Element;
+use move_core_types::identifier;
 
-use super::lexer::{Lexeme as L, Lexer, OwnedLexeme, Token as T, TokenSet};
+use crate::v1::lexer::Lexeme as L;
+use crate::v1::lexer::Lexer;
+use crate::v1::lexer::OwnedLexeme;
+use crate::v1::lexer::Token as T;
+use crate::v1::lexer::TokenSet;
 
 /// A strand is a single component of a format string, it can either be a piece of literal text
 /// that needs to be preserved in the output, or a reference to a nested field (as a sequence of

@@ -104,6 +104,7 @@ members = [
   "crates/sui-bridge-indexer",
   "crates/sui-bridge-indexer-alt",
   "crates/sui-bridge-schema",
+  "crates/sui-checkpoint-blob-indexer",
   "crates/sui-cluster-test",
   "crates/sui-config",
   "crates/sui-core",
@@ -114,7 +115,6 @@ members = [
   "crates/sui-default-config",
   "crates/sui-display",
   "crates/sui-e2e-tests",
-  "crates/sui-edge-proxy",
   "crates/sui-enum-compat-util",
   "crates/sui-faucet",
   "crates/sui-field-count",
@@ -138,6 +138,7 @@ members = [
   "crates/sui-indexer-alt-graphql",
   "crates/sui-indexer-alt-jsonrpc",
   "crates/sui-indexer-alt-metrics",
+  "crates/sui-indexer-alt-object-store",
   "crates/sui-indexer-alt-reader",
   "crates/sui-indexer-alt-restorer",
   "crates/sui-indexer-alt-schema",
@@ -229,7 +230,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.60.0"
+version = "1.62.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -403,8 +404,8 @@ hyper-rustls = { version = "0.27", default-features = false, features = [
 im = "15"
 impl-trait-for-tuples = "0.2.0"
 indexmap = { version = "2.8.0", features = ["serde"] }
-indicatif = "0.17.2"
 indoc = "2.0.6"
+indicatif = "0.18.3"
 inquire = "0.6.0"
 insta = { version = "1.21.1", features = ["redactions", "yaml", "json"] }
 insta-cmd = "0.6.0"
@@ -441,7 +442,7 @@ msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "427
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
-nonempty = "0.9.0"
+nonempty = { version = "0.9.0", features = ["serialize"] }
 nonzero_ext = "0.3.0"
 notify = "6.1.1"
 ntest = "0.9.0"
@@ -725,6 +726,7 @@ sui-indexer-alt-reader = { path = "crates/sui-indexer-alt-reader" }
 sui-indexer-alt-restorer = { path = "crates/sui-indexer-alt-restorer" }
 sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }
+sui-indexer-alt-object-store = { path = "crates/sui-indexer-alt-object-store" }
 sui-json = { path = "crates/sui-json" }
 sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }

@@ -33,7 +33,7 @@ $ vim /opt/sui/config/sui-node.yaml #on validator host
 #       peer-id: abcdefg2
 ```
 
-2. State sync fullnodes should have indexing disabled, run with pruning, and push metrics to mystens metric proxy
+2. State sync fullnodes should have indexing disabled, run with pruning, and push metrics to Mysten's metric proxy
 
 This is a simple change, just add the following configs to your fullnode:
 ```
@@ -56,6 +56,6 @@ metrics:
 This coupled with starting your node from a formal snapshot should mean a very small database footprint for ssfns
 
 
-![ssfn diagram](nre/ssfn-diagram.png)
+![ssfn diagram](https://github.com/MystenLabs/sui/blob/main/nre/ssfn-diagram.png)
 
 

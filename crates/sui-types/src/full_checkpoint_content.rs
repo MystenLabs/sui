@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::base_types::{ExecutionData, ObjectRef};
+use crate::base_types::{ExecutionData, ObjectID, ObjectRef};
 use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use crate::object::Object;
@@ -235,6 +235,84 @@ impl ObjectSet {
 
     pub fn iter(&self) -> impl Iterator<Item = &Object> {
         self.0.values()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl Checkpoint {
+    pub fn latest_live_output_objects(&self) -> BTreeMap<ObjectID, Object> {
+        let mut latest_live_output_objects = BTreeMap::new();
+        for tx in self.transactions.iter() {
+            for obj in tx.output_objects(&self.object_set) {
+                latest_live_output_objects.insert(obj.id(), obj.clone());
+            }
+            for obj_ref in tx
+                .effects
+                .deleted()
+                .into_iter()
+                .chain(tx.effects.wrapped().into_iter())
+                .chain(tx.effects.unwrapped_then_deleted().into_iter())
+            {
+                latest_live_output_objects.remove(&obj_ref.0);
+            }
+        }
+        latest_live_output_objects
+    }
+
+    pub fn eventually_removed_object_refs_post_version(&self) -> Vec<ObjectRef> {
+        let mut eventually_removed_object_refs = BTreeMap::new();
+        for tx in self.transactions.iter() {
+            for obj_ref in tx
+                .effects
+                .deleted()
+                .into_iter()
+                .chain(tx.effects.wrapped().into_iter())
+                .chain(tx.effects.unwrapped_then_deleted().into_iter())
+            {
+                eventually_removed_object_refs.insert(obj_ref.0, obj_ref);
+            }
+            for obj in tx.output_objects(&self.object_set) {
+                eventually_removed_object_refs.remove(&obj.id());
+            }
+        }
+        eventually_removed_object_refs.into_values().collect()
+    }
+}
+
+impl ExecutedTransaction {
+    pub fn input_objects<'a>(
+        &self,
+        object_set: &'a ObjectSet,
+    ) -> impl Iterator<Item = &'a Object> + 'a {
+        self.effects
+            .object_changes()
+            .into_iter()
+            .filter_map(move |change| {
+                change
+                    .input_version
+                    .and_then(|version| object_set.get(&ObjectKey(change.id, version)))
+            })
+    }
+
+    pub fn output_objects<'a>(
+        &self,
+        object_set: &'a ObjectSet,
+    ) -> impl Iterator<Item = &'a Object> + 'a {
+        self.effects
+            .object_changes()
+            .into_iter()
+            .filter_map(move |change| {
+                change
+                    .output_version
+                    .and_then(|version| object_set.get(&ObjectKey(change.id, version)))
+            })
     }
 }
 

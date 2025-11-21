@@ -579,3 +579,97 @@ async fn resolve_transaction_insufficient_gas_with_payment_objects() {
         "Insufficient gas balance to cover estimated transaction cost.",
     );
 }
+
+#[sim_test]
+async fn resolve_transaction_shared_object_with_generic_type_parameter() {
+    use sui_test_transaction_builder::publish_basics_package_and_make_party_object;
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+
+    let mut client = Client::new(test_cluster.rpc_url()).unwrap();
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+
+    // Create a party object (which is a shared object with ConsensusAddressOwner)
+    let (package, party_object) =
+        publish_basics_package_and_make_party_object(&test_cluster.wallet).await;
+
+    let sender = test_cluster.wallet.get_addresses()[0];
+    let recipient = SuiAddress::random_for_testing_only();
+
+    // Create an unresolved transaction that passes the party object to public_transfer
+    // public_transfer has signature: public_transfer<T: key + store>(obj: T, recipient: address)
+    // This tests that objects passed by value to generic type parameters are marked as mutable
+    let mut unresolved_transaction = Transaction::default();
+    unresolved_transaction.kind = Some(TransactionKind::from({
+        let mut ptb = ProgrammableTransaction::default();
+        ptb.inputs = vec![
+            {
+                let mut message = Input::default();
+                message.object_id = Some(party_object.0.to_canonical_string(true));
+                message
+            },
+            {
+                let mut message = Input::default();
+                message.literal = Some(Box::new(recipient.to_string().into()));
+                message
+            },
+        ];
+        ptb.commands = vec![Command::from({
+            let mut message = MoveCall::default();
+            message.package = Some("0x2".to_owned());
+            message.module = Some("transfer".to_owned());
+            message.function = Some("public_transfer".to_owned());
+            message.type_arguments = vec![format!(
+                "{}::object_basics::Object",
+                package.0.to_canonical_string(true)
+            )];
+            message.arguments = vec![Argument::new_input(0), Argument::new_input(1)];
+            message
+        })];
+        ptb
+    }));
+    unresolved_transaction.sender = Some(sender.to_string());
+
+    let resolved = alpha_client
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+    let (transaction, effects_from_simulation, _events) = proto_to_response(resolved);
+
+    // Verify that the party object input was resolved and marked as mutable
+    let inputs = match transaction.kind() {
+        sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb) => &ptb.inputs,
+        _ => panic!("Expected ProgrammableTransaction"),
+    };
+    assert_eq!(inputs.len(), 2);
+
+    match &inputs[0] {
+        sui_types::transaction::CallArg::Object(
+            sui_types::transaction::ObjectArg::SharedObject { id, mutability, .. },
+        ) => {
+            assert_eq!(*id, party_object.0);
+            assert_eq!(
+                mutability,
+                &sui_types::transaction::SharedObjectMutability::Mutable,
+                "Party object should be marked as mutable when passed by value to generic type parameter"
+            );
+        }
+        _ => panic!("Expected SharedObject input, got: {:?}", inputs[0]),
+    }
+
+    let signed_transaction = test_cluster.wallet.sign_transaction(&transaction).await;
+    let effects = client
+        .execute_transaction(&signed_transaction)
+        .await
+        .unwrap()
+        .effects;
+
+    assert!(effects.status().is_ok());
+    assert_eq!(effects_from_simulation, effects);
+}

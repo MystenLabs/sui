@@ -18,7 +18,7 @@ git -C a -c user.email=test@test.com -c user.name=test commit -q -m "initial rev
 
 HASH=$(git -C a log --pretty=format:%H)
 
-sui move cache-package testnet 4c78adac "{ git = \"$(pwd)/a\", rev = \"${HASH}\", subdir = \".\" }"
+sui move cache-package testnet 4c78adac "{ git = \"file://$(pwd)/a\", rev = \"${HASH}\", subdir = \".\" }"
 
 ----- results -----
 success: true
