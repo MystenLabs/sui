@@ -16,8 +16,8 @@ use crate::{
     validation::verification::ast::{Module, Package},
 };
 use move_binary_format::{
-    errors::{Location, PartialVMError, VMResult},
     CompiledModule,
+    errors::{Location, PartialVMError, VMResult},
 };
 use move_bytecode_verifier::{cyclic_dependencies, dependencies};
 use move_core_types::vm_status::StatusCode;
@@ -88,7 +88,7 @@ pub(crate) fn verify_linkage_and_cyclic_checks_for_publication(
 fn verify_package_no_cyclic_relationships(
     package: &[&Module],
     cached_packages: &BTreeMap<VersionId, &Package>,
-    relocation_map: &HashMap<VersionId, OriginalId>,
+    relocation_map: &HashMap<OriginalId, VersionId>,
 ) -> VMResult<()> {
     let mut to_visit_modules: BTreeMap<_, _> =
         package.iter().map(|m| (m.value.self_id(), m)).collect();
