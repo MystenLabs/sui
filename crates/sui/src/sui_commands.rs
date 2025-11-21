@@ -1248,12 +1248,16 @@ async fn start(
                 .import(None, SuiKeyPair::Ed25519(kp))
                 .await
                 .unwrap();
+
+            // On windows, using 0.0.0.0 will usually yield in an networking error. This localnet ip
+            // address must bind to 127.0.0.1 if the default 0.0.0.0 is used.
             let localnet_ip = if fullnode_rpc_address.ip() == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))
             {
                 format!("http://127.0.0.1:{}", fullnode_rpc_address.port())
             } else {
                 fullnode_rpc_url
             };
+
             SuiClientConfig {
                 keystore,
                 external_keys: None,
