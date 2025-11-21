@@ -1625,19 +1625,25 @@ impl CheckpointBuilder {
                         &mut effects_in_current_checkpoint,
                     )?;
 
-                    // No other dependencies of this consensus commit prologue that haven't been included
-                    // in any previous checkpoint.
-                    if unsorted_ccp.len() != 1 {
+                    // TODO(multi-leader): With multi-leader, we may have multiple consensus commit prologues
+                    // in the same round (one per leader). The complete_checkpoint_effects function will
+                    // find all of them as dependencies. We need to verify that the first one we extracted
+                    // is included in the results.
+                    if unsorted_ccp.is_empty() {
+                        fatal!("Expected at least 1 consensus commit prologue, got 0");
+                    }
+
+                    // Verify that the first extracted prologue is in the results
+                    if !unsorted_ccp.iter().any(|e| e.transaction_digest() == ccp_digest) {
                         fatal!(
-                            "Expected 1 consensus commit prologue, got {:?}",
+                            "Extracted consensus commit prologue {} not found in complete_checkpoint_effects results: {:?}",
+                            ccp_digest,
                             unsorted_ccp
                                 .iter()
                                 .map(|e| e.transaction_digest())
                                 .collect::<Vec<_>>()
                         );
                     }
-                    assert_eq!(unsorted_ccp.len(), 1);
-                    assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
                 }
                 consensus_commit_prologue
             } else {
@@ -1715,6 +1721,9 @@ impl CheckpointBuilder {
         // transaction.
         // When prepend_prologue_tx_in_consensus_commit_in_checkpoints is enabled, the consensus commit prologue
         // transaction should be the first transaction in the roots written by the consensus handler.
+        // TODO(multi-leader): With multi-leader, there may be multiple consensus commit prologues
+        // in the roots (one per leader). For now, we only extract the first one, and
+        // complete_checkpoint_effects will find the rest as dependencies.
         let first_tx = self
             .state
             .get_transaction_cache_reader()

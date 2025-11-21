@@ -62,10 +62,11 @@ impl Linearizer {
 
     /// Collect the sub-dag and the corresponding commit from a specific leader excluding any duplicates or
     /// blocks that have already been committed (within previous sub-dags).
+    /// Returns None if the leader block was already committed (multi-leader scenario).
     fn collect_sub_dag_and_commit(
         &mut self,
         leader_block: VerifiedBlock,
-    ) -> (CommittedSubDag, TrustedCommit) {
+    ) -> Option<(CommittedSubDag, TrustedCommit)> {
         let _s = self
             .context
             .metrics
@@ -82,6 +83,22 @@ impl Linearizer {
 
         // Now linearize the sub-dag starting from the leader block
         let to_commit = Self::linearize_sub_dag(leader_block.clone(), &mut dag_state);
+
+        // TODO(multi-leader): If the leader block was already committed in a previous subdag,
+        // linearize_sub_dag returns an empty vector. In this case, skip creating a commit entirely.
+        // This avoids creating empty commits that would fail the CommitState::new assertion.
+        // Before production, verify:
+        // 1. Downstream systems handle skipped commits correctly (commit indices may have gaps)
+        // 2. Checkpoint builder and state sync work correctly with missing commits
+        // 3. Consider if we should filter duplicate leader elections earlier in universal_committer
+        if to_commit.is_empty() {
+            drop(dag_state);
+            tracing::debug!(
+                "Leader block {:?} produced empty subdag (multi-leader), skipping commit creation",
+                leader_block.reference()
+            );
+            return None;
+        }
 
         let timestamp_ms = Self::calculate_commit_timestamp(
             &self.context,
@@ -116,7 +133,7 @@ impl Linearizer {
             commit.reference(),
         );
 
-        (sub_dag, commit)
+        Some((sub_dag, commit))
     }
 
     /// Calculates the commit's timestamp. The timestamp will be calculated as the median of leader's parents (leader.round - 1)
@@ -168,11 +185,20 @@ impl Linearizer {
 
         // Perform the recursion without stopping at the highest round round that has been committed per authority. Instead it will
         // allow to commit blocks that are lower than the highest committed round for an authority but higher than gc_round.
-        assert!(
-            dag_state.set_committed(&leader_block_ref),
-            "Leader block with reference {:?} attempted to be committed twice",
-            leader_block_ref
-        );
+        // TODO(multi-leader): With multi-leader, the same block can be elected as leader in multiple
+        // subdags (from different leaders in the same round). If this leader block was already committed
+        // in a previous subdag, skip linearization and return empty vector. The commit is still valid
+        // (records this leader election) but contains no new blocks. Before production:
+        // 1. Verify empty commits don't break downstream checkpoint/state processing
+        // 2. Verify commit index sequencing is correct for empty commits
+        // 3. Consider if we should filter out redundant leader elections earlier in the pipeline
+        if !dag_state.set_committed(&leader_block_ref) {
+            tracing::debug!(
+                "Leader block {:?} already committed (multi-leader), skipping subdag linearization",
+                leader_block_ref
+            );
+            return Vec::new();
+        }
 
         while let Some(x) = buffer.pop() {
             to_commit.push(x.clone());
@@ -228,15 +254,16 @@ impl Linearizer {
         let mut committed_sub_dags = vec![];
         for leader_block in committed_leaders {
             // Collect the sub-dag generated using each of these leaders and the corresponding commit.
-            let (sub_dag, commit) = self.collect_sub_dag_and_commit(leader_block);
+            // With multi-leader, the same block may be elected multiple times; skip if already committed.
+            if let Some((sub_dag, commit)) = self.collect_sub_dag_and_commit(leader_block) {
+                self.update_blocks_pruned_metric(&sub_dag);
 
-            self.update_blocks_pruned_metric(&sub_dag);
+                // Buffer commit in dag state for persistence later.
+                // This also updates the last committed rounds.
+                self.dag_state.write().add_commit(commit.clone());
 
-            // Buffer commit in dag state for persistence later.
-            // This also updates the last committed rounds.
-            self.dag_state.write().add_commit(commit.clone());
-
-            committed_sub_dags.push(sub_dag);
+                committed_sub_dags.push(sub_dag);
+            }
         }
 
         committed_sub_dags

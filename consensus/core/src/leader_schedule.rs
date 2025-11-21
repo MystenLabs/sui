@@ -154,7 +154,16 @@ impl LeaderSchedule {
     }
 
     pub(crate) fn elect_leader_stake_based(&self, round: u32, offset: u32) -> AuthorityIndex {
-        assert!((offset as usize) < self.context.committee.size());
+        let committee_size = self.context.committee.size();
+
+        // With multi-leader, we should not allow more leaders than validators.
+        // The offset should always be less than the committee size.
+        assert!(
+            (offset as usize) < committee_size,
+            "Leader offset {} must be less than committee size {}. Cannot have more leaders than validators.",
+            offset,
+            committee_size
+        );
 
         // To ensure that we elect different leaders for the same round (using
         // different offset) we are using the round number as seed to shuffle in

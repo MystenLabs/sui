@@ -606,6 +606,12 @@ pub struct ConsensusHandler<C> {
     /// With multi-leader support, multiple commits can occur in the same round from different
     /// authorities, so we need to track both round and authority to avoid reprocessing.
     processed_commits: HashSet<(u64, AuthorityIndex)>,
+
+    /// Tracks the last round for which we created a consensus commit prologue.
+    /// With multi-leader, only the first commit in a round should create a prologue
+    /// because all prologues update the Clock object, which must have sequential versions.
+    /// Uses AtomicU64 for thread-safe interior mutability. 0 means no prologue created yet.
+    last_prologue_round: std::sync::atomic::AtomicU64,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -657,6 +663,7 @@ impl<C> ConsensusHandler<C> {
             backpressure_subscriber,
             traffic_controller,
             processed_commits: HashSet::new(),
+            last_prologue_round: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -1344,6 +1351,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     // Adds the consensus commit prologue transaction to the beginning of input `transactions` to update
     // the system clock used in all transactions in the current consensus commit.
     // Returns the root of the consensus commit prologue transaction if it was added to the input.
+    // With multi-leader, only the first commit in each round creates a prologue since the Clock
+    // object must have sequential versions and cannot be updated multiple times per round.
     fn add_consensus_commit_prologue_transaction<'a>(
         &'a self,
         state: &'a mut CommitHandlerState,
@@ -1356,6 +1365,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 return None;
             }
         }
+
+        // With multi-leader support, multiple commits can occur in the same round.
+        // Only the first commit in each round should create a consensus commit prologue
+        // because all prologues update the Clock object, which must have sequential versions.
+        let last_round = self
+            .last_prologue_round
+            .load(std::sync::atomic::Ordering::Acquire);
+        if last_round > 0 && last_round >= commit_info.round {
+            tracing::debug!(
+                "Skipping consensus commit prologue for round {} (already created for round {})",
+                commit_info.round,
+                last_round
+            );
+            return None;
+        }
+        // Update the last prologue round
+        self.last_prologue_round
+            .store(commit_info.round, std::sync::atomic::Ordering::Release);
 
         let mut version_assignment = Vec::new();
         let mut shared_input_next_version = HashMap::new();
