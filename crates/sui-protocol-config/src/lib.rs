@@ -277,6 +277,7 @@ const MAX_PROTOCOL_VERSION: u64 = 104;
 //              Set max updates per settlement txn to 100.
 // Version 103: Framework update: internal Coin methods
 // Version 104: Framework update: CoinRegistry follow up for Coin methods
+//              Enable address balances on devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4262,7 +4263,12 @@ impl ProtocolConfig {
                     cfg.feature_flags.deprecate_global_storage_ops = true;
                 }
                 103 => {}
-                104 => {}
+                104 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_accumulators = true;
+                        cfg.feature_flags.enable_address_balance_gas_payments = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4820,10 +4826,9 @@ mod test {
         );
 
         // We didnt have this in version 1
-        assert!(
-            prot.lookup_attr("max_move_identifier_len".to_string())
-                .is_none()
-        );
+        assert!(prot
+            .lookup_attr("max_move_identifier_len".to_string())
+            .is_none());
 
         // But we did in version 9
         let prot: ProtocolConfig =
@@ -4836,12 +4841,11 @@ mod test {
         let prot: ProtocolConfig =
             ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // We didnt have this in version 1
-        assert!(
-            prot.attr_map()
-                .get("max_move_identifier_len")
-                .unwrap()
-                .is_none()
-        );
+        assert!(prot
+            .attr_map()
+            .get("max_move_identifier_len")
+            .unwrap()
+            .is_none());
         // We had this in version 1
         assert!(
             prot.attr_map().get("max_arguments").unwrap()
@@ -4852,17 +4856,14 @@ mod test {
         let prot: ProtocolConfig =
             ProtocolConfig::get_for_version(ProtocolVersion::new(1), Chain::Unknown);
         // Does not exist
-        assert!(
-            prot.feature_flags
-                .lookup_attr("some random string".to_owned())
-                .is_none()
-        );
-        assert!(
-            !prot
-                .feature_flags
-                .attr_map()
-                .contains_key("some random string")
-        );
+        assert!(prot
+            .feature_flags
+            .lookup_attr("some random string".to_owned())
+            .is_none());
+        assert!(!prot
+            .feature_flags
+            .attr_map()
+            .contains_key("some random string"));
 
         // Was false in v1
         assert!(
