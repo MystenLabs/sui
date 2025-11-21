@@ -96,7 +96,6 @@ pub(super) fn run(
             let _ = state.debug_print_stack_trace(run_context.vtables, &mut buf);
             buf
         });
-        continue;
     }
 
     // When we are done, grab the operand stack as the return type.
@@ -128,7 +127,7 @@ fn step(
     let instructions = fun_ref.code();
     let pc = state.call_stack.current_frame.pc as usize;
     assert!(
-        pc <= instructions.len(),
+        pc < instructions.len(),
         "PC beyond instruction count for {}",
         fun_ref.name(&run_context.vtables.interner)
     );
