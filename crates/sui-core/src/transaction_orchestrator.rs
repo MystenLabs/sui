@@ -138,10 +138,10 @@ where
         let pending_tx_log = Arc::new(WritePathPendingTransactionLog::new(
             parent_path.join("fullnode_pending_transactions"),
         ));
-        let pending_tx_log_clone = pending_tx_log.clone();
         let _local_executor_handle = {
+            let pending_tx_log = pending_tx_log.clone();
             spawn_monitored_task!(async move {
-                Self::loop_pending_transaction_log(effects_receiver, pending_tx_log_clone).await;
+                Self::loop_pending_transaction_log(effects_receiver, pending_tx_log).await;
             })
         };
         Self::schedule_txes_in_log(pending_tx_log.clone(), quorum_driver_handler.clone());
@@ -368,19 +368,9 @@ where
         }
 
         // Add transaction to WAL log.
-        let is_new_transaction = self
-            .pending_tx_log
-            .write_pending_transaction_maybe(&verified_transaction)
-            .await
-            .map_err(|e| {
-                warn!("QuorumDriverInternalError: {e:?}");
-                QuorumDriverError::QuorumDriverInternalError(e)
-            })?;
-        if is_new_transaction {
-            debug!("Added transaction to WAL log for TransactionDriver");
-        } else {
-            debug!("Transaction already in pending_tx_log");
-        }
+        let guard =
+            TransactionSubmissionGuard::new(self.pending_tx_log.clone(), &verified_transaction);
+        let is_new_transaction = guard.is_new_transaction();
 
         let include_events = request.include_events;
         let include_input_objects = request.include_input_objects;
@@ -471,7 +461,7 @@ where
         // Wait for execution timeout.
         let mut timeout_future = tokio::time::sleep(finality_timeout).boxed();
 
-        let result = loop {
+        loop {
             tokio::select! {
                 biased;
 
@@ -574,28 +564,10 @@ where
                     debug!("Timeout waiting for transaction finality.");
                     self.metrics.wait_for_finality_timeout.inc();
 
-                    // Clean up transaction from WAL log only for TD submissions
-                    // For QD submissions, the cleanup happens in loop_pending_transaction_log
-                    if using_td.load(Ordering::Acquire) {
-                        debug!("Cleaning up TD transaction from WAL due to timeout");
-                        if let Err(err) = self.pending_tx_log.finish_transaction(&tx_digest) {
-                            warn!(
-                                "Failed to finish TD transaction in pending transaction log: {err}"
-                            );
-                        }
-                    }
-
                     break Err(QuorumDriverError::TimeoutBeforeFinality);
                 }
             }
-        };
-
-        // Clean up transaction from WAL log
-        if let Err(err) = self.pending_tx_log.finish_transaction(&tx_digest) {
-            warn!("Failed to finish transaction in pending transaction log: {err}");
         }
-
-        result
     }
 
     #[instrument(level = "error", skip_all)]
@@ -1174,5 +1146,50 @@ where
     ) -> Result<SimulateTransactionResult, SuiError> {
         self.validator_state
             .simulate_transaction(transaction, checks)
+    }
+}
+
+/// Keeps track of inflight transactions being submitted, and helps recover transactions
+/// on restart.
+struct TransactionSubmissionGuard {
+    pending_tx_log: Arc<WritePathPendingTransactionLog>,
+    tx_digest: TransactionDigest,
+    is_new_transaction: bool,
+}
+
+impl TransactionSubmissionGuard {
+    pub fn new(
+        pending_tx_log: Arc<WritePathPendingTransactionLog>,
+        tx: &VerifiedTransaction,
+    ) -> Self {
+        let is_new_transaction = pending_tx_log.write_pending_transaction_maybe(tx);
+        let tx_digest = *tx.digest();
+        if is_new_transaction {
+            debug!(?tx_digest, "Added transaction to inflight set");
+        } else {
+            debug!(
+                ?tx_digest,
+                "Transaction already being processed, no new submission will be made"
+            );
+        };
+        Self {
+            pending_tx_log,
+            tx_digest,
+            is_new_transaction,
+        }
+    }
+
+    fn is_new_transaction(&self) -> bool {
+        self.is_new_transaction
+    }
+}
+
+impl Drop for TransactionSubmissionGuard {
+    fn drop(&mut self) {
+        if let Err(err) = self.pending_tx_log.finish_transaction(&self.tx_digest) {
+            warn!(?self.tx_digest, "Failed to clean up transaction in pending log: {err}");
+        } else {
+            debug!(?self.tx_digest, "Cleaned up transaction in pending log");
+        }
     }
 }

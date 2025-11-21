@@ -1,6 +1,6 @@
 /crates/sui-types/src/crypto.rs @joyqvq @kchalkias @benr-ml
 /crates/sui-types/src/base_types.rs @joyqvq
-/crates/sui-keys/ @joyqvq @patrickkuo
+/crates/sui-keys/ @joyqvq
 /crates/sui-protocol-config @mystenmark
 
 *.md @ronny-mysten @jessiemongeon1
@@ -11,6 +11,9 @@ CHANGELOG.md
 
 # When native functions change, so we can evaluate cost impact
 /crates/sui-framework/src/natives/ @dariorussi
+
+# System packages tracking
+/crates/sui-framework/ @MystenLabs/devx-move
 
 # GraphQL RPC working group
 /crates/sui-default-config @MystenLabs/devx-indexers-and-rpcs

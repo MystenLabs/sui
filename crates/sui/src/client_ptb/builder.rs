@@ -916,9 +916,17 @@ impl<'a> PTBBuilder<'a> {
                 self.last_command = Some(res);
             }
             ParsedPTBCommand::Publish(sp!(pkg_loc, package_path)) => {
+                let package_path = Path::new(&package_path);
+                if !package_path.exists() {
+                    error!(
+                        pkg_loc,
+                        "Package path '{}' does not exist",
+                        package_path.display()
+                    );
+                }
+
                 let chain_id = self.reader.get_chain_identifier().await.ok();
                 let build_config = MoveBuildConfig::default();
-                let package_path = Path::new(&package_path);
                 let build_config = resolve_lock_file_path(build_config.clone(), Some(package_path))
                     .map_err(|e| err!(pkg_loc, "{e}"))?;
                 let previous_id = if let Some(ref chain_id) = chain_id {
@@ -962,6 +970,15 @@ impl<'a> PTBBuilder<'a> {
             }
             // Update this command to not do as many things. It should result in a single command.
             ParsedPTBCommand::Upgrade(sp!(path_loc, package_path), mut arg) => {
+                let package_path = Path::new(&package_path);
+                if !package_path.exists() {
+                    error!(
+                        path_loc,
+                        "Package path '{}' does not exist",
+                        package_path.display()
+                    );
+                }
+
                 if let sp!(loc, PTBArg::Identifier(id)) = arg {
                     arg = self
                         .arguments_to_resolve
@@ -986,7 +1003,7 @@ impl<'a> PTBBuilder<'a> {
 
                 let chain_id = self.reader.get_chain_identifier().await.ok();
                 let build_config = MoveBuildConfig::default();
-                let package_path = Path::new(&package_path);
+
                 let build_config = resolve_lock_file_path(build_config.clone(), Some(package_path))
                     .map_err(|e| err!(path_loc, "{e}"))?;
                 let previous_id = if let Some(ref chain_id) = chain_id {

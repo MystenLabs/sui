@@ -64,11 +64,12 @@ use sui_indexer_alt_framework::{
     ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
 };
 use sui_indexer_alt_graphql::{
-    RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
+    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, config::RpcConfig as GraphQlConfig,
+    start_rpc as start_graphql,
 };
 use sui_indexer_alt_reader::{
-    bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
-    fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
+    consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs,
+    system_package_task::SystemPackageTaskArgs,
 };
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::read_key;
@@ -1184,10 +1185,9 @@ async fn start(
 
         let handle = start_graphql(
             database_url.clone(),
-            None,
             fullnode_args,
             DbArgs::default(),
-            BigtableArgs::default(),
+            GraphQlKvArgs::default(),
             consistent_reader_args,
             graphql_args,
             SystemPackageTaskArgs::default(),

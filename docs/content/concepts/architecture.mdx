@@ -1,6 +1,99 @@
 ---
-title: Architecture
-draft: true
+title: Sui Architecture
+description: Sui is a layer 1 blockchain that performs its own consensus and validation of transaction blocks. Sui is comprised of the blockchain itself, the blockchain's activity such as transactions, and the validator entities that verify this activity.
+keywords: [ sui blockchain, sui components, sui validators, sui transactions, components of sui, what is sui comprised of, delegated proof of stake, delegated proof-of-stake, dpos, consensus, sui networks, sui mainnet, sui testnet, sui devnet, move, move language ]
 ---
 
-Content coming soon
+Sui is a layer 1 blockchain. Layer 1 networks consist of the following primary components:
+
+1. [**Nodes**](/guides/operator.mdx) that run the network's binaries and participate in network activity such as consensus. Nodes provide compute and [storage](/concepts/sui-architecture/sui-storage.mdx) resources to the network.
+
+1. The [**consensus mechanism**](/concepts/sui-architecture/consensus.mdx) used to validate transactions.
+
+1. [**Transactions**](/concepts/transactions.mdx) themselves, which on Sui reflect on-chain operations such as creating objects or sending assets.
+
+1. [**Tokens**](/concepts/tokenomics.mdx) used to pay for resources and transactions on the network.
+
+On Sui specifically, other core components include:
+
+1. [**Objects**](/concepts/object-model), the most basic unit of storage on Sui that are addressable on-chain by unique IDs.
+
+1. [**Move**](/concepts/sui-move-concepts), the programming language used to create smart contracts on Sui.
+
+## Networks
+
+Sui operates multiple networks that are comprised of these essential components. Each network serves a different purpose:
+
+- **Mainnet:** Production network for live transactions and real-value assets.
+
+- **Testnet:** Staging network for testing changes before production deployment.
+
+- **Devnet:** For developing and testing new features.
+
+- **Localnet:** Local network you can run on your own machine for optimized development.
+
+Learn more about the [Sui networks](/concepts/sui-architecture/networks.mdx).
+
+### Nodes
+
+On Sui, nodes on the network participate directly in the chain's consensus mechanism to validate all on-chain activity. Activity comes in the form of transaction blocks that must be validated before being finalized and permanently committed to the network's history.
+
+There are 2 types of nodes on Sui:
+
+1. **Full node:** Responsible for validating blockchain activity such as transactions, checkpoints, and [epoch](/concepts/sui-architecture/epochs.mdx) changes. Each full node stores the blockchain's state and history to serve queries.
+
+2. **Validator node:** Responsible for executing more tasks than full nodes, such as staking, gas price references, and tallying rules.
+
+Learn more about [nodes on Sui](/guides/operator.mdx).
+
+## Delegated proof-of-stake consensus
+
+Sui uses a delegated proof-of-stake (DPoS) consensus mechanism to validate transactions. Validators must stake SUI tokens on the network, either their own or delegated by other token holders, to participate in consensus. This approach aligns validator incentives with network security and efficiency without the high energy costs of proof-of-work systems.
+
+To learn more about consensus on Sui, see:
+
+- [Sui Consensus](/concepts/sui-architecture/consensus.mdx)
+
+- [Validator Committee](/concepts/sui-architecture/consensus.mdx)
+
+## Transactions
+
+Transactions on Sui consist of several commands that execute on inputs. These inputs define the result of the transaction. All updates to the Sui network happen through transactions. There are only 2 types of transactions on Sui:
+
+1. **Programmable transaction blocks:** Define all user transactions on Sui, as they can be submitted by anyone. They are used for activities such as sending tokens, creating objects, and interacting with smart contracts.
+
+1. **System transactions:** Only submittable by validator nodes. These transactions are for network functions such as changing epochs or starting checkpoints.
+
+Learn more about both types of [transactions](/concepts/transactions.mdx), or learn more about [programmable transaction blocks](/concepts/transactions/prog-txn-blocks.mdx).
+
+## Tokens
+
+The native token for Sui is **SUI**. Transactions on Sui often deal with small fractions of the value of 1 SUI. To make it easier to work with transactions, Sui also provides the token **MIST**. 1 billion MIST equals 1 SUI.
+
+On the network, everything has a cost. It costs money to provide computational power, process transactions, and store transaction data. This cost is referred to as _gas_. You pay gas fees with a blockchain's native token, in this case, SUI or MIST.
+
+To learn more about the tokenomics of Sui, see the following topics:
+
+- [Sui Tokenomics](/concepts/tokenomics.mdx)
+
+- [Gas Fees](/concepts/tokenomics/gas-in-sui.mdx)
+
+- [Staking and Unstaking](/concepts/tokenomics/staking-unstaking.mdx)
+
+- [Sui Bridging](/concepts/tokenomics/sui-bridging.mdx)
+
+## Objects
+
+The basic unit of storage in Sui is the object. Blocks on the chain are actually objects that define assets rather than simple key-value stores that define addresses. Sui's storage is centered around objects that are addressable on-chain by unique IDs. A smart contract is an object (called a Sui Move package), and these smart contracts manipulate objects on the Sui network.
+
+Every object has an owner field that dictates how you can use it in transactions. Objects can be owned by an address or party, or they can be immutable, shared, or wrapped.
+
+Learn more about the [Sui Object Model](/concepts/object-model.mdx) or [Object Ownership](/concepts/object-ownership.mdx).
+
+## Move
+
+Move is an open source programming language that is used for all activity on Sui, such as creating or trading NFTs, using dApps, and all other transaction-based events. It is used for writing safe packages that can create and manipulate objects on-chain.
+
+Move is platform-agnostic to enable common libraries, tooling, and developer communities across blockchains with vastly different data and execution models.
+
+To learn more about Move, see [Move Concepts](/concepts/sui-move-concepts.mdx).

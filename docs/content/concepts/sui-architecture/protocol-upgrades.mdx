@@ -1,25 +1,33 @@
 ---
 title: Protocol Upgrades
 description: The Sui protocol, framework, and execution engine are frequently extended to include new functionality and bug fixes. The upgrade process ensures all clients use the same source.
+keywords: [ protocol upgrades, framework upgrades, protocol config, feature flags, validator upgrades, protocol version ]
 ---
 
-The Sui protocol, framework, and execution engine are frequently extended to include new functionality and bug fixes. This functionality is added as new code released to validator operators as part of regular software releases. The Sui protocol requires that all validators agree on the results of executing each transaction.
+The Sui protocol, framework, and execution engine are frequently extended to include new functionality and bug fixes. This functionality is added as new code released to validator operators as part of regular software releases.
 
-This creates a challenge: how is code released that changes transaction execution, given that operators cannot all upgrade at the same instant? Further, how is it ensured that all transaction history can be replayed even after functionality has changed?
+As [consensus](/concepts/sui-architecture/consensus.mdx) requires that all validators agree on the results of executing each transaction, how is code released that changes transaction execution, given that operators cannot all upgrade at the same instant? Further, how is it ensured that all transaction history can be replayed even after functionality has changed?
 
-To solve this, Sui uses a process called protocol upgrades.
+To solve this, Sui uses a process called _protocol upgrades_.
 
 ## Protocol upgrade process
 
-The process for protocol upgrades includes these steps:
+The process for protocol upgrades includes the following steps:
 
 1. A developer codes the new feature but restricts access to it with a feature flag, a boolean configuration variable initially set to false.
+
 1. The value of the feature flag is retrieved from a struct called `ProtocolConfig`.
+
 1. The developer creates a new version of the `ProtocolConfig` struct where the feature flag is set to true.
+
 1. A new release of the Sui validator software is built and released to validator and full node operators.
+
 1. When the validator process starts, it continues to use the previous version of `ProtocolConfig` (flag set to false). All validators behave identically regardless of whether they have the new software.
+
 1. As validators are upgraded, they signal to the validator committee that they are prepared to switch to the new version of the configuration (flag enabled).
-1. If enough validators vote to switch to the new protocol version, the new version takes effect at the beginning of the next epoch.
+
+1. If 2/3 or more of validators vote to switch to the new protocol version, the new version takes effect at the beginning of the next epoch.
+
 1. The new feature becomes active.
 
 Full node operators follow a similar process but do not participate in voting. They follow the actions recorded by validators.
@@ -32,4 +40,8 @@ Not all new Sui functionality comes from validator code changes. Developers also
 
 Instead of feature flags, Sui objects coordinate framework changes. The Sui framework is a special object with ID `0x2`. The Move source code for the framework is built into the validator binary.
 
-If a validator notices that its built-in framework differs from the framework in object `0x2`, it signals to other validators that it wants to upgrade the framework to a new version. As with `ProtocolConfig`, if enough validators agree, the new framework object is written at the end of the current epoch. Transactions executed in the new epoch then use the new version of the framework.
+If a validator notices that its built-in framework differs from the framework in object `0x2`, it signals to other validators that it wants to upgrade the framework to a new version. As with `ProtocolConfig`, if 2/3 or more of validators agree, the new framework object is written at the end of the current epoch. Transactions executed in the new epoch then use the new version of the framework.
+
+## Related links
+
+<RelatedLink to="/concepts/sui-architecture/consensus.mdx" />

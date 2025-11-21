@@ -403,7 +403,7 @@ hyper-rustls = { version = "0.27", default-features = false, features = [
 im = "15"
 impl-trait-for-tuples = "0.2.0"
 indexmap = { version = "2.8.0", features = ["serde"] }
-indicatif = "0.17.2"
+indicatif = "0.18.3"
 inquire = "0.6.0"
 insta = { version = "1.21.1", features = ["redactions", "yaml", "json"] }
 insta-cmd = "0.6.0"
