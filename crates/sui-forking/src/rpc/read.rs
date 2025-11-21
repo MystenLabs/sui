@@ -4,14 +4,16 @@
 use fastcrypto::encoding::Base64;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sui_json_rpc_types::{
-    DryRunTransactionBlockResponse, SuiTransactionBlock, SuiTransactionBlockEffects,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    DryRunTransactionBlockResponse, ProtocolConfigResponse, SuiTransactionBlock,
+    SuiTransactionBlockEffects, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::{
     digests::ChainIdentifier,
     quorum_driver_types::ExecuteTransactionRequestType,
+    sui_serde::BigInt,
+    supported_protocol_versions::{Chain, ProtocolConfig},
     transaction::{Transaction, TransactionData},
 };
 
@@ -28,21 +30,33 @@ pub trait ReadApi {
     async fn get_chain_identifier(&self) -> RpcResult<String>;
 
     #[method(name = "getProtocolConfig")]
-    async fn get_protocol_config(&self) -> RpcResult<String>;
+    async fn get_protocol_config(
+        &self,
+        /// An optional protocol version specifier. If omitted, the latest protocol config table for the node will be returned.
+        version: Option<BigInt<u64>>,
+    ) -> RpcResult<ProtocolConfigResponse>;
 }
 
-pub(crate) struct Read(pub Arc<RwLock<Simulacrum>>);
+pub(crate) struct Read {
+    pub simulacrum: Arc<RwLock<Simulacrum>>,
+    pub protocol_version: u64,
+    pub chain: sui_types::supported_protocol_versions::Chain,
+}
 
 impl Read {
-    pub fn new(simulacrum: Arc<RwLock<Simulacrum>>) -> Self {
-        Self(simulacrum)
+    pub fn new(simulacrum: Arc<RwLock<Simulacrum>>, protocol_version: u64, chain: Chain) -> Self {
+        Self {
+            simulacrum,
+            protocol_version,
+            chain,
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl ReadApiServer for Read {
     async fn get_chain_identifier(&self) -> RpcResult<String> {
-        let simulacrum = self.0.read().unwrap();
+        let simulacrum = self.simulacrum.read().unwrap();
         let chain_id: ChainIdentifier = simulacrum
             .store()
             .get_checkpoint_by_sequence_number(0)
@@ -54,9 +68,15 @@ impl ReadApiServer for Read {
         Ok(chain_id)
     }
 
-    async fn get_protocol_config(&self) -> RpcResult<String> {
-        let simulacrum = self.0.read().unwrap();
-        Ok(protocol_config_str)
+    async fn get_protocol_config(
+        &self,
+        version: Option<BigInt<u64>>,
+    ) -> RpcResult<ProtocolConfigResponse> {
+        let protocol_config =
+            ProtocolConfig::get_for_version(self.protocol_version.into(), self.chain);
+        let response = ProtocolConfigResponse::from(protocol_config);
+
+        Ok(response)
     }
 }
 
