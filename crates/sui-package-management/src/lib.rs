@@ -127,6 +127,52 @@ pub async fn update_lock_file_for_chain_env(
     Ok(())
 }
 
+/// Update the `Move.lock` file with automated address management info. This variant accepts the
+/// package ID and version directly, allowing for updates when a single transaction publishes
+/// multiple packages. The `Move.lock` file principally records the published address
+/// (i.e., package ID) of a package under an environment in the given chain.
+/// See the `ManagedPackage` type in the lock file for a complete spec.
+pub async fn update_lock_file_for_chain_env_with_package_id(
+    chain_identifier: &str,
+    env_alias: &str,
+    command: LockCommand,
+    install_dir: Option<PathBuf>,
+    lock_file: Option<PathBuf>,
+    original_id: ObjectID,
+    version: u64,
+) -> Result<(), anyhow::Error> {
+    let Some(lock_file) = lock_file else {
+        bail!(
+            "Expected a `Move.lock` file to exist after publishing \
+             package, but none found. Consider running `sui move build` to \
+             generate the `Move.lock` file in the package directory."
+        )
+    };
+    let install_dir = install_dir.unwrap_or(PathBuf::from("."));
+
+    let mut lock = LockFile::from(install_dir.clone(), &lock_file)?;
+    match command {
+        LockCommand::Publish => lock_file::schema::update_managed_address(
+            &mut lock,
+            env_alias,
+            lock_file::schema::ManagedAddressUpdate::Published {
+                chain_id: chain_identifier.to_string(),
+                original_id: original_id.to_string(),
+            },
+        ),
+        LockCommand::Upgrade => lock_file::schema::update_managed_address(
+            &mut lock,
+            env_alias,
+            lock_file::schema::ManagedAddressUpdate::Upgraded {
+                latest_id: original_id.to_string(),
+                version: version.into(),
+            },
+        ),
+    }?;
+    lock.commit(lock_file)?;
+    Ok(())
+}
+
 /// Sets the `original-published-id` in the Move.lock to the given `id`. This function
 /// provides a utility to manipulate the `original-published-id` during a package upgrade.
 /// For instance, we require graph resolution to resolve a `0x0` address for module names
