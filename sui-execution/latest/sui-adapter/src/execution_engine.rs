@@ -100,14 +100,15 @@ mod checked {
             writer
                 .write_record(&[
                     "tx_digest",
+                    "gas_budget",
                     "new_computation_cost",
                     "old_computation_cost",
                     "new_storage_cost",
                     "old_storage_cost",
                     "new_storage_rebate",
                     "old_storage_rebate",
-                    "old_gas_used",
                     "new_gas_used",
+                    "old_gas_used",
                 ])
                 .expect("failed to write gas header");
             Mutex::new(writer)
@@ -125,14 +126,15 @@ mod checked {
         writer
             .write_record(&[
                 &transaction_digest,
+                &new_gas.gas_budget.to_string(),
                 &new_gas.cost_summary.computation_cost.to_string(),
                 &old_gas.cost_summary.computation_cost.to_string(),
                 &new_gas.cost_summary.storage_cost.to_string(),
                 &old_gas.cost_summary.storage_cost.to_string(),
                 &new_gas.cost_summary.storage_rebate.to_string(),
                 &old_gas.cost_summary.storage_rebate.to_string(),
-                &old_gas.gas_used.to_string(),
                 &new_gas.gas_used.to_string(),
+                &old_gas.gas_used.to_string(),
             ])
             .expect("failed to write gas row");
         writer.flush().expect("failed to flush gas writer");
