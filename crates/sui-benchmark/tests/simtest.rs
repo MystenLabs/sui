@@ -176,7 +176,36 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_basic() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(7, 0, 1).await;
+
+        // Create validators with different stake weights
+        // Using: 3 validators with high stake (30%), 2 with medium (20%), 2 with low (10%)
+        // Total: 3*30 + 2*20 + 2*10 = 90 + 40 + 20 = 150 units
+        let stake_distribution = vec![
+            30_000_000_000_000_000, // 30% - Validator 1
+            30_000_000_000_000_000, // 30% - Validator 2
+            30_000_000_000_000_000, // 30% - Validator 3
+            20_000_000_000_000_000, // 20% - Validator 4
+            20_000_000_000_000_000, // 20% - Validator 5
+            10_000_000_000_000_000, // 10% - Validator 6
+            10_000_000_000_000_000, // 10% - Validator 7
+        ];
+
+        let test_cluster = build_test_cluster_with_stake(stake_distribution.clone(), 0, 1).await;
+
+        // Log validator stake distribution
+        eprintln!("=== Validator Stake Distribution ===");
+        let committee = test_cluster.committee();
+        for (i, stake) in stake_distribution.iter().enumerate() {
+            let percentage =
+                (*stake as f64 / stake_distribution.iter().sum::<u64>() as f64) * 100.0;
+            eprintln!("Validator {}: stake={} ({:.1}%)", i + 1, stake, percentage);
+        }
+        eprintln!(
+            "Total stake: {}, Committee voting threshold: {}",
+            committee.total_votes(),
+            committee.quorum_threshold()
+        );
+        eprintln!("=====================================");
 
         // Configure to send ONLY randomness transactions
         let mut simulated_load_config = SimulatedLoadConfig::default();
@@ -1206,6 +1235,61 @@ mod test {
                 // Disable system overload checks for the test - during tests with crashes,
                 // it is possible for overload protection to trigger due to validators
                 // having queued certs which are missing dependencies.
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .with_submit_delay_step_override_millis(3000)
+            .with_num_unpruned_validators(default_num_of_unpruned_validators)
+            .build()
+            .await
+            .into()
+    }
+
+    async fn build_test_cluster_with_stake(
+        stake_distribution: Vec<u64>,
+        default_epoch_duration_ms: u64,
+        default_num_of_unpruned_validators: usize,
+    ) -> Arc<TestCluster> {
+        use rand::rngs::OsRng;
+        use sui_swarm_config::genesis_config::ValidatorGenesisConfigBuilder;
+
+        let num_validators = stake_distribution.len();
+        assert!(
+            default_num_of_unpruned_validators <= num_validators,
+            "Provided number of unpruned validators is greater than the total number of validators"
+        );
+
+        // Create validator configs with custom stake weights
+        let mut rng = OsRng;
+        let validators: Vec<_> = stake_distribution
+            .into_iter()
+            .map(|stake| {
+                ValidatorGenesisConfigBuilder::new()
+                    .with_stake(stake)
+                    .build(&mut rng)
+            })
+            .collect();
+
+        let mut builder = TestClusterBuilder::new()
+            .with_validators(validators)
+            .disable_fullnode_pruning();
+
+        #[cfg(msim)]
+        {
+            builder = builder.with_synthetic_execution_time_injection();
+        }
+
+        if std::env::var("CHECKPOINTS_PER_EPOCH").is_ok() {
+            eprintln!("CHECKPOINTS_PER_EPOCH env var is deprecated, use EPOCH_DURATION_MS");
+        }
+        let epoch_duration_ms = get_var("EPOCH_DURATION_MS", default_epoch_duration_ms);
+        if epoch_duration_ms > 0 {
+            builder = builder.with_epoch_duration_ms(epoch_duration_ms);
+        }
+
+        builder
+            .with_authority_overload_config(AuthorityOverloadConfig {
                 check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
                 ..Default::default()
