@@ -20,7 +20,7 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use mysten_common::in_antithesis;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
-use mysten_metrics::{add_server_timing, spawn_logged_monitored_task, spawn_monitored_task};
+use mysten_metrics::{add_server_timing, spawn_logged_monitored_task};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
     HistogramVec, IntCounter, IntCounterVec, Registry, register_histogram_vec_with_registry,
@@ -38,16 +38,14 @@ use sui_types::messages_grpc::{SubmitTxRequest, TxType};
 use sui_types::quorum_driver_types::{
     EffectsFinalityInfo, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
     ExecuteTransactionResponseV3, FinalizedEffects, IsTransactionExecutedLocally,
-    QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResult,
+    QuorumDriverError, QuorumDriverResult,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{Transaction, TransactionData, VerifiedTransaction};
 use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChecks};
 use tokio::sync::broadcast::Receiver;
-use tokio::sync::broadcast::error::RecvError;
-use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep, timeout};
-use tracing::{Instrument, debug, error, error_span, info, instrument, warn};
+use tracing::{Instrument, debug, error_span, info, instrument, warn};
 
 use crate::authority::AuthorityState;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -72,11 +70,10 @@ pub type QuorumTransactionEffectsResult =
 pub struct TransactionOrchestrator<A: Clone> {
     quorum_driver_handler: Arc<QuorumDriverHandler<A>>,
     validator_state: Arc<AuthorityState>,
-    _local_executor_handle: JoinHandle<()>,
     pending_tx_log: Arc<WritePathPendingTransactionLog>,
     notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
     metrics: Arc<TransactionOrchestratorMetrics>,
-    transaction_driver: Option<Arc<TransactionDriver<A>>>,
+    transaction_driver: Arc<TransactionDriver<A>>,
     td_percentage: u8,
     td_allowed_submission_list: Vec<String>,
     td_blocked_submission_list: Vec<String>,
@@ -123,50 +120,35 @@ where
         reconfig_observer: OnsiteReconfigObserver,
         node_config: &NodeConfig,
     ) -> Self {
-        let metrics = Arc::new(QuorumDriverMetrics::new(prometheus_registry));
+        let metrics = Arc::new(TransactionOrchestratorMetrics::new(prometheus_registry));
+
+        let qd_metrics = Arc::new(QuorumDriverMetrics::new(prometheus_registry));
         let notifier = Arc::new(NotifyRead::new());
         let reconfig_observer = Arc::new(reconfig_observer);
         let quorum_driver_handler = Arc::new(
-            QuorumDriverHandlerBuilder::new(validators.clone(), metrics.clone())
+            QuorumDriverHandlerBuilder::new(validators.clone(), qd_metrics.clone())
                 .with_notifier(notifier.clone())
                 .with_reconfig_observer(reconfig_observer.clone())
                 .start(),
         );
 
-        let effects_receiver = quorum_driver_handler.subscribe_to_effects();
-        let metrics = Arc::new(TransactionOrchestratorMetrics::new(prometheus_registry));
-        let pending_tx_log = Arc::new(WritePathPendingTransactionLog::new(
-            parent_path.join("fullnode_pending_transactions"),
-        ));
-        let _local_executor_handle = {
-            let pending_tx_log = pending_tx_log.clone();
-            spawn_monitored_task!(async move {
-                Self::loop_pending_transaction_log(effects_receiver, pending_tx_log).await;
-            })
-        };
-        Self::schedule_txes_in_log(pending_tx_log.clone(), quorum_driver_handler.clone());
+        let td_metrics = Arc::new(TransactionDriverMetrics::new(prometheus_registry));
+        let client_metrics = Arc::new(
+            crate::validator_client_monitor::ValidatorClientMetrics::new(prometheus_registry),
+        );
+        let transaction_driver = TransactionDriver::new(
+            validators.clone(),
+            reconfig_observer.clone(),
+            td_metrics,
+            Some(node_config),
+            client_metrics,
+        );
 
         let epoch_store = validator_state.load_epoch_store_one_call_per_task();
         let td_percentage = if !epoch_store.protocol_config().mysticeti_fastpath() {
             0
         } else {
             choose_transaction_driver_percentage(Some(epoch_store.get_chain_identifier()))
-        };
-
-        let transaction_driver = if td_percentage > 0 {
-            let td_metrics = Arc::new(TransactionDriverMetrics::new(prometheus_registry));
-            let client_metrics = Arc::new(
-                crate::validator_client_monitor::ValidatorClientMetrics::new(prometheus_registry),
-            );
-            Some(TransactionDriver::new(
-                validators.clone(),
-                reconfig_observer.clone(),
-                td_metrics,
-                Some(node_config),
-                client_metrics,
-            ))
-        } else {
-            None
         };
 
         let td_allowed_submission_list = node_config
@@ -188,6 +170,11 @@ where
             );
         }
 
+        let pending_tx_log = Arc::new(WritePathPendingTransactionLog::new(
+            parent_path.join("fullnode_pending_transactions"),
+        ));
+        Self::start_task_to_recover_txes_in_log(pending_tx_log.clone(), transaction_driver.clone());
+
         let enable_early_validation = node_config
             .transaction_driver_config
             .as_ref()
@@ -197,7 +184,6 @@ where
         Self {
             quorum_driver_handler,
             validator_state,
-            _local_executor_handle,
             pending_tx_log,
             notifier,
             metrics,
@@ -601,15 +587,14 @@ where
         });
 
         // Select TransactionDriver or QuorumDriver for submission.
-        let (response, driver_type) = if self.transaction_driver.is_some()
-            && self.should_use_transaction_driver(epoch_store, tx_digest)
+        let (response, driver_type) = if self.should_use_transaction_driver(epoch_store, tx_digest)
         {
             // Mark that we're using TD before submitting.
             using_td.store(true, Ordering::Release);
 
             (
                 self.submit_with_transaction_driver(
-                    self.transaction_driver.as_ref().unwrap(),
+                    &self.transaction_driver,
                     &request,
                     client_addr,
                     &verified_transaction,
@@ -837,51 +822,24 @@ where
         v <= self.td_percentage
     }
 
-    // TODO: Potentially cleanup this function and pending transaction log.
-    async fn loop_pending_transaction_log(
-        mut effects_receiver: Receiver<QuorumDriverEffectsQueueResult>,
-        pending_transaction_log: Arc<WritePathPendingTransactionLog>,
-    ) {
-        loop {
-            match effects_receiver.recv().await {
-                Ok(Ok((transaction, ..))) => {
-                    let tx_digest = transaction.digest();
-                    if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
-                        error!(
-                            ?tx_digest,
-                            "Failed to finish transaction in pending transaction log: {err}"
-                        );
-                    }
-                }
-                Ok(Err((tx_digest, _err))) => {
-                    if let Err(err) = pending_transaction_log.finish_transaction(&tx_digest) {
-                        error!(
-                            ?tx_digest,
-                            "Failed to finish transaction in pending transaction log: {err}"
-                        );
-                    }
-                }
-                Err(RecvError::Closed) => {
-                    error!("Sender of effects subscriber queue has been dropped!");
-                    return;
-                }
-                Err(RecvError::Lagged(skipped_count)) => {
-                    warn!("Skipped {skipped_count} transasctions in effects subscriber queue.");
-                }
-            }
-        }
+    pub fn authority_state(&self) -> &Arc<AuthorityState> {
+        &self.validator_state
     }
 
-    pub fn quorum_driver(&self) -> &Arc<QuorumDriverHandler<A>> {
+    pub fn transaction_driver(&self) -> &Arc<TransactionDriver<A>> {
+        &self.transaction_driver
+    }
+
+    fn quorum_driver(&self) -> &Arc<QuorumDriverHandler<A>> {
         &self.quorum_driver_handler
     }
 
-    pub fn clone_quorum_driver(&self) -> Arc<QuorumDriverHandler<A>> {
+    fn clone_quorum_driver(&self) -> Arc<QuorumDriverHandler<A>> {
         self.quorum_driver_handler.clone()
     }
 
     pub fn clone_authority_aggregator(&self) -> Arc<AuthorityAggregator<A>> {
-        self.quorum_driver().authority_aggregator().load_full()
+        self.transaction_driver.authority_aggregator().load_full()
     }
 
     fn update_metrics<'a>(
@@ -910,9 +868,9 @@ where
         )
     }
 
-    fn schedule_txes_in_log(
+    fn start_task_to_recover_txes_in_log(
         pending_tx_log: Arc<WritePathPendingTransactionLog>,
-        quorum_driver: Arc<QuorumDriverHandler<A>>,
+        transaction_driver: Arc<TransactionDriver<A>>,
     ) {
         spawn_logged_monitored_task!(async move {
             if std::env::var("SKIP_LOADING_FROM_PENDING_TX_LOG").is_ok() {
@@ -922,48 +880,70 @@ where
             let pending_txes = pending_tx_log
                 .load_all_pending_transactions()
                 .expect("failed to load all pending transactions");
+            let num_pending_txes = pending_txes.len();
             info!(
                 "Recovering {} pending transactions from pending_tx_log.",
-                pending_txes.len()
+                num_pending_txes
             );
-            for (i, tx) in pending_txes.into_iter().enumerate() {
-                // TODO: ideally pending_tx_log would not contain VerifiedTransaction, but that
-                // requires a migration.
-                let tx = tx.into_inner();
-                let tx_digest = *tx.digest();
-                // It's not impossible we fail to enqueue a task but that's not the end of world.
-                // TODO(william) correctly extract client_addr from logs
-                if let Err(err) = quorum_driver
-                    .submit_transaction_no_ticket(
-                        ExecuteTransactionRequestV3 {
-                            transaction: tx,
-                            include_events: true,
-                            include_input_objects: false,
-                            include_output_objects: false,
-                            include_auxiliary_data: false,
-                        },
-                        None,
-                    )
-                    .await
-                {
-                    warn!(
-                        ?tx_digest,
-                        "Failed to enqueue transaction from pending_tx_log, err: {err:?}"
-                    );
-                } else {
-                    debug!("Enqueued transaction from pending_tx_log");
-                    if (i + 1) % 1000 == 0 {
-                        info!("Enqueued {} transactions from pending_tx_log.", i + 1);
+            let mut recovery = pending_txes
+                .into_iter()
+                .map(|tx| {
+                    let pending_tx_log = pending_tx_log.clone();
+                    let transaction_driver = transaction_driver.clone();
+                    async move {
+                        // TODO: ideally pending_tx_log would not contain VerifiedTransaction, but that
+                        // requires a migration.
+                        let tx = tx.into_inner();
+                        let tx_digest = *tx.digest();
+                        // It's not impossible we fail to enqueue a task but that's not the end of world.
+                        // TODO(william) correctly extract client_addr from logs
+                        if let Err(err) = transaction_driver
+                            .drive_transaction(
+                                SubmitTxRequest::new_transaction(tx),
+                                SubmitTransactionOptions::default(),
+                                Some(Duration::from_secs(60)),
+                            )
+                            .await
+                        {
+                            warn!(?tx_digest, "Failed to execute recovered transaction: {err}");
+                        } else {
+                            debug!(?tx_digest, "Executed recovered transaction");
+                        }
+                        if let Err(err) = pending_tx_log.finish_transaction(&tx_digest) {
+                            warn!(
+                                ?tx_digest,
+                                "Failed to clean up transaction in pending log: {err}"
+                            );
+                        } else {
+                            debug!(?tx_digest, "Cleaned up transaction in pending log");
+                        }
                     }
+                })
+                .collect::<FuturesUnordered<_>>();
+
+            let mut num_recovered = 0;
+            while recovery.next().await.is_some() {
+                num_recovered += 1;
+                if num_recovered % 1000 == 0 {
+                    info!(
+                        "Recovered {} out of {} transactions from pending_tx_log.",
+                        num_recovered, num_pending_txes
+                    );
                 }
             }
-            // Transactions will be cleaned up in loop_execute_finalized_tx_locally() after they
-            // produce effects.
+            info!(
+                "Recovery finished. Recovered {} out of {} transactions from pending_tx_log.",
+                num_recovered, num_pending_txes
+            );
         });
     }
 
     pub fn load_all_pending_transactions_in_test(&self) -> SuiResult<Vec<VerifiedTransaction>> {
         self.pending_tx_log.load_all_pending_transactions()
+    }
+
+    pub fn empty_pending_tx_log_in_test(&self) -> bool {
+        self.pending_tx_log.is_empty()
     }
 }
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
