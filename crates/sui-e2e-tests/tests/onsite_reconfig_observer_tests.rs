@@ -21,12 +21,13 @@ async fn test_onsite_reconfig_observer_basic() {
 
     let fullnode = &test_cluster.fullnode_handle.sui_node;
 
-    let qd = fullnode.with(|node| {
+    let td = fullnode.with(|node| {
         node.transaction_orchestrator()
             .unwrap()
-            .clone_quorum_driver()
+            .transaction_driver()
+            .clone()
     });
-    assert_eq!(qd.current_epoch(), 0);
+    assert_eq!(td.authority_aggregator().load().committee.epoch, 0);
     let rx = fullnode.with(|node| node.subscribe_to_epoch_change());
     let registry = Registry::new();
     let mut observer = OnsiteReconfigObserver::new(
@@ -36,8 +37,7 @@ async fn test_onsite_reconfig_observer_basic() {
         SafeClientMetricsBase::new(&registry),
         AuthAggMetrics::new(&registry),
     );
-    let qd_clone = qd.clone_quorum_driver();
-    let observer_handle = tokio::task::spawn(async move { observer.run(qd_clone).await });
+    let observer_handle = tokio::task::spawn(async move { observer.run(td.clone()).await });
 
     // Wait for all nodes to reach the next epoch.
     info!("Waiting for nodes to advance to epoch 1");
@@ -45,16 +45,13 @@ async fn test_onsite_reconfig_observer_basic() {
 
     // Give it some time for the update to happen
     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-    let qd = fullnode.with(|node| {
+    let td = fullnode.with(|node| {
         node.transaction_orchestrator()
             .unwrap()
-            .clone_quorum_driver()
+            .transaction_driver()
+            .clone()
     });
-    assert_eq!(qd.current_epoch(), 1);
-    assert_eq!(
-        fullnode.with(|node| node.clone_authority_aggregator().unwrap().committee.epoch),
-        1
-    );
+    assert_eq!(td.authority_aggregator().load().committee.epoch, 1);
     // The observer thread is not managed by simtest, and hence we must abort it manually to make sure
     // it stops running first. Otherwise it may lead to unexpected channel close issue.
     observer_handle.abort();
