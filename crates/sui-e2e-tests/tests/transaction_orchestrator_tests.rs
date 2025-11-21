@@ -4,6 +4,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority_client::NetworkAuthorityClient;
+use sui_core::transaction_driver::SubmitTransactionOptions;
 use sui_core::transaction_orchestrator::TransactionOrchestrator;
 use sui_macros::sim_test;
 use sui_storage::key_value_store::TransactionKeyValueStore;
@@ -13,6 +14,7 @@ use sui_test_transaction_builder::{
 };
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::ErrorCategory;
+use sui_types::messages_grpc::SubmitTxRequest;
 use sui_types::object::PastObjectRead;
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
@@ -42,14 +44,18 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
         txn_count,
     );
 
-    // Quorum driver does not execute txn locally
+    // Transaction driver does not execute txn locally
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
     orchestrator
-        .quorum_driver()
-        .submit_transaction_no_ticket(
-            ExecuteTransactionRequestV3::new_v2(txn),
-            Some(make_socket_addr()),
+        .transaction_driver()
+        .drive_transaction(
+            SubmitTxRequest::new_transaction(txn),
+            SubmitTransactionOptions {
+                forwarded_client_addr: Some(make_socket_addr()),
+                ..Default::default()
+            },
+            Some(Duration::from_secs(60)),
         )
         .await?;
 
@@ -188,8 +194,9 @@ async fn test_transaction_orchestrator_reconfig() {
     let epoch = test_cluster.fullnode_handle.sui_node.with(|node| {
         node.transaction_orchestrator()
             .unwrap()
-            .quorum_driver()
-            .current_epoch()
+            .authority_state()
+            .epoch_store_for_testing()
+            .epoch()
     });
     assert_eq!(epoch, 0);
 
@@ -203,8 +210,9 @@ async fn test_transaction_orchestrator_reconfig() {
             let epoch = test_cluster.fullnode_handle.sui_node.with(|node| {
                 node.transaction_orchestrator()
                     .unwrap()
-                    .quorum_driver()
-                    .current_epoch()
+                    .authority_state()
+                    .epoch_store_for_testing()
+                    .epoch()
             });
             if epoch == 1 {
                 break;

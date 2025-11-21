@@ -867,11 +867,19 @@ where
         }
     }
 
-    pub fn quorum_driver(&self) -> &Arc<QuorumDriverHandler<A>> {
+    pub fn authority_state(&self) -> &Arc<AuthorityState> {
+        &self.validator_state
+    }
+
+    pub fn transaction_driver(&self) -> &Arc<TransactionDriver<A>> {
+        &self.transaction_driver
+    }
+
+    fn quorum_driver(&self) -> &Arc<QuorumDriverHandler<A>> {
         &self.quorum_driver_handler
     }
 
-    pub fn clone_quorum_driver(&self) -> Arc<QuorumDriverHandler<A>> {
+    fn clone_quorum_driver(&self) -> Arc<QuorumDriverHandler<A>> {
         self.quorum_driver_handler.clone()
     }
 
