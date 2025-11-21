@@ -87,6 +87,7 @@ impl<A> TransactionDriver<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    // TODO: accept a TransactionDriverConfig to set default allowed & blocked validators.
     pub fn new(
         authority_aggregator: Arc<AuthorityAggregator<A>>,
         reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
