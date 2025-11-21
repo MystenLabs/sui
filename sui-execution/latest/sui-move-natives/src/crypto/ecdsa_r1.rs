@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{get_extension, NativesCostTable};
+use crate::{NativesCostTable, get_extension};
 use fastcrypto::error::FastCryptoError;
 use fastcrypto::hash::{Keccak256, Sha256};
 use fastcrypto::traits::RecoverableSignature;
 use fastcrypto::{
     secp256r1::{
-        recoverable::Secp256r1RecoverableSignature, Secp256r1PublicKey, Secp256r1Signature,
+        Secp256r1PublicKey, Secp256r1Signature, recoverable::Secp256r1RecoverableSignature,
     },
     traits::ToFromBytes,
 };

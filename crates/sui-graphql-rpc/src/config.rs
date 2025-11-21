@@ -364,7 +364,7 @@ impl TxExecFullNodeConfig {
 
 impl ConnectionConfig {
     pub fn db_name(&self) -> String {
-        self.db_url.split('/').last().unwrap().to_string()
+        self.db_url.split('/').next_back().unwrap().to_string()
     }
 
     pub fn db_url(&self) -> String {

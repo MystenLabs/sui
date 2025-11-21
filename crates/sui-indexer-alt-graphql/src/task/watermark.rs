@@ -7,16 +7,16 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, bail, ensure, Context as _};
+use anyhow::{Context as _, anyhow, bail, ensure};
 use chrono::{DateTime, Utc};
 use diesel::{
-    sql_types::{BigInt, Text},
     QueryableByName,
+    sql_types::{BigInt, Text},
 };
 use futures::future::OptionFuture;
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableReader,
-    consistent_reader::{self, proto::AvailableRangeResponse, ConsistentReader},
+    consistent_reader::{self, ConsistentReader, proto::AvailableRangeResponse},
     pg_reader::PgReader,
 };
 use sui_sql_macro::query;
@@ -24,7 +24,10 @@ use tokio::{join, sync::RwLock, task::JoinHandle, time};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use crate::{config::WatermarkConfig, metrics::RpcMetrics};
+use crate::{
+    api::types::available_range::pipeline_unavailable, config::WatermarkConfig, error::RpcError,
+    metrics::RpcMetrics,
+};
 
 /// Background task responsible for tracking per-pipeline upper- and lower-bounds.
 ///
@@ -220,11 +223,11 @@ impl Watermarks {
         &self.global_hi
     }
 
-    /// The reader_lo for a pipeline. Returned as an inclusive checkpoint number.
-    pub(crate) fn pipeline_lo_watermark(&self, pipeline: &str) -> anyhow::Result<&Watermark> {
+    /// The reader_lo watermark for a pipeline.
+    pub(crate) fn pipeline_lo_watermark(&self, pipeline: &str) -> Result<&Watermark, RpcError> {
         self.pipeline_lo
             .get(pipeline)
-            .ok_or_else(|| anyhow!("'{pipeline}' not found in pipeline_lo watermarks"))
+            .ok_or_else(|| pipeline_unavailable(pipeline))
     }
 
     /// Timestamp corresponding to high watermark. Can be `None` if the timestamp is out of range

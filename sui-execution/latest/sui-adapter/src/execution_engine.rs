@@ -60,7 +60,6 @@ mod checked {
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::{ExecutionTiming, ResultWithTimings};
-    use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
@@ -74,6 +73,7 @@ mod checked {
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
         ProgrammableTransaction, StoredExecutionTimeObservations, TransactionKind,
+        is_gas_paid_from_address_balance,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
@@ -110,7 +110,7 @@ mod checked {
     ) {
         let input_objects = input_objects.into_inner();
         let mutable_inputs = if enable_expensive_checks {
-            input_objects.mutable_inputs().keys().copied().collect()
+            input_objects.all_mutable_inputs().keys().copied().collect()
         } else {
             HashSet::new()
         };
@@ -137,11 +137,18 @@ mod checked {
         };
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
+        let address_balance_gas_payer =
+            if is_gas_paid_from_address_balance(&gas_data, &transaction_kind) {
+                Some(gas_data.owner)
+            } else {
+                None
+            };
         let mut gas_charger = GasCharger::new(
             transaction_digest,
             gas_data.payment,
             gas_status,
             protocol_config,
+            address_balance_gas_payer,
         );
 
         let tx_ctx = TxContext::new_from_components(
@@ -752,19 +759,32 @@ mod checked {
                             builder = setup_bridge_committee_update(builder, bridge_shared_version)
                         }
                         EndOfEpochTransactionKind::StoreExecutionTimeObservations(estimates) => {
-                            assert!(matches!(
-                                protocol_config.per_object_congestion_control_mode(),
-                                PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
-                            ));
-                            builder = setup_store_execution_time_estimates(builder, estimates);
+                            if let PerObjectCongestionControlMode::ExecutionTimeEstimate(params) =
+                                protocol_config.per_object_congestion_control_mode()
+                            {
+                                if let Some(chunk_size) = params.observations_chunk_size {
+                                    builder = setup_store_execution_time_estimates_v2(
+                                        builder,
+                                        estimates,
+                                        chunk_size as usize,
+                                    );
+                                } else {
+                                    builder =
+                                        setup_store_execution_time_estimates(builder, estimates);
+                                }
+                            }
                         }
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
-                            assert!(protocol_config.enable_accumulators());
+                            assert!(protocol_config.create_root_accumulator_object());
                             builder = setup_accumulator_root_create(builder);
                         }
                         EndOfEpochTransactionKind::CoinRegistryCreate => {
                             assert!(protocol_config.enable_coin_registry());
                             builder = setup_coin_registry_create(builder);
+                        }
+                        EndOfEpochTransactionKind::DisplayRegistryCreate => {
+                            assert!(protocol_config.enable_display_registry());
+                            builder = setup_display_registry_create(builder);
                         }
                     }
                 }
@@ -1025,7 +1045,7 @@ mod checked {
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) {
         let digest = tx_ctx.borrow().digest();
-        let binary_config = to_binary_config(protocol_config);
+        let binary_config = protocol_config.binary_config(None);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
                 .iter()
@@ -1196,7 +1216,7 @@ mod checked {
             .obj(ObjectArg::SharedObject {
                 id: SUI_BRIDGE_OBJECT_ID,
                 initial_shared_version: bridge_shared_version,
-                mutable: true,
+                mutability: sui_types::transaction::SharedObjectMutability::Mutable,
             })
             .expect("Unable to create Bridge object arg!");
         let system_state = builder
@@ -1251,7 +1271,7 @@ mod checked {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                         initial_shared_version: update.authenticator_obj_initial_shared_version,
-                        mutable: true,
+                        mutability: sui_types::transaction::SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure(bcs::to_bytes(&update.new_active_jwks).unwrap()),
                 ],
@@ -1291,7 +1311,7 @@ mod checked {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                         initial_shared_version: expire.authenticator_obj_initial_shared_version,
-                        mutable: true,
+                        mutability: sui_types::transaction::SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure(bcs::to_bytes(&expire.min_epoch).unwrap()),
                 ],
@@ -1322,7 +1342,7 @@ mod checked {
                     CallArg::Object(ObjectArg::SharedObject {
                         id: SUI_RANDOMNESS_STATE_OBJECT_ID,
                         initial_shared_version: update.randomness_obj_initial_shared_version,
-                        mutable: true,
+                        mutability: sui_types::transaction::SharedObjectMutability::Mutable,
                     }),
                     CallArg::Pure(bcs::to_bytes(&update.randomness_round).unwrap()),
                     CallArg::Pure(bcs::to_bytes(&update.random_bytes).unwrap()),
@@ -1383,6 +1403,32 @@ mod checked {
         builder
     }
 
+    fn setup_store_execution_time_estimates_v2(
+        mut builder: ProgrammableTransactionBuilder,
+        estimates: StoredExecutionTimeObservations,
+        chunk_size: usize,
+    ) -> ProgrammableTransactionBuilder {
+        let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+
+        let estimate_chunks = estimates.chunk_observations(chunk_size);
+
+        let chunk_bytes: Vec<Vec<u8>> = estimate_chunks
+            .into_iter()
+            .map(|chunk| bcs::to_bytes(&chunk).unwrap())
+            .collect();
+
+        let chunks_arg = builder.pure(chunk_bytes).unwrap();
+
+        builder.programmable_move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            ident_str!("store_execution_time_estimates_v2").to_owned(),
+            vec![],
+            vec![system_state, chunks_arg],
+        );
+        builder
+    }
+
     fn setup_accumulator_root_create(
         mut builder: ProgrammableTransactionBuilder,
     ) -> ProgrammableTransactionBuilder {
@@ -1410,6 +1456,21 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate coin_registry_create transaction!");
+        builder
+    }
+
+    fn setup_display_registry_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("display_registry").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate display_registry_create transaction!");
         builder
     }
 }

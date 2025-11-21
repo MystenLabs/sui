@@ -14,7 +14,7 @@ use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeCo
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-use crate::{get_extension, NativesCostTable};
+use crate::{NativesCostTable, get_extension};
 
 pub(crate) fn is_otw_struct(
     struct_layout: &MoveStructLayout,

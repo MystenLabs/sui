@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::object_runtime::ObjectRuntime;
-use crate::{get_extension, NativesCostTable};
-use fastcrypto_vdf::class_group::discriminant::DISCRIMINANT_3072;
+use crate::{NativesCostTable, get_extension};
 use fastcrypto_vdf::class_group::QuadraticForm;
-use fastcrypto_vdf::vdf::wesolowski::DefaultVDF;
+use fastcrypto_vdf::class_group::discriminant::DISCRIMINANT_3072;
 use fastcrypto_vdf::vdf::VDF;
+use fastcrypto_vdf::vdf::wesolowski::DefaultVDF;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;

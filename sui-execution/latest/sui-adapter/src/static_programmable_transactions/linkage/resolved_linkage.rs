@@ -63,12 +63,12 @@ impl ExecutableLinkage {
 
 #[derive(Debug)]
 pub struct ResolvedLinkage {
+    // A mapping of original package ID to its resolved version ID for that linkage.
     pub linkage: BTreeMap<ObjectID, ObjectID>,
     // A mapping of every package ID to its runtime ID.
     // Note: Multiple packages can have the same runtime ID in this mapping, and domain of this map
     // is a superset of range of `linkage`.
     pub linkage_resolution: BTreeMap<ObjectID, ObjectID>,
-    pub versions: BTreeMap<ObjectID, u64>,
 }
 
 impl ResolvedLinkage {
@@ -80,20 +80,17 @@ impl ResolvedLinkage {
     /// Create a `ResolvedLinkage` from a `ResolutionTable`.
     pub(crate) fn from_resolution_table(resolution_table: ResolutionTable) -> Self {
         let mut linkage = BTreeMap::new();
-        let mut versions = BTreeMap::new();
         for (original_id, resolution) in resolution_table.resolution_table {
             match resolution {
-                VersionConstraint::Exact(version, object_id)
-                | VersionConstraint::AtLeast(version, object_id) => {
+                VersionConstraint::Exact(_version, object_id)
+                | VersionConstraint::AtLeast(_version, object_id) => {
                     linkage.insert(original_id, object_id);
-                    versions.insert(original_id, version);
                 }
             }
         }
         Self {
             linkage,
             linkage_resolution: resolution_table.all_versions_resolution_table,
-            versions,
         }
     }
 

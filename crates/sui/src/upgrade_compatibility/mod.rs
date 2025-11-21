@@ -6,9 +6,9 @@ mod formatting;
 #[cfg(test)]
 mod upgrade_compatibility_tests;
 
-use formatting::{format_list, format_param, singular_or_plural, FormattedField};
+use formatting::{FormattedField, format_list, format_param, singular_or_plural};
 
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
@@ -20,19 +20,21 @@ use move_binary_format::file_format::{
     StructDefinitionIndex, TableIndex,
 };
 use move_binary_format::{
+    CompiledModule,
     compatibility::{Compatibility, InclusionCheck},
     compatibility_mode::CompatibilityMode,
     file_format::Visibility,
     inclusion_mode::InclusionCheckMode,
-    normalized, CompiledModule,
+    normalized,
 };
 use move_bytecode_source_map::source_map::SourceName;
 use move_command_line_common::files::FileHash;
 use move_compiler::diagnostics::codes::DiagnosticInfo;
 use move_compiler::{
     diagnostics::{
-        codes::{custom, Severity},
-        report_diagnostics_to_buffer, Diagnostic, Diagnostics,
+        Diagnostic, Diagnostics,
+        codes::{Severity, custom},
+        report_diagnostics_to_buffer,
     },
     shared::files::FileName,
 };
@@ -46,8 +48,8 @@ use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_move_build::CompiledPackage;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::apis::ReadApi;
+use sui_types::base_types::ObjectID;
 use sui_types::move_package::UpgradePolicy;
-use sui_types::{base_types::ObjectID, execution_config_utils::to_binary_config};
 
 type Enum = normalized::Enum<normalized::RcIdentifier>;
 type Field = normalized::Field<normalized::RcIdentifier>;
@@ -208,8 +210,8 @@ fn breaks_compatibility(
         | UpgradeCompatibilityModeError::FunctionNew { .. }
         | UpgradeCompatibilityModeError::FunctionChange { .. }
         | UpgradeCompatibilityModeError::FunctionMissing { .. }
-        | UpgradeCompatibilityModeError::FriendNew { .. }
-        | UpgradeCompatibilityModeError::FriendMissing { .. } => false,
+        | UpgradeCompatibilityModeError::FriendNew
+        | UpgradeCompatibilityModeError::FriendMissing => false,
     }
 }
 
@@ -250,8 +252,8 @@ fn breaks_inclusion_check(
         | UpgradeCompatibilityModeError::EnumChange { .. }
         | UpgradeCompatibilityModeError::FunctionChange { .. }
         | UpgradeCompatibilityModeError::FunctionMissing { .. }
-        | UpgradeCompatibilityModeError::FriendNew { .. }
-        | UpgradeCompatibilityModeError::FriendMissing { .. } => true,
+        | UpgradeCompatibilityModeError::FriendNew
+        | UpgradeCompatibilityModeError::FriendMissing => true,
     }
 }
 
@@ -708,7 +710,7 @@ pub(crate) async fn check_compatibility(
     let existing_modules = existing_package
         .module_map
         .iter()
-        .map(|m| CompiledModule::deserialize_with_config(m.1, &to_binary_config(&protocol_config)))
+        .map(|m| CompiledModule::deserialize_with_config(m.1, &protocol_config.binary_config(None)))
         .collect::<Result<Vec<_>, _>>()
         .context("Unable to get existing package")?;
 
@@ -768,11 +770,11 @@ fn compare_packages(
             Some(new_module) => {
                 let new_module_address_idx = new_module.self_handle().address;
                 let addrs = &mut new_module.address_identifiers;
-                if let Some(address_mut) = addrs.get_mut(new_module_address_idx.0 as usize) {
-                    if *address_mut == AccountAddress::ZERO {
-                        // if the new module address is zero, set it to the on-chain address
-                        *address_mut = package_id;
-                    }
+                if let Some(address_mut) = addrs.get_mut(new_module_address_idx.0 as usize)
+                    && *address_mut == AccountAddress::ZERO
+                {
+                    // if the new module address is zero, set it to the on-chain address
+                    *address_mut = package_id;
                 }
 
                 let compiled_unit_with_source = new_package
@@ -810,7 +812,8 @@ fn compare_packages(
                 &new_package.package.file_map,
                 diags,
                 use_colors()
-            )).context("Unable to convert buffer to string")?,
+            ))
+            .context("Unable to convert buffer to string")?,
             match policy {
                 UpgradePolicy::Compatible => "compatible",
                 UpgradePolicy::Additive => "additive",
@@ -1047,8 +1050,7 @@ fn compatibility_diag_from_error(
         } => {
             file_format_version_downgrade_diag(old_version, new_version, compiled_unit_with_source)
         }
-        UpgradeCompatibilityModeError::FriendNew { .. }
-        | UpgradeCompatibilityModeError::FriendMissing { .. } => {
+        UpgradeCompatibilityModeError::FriendNew | UpgradeCompatibilityModeError::FriendMissing => {
             friend_link_diag(compiled_unit_with_source)
         }
     }
@@ -1976,7 +1978,7 @@ fn enum_variant_mismatch_diag(
                 .get(i)
                 .context("Unable to get variant location")?
                 .0
-                 .1;
+                .1;
 
             let messages = enum_variant_field_message(old_variant, new_variant)?;
 
@@ -2045,7 +2047,7 @@ fn enum_new_variant_diag(
                 .get(i)
                 .context("Unable to get variant location")?
                 .0
-                 .1;
+                .1;
 
             diags.add(Diagnostic::new(
                 Enums::VariantMismatch,
@@ -2577,7 +2579,7 @@ fn use_colors() -> bool {
 
     #[cfg(not(test))]
     {
-        use std::io::{stdout, IsTerminal};
+        use std::io::{IsTerminal, stdout};
         stdout().is_terminal()
     }
 }

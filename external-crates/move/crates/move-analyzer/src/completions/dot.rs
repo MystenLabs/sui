@@ -39,11 +39,14 @@ pub fn dot_completions(
         eprintln!("no dot completions due to missing loc");
         return (completions, completion_finalized);
     };
-    let Some(info) = symbols.compiler_info.get_autocomplete_info(fhash, &loc) else {
+    let Some(info) = symbols
+        .compiler_autocomplete_info
+        .get_dot_autocomplete_info(fhash, &loc)
+    else {
         return (completions, completion_finalized);
     };
     // we found auto-completion info, so don't look for any more completions
-    // even if if it does not contain any
+    // even if it does not contain any
     completion_finalized = true;
     for AutocompleteMethod {
         method_name,

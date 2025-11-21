@@ -4,8 +4,9 @@
 use std::path::{Path, PathBuf};
 
 use move_binary_format::{
+    CompiledModule,
     compatibility::{self, Compatibility, InclusionCheck},
-    normalized, CompiledModule,
+    normalized,
 };
 use sui_move_build::{BuildConfig, SuiPackageHooks};
 

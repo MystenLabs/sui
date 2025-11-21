@@ -23,8 +23,6 @@ dag_state_cached_rounds: 500
 commit_sync_parallel_fetches: 8
 commit_sync_batch_size: 100
 commit_sync_batches_ahead: 32
-anemo:
-  excessive_message_size: 8388608
 tonic:
   keepalive_interval:
     secs: 10

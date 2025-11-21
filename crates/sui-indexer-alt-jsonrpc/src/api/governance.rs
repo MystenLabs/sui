@@ -11,23 +11,23 @@ use sui_json_rpc_types::{DelegatedStake, ValidatorApys};
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::{
+    SUI_SYSTEM_STATE_OBJECT_ID, TypeTag,
     base_types::{ObjectID, SuiAddress},
-    dynamic_field::{derive_dynamic_field_id, Field},
+    dynamic_field::{Field, derive_dynamic_field_id},
     sui_serde::BigInt,
     sui_system_state::{
+        SuiSystemStateTrait, SuiSystemStateWrapper,
         sui_system_state_inner_v1::SuiSystemStateInnerV1,
         sui_system_state_inner_v2::SuiSystemStateInnerV2,
-        sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait,
-        SuiSystemStateWrapper,
+        sui_system_state_summary::SuiSystemStateSummary,
     },
-    TypeTag, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
 use crate::{
     config::NodeConfig,
     context::Context,
     data::load_live_deserialized,
-    error::{client_error_to_error_object, rpc_bail, RpcError},
+    error::{RpcError, client_error_to_error_object, rpc_bail},
 };
 
 use super::rpc_module::RpcModule;

@@ -15,6 +15,7 @@ use crate::{
             values::{Local, Locals, Value},
         },
         linkage::resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
+        loading::ast::ObjectMutability,
         typing::ast::{self as T, Type},
     },
 };
@@ -43,6 +44,7 @@ use move_vm_runtime::{
     validation::verification::ast::Package as VerifiedPackage,
 };
 use mysten_common::debug_fatal;
+use nonempty::nonempty;
 use serde::{Deserialize, de::DeserializeSeed};
 use std::{
     cell::RefCell,
@@ -57,7 +59,7 @@ use sui_move_natives::object_runtime::{
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    SUI_FRAMEWORK_ADDRESS, TypeTag,
+    TypeTag,
     accumulator_event::AccumulatorEvent,
     accumulator_root::AccumulatorObjId,
     balance::Balance,
@@ -69,7 +71,6 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind, command_argument_error},
     event::Event,
     execution::{ExecutionResults, ExecutionResultsV2},
-    execution_config_utils::to_binary_config,
     execution_status::{CommandArgumentError, PackageUpgradeError},
     metrics::LimitsMetrics,
     move_package::{
@@ -79,10 +80,7 @@ use sui_types::{
     object::{MoveObject, Object, Owner},
     storage::{BackingPackageStore, DenyListResult, PackageObject, get_package_objects},
 };
-use sui_verifier::{
-    INIT_FN_NAME,
-    private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
-};
+use sui_verifier::INIT_FN_NAME;
 use tracing::instrument;
 
 macro_rules! unwrap {
@@ -141,7 +139,7 @@ pub struct CtxValue(Value);
 #[derive(Clone, Debug)]
 pub struct InputObjectMetadata {
     pub id: ObjectID,
-    pub is_mutable_input: bool,
+    pub mutability: ObjectMutability,
     pub owner: Owner,
     pub version: SequenceNumber,
     pub type_: Type,
@@ -207,7 +205,7 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
 impl Locations {
     /// NOTE! This does not charge gas and should not be used directly. It is exposed for
     /// dev-inspect
-    fn resolve(&mut self, location: T::Location) -> Result<ResolvedLocation, ExecutionError> {
+    fn resolve(&mut self, location: T::Location) -> Result<ResolvedLocation<'_>, ExecutionError> {
         Ok(match location {
             T::Location::TxContext => ResolvedLocation::Local(self.tx_context_value.local(0)?),
             T::Location::GasCoin => {
@@ -280,7 +278,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                     env,
                     &mut input_object_map,
                     gas_coin,
-                    true,
+                    ObjectMutability::Mutable,
                     ty,
                 )?;
                 let mut gas_locals = Locals::new([Some(gas_value)])?;
@@ -354,14 +352,17 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         for (metadata, value_opt) in object_inputs.into_iter().chain(gas) {
             let InputObjectMetadata {
                 id,
-                is_mutable_input,
+                mutability,
                 owner,
                 version,
                 type_,
             } = metadata;
-            // We are only interested in mutable inputs.
-            if !is_mutable_input {
-                continue;
+            match mutability {
+                ObjectMutability::Immutable => continue,
+                // It is illegal to mutate NonExclusiveWrites, but they are passed as &mut T,
+                // so we need to treat them as mutable here. After execution, we check if they
+                // have been mutated, and abort the tx if they have.
+                ObjectMutability::NonExclusiveWrite | ObjectMutability::Mutable => (),
             }
             loaded_runtime_objects.insert(
                 id,
@@ -425,10 +426,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let mut written_objects = BTreeMap::new();
 
         for (id, (recipient, ty, value)) in writes {
-            let ty: Type = env.load_type_from_struct(&ty.clone().into())?;
+            let (ty, layout) = env.load_type_and_layout_from_struct(&ty.clone().into())?;
             let abilities = ty.abilities();
             let has_public_transfer = abilities.has_store();
-            let Some(bytes) = value.serialize() else {
+            let Some(bytes) = value.typed_serialize(&layout) else {
                 invariant_violation!("Failed to serialize already deserialized Move value");
             };
             // safe because has_public_transfer has been determined by the abilities
@@ -457,46 +458,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             let id = package_obj.id();
             created_object_ids.insert(id);
             written_objects.insert(id, package_obj);
-        }
-
-        // Before finishing, ensure that any shared object taken by value by the transaction is either:
-        // 1. Mutated (and still has a shared ownership); or
-        // 2. Deleted.
-        // Otherwise, the shared object operation is not allowed and we fail the transaction.
-        for id in &by_value_shared_objects {
-            // If it's been written it must have been reshared so must still have an ownership
-            // of `Shared`.
-            if let Some(obj) = written_objects.get(id) {
-                if !obj.is_shared() {
-                    return Err(ExecutionError::new(
-                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                        Some(
-                            format!(
-                                "Shared object operation on {} not allowed: \
-                                 cannot be frozen, transferred, or wrapped",
-                                id
-                            )
-                            .into(),
-                        ),
-                    ));
-                }
-            } else {
-                // If it's not in the written objects, the object must have been deleted. Otherwise
-                // it's an error.
-                if !deleted_object_ids.contains(id) {
-                    return Err(ExecutionError::new(
-                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                        Some(
-                            format!(
-                                "Shared object operation on {} not allowed: \
-                                     shared objects used by value must be re-shared if not deleted",
-                                id
-                            )
-                            .into(),
-                        ),
-                    ));
-                }
-            }
         }
 
         execution::context::finish(
@@ -536,7 +497,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let new_events = events
             .into_iter()
             .map(|(tag, value)| {
-                let Some(bytes) = value.serialize() else {
+                let layout = self.env.type_layout_for_struct(&tag)?;
+                let Some(bytes) = value.typed_serialize(&layout) else {
                     invariant_violation!("Failed to serialize Move event");
                 };
                 Ok((version_mid.clone(), tag, bytes))
@@ -782,7 +744,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             self.gas_charger.charge_publish_package(total_bytes)?
         }
 
-        let binary_config = to_binary_config(self.env.protocol_config);
+        let binary_config = self.env.protocol_config.binary_config(None);
         let modules = module_bytes
             .iter()
             .map(|b| {
@@ -794,15 +756,67 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(modules)
     }
 
-    fn fetch_package(&mut self, dependency_id: &ObjectID) -> Result<PackageObject, ExecutionError> {
-        fetch_package(&self.env.state_view, dependency_id)
+    fn fetch_package(
+        &mut self,
+        dependency_id: &ObjectID,
+    ) -> Result<Rc<MovePackage>, ExecutionError> {
+        let [fetched_package] = self.fetch_packages(&[*dependency_id])?.try_into().map_err(
+            |_| {
+                make_invariant_violation!(
+                    "We should always fetch a single package for each object or return a dependency error."
+                )
+            },
+        )?;
+        Ok(fetched_package)
     }
 
     fn fetch_packages(
         &mut self,
         dependency_ids: &[ObjectID],
-    ) -> Result<Vec<PackageObject>, ExecutionError> {
-        fetch_packages(&self.env.state_view, dependency_ids)
+    ) -> Result<Vec<Rc<MovePackage>>, ExecutionError> {
+        let mut fetched = vec![];
+        let mut missing = vec![];
+
+        // Collect into a set to avoid duplicate fetches and preserve existing behavior
+        let dependency_ids: BTreeSet<_> = dependency_ids.iter().collect();
+
+        for id in &dependency_ids {
+            match self.env.linkable_store.get_move_package(id) {
+                Err(e) => {
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::PublishUpgradeMissingDependency,
+                        e,
+                    ));
+                }
+                Ok(Some(inner)) => {
+                    fetched.push(inner);
+                }
+                Ok(None) => {
+                    missing.push(*id);
+                }
+            }
+        }
+
+        if missing.is_empty() {
+            assert_invariant!(
+                fetched.len() == dependency_ids.len(),
+                "all dependencies should be fetched"
+            );
+            Ok(fetched)
+        } else {
+            let msg = format!(
+                "Missing dependencies: {}",
+                missing
+                    .into_iter()
+                    .map(|dep| format!("{}", dep))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::PublishUpgradeMissingDependency,
+                msg,
+            ))
+        }
     }
 
     fn publish_and_verify_modules(
@@ -922,7 +936,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let package = Rc::new(MovePackage::new_initial(
             &modules,
             self.env.protocol_config,
-            dependencies.iter().map(|p| p.move_package()),
+            dependencies.iter().map(|p| p.as_ref()),
         )?);
         let package_id = package.id();
 
@@ -961,9 +975,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         linkage: ResolvedLinkage,
     ) -> Result<ObjectID, ExecutionError> {
         // Check that this package ID points to a package and get the package we're upgrading.
-        let current_package = self.fetch_package(&current_package_id)?;
+        let current_move_package = self.fetch_package(&current_package_id)?;
 
-        let original_id = current_package.move_package().original_package_id();
+        let original_id = current_move_package.original_package_id();
         adapter::substitute_package_id(&mut modules, original_id)?;
 
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
@@ -973,12 +987,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let version_id = self.tx_context.borrow_mut().fresh_id();
 
         let dependencies = self.fetch_packages(dep_ids)?;
-        let current_move_package = current_package.move_package();
         let package = current_move_package.new_upgraded(
             version_id,
             &modules,
             self.env.protocol_config,
-            dependencies.iter().map(|p| p.move_package()),
+            dependencies.iter().map(|p| p.as_ref()),
         )?;
 
         let linkage = ResolvedLinkage::update_for_publication(version_id, original_id, linkage);
@@ -987,15 +1000,14 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
         check_compatibility(
             self.env.protocol_config,
-            current_package.move_package(),
+            current_move_package.as_ref(),
             &modules,
             upgrade_ticket_policy,
         )?;
 
         // find newly added modules to the package,
         // and error if they have init functions
-        let current_module_names: BTreeSet<&str> = current_package
-            .move_package()
+        let current_module_names: BTreeSet<&str> = current_move_package
             .serialized_module_map()
             .keys()
             .map(|s| s.as_str())
@@ -1071,14 +1083,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(())
     }
 
-    /// Check for valid shared object usage, either deleted or re-shared, at the end of a command
-    pub fn check_shared_object_usage(
-        &mut self,
-        consumed_shared_objects: Vec<ObjectID>,
-    ) -> Result<(), ExecutionError> {
-        check_shared_object_usage(object_runtime!(self)?, &consumed_shared_objects)
-    }
-
     //
     // Dev Inspect tracking
     //
@@ -1138,7 +1142,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 invariant_violation!("read should not return a reference")
             }
         };
-        let Some(bytes) = value.serialize() else {
+        let layout = self.env.runtime_layout(&ty)?;
+        let Some(bytes) = value.typed_serialize(&layout) else {
             invariant_violation!("Failed to serialize Move value");
         };
         let arg = match location {
@@ -1191,7 +1196,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             }
             _ => (result, ty),
         };
-        let Some(bytes) = v.serialize() else {
+        let layout = self.env.runtime_layout(&ty)?;
+        let Some(bytes) = v.typed_serialize(&layout) else {
             invariant_violation!("Failed to serialize Move value");
         };
         let Ok(tag): Result<TypeTag, _> = ty.try_into() else {
@@ -1239,9 +1245,9 @@ fn load_object_arg(
     input: T::ObjectInput,
 ) -> Result<(T::InputIndex, InputObjectMetadata, Value), ExecutionError> {
     let id = input.arg.id();
-    let is_mutable_input = input.arg.is_mutable();
+    let mutability = input.arg.mutability();
     let (metadata, value) =
-        load_object_arg_impl(meter, env, input_object_map, id, is_mutable_input, input.ty)?;
+        load_object_arg_impl(meter, env, input_object_map, id, mutability, input.ty)?;
     Ok((input.original_input_index, metadata, value))
 }
 
@@ -1250,7 +1256,7 @@ fn load_object_arg_impl(
     env: &Env,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     id: ObjectID,
-    is_mutable_input: bool,
+    mutability: ObjectMutability,
     ty: T::Type,
 ) -> Result<(InputObjectMetadata, Value), ExecutionError> {
     let obj = env.read_object(&id)?;
@@ -1258,7 +1264,7 @@ fn load_object_arg_impl(
     let version = obj.version();
     let object_metadata = InputObjectMetadata {
         id,
-        is_mutable_input,
+        mutability,
         owner: owner.clone(),
         version,
         type_: ty.clone(),
@@ -1650,36 +1656,6 @@ impl fmt::Display for PrimitiveArgumentLayout {
     }
 }
 
-pub fn check_private_generics(
-    module_id: &ModuleId,
-    function: &IdentStr,
-) -> Result<(), ExecutionError> {
-    let module_ident = (module_id.address(), module_id.name());
-    if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::NonEntryFunctionInvoked,
-            format!("Cannot directly call functions in sui::{}", EVENT_MODULE),
-        ));
-    }
-
-    if module_ident == (&SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE)
-        && PRIVATE_TRANSFER_FUNCTIONS.contains(&function)
-    {
-        let msg = format!(
-            "Cannot directly call sui::{m}::{f}. \
-                Use the public variant instead, sui::{m}::public_{f}",
-            m = TRANSFER_MODULE,
-            f = function
-        );
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::NonEntryFunctionInvoked,
-            msg,
-        ));
-    }
-
-    Ok(())
-}
-
 pub fn finish(
     protocol_config: &ProtocolConfig,
     state_view: &dyn ExecutionState,
@@ -1817,7 +1793,7 @@ pub fn finish(
                         );
                     };
                     let digest = event.digest();
-                    AccumulatorValue::EventDigest(event_idx, digest)
+                    AccumulatorValue::EventDigest(nonempty![(event_idx, digest)])
                 }
             };
 
@@ -1837,22 +1813,24 @@ pub fn finish(
         })
         .collect::<Result<Vec<_>, ExecutionError>>()?;
 
-    for object in written_objects.values() {
-        let coin_type = object.type_().and_then(|ty| ty.coin_type_maybe());
-        let owner = object.owner.get_address_owner_address();
-        if let (Some(ty), Ok(owner)) = (coin_type, owner) {
-            receiving_funds_type_and_owners
-                .entry(ty)
-                .or_insert_with(BTreeSet::new)
-                .insert(owner);
+    if protocol_config.enable_coin_deny_list_v2() {
+        for object in written_objects.values() {
+            let coin_type = object.type_().and_then(|ty| ty.coin_type_maybe());
+            let owner = object.owner.get_address_owner_address();
+            if let (Some(ty), Ok(owner)) = (coin_type, owner) {
+                receiving_funds_type_and_owners
+                    .entry(ty)
+                    .or_insert_with(BTreeSet::new)
+                    .insert(owner);
+            }
         }
+        let DenyListResult {
+            result,
+            num_non_gas_coin_owners,
+        } = state_view.check_coin_deny_list(receiving_funds_type_and_owners);
+        gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+        result?;
     }
-    let DenyListResult {
-        result,
-        num_non_gas_coin_owners,
-    } = state_view.check_coin_deny_list(receiving_funds_type_and_owners);
-    gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
-    result?;
 
     Ok(ExecutionResults::V2(ExecutionResultsV2 {
         written_objects,
@@ -1930,7 +1908,7 @@ pub fn check_compatibility(
     };
 
     let pool = &mut normalized::RcPool::new();
-    let binary_config = to_binary_config(protocol_config);
+    let binary_config = protocol_config.binary_config(None);
     let Ok(current_normalized) =
         existing_package.normalize(pool, &binary_config, /* include code */ true)
     else {
@@ -1999,30 +1977,4 @@ fn check_module_compatibility(
             e,
         )
     })
-}
-
-/// Check for valid shared object usage, either deleted or re-shared, at the end of a command
-pub fn check_shared_object_usage<'a>(
-    object_runtime: &ObjectRuntime,
-    consumed_shared_objects: impl IntoIterator<Item = &'a ObjectID>,
-) -> Result<(), ExecutionError> {
-    for id in consumed_shared_objects {
-        // valid if done deleted or re-shared
-        let is_valid_usage = object_runtime.is_deleted(id)
-            || matches!(
-                object_runtime.is_transferred(id),
-                Some(Owner::Shared { .. })
-            );
-        if !is_valid_usage {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                format!(
-                    "Shared object operation on {} not allowed: \
-                        cannot be frozen, transferred, or wrapped",
-                    id
-                ),
-            ));
-        }
-    }
-    Ok(())
 }

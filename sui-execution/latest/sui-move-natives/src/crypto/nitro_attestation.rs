@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{get_extension, object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
 use move_vm_runtime::execution::values::VectorSpecialization;
@@ -9,8 +9,8 @@ use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
-        values::{Struct, Value, Vector, VectorRef},
         Type,
+        values::{Struct, Value, Vector, VectorRef},
     },
     natives::functions::NativeResult,
     pop_arg,

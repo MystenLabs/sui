@@ -3,27 +3,27 @@
 
 use either::Either;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
-use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, JWK};
+use fastcrypto_zkp::bn254::zk_login::{JWK, OIDCProvider};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::pin_mut;
 use im::hashmap::HashMap as ImHashMap;
-use itertools::{izip, Itertools as _};
+use itertools::{Itertools as _, izip};
 use mysten_metrics::monitored_scope;
 use parking_lot::{Mutex, MutexGuard, RwLock};
-use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use prometheus::{IntCounter, Registry, register_int_counter_with_registry};
 use shared_crypto::intent::Intent;
 use std::sync::Arc;
 use sui_types::digests::SenderSignedDataDigest;
 use sui_types::digests::ZKLoginInputsDigest;
 use sui_types::signature_verification::{
-    verify_sender_signed_data_message_signatures, VerifiedDigestCache,
+    VerifiedDigestCache, verify_sender_signed_data_message_signatures,
 };
 use sui_types::transaction::SenderSignedData;
 use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
     digests::CertificateDigest,
-    error::{SuiError, SuiResult},
+    error::{SuiErrorKind, SuiResult},
     message_envelope::Message,
     messages_checkpoint::SignedCheckpointSummary,
     signature::VerifyParams,
@@ -33,7 +33,7 @@ use tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::{
     sync::oneshot,
-    time::{timeout, Duration},
+    time::{Duration, timeout},
 };
 use tracing::debug;
 // Maximum amount of time we wait for a batch to fill up before verifying a partial batch.
@@ -254,10 +254,11 @@ impl SignatureVerifier {
         // this is the only innocent error we are likely to encounter - filter it before we poison
         // a whole batch.
         if cert.auth_sig().epoch != self.committee.epoch() {
-            return Err(SuiError::WrongEpoch {
+            return Err(SuiErrorKind::WrongEpoch {
                 expected_epoch: self.committee.epoch(),
                 actual_epoch: cert.auth_sig().epoch,
-            });
+            }
+            .into());
         }
 
         self.verify_cert_inner(cert).await

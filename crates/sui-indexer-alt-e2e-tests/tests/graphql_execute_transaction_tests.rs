@@ -5,19 +5,19 @@ use anyhow::Context;
 use prometheus::Registry;
 use reqwest::Client;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use sui_indexer_alt_graphql::{
-    config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
+    RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
 };
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
     fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
 };
 use sui_macros::sim_test;
-use sui_pg_db::{temp::get_available_port, DbArgs};
+use sui_pg_db::{DbArgs, temp::get_available_port};
 use sui_test_transaction_builder::make_transfer_sui_transaction;
-use sui_types::gas_coin::GasCoin;
+use sui_types::{gas_coin::GasCoin, transaction::SharedObjectMutability};
 
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -453,7 +453,7 @@ async fn test_execute_transaction_unchanged_consensus_objects() {
         .obj(ObjectArg::SharedObject {
             id: sui_types::SUI_CLOCK_OBJECT_ID,
             initial_shared_version: sui_types::base_types::SequenceNumber::from_u64(1),
-            mutable: false,
+            mutability: SharedObjectMutability::Immutable,
         })
         .unwrap();
 

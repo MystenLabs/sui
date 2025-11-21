@@ -11,9 +11,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use std::sync::Arc;
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{info, warn};
 

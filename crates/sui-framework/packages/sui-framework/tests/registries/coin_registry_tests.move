@@ -5,11 +5,10 @@
 module sui::coin_registry_tests;
 
 use std::string::String;
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, destroy};
 use sui::coin::{Self, DenyCapV2, TreasuryCap, CoinMetadata};
 use sui::coin_registry::{Self, Currency, CurrencyInitializer, CoinRegistry};
 use sui::test_scenario;
-use sui::test_utils::destroy;
 use sui::url;
 
 /// OTW-like.
@@ -85,29 +84,16 @@ fun update_metadata() {
 
     // Perform updates on metadata.
     currency.set_name(&metadata_cap, b"new_name".to_string());
-    currency.set_symbol(&metadata_cap, b"new_symbol".to_string());
     currency.set_description(&metadata_cap, b"new_description".to_string());
     currency.set_icon_url(&metadata_cap, b"new_icon_url".to_string());
 
     assert_eq!(currency.name(), b"new_name".to_string());
-    assert_eq!(currency.symbol(), b"new_symbol".to_string());
     assert_eq!(currency.description(), b"new_description".to_string());
     assert_eq!(currency.icon_url(), b"new_icon_url".to_string());
 
     destroy(metadata_cap);
     destroy(currency);
     destroy(t_cap);
-}
-
-#[test, expected_failure(abort_code = coin_registry::EInvalidSymbol)]
-fun update_symbol_non_ascii() {
-    let ctx = &mut tx_context::dummy();
-    let (builder, _t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
-    let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
-
-    currency.set_symbol(&metadata_cap, b"\x00".to_string());
-
-    abort
 }
 
 #[test, expected_failure(abort_code = coin_registry::EInvalidSymbol)]
@@ -331,13 +317,11 @@ fun perfect_migration_regulated() {
     assert!(currency.is_metadata_cap_claimed());
     assert!(currency.metadata_cap_id().is_some_and!(|id| id == object::id(&metadata_cap)));
 
-    // Delete the migrated legacy metadata.
-    currency.delete_migrated_legacy_metadata(metadata);
-
     destroy(metadata_cap);
     destroy(registry);
     destroy(currency);
     destroy(deny_cap);
+    destroy(metadata);
     destroy(t_cap);
 }
 
@@ -417,25 +401,6 @@ fun update_legacy_fail() {
 
     let _metadata_cap = currency.claim_metadata_cap(&t_cap, ctx);
     currency.update_from_legacy_metadata(&metadata);
-
-    abort
-}
-
-#[test, expected_failure(abort_code = coin_registry::EMetadataCapNotClaimed)]
-fun delete_legacy_fail() {
-    let ctx = &mut tx_context::dummy();
-    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
-    let (_t_cap, _deny_cap, metadata) = new_builder().build_legacy_regulated(
-        COIN_REGISTRY_TESTS {},
-        ctx,
-    );
-    let mut currency = coin_registry::migrate_legacy_metadata_for_testing(
-        &mut registry,
-        &metadata,
-        ctx,
-    );
-
-    currency.delete_migrated_legacy_metadata(metadata);
 
     abort
 }

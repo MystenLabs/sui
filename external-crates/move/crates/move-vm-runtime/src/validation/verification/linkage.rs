@@ -16,8 +16,8 @@ use crate::{
     validation::verification::ast::{Module, Package},
 };
 use move_binary_format::{
-    CompiledModule,
     errors::{Location, PartialVMError, VMResult},
+    CompiledModule,
 };
 use move_bytecode_verifier::{cyclic_dependencies, dependencies};
 use move_core_types::vm_status::StatusCode;

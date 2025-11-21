@@ -8,9 +8,9 @@ use sui_sdk_types::{Address, Object, Version};
 use sui_sdk_types::{CheckpointSequenceNumber, EpochId, SignedTransaction, ValidatorCommittee};
 use sui_types::balance_change::BalanceChange;
 use sui_types::base_types::{ObjectID, ObjectType};
-use sui_types::storage::error::{Error as StorageError, Result};
 use sui_types::storage::ObjectKey;
 use sui_types::storage::RpcStateReader;
+use sui_types::storage::error::{Error as StorageError, Result};
 use sui_types::storage::{ObjectStore, TransactionInfo};
 use tap::Pipe;
 
@@ -158,7 +158,8 @@ impl StateReader {
                     Some(info.object_types),
                 )
             } else {
-                (None, None, None)
+                let checkpoint = self.inner().get_transaction_checkpoint(&(digest.into()));
+                (checkpoint, None, None)
             };
         let timestamp_ms = if let Some(checkpoint) = checkpoint {
             self.inner()

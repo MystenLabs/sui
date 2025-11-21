@@ -20,7 +20,9 @@ mod checked {
         runtime::{VMConfig, VMRuntimeLimitsConfig},
         verifier::VerifierConfig,
     };
+    use mysten_common::debug_fatal;
     use sui_move_natives::{object_runtime, transaction_context::TransactionContext};
+    use sui_types::error::SuiErrorKind;
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_verifier::check_for_verifier_timeout;
     use tracing::instrument;
@@ -31,7 +33,6 @@ mod checked {
         base_types::*,
         error::ExecutionError,
         error::{ExecutionErrorKind, SuiError},
-        execution_config_utils::to_binary_config,
         metrics::LimitsMetrics,
         storage::ChildObjectResolver,
     };
@@ -42,7 +43,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
     ) -> Result<MoveRuntime, SuiError> {
         let native_functions =
-            NativeFunctions::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)?;
+            NativeFunctions::new(natives).map_err(|_| SuiErrorKind::ExecutionInvariantViolation)?;
         Ok(MoveRuntime::new(
             native_functions,
             VMConfig {
@@ -59,11 +60,13 @@ mod checked {
                     .no_extraneous_module_bytes(),
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,
-                binary_config: to_binary_config(protocol_config),
+                binary_config: protocol_config.binary_config(None),
                 rethrow_serialization_type_layout_errors: protocol_config
                     .rethrow_serialization_type_layout_errors(),
                 max_type_to_layout_nodes: protocol_config.max_type_to_layout_nodes_as_option(),
                 variant_nodes: protocol_config.variant_nodes(),
+                deprecate_global_storage_ops_during_deserialization: protocol_config
+                    .deprecate_global_storage_ops_during_deserialization(),
                 optimize_bytecode: false,
             },
         ))
@@ -198,9 +201,23 @@ mod checked {
         if let Err(e) = verify_module_with_config_metered(verifier_config, module, meter) {
             // Check that the status indicates metering timeout.
             if check_for_verifier_timeout(&e.major_status()) {
-                return Err(SuiError::ModuleVerificationFailure {
+                if e.major_status()
+                    == move_core_types::vm_status::StatusCode::REFERENCE_SAFETY_INCONSISTENT
+                {
+                    let mut bytes = vec![];
+                    let _ = module.serialize_with_version(
+                        move_binary_format::file_format_common::VERSION_MAX,
+                        &mut bytes,
+                    );
+                    debug_fatal!(
+                        "Reference safety inconsistency detected in module: {:?}",
+                        bytes
+                    );
+                }
+                return Err(SuiErrorKind::ModuleVerificationFailure {
                     error: format!("Verification timed out: {}", e),
-                });
+                }
+                .into());
             }
         } else if let Err(err) = sui_verify_module_metered_check_timeout_only(
             module,
@@ -212,9 +229,10 @@ mod checked {
         }
 
         if meter.transfer(Scope::Module, Scope::Package, 1.0).is_err() {
-            return Err(SuiError::ModuleVerificationFailure {
+            return Err(SuiErrorKind::ModuleVerificationFailure {
                 error: "Verification timed out".to_string(),
-            });
+            }
+            .into());
         }
 
         Ok(())

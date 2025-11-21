@@ -10,11 +10,11 @@ use sui_json_rpc_types::{
     TransactionBlockBytes,
 };
 use sui_move_build::BuildConfig;
+use sui_types::Identifier;
 use sui_types::base_types::SuiAddress;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::{CallArg, ObjectArg, TransactionData, TransactionKind};
-use sui_types::Identifier;
 use test_cluster::TestClusterBuilder;
 
 #[tokio::test]

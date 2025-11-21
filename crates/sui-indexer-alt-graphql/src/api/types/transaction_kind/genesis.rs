@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{connection::Connection, Context, Object};
+use async_graphql::{Context, Object, connection::Connection};
 use sui_types::transaction::GenesisTransaction as NativeGenesisTransaction;
 
 use crate::{

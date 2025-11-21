@@ -642,6 +642,11 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
         match value {
             crate::transaction::TransactionExpiration::None => Self::None,
             crate::transaction::TransactionExpiration::Epoch(epoch) => Self::Epoch(epoch),
+            crate::transaction::TransactionExpiration::ValidDuring { .. } => {
+                // TODO: Implement proper SDK conversion for ValidDuring
+                // For now, treat as None to maintain compatibility
+                Self::None
+            }
         }
     }
 }
@@ -850,6 +855,9 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::InvalidLinkage => Self::InvalidLinkage,
             crate::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw => {
                 todo!("Add InsufficientBalanceForWithdraw to sdk")
+            }
+            crate::execution_status::ExecutionFailureStatus::NonExclusiveWriteInputObjectModified { .. } => {
+                todo!("Add NonExclusiveWriteInputObjectModified to sdk")
             }
             crate::execution_status::ExecutionFailureStatus::DuplicateModuleName { .. } => {
                 todo!("Add DuplicateModuleName to sdk")
@@ -1156,11 +1164,16 @@ impl From<crate::transaction::CallArg> for Input {
                 crate::transaction::ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
-                    mutable,
+                    mutability,
                 } => Self::Shared {
                     object_id: id.into(),
                     initial_shared_version: initial_shared_version.value(),
-                    mutable,
+                    mutable: match mutability {
+                        crate::transaction::SharedObjectMutability::Mutable => true,
+                        crate::transaction::SharedObjectMutability::Immutable => false,
+                        // TODO(address-balances): expose non-exclusive writes to sdk
+                        crate::transaction::SharedObjectMutability::NonExclusiveWrite => false,
+                    },
                 },
                 crate::transaction::ObjectArg::Receiving((id, version, digest)) => Self::Receiving(
                     ObjectReference::new(id.into(), version.value(), digest.into()),
@@ -1195,7 +1208,11 @@ impl From<Input> for crate::transaction::CallArg {
             } => Self::Object(ObjectArg::SharedObject {
                 id: object_id.into(),
                 initial_shared_version: initial_shared_version.into(),
-                mutable,
+                mutability: if mutable {
+                    crate::transaction::SharedObjectMutability::Mutable
+                } else {
+                    crate::transaction::SharedObjectMutability::Immutable
+                },
             }),
             Input::Receiving(object_reference) => {
                 let (id, version, digest) = object_reference.into_parts();
@@ -1469,6 +1486,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             }
             crate::transaction::EndOfEpochTransactionKind::CoinRegistryCreate => {
                 Self::CoinRegistryCreate
+            }
+            crate::transaction::EndOfEpochTransactionKind::DisplayRegistryCreate => {
+                Self::DisplayRegistryCreate
             }
         }
     }

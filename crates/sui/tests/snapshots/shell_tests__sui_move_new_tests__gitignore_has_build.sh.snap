@@ -25,6 +25,7 @@ ignore1
 build/*
 ignore2
 build/*
+traces/*
 .trace
 .coverage*
 

@@ -3,7 +3,7 @@
 
 use crate::{
     data_fetcher::{DataFetcher, RemoteFetcher},
-    types::{ReplayEngineError, MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD},
+    types::{MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD, ReplayEngineError},
 };
 use std::{collections::VecDeque, fmt::Formatter};
 use std::{fmt::Debug, str::FromStr};
@@ -51,7 +51,10 @@ impl FromStr for FuzzStartPoint {
             Err(u64_err) => match TransactionDigest::from_str(s) {
                 Ok(d) => Ok(FuzzStartPoint::TxDigest(d)),
                 Err(tx_err) => {
-                    info!("{} is not a valid checkpoint (err: {:?}) or transaction digest (err: {:?})", s, u64_err, tx_err);
+                    info!(
+                        "{} is not a valid checkpoint (err: {:?}) or transaction digest (err: {:?})",
+                        s, u64_err, tx_err
+                    );
                     Err(tx_err)
                 }
             },

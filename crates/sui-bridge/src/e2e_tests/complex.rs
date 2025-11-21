@@ -4,7 +4,7 @@
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 
 use crate::e2e_tests::test_utils::{
-    initiate_bridge_eth_to_sui, initiate_bridge_sui_to_eth, BridgeTestClusterBuilder,
+    BridgeTestClusterBuilder, initiate_bridge_eth_to_sui, initiate_bridge_sui_to_eth,
 };
 use crate::sui_transaction_builder::build_sui_transaction;
 use crate::types::{BridgeAction, EmergencyAction};
@@ -61,7 +61,7 @@ async fn test_sui_bridge_paused() {
     // verify Eth was transferred to Sui address
     let eth_coin_type = sui_token_type_tags.get(&TOKEN_ID_ETH).unwrap();
     let eth_coin = bridge_client
-        .sui_client()
+        .jsonrpc_client()
         .coin_read_api()
         .get_coins(sui_address, Some(eth_coin_type.to_string()), None, None)
         .await

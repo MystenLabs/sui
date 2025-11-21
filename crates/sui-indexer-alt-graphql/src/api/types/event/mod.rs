@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, Context, Object};
+use async_graphql::{Context, Object, connection::Connection};
 use diesel::{prelude::QueryableByName, sql_types::BigInt};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};

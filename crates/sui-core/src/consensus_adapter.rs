@@ -5,24 +5,25 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::net::IpAddr;
 use std::ops::Deref;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Instant;
 
 use arc_swap::{ArcSwap, ArcSwapOption};
-use consensus_core::{BlockStatus, ConnectionStatus};
-use dashmap::try_result::TryResult;
+use consensus_core::BlockStatus;
 use dashmap::DashMap;
-use futures::future::{self, select, Either};
-use futures::stream::FuturesUnordered;
+use dashmap::try_result::TryResult;
 use futures::FutureExt;
-use futures::{pin_mut, StreamExt};
+use futures::future::{self, Either, select};
+use futures::stream::FuturesUnordered;
+use futures::{StreamExt, pin_mut};
 use itertools::Itertools;
 use mysten_common::debug_fatal;
 use mysten_metrics::{
-    spawn_monitored_task, GaugeGuard, InflightGuardFutureExt, LATENCY_SEC_BUCKETS,
+    GaugeGuard, InflightGuardFutureExt, LATENCY_SEC_BUCKETS, spawn_monitored_task,
 };
+use mysten_network::anemo_connection_monitor::ConnectionStatus;
 use parking_lot::RwLockReadGuard;
 use prometheus::Histogram;
 use prometheus::HistogramVec;
@@ -40,21 +41,21 @@ use sui_simulator::anemo::PeerId;
 use sui_types::base_types::AuthorityName;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::fp_ensure;
 use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
 use sui_types::transaction::TransactionDataAPI;
-use tokio::sync::{oneshot, Semaphore, SemaphorePermit};
+use tokio::sync::{Semaphore, SemaphorePermit, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
 use tokio::time::{self};
-use tracing::{debug, debug_span, info, instrument, trace, warn, Instrument};
+use tracing::{Instrument, debug, debug_span, info, instrument, trace, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::checkpoints::CheckpointStore;
-use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
+use crate::consensus_handler::{SequencedConsensusTransactionKey, classify};
 use crate::consensus_throughput_calculator::{ConsensusThroughputProfiler, Level};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 use crate::metrics::LatencyObserver;
@@ -497,11 +498,7 @@ impl ConsensusAdapter {
                         let l = Duration::from_millis(HIGH_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS);
 
                         // back off according to recorded latency if it's significantly higher
-                        if latency >= 2 * l {
-                            latency
-                        } else {
-                            l
-                        }
+                        if latency >= 2 * l { latency } else { l }
                     }
                 };
             }
@@ -662,7 +659,7 @@ impl ConsensusAdapter {
                             transaction.kind,
                             ConsensusTransactionKind::UserTransaction(_)
                         ),
-                        SuiError::InvalidTxKindInSoftBundle
+                        SuiErrorKind::InvalidTxKindInSoftBundle.into()
                     );
                 } else if is_cert_batch {
                     fp_ensure!(
@@ -670,11 +667,11 @@ impl ConsensusAdapter {
                             transaction.kind,
                             ConsensusTransactionKind::CertifiedTransaction(_)
                         ),
-                        SuiError::InvalidTxKindInSoftBundle
+                        SuiErrorKind::InvalidTxKindInSoftBundle.into()
                     );
                 } else {
                     // Other transaction kinds cannot be batched
-                    return Err(SuiError::InvalidTxKindInSoftBundle);
+                    return Err(SuiErrorKind::InvalidTxKindInSoftBundle.into());
                 }
             }
         }
@@ -768,7 +765,9 @@ impl ConsensusAdapter {
         if transactions.is_empty() {
             // If transactions are empty, then we attempt to ping consensus and simulate a transaction submission to consensus.
             // We intentionally do not wait for the block status, as we are only interested in the consensus position and return it immediately.
-            debug!("Performing a ping check, pinging consensus to get a consensus position in next block");
+            debug!(
+                "Performing a ping check, pinging consensus to get a consensus position in next block"
+            );
             let (consensus_positions, _status_waiter) = self
                 .submit_inner(&transactions, epoch_store, &[], "ping", false)
                 .await;
@@ -972,7 +971,8 @@ impl ConsensusAdapter {
                         }
                         Err(err) => {
                             warn!(
-                                "Error while waiting for status from consensus for transactions {transaction_keys:?}, with error {:?}. Will be retried.", err
+                                "Error while waiting for status from consensus for transactions {transaction_keys:?}, with error {:?}. Will be retried.",
+                                err
                             );
                             time::sleep(RETRY_DELAY_STEP).await;
                             continue;
@@ -1196,15 +1196,14 @@ impl CheckConnection for ConnectionMonitorStatus {
             }
         };
 
-        let res = match self.connection_statuses.try_get(peer_id) {
+        match self.connection_statuses.try_get(peer_id) {
             TryResult::Present(c) => Some(c.value().clone()),
             TryResult::Absent => None,
             TryResult::Locked => {
                 // update is in progress, assume the status is still or becoming disconnected
                 Some(ConnectionStatus::Disconnected)
             }
-        };
-        res
+        }
     }
     fn update_mapping_for_epoch(
         &self,
@@ -1245,7 +1244,7 @@ impl ConsensusOverloadChecker for ConsensusAdapter {
     fn check_consensus_overload(&self) -> SuiResult {
         fp_ensure!(
             self.check_limits(),
-            SuiError::TooManyTransactionsPendingConsensus
+            SuiErrorKind::TooManyTransactionsPendingConsensus.into()
         );
         Ok(())
     }
@@ -1443,7 +1442,7 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
         let permit = match self.submit_semaphore.clone().try_acquire_owned() {
             Ok(permit) => permit,
             Err(_) => {
-                return Err(SuiError::TooManyTransactionsPendingConsensus);
+                return Err(SuiErrorKind::TooManyTransactionsPendingConsensus.into());
             }
         };
 
@@ -1502,13 +1501,13 @@ mod adapter_tests {
     use crate::mysticeti_adapter::LazyMysticetiClient;
     use fastcrypto::traits::KeyPair;
     use rand::Rng;
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{SeedableRng, rngs::StdRng};
     use std::sync::Arc;
     use std::time::Duration;
     use sui_types::{
         base_types::TransactionDigest,
         committee::Committee,
-        crypto::{get_key_pair_from_rng, AuthorityKeyPair, AuthorityPublicKeyBytes},
+        crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, get_key_pair_from_rng},
     };
 
     fn test_committee(rng: &mut StdRng, size: usize) -> Committee {

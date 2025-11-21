@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    abstract_size, charge_cache_or_load_gas, get_extension, get_extension_mut,
+    NativesCostTable, abstract_size, charge_cache_or_load_gas, get_extension, get_extension_mut,
     get_nested_struct_field, get_object_id,
-    object_runtime::{object_store::ObjectResult, ObjectRuntime},
-    NativesCostTable,
+    object_runtime::{
+        ObjectRuntime,
+        object_store::{CacheInfo, ObjectResult},
+    },
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -18,11 +20,12 @@ use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
-        values::{StructRef, Value},
         Type,
+        values::{StructRef, Value},
     },
     natives::functions::NativeResult,
     pop_arg,
+    shared::views::{SizeConfig, ValueView},
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -32,6 +35,11 @@ use tracing::instrument;
 const E_KEY_DOES_NOT_EXIST: u64 = 1;
 const E_FIELD_TYPE_MISMATCH: u64 = 2;
 const E_BCS_SERIALIZATION_FAILURE: u64 = 3;
+
+// Used for pre-existing values
+const PRE_EXISTING_ABSTRACT_SIZE: u64 = 2;
+// Used for borrowing pre-existing values
+const BORROW_ABSTRACT_SIZE: u64 = 8;
 
 macro_rules! get_or_fetch_object {
     ($context:ident, $ty_args:ident, $parent:ident, $child_id:ident, $ty_cost_per_byte:expr) => {{
@@ -49,7 +57,7 @@ macro_rules! get_or_fetch_object {
                 return Ok(NativeResult::err(
                     $context.gas_used(),
                     E_BCS_SERIALIZATION_FAILURE,
-                ))
+                ));
             }
         };
 
@@ -185,10 +193,8 @@ pub fn add_child_object(
     let parent = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
 
-    let child_value_size = u64::from(abstract_size(
-        get_extension!(context, ObjectRuntime)?.protocol_config,
-        &child,
-    ));
+    // The value already exists, the size of the value is irrelevant
+    let child_value_size = PRE_EXISTING_ABSTRACT_SIZE;
     // ID extraction step
     native_charge_gas_early_exit!(
         context,
@@ -220,7 +226,7 @@ pub fn add_child_object(
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Sui verifier guarantees this is a struct".to_string()),
-            )
+            );
         }
     };
 
@@ -298,7 +304,7 @@ pub fn borrow_child_object(
     );
     let (cache_info, global_value) = match global_value_result {
         ObjectResult::MismatchedType => {
-            return Ok(NativeResult::err(context.gas_used(), E_FIELD_TYPE_MISMATCH))
+            return Ok(NativeResult::err(context.gas_used(), E_FIELD_TYPE_MISMATCH));
         }
         ObjectResult::Loaded(gv) => gv,
     };
@@ -310,11 +316,20 @@ pub fn borrow_child_object(
     })?;
 
     charge_cache_or_load_gas!(context, cache_info);
-
-    let child_ref_size = abstract_size(
-        get_extension!(context, ObjectRuntime)?.protocol_config,
-        &child_ref,
-    );
+    let child_ref_size = match cache_info {
+        CacheInfo::CachedValue => {
+            // The value already existed
+            BORROW_ABSTRACT_SIZE.into()
+        }
+        // The Move value had to be created. We traverse references to get the full size of the
+        // borrowed value
+        CacheInfo::CachedObject | CacheInfo::Loaded(_) => {
+            child_ref.abstract_memory_size(&SizeConfig {
+                include_vector_size: true,
+                traverse_references: true,
+            })
+        }
+    };
 
     native_charge_gas_early_exit!(
         context,
@@ -371,7 +386,7 @@ pub fn remove_child_object(
     );
     let (cache_info, global_value) = match global_value_result {
         ObjectResult::MismatchedType => {
-            return Ok(NativeResult::err(context.gas_used(), E_FIELD_TYPE_MISMATCH))
+            return Ok(NativeResult::err(context.gas_used(), E_FIELD_TYPE_MISMATCH));
         }
         ObjectResult::Loaded(gv) => gv,
     };
@@ -385,11 +400,18 @@ pub fn remove_child_object(
 
     charge_cache_or_load_gas!(context, cache_info);
 
-    let child_size = abstract_size(
-        get_extension!(context, ObjectRuntime)?.protocol_config,
-        &child,
-    );
-
+    let child_size = match cache_info {
+        CacheInfo::CachedValue => {
+            // The value already existed
+            PRE_EXISTING_ABSTRACT_SIZE.into()
+        }
+        // The Move value had to be created. The value isn't a reference so traverse_references
+        // doesn't matter
+        CacheInfo::CachedObject | CacheInfo::Loaded(_) => child.abstract_memory_size(&SizeConfig {
+            include_vector_size: true,
+            traverse_references: false,
+        }),
+    };
     native_charge_gas_early_exit!(
         context,
         dynamic_field_remove_child_object_cost_params
@@ -430,7 +452,8 @@ pub fn has_child_object(
     let child_id = pop_arg!(args, AccountAddress).into();
     let parent = pop_arg!(args, AccountAddress).into();
     let object_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
-    let has_child = object_runtime.child_object_exists(parent, child_id)?;
+    let (cache_info, has_child) = object_runtime.child_object_exists(parent, child_id)?;
+    charge_cache_or_load_gas!(context, cache_info);
     Ok(NativeResult::ok(
         context.gas_used(),
         smallvec![Value::bool(has_child)],
@@ -487,7 +510,7 @@ pub fn has_child_object_with_ty(
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Sui verifier guarantees this is a struct".to_string()),
-            )
+            );
         }
     };
 

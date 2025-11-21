@@ -251,14 +251,14 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Return the list of all packages in the root package's package graph (including itself and all
     /// transitive dependencies). This includes the non-duplicate addresses only.
-    pub fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
+    pub fn packages(&self) -> PackageResult<Vec<PackageInfo<'_, F>>> {
         self.graph.packages()
     }
 
     /// Return the linkage table for the root package. This contains an entry for each package that
     /// this package depends on (transitively). Returns an error if any of the packages that this
     /// package depends on is unpublished.
-    pub fn linkage(&self) -> PackageResult<LinkageTable<F>> {
+    pub fn linkage(&self) -> PackageResult<LinkageTable<'_, F>> {
         Ok(self.graph.linkage()?)
     }
 
@@ -330,13 +330,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ) -> PackageResult<ParsedEphemeralPubs<F>> {
         if let Ok(file) = FileHandle::new(&pubfile) {
             let parsed: ParsedEphemeralPubs<F> = toml_edit::de::from_str(file.source())?;
-            if let Some(build_env) = build_env {
-                if build_env != parsed.build_env {
-                    return Err(PackageError::EphemeralEnvMismatch {
-                        file_build_env: parsed.build_env,
-                        passed_build_env: build_env,
-                    });
-                }
+            if let Some(build_env) = build_env
+                && build_env != parsed.build_env
+            {
+                return Err(PackageError::EphemeralEnvMismatch {
+                    file_build_env: parsed.build_env,
+                    passed_build_env: build_env,
+                });
             }
             if chain_id != parsed.chain_id {
                 return Err(PackageError::EphemeralChainMismatch {

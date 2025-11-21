@@ -8,18 +8,18 @@ Everything on the Sui blockchain is an object. When you develop Move packages fo
 
 References are a key construct when programming in Move and on Sui. Most of the functionality available in the Sui API takes objects by reference.
 
-There are two ways to use an object:
+There are 2 ways to use an object:
 
 - **By value:** When you use an object by value, you have full control over that object. You can destroy it (if the functionality is available), wrap it (if it has the `store` ability), or transfer it to an address.
-- **By reference:** When you use an object by reference, operations over that object are determined by the logic the module that defines the object provides because you are using a reference to its data rather than having ownership of the object itself. The restrictions of references allow you to develop smart contracts with a high level of security and safety around assets. There are two types of references:
+- **By reference:** When you use an object by reference, operations over that object are determined by the logic the module that defines the object provides because you are using a reference to its data rather than having ownership of the object itself. The restrictions of references allow you to develop smart contracts with a high level of security and safety around assets. There are 2 types of references:
   - Mutable reference (`&mut`): You can alter the object (according to the API) but you can't destroy or transfer it.
-  - Immutable reference (`&`): Further restricts the set of operations and the guarantees/invariants over the referenced object. You have read-only access to the object's data.
+  - Immutable reference (`&`): Further restricts the set of operations and the guarantees or invariants over the referenced object. You have read-only access to the object's data.
 
 Programmable transaction blocks (PTBs) do not currently allow the use of object references returned from one of its transaction commands. You can use input objects to the PTB, objects created by the PTB (like `MakeMoveVec`), or returned from a transaction command by value as references in subsequent transaction commands. If a transaction command returns a reference, however, you can't use that reference in any call, significantly limiting certain common patterns in Move.
 
 ## The borrow module
 
-The Sui framework includes a [borrow](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/borrow.md) module that offers a solution to the reference problem. The module provides access to an object by value but builds a model that makes it impossible to destroy, transfer, or wrap the object retrieved. The borrow module exposes a `Referent` object that wraps another object (the object you want to reference). The module uses the hot potato pattern (via a `Borrow` instance) to allow retrieval of the wrapped object by value. Within the same PTB, the module then forces the object to be returned to the `Referent`. The `Borrow` instance guarantees that the object returned is the same that was retrieved.
+The Sui framework includes a [borrow](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/borrow.md) module that offers a solution to the reference problem. The module provides access to an object by value but builds a model that makes it impossible to destroy, transfer, or wrap the object retrieved. The borrow module exposes a `Referent` object that wraps another object (the object you want to reference). The module uses the hot potato pattern (through a `Borrow` instance) to allow retrieval of the wrapped object by value. Within the same PTB, the module then forces the object to be returned to the `Referent`. The `Borrow` instance guarantees that the object returned is the same that was retrieved.
 
 As an example, consider the following module stub that exposes an object (`Asset`) and a function (`use_asset`) to use that object.
 
@@ -62,9 +62,9 @@ fun do_something(manager: &AssetManager) {
 }
 ```
 
-The two functions in `do_something` are not valid within a PTB, however, because PTBs do not support a reference returned by a function and passed to another function.
+The 2 functions in `do_something` are not valid within a PTB, however, because PTBs do not support a reference returned by a function and passed to another function.
 
-To make this operation valid within a PTB, you would need to include functionality from the borrow module. Consequently, you could change the `another_module` code to the following:
+To make this operation valid within a PTB, you need to include functionality from the borrow module. Consequently, you could change the `another_module` code to the following:
 
 ```rust
 module another_module {

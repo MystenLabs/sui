@@ -7,13 +7,13 @@ use std::path::PathBuf;
 use anyhow::Context;
 use prometheus::Registry;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sui_indexer_alt_jsonrpc::{
-    args::SystemPackageTaskArgs, config::RpcConfig, start_rpc, NodeArgs, RpcArgs,
+    NodeArgs, RpcArgs, args::SystemPackageTaskArgs, config::RpcConfig, start_rpc,
 };
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_macros::sim_test;
-use sui_pg_db::{temp::get_available_port, DbArgs};
+use sui_pg_db::{DbArgs, temp::get_available_port};
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_test_transaction_builder::{make_publish_transaction, make_staking_transaction};
 use sui_types::{base_types::SuiAddress, transaction::TransactionDataAPI};
@@ -274,10 +274,12 @@ async fn test_execution_with_no_sigs() {
 
     assert_eq!(response["error"]["code"], -32602);
     assert_eq!(response["error"]["message"], "Invalid params");
-    assert!(response["error"]["data"]
-        .as_str()
-        .unwrap()
-        .starts_with("missing field `signatures`"));
+    assert!(
+        response["error"]["data"]
+            .as_str()
+            .unwrap()
+            .starts_with("missing field `signatures`")
+    );
 
     test_cluster.stopped().await;
 }
@@ -388,10 +390,12 @@ async fn test_dry_run_with_invalid_tx() {
 
     assert_eq!(response["error"]["code"], -32602);
     assert_eq!(response["error"]["message"], "Invalid params");
-    assert!(response["error"]["data"]
-        .as_str()
-        .unwrap()
-        .starts_with("Invalid value was given to the function"));
+    assert!(
+        response["error"]["data"]
+            .as_str()
+            .unwrap()
+            .starts_with("Invalid value was given to the function")
+    );
     test_cluster.stopped().await;
 }
 
@@ -432,10 +436,12 @@ async fn test_get_all_balances_with_invalid_address() {
 
     assert_eq!(response["error"]["code"], -32602);
     assert_eq!(response["error"]["message"], "Invalid params");
-    assert!(response["error"]["data"]
-        .as_str()
-        .unwrap()
-        .contains("Deserialization failed"));
+    assert!(
+        response["error"]["data"]
+            .as_str()
+            .unwrap()
+            .contains("Deserialization failed")
+    );
 
     test_cluster.stopped().await;
 }
@@ -506,10 +512,12 @@ async fn test_get_stakes_invalid_params() {
     // Check that we have all the error information in the response.
     assert_eq!(response["error"]["code"], -32602);
     assert_eq!(response["error"]["message"], "Invalid params");
-    assert!(response["error"]["data"]
-        .as_str()
-        .unwrap()
-        .contains("Deserialization failed"));
+    assert!(
+        response["error"]["data"]
+            .as_str()
+            .unwrap()
+            .contains("Deserialization failed")
+    );
 
     let response = test_cluster
         .execute_jsonrpc(
@@ -521,10 +529,12 @@ async fn test_get_stakes_invalid_params() {
 
     assert_eq!(response["error"]["code"], -32602);
     assert_eq!(response["error"]["message"], "Invalid params");
-    assert!(response["error"]["data"]
-        .as_str()
-        .unwrap()
-        .contains("AccountAddressParseError"));
+    assert!(
+        response["error"]["data"]
+            .as_str()
+            .unwrap()
+            .contains("AccountAddressParseError")
+    );
 
     test_cluster.stopped().await;
 }
@@ -604,10 +614,12 @@ async fn test_get_balance() {
         .await
         .unwrap();
     assert_eq!(response["error"]["code"], -32602);
-    assert!(response["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("Invalid struct type: invalid_coin_type"));
+    assert!(
+        response["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Invalid struct type: invalid_coin_type")
+    );
 
     // Test out the invalid address.
     let response = test_cluster
@@ -618,9 +630,11 @@ async fn test_get_balance() {
         .await
         .unwrap();
     assert_eq!(response["error"]["code"], -32602);
-    assert!(response["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("Invalid params"));
+    assert!(
+        response["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Invalid params")
+    );
     test_cluster.stopped().await;
 }

@@ -12,8 +12,8 @@ use sui_types::digests::TransactionDigest;
 use crate::{api::types::transaction::tx_digests, error::RpcError, pagination::Page, scope::Scope};
 
 use super::{
-    filter::{tx_ev_bounds, EventFilter},
     CEvent, Event, EventCursor,
+    filter::{EventFilter, tx_ev_bounds},
 };
 
 /// The page of Event cursors and Events emitted from transactions with cursors and limits with

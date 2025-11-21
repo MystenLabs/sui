@@ -71,4 +71,10 @@ pub enum BridgeError {
     Generic(String),
 }
 
+impl std::fmt::Display for BridgeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 pub type BridgeResult<T> = Result<T, BridgeError>;

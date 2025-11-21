@@ -7,7 +7,7 @@ use crate::{
     crypto::BridgeAuthorityPublicKeyBytes,
     error::BridgeError,
     metrics::BridgeMetrics,
-    server::handler::{BridgeRequestHandler, BridgeRequestHandlerTrait},
+    server::handler::BridgeRequestHandlerTrait,
     types::{
         AddTokensOnEvmAction, AddTokensOnSuiAction, AssetPriceUpdateAction,
         BlocklistCommitteeAction, BlocklistType, BridgeAction, EmergencyAction,
@@ -15,10 +15,10 @@ use crate::{
     },
 };
 use axum::{
-    extract::{Path, State},
     Json,
+    extract::{Path, State},
 };
-use axum::{http::StatusCode, routing::get, Router};
+use axum::{Router, http::StatusCode, routing::get};
 use ethers::types::Address as EthAddress;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use fastcrypto::{
@@ -27,7 +27,7 @@ use fastcrypto::{
 };
 use std::sync::Arc;
 use std::{net::SocketAddr, str::FromStr};
-use sui_types::{bridge::BridgeChainId, TypeTag};
+use sui_types::{TypeTag, bridge::BridgeChainId};
 use tracing::{info, instrument};
 
 pub mod governance_verifier;
@@ -48,6 +48,8 @@ pub const METRICS_KEY_PATH: &str = "/metrics_pub_key";
 // Important: for BridgeActions, the paths need to match the ones in bridge_client.rs
 pub const ETH_TO_SUI_TX_PATH: &str = "/sign/bridge_tx/eth/sui/{tx_hash}/{event_index}";
 pub const SUI_TO_ETH_TX_PATH: &str = "/sign/bridge_tx/sui/eth/{tx_digest}/{event_index}";
+pub const SUI_TO_ETH_TRANSFER_PATH: &str =
+    "/sign/bridge_action/sui/eth/{source_chain}/{message_type}/{bridge_seq_num}";
 pub const COMMITTEE_BLOCKLIST_UPDATE_PATH: &str =
     "/sign/update_committee_blocklist/{chain_id}/{nonce}/{type}/{keys}";
 pub const EMERGENCY_BUTTON_PATH: &str = "/sign/emergency_button/{chain_id}/{nonce}/{type}";
@@ -59,10 +61,8 @@ pub const EVM_CONTRACT_UPGRADE_PATH_WITH_CALLDATA: &str =
     "/sign/upgrade_evm_contract/{chain_id}/{nonce}/{proxy_address}/{new_impl_address}/{calldata}";
 pub const EVM_CONTRACT_UPGRADE_PATH: &str =
     "/sign/upgrade_evm_contract/{chain_id}/{nonce}/{proxy_address}/{new_impl_address}";
-pub const ADD_TOKENS_ON_SUI_PATH: &str =
-    "/sign/add_tokens_on_sui/{chain_id}/{nonce}/{native}/{token_ids}/{token_type_names}/{token_prices}";
-pub const ADD_TOKENS_ON_EVM_PATH: &str =
-    "/sign/add_tokens_on_evm/{chain_id}/{nonce}/{native}/{token_ids}/{token_addresses}/{token_sui_decimals}/{token_prices}";
+pub const ADD_TOKENS_ON_SUI_PATH: &str = "/sign/add_tokens_on_sui/{chain_id}/{nonce}/{native}/{token_ids}/{token_type_names}/{token_prices}";
+pub const ADD_TOKENS_ON_EVM_PATH: &str = "/sign/add_tokens_on_evm/{chain_id}/{nonce}/{native}/{token_ids}/{token_addresses}/{token_sui_decimals}/{token_prices}";
 
 // BridgeNode's public metadata that is accessible via the `/ping` endpoint.
 // Be careful with what to put here, as it is public.
@@ -90,7 +90,7 @@ impl BridgeNodePublicMetadata {
 
 pub fn run_server(
     socket_address: &SocketAddr,
-    handler: BridgeRequestHandler,
+    handler: impl BridgeRequestHandlerTrait + Sync + Send + 'static,
     metrics: Arc<BridgeMetrics>,
     metadata: Arc<BridgeNodePublicMetadata>,
 ) -> tokio::task::JoinHandle<()> {
@@ -117,6 +117,7 @@ pub(crate) fn make_router(
         .route(METRICS_KEY_PATH, get(metrics_key_fetch))
         .route(ETH_TO_SUI_TX_PATH, get(handle_eth_tx_hash))
         .route(SUI_TO_ETH_TX_PATH, get(handle_sui_tx_digest))
+        .route(SUI_TO_ETH_TRANSFER_PATH, get(handle_sui_token_transfer))
         .route(
             COMMITTEE_BLOCKLIST_UPDATE_PATH,
             get(handle_update_committee_blocklist_action),
@@ -226,6 +227,24 @@ async fn handle_sui_tx_digest(
         Ok(sig)
     };
     with_metrics!(metrics.clone(), "handle_sui_tx_digest", future).await
+}
+
+#[instrument(level = "error", skip_all, fields(source_chain=source_chain, message_type=message_type, bridge_seq_num=bridge_seq_num))]
+async fn handle_sui_token_transfer(
+    Path((source_chain, message_type, bridge_seq_num)): Path<(u8, u8, u64)>,
+    State((handler, metrics, _metadata)): State<(
+        Arc<impl BridgeRequestHandlerTrait + Sync + Send>,
+        Arc<BridgeMetrics>,
+        Arc<BridgeNodePublicMetadata>,
+    )>,
+) -> Result<Json<SignedBridgeAction>, BridgeError> {
+    let future = async {
+        let sig: Json<SignedBridgeAction> = handler
+            .handle_sui_token_transfer(source_chain, message_type, bridge_seq_num)
+            .await?;
+        Ok(sig)
+    };
+    with_metrics!(metrics.clone(), "handle_sui_token_transfer", future).await
 }
 
 #[instrument(level = "error", skip_all, fields(chain_id=chain_id, nonce=nonce, blocklist_type=blocklist_type, keys=keys))]
@@ -469,7 +488,7 @@ async fn handle_add_tokens_on_sui(
                 return Err(BridgeError::InvalidBridgeClientRequest(format!(
                     "Invalid native flag: {}",
                     native
-                )))
+                )));
             }
         };
         // Validate list sizes to prevent DoS
@@ -555,7 +574,7 @@ async fn handle_add_tokens_on_evm(
                 return Err(BridgeError::InvalidBridgeClientRequest(format!(
                     "Invalid native flag: {}",
                     native
-                )))
+                )));
             }
         };
         // Validate list sizes to prevent DoS

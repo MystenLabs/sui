@@ -1,0 +1,167 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 21 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-53:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8063600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 55-57:
+//# programmable --sender A --inputs @A
+//> test::m::a();
+//> sui::transfer::public_transfer<test::m::A>(Result(0), Input(0));
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, lines 61-63:
+//# programmable --sender A --inputs @a
+//> test::m::a();
+//> sui::transfer::public_transfer<test::m::A>(Result(0), Input(0));
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 65-66:
+//# programmable --sender A
+//> test::m::share();
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 68-71:
+//# programmable --sender A --inputs object(2,0) object(5,0)
+// object input by-ref
+//> 0: test::m::heat_imm<test::m::A>(Input(0), Input(1));
+//> test::m::play_a(Input(0));
+mutated: object(0,0), object(2,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 3408372, non_refundable_storage_fee: 34428
+
+task 7, lines 73-76:
+//# programmable --sender A --inputs object(2,0) object(5,0)
+// object input by-mut
+//> 0: test::m::heat_mut<test::m::A>(Input(0), Input(1));
+//> test::m::play_a(Input(0));
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } at command Some(1)
+
+task 8, lines 78-81:
+//# programmable --sender A --inputs object(5,0)
+// gas coin by-ref
+//> test::m::heat_imm<sui::coin::Coin<sui::sui::SUI>>(Gas, Input(0));
+//> test::m::play_coin(Gas);
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 9, lines 83-86:
+//# programmable --sender A --inputs object(5,0)
+// gas coin by-mut
+//> test::m::heat_mut<sui::coin::Coin<sui::sui::SUI>>(Gas, Input(0));
+//> test::m::play_coin(Gas);
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } at command Some(1)
+
+task 10, lines 88-94:
+//# programmable --sender A --inputs object(2,0) object(5,0)
+// result ref copy
+//> 0: test::m::id_imm<test::m::A>(Input(0));
+//> 1: test::m::heat_imm<test::m::A>(Result(0), Input(1));
+//> test::m::play_a(Result(0));
+//> test::m::play_a(Result(0));
+//> test::m::play_a(Input(0));
+Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
+Debug of error: InvalidPublicFunctionReturnType { idx: 0 } at command Some(0)
+
+task 11, lines 96-100:
+//# programmable --sender A --inputs object(2,0) object(5,0)
+// result ref move
+//> 0: test::m::id_imm<test::m::A>(Input(0));
+//> 1: test::m::heat_imm<test::m::A>(Result(0), Input(1));
+//> test::m::play_a(Input(0));
+Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
+Debug of error: InvalidPublicFunctionReturnType { idx: 0 } at command Some(0)
+
+task 12, lines 102-108:
+//# programmable --sender A --inputs object(2,0) object(5,0)
+// result mut ref copy
+//> 0: test::m::id_mut<test::m::A>(Input(0));
+//> 1: test::m::heat_mut<test::m::A>(Result(0), Input(1));
+//> test::m::play_a(Result(0));
+//> test::m::play_a(Result(0));
+//> test::m::play_a(Input(0));
+Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
+Debug of error: InvalidPublicFunctionReturnType { idx: 0 } at command Some(0)
+
+task 13, lines 110-116:
+//# programmable --sender A --inputs object(2,0) object(5,0)
+// result mut ref freeze
+//> 0: test::m::id_mut<test::m::A>(Input(0));
+//> 1: test::m::heat_imm<test::m::A>(Result(0), Input(1));
+//> test::m::play_a(Result(0));
+//> test::m::play_a(Result(0));
+//> test::m::play_a(Input(0));
+Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
+Debug of error: InvalidPublicFunctionReturnType { idx: 0 } at command Some(0)
+
+task 14, lines 118-122:
+//# programmable --sender A --inputs object(2,0) object(5,0)
+// result mut ref move
+//> 0: test::m::id_mut<test::m::A>(Input(0));
+//> 1: test::m::heat_mut<test::m::A>(Result(0), Input(1));
+//> test::m::play_a(Input(0));
+Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
+Debug of error: InvalidPublicFunctionReturnType { idx: 0 } at command Some(0)
+
+task 15, lines 124-127:
+//# programmable --sender A --inputs 0u64 object(5,0)
+// pure input by-value
+//> 0: test::m::heat_val<u64>(Input(0), Input(1));
+//> test::m::play_u64(Input(0));
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 16, lines 129-132:
+//# programmable --sender A --inputs 0u64 object(5,0)
+// pure input by-ref
+//> 0: test::m::heat_imm<u64>(Input(0), Input(1));
+//> test::m::play_u64(Input(0));
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 17, lines 134-137:
+//# programmable --sender A --inputs 0u64 object(5,0)
+// pure input by-mut
+//> 0: test::m::heat_mut<u64>(Input(0), Input(1));
+//> test::m::play_u64(Input(0));
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } at command Some(1)
+
+task 18, lines 139-142:
+//# programmable --sender A --inputs receiving(4,0) object(5,0)
+// receiving input by-ref
+//> 0: test::m::heat_imm<sui::transfer::Receiving<test::m::A>>(Input(0), Input(1));
+//> test::m::play_receiving(Input(0));
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 19, lines 144-147:
+//# programmable --sender A --inputs receiving(4,0) object(5,0)
+// receiving input by-mut
+//> 0: test::m::heat_mut<sui::transfer::Receiving<test::m::A>>(Input(0), Input(1));
+//> test::m::play_receiving(Input(0));
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } at command Some(1)
+
+task 20, lines 149-152:
+//# programmable --sender A --inputs receiving(4,0) object(5,0)
+// receiving input by-val
+//> 0: test::m::heat_val<sui::transfer::Receiving<test::m::A>>(Input(0), Input(1));
+//> test::m::play_receiving(NestedResult(0,0));
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } at command Some(1)

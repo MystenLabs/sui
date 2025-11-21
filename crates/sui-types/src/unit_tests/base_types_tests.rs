@@ -12,12 +12,12 @@ use move_binary_format::file_format;
 
 use crate::crypto::bcs_signable_test::{Bar, Foo};
 use crate::crypto::{
-    get_key_pair, get_key_pair_from_bytes, AccountKeyPair, AuthorityKeyPair, AuthoritySignature,
-    Signature, SuiAuthoritySignature, SuiSignature,
+    AccountKeyPair, AuthorityKeyPair, AuthoritySignature, Signature, SuiAuthoritySignature,
+    SuiSignature, get_key_pair, get_key_pair_from_bytes,
 };
 use crate::digests::Digest;
 use crate::id::{ID, UID};
-use crate::{gas_coin::GasCoin, object::Object, SUI_FRAMEWORK_ADDRESS};
+use crate::{SUI_FRAMEWORK_ADDRESS, gas_coin::GasCoin, object::Object};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use sui_protocol_config::ProtocolConfig;
 
@@ -48,17 +48,20 @@ fn test_signatures() {
     let bar = IntentMessage::new(Intent::sui_transaction(), Bar("hello".into()));
 
     let s = Signature::new_secure(&foo, &sec1);
-    assert!(s
-        .verify_secure(&foo, addr1, SignatureScheme::ED25519)
-        .is_ok());
-    assert!(s
-        .verify_secure(&foo, addr2, SignatureScheme::ED25519)
-        .is_err());
-    assert!(s
-        .verify_secure(&foox, addr1, SignatureScheme::ED25519)
-        .is_err());
-    assert!(s
-        .verify_secure(
+    assert!(
+        s.verify_secure(&foo, addr1, SignatureScheme::ED25519)
+            .is_ok()
+    );
+    assert!(
+        s.verify_secure(&foo, addr2, SignatureScheme::ED25519)
+            .is_err()
+    );
+    assert!(
+        s.verify_secure(&foox, addr1, SignatureScheme::ED25519)
+            .is_err()
+    );
+    assert!(
+        s.verify_secure(
             &IntentMessage::new(
                 Intent::sui_app(IntentScope::SenderSignedTransaction),
                 Foo("hello".into())
@@ -66,12 +69,14 @@ fn test_signatures() {
             addr1,
             SignatureScheme::ED25519
         )
-        .is_err());
+        .is_err()
+    );
 
     // The struct type is different, but the serialization is the same.
-    assert!(s
-        .verify_secure(&bar, addr1, SignatureScheme::ED25519)
-        .is_ok());
+    assert!(
+        s.verify_secure(&bar, addr1, SignatureScheme::ED25519)
+            .is_ok()
+    );
 }
 
 #[test]

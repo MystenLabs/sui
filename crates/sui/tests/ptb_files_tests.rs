@@ -13,7 +13,7 @@ const TEST_DIR: &str = "tests";
 #[tokio::main]
 async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
     use std::collections::BTreeMap;
-    use sui::client_ptb::ptb::{to_source_string, PTB};
+    use sui::client_ptb::ptb::{PTB, to_source_string};
     use sui::client_ptb::{error::build_error_reports, ptb::PTBPreview};
     use test_cluster::TestClusterBuilder;
 
@@ -93,9 +93,13 @@ async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
             results.push(format!("{:?}", e));
         }
     }
+    use normalize_line_endings::normalized;
 
     // === FINALLY DO THE ASSERTION ===
-    insta::assert_snapshot!(fname(), results.join("\n"));
+    insta::assert_snapshot!(
+        fname(),
+        &String::from_iter(normalized(results.join("\n").chars()))
+    );
 
     Ok(())
 }
@@ -106,8 +110,8 @@ fn stable_call_arg_display(ca: &CallArg) -> String {
         CallArg::Pure(v) => format!("Pure({:?})", v),
         CallArg::Object(oa) => match oa {
             ObjectArg::ImmOrOwnedObject(_) => "ImmutableOrOwnedObject".to_string(),
-            ObjectArg::SharedObject { mutable, .. } => {
-                format!("SharedObject(mutable: {})", mutable)
+            ObjectArg::SharedObject { mutability, .. } => {
+                format!("SharedObject(mutability: {:?})", mutability)
             }
             ObjectArg::Receiving(_) => "Receiving".to_string(),
         },

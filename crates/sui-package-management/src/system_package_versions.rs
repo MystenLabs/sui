@@ -83,10 +83,12 @@ fn test_exact_version() {
         "f5d26f1b3ae89f68cb66f3a007e90065e5286905"
     );
     assert_eq!(protocol, 4.into());
-    assert!(system_packages
-        .packages
-        .iter()
-        .any(|p| p.package_name == "Sui"));
+    assert!(
+        system_packages
+            .packages
+            .iter()
+            .any(|p| p.package_name == "Sui")
+    );
 }
 
 #[test]

@@ -3,8 +3,8 @@
 
 use super::object_runtime::{ObjectRuntime, TransferResult};
 use crate::{
-    get_extension, get_extension_mut, get_receiver_object_id, get_tag_and_layouts,
-    object_runtime::object_store::ObjectResult, NativesCostTable,
+    NativesCostTable, get_extension, get_extension_mut, get_receiver_object_id,
+    get_tag_and_layouts, object_runtime::object_store::ObjectResult,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -88,14 +88,14 @@ pub fn receive_object_internal(
             return Ok(NativeResult::err(
                 context.gas_used(),
                 E_UNABLE_TO_RECEIVE_OBJECT,
-            ))
+            ));
         }
         Ok(Some(ObjectResult::Loaded(gv))) => gv,
         Ok(Some(ObjectResult::MismatchedType)) => {
             return Ok(NativeResult::err(
                 context.gas_used(),
                 E_RECEIVING_OBJECT_TYPE_MISMATCH,
-            ))
+            ));
         }
         Err(x) => return Err(x),
     };

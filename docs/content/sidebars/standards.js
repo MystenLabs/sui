@@ -3,6 +3,7 @@
 
 const standards = [
 	'standards',
+	'standards/coin',
 	'standards/currency',
 	{
 		type: 'category',
@@ -38,6 +39,8 @@ const standards = [
 			'standards/deepbookv3/flash-loans',
 			'standards/deepbookv3/staking-governance',
 			'standards/deepbookv3-indexer',
+			'standards/deepbookv3/referral',
+			'standards/deepbookv3/ewma',
 			{
 				type: 'category',
 				label: 'SDK',
@@ -46,6 +49,7 @@ const standards = [
 					id: 'standards/deepbookv3-sdk',
 				},
 				items: [
+					'standards/deepbookv3-sdk/balance-manager',
 					'standards/deepbookv3-sdk/flash-loans',
 					'standards/deepbookv3-sdk/orders',
 					'standards/deepbookv3-sdk/pools',
@@ -55,7 +59,36 @@ const standards = [
 			},
 		],
 	},
+	{
+		type: 'category',
+		label: 'DeepBook Margin',
+		link: {
+			type: 'doc',
+			id: 'standards/deepbook-margin',
+		},
+		items: [
+			'standards/deepbook-margin/design',
+			'standards/deepbook-margin/margin-manager',
+			'standards/deepbook-margin/margin-pool',
+			'standards/deepbook-margin/orders',
+			{
+				type: 'category',
+				label: 'SDK',
+				link: {
+					type: 'doc',
+					id: 'standards/deepbook-margin-sdk',
+				},
+				items: [
+					'standards/deepbook-margin-sdk/orders',
+					'standards/deepbook-margin-sdk/margin-manager',
+					'standards/deepbook-margin-sdk/margin-pool',
+					'standards/deepbook-margin-sdk/maintainer',
+				],
+			},
+		],
+	},
 	'standards/display',
+	'standards/payment-kit',
 	'standards/wallet-standard',
 ];
 export default standards;

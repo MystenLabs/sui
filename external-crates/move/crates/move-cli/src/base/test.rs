@@ -50,7 +50,7 @@ pub struct Test {
         long = "threads"
     )]
     pub num_threads: usize,
-    /// Report test statistics at the end of testing. CSV report generated if 'csv' passed
+    /// Report test statistics at the end of testing. CSV report generated if 'csv' passed.
     #[clap(name = "report-statistics", short = 's', long = "statistics")]
     pub report_statistics: Option<Option<String>>,
 
@@ -69,7 +69,7 @@ pub struct Test {
     #[clap(name = "rand-num-iters", long = "rand-num-iters")]
     pub rand_num_iters: Option<u64>,
 
-    // Enable tracing for tests
+    /// Enable tracing for tests.
     #[clap(long = "trace")]
     pub trace: bool,
 }

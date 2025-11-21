@@ -44,7 +44,7 @@ impl Context {
         let edges = self
             .datatype_neighbors
             .iter()
-            .flat_map(|(parent, children)| children.iter().map(move |(child, _)| (parent, child)));
+            .flat_map(|(parent, children)| children.keys().map(move |child| (parent, child)));
         DiGraphMap::from_edges(edges)
     }
 }

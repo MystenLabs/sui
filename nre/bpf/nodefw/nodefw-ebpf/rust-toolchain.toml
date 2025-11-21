@@ -1,5 +1,5 @@
 [toolchain]
-channel = "stable"
+channel = "1.90"
 # The source code of rustc, provided by the rust-src component, is needed for
 # building eBPF programs.
 components = [

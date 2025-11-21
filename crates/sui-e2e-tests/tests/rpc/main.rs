@@ -3,7 +3,6 @@
 
 mod client;
 mod v2;
-mod v2beta2;
 
 async fn transfer_coin(context: &sui_sdk::wallet_context::WalletContext) -> sui_sdk_types::Digest {
     let gas_price = context.get_reference_gas_price().await.unwrap();

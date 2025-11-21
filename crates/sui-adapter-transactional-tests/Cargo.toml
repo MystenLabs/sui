@@ -5,7 +5,7 @@ authors = ["Mysten Labs <eng@mystenlabs.com>"]
 description = "Transactional tests for Sui Adapter"
 license = "Apache-2.0"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [dev-dependencies]
 datatest-stable.workspace = true

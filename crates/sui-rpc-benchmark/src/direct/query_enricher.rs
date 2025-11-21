@@ -11,7 +11,7 @@ use bb8_postgres::PostgresConnectionManager;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use sui_indexer_alt_framework::task::TrySpawnStreamExt;
-use tokio_postgres::{types::Type, NoTls, Row};
+use tokio_postgres::{NoTls, Row, types::Type};
 use tracing::warn;
 use url::Url;
 

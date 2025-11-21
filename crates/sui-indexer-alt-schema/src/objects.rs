@@ -3,8 +3,8 @@
 
 use anyhow::Context;
 use diesel::{
-    backend::Backend, deserialize, expression::AsExpression, prelude::*, serialize,
-    sql_types::SmallInt, FromSqlRow,
+    FromSqlRow, backend::Backend, deserialize, expression::AsExpression, prelude::*, serialize,
+    sql_types::SmallInt,
 };
 
 use sui_field_count::FieldCount;
@@ -112,7 +112,7 @@ impl StoredObjInfo {
             owner_id: match object.owner() {
                 Owner::AddressOwner(a) => Some(a.to_vec()),
                 Owner::ObjectOwner(o) => Some(o.to_vec()),
-                Owner::Shared { .. } | Owner::Immutable { .. } => None,
+                Owner::Shared { .. } | Owner::Immutable => None,
                 Owner::ConsensusAddressOwner { owner, .. } => Some(owner.to_vec()),
             },
 

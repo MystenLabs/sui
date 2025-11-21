@@ -15,9 +15,9 @@ use tokio::sync::oneshot::Sender;
 use tracing::{debug, instrument};
 
 use crate::execution_scheduler::balance_withdraw_scheduler::{
+    BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
     balance_read::AccountBalanceRead,
     scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
-    BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
 };
 
 pub(crate) struct EagerBalanceWithdrawScheduler {
@@ -91,16 +91,9 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
         let mut inner_state = self.inner_state.lock();
         let cur_accumulator_version = inner_state.accumulator_version;
         if withdraws.accumulator_version < cur_accumulator_version {
-            debug!(
-                cur_accumulator_version =? cur_accumulator_version.value(),
-                "These withdraws have already been settled"
-            );
-            for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
-                let _ = sender.send(ScheduleResult {
-                    tx_digest: withdraw.tx_digest,
-                    status: ScheduleStatus::AlreadySettled,
-                });
-            }
+            // This accumulator version is already settled.
+            // There is no need to schedule the withdraws.
+            withdraws.notify_skip_schedule();
             return;
         }
 
@@ -209,6 +202,7 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                 "Reserved balance: {:?}, settled balance: {:?}, new min guaranteed balance: {:?}",
                 reserved, settled, account_state.balance_lower_bound,
             );
+
             while !account_state.pending_reservations.is_empty() {
                 let pending_withdraw = account_state.pending_reservations.pop_front().unwrap();
                 assert!(pending_withdraw.accumulator_version >= next_accumulator_version);
@@ -247,6 +241,12 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
         let inner_state = self.inner_state.lock();
         assert!(inner_state.pending_settlements.is_empty());
         assert!(inner_state.tracked_accounts.is_empty());
+    }
+
+    #[cfg(test)]
+    fn get_current_accumulator_version(&self) -> SequenceNumber {
+        let inner_state = self.inner_state.lock();
+        inner_state.accumulator_version
     }
 }
 

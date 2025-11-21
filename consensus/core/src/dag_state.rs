@@ -18,16 +18,16 @@ use tokio::time::Instant;
 use tracing::{debug, error, info, trace};
 
 use crate::{
-    block::{genesis_blocks, BlockAPI, Slot, VerifiedBlock, GENESIS_ROUND},
+    CommittedSubDag,
+    block::{BlockAPI, GENESIS_ROUND, Slot, VerifiedBlock, genesis_blocks},
     commit::{
-        load_committed_subdag_from_store, CommitAPI as _, CommitDigest, CommitIndex, CommitInfo,
-        CommitRef, CommitVote, TrustedCommit, GENESIS_COMMIT_INDEX,
+        CommitAPI as _, CommitDigest, CommitIndex, CommitInfo, CommitRef, CommitVote,
+        GENESIS_COMMIT_INDEX, TrustedCommit, load_committed_subdag_from_store,
     },
     context::Context,
     leader_scoring::{ReputationScores, ScoringSubdag},
     storage::{Store, WriteBatch},
     threshold_clock::ThresholdClock,
-    CommittedSubDag,
 };
 
 /// DagState provides the API to write and read accepted blocks from the DAG.
@@ -226,7 +226,10 @@ impl DagState {
         if let Some(last_commit) = last_commit {
             let mut index = last_commit.index();
             let gc_round = state.gc_round();
-            info!("Recovering block commit statuses from commit index {} and backwards until leader of round <= gc_round {:?}", index, gc_round);
+            info!(
+                "Recovering block commit statuses from commit index {} and backwards until leader of round <= gc_round {:?}",
+                index, gc_round
+            );
 
             loop {
                 let commits = store
@@ -648,7 +651,9 @@ impl DagState {
 
             let last_evicted_round = self.evicted_rounds[authority_index];
             if end_round.saturating_sub(1) <= last_evicted_round {
-                panic!("Attempted to request for blocks of rounds < {end_round}, when the last evicted round is {last_evicted_round} for authority {authority_index}", );
+                panic!(
+                    "Attempted to request for blocks of rounds < {end_round}, when the last evicted round is {last_evicted_round} for authority {authority_index}",
+                );
             }
 
             let block_ref_iter = block_refs
@@ -693,7 +698,12 @@ impl DagState {
 
         let eviction_round = self.evicted_rounds[slot.authority];
         if slot.round <= eviction_round {
-            panic!("{}", format!("Attempted to check for slot {slot} that is <= the last evicted round {eviction_round}"));
+            panic!(
+                "{}",
+                format!(
+                    "Attempted to check for slot {slot} that is <= the last evicted round {eviction_round}"
+                )
+            );
         }
 
         let mut result = self.recent_refs_by_authority[slot.authority].range((
@@ -797,22 +807,28 @@ impl DagState {
                 .recent_blocks
                 .get_mut(&block_ref)
                 .unwrap_or_else(|| panic!("Block {:?} is not in DAG state", block_ref));
-            if block_info.hard_linked {
+            if block_info.included {
                 continue;
             }
             linked_blocks.push(block_ref);
-            block_info.hard_linked = true;
+            block_info.included = true;
             targets.extend(block_info.block.ancestors().iter());
         }
         linked_blocks
     }
 
-    /// Returns true if the block is hard linked by a proposed block.
-    pub(crate) fn is_hard_linked(&self, block_ref: &BlockRef) -> bool {
+    /// Returns true if the block has been included in an owned proposed block.
+    /// NOTE: caller should make sure only blocks above GC round are queried.
+    pub(crate) fn has_been_included(&self, block_ref: &BlockRef) -> bool {
         self.recent_blocks
             .get(block_ref)
-            .unwrap_or_else(|| panic!("Attempted to query for hard link status for a block not in cached data {block_ref}"))
-            .hard_linked
+            .unwrap_or_else(|| {
+                panic!(
+                    "Attempted to query for inclusion status for a block not in cached data {}",
+                    block_ref
+                )
+            })
+            .included
     }
 
     pub(crate) fn threshold_clock_round(&self) -> Round {
@@ -843,7 +859,10 @@ impl DagState {
             assert_eq!(commit.index(), last_commit.index() + 1);
 
             if commit.timestamp_ms() < last_commit.timestamp_ms() {
-                panic!("Commit timestamps do not monotonically increment, prev commit {:?}, new commit {:?}", last_commit, commit);
+                panic!(
+                    "Commit timestamps do not monotonically increment, prev commit {:?}, new commit {:?}",
+                    last_commit, commit
+                );
             }
             commit
                 .timestamp_ms()
@@ -1206,8 +1225,13 @@ struct BlockInfo {
     block: VerifiedBlock,
     // Whether the block has been committed
     committed: bool,
-    // Whether the block has been hard linked by a proposed block.
-    hard_linked: bool,
+    // Whether the block has been included in the causal history of an owned proposed block.
+    ///
+    /// There are two usages of this field:
+    /// 1. When proposing blocks, determine the set of blocks to carry votes for.
+    /// 2. When recovering, determine if a block has not been included in a proposed block and
+    ///    should recover transaction votes by voting.
+    included: bool,
 }
 
 impl BlockInfo {
@@ -1215,7 +1239,7 @@ impl BlockInfo {
         Self {
             block,
             committed: false,
-            hard_linked: false,
+            included: false,
         }
     }
 }
@@ -1230,10 +1254,9 @@ mod test {
     use super::*;
     use crate::{
         block::{TestBlock, VerifiedBlock},
-        storage::{mem_store::MemStore, WriteBatch},
+        storage::{WriteBatch, mem_store::MemStore},
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
-        CommitRange,
     };
 
     #[tokio::test]
@@ -1278,13 +1301,15 @@ mod test {
 
         // Check uncommitted blocks that do not exist.
         let last_ref = blocks.keys().last().unwrap();
-        assert!(dag_state
-            .get_block(&BlockRef::new(
-                last_ref.round,
-                last_ref.author,
-                BlockDigest::MIN
-            ))
-            .is_none());
+        assert!(
+            dag_state
+                .get_block(&BlockRef::new(
+                    last_ref.round,
+                    last_ref.author,
+                    BlockDigest::MIN
+                ))
+                .is_none()
+        );
 
         // Check slots with uncommitted blocks.
         for round in 1..=num_rounds {
@@ -1337,9 +1362,11 @@ mod test {
         }
 
         // Check rounds without uncommitted blocks.
-        assert!(dag_state
-            .get_uncommitted_blocks_at_round(non_existent_round)
-            .is_empty());
+        assert!(
+            dag_state
+                .get_uncommitted_blocks_at_round(non_existent_round)
+                .is_empty()
+        );
     }
 
     #[tokio::test]
@@ -1526,7 +1553,7 @@ mod test {
 
         // No block is linked yet.
         for block in &all_blocks {
-            assert!(!dag_state.is_hard_linked(&block.reference()));
+            assert!(!dag_state.has_been_included(&block.reference()));
         }
 
         // Link causal history from a round 1 block.
@@ -1538,7 +1565,7 @@ mod test {
         assert_eq!(linked_blocks.len(), 1);
         assert_eq!(linked_blocks[0], round_1_block.reference());
         for block_ref in linked_blocks {
-            assert!(dag_state.is_hard_linked(&block_ref));
+            assert!(dag_state.has_been_included(&block_ref));
         }
 
         // Link causal history from a round 2 block.
@@ -1555,9 +1582,9 @@ mod test {
         // Check linked status in dag state.
         for block in &all_blocks {
             if block.round() == 1 || block.reference() == round_2_block.reference() {
-                assert!(dag_state.is_hard_linked(&block.reference()));
+                assert!(dag_state.has_been_included(&block.reference()));
             } else {
-                assert!(!dag_state.is_hard_linked(&block.reference()));
+                assert!(!dag_state.has_been_included(&block.reference()));
             }
         }
 
@@ -1602,9 +1629,9 @@ mod test {
                 || block_ref.round == 5
                 || block_ref == round_6_block.reference()
             {
-                assert!(dag_state.is_hard_linked(&block.reference()));
+                assert!(dag_state.has_been_included(&block.reference()));
             } else {
-                assert!(!dag_state.is_hard_linked(&block.reference()));
+                assert!(!dag_state.has_been_included(&block.reference()));
             }
         }
     }
@@ -1796,8 +1823,12 @@ mod test {
         }
 
         for round in 1..=3 {
-            assert!(dag_state
-                .contains_cached_block_at_slot(Slot::new(round, AuthorityIndex::new_for_test(0))));
+            assert!(
+                dag_state.contains_cached_block_at_slot(Slot::new(
+                    round,
+                    AuthorityIndex::new_for_test(0)
+                ))
+            );
         }
 
         // When trying to request for authority 1 at block slot 3 it should panic, as anything
@@ -2024,15 +2055,19 @@ mod test {
             if authority_index == AuthorityIndex::new_for_test(0) {
                 assert_eq!(blocks.len(), 4);
                 assert_eq!(dag_state.evicted_rounds[authority_index.value()], 6);
-                assert!(blocks
-                    .into_iter()
-                    .all(|block| block.round() >= 7 && block.round() <= 12));
+                assert!(
+                    blocks
+                        .into_iter()
+                        .all(|block| block.round() >= 7 && block.round() <= 12)
+                );
             } else {
                 assert_eq!(blocks.len(), 6);
                 assert_eq!(dag_state.evicted_rounds[authority_index.value()], 6);
-                assert!(blocks
-                    .into_iter()
-                    .all(|block| block.round() >= 7 && block.round() <= 12));
+                assert!(
+                    blocks
+                        .into_iter()
+                        .all(|block| block.round() >= 7 && block.round() <= 12)
+                );
             }
         }
 
@@ -2061,9 +2096,9 @@ mod test {
             .iter()
             .for_each(|(block_ref, block_info)| {
                 if block_ref.round < PERSISTED_BLOCK_ROUNDS || block_ref.author.value() == 0 {
-                    assert!(block_info.hard_linked);
+                    assert!(block_info.included);
                 } else {
-                    assert!(!block_info.hard_linked);
+                    assert!(!block_info.included);
                 }
             });
     }
@@ -2584,9 +2619,10 @@ mod test {
         // THEN the commit and rejected transactions should be written to storage
         let last_finalized_commit = store.read_last_finalized_commit().unwrap();
         assert_eq!(last_finalized_commit, Some(commit_ref));
-        let commits = store
-            .scan_finalized_commits(CommitRange::new(1..=1))
+        let stored_rejected_transactions = store
+            .read_rejected_transactions(commit_ref)
+            .unwrap()
             .unwrap();
-        assert_eq!(commits, vec![(commit_ref, rejected_transactions.clone())]);
+        assert_eq!(stored_rejected_transactions, rejected_transactions);
     }
 }

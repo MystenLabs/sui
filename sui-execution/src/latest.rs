@@ -213,6 +213,10 @@ impl verifier::Verifier for Verifier<'_> {
         Box::new(SuiVerifierMeter::new(config))
     }
 
+    fn override_deprecate_global_storage_ops_during_deserialization(&self) -> Option<bool> {
+        Some(true)
+    }
+
     fn meter_compiled_modules(
         &mut self,
         _protocol_config: &ProtocolConfig,

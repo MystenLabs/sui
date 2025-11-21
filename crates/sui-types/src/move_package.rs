@@ -3,12 +3,12 @@
 
 use crate::execution_status::PackageUpgradeError;
 use crate::{
+    SUI_FRAMEWORK_ADDRESS,
     base_types::{ObjectID, SequenceNumber},
     crypto::DefaultHash,
-    error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
+    error::{ExecutionError, ExecutionErrorKind, SuiErrorKind, SuiResult},
     id::{ID, UID},
     object::OBJECT_START_VERSION,
-    SUI_FRAMEWORK_ADDRESS,
 };
 use fastcrypto::hash::HashFunction;
 use move_binary_format::binary_config::BinaryConfig;
@@ -26,8 +26,8 @@ use move_core_types::{
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use serde_with::Bytes;
+use serde_with::serde_as;
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hash;
 use sui_protocol_config::ProtocolConfig;
@@ -537,16 +537,16 @@ impl MovePackage {
         binary_config: &BinaryConfig,
     ) -> SuiResult<CompiledModule> {
         // TODO use the session's cache
-        let bytes =
-            self.serialized_module_map()
-                .get(module)
-                .ok_or_else(|| SuiError::ModuleNotFound {
-                    module_name: module.to_string(),
-                })?;
+        let bytes = self.serialized_module_map().get(module).ok_or_else(|| {
+            SuiErrorKind::ModuleNotFound {
+                module_name: module.to_string(),
+            }
+        })?;
         CompiledModule::deserialize_with_config(bytes, binary_config).map_err(|error| {
-            SuiError::ModuleDeserializationFailure {
+            SuiErrorKind::ModuleDeserializationFailure {
                 error: error.to_string(),
             }
+            .into()
         })
     }
 
@@ -691,7 +691,7 @@ where
     for bytecode in modules {
         let module =
             CompiledModule::deserialize_with_config(bytecode, binary_config).map_err(|error| {
-                SuiError::ModuleDeserializationFailure {
+                SuiErrorKind::ModuleDeserializationFailure {
                     error: error.to_string(),
                 }
             })?;

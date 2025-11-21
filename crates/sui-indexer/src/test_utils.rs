@@ -11,8 +11,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
-use sui_pg_db::temp::{get_available_port, TempDb};
+use sui_pg_db::temp::{TempDb, get_available_port};
 
+use crate::IndexerMetrics;
 use crate::config::{IngestionConfig, RetentionConfig, SnapshotLagConfig, UploadOptions};
 use crate::database::Connection;
 use crate::database::ConnectionPool;
@@ -20,7 +21,6 @@ use crate::db::ConnectionPoolConfig;
 use crate::errors::IndexerError;
 use crate::indexer::Indexer;
 use crate::store::PgIndexerStore;
-use crate::IndexerMetrics;
 
 /// Wrapper over `Indexer::start_reader` to make it easier to configure an indexer jsonrpc reader
 /// for testing.

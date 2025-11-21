@@ -24,11 +24,11 @@ public fun dtor(l0: enums::temperature::Temperature) {
         let l1 = &l2;
         switch 0x0::temperature::Temperature (l1) {
             Fahrenheit => {
-                0x0::temperature::Temperature::Fahrenheit { pos0: reg_4 } = &l1;
+                0x0::temperature::Temperature::Fahrenheit { pos0: reg_4 } = l1;
                 0x0::temperature::Temperature::Fahrenheit { pos0: reg_6 } = l2
             },
             Celcius => {
-                0x0::temperature::Temperature::Celcius { pos0: reg_8 } = &l1;
+                0x0::temperature::Temperature::Celcius { pos0: reg_8 } = l1;
                 0x0::temperature::Temperature::Celcius { pos0: reg_10 } = l2
             }
         };
@@ -45,7 +45,7 @@ public fun is_temperature_fahrenheit(l0: &enums::temperature::Temperature): bool
         let l2 = l0;
         switch 0x0::temperature::Temperature (l2) {
             Fahrenheit => {
-                0x0::temperature::Temperature::Fahrenheit { pos0: reg_3 } = &l2;
+                0x0::temperature::Temperature::Fahrenheit { pos0: reg_3 } = l2;
                 let l1 = true;
             },
             Celcius => {

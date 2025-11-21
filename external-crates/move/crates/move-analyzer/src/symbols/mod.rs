@@ -56,7 +56,7 @@ use crate::{
         DefMap, find_datatype, parsing_analysis::parsing_mod_def_to_map_key, run_parsing_analysis,
         run_typing_analysis,
     },
-    compiler_info::CompilerInfo,
+    compiler_info::CompilerAutocompleteInfo,
     symbols::{
         compilation::{
             CachedPackages, CachedPkgInfo, CompiledPkgInfo, CompiledProgram, ParsedDefinitions,
@@ -121,8 +121,8 @@ pub struct Symbols {
     pub files: MappedFiles,
     /// Additional information about definitions
     pub def_info: DefMap,
-    /// IDE Annotation Information from the Compiler
-    pub compiler_info: CompilerInfo,
+    /// IDE Autocomplete Information from the Compiler
+    pub compiler_autocomplete_info: CompilerAutocompleteInfo,
     /// Cursor information gathered up during analysis
     pub cursor_context: Option<CursorContext>,
 }
@@ -187,6 +187,7 @@ pub fn get_symbols(
             lint,
             implicit_deps.clone(),
             flavor,
+            cursor_info.map(|(path, _)| path),
         )?;
         eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
         let Some(compiled_pkg_info) = compiled_pkg_info_opt else {
@@ -217,7 +218,7 @@ pub fn compute_symbols(
     let cached_dep_opt = compiled_pkg_info.cached_deps.clone();
     let dep_hashes = compiled_pkg_info.dep_hashes.clone();
     let edition = compiled_pkg_info.edition;
-    let compiler_info = compiled_pkg_info.compiler_info.clone();
+    let compiler_analysis_info = compiled_pkg_info.compiler_analysis_info.clone();
     let lsp_diags = compiled_pkg_info.lsp_diags.clone();
     let file_paths = compiled_pkg_info
         .mapped_files
@@ -274,7 +275,7 @@ pub fn compute_symbols(
                     file_paths: Arc::new(file_paths),
                     user_file_hashes: Arc::new(user_file_hashes),
                     edition,
-                    compiler_info,
+                    compiler_analysis_info,
                     lsp_diags,
                 }),
             );
@@ -309,24 +310,24 @@ pub fn compute_symbols_pre_process(
         &fields_order_info,
         &compiled_pkg_info.mapped_files,
         &mut computation_data.mod_outer_defs,
-        &mut computation_data.mod_use_defs,
+        &mut computation_data.use_defs,
         &mut computation_data.references,
         &mut computation_data.def_info,
         &compiled_pkg_info.edition,
         cursor_context.as_mut(),
     );
 
-    if let Some(cached_deps) = compiled_pkg_info.cached_deps.clone() {
-        if let Some(cached_symbols_data) = cached_deps.symbols_data {
-            // We need to update definitions for the code being currently processed
-            // so that these definitions are available when ASTs for this code are visited
-            computation_data
-                .mod_outer_defs
-                .extend(cached_symbols_data.mod_outer_defs.clone());
-            computation_data
-                .def_info
-                .extend(cached_symbols_data.def_info.clone());
-        }
+    if let Some(cached_deps) = compiled_pkg_info.cached_deps.clone()
+        && let Some(cached_symbols_data) = cached_deps.symbols_data
+    {
+        // We need to update definitions for the code being currently processed
+        // so that these definitions are available when ASTs for this code are visited
+        computation_data
+            .mod_outer_defs
+            .extend(cached_symbols_data.mod_outer_defs.clone());
+        computation_data
+            .def_info
+            .extend(cached_symbols_data.def_info.clone());
     }
 
     cursor_context
@@ -363,12 +364,12 @@ pub fn compute_symbols_typed_program(
     CompiledProgram,
 ) {
     // run typing analysis for the main user program
-    let compiler_info = &mut compiled_pkg_info.compiler_info.as_mut().unwrap();
+    let compiler_analysis_info = compiled_pkg_info.compiler_analysis_info.as_ref().unwrap();
     let mapped_files = &compiled_pkg_info.mapped_files;
     let mut computation_data = run_typing_analysis(
         computation_data,
         mapped_files,
-        compiler_info,
+        compiler_analysis_info,
         &compiled_pkg_info.program.typed_modules,
     );
     let mut file_use_defs = BTreeMap::new();
@@ -423,11 +424,9 @@ pub fn compute_symbols_typed_program(
                     mod_outer_defs,
                     |(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str)
                 ),
-                mod_use_defs: filter_computation_data!(
-                    computation_data,
-                    mod_use_defs,
-                    |(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str)
-                ),
+                use_defs: filter_computation_data!(computation_data, use_defs, |(fhash, _)| {
+                    cached_deps.dep_hashes.contains(fhash)
+                }),
                 references: filter_computation_data!(computation_data, references, |(loc, _)| {
                     cached_deps.dep_hashes.contains(&loc.file_hash())
                 }),
@@ -440,6 +439,10 @@ pub fn compute_symbols_typed_program(
                     |(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str)
                 ),
             };
+
+            // Filter program ASTs to remove dependencies before caching
+            filter_program_asts(&mut compiled_pkg_info.program, &cached_deps.dep_hashes);
+
             Arc::new(deps_computation_data)
         };
         Some(deps_symbols_data)
@@ -460,7 +463,9 @@ pub fn compute_symbols_typed_program(
             file_mods,
             def_info: computation_data.def_info,
             files: compiled_pkg_info.mapped_files,
-            compiler_info: compiled_pkg_info.compiler_info.unwrap(),
+            compiler_autocomplete_info: compiled_pkg_info
+                .compiler_autocomplete_info
+                .unwrap_or_default(),
             cursor_context,
         },
         deps_symbols_data_opt,
@@ -475,14 +480,8 @@ fn update_file_use_defs(
     mapped_files: &MappedFiles,
     file_use_defs: &mut FileUseDefs,
 ) {
-    for (module_ident_str, use_defs) in &computation_data.mod_use_defs {
-        // unwrap here is safe as all modules in a given program have the module_defs entry
-        // in the map
-        let module_defs = computation_data
-            .mod_outer_defs
-            .get(module_ident_str)
-            .unwrap();
-        let fpath = match mapped_files.file_name_mapping().get(&module_defs.fhash) {
+    for (fhash, use_defs) in &computation_data.use_defs {
+        let fpath = match mapped_files.file_name_mapping().get(fhash) {
             Some(p) => p.as_path().to_string_lossy().to_string(),
             None => return,
         };
@@ -522,6 +521,47 @@ fn pre_process_parsed_program(
     });
 }
 
+/// Filter dependency ASTs from compiled program in place, keeping only user code
+fn filter_program_asts(program: &mut CompiledProgram, dep_hashes: &[FileHash]) {
+    fn is_dep_pkg(pkg_def: &P::PackageDefinition, dep_hashes: &[FileHash]) -> bool {
+        let file_hash = match &pkg_def.def {
+            P::Definition::Module(mdef) => mdef.loc.file_hash(),
+            P::Definition::Address(adef) => adef.loc.file_hash(),
+        };
+        dep_hashes.contains(&file_hash)
+    }
+
+    // Remove dependency packages from source_definitions
+    program
+        .parsed_definitions
+        .source_definitions
+        .retain(|pkg_def| !is_dep_pkg(pkg_def, dep_hashes));
+
+    // Remove dependency packages from lib_definitions
+    program
+        .parsed_definitions
+        .lib_definitions
+        .retain(|pkg_def| !is_dep_pkg(pkg_def, dep_hashes));
+
+    // Collect dependency module identifiers
+    let dep_module_idents: Vec<ModuleIdent> = program
+        .typed_modules
+        .key_cloned_iter()
+        .filter_map(|(mident, mdef)| {
+            if dep_hashes.contains(&mdef.loc.file_hash()) {
+                Some(mident)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Remove dependency modules from typed_modules
+    for mident in dep_module_idents {
+        program.typed_modules.remove(&mident);
+    }
+}
+
 /// Pre-process parsed package to get initial info before AST traversals
 fn pre_process_parsed_pkg(
     pkg_def: &P::PackageDefinition,
@@ -544,21 +584,21 @@ fn pre_process_parsed_pkg(
             return;
         };
         for member in &mod_def.members {
-            if let P::ModuleMember::Struct(sdef) = member {
-                if let P::StructFields::Named(fields) = &sdef.fields {
-                    let indexed_fields = fields
-                        .iter()
-                        .enumerate()
-                        .map(|(i, (_, f, _))| (f.value(), i))
-                        .collect::<BTreeMap<_, _>>();
-                    fields_order_info
-                        .structs
-                        .entry(mod_ident_str.clone())
-                        .or_default()
-                        .entry(sdef.name.value())
-                        .or_default()
-                        .extend(indexed_fields);
-                }
+            if let P::ModuleMember::Struct(sdef) = member
+                && let P::StructFields::Named(fields) = &sdef.fields
+            {
+                let indexed_fields = fields
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (_, f, _))| (f.value(), i))
+                    .collect::<BTreeMap<_, _>>();
+                fields_order_info
+                    .structs
+                    .entry(mod_ident_str.clone())
+                    .or_default()
+                    .entry(sdef.name.value())
+                    .or_default()
+                    .extend(indexed_fields);
             }
             if let P::ModuleMember::Enum(edef) = member {
                 for vdef in &edef.variants {
@@ -589,7 +629,7 @@ fn pre_process_typed_modules(
     fields_order_info: &FieldOrderInfo,
     files: &MappedFiles,
     mod_outer_defs: &mut BTreeMap<String, ModuleDefs>,
-    mod_use_defs: &mut BTreeMap<String, UseDefMap>,
+    use_defs: &mut BTreeMap<FileHash, UseDefMap>,
     references: &mut References,
     def_info: &mut DefMap,
     edition: &Option<Edition>,
@@ -597,10 +637,10 @@ fn pre_process_typed_modules(
 ) {
     for (pos, module_ident, module_def) in typed_modules {
         // If the cursor is in this module, mark that down.
-        if let Some(cursor) = &mut cursor_context {
-            if module_def.loc.contains(&cursor.loc) {
-                cursor.module = Some(sp(pos, *module_ident));
-            }
+        if let Some(cursor) = &mut cursor_context
+            && module_def.loc.contains(&cursor.loc)
+        {
+            cursor.module = Some(sp(pos, *module_ident));
         };
 
         let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
@@ -616,7 +656,11 @@ fn pre_process_typed_modules(
             edition,
         );
         mod_outer_defs.insert(mod_ident_str.clone(), defs);
-        mod_use_defs.insert(mod_ident_str, symbols);
+
+        use_defs
+            .entry(module_def.loc.file_hash())
+            .or_default()
+            .extend(symbols.elements());
     }
 }
 
@@ -652,7 +696,7 @@ pub fn empty_symbols() -> Symbols {
         file_mods: BTreeMap::new(),
         def_info: BTreeMap::new(),
         files: MappedFiles::empty(),
-        compiler_info: CompilerInfo::new(),
+        compiler_autocomplete_info: CompilerAutocompleteInfo::new(),
         cursor_context: None,
     }
 }
@@ -893,7 +937,7 @@ fn get_mod_outer_defs(
             fun.signature
                 .type_parameters
                 .iter()
-                .map(|t| (sp(t.user_specified_name.loc, Type_::Param(t.clone()))))
+                .map(|t| sp(t.user_specified_name.loc, Type_::Param(t.clone())))
                 .collect(),
             fun.signature
                 .parameters

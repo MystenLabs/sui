@@ -3,12 +3,12 @@
 
 use std::{path::PathBuf, time::Duration};
 
-use anyhow::{ensure, Context as _};
+use anyhow::{Context as _, ensure};
 use move_core_types::ident_str;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use simulacrum::Simulacrum;
-use sui_indexer_alt_e2e_tests::{find, FullCluster, OffchainClusterConfig};
+use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig, find};
 use sui_indexer_alt_graphql::config::RpcConfig;
 use sui_indexer_alt_jsonrpc::config::NameServiceConfig;
 use sui_move_build::BuildConfig;
@@ -16,7 +16,7 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress},
     effects::TransactionEffectsAPI,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{ObjectArg, Transaction, TransactionData},
+    transaction::{ObjectArg, SharedObjectMutability, Transaction, TransactionData},
 };
 use tokio_util::sync::CancellationToken;
 
@@ -369,7 +369,7 @@ impl SuiNSCluster {
         let forward_registry = ObjectArg::SharedObject {
             id: registry_id,
             initial_shared_version: fx.lamport_version(),
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         };
 
         // (6) Initialize the reverse registry.
@@ -400,7 +400,7 @@ impl SuiNSCluster {
         let reverse_registry = ObjectArg::SharedObject {
             id: reverse_registry_id,
             initial_shared_version: fx.lamport_version(),
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         };
 
         // (7) Configure the GraphQL RPC to read from the mock SuiNS package.

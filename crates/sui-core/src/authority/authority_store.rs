@@ -8,7 +8,7 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_pruner::{
     AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
 };
-use crate::authority::authority_store_types::{get_store_object, StoreObject, StoreObjectWrapper};
+use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper, get_store_object};
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::global_state_hasher::GlobalStateHashStore;
 use crate::rpc_index::RpcIndexStore;
@@ -23,13 +23,13 @@ use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
-use sui_types::error::UserInputError;
+use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
 use sui_types::storage::{
-    get_module, get_package, BackingPackageStore, FullObjectKey, MarkerValue, ObjectKey,
-    ObjectOrTombstone, ObjectStore,
+    BackingPackageStore, FullObjectKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore,
+    get_module, get_package,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure};
@@ -37,8 +37,8 @@ use tokio::time::Instant;
 use tracing::{debug, info, trace};
 use typed_store::traits::Map;
 use typed_store::{
-    rocks::{DBBatch, DBMap},
     TypedStoreError,
+    rocks::{DBBatch, DBMap},
 };
 
 use super::authority_store_tables::LiveObject;
@@ -542,12 +542,12 @@ impl AuthorityStore {
                 Some(ObjectKey(*object_id, prior_version)),
             )?;
 
-        if let Some((object_key, value)) = iterator.next().transpose()? {
-            if object_key.0 == *object_id {
-                return Ok(Some(
-                    self.perpetual_tables.object_reference(&object_key, value)?,
-                ));
-            }
+        if let Some((object_key, value)) = iterator.next().transpose()?
+            && object_key.0 == *object_id
+        {
+            return Ok(Some(
+                self.perpetual_tables.object_reference(&object_key, value)?,
+            ));
         }
         Ok(None)
     }
@@ -898,11 +898,13 @@ impl AuthorityStore {
         ) {
             let Some(live_marker) = live_marker else {
                 let latest_lock = self.get_latest_live_version_for_object_id(obj_ref.0)?;
-                fp_bail!(UserInputError::ObjectVersionUnavailableForConsumption {
-                    provided_obj_ref: *obj_ref,
-                    current_version: latest_lock.1
-                }
-                .into());
+                fp_bail!(
+                    UserInputError::ObjectVersionUnavailableForConsumption {
+                        provided_obj_ref: *obj_ref,
+                        current_version: latest_lock.1
+                    }
+                    .into()
+                );
             };
 
             let live_marker = live_marker.map(|l| l.migrate().into_inner());
@@ -930,10 +932,11 @@ impl AuthorityStore {
                     info!(prev_tx_digest = ?previous_tx_digest,
                           cur_tx_digest = ?tx_digest,
                           "Cannot acquire lock: conflicting transaction!");
-                    return Err(SuiError::ObjectLockConflict {
+                    return Err(SuiErrorKind::ObjectLockConflict {
                         obj_ref: *obj_ref,
                         pending_transaction: *previous_tx_digest,
-                    });
+                    }
+                    .into());
                 }
             }
 
@@ -997,7 +1000,7 @@ impl AuthorityStore {
             .next()
             .transpose()?
             .and_then(|value| {
-                if value.0 .0 == object_id {
+                if value.0.0 == object_id {
                     Some(value)
                 } else {
                     None
@@ -1024,18 +1027,20 @@ impl AuthorityStore {
         for (lock, obj_ref) in locks.into_iter().zip(objects) {
             if lock.is_none() {
                 let latest_lock = self.get_latest_live_version_for_object_id(obj_ref.0)?;
-                fp_bail!(UserInputError::ObjectVersionUnavailableForConsumption {
-                    provided_obj_ref: *obj_ref,
-                    current_version: latest_lock.1
-                }
-                .into());
+                fp_bail!(
+                    UserInputError::ObjectVersionUnavailableForConsumption {
+                        provided_obj_ref: *obj_ref,
+                        current_version: latest_lock.1
+                    }
+                    .into()
+                );
             }
         }
         Ok(())
     }
 
     /// Initialize a lock to None (but exists) for a given list of ObjectRefs.
-    /// Returns SuiError::ObjectLockAlreadyInitialized if the lock already exists and is locked to a transaction
+    /// Returns SuiErrorKind::ObjectLockAlreadyInitialized if the lock already exists and is locked to a transaction
     fn initialize_live_object_markers_impl(
         &self,
         write_batch: &mut DBBatch,
@@ -1076,9 +1081,10 @@ impl AuthorityStore {
                     ?existing_live_object_markers,
                     "Cannot initialize live_object_markers because some exist already"
                 );
-                return Err(SuiError::ObjectLockAlreadyInitialized {
+                return Err(SuiErrorKind::ObjectLockAlreadyInitialized {
                     refs: existing_live_object_markers,
-                });
+                }
+                .into());
             }
         }
 
@@ -1445,7 +1451,9 @@ impl AuthorityStore {
         if !should_reaccumulate {
             return;
         }
-        info!("[Re-accumulate] simplified_unwrap_then_delete is enabled in the new protocol version, re-accumulating state hash");
+        info!(
+            "[Re-accumulate] simplified_unwrap_then_delete is enabled in the new protocol version, re-accumulating state hash"
+        );
         let cur_time = Instant::now();
         std::thread::scope(|s| {
             let pending_tasks = FuturesUnordered::new();
@@ -1486,17 +1494,17 @@ impl AuthorityStore {
                         match db_result {
                             Ok((object_key, object)) => {
                                 object_scanned += 1;
-                                if object_scanned % 100000 == 0 {
+                                if object_scanned.is_multiple_of(100000) {
                                     info!(
                                         "[Re-accumulate] Task {}: object scanned: {}",
                                         index, object_scanned,
                                     );
                                 }
                                 if matches!(prev.1.inner(), StoreObject::Wrapped)
-                                    && object_key.0 != prev.0 .0
+                                    && object_key.0 != prev.0.0
                                 {
                                     wrapped_objects_to_remove
-                                        .push(WrappedObject::new(prev.0 .0, prev.0 .1));
+                                        .push(WrappedObject::new(prev.0.0, prev.0.1));
                                 }
 
                                 prev = (object_key, object);
@@ -1508,7 +1516,7 @@ impl AuthorityStore {
                         }
                     }
                     if matches!(prev.1.inner(), StoreObject::Wrapped) {
-                        wrapped_objects_to_remove.push(WrappedObject::new(prev.0 .0, prev.0 .1));
+                        wrapped_objects_to_remove.push(WrappedObject::new(prev.0.0, prev.0.1));
                     }
                     info!(
                         "[Re-accumulate] Task {}: object scanned: {}, wrapped objects: {}",

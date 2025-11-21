@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::error::Error;
+use crate::v2::error::FormatError;
 
 /// Limits that the parser enforces while parsing potentially multiple Display formats.
-pub(crate) struct Limits {
+#[derive(Clone)]
+pub struct Limits {
     /// Maximum number of times the parser can recurse into nested structures. Depth does not
     /// account for all nodes, only nodes that can be contained within themselves.
     pub max_depth: usize,
@@ -12,12 +13,16 @@ pub(crate) struct Limits {
     /// Maximum number of AST nodes that can be allocated during parsing. This counts all values
     /// that are instances of AST types (but not, for example, `Vec<T>`).
     pub max_nodes: usize,
+
+    /// Maximum number of times the format can try to load an object.
+    pub max_loads: usize,
 }
 
 /// The available budget left for limits that are tracked across all invocations to the parser for
 /// a single Display.
 pub(crate) struct Budget {
     pub nodes: usize,
+    pub loads: usize,
 }
 
 pub(crate) struct Meter<'b> {
@@ -26,9 +31,10 @@ pub(crate) struct Meter<'b> {
 }
 
 impl Limits {
-    pub fn budget(&self) -> Budget {
+    pub(crate) fn budget(&self) -> Budget {
         Budget {
             nodes: self.max_nodes,
+            loads: self.max_loads,
         }
     }
 }
@@ -42,9 +48,9 @@ impl<'b> Meter<'b> {
     }
 
     /// Create a nested meter, with a reduced depth budget.
-    pub fn nest(&mut self) -> Result<Meter<'_>, Error> {
+    pub fn nest(&mut self) -> Result<Meter<'_>, FormatError> {
         if self.depth_budget == 0 {
-            return Err(Error::TooDeep);
+            return Err(FormatError::TooDeep);
         }
 
         Ok(Meter {
@@ -54,12 +60,22 @@ impl<'b> Meter<'b> {
     }
 
     /// Signal that a node has been allocated.
-    pub fn alloc(&mut self) -> Result<(), Error> {
+    pub fn alloc(&mut self) -> Result<(), FormatError> {
         if self.budget.nodes == 0 {
-            return Err(Error::TooBig);
+            return Err(FormatError::TooBig);
         }
 
         self.budget.nodes -= 1;
+        Ok(())
+    }
+
+    /// Signal that a load could be performed.
+    pub fn load(&mut self) -> Result<(), FormatError> {
+        if self.budget.loads == 0 {
+            return Err(FormatError::TooManyLoads);
+        }
+
+        self.budget.loads -= 1;
         Ok(())
     }
 }
@@ -69,6 +85,7 @@ impl Default for Limits {
         Self {
             max_depth: 32,
             max_nodes: 32768,
+            max_loads: 8,
         }
     }
 }

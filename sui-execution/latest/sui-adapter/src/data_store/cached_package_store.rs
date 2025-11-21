@@ -7,10 +7,11 @@ use move_vm_runtime::{
     cache::move_cache::ResolvedPackageResult, runtime::MoveRuntime,
     validation::verification::ast::Package as VerifiedPackage,
 };
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 use sui_types::{
     base_types::ObjectID,
-    error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
+    error::{ExecutionError, ExecutionErrorKind, SuiErrorKind, SuiResult},
+    move_package::MovePackage,
 };
 
 /// The `CachedPackageStore` is a `PackageStore` implementation that uses a `MoveRuntime` to
@@ -49,6 +50,10 @@ impl<'state, 'runtime> CachedPackageStore<'state, 'runtime> {
         self.fetch_package(object_id)
     }
 
+    pub fn get_move_package(&self, object_id: &ObjectID) -> SuiResult<Option<Rc<MovePackage>>> {
+        self.package_store.fetch_move_package(**object_id)
+    }
+
     /// Get a package by its package ID (i.e., not original ID). This will first look in the new
     /// packages, and then fetch the pacakge from the underlying Move runtime which handles loading
     /// and caching of packages.
@@ -65,7 +70,7 @@ impl<'state, 'runtime> CachedPackageStore<'state, 'runtime> {
             .runtime
             .resolve_and_cache_package(&self.package_store, (*id).into())
             .map_err(|e| {
-                SuiError::ExecutionError(
+                SuiErrorKind::ExecutionError(
                     ExecutionError::new_with_source(
                         ExecutionErrorKind::VMVerificationOrDeserializationError,
                         e.to_string(),

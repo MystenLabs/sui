@@ -3,8 +3,8 @@
 
 use anyhow::Context;
 use anyhow::Result;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::trace;
@@ -25,6 +25,7 @@ pub mod verifier_signing_config;
 pub use node::{ConsensusConfig, ExecutionCacheConfig, NodeConfig};
 pub use rpc_config::{RpcConfig, RpcIndexInitConfig, RpcTlsConfig};
 use sui_types::multiaddr::Multiaddr;
+use tracing::debug;
 
 const SUI_DIR: &str = ".sui";
 pub const SUI_CONFIG_DIR: &str = "sui_config";
@@ -82,10 +83,10 @@ pub fn ssfn_config_file(address: Multiaddr, i: usize) -> String {
 }
 
 fn multiaddr_to_filename(address: Multiaddr) -> Option<String> {
-    if let Some(hostname) = address.hostname() {
-        if let Some(port) = address.port() {
-            return Some(format!("{}-{}.yaml", hostname, port));
-        }
+    if let Some(hostname) = address.hostname()
+        && let Some(port) = address.port()
+    {
+        return Some(format!("{}-{}.yaml", hostname, port));
     }
     None
 }
@@ -117,6 +118,47 @@ where
             .with_context(|| format!("Unable to save config to {}", path.display()))?;
         Ok(())
     }
+
+    /// Load the config from the given path, acquiring a shared lock on the file during the read.
+    fn load_with_lock<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
+        let path = path.as_ref();
+        debug!("Reading config with lock from {}", path.display());
+        let file = fs::File::open(path)
+            .with_context(|| format!("Unable to load config from {}", path.display()))?;
+        file.lock_shared()?;
+        let config: Self = serde_yaml::from_reader(&file)?;
+        file.unlock()?;
+        Ok(config)
+    }
+
+    /// Save the config to the given path, acquiring an exclusive lock on the file during the
+    /// write.
+    fn save_with_lock<P: AsRef<Path>>(&self, path: P) -> Result<(), anyhow::Error> {
+        let path = path.as_ref();
+        debug!("Writing config with lock to {}", path.display());
+        let config_str = serde_yaml::to_string(&self)?;
+
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)
+            .with_context(|| {
+                format!(
+                    "Unable to open config file for writing at {}",
+                    path.display()
+                )
+            })?;
+
+        file.lock()
+            .with_context(|| format!("Unable to acquire exclusive lock on {}", path.display()))?;
+
+        fs::write(path, config_str)
+            .with_context(|| format!("Unable to save config to {}", path.display()))?;
+
+        file.unlock()?;
+        Ok(())
+    }
 }
 
 pub struct PersistedConfig<C> {
@@ -134,6 +176,10 @@ where
 
     pub fn save(&self) -> Result<(), anyhow::Error> {
         self.inner.save(&self.path)
+    }
+
+    pub fn save_with_lock(&self) -> Result<(), anyhow::Error> {
+        self.inner.save_with_lock(&self.path)
     }
 
     pub fn into_inner(self) -> C {

@@ -4,10 +4,10 @@
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
-use sui_rpc::proto::sui::rpc::v2::coin_treasury::SupplyState as RpcSupplyState;
 use sui_rpc::proto::sui::rpc::v2::CoinTreasury;
 use sui_rpc::proto::sui::rpc::v2::GetCoinInfoRequest;
 use sui_rpc::proto::sui::rpc::v2::GetCoinInfoResponse;
+use sui_rpc::proto::sui::rpc::v2::coin_treasury::SupplyState as RpcSupplyState;
 use sui_sdk_types::{Address, StructTag};
 use sui_types::base_types::{ObjectID as SuiObjectID, SuiAddress};
 use sui_types::coin::RegulatedCoinMetadata;
@@ -135,10 +135,18 @@ fn get_coin_info_from_registry(
                 treasury.supply_state = Some(RpcSupplyState::BurnOnly.into());
                 Some(treasury)
             }
-            _ => {
-                // For unknown supply state, look up the treasury cap object
+            Some(SupplyState::Unknown) | None => {
+                // For unknown or missing supply state, look up the treasury cap object
                 currency
                     .treasury_cap_id
+                    .or_else(|| {
+                        service
+                            .reader
+                            .inner()
+                            .indexes()
+                            .and_then(|indexes| indexes.get_coin_info(core_coin_type).ok()?)
+                            .and_then(|coin_info| coin_info.treasury_object_id)
+                    })
                     .and_then(|id| get_treasury_cap_info(service, id))
             }
         }

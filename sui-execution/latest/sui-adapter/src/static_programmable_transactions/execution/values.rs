@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
 use move_binary_format::errors::PartialVMError;
 use move_core_types::account_address::AccountAddress;
+use move_core_types::runtime_value::MoveTypeLayout;
 use move_vm_runtime::execution::interpreter::locals::{BaseHeap as VMBaseHeap, BaseHeapId};
 use move_vm_runtime::shared::views::ValueVisitor;
 use move_vm_runtime::{
@@ -78,7 +79,7 @@ impl Locals {
         Ok(Self { heap, locations })
     }
 
-    pub fn local(&mut self, index: u16) -> Result<Local, ExecutionError> {
+    pub fn local(&mut self, index: u16) -> Result<Local<'_>, ExecutionError> {
         Ok(Local(self, index))
     }
 }
@@ -183,8 +184,8 @@ impl Value {
         Ok(Value(value))
     }
 
-    pub fn serialize(&self) -> Option<Vec<u8>> {
-        self.0.serialize()
+    pub fn typed_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
+        self.0.typed_serialize(layout)
     }
 }
 

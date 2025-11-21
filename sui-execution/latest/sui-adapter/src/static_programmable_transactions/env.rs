@@ -312,6 +312,28 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         self.adapter_type_from_vm_type(&vm_opt, &vm_type)
     }
 
+    /// Load the type and layout for a struct tag.
+    /// This is an optimization to avoid loading the VM type twice when both adapter type and type
+    /// layout are needed.
+    pub fn load_type_and_layout_from_struct(
+        &self,
+        tag: &StructTag,
+    ) -> Result<(Type, MoveTypeLayout), ExecutionError> {
+        let (vm_type, Some(vm)) =
+            self.load_vm_type_from_type_tag(None, &TypeTag::Struct(Box::new(tag.clone())))?
+        else {
+            invariant_violation!(
+                "Expected VM in load_type_and_layout_from_struct for non-primitive tag {:?}",
+                tag
+            );
+        };
+        let layout = vm
+            .runtime_type_layout(&TypeTag::Struct(Box::new(tag.clone())))
+            .map_err(|e| self.convert_vm_error(e))?;
+        self.adapter_type_from_vm_type(&Some(vm), &vm_type)
+            .map(|ty| (ty, layout))
+    }
+
     pub fn type_layout_for_struct(
         &self,
         tag: &StructTag,

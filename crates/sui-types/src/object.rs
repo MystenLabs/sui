@@ -15,14 +15,16 @@ use mysten_common::debug_fatal;
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use serde_with::Bytes;
+use serde_with::serde_as;
 
 use crate::accumulator_root::AccumulatorValue;
 use crate::base_types::{FullObjectID, FullObjectRef, MoveObjectType, ObjectIDParseError};
 use crate::coin::{Coin, CoinMetadata, TreasuryCap};
 use crate::crypto::{default_hash, deterministic_random_account_key};
-use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
+use crate::error::{
+    ExecutionError, ExecutionErrorKind, SuiErrorKind, UserInputError, UserInputResult,
+};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::GAS;
 use crate::is_system_package;
@@ -41,6 +43,7 @@ use self::bounded_visitor::BoundedVisitor;
 
 mod balance_traversal;
 pub mod bounded_visitor;
+pub mod option_visitor;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 300_000_000_000_000;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
@@ -97,7 +100,15 @@ impl MoveObject {
         } else {
             protocol_config.max_move_object_size()
         };
-        Self::new_from_execution_with_limit(type_, has_public_transfer, version, contents, bound)
+        unsafe {
+            Self::new_from_execution_with_limit(
+                type_,
+                has_public_transfer,
+                version,
+                contents,
+                bound,
+            )
+        }
     }
 
     /// # Safety
@@ -237,6 +248,10 @@ impl MoveObject {
         self.version
     }
 
+    pub fn contents_and_type_equal(&self, other: &Self) -> bool {
+        self.contents == other.contents && self.type_ == other.type_
+    }
+
     /// Contents of the object that are specific to its type--i.e., not its ID and version, which all objects have
     /// For example if the object was declared as `struct S has key { id: ID, f1: u64, f2: bool },
     /// this returns the slice containing `f1` and `f2`.
@@ -320,7 +335,7 @@ impl MoveObject {
     ) -> Result<MoveStructLayout, SuiError> {
         let type_ = TypeTag::Struct(Box::new(struct_tag));
         let layout = TypeLayoutBuilder::build_with_types(&type_, resolver).map_err(|e| {
-            SuiError::ObjectSerializationError {
+            SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
             }
         })?;
@@ -335,9 +350,10 @@ impl MoveObject {
     /// Convert `self` to the JSON representation dictated by `layout`.
     pub fn to_move_struct(&self, layout: &MoveStructLayout) -> Result<MoveStruct, SuiError> {
         BoundedVisitor::deserialize_struct(&self.contents, layout).map_err(|e| {
-            SuiError::ObjectSerializationError {
+            SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
             }
+            .into()
         })
     }
 
@@ -388,7 +404,7 @@ impl MoveObject {
 
             let mut traversal = BalanceTraversal::default();
             MoveValue::visit_deserialize(&self.contents, &layout.into_layout(), &mut traversal)
-                .map_err(|e| SuiError::ObjectSerializationError {
+                .map_err(|e| SuiErrorKind::ObjectSerializationError {
                     error: e.to_string(),
                 })?;
 
@@ -513,7 +529,7 @@ impl Owner {
             Self::Shared { .. }
             | Self::Immutable
             | Self::ObjectOwner(_)
-            | Self::ConsensusAddressOwner { .. } => Err(SuiError::UnexpectedOwnerType),
+            | Self::ConsensusAddressOwner { .. } => Err(SuiErrorKind::UnexpectedOwnerType.into()),
         }
     }
 
@@ -525,7 +541,7 @@ impl Owner {
             Self::AddressOwner(address)
             | Self::ObjectOwner(address)
             | Self::ConsensusAddressOwner { owner: address, .. } => Ok(*address),
-            Self::Shared { .. } | Self::Immutable => Err(SuiError::UnexpectedOwnerType),
+            Self::Shared { .. } | Self::Immutable => Err(SuiErrorKind::UnexpectedOwnerType.into()),
         }
     }
 
@@ -964,14 +980,18 @@ impl ObjectInner {
     /// like this: `S<T>`.
     /// Returns the inner parameter type `T`.
     pub fn get_move_template_type(&self) -> SuiResult<TypeTag> {
-        let move_struct = self.data.struct_tag().ok_or_else(|| SuiError::TypeError {
-            error: "Object must be a Move object".to_owned(),
-        })?;
+        let move_struct = self
+            .data
+            .struct_tag()
+            .ok_or_else(|| SuiErrorKind::TypeError {
+                error: "Object must be a Move object".to_owned(),
+            })?;
         fp_ensure!(
             move_struct.type_params.len() == 1,
-            SuiError::TypeError {
+            SuiErrorKind::TypeError {
                 error: "Move object struct must have one type parameter".to_owned()
             }
+            .into()
         );
         // Index access safe due to checks above.
         let type_tag = move_struct.type_params[0].clone();
@@ -1285,7 +1305,11 @@ impl Display for PastObjectRead {
                 asked_version,
                 latest_version,
             } => {
-                write!(f, "PastObjectRead::VersionTooHigh ({:?}, asked sequence number {:?}, latest sequence number {:?})", object_id, asked_version, latest_version)
+                write!(
+                    f,
+                    "PastObjectRead::VersionTooHigh ({:?}, asked sequence number {:?}, latest sequence number {:?})",
+                    object_id, asked_version, latest_version
+                )
             }
         }
     }
@@ -1293,7 +1317,7 @@ impl Display for PastObjectRead {
 
 #[cfg(test)]
 mod tests {
-    use crate::object::{Object, Owner, OBJECT_START_VERSION};
+    use crate::object::{OBJECT_START_VERSION, Object, Owner};
     use crate::{
         base_types::{ObjectID, SuiAddress, TransactionDigest},
         gas_coin::GasCoin,
@@ -1323,7 +1347,10 @@ mod tests {
         );
 
         let objref = format!("{:?}", o.compute_object_reference());
-        assert_eq!(objref, "(0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(1), o#59tZq65HVqZjUyNtD7BCGLTD87N5cpayYwEFrtwR4aMz)");
+        assert_eq!(
+            objref,
+            "(0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(1), o#59tZq65HVqZjUyNtD7BCGLTD87N5cpayYwEFrtwR4aMz)"
+        );
     }
 
     #[test]

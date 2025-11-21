@@ -20,7 +20,6 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID,
     error::{ExecutionError, ExecutionErrorKind},
-    execution_config_utils::to_binary_config,
 };
 
 #[derive(Debug)]
@@ -34,7 +33,7 @@ impl LinkageAnalyzer {
     ) -> Result<Self, ExecutionError> {
         let always_include_system_packages = !Mode::packages_are_predefined();
         let linkage_config = LinkageConfig::legacy_linkage_settings(always_include_system_packages);
-        let binary_config = to_binary_config(protocol_config);
+        let binary_config = protocol_config.binary_config(None);
         Ok(Self {
             internal: ResolutionConfig {
                 linkage_config,
@@ -167,11 +166,7 @@ impl LinkageAnalyzer {
             .linkage_config
             .resolution_table_with_native_packages(store)?;
         for id in deps {
-            let pkg = get_package(id, store)?;
             add_and_unify(id, store, &mut resolution_table, VersionConstraint::exact)?;
-            resolution_table
-                .all_versions_resolution_table
-                .insert(pkg.version_id().into(), pkg.original_id().into());
         }
         Ok(resolution_table)
     }

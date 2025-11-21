@@ -5,7 +5,7 @@ use diesel::data_types::PgTimestamp;
 use diesel::{Identifiable, Insertable, Queryable, QueryableByName, Selectable};
 
 use serde::Serialize;
-use sui_indexer_builder::{Task, LIVE_TASK_TARGET_CHECKPOINT};
+use sui_indexer_builder::{LIVE_TASK_TARGET_CHECKPOINT, Task};
 
 use crate::schema::{
     balances, balances_summary, flashloans, order_fills, order_updates, pool_prices, pools,

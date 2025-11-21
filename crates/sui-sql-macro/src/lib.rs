@@ -4,10 +4,10 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
+    Error, Expr, LitStr, Result, Token, Type,
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
-    Error, Expr, LitStr, Result, Token, Type,
 };
 
 use crate::{

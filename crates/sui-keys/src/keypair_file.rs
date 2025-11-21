@@ -91,10 +91,10 @@ pub fn read_key(path: &PathBuf, require_secp256k1: bool) -> Result<SuiKeyPair, a
     }
 
     // Try hex encoded Raw key `privkey`
-    if let Ok(bytes) = Hex::decode(contents).map_err(|e| anyhow!("Error decoding hex: {:?}", e)) {
-        if let Ok(key) = Secp256k1KeyPair::from_bytes(&bytes) {
-            return Ok(SuiKeyPair::Secp256k1(key));
-        }
+    if let Ok(bytes) = Hex::decode(contents).map_err(|e| anyhow!("Error decoding hex: {:?}", e))
+        && let Ok(key) = Secp256k1KeyPair::from_bytes(&bytes)
+    {
+        return Ok(SuiKeyPair::Secp256k1(key));
     }
 
     Err(anyhow!("Error decoding key from {:?}", path))

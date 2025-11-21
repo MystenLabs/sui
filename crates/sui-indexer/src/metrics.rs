@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::{extract::Extension, http::StatusCode, routing::get, Router};
+use axum::{Router, extract::Extension, http::StatusCode, routing::get};
 use mysten_metrics::RegistryService;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
+    Histogram, IntCounter, IntGauge, register_histogram_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry,
 };
 use prometheus::{Registry, TextEncoder};
 use std::net::SocketAddr;

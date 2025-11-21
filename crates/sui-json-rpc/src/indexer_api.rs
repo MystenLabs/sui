@@ -5,10 +5,10 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use async_trait::async_trait;
-use futures::{future, Stream, StreamExt};
+use futures::{Stream, StreamExt, future};
 use jsonrpsee::{
-    core::{RpcResult, SubscriptionResult},
     PendingSubscriptionSink, RpcModule,
+    core::{RpcResult, SubscriptionResult},
 };
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_core_types::language_storage::TypeTag;
@@ -17,8 +17,8 @@ use serde::Serialize;
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_api::{
-    cap_page_limit, validate_limit, IndexerApiOpenRpc, IndexerApiServer, JsonRpcMetrics,
-    ReadApiServer, QUERY_MAX_RESULT_LIMIT,
+    IndexerApiOpenRpc, IndexerApiServer, JsonRpcMetrics, QUERY_MAX_RESULT_LIMIT, ReadApiServer,
+    cap_page_limit, validate_limit,
 };
 use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectDataOptions,
@@ -39,9 +39,10 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::{instrument, warn};
 
 use crate::{
+    SuiRpcModule,
     authority_state::{StateRead, StateReadResult},
     error::{Error, SuiRpcInputError},
-    with_tracing, SuiRpcModule,
+    with_tracing,
 };
 
 pub fn spawn_subscription<S, T>(

@@ -6,10 +6,10 @@ use std::sync::Arc;
 use anyhow::Result;
 use move_core_types::annotated_value::MoveValue;
 
-use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
+use crate::FileType;
+use crate::handlers::{AnalyticsHandler, TransactionProcessor, process_transactions};
 use crate::package_store::PackageCache;
 use crate::tables::EventEntry;
-use crate::FileType;
 use sui_json_rpc_types::type_and_fields_from_move_event_data;
 use sui_types::event::Event;
 use sui_types::full_checkpoint_content::CheckpointData;

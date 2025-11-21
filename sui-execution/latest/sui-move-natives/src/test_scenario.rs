@@ -3,7 +3,7 @@
 
 use crate::{
     get_extension, get_extension_mut, get_nth_struct_field, get_tag_and_layouts, legacy_test_cost,
-    object_runtime::{object_store::ChildObjectEffects, ObjectRuntime, RuntimeResults},
+    object_runtime::{ObjectRuntime, RuntimeResults, object_store::ChildObjectEffects},
 };
 use better_any::{Tid, TidAble};
 use indexmap::{IndexMap, IndexSet};
@@ -37,6 +37,7 @@ use std::{
     thread::LocalKey,
 };
 use sui_types::{
+    TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     config,
     digests::{ObjectDigest, TransactionDigest},
@@ -46,7 +47,6 @@ use sui_types::{
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
     storage::ChildObjectResolver,
-    TypeTag,
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -122,7 +122,7 @@ pub fn end_transaction(
     // * Remove all allocated_tickets in the test inventories.
     // * For each allocated ticket, if the ticket's object ID is loaded, move it to `received`.
     // * Otherwise re-insert the allocated ticket into the objects inventory, and mark it to be
-    //   removed from the backing storage (deferred due to needing to have acces to `context` which
+    //   removed from the backing storage (deferred due to needing to have access to `context` which
     //   has outstanding references at this point).
     let allocated_tickets =
         std::mem::take(&mut object_runtime_ref.test_inventories.allocated_tickets);
@@ -345,13 +345,12 @@ pub fn end_transaction(
             .taken_immutable_values
             .get(&ty)
             .and_then(|values| values.get(&id))
+            && !value.equals(prev_value)?
         {
-            if !value.equals(prev_value)? {
-                return Ok(NativeResult::err(
-                    legacy_test_cost(),
-                    E_INVALID_SHARED_OR_IMMUTABLE_USAGE,
-                ));
-            }
+            return Ok(NativeResult::err(
+                legacy_test_cost(),
+                E_INVALID_SHARED_OR_IMMUTABLE_USAGE,
+            ));
         }
         object_runtime_ref
             .test_inventories
@@ -816,7 +815,7 @@ fn most_recent_at_ty_opt(
     ty: MoveObjectType,
 ) -> Option<Value> {
     let s = inv.get(&ty)?;
-    let most_recent_id = s.iter().filter(|id| !taken.contains_key(id)).last()?;
+    let most_recent_id = s.iter().filter(|id| !taken.contains_key(id)).next_back()?;
     Some(pack_id(*most_recent_id))
 }
 
@@ -831,7 +830,7 @@ fn pop_id(args: &mut VecDeque<Value>) -> PartialVMResult<ObjectID> {
         None => {
             return Err(PartialVMError::new(
                 StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            ))
+            ));
         }
         Some(v) => v,
     };
@@ -853,13 +852,15 @@ fn pack_ids(items: impl IntoIterator<Item = impl Into<AccountAddress>>) -> Value
 }
 
 fn pack_vec_map(items: impl IntoIterator<Item = (Value, Value)>) -> Value {
-    Value::struct_(values::Struct::pack(vec![Vector::pack(
-        VectorSpecialization::Container,
-        items
-            .into_iter()
-            .map(|(k, v)| Value::struct_(values::Struct::pack(vec![k, v]))),
-    )
-    .unwrap()]))
+    Value::struct_(values::Struct::pack(vec![
+        Vector::pack(
+            VectorSpecialization::Container,
+            items
+                .into_iter()
+                .map(|(k, v)| Value::struct_(values::Struct::pack(vec![k, v]))),
+        )
+        .unwrap(),
+    ]))
 }
 
 fn transaction_effects(
@@ -921,11 +922,9 @@ fn pack_option(specialization: VectorSpecialization, opt: Option<Value>) -> Valu
         Some(v) => vec![v],
         None => vec![],
     };
-    Value::struct_(values::Struct::pack(vec![Vector::pack(
-        specialization,
-        item,
-    )
-    .unwrap()]))
+    Value::struct_(values::Struct::pack(vec![
+        Vector::pack(specialization, item).unwrap(),
+    ]))
 }
 
 fn find_all_wrapped_objects<'a, 'i>(

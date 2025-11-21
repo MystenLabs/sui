@@ -28,7 +28,11 @@ where
     if let Some((vec_index, v)) = entities.iter().enumerate().find(|(_, v)| v.len() != length) {
         error!(
             "Entity: {} lengths do not match at index {}: first vec has length {} vs vec {} has length {}",
-            entity_name, vec_index, length, vec_index, v.len()
+            entity_name,
+            vec_index,
+            length,
+            vec_index,
+            v.len()
         );
         return;
     }

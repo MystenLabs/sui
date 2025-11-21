@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{get_extension, NativesCostTable};
+use crate::{NativesCostTable, get_extension};
 use fastcrypto::error::FastCryptoError;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;

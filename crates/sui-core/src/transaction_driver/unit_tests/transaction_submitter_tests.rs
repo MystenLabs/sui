@@ -5,8 +5,8 @@ use crate::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::AuthorityAPI,
     transaction_driver::{
-        error::TransactionDriverError, metrics::TransactionDriverMetrics,
-        transaction_submitter::TransactionSubmitter, SubmitTransactionOptions,
+        SubmitTransactionOptions, error::TransactionDriverError, metrics::TransactionDriverMetrics,
+        transaction_submitter::TransactionSubmitter,
     },
     validator_client_monitor::ValidatorClientMonitor,
 };
@@ -16,32 +16,31 @@ use std::{
     collections::{BTreeMap, HashMap},
     net::SocketAddr,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, Mutex as StdMutex,
+        atomic::{AtomicUsize, Ordering},
     },
 };
 use sui_types::{
-    base_types::{random_object_ref, AuthorityName},
+    base_types::{AuthorityName, random_object_ref},
     committee::Committee,
     digests::TransactionDigest,
-    error::{SuiError, UserInputError},
+    error::{SuiError, SuiErrorKind, UserInputError},
     messages_checkpoint::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
     messages_consensus::ConsensusPosition,
-    messages_grpc::TxType,
     messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
         HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
         SubmitTxResponse, SubmitTxResult, SystemStateRequest, TransactionInfoRequest,
-        TransactionInfoResponse, ValidatorHealthRequest, ValidatorHealthResponse,
+        TransactionInfoResponse, TxType, ValidatorHealthRequest, ValidatorHealthResponse,
         WaitForEffectsRequest, WaitForEffectsResponse,
     },
     sui_system_state::SuiSystemState,
     transaction::{CertifiedTransaction, Transaction},
 };
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 // Mock AuthorityAPI for testing transaction submission.
 #[derive(Clone)]
@@ -101,7 +100,7 @@ impl AuthorityAPI for MockAuthority {
         let maybe_response = match raw_request.transactions.first() {
             Some(tx_bytes) => {
                 let tx: Transaction =
-                    bcs::from_bytes(tx_bytes).map_err(|e| SuiError::GenericAuthorityError {
+                    bcs::from_bytes(tx_bytes).map_err(|e| SuiErrorKind::GenericAuthorityError {
                         error: format!("Failed to deserialize transaction: {}", e),
                     })?;
                 let tx_digest = tx.digest();
@@ -237,7 +236,7 @@ fn create_test_authority_aggregator_with_rgp(
 
 fn create_test_submit_request(gas_price: u64) -> SubmitTxRequest {
     use sui_test_transaction_builder::TestTransactionBuilder;
-    use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
+    use sui_types::crypto::{AccountKeyPair, get_account_key_pair};
 
     let (sender, keypair): (_, AccountKeyPair) = get_account_key_pair();
     let gas_object_ref = random_object_ref();
@@ -437,9 +436,10 @@ async fn test_submit_transaction_with_amplification() {
             if i < 2 {
                 mock_authority.set_submit_response(
                     tx_digest,
-                    Err(SuiError::ValidatorOverloadedRetryAfter {
+                    Err(SuiErrorKind::ValidatorOverloadedRetryAfter {
                         retry_after_secs: 1,
-                    }),
+                    }
+                    .into()),
                 );
             } else {
                 mock_authority.set_submit_response(
@@ -510,12 +510,13 @@ async fn test_submit_transaction_invalid_input() {
     for mock_authority in &mock_authorities {
         mock_authority.set_submit_response(
             tx_digest,
-            Err(SuiError::UserInputError {
+            Err(SuiErrorKind::UserInputError {
                 error: UserInputError::ObjectVersionUnavailableForConsumption {
                     provided_obj_ref: random_object_ref(),
                     current_version: 1.into(),
                 },
-            }),
+            }
+            .into()),
         );
     }
 

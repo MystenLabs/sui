@@ -98,6 +98,38 @@ impl TransactionFilter {
             sent_address: intersect!(sent_address, intersect::by_eq)?,
         })
     }
+
+    /// The active filters in TransactionFilter. Used to find the pipelines that are available to serve queries with these filters applied.
+    pub(crate) fn active_filters(&self) -> Vec<String> {
+        let mut filters = vec![];
+
+        if self.affected_address.is_some() {
+            filters.push("affectedAddress".to_string());
+        }
+        if self.sent_address.is_some() {
+            filters.push("sentAddress".to_string());
+        }
+        if self.kind.is_some() {
+            filters.push("kind".to_string());
+        }
+        if self.function.is_some() {
+            filters.push("function".to_string());
+        }
+        if self.affected_object.is_some() {
+            filters.push("affectedObjects".to_string());
+        }
+        if self.at_checkpoint.is_some() {
+            filters.push("atCheckpoint".to_string());
+        }
+        if self.after_checkpoint.is_some() {
+            filters.push("afterCheckpoint".to_string());
+        }
+        if self.before_checkpoint.is_some() {
+            filters.push("beforeCheckpoint".to_string());
+        }
+
+        filters
+    }
 }
 
 impl CheckpointBounds for TransactionFilter {

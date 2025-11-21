@@ -1,21 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Context as _};
-use async_graphql::{connection::Connection, Context, Enum, Object, SimpleObject};
+use anyhow::{Context as _, anyhow};
+use async_graphql::{Context, Enum, Object, SimpleObject, connection::Connection};
 use move_core_types::language_storage::StructTag;
 use sui_types::{
+    SUI_FRAMEWORK_ADDRESS, TypeTag,
     base_types::SuiAddress as NativeAddress,
     coin::{
-        CoinMetadata as NativeMetadata, RegulatedCoinMetadata, TreasuryCap,
-        COIN_METADATA_STRUCT_NAME, COIN_MODULE_NAME,
+        COIN_METADATA_STRUCT_NAME, COIN_MODULE_NAME, CoinMetadata as NativeMetadata,
+        RegulatedCoinMetadata, TreasuryCap,
     },
     coin_registry::{
         Currency as NativeCurrency, RegulatedState as NativeRegulated, SupplyState as NativeSupply,
     },
     gas_coin::{GAS, TOTAL_SUPPLY_MIST},
     object::Owner as NativeOwner,
-    TypeTag, SUI_FRAMEWORK_ADDRESS,
 };
 use tokio::sync::OnceCell;
 
@@ -24,7 +24,7 @@ use crate::{
         base64::Base64, big_int::BigInt, sui_address::SuiAddress, type_filter::TypeInput,
         uint53::UInt53,
     },
-    error::{upcast, RpcError},
+    error::{RpcError, upcast},
     scope::Scope,
 };
 
@@ -36,7 +36,7 @@ use super::{
     object::{self, CLive, CVersion, Object, VersionFilter},
     object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
     owner::Owner,
-    transaction::{filter::TransactionFilter, CTransaction, Transaction},
+    transaction::{CTransaction, Transaction, filter::TransactionFilter},
 };
 
 pub(crate) struct CoinMetadata {
@@ -505,7 +505,7 @@ impl CoinMetadata {
                 return Ok(SupplyFields {
                     supply_state: Some(SupplyState::Fixed),
                     supply: Some(BigInt::from(*s)),
-                })
+                });
             }
 
             NativeContents::Registry(NativeCurrency {
@@ -515,7 +515,7 @@ impl CoinMetadata {
                 return Ok(SupplyFields {
                     supply_state: Some(SupplyState::BurnOnly),
                     supply: Some(BigInt::from(*s)),
-                })
+                });
             }
 
             _ => {}

@@ -241,18 +241,18 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
 
 #[cfg(test)]
 mod test {
-    use anemo::async_trait;
+    use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_types::block::BlockRef;
     use futures::stream;
 
     use super::*;
     use crate::{
+        VerifiedBlock,
         commit::CommitRange,
         error::ConsensusResult,
-        network::{test_network::TestService, BlockStream, ExtendedSerializedBlock},
+        network::{BlockStream, ExtendedSerializedBlock, test_network::TestService},
         storage::mem_store::MemStore,
-        VerifiedBlock,
     };
 
     struct SubscriberTestClient {}
@@ -265,8 +265,6 @@ mod test {
 
     #[async_trait]
     impl NetworkClient for SubscriberTestClient {
-        const SUPPORT_STREAMING: bool = true;
-
         async fn send_block(
             &self,
             _peer: AuthorityIndex,

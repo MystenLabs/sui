@@ -26,6 +26,8 @@ tokens and coins. <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> c
 -  [Function `into_balance`](#sui_coin_into_balance)
 -  [Function `take`](#sui_coin_take)
 -  [Function `put`](#sui_coin_put)
+-  [Function `redeem_funds`](#sui_coin_redeem_funds)
+-  [Function `send_funds`](#sui_coin_send_funds)
 -  [Function `join`](#sui_coin_join)
 -  [Function `split`](#sui_coin_split)
 -  [Function `divide_into_n`](#sui_coin_divide_into_n)
@@ -60,6 +62,8 @@ tokens and coins. <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> c
 -  [Function `new_deny_cap_v2`](#sui_coin_new_deny_cap_v2)
 -  [Function `new_treasury_cap`](#sui_coin_new_treasury_cap)
 -  [Function `allow_global_pause`](#sui_coin_allow_global_pause)
+-  [Function `new_coin_metadata`](#sui_coin_new_coin_metadata)
+-  [Function `update_coin_metadata`](#sui_coin_update_coin_metadata)
 -  [Function `supply`](#sui_coin_supply)
 -  [Function `create_regulated_currency`](#sui_coin_create_regulated_currency)
 -  [Function `deny_list_add`](#sui_coin_deny_list_add)
@@ -691,6 +695,59 @@ Put a <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;</code> to t
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_put">put</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: &<b>mut</b> Balance&lt;T&gt;, <a href="../sui/coin.md#sui_coin">coin</a>: <a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;) {
     <a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/coin.md#sui_coin_join">join</a>(<a href="../sui/coin.md#sui_coin_into_balance">into_balance</a>(<a href="../sui/coin.md#sui_coin">coin</a>));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_redeem_funds"></a>
+
+## Function `redeem_funds`
+
+Redeem a <code>Withdrawal&lt;Balance&lt;T&gt;&gt;</code> and create a <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;</code> from the withdrawn Balance<T>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_redeem_funds">redeem_funds</a>&lt;T&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_redeem_funds">redeem_funds</a>&lt;T&gt;(
+    withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;Balance&lt;T&gt;&gt;,
+    ctx: &<b>mut</b> TxContext,
+): <a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt; {
+    <a href="../sui/balance.md#sui_balance_redeem_funds">balance::redeem_funds</a>(withdrawal).into_coin(ctx)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_send_funds"></a>
+
+## Function `send_funds`
+
+Send a coin to an address balance
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_send_funds">send_funds</a>&lt;T&gt;(<a href="../sui/coin.md#sui_coin">coin</a>: <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;, recipient: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_send_funds">send_funds</a>&lt;T&gt;(<a href="../sui/coin.md#sui_coin">coin</a>: <a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;, recipient: <b>address</b>) {
+    <a href="../sui/balance.md#sui_balance_send_funds">balance::send_funds</a>(<a href="../sui/coin.md#sui_coin">coin</a>.<a href="../sui/coin.md#sui_coin_into_balance">into_balance</a>(), recipient);
 }
 </code></pre>
 
@@ -1702,6 +1759,79 @@ Destroy legacy <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata
 
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_allow_global_pause">allow_global_pause</a>&lt;T&gt;(cap: &<a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;): bool {
     cap.<a href="../sui/coin.md#sui_coin_allow_global_pause">allow_global_pause</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_new_coin_metadata"></a>
+
+## Function `new_coin_metadata`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_new_coin_metadata">new_coin_metadata</a>&lt;T&gt;(decimals: u8, name: <a href="../std/string.md#std_string_String">std::string::String</a>, symbol: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, description: <a href="../std/string.md#std_string_String">std::string::String</a>, icon_url: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_new_coin_metadata">new_coin_metadata</a>&lt;T&gt;(
+    decimals: u8,
+    name: string::String,
+    symbol: ascii::String,
+    description: string::String,
+    icon_url: ascii::String,
+    ctx: &<b>mut</b> TxContext,
+): <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt; {
+    <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a> {
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url: option::some(<a href="../sui/url.md#sui_url_new_unsafe">url::new_unsafe</a>(icon_url)),
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_update_coin_metadata"></a>
+
+## Function `update_coin_metadata`
+
+Internal function to refresh the <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code> with new values in
+<code>CoinRegistry</code> borrowing.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_update_coin_metadata">update_coin_metadata</a>&lt;T&gt;(metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, name: <a href="../std/string.md#std_string_String">std::string::String</a>, symbol: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, description: <a href="../std/string.md#std_string_String">std::string::String</a>, icon_url: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin.md#sui_coin_update_coin_metadata">update_coin_metadata</a>&lt;T&gt;(
+    metadata: &<b>mut</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;,
+    name: string::String,
+    symbol: ascii::String,
+    description: string::String,
+    icon_url: ascii::String,
+) {
+    metadata.name = name;
+    metadata.symbol = symbol;
+    metadata.description = description;
+    metadata.icon_url = option::some(<a href="../sui/url.md#sui_url_new_unsafe">url::new_unsafe</a>(icon_url));
 }
 </code></pre>
 

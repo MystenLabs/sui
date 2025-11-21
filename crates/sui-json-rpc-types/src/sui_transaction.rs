@@ -10,7 +10,7 @@ use serde_with::serde_as;
 use sui_package_resolver::{PackageStore, Resolver};
 use tabled::{
     builder::Builder as TableBuilder,
-    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
+    settings::{Panel as TablePanel, Style as TableStyle, style::HorizontalLine},
 };
 
 use fastcrypto::encoding::Base64;
@@ -20,9 +20,10 @@ use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::identifier::{IdentStr, Identifier};
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use mysten_metrics::monitored_scope;
-use sui_json::{primitive_type, SuiJsonValue};
+use nonempty::NonEmpty;
+use sui_json::{SuiJsonValue, primitive_type};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::accumulator_event::AccumulatorEvent;
-use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
@@ -39,7 +40,7 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
-use sui_types::layout_resolver::{get_layout_from_struct_tag, LayoutResolver};
+use sui_types::layout_resolver::{LayoutResolver, get_layout_from_struct_tag};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::Owner;
@@ -57,7 +58,7 @@ use sui_types::transaction::{
     SenderSignedData, TransactionData, TransactionDataAPI, TransactionKind, WithdrawFrom,
     WithdrawalTypeArg,
 };
-use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::{authenticator_state::ActiveJwk, transaction::SharedObjectMutability};
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
@@ -463,7 +464,11 @@ impl Display for SuiTransactionBlockKind {
                 writeln!(
                     writer,
                     "Epoch: {}, Round: {}, SubDagIndex: {:?}, Timestamp: {}, ConsensusCommitDigest: {}",
-                    p.epoch, p.round, p.sub_dag_index, p.commit_timestamp_ms, p.consensus_commit_digest
+                    p.epoch,
+                    p.round,
+                    p.sub_dag_index,
+                    p.commit_timestamp_ms,
+                    p.consensus_commit_digest
                 )?;
             }
             Self::ConsensusCommitPrologueV4(p) => {
@@ -471,7 +476,12 @@ impl Display for SuiTransactionBlockKind {
                 writeln!(
                     writer,
                     "Epoch: {}, Round: {}, SubDagIndex: {:?}, Timestamp: {}, ConsensusCommitDigest: {} AdditionalStateDigest: {}",
-                    p.epoch, p.round, p.sub_dag_index, p.commit_timestamp_ms, p.consensus_commit_digest, p.additional_state_digest
+                    p.epoch,
+                    p.round,
+                    p.sub_dag_index,
+                    p.commit_timestamp_ms,
+                    p.consensus_commit_digest,
+                    p.additional_state_digest
                 )?;
             }
             Self::ProgrammableTransaction(p) => {
@@ -606,6 +616,9 @@ impl SuiTransactionBlockKind {
                             }
                             EndOfEpochTransactionKind::CoinRegistryCreate => {
                                 SuiEndOfEpochTransactionKind::CoinRegistryCreate
+                            }
+                            EndOfEpochTransactionKind::DisplayRegistryCreate => {
+                                SuiEndOfEpochTransactionKind::DisplayRegistryCreate
                             }
                         })
                         .collect(),
@@ -810,7 +823,8 @@ impl From<AccumulatorOperation> for SuiAccumulatorOperation {
 pub enum SuiAccumulatorValue {
     Integer(u64),
     IntegerTuple(u64, u64),
-    EventDigest(u64 /* event index in the transaction */, Digest),
+    #[schemars(with = "Vec<(u64, Digest)>")]
+    EventDigest(NonEmpty<(u64 /* event index in the transaction */, Digest)>),
 }
 
 impl From<AccumulatorValue> for SuiAccumulatorValue {
@@ -818,7 +832,7 @@ impl From<AccumulatorValue> for SuiAccumulatorValue {
         match value {
             AccumulatorValue::Integer(value) => Self::Integer(value),
             AccumulatorValue::IntegerTuple(value1, value2) => Self::IntegerTuple(value1, value2),
-            AccumulatorValue::EventDigest(idx, value) => Self::EventDigest(idx, value),
+            AccumulatorValue::EventDigest(digests) => Self::EventDigest(digests),
         }
     }
 }
@@ -1398,7 +1412,7 @@ impl Display for SuiExecutionStatus {
 
 impl SuiExecutionStatus {
     pub fn is_ok(&self) -> bool {
-        matches!(self, SuiExecutionStatus::Success { .. })
+        matches!(self, SuiExecutionStatus::Success)
     }
     pub fn is_err(&self) -> bool {
         matches!(self, SuiExecutionStatus::Failure { .. })
@@ -1769,6 +1783,7 @@ pub enum SuiEndOfEpochTransactionKind {
     StoreExecutionTimeObservations,
     AccumulatorRootCreate,
     CoinRegistryCreate,
+    DisplayRegistryCreate,
 }
 
 #[serde_as]
@@ -1924,19 +1939,19 @@ impl SuiProgrammableTransactionBlock {
                         return result_types;
                     };
                     for (arg, type_) in c.arguments.iter().zip(types) {
-                        if let (&Argument::Input(i), Some(type_)) = (arg, type_) {
-                            if let Some(x) = result_types.get_mut(i as usize) {
-                                x.replace(type_);
-                            }
+                        if let (&Argument::Input(i), Some(type_)) = (arg, type_)
+                            && let Some(x) = result_types.get_mut(i as usize)
+                        {
+                            x.replace(type_);
                         }
                     }
                 }
                 Command::SplitCoins(_, amounts) => {
                     for arg in amounts {
-                        if let &Argument::Input(i) = arg {
-                            if let Some(x) = result_types.get_mut(i as usize) {
-                                x.replace(MoveTypeLayout::U64);
-                            }
+                        if let &Argument::Input(i) = arg
+                            && let Some(x) = result_types.get_mut(i as usize)
+                        {
+                            x.replace(MoveTypeLayout::U64);
                         }
                     }
                 }
@@ -2203,11 +2218,16 @@ impl From<InputObjectKind> for SuiInputObjectKind {
             InputObjectKind::SharedMoveObject {
                 id,
                 initial_shared_version,
-                mutable,
+                mutability,
             } => Self::SharedMoveObject {
                 id,
                 initial_shared_version,
-                mutable,
+                mutable: match mutability {
+                    SharedObjectMutability::Mutable => true,
+                    SharedObjectMutability::Immutable => false,
+                    // TODO(address-balances): expose detailed mutability info
+                    SharedObjectMutability::NonExclusiveWrite => false,
+                },
             },
         }
     }
@@ -2341,14 +2361,15 @@ impl SuiCallArg {
                     digest,
                 })
             }
+            // TODO(address-balances): Expose the full mutability enum
             CallArg::Object(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutable,
+                mutability,
             }) => SuiCallArg::Object(SuiObjectArg::SharedObject {
                 object_id: id,
                 initial_shared_version,
-                mutable,
+                mutable: mutability.is_exclusive(),
             }),
             CallArg::Object(ObjectArg::Receiving((object_id, version, digest))) => {
                 SuiCallArg::Object(SuiObjectArg::Receiving {
@@ -2369,6 +2390,7 @@ impl SuiCallArg {
                 },
                 withdraw_from: match arg.withdraw_from {
                     WithdrawFrom::Sender => SuiWithdrawFrom::Sender,
+                    WithdrawFrom::Sponsor => SuiWithdrawFrom::Sponsor,
                 },
             }),
         })
@@ -2467,6 +2489,7 @@ pub enum SuiWithdrawalTypeArg {
 #[serde(rename_all = "camelCase")]
 pub enum SuiWithdrawFrom {
     Sender,
+    Sponsor,
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]

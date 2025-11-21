@@ -9,10 +9,10 @@ use std::time::Instant;
 use anyhow::{Context, Result};
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
-use rand::seq::SliceRandom;
 use rand::SeedableRng;
+use rand::seq::SliceRandom;
 use sui_indexer_alt_framework::task::TrySpawnStreamExt;
-use tokio_postgres::{types::ToSql, NoTls};
+use tokio_postgres::{NoTls, types::ToSql};
 use tracing::info;
 use url::Url;
 

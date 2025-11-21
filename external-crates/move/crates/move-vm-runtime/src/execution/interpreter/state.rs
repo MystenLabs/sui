@@ -241,7 +241,7 @@ impl MachineState {
         let code = func.code();
 
         if pc < code.len() {
-            let before = if pc > 3 { pc - 3 } else { 0 };
+            let before = pc.saturating_sub(3);
             let after = min(code.len(), pc + 4);
 
             for (ndx, instr) in code.iter().enumerate().take(pc).skip(before) {

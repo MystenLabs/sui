@@ -6,7 +6,7 @@ use consensus_config::{
 };
 use insta::assert_yaml_snapshot;
 use mysten_network::Multiaddr;
-use rand::{rngs::StdRng, SeedableRng as _};
+use rand::{SeedableRng as _, rngs::StdRng};
 
 // Committee is not sent over network or stored on disk itself, but some of its fields are.
 // So this test can still be useful to detect accidental format changes.

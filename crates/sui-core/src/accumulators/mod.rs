@@ -5,11 +5,11 @@ use std::collections::{BTreeMap, HashMap};
 
 use move_core_types::u256::U256;
 use mysten_common::fatal;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{
-    build_event_merkle_root, AccumulatorObjId, EventCommitment,
-    ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC, ACCUMULATOR_ROOT_SETTLE_U128_FUNC,
-    ACCUMULATOR_SETTLEMENT_MODULE,
+    ACCUMULATOR_ROOT_SETTLE_U128_FUNC, ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC,
+    ACCUMULATOR_SETTLEMENT_MODULE, AccumulatorObjId, EventCommitment, build_event_merkle_root,
 };
 use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
 use sui_types::base_types::SequenceNumber;
@@ -20,9 +20,11 @@ use sui_types::effects::{
     TransactionEffects, TransactionEffectsAPI,
 };
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{Argument, CallArg, ObjectArg, TransactionKind};
+use sui_types::transaction::{
+    Argument, CallArg, ObjectArg, SharedObjectMutability, TransactionKind,
+};
 use sui_types::{
-    TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
 };
 
 use crate::execution_cache::TransactionCacheRead;
@@ -69,11 +71,11 @@ impl MergedValue {
         split: Self,
         root: Argument,
         address: &AccumulatorAddress,
+        checkpoint_seq: u64,
         builder: &mut ProgrammableTransactionBuilder,
     ) {
         let ty = ClassifiedType::classify(&address.ty);
         let address_arg = builder.pure(address.address).unwrap();
-        let checkpoint_seq = 0u64; /* TODO: replace with actual checkpoint sequence number */
 
         match (ty, merge, split) {
             (
@@ -160,7 +162,7 @@ impl MergedValueIntermediate {
         match value {
             AccumulatorValue::Integer(_) => Self::SumU128(0),
             AccumulatorValue::IntegerTuple(_, _) => Self::SumU128U128(0, 0),
-            AccumulatorValue::EventDigest(_, _) => Self::Events(vec![]),
+            AccumulatorValue::EventDigest(_) => Self::Events(vec![]),
         }
     }
 
@@ -176,13 +178,15 @@ impl MergedValueIntermediate {
                 *v1 += w1 as u128;
                 *v2 += w2 as u128;
             }
-            (Self::Events(commitments), AccumulatorValue::EventDigest(event_idx, digest)) => {
-                commitments.push(EventCommitment::new(
-                    checkpoint_seq,
-                    transaction_idx,
-                    event_idx,
-                    digest,
-                ));
+            (Self::Events(commitments), AccumulatorValue::EventDigest(event_digests)) => {
+                for (event_idx, digest) in event_digests {
+                    commitments.push(EventCommitment::new(
+                        checkpoint_seq,
+                        transaction_idx,
+                        event_idx,
+                        digest,
+                    ));
+                }
             }
             _ => {
                 fatal!("invalid merge");
@@ -194,30 +198,30 @@ impl MergedValueIntermediate {
 struct Update {
     merge: MergedValueIntermediate,
     split: MergedValueIntermediate,
+    // Track input and output SUI for each update. Necessary so that when we construct
+    // a settlement transaction from a collection of Updates, they can accurately
+    // track the net SUI flows.
+    input_sui: u64,
+    output_sui: u64,
 }
 
 pub(crate) struct AccumulatorSettlementTxBuilder {
-    updates: HashMap<AccumulatorObjId, Update>,
+    // updates is iterated over, must be a BTreeMap
+    updates: BTreeMap<AccumulatorObjId, Update>,
+    // addresses is only used for lookups.
     addresses: HashMap<AccumulatorObjId, AccumulatorAddress>,
-
-    total_input_sui: u64,
-    total_output_sui: u64,
 }
 
 impl AccumulatorSettlementTxBuilder {
     pub fn new(
         cache: Option<&dyn TransactionCacheRead>,
         ckpt_effects: &[TransactionEffects],
+        checkpoint_seq: u64,
         tx_index_offset: u64,
     ) -> Self {
-        let checkpoint_seq = 0u64; /* TODO: replace with actual checkpoint sequence number */
-
-        let mut updates = HashMap::<_, _>::new();
+        let mut updates = BTreeMap::<_, _>::new();
 
         let mut addresses = HashMap::<_, _>::new();
-
-        let mut total_input_sui = 0;
-        let mut total_output_sui = 0;
 
         for (tx_index, effect) in ckpt_effects.iter().enumerate() {
             let tx = effect.transaction_digest();
@@ -231,11 +235,9 @@ impl AccumulatorSettlementTxBuilder {
             };
 
             for event in events {
-                let (input_sui, output_sui) = event.total_sui_in_event();
                 // The input to the settlement is the sum of the outputs of accumulator events (i.e. deposits).
-                total_input_sui += output_sui;
                 // and the output of the settlement is the sum of the inputs (i.e. withdraws).
-                total_output_sui += input_sui;
+                let (event_input_sui, event_output_sui) = event.total_sui_in_event();
 
                 let AccumulatorEvent {
                     accumulator_obj,
@@ -256,8 +258,14 @@ impl AccumulatorSettlementTxBuilder {
                     Update {
                         merge: zero.clone(),
                         split: zero,
+                        input_sui: 0,
+                        output_sui: 0,
                     }
                 });
+
+                // The output of the event is the input of the settlement, and vice versa.
+                entry.input_sui += event_output_sui;
+                entry.output_sui += event_input_sui;
 
                 match operation {
                     AccumulatorOperation::Merge => {
@@ -278,12 +286,7 @@ impl AccumulatorSettlementTxBuilder {
             }
         }
 
-        Self {
-            updates,
-            addresses,
-            total_input_sui,
-            total_output_sui,
-        }
+        Self { updates, addresses }
     }
 
     pub fn num_updates(&self) -> usize {
@@ -316,27 +319,103 @@ impl AccumulatorSettlementTxBuilder {
     //   have been applied.
     pub fn build_tx(
         self,
+        protocol_config: &ProtocolConfig,
         epoch: u64,
         accumulator_root_obj_initial_shared_version: SequenceNumber,
         checkpoint_height: u64,
-    ) -> Vec<TransactionKind> {
-        let mut builder = ProgrammableTransactionBuilder::new();
+        checkpoint_seq: u64,
+    ) -> (
+        Vec<TransactionKind>, /* settlements */
+        TransactionKind,      /* barrier */
+    ) {
+        let Self { updates, addresses } = self;
 
+        let mut pending_updates = Vec::new();
+        let mut settlements = Vec::new();
+
+        let build_one_settlement_txn = |idx: u64, updates: &mut Vec<(AccumulatorObjId, Update)>| {
+            let (total_input_sui, total_output_sui) =
+                updates
+                    .iter()
+                    .fold((0, 0), |(acc_input, acc_output), (_, update)| {
+                        (acc_input + update.input_sui, acc_output + update.output_sui)
+                    });
+
+            Self::build_one_settlement_txn(
+                &addresses,
+                epoch,
+                idx,
+                checkpoint_height,
+                accumulator_root_obj_initial_shared_version,
+                updates.drain(..),
+                total_input_sui,
+                total_output_sui,
+                checkpoint_seq,
+            )
+        };
+
+        for (obj, update) in updates.into_iter() {
+            pending_updates.push((obj, update));
+
+            if pending_updates.len()
+                == protocol_config
+                    .max_updates_per_settlement_txn_as_option()
+                    .unwrap_or(u32::MAX) as usize
+            {
+                settlements.push(build_one_settlement_txn(
+                    settlements.len() as u64,
+                    // pending_updates will be drained and can be re-used
+                    &mut pending_updates,
+                ));
+            }
+        }
+
+        if !pending_updates.is_empty() {
+            settlements.push(build_one_settlement_txn(
+                settlements.len() as u64,
+                &mut pending_updates,
+            ));
+        }
+
+        // Now construct the barrier transaction
+        let mut builder = ProgrammableTransactionBuilder::new();
         let root = builder
             .input(CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
                 initial_shared_version: accumulator_root_obj_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             }))
             .unwrap();
 
+        Self::add_prologue(
+            &mut builder,
+            root,
+            epoch,
+            checkpoint_height,
+            settlements.len() as u64,
+            0u64,
+            0u64,
+        );
+
+        let barrier = TransactionKind::ProgrammableSystemTransaction(builder.finish());
+
+        (settlements, barrier)
+    }
+
+    fn add_prologue(
+        builder: &mut ProgrammableTransactionBuilder,
+        root: Argument,
+        epoch: u64,
+        checkpoint_height: u64,
+        idx: u64,
+        total_input_sui: u64,
+        total_output_sui: u64,
+    ) {
         let epoch_arg = builder.pure(epoch).unwrap();
         let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
-        let idx_arg = builder.pure(0u64).unwrap();
-        let total_input_sui_arg = builder.pure(self.total_input_sui).unwrap();
-        let total_output_sui_arg = builder.pure(self.total_output_sui).unwrap();
-        tracing::debug!("total_input_sui: {}", self.total_input_sui);
-        tracing::debug!("total_output_sui: {}", self.total_output_sui);
+        let idx_arg = builder.pure(idx).unwrap();
+        let total_input_sui_arg = builder.pure(total_input_sui).unwrap();
+        let total_output_sui_arg = builder.pure(total_output_sui).unwrap();
 
         builder.programmable_move_call(
             SUI_FRAMEWORK_PACKAGE_ID,
@@ -344,6 +423,7 @@ impl AccumulatorSettlementTxBuilder {
             ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
             vec![],
             vec![
+                root,
                 epoch_arg,
                 checkpoint_height_arg,
                 idx_arg,
@@ -351,17 +431,54 @@ impl AccumulatorSettlementTxBuilder {
                 total_output_sui_arg,
             ],
         );
+    }
 
-        for (accumulator_obj, update) in self.updates {
-            let Update { merge, split } = update;
-            let address = self.addresses.get(&accumulator_obj).unwrap();
+    fn build_one_settlement_txn(
+        addresses: &HashMap<AccumulatorObjId, AccumulatorAddress>,
+        epoch: u64,
+        idx: u64,
+        checkpoint_height: u64,
+        accumulator_root_obj_initial_shared_version: SequenceNumber,
+        updates: impl Iterator<Item = (AccumulatorObjId, Update)>,
+        total_input_sui: u64,
+        total_output_sui: u64,
+        checkpoint_seq: u64,
+    ) -> TransactionKind {
+        let mut builder = ProgrammableTransactionBuilder::new();
+
+        let root = builder
+            .input(CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                initial_shared_version: accumulator_root_obj_initial_shared_version,
+                mutability: SharedObjectMutability::NonExclusiveWrite,
+            }))
+            .unwrap();
+
+        Self::add_prologue(
+            &mut builder,
+            root,
+            epoch,
+            checkpoint_height,
+            idx,
+            total_input_sui,
+            total_output_sui,
+        );
+
+        for (accumulator_obj, update) in updates {
+            let Update { merge, split, .. } = update;
+            let address = addresses.get(&accumulator_obj).unwrap();
             let merged_value = MergedValue::from(merge);
             let split_value = MergedValue::from(split);
-            MergedValue::add_move_call(merged_value, split_value, root, address, &mut builder);
+            MergedValue::add_move_call(
+                merged_value,
+                split_value,
+                root,
+                address,
+                checkpoint_seq,
+                &mut builder,
+            );
         }
 
-        vec![TransactionKind::ProgrammableSystemTransaction(
-            builder.finish(),
-        )]
+        TransactionKind::ProgrammableSystemTransaction(builder.finish())
     }
 }

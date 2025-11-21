@@ -5,7 +5,7 @@ use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use crate::validator_client_monitor::stats::ClientObservedStats;
 use crate::validator_client_monitor::{
-    metrics::ValidatorClientMetrics, OperationFeedback, OperationType,
+    OperationFeedback, OperationType, metrics::ValidatorClientMetrics,
 };
 use arc_swap::ArcSwap;
 use parking_lot::RwLock;
@@ -128,6 +128,7 @@ where
                                 authority_name: name,
                                 display_name: display_name.clone(),
                                 operation: OperationType::HealthCheck,
+                                ping_type: None,
                                 result: Ok(latency),
                             });
                         }
@@ -137,6 +138,7 @@ where
                                 authority_name: name,
                                 display_name: display_name.clone(),
                                 operation: OperationType::HealthCheck,
+                                ping_type: None,
                                 result: Err(()),
                             });
                         }
@@ -145,6 +147,7 @@ where
                                 authority_name: name,
                                 display_name,
                                 operation: OperationType::HealthCheck,
+                                ping_type: None,
                                 result: Err(()),
                             });
                         }
@@ -212,22 +215,27 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             OperationType::FastPath => "fast_path",
             OperationType::Consensus => "consensus",
         };
+        let ping_label = if feedback.ping_type.is_some() {
+            "true"
+        } else {
+            "false"
+        };
 
         match feedback.result {
             Ok(latency) => {
                 self.metrics
                     .observed_latency
-                    .with_label_values(&[&feedback.display_name, operation_str])
+                    .with_label_values(&[&feedback.display_name, operation_str, ping_label])
                     .observe(latency.as_secs_f64());
                 self.metrics
                     .operation_success
-                    .with_label_values(&[&feedback.display_name, operation_str])
+                    .with_label_values(&[&feedback.display_name, operation_str, ping_label])
                     .inc();
             }
             Err(()) => {
                 self.metrics
                     .operation_failure
-                    .with_label_values(&[&feedback.display_name, operation_str])
+                    .with_label_values(&[&feedback.display_name, operation_str, ping_label])
                     .inc();
             }
         }

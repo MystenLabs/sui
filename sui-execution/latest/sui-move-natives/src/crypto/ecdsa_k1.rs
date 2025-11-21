@@ -9,7 +9,7 @@ use fastcrypto::{
     error::FastCryptoError,
     hash::{Keccak256, Sha256},
     secp256k1::{
-        recoverable::Secp256k1RecoverableSignature, Secp256k1PublicKey, Secp256k1Signature,
+        Secp256k1PublicKey, Secp256k1Signature, recoverable::Secp256k1RecoverableSignature,
     },
     traits::{RecoverableSignature, ToFromBytes},
 };
@@ -17,15 +17,15 @@ use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
     execution::{
-        values::{self, Value, VectorRef},
         Type,
+        values::{self, Value, VectorRef},
     },
     natives::functions::NativeResult,
     pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::crypto::KeypairTraits;

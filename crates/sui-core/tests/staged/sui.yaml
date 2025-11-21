@@ -28,9 +28,11 @@ AccumulatorValue:
           - U64
     2:
       EventDigest:
-        TUPLE:
-          - U64
-          - TYPENAME: Digest
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - U64
+              - TYPENAME: Digest
 AccumulatorWriteV1:
   STRUCT:
     - address:
@@ -472,6 +474,8 @@ EndOfEpochTransactionKind:
       AccumulatorRootCreate: UNIT
     9:
       CoinRegistryCreate: UNIT
+    10:
+      DisplayRegistryCreate: UNIT
 Event:
   STRUCT:
     - package_id:
@@ -615,15 +619,6 @@ ExecutionFailureStatus:
           - coin_type: STR
     36:
       ExecutionCancelledDueToRandomnessUnavailable: UNIT
-<<<<<<< HEAD
-    37:
-      InvalidLinkage: UNIT
-    38:
-      DuplicateModuleName:
-        STRUCT:
-          - duplicate_module_name: STR
-||||||| 0f914b9774
-=======
     37:
       MoveVectorElemTooBig:
         STRUCT:
@@ -638,7 +633,11 @@ ExecutionFailureStatus:
       InvalidLinkage: UNIT
     40:
       InsufficientBalanceForWithdraw: UNIT
->>>>>>> origin/main
+    41:
+      NonExclusiveWriteInputObjectModified:
+        STRUCT:
+          - id:
+              TYPENAME: ObjectID
 ExecutionStatus:
   ENUM:
     0:
@@ -863,7 +862,8 @@ ObjectArg:
               TYPENAME: ObjectID
           - initial_shared_version:
               TYPENAME: SequenceNumber
-          - mutable: BOOL
+          - mutability:
+              TYPENAME: SharedObjectMutability
     2:
       Receiving:
         NEWTYPE:
@@ -1048,6 +1048,14 @@ SenderSignedTransaction:
           TYPENAME: GenericSignature
 SequenceNumber:
   NEWTYPESTRUCT: U64
+SharedObjectMutability:
+  ENUM:
+    0:
+      Immutable: UNIT
+    1:
+      Mutable: UNIT
+    2:
+      NonExclusiveWrite: UNIT
 StoredExecutionTimeObservations:
   ENUM:
     0:
@@ -1237,6 +1245,20 @@ TransactionExpiration:
     1:
       Epoch:
         NEWTYPE: U64
+    2:
+      ValidDuring:
+        STRUCT:
+          - min_epoch:
+              OPTION: U64
+          - max_epoch:
+              OPTION: U64
+          - min_timestamp_seconds:
+              OPTION: U64
+          - max_timestamp_seconds:
+              OPTION: U64
+          - chain:
+              TYPENAME: ChainIdentifier
+          - nonce: U32
 TransactionKind:
   ENUM:
     0:
@@ -1401,6 +1423,8 @@ WithdrawFrom:
   ENUM:
     0:
       Sender: UNIT
+    1:
+      Sponsor: UNIT
 WithdrawalTypeArg:
   ENUM:
     0:

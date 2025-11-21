@@ -20,7 +20,7 @@ use sui_types::quorum_driver_types::{
 };
 use tap::TapFallible;
 use tokio::sync::Semaphore;
-use tokio::time::{sleep_until, Instant};
+use tokio::time::{Instant, sleep_until};
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
@@ -32,10 +32,10 @@ use crate::authority_aggregator::{
 };
 use crate::authority_client::AuthorityAPI;
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
-use mysten_metrics::{spawn_monitored_task, GaugeGuard};
+use mysten_metrics::{GaugeGuard, spawn_monitored_task};
 use std::fmt::Write;
 use sui_macros::fail_point;
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::transaction::{CertifiedTransaction, Transaction};
 
 use self::reconfig_observer::ReconfigObserver;
@@ -132,8 +132,11 @@ impl<A: Clone> QuorumDriver<A> {
                         .observe(task.retry_times as f64);
                 }
             })
-            .map_err(|e| SuiError::QuorumDriverCommunicationError {
-                error: e.to_string(),
+            .map_err(|e| {
+                SuiErrorKind::QuorumDriverCommunicationError {
+                    error: e.to_string(),
+                }
+                .into()
             })
     }
 
@@ -244,7 +247,7 @@ where
     pub async fn submit_transaction(
         &self,
         request: ExecuteTransactionRequestV3,
-    ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
+    ) -> SuiResult<Registration<'_, TransactionDigest, QuorumDriverResult>> {
         let tx_digest = request.transaction.digest();
         debug!(?tx_digest, "Received transaction execution request.");
         self.metrics.total_requests.inc();
@@ -511,7 +514,7 @@ where
     pub async fn submit_transaction(
         &self,
         request: ExecuteTransactionRequestV3,
-    ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
+    ) -> SuiResult<Registration<'_, TransactionDigest, QuorumDriverResult>> {
         self.quorum_driver.submit_transaction(request).await
     }
 

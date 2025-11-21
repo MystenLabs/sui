@@ -39,7 +39,9 @@ pub enum IndexerError {
     #[error("Indexer failed to deserialize event from events table with error: `{0}`")]
     EventDeserializationError(String),
 
-    #[error("Fullnode returns unexpected responses, which may block indexers from proceeding, with error: `{0}`")]
+    #[error(
+        "Fullnode returns unexpected responses, which may block indexers from proceeding, with error: `{0}`"
+    )]
     UnexpectedFullnodeResponseError(String),
 
     #[error("Indexer failed to transform data with error: `{0}`")]
@@ -171,6 +173,12 @@ impl From<tokio::task::JoinError> for IndexerError {
 impl From<diesel_async::pooled_connection::bb8::RunError> for IndexerError {
     fn from(value: diesel_async::pooled_connection::bb8::RunError) -> Self {
         Self::PgPoolConnectionError(value.to_string())
+    }
+}
+
+impl From<sui_types::error::SuiErrorKind> for IndexerError {
+    fn from(e: sui_types::error::SuiErrorKind) -> Self {
+        IndexerError::SuiError(SuiError::from(e))
     }
 }
 

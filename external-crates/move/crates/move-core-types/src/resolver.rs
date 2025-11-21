@@ -51,6 +51,7 @@ impl SerializedPackage {
     }
 }
 
+#[allow(clippy::doc_overindented_list_items)]
 /// # Traits for resolving Move modules and resources from persistent storage
 ///
 /// A persistent storage backend that can resolve modules by address + name.

@@ -14,7 +14,7 @@ use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::DBMap;
 use typed_store::rocks::MetricConf;
 use typed_store::traits::Map;
-use typed_store::{be_fix_int_ser, DBMapUtils};
+use typed_store::{DBMapUtils, be_fix_int_ser};
 
 fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
@@ -52,9 +52,9 @@ struct RenameTables2 {
 }
 
 impl<
-        T: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
-        V: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
-    > Generic<T, V>
+    T: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
+    V: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
+> Generic<T, V>
 {
 }
 

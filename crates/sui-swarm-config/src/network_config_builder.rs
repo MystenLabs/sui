@@ -6,22 +6,22 @@ use std::time::Duration;
 use std::{num::NonZeroUsize, path::Path, sync::Arc};
 
 use rand::rngs::OsRng;
+use sui_config::ExecutionCacheConfig;
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_config::node::AuthorityOverloadConfig;
 #[cfg(msim)]
 use sui_config::node::ExecutionTimeObserverConfig;
-use sui_config::ExecutionCacheConfig;
 use sui_protocol_config::Chain;
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
 use sui_types::crypto::{
-    get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, KeypairTraits, PublicKey,
+    AccountKeyPair, AuthorityKeyPair, KeypairTraits, PublicKey, get_key_pair_from_rng,
 };
 use sui_types::object::Object;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
-use crate::genesis_config::{AccountConfig, ValidatorGenesisConfigBuilder, DEFAULT_GAS_AMOUNT};
+use crate::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT, ValidatorGenesisConfigBuilder};
 use crate::genesis_config::{GenesisConfig, ValidatorGenesisConfig};
 use crate::network_config::NetworkConfig;
 use crate::node_config_builder::ValidatorConfigBuilder;
@@ -542,10 +542,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     builder =
                         builder.with_global_state_hash_v2_enabled(global_state_hash_v2_enabled);
                 }
-                if let Some(num_unpruned_validators) = self.num_unpruned_validators {
-                    if idx < num_unpruned_validators {
-                        builder = builder.with_unpruned_checkpoints();
-                    }
+                if let Some(num_unpruned_validators) = self.num_unpruned_validators
+                    && idx < num_unpruned_validators
+                {
+                    builder = builder.with_unpruned_checkpoints();
                 }
                 builder.build(validator, genesis.clone())
             })

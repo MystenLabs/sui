@@ -4,9 +4,9 @@
 use sui_macros::sim_test;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::{Checkpoint, ExecutedTransaction, GetCheckpointRequest, Object};
 use test_cluster::TestClusterBuilder;
 
@@ -14,7 +14,10 @@ use crate::{stake_with_validator, transfer_coin};
 
 #[sim_test]
 async fn get_checkpoint() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .disable_fullnode_pruning()
+        .build()
+        .await;
 
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
     let transaction_digest = stake_with_validator(&test_cluster).await;

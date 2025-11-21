@@ -410,8 +410,12 @@ pub async fn execute_replay_command(
             // We need this for other activities in this session
             lx.current_protocol_version = *epoch_table.keys().peekable().last().unwrap();
 
-            println!("  Protocol Version  |                Epoch Change TX               |      Epoch Range     |   Checkpoint Range   ");
-            println!("---------------------------------------------------------------------------------------------------------------");
+            println!(
+                "  Protocol Version  |                Epoch Change TX               |      Epoch Range     |   Checkpoint Range   "
+            );
+            println!(
+                "---------------------------------------------------------------------------------------------------------------"
+            );
 
             for (
                 protocol_version,
@@ -582,7 +586,10 @@ fn parse_configs_versions(
 ) -> Option<Vec<(ObjectID, SequenceNumber)>> {
     let configs_and_versions = configs_and_versions?;
 
-    assert!(configs_and_versions.len() % 2 == 0, "Invalid number of arguments for configs and version -- you must supply a version for each config");
+    assert!(
+        configs_and_versions.len() % 2 == 0,
+        "Invalid number of arguments for configs and version -- you must supply a version for each config"
+    );
     Some(
         configs_and_versions
             .chunks_exact(2)

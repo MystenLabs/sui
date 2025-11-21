@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+use jsonrpsee::core::RpcResult;
 use sui_json_rpc::error::SuiRpcInputError;
 use sui_types::error::SuiObjectResponseError;
 use sui_types::object::ObjectRead;
@@ -11,7 +11,7 @@ use sui_types::object::ObjectRead;
 use crate::errors::IndexerError;
 use crate::indexer_reader::IndexerReader;
 use sui_json_rpc::SuiRpcModule;
-use sui_json_rpc_api::{ReadApiServer, QUERY_MAX_RESULT_LIMIT};
+use sui_json_rpc_api::{QUERY_MAX_RESULT_LIMIT, ReadApiServer};
 use sui_json_rpc_types::ZkLoginIntentScope;
 use sui_json_rpc_types::ZkLoginVerifyResult;
 use sui_json_rpc_types::{

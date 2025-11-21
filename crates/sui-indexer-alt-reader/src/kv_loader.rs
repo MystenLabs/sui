@@ -9,7 +9,7 @@ use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::{
     TransactionData as KVTransactionData, TransactionEventsData as KVTransactionEventsData,
 };
-use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_types::{
     base_types::ObjectID,
     crypto::AuthorityQuorumSignInfo,
@@ -45,6 +45,7 @@ pub enum KvLoader {
 }
 
 /// A wrapper for the contents of a transaction, either from Bigtable, Postgres, or just executed.
+#[allow(clippy::large_enum_variant)]
 pub enum TransactionContents {
     Bigtable(KVTransactionData),
     Pg(StoredTransaction),

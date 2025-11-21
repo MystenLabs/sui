@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, HistogramVec, IntCounter, IntCounterVec, IntGauge,
-    IntGaugeVec, Registry,
+    register_int_gauge_with_registry,
 };
 
 const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -45,9 +45,6 @@ pub struct BridgeMetrics {
     pub(crate) action_executor_execution_queue_skipped_actions_due_to_pausing: IntCounter,
 
     pub(crate) last_observed_actions_seq_num: IntGaugeVec,
-
-    pub(crate) signer_with_cache_hit: IntCounterVec,
-    pub(crate) signer_with_cache_miss: IntCounterVec,
 
     pub(crate) eth_rpc_queries: IntCounterVec,
     pub(crate) eth_rpc_queries_latency: HistogramVec,
@@ -245,20 +242,6 @@ impl BridgeMetrics {
                 "bridge_last_observed_actions_seq_num",
                 "The latest observed action sequence number per chain_id and action_type",
                 &["chain_id", "action_type"],
-                registry,
-            )
-            .unwrap(),
-            signer_with_cache_hit: register_int_counter_vec_with_registry!(
-                "bridge_signer_with_cache_hit",
-                "Total number of hit in signer's cache, by verifier type",
-                &["type"],
-                registry,
-            )
-            .unwrap(),
-            signer_with_cache_miss: register_int_counter_vec_with_registry!(
-                "bridge_signer_with_cache_miss",
-                "Total number of miss in signer's cache, by verifier type",
-                &["type"],
                 registry,
             )
             .unwrap(),

@@ -152,10 +152,10 @@ fn extract_macros(
         pre_compiled_lib.iter().flat_map(|module_info| {
             module_info.iter().filter_map(|(mident, module_info)| {
                 // TOOD rewrite to if ... && let Some(...) once this feature is stable
-                if !modules.contains_key(mident) {
-                    if let Some(macro_definitions) = &module_info.macro_definitions {
-                        return Some((*mident, &macro_definitions.0, &macro_definitions.1));
-                    }
+                if !modules.contains_key(mident)
+                    && let Some(macro_definitions) = &module_info.macro_definitions
+                {
+                    return Some((*mident, &macro_definitions.0, &macro_definitions.1));
                 }
                 None
             })
@@ -1384,6 +1384,7 @@ fn subtype_no_report(
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn subtype_impl<T: ToString, F: FnOnce() -> T>(
     context: &mut Context,
     loc: Loc,
@@ -1415,10 +1416,7 @@ fn subtype_opt<T: ToString, F: FnOnce() -> T>(
     pre_lhs: Type,
     pre_rhs: Type,
 ) -> Option<Type> {
-    match subtype_impl(context, loc, msg, pre_lhs, pre_rhs) {
-        Err(_rhs) => None,
-        Ok(t) => Some(t),
-    }
+    subtype_impl(context, loc, msg, pre_lhs, pre_rhs).ok()
 }
 
 fn subtype<T: ToString, F: FnOnce() -> T>(
@@ -1498,6 +1496,7 @@ fn invariant_no_report(
 }
 
 #[allow(dead_code)]
+#[allow(clippy::result_large_err)]
 fn invariant_impl<T: ToString, F: FnOnce() -> T>(
     context: &mut Context,
     loc: Loc,
@@ -3358,14 +3357,14 @@ fn process_exp_dotted(
             Type_::Ref(false, inner) => (BaseRefKind::MutRef, *inner.clone()),
             _ => (BaseRefKind::Owned, base.ty.clone()),
         };
-        if matches!(base_kind, BaseRefKind::Owned) {
-            if let Some(verb) = constraint_verb {
-                context.add_single_type_constraint(
-                    dloc,
-                    format!("Invalid {}", verb),
-                    base_type.clone(),
-                );
-            }
+        if matches!(base_kind, BaseRefKind::Owned)
+            && let Some(verb) = constraint_verb
+        {
+            context.add_single_type_constraint(
+                dloc,
+                format!("Invalid {}", verb),
+                base_type.clone(),
+            );
         }
         let accessors = vec![];
         ExpDotted {
@@ -3955,6 +3954,7 @@ fn ide_report_autocomplete(context: &mut Context, at_loc: &Loc, in_ty: &Type) {
 // Calls
 //**************************************************************************************************
 
+#[allow(clippy::large_enum_variant)]
 enum ResolvedMethodCall {
     Resolved(
         Box<ModuleIdent>,
@@ -4939,14 +4939,12 @@ pub fn collect_known_attribute_module_members(
         Testing(test_attr) => {
             // For Testing attributes we currently assume that none contain module accesses.
             if let known_attributes::TestingAttribute::ExpectedFailure(expected_failure) = test_attr
-            {
-                if let known_attributes::ExpectedFailure::ExpectedWithError {
+                && let known_attributes::ExpectedFailure::ExpectedWithError {
                     minor_code: Some(sp!(_, MinorCode_::Constant(mident, name))),
                     ..
                 } = expected_failure.as_ref()
-                {
-                    set.insert((*mident, *name));
-                }
+            {
+                set.insert((*mident, *name));
             }
         }
         External(ext_attr) => {

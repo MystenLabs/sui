@@ -1,17 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use std::cell::RefCell;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
+
 use mysten_metrics::RegistryService;
 use once_cell::sync::OnceCell;
 use prometheus::{
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
+    HistogramVec, IntCounterVec, IntGaugeVec, Registry, register_histogram_vec_with_registry,
+    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry,
 };
 use rocksdb::perf::set_perf_stats;
 use rocksdb::{PerfContext, PerfMetric, PerfStatsLevel};
-use std::cell::RefCell;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
 use tap::TapFallible;
 use tracing::warn;
 
@@ -70,7 +72,9 @@ impl SamplingInterval {
     }
     pub fn sample(&self) -> bool {
         if self.once_every_duration.is_zero() {
-            self.counter.fetch_add(1, Ordering::Relaxed) % (self.after_num_ops + 1) == 0
+            self.counter
+                .fetch_add(1, Ordering::Relaxed)
+                .is_multiple_of(self.after_num_ops + 1)
         } else {
             self.counter.fetch_add(1, Ordering::Relaxed) == 0
         }
@@ -982,35 +986,36 @@ impl DBMetrics {
             registry_serivce: registry_service,
         }
     }
-    pub fn init(registry_service: RegistryService) -> &'static Arc<DBMetrics> {
+
+    // TODO: Remove static initialization (init() and get()) by constructing DBMetrics
+    // and accessing it without static variables.
+    pub fn init(registry_service: RegistryService) {
         // Initialize this before creating any instance of DBMap
-        // TODO: Remove static initialization because this basically means we can
-        // only ever initialize db metrics once with a registry whereas
-        // in the code we might want to initialize it with different
-        // registries. The problem is underlying metrics cannot be re-initialized
-        // or prometheus complains. We essentially need to pass in DBMetrics
-        // everywhere we create DBMap as the right fix
         let _ = ONCE
             .set(Arc::new(DBMetrics::new(registry_service)))
             // this happens many times during tests
             .tap_err(|_| warn!("DBMetrics registry overwritten"));
-        ONCE.get().unwrap()
     }
+
     pub fn increment_num_active_dbs(&self, db_name: &str) {
         self.op_metrics
             .rocksdb_num_active_db_handles
             .with_label_values(&[db_name])
             .inc();
     }
+
     pub fn decrement_num_active_dbs(&self, db_name: &str) {
         self.op_metrics
             .rocksdb_num_active_db_handles
             .with_label_values(&[db_name])
             .dec();
     }
+
     pub fn get() -> &'static Arc<DBMetrics> {
-        ONCE.get().unwrap_or_else(|| {
-            DBMetrics::init(RegistryService::new(prometheus::default_registry().clone()))
+        ONCE.get_or_init(|| {
+            Arc::new(DBMetrics::new(RegistryService::new(
+                prometheus::default_registry().clone(),
+            )))
         })
     }
 }

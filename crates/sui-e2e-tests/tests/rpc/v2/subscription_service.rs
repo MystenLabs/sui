@@ -5,8 +5,8 @@ use crate::transfer_coin;
 use sui_macros::sim_test;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
 use test_cluster::TestClusterBuilder;
 use tokio_stream::StreamExt;
 

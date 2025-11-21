@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::SecurityWatchdogConfig;
 use crate::metrics::WatchdogMetrics;
 use crate::pagerduty::{Body, CreateIncident, Incident, Pagerduty, Service};
 use crate::query_runner::{QueryRunner, SnowflakeQueryRunner};
-use crate::SecurityWatchdogConfig;
 use anyhow::anyhow;
 use chrono::{DateTime, Utc};
 use prometheus::{IntGauge, Registry};

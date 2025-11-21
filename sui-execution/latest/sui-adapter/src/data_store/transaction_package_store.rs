@@ -30,6 +30,10 @@ pub struct TransactionPackageStore<'a> {
     /// transaction.
     /// Elements in this are _not_ safe to evict, unless evicted through `pop_package`.
     new_packages: RefCell<IndexMap<ObjectID, (Rc<MovePackage>, Arc<VerifiedPackage>)>>,
+
+    /// A cache of packages that we've loaded so far. This is used to speed up package loading.
+    /// Elements in this are safe to be evicted based on cache decisions.
+    package_cache: RefCell<IndexMap<ObjectID, Option<Rc<MovePackage>>>>,
 }
 
 impl<'a> TransactionPackageStore<'a> {
@@ -37,6 +41,7 @@ impl<'a> TransactionPackageStore<'a> {
         Self {
             package_store,
             new_packages: RefCell::new(IndexMap::new()),
+            package_cache: RefCell::new(IndexMap::new()),
         }
     }
 
@@ -120,18 +125,46 @@ impl<'a> TransactionPackageStore<'a> {
     }
 
     /// Fetch a package by its version ID. This will first look in the new packages, and then in
-    /// the backing store.
-    /// If found, it will be returned as a SerializedPackage.
-    fn fetch_package(&self, package_version_id: VersionId) -> SuiResult<Option<SerializedPackage>> {
+    /// the cache for any packages that have been loaded this transaction, and then in the backing store.
+    /// If found, it will be returned as a [`MovePackage`].
+    pub fn fetch_move_package(
+        &self,
+        package_version_id: VersionId,
+    ) -> SuiResult<Option<Rc<MovePackage>>> {
         if let Some((move_pkg, _verified_pkg)) = self.fetch_new_package(&package_version_id.into())
         {
-            return Ok(Some(move_pkg.into_serialized_move_package()));
+            return Ok(Some(move_pkg));
         }
 
-        Ok(self
+        if let Some(cached_pkg) = self
+            .package_cache
+            .borrow()
+            .get(&ObjectID::from(package_version_id))
+        {
+            return Ok(cached_pkg.clone());
+        }
+
+        let move_package = self
             .package_store
             .get_package_object(&package_version_id.into())?
-            .map(|pkg| pkg.move_package().into_serialized_move_package()))
+            .map(|pkg| Rc::new(pkg.move_package().clone()));
+
+        self.package_cache
+            .borrow_mut()
+            .insert(package_version_id.into(), move_package.clone());
+
+        Ok(move_package)
+    }
+
+    /// Fetch a package by its version ID. This will first look in the new packages, and then in
+    /// the cache for any packages that have been loaded this transaction, and then in the backing store.
+    /// If found, it will be returned as a [`SerializedPackage`].
+    fn fetch_package(&self, package_version_id: VersionId) -> SuiResult<Option<SerializedPackage>> {
+        self.fetch_move_package(package_version_id).map(|opt_pkg| {
+            opt_pkg
+                .as_ref()
+                .map(|pkg| pkg.as_ref().into_serialized_move_package())
+        })
     }
 }
 

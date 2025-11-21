@@ -28,8 +28,12 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
-use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
+use sui_protocol_config::{LimitThresholdCrossed, ProtocolConfig, check_limit_by_meter};
 use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
+    SUI_CLOCK_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_DISPLAY_REGISTRY_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     committee::EpochId,
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
@@ -38,9 +42,6 @@ use sui_types::{
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
     storage::ChildObjectResolver,
-    TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-    SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID,
-    SUI_DENY_LIST_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tracing::error;
 
@@ -111,6 +112,8 @@ pub(crate) struct ObjectRuntimeState {
     // is correct.
     settlement_input_sui: u64,
     settlement_output_sui: u64,
+    accumulator_merge_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
+    accumulator_split_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
 }
 
 #[derive(Tid)]
@@ -198,6 +201,8 @@ impl<'a> ObjectRuntime<'a> {
                 received: IndexMap::new(),
                 settlement_input_sui: 0,
                 settlement_output_sui: 0,
+                accumulator_merge_totals: BTreeMap::new(),
+                accumulator_split_totals: BTreeMap::new(),
             },
             is_metered,
             protocol_config,
@@ -287,6 +292,7 @@ impl<'a> ObjectRuntime<'a> {
             SUI_BRIDGE_OBJECT_ID,
             SUI_ACCUMULATOR_ROOT_OBJECT_ID,
             SUI_COIN_REGISTRY_OBJECT_ID,
+            SUI_DISPLAY_REGISTRY_OBJECT_ID,
         ]
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains(&id) {
@@ -368,6 +374,47 @@ impl<'a> ObjectRuntime<'a> {
         target_ty: TypeTag,
         value: MoveAccumulatorValue,
     ) -> PartialVMResult<()> {
+        if let MoveAccumulatorValue::U64(amount) = value {
+            let key = (target_addr, target_ty.clone());
+
+            match action {
+                MoveAccumulatorAction::Merge => {
+                    let current = self
+                        .state
+                        .accumulator_merge_totals
+                        .get(&key)
+                        .copied()
+                        .unwrap_or(0);
+                    let new_total = current + amount as u128;
+                    if new_total > u64::MAX as u128 {
+                        return Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
+                            .with_message(format!(
+                                "accumulator merge overflow: total merges {} exceed u64::MAX",
+                                new_total
+                            )));
+                    }
+                    self.state.accumulator_merge_totals.insert(key, new_total);
+                }
+                MoveAccumulatorAction::Split => {
+                    let current = self
+                        .state
+                        .accumulator_split_totals
+                        .get(&key)
+                        .copied()
+                        .unwrap_or(0);
+                    let new_total = current + amount as u128;
+                    if new_total > u64::MAX as u128 {
+                        return Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
+                            .with_message(format!(
+                                "accumulator split overflow: total splits {} exceed u64::MAX",
+                                new_total
+                            )));
+                    }
+                    self.state.accumulator_split_totals.insert(key, new_total);
+                }
+            }
+        }
+
         let event = MoveAccumulatorEvent {
             accumulator_id,
             action,
@@ -383,7 +430,7 @@ impl<'a> ObjectRuntime<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-    ) -> PartialVMResult<bool> {
+    ) -> PartialVMResult<CacheMetadata<bool>> {
         self.child_object_store.object_exists(parent, child)
     }
 
@@ -540,11 +587,12 @@ impl<'a> ObjectRuntime<'a> {
     pub fn loaded_runtime_objects(&self) -> BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata> {
         // The loaded child objects, and the received objects, should be disjoint. If they are not,
         // this is an error since it could lead to incorrect transaction dependency computations.
-        debug_assert!(self
-            .child_object_store
-            .cached_objects()
-            .keys()
-            .all(|id| !self.state.received.contains_key(id)));
+        debug_assert!(
+            self.child_object_store
+                .cached_objects()
+                .keys()
+                .all(|id| !self.state.received.contains_key(id))
+        );
         self.child_object_store
             .cached_objects()
             .iter()
@@ -637,6 +685,8 @@ impl ObjectRuntimeState {
             accumulator_events,
             settlement_input_sui,
             settlement_output_sui,
+            accumulator_merge_totals: _,
+            accumulator_split_totals: _,
         } = self;
 
         // The set of new ids is a subset of the generated ids.
@@ -681,7 +731,7 @@ impl ObjectRuntimeState {
                 None => {
                     return Err(ExecutionError::invariant_violation(format!(
                         "Failed to find received UID {received_object} in loaded child objects."
-                    )))
+                    )));
                 }
             }
         }
@@ -793,9 +843,11 @@ impl ObjectRuntimeState {
                             && !self.received.contains_key(&child))
                 );
                 // In any case, if it was not changed, it should not be marked as modified
-                debug_assert!(loaded_child_objects
-                    .get(&child)
-                    .is_none_or(|loaded_child| !loaded_child.is_modified));
+                debug_assert!(
+                    loaded_child_objects
+                        .get(&child)
+                        .is_none_or(|loaded_child| !loaded_child.is_modified)
+                );
             }
         }
     }
@@ -880,6 +932,6 @@ pub fn get_all_uids(
         fully_annotated_layout,
         &mut UIDTraversal(&mut ids),
     )
-    .map_err(|e| format!("Failed to deserialize. {e:?}"))?;
+    .map_err(|e| format!("Failed to deserialize. {e}"))?;
     Ok(ids)
 }

@@ -18,7 +18,7 @@ use sui_types::object::{Object, ObjectRead};
 
 use crate::errors::IndexerError;
 use crate::schema::{full_objects_history, objects, objects_history, objects_snapshot};
-use crate::types::{owner_to_owner_info, IndexedDeletedObject, IndexedObject, ObjectStatus};
+use crate::types::{IndexedDeletedObject, IndexedObject, ObjectStatus, owner_to_owner_info};
 
 #[derive(Queryable)]
 pub struct DynamicFieldColumn {
@@ -526,11 +526,11 @@ impl TryFrom<StoredObjectSnapshot> for StoredObject {
 mod tests {
     use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
     use sui_types::{
+        Identifier, TypeTag,
         coin::Coin,
         digests::TransactionDigest,
-        gas_coin::{GasCoin, GAS},
+        gas_coin::{GAS, GasCoin},
         object::{Data, MoveObject, ObjectInner, Owner},
-        Identifier, TypeTag,
     };
 
     use super::*;
@@ -544,7 +544,10 @@ mod tests {
 
         match stored_obj.object_type {
             Some(t) => {
-                assert_eq!(t, "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>");
+                assert_eq!(
+                    t,
+                    "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                );
             }
             None => {
                 panic!("object_type should not be none");
@@ -624,7 +627,10 @@ mod tests {
 
         match stored_obj.object_type {
             Some(t) => {
-                assert_eq!(t, "0x00000000000000000000000000000000000000000000000000000000000000e7::vec_coin::VecCoin<vector<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>>");
+                assert_eq!(
+                    t,
+                    "0x00000000000000000000000000000000000000000000000000000000000000e7::vec_coin::VecCoin<vector<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>>"
+                );
             }
             None => {
                 panic!("object_type should not be none");

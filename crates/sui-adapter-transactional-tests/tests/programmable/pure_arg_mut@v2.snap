@@ -34,19 +34,19 @@ Error: Transaction Effects Status: Move Abort in test::m1::assert_string (functi
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m1") }, function: 6, instruction: 11, function_name: Some("assert_string") }, 13906834324667236351), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834324667236351), message: Some("test::m1::assert_string at offset 11"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m1") }), indices: [], offsets: [(FunctionDefinitionIndex(6), 11)] }), command: Some(1) } }
 
 task 4, lines 59-63:
-//# programmable --inputs 0u8 --dev-inspect
+//# programmable --inputs 0u8
 //> 0: test::m1::borrow_mut<u8>(Input(0));
 //> 1: test::m1::borrow_mut<std::ascii::String>(Input(0));
 //> test::m1::modify_ascii(Result(1));
 //> test::m1::modify_u8(Result(0));
-mutated: object(_)
-gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 65-69:
-//# programmable --inputs 0u8 --dev-inspect
+//# programmable --inputs 0u8
 //> 0: test::m1::borrow_mut<u8>(Input(0));
 //> 1: test::m1::borrow_mut<std::ascii::String>(Input(0));
 //> test::m1::modify_u8(Result(0));
 //> test::m1::modify_ascii(Result(1));
-mutated: object(_)
-gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

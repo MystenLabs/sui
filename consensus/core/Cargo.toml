@@ -3,15 +3,13 @@ name = "consensus-core"
 version = "0.1.0"
 license = "Apache-2.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
-edition = "2021"
+edition = "2024"
 publish = false
 
 [lints]
 workspace = true
 
 [dependencies]
-anemo.workspace = true
-anemo-tower.workspace = true
 anyhow.workspace = true
 arc-swap.workspace = true
 async-trait.workspace = true
@@ -52,6 +50,7 @@ tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
 tonic.workspace = true
+tonic-prost.workspace = true
 tower.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
@@ -66,7 +65,6 @@ tempfile.workspace = true
 telemetry-subscribers.workspace = true
 
 [build-dependencies]
-anemo-build.workspace = true
 tonic-build.workspace = true
 
 [[bench]]

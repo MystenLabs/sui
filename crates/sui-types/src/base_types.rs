@@ -2,14 +2,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::MOVE_STDLIB_ADDRESS;
+use crate::MoveTypeTagTrait;
+use crate::MoveTypeTagTraitGeneric;
+use crate::SUI_CLOCK_OBJECT_ID;
+use crate::SUI_FRAMEWORK_ADDRESS;
+use crate::SUI_SYSTEM_ADDRESS;
 use crate::accumulator_root::extract_balance_type_from_field;
 use crate::accumulator_root::is_balance_accumulator_field;
 use crate::balance::Balance;
+use crate::coin::COIN_MODULE_NAME;
+use crate::coin::COIN_STRUCT_NAME;
 use crate::coin::Coin;
 use crate::coin::CoinMetadata;
 use crate::coin::TreasuryCap;
-use crate::coin::COIN_MODULE_NAME;
-use crate::coin::COIN_STRUCT_NAME;
 use crate::coin_registry::Currency;
 pub use crate::committee::EpochId;
 use crate::crypto::{
@@ -24,38 +30,33 @@ use crate::effects::TransactionEffectsAPI;
 use crate::epoch_data::EpochData;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
+use crate::error::SuiErrorKind;
 use crate::error::{ExecutionError, SuiResult};
-use crate::gas_coin::GasCoin;
 use crate::gas_coin::GAS;
-use crate::governance::StakedSui;
+use crate::gas_coin::GasCoin;
 use crate::governance::STAKED_SUI_STRUCT_NAME;
 use crate::governance::STAKING_POOL_MODULE_NAME;
+use crate::governance::StakedSui;
 use crate::id::RESOLVED_SUI_ID;
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
 use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
+use crate::sui_serde::Readable;
 use crate::sui_serde::to_custom_deser_error;
 use crate::sui_serde::to_sui_struct_tag_string;
-use crate::sui_serde::Readable;
 use crate::transaction::Transaction;
 use crate::transaction::VerifiedTransaction;
 use crate::zk_login_authenticator::ZkLoginAuthenticator;
-use crate::MoveTypeTagTrait;
-use crate::MoveTypeTagTraitGeneric;
-use crate::MOVE_STDLIB_ADDRESS;
-use crate::SUI_CLOCK_OBJECT_ID;
-use crate::SUI_FRAMEWORK_ADDRESS;
-use crate::SUI_SYSTEM_ADDRESS;
 use anyhow::anyhow;
 use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::AllowedRng;
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
-use move_binary_format::file_format::SignatureToken;
 use move_binary_format::CompiledModule;
+use move_binary_format::file_format::SignatureToken;
 use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
@@ -66,14 +67,14 @@ use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use rand::Rng;
 use schemars::JsonSchema;
-use serde::ser::Error;
-use serde::ser::SerializeSeq;
 use serde::Deserializer;
 use serde::Serializer;
+use serde::ser::Error;
+use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use serde_with::DeserializeAs;
 use serde_with::SerializeAs;
+use serde_with::serde_as;
 use shared_crypto::intent::HashingIntentScope;
 use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
@@ -506,10 +507,11 @@ impl MoveObjectType {
     pub fn try_extract_field_name(&self, type_: &DynamicFieldType) -> SuiResult<TypeTag> {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
-                Err(SuiError::ObjectDeserializationError {
+                Err(SuiErrorKind::ObjectDeserializationError {
                     error: "Error extracting dynamic object name from specialized object type"
                         .to_string(),
-                })
+                }
+                .into())
             }
             MoveObjectType_::SuiBalanceAccumulatorField
             | MoveObjectType_::BalanceAccumulatorField(_) => {
@@ -523,10 +525,11 @@ impl MoveObjectType {
     pub fn try_extract_field_value(&self) -> SuiResult<TypeTag> {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
-                Err(SuiError::ObjectDeserializationError {
+                Err(SuiErrorKind::ObjectDeserializationError {
                     error: "Error extracting dynamic object value from specialized object type"
                         .to_string(),
-                })
+                }
+                .into())
             }
             MoveObjectType_::SuiBalanceAccumulatorField
             | MoveObjectType_::BalanceAccumulatorField(_) => {
@@ -813,7 +816,7 @@ impl SuiAddress {
     }
 
     pub fn generate<R: rand::RngCore + rand::CryptoRng>(mut rng: R) -> Self {
-        let buf: [u8; SUI_ADDRESS_LENGTH] = rng.gen();
+        let buf: [u8; SUI_ADDRESS_LENGTH] = rng.r#gen();
         Self(buf)
     }
 
@@ -848,7 +851,7 @@ impl SuiAddress {
     /// Parse a SuiAddress from a byte array or buffer.
     pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, SuiError> {
         <[u8; SUI_ADDRESS_LENGTH]>::try_from(bytes.as_ref())
-            .map_err(|_| SuiError::InvalidAddress)
+            .map_err(|_| SuiErrorKind::InvalidAddress.into())
             .map(SuiAddress)
     }
 
@@ -974,7 +977,7 @@ impl TryFrom<&GenericSignature> for SuiAddress {
                 let scheme = sig.scheme();
                 let pub_key_bytes = sig.public_key_bytes();
                 let pub_key = PublicKey::try_from_bytes(scheme, pub_key_bytes).map_err(|_| {
-                    SuiError::InvalidSignature {
+                    SuiErrorKind::InvalidSignature {
                         error: "Cannot parse pubkey".to_string(),
                     }
                 })?;
@@ -983,7 +986,7 @@ impl TryFrom<&GenericSignature> for SuiAddress {
             GenericSignature::MultiSig(ms) => Ok(ms.get_pk().into()),
             GenericSignature::MultiSigLegacy(ms) => {
                 Ok(crate::multisig::MultiSig::try_from(ms.clone())
-                    .map_err(|_| SuiError::InvalidSignature {
+                    .map_err(|_| SuiErrorKind::InvalidSignature {
                         error: "Invalid legacy multisig".to_string(),
                     })?
                     .get_pk()
@@ -1125,6 +1128,13 @@ pub const RESOLVED_TX_CONTEXT: (&AccountAddress, &IdentStr, &IdentStr) = (
     TX_CONTEXT_STRUCT_NAME,
 );
 
+pub const URL_MODULE_NAME: &IdentStr = ident_str!("url");
+pub const URL_STRUCT_NAME: &IdentStr = ident_str!("Url");
+
+pub const VEC_MAP_MODULE_NAME: &IdentStr = ident_str!("vec_map");
+pub const VEC_MAP_STRUCT_NAME: &IdentStr = ident_str!("VecMap");
+pub const VEC_MAP_ENTRY_STRUCT_NAME: &IdentStr = ident_str!("Entry");
+
 pub fn move_ascii_str_layout() -> A::MoveStructLayout {
     A::MoveStructLayout {
         type_: StructTag {
@@ -1151,6 +1161,21 @@ pub fn move_utf8_str_layout() -> A::MoveStructLayout {
         fields: vec![A::MoveFieldLayout::new(
             ident_str!("bytes").into(),
             A::MoveTypeLayout::Vector(Box::new(A::MoveTypeLayout::U8)),
+        )],
+    }
+}
+
+pub fn url_layout() -> A::MoveStructLayout {
+    A::MoveStructLayout {
+        type_: StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: URL_MODULE_NAME.to_owned(),
+            name: URL_STRUCT_NAME.to_owned(),
+            type_params: vec![],
+        },
+        fields: vec![A::MoveFieldLayout::new(
+            ident_str!("url").to_owned(),
+            A::MoveTypeLayout::Struct(Box::new(move_ascii_str_layout())),
         )],
     }
 }
@@ -1536,7 +1561,7 @@ impl ObjectID {
     where
         R: AllowedRng,
     {
-        let buf: [u8; Self::LENGTH] = rng.gen();
+        let buf: [u8; Self::LENGTH] = rng.r#gen();
         ObjectID::new(buf)
     }
 

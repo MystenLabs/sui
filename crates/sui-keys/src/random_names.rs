@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use rand::{rngs::ThreadRng, thread_rng, Rng};
+use rand::{Rng, rngs::ThreadRng, thread_rng};
 use std::collections::HashSet;
 
 // This library provides two functions to generate

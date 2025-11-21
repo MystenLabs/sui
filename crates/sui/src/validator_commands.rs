@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use move_core_types::ident_str;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -14,8 +14,9 @@ use sui_genesis_builder::validator_info::GenesisValidatorInfo;
 use url::{ParseError, Url};
 
 use sui_types::{
+    SUI_SYSTEM_PACKAGE_ID,
     base_types::{ObjectID, ObjectRef, SuiAddress},
-    crypto::{AuthorityPublicKey, NetworkPublicKey, Signable, DEFAULT_EPOCH_ID},
+    crypto::{AuthorityPublicKey, DEFAULT_EPOCH_ID, NetworkPublicKey, Signable},
     dynamic_field::Field,
     multiaddr::Multiaddr,
     object::Owner,
@@ -23,7 +24,6 @@ use sui_types::{
         sui_system_state_inner_v1::{UnverifiedValidatorOperationCapV1, ValidatorV1},
         sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary},
     },
-    SUI_SYSTEM_PACKAGE_ID,
 };
 use tap::tap::TapOptional;
 
@@ -53,12 +53,12 @@ use sui_keys::{
     },
 };
 use sui_keys::{keypair_file::read_key, keystore::AccountKeystore};
-use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
-use sui_types::crypto::{
-    generate_proof_of_possession, get_authority_key_pair, AuthorityPublicKeyBytes,
-};
+use sui_sdk::wallet_context::WalletContext;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SignatureScheme, SuiKeyPair};
+use sui_types::crypto::{
+    AuthorityPublicKeyBytes, generate_proof_of_possession, get_authority_key_pair,
+};
 use sui_types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
 
 #[path = "unit_tests/validator_tests.rs"]
@@ -274,7 +274,7 @@ impl SuiValidatorCommand {
     ) -> Result<SuiValidatorCommandResponse, anyhow::Error> {
         let sui_address = context.active_address()?;
 
-        let ret = Ok(match self {
+        Ok(match self {
             SuiValidatorCommand::MakeValidatorInfo {
                 name,
                 description,
@@ -544,7 +544,10 @@ impl SuiValidatorCommand {
                 {
                     bail!("Address {} is not in the committee", address);
                 }
-                println!("Starting bridge committee registration for Sui validator: {address}, with bridge public key: {} and url: {}", ecdsa_keypair.public, bridge_authority_url);
+                println!(
+                    "Starting bridge committee registration for Sui validator: {address}, with bridge public key: {} and url: {}",
+                    ecdsa_keypair.public, bridge_authority_url
+                );
                 let sui_rpc_url = &context.get_active_env().unwrap().rpc;
                 let bridge_metrics = Arc::new(BridgeMetrics::new_for_testing());
                 let bridge_client = SuiBridgeClient::new(sui_rpc_url, bridge_metrics).await?;
@@ -665,8 +668,7 @@ impl SuiValidatorCommand {
                     }
                 }
             }
-        });
-        ret
+        })
     }
 }
 
@@ -676,13 +678,13 @@ fn check_address(
     print_unsigned_transaction_only: bool,
 ) -> Result<SuiAddress, anyhow::Error> {
     if !print_unsigned_transaction_only {
-        if let Some(validator_address) = validator_address {
-            if validator_address != active_address {
-                bail!(
-                    "`--validator-address` must be the same as the current active address: {}",
-                    active_address
-                );
-            }
+        if let Some(validator_address) = validator_address
+            && validator_address != active_address
+        {
+            bail!(
+                "`--validator-address` must be the same as the current active address: {}",
+                active_address
+            );
         }
         Ok(active_address)
     } else {
@@ -1298,5 +1300,8 @@ async fn check_status(
     if allowed_status.contains(&status) {
         return Ok(status);
     }
-    bail!("Validator {validator_address} is {:?}, this operation is not supported in this tool or prohibited.", status)
+    bail!(
+        "Validator {validator_address} is {:?}, this operation is not supported in this tool or prohibited.",
+        status
+    )
 }

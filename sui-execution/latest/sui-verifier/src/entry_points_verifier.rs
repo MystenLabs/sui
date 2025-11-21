@@ -2,23 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
-    file_format::{AbilitySet, Bytecode, FunctionDefinition, SignatureToken, Visibility},
     CompiledModule,
+    file_format::{AbilitySet, Bytecode, FunctionDefinition, SignatureToken, Visibility},
 };
 use move_bytecode_utils::format_signature_token;
 use move_vm_config::verifier::VerifierConfig;
 use sui_types::randomness_state::is_mutable_random;
 use sui_types::{
-    base_types::{TxContext, TxContextKind, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
+    SUI_FRAMEWORK_ADDRESS,
+    base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, TxContext, TxContextKind},
     clock::Clock,
     error::ExecutionError,
     is_object, is_object_vector, is_primitive,
-    move_package::{is_test_fun, FnInfoMap},
+    move_package::{FnInfoMap, is_test_fun},
     transfer::Receiving,
-    SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::{verification_failure, INIT_FN_NAME};
+use crate::{INIT_FN_NAME, verification_failure};
 
 /// Checks valid rules for entry points, both for module initialization and transactions
 ///

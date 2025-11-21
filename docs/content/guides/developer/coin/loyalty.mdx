@@ -10,13 +10,13 @@ The following example demonstrates the creation of a loyalty token that bearers 
 
 ## Example
 
-The loyalty token example illustrates a loyalty token that is created with the Closed Loop Token standard. If you were to implement this example, the Admin would send `LOYALTY` tokens to the users of your service as a reward for their loyalty. The example creates a `GiftShop` where holders can spend `LOYALTY` tokens to buy `Gift`s.
+The loyalty token example illustrates a loyalty token that is created with the Closed Loop Token standard. If you were to implement this example, the Admin sends `LOYALTY` tokens to the users of your service as a reward for their loyalty. The example creates a `GiftShop` where holders can spend `LOYALTY` tokens to buy `Gift`s.
 
-The `loyalty.move` source file contains the `examples::loyalty` module code that creates the loyalty token. The module includes the one-time witness (OTW) that creates the coin (with the same name as the module, `LOYALTY`), possesses only the `drop` ability, and has no fields. These are the characteristics of a OTW, which ensures the `LOYALTY` type has a single instance.
+The `loyalty.move` source file contains the `examples::loyalty` module code that creates the loyalty token. The module includes the One-Time Witness (OTW) that creates the coin (with the same name as the module, `LOYALTY`), possesses only the `drop` ability, and has no fields. These are the characteristics of a OTW, which ensures the `LOYALTY` type has a single instance.
 
 <ImportContent source="examples/move/token/sources/loyalty.move" mode="code" struct="LOYALTY" />
 
-The `init` function of the module uses the `LOYALTY` OTW to create the token. All `init` functions run one time only at the package publish event. The initializer function makes use of the OTW `LOYALTY` type defined previously in its call to `create_currency`. The function also defines a policy, sending both the policy capability and treasury capability to the address associated with the publish event. The holder of these transferrable capabilities can mint new `LOYALTY` tokens and modify their policies.
+The `init` function of the module uses the `LOYALTY` OTW to create the token. All `init` functions run only during the package publish event. The initializer function makes use of the OTW `LOYALTY` type defined previously in its call to `create_currency`. The function also defines a policy, sending both the policy capability and treasury capability to the address associated with the publish event. The holder of these transferrable capabilities can mint new `LOYALTY` tokens and modify their policies.
 
 <ImportContent source="examples/move/token/sources/loyalty.move" mode="code" fun="init" noComments />
 

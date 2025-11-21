@@ -61,14 +61,14 @@ pub fn publish(
     let mut dependency_map = BTreeMap::new();
     for (name, unit) in package.deps_compiled_units.iter() {
         let unit_address = *unit.unit.module.self_id().address();
-        if let Some(other) = dependency_map.insert(unit_address, unit_address) {
-            if other != unit_address {
-                bail!(
-                    "Package {name} has linkages: {} and {}",
-                    other,
-                    unit_address
-                );
-            }
+        if let Some(other) = dependency_map.insert(unit_address, unit_address)
+            && other != unit_address
+        {
+            bail!(
+                "Package {name} has linkages: {} and {}",
+                other,
+                unit_address
+            );
         }
     }
     dependency_map.insert(package_original_id, package_version_id);

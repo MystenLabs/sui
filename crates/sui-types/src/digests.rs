@@ -4,7 +4,7 @@
 use std::{env, fmt};
 
 use crate::{
-    error::{SuiError, SuiResult},
+    error::{SuiError, SuiErrorKind, SuiResult},
     sui_serde::Readable,
 };
 use fastcrypto::encoding::{Base58, Encoding, Hex};
@@ -12,7 +12,7 @@ use fastcrypto::hash::{Blake2b256, HashFunction};
 use once_cell::sync::{Lazy, OnceCell};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, Bytes};
+use serde_with::{Bytes, serde_as};
 use sui_protocol_config::Chain;
 use tracing::info;
 
@@ -94,7 +94,7 @@ impl TryFrom<Vec<u8>> for Digest {
 
     fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
         let bytes: [u8; 32] =
-            <[u8; 32]>::try_from(&bytes[..]).map_err(|_| SuiError::InvalidDigestLength {
+            <[u8; 32]>::try_from(&bytes[..]).map_err(|_| SuiErrorKind::InvalidDigestLength {
                 expected: 32,
                 actual: bytes.len(),
             })?;
@@ -257,7 +257,7 @@ pub fn get_testnet_chain_identifier() -> ChainIdentifier {
 
 impl fmt::Display for ChainIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for byte in self.0 .0 .0[0..4].iter() {
+        for byte in self.0.0.0[0..4].iter() {
             write!(f, "{:02x}", byte)?;
         }
 
@@ -629,7 +629,7 @@ impl TryFrom<&[u8]> for TransactionDigest {
     fn try_from(bytes: &[u8]) -> Result<Self, crate::error::SuiError> {
         let arr: [u8; 32] = bytes
             .try_into()
-            .map_err(|_| crate::error::SuiError::InvalidTransactionDigest)?;
+            .map_err(|_| crate::error::SuiErrorKind::InvalidTransactionDigest)?;
         Ok(Self::new(arr))
     }
 }
@@ -1016,7 +1016,7 @@ impl TryFrom<&[u8]> for ObjectDigest {
     fn try_from(bytes: &[u8]) -> Result<Self, crate::error::SuiError> {
         let arr: [u8; 32] = bytes
             .try_into()
-            .map_err(|_| crate::error::SuiError::InvalidTransactionDigest)?;
+            .map_err(|_| crate::error::SuiErrorKind::InvalidTransactionDigest)?;
         Ok(Self::new(arr))
     }
 }

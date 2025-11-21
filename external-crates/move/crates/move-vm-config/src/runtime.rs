@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::verifier::{DEFAULT_MAX_CONSTANT_VECTOR_LEN, VerifierConfig};
+use crate::verifier::{VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN};
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format_common::VERSION_MAX;
 
@@ -31,6 +31,8 @@ pub struct VMConfig {
     pub max_type_to_layout_nodes: Option<u64>,
     /// Count variants as nodes.
     pub variant_nodes: bool,
+    /// Check for deprecated global storage operations during deserialization.
+    pub deprecate_global_storage_ops_during_deserialization: bool,
     /// Enable or disable bytecode optimization passes while caching bytecode in the Move Runtime.
     pub optimize_bytecode: bool,
 }
@@ -44,10 +46,14 @@ impl Default for VMConfig {
             enable_invariant_violation_check_in_swap_loc: true,
             check_no_extraneous_bytes_during_deserialization: true,
             error_execution_state: true,
-            binary_config: BinaryConfig::with_extraneous_bytes_check(true),
+            binary_config: BinaryConfig::legacy_with_flags(
+                /* check_no_extraneous_bytes */ true,
+                /* deprecate_global_storage_ops */ false,
+            ),
             rethrow_serialization_type_layout_errors: false,
             max_type_to_layout_nodes: Some(512),
             variant_nodes: true,
+            deprecate_global_storage_ops_during_deserialization: false,
             // FIXME FIXME FIXME
             // FEATURE GATE THIS AFTER GAS BLOCKS
             // FIXME FIXME FIXME

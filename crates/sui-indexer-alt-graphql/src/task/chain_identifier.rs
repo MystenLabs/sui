@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use diesel::QueryDsl;
 use sui_indexer_alt_reader::pg_reader::{Connection, PgReader};
 use sui_indexer_alt_schema::schema::kv_genesis;

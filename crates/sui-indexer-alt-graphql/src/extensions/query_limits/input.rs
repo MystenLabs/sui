@@ -4,15 +4,15 @@
 use std::mem;
 
 use async_graphql::{
-    parser::types::{ExecutableDocument, Selection},
     ServerResult,
+    parser::types::{ExecutableDocument, Selection},
 };
 use serde::{Deserialize, Serialize};
 
 use super::{
+    QueryLimitsConfig,
     chain::Chain,
     error::{Error, ErrorKind},
-    QueryLimitsConfig,
 };
 
 /// How many input nodes the query used, and how deep the deepest part of the query was.

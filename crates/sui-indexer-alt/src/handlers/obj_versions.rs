@@ -4,28 +4,30 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pipeline::{concurrent::Handler, Processor},
-    postgres::{Connection, Db},
-    types::{effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData},
+    pipeline::Processor,
+    postgres::{Connection, handler::Handler},
+    types::{effects::TransactionEffectsAPI, full_checkpoint_content::Checkpoint},
 };
 use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
 
 pub(crate) struct ObjVersions;
 
+#[async_trait]
 impl Processor for ObjVersions {
     const NAME: &'static str = "obj_versions";
     type Value = StoredObjVersion;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let CheckpointData {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let Checkpoint {
             transactions,
-            checkpoint_summary,
+            summary,
             ..
         } = checkpoint.as_ref();
 
-        let cp_sequence_number = checkpoint_summary.sequence_number as i64;
+        let cp_sequence_number = summary.sequence_number as i64;
         Ok(transactions
             .iter()
             .flat_map(|tx| {
@@ -48,10 +50,8 @@ impl Processor for ObjVersions {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Handler for ObjVersions {
-    type Store = Db;
-
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 

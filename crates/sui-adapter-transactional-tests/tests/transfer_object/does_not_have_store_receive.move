@@ -111,6 +111,8 @@ module test::m {
 //# programmable --sender A --inputs object(10,0) receiving(10,1)
 //> 0: test::m::parent_uid(Input(0));
 //> 1: sui::transfer::receive<test::m::S>(Result(0), Input(1));
+//> 2: sui::object::delete(Result(0));
+//> 3: test::m::destroy_s(Result(1));
 
 // Now publish one with store. We should:
 // 1. Not be able to call `receive` to receive it.
@@ -125,6 +127,8 @@ module test::m {
 //# programmable --sender A --inputs object(15,0) receiving(15,1)
 //> 0: test::m::parent_uid(Input(0));
 //> 1: sui::transfer::receive<test::m::Store>(Result(0), Input(1));
+//> 2: sui::object::delete(Result(0));
+//> 3: test::m::destroy_store(Result(1));
 
 // Can receive it via a direct `public_receive` call since `Store` has the `store` ability.
 //# programmable --sender A --inputs object(15,0) receiving(15,1)

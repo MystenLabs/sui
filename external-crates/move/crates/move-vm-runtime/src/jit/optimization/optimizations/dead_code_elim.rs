@@ -110,10 +110,10 @@ fn blocks(
     let labels = blocks.keys().collect::<Vec<_>>();
     for ((_, block), next) in blocks.iter().zip(labels.into_iter().skip(1)) {
         // Check for fall-through
-        if let Some(instr) = block.last() {
-            if !instr.is_unconditional_branch() {
-                context.live_labels.insert(*next);
-            }
+        if let Some(instr) = block.last()
+            && !instr.is_unconditional_branch()
+        {
+            context.live_labels.insert(*next);
         }
     }
 }

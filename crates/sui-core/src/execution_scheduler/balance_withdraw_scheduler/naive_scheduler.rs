@@ -8,9 +8,9 @@ use tokio::sync::watch;
 use tracing::{debug, instrument};
 
 use crate::execution_scheduler::balance_withdraw_scheduler::{
+    BalanceSettlement, ScheduleResult, ScheduleStatus,
     balance_read::AccountBalanceRead,
     scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
-    BalanceSettlement, ScheduleResult, ScheduleStatus,
 };
 
 /// A naive implementation of the balance withdraw scheduler that does not attempt to optimize the scheduling.
@@ -52,13 +52,9 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
             }
         }
         if *receiver.borrow() > withdraws.accumulator_version {
-            debug!("Withdraws at accumulator version are already settled");
-            for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
-                let _ = sender.send(ScheduleResult {
-                    tx_digest: withdraw.tx_digest,
-                    status: ScheduleStatus::AlreadySettled,
-                });
-            }
+            // This accumulator version is already settled.
+            // There is no need to schedule the withdraws.
+            withdraws.notify_skip_schedule();
             return;
         }
 
@@ -75,7 +71,6 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                     self.balance_read
                         .get_account_balance(object_id, withdraws.accumulator_version)
                 });
-
                 if *entry < *reservation as u128 {
                     debug!(
                         tx_digest =? withdraw.tx_digest,
@@ -126,5 +121,10 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
 
     fn close_epoch(&self) {
         debug!("Closing epoch in NaiveBalanceWithdrawScheduler");
+    }
+
+    #[cfg(test)]
+    fn get_current_accumulator_version(&self) -> SequenceNumber {
+        *self.accumulator_version_receiver.borrow()
     }
 }

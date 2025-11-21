@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.59.0"
+    "version": "1.62.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "98",
+              "maxSupportedProtocolVersion": "103",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1307,6 +1307,7 @@
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_private_accumulator_entrypoints": false,
                 "allow_receiving_object_id": false,
+                "allow_references_in_ptbs": false,
                 "allow_unbounded_system_objects": false,
                 "authority_capabilities_v2": false,
                 "ban_entry_init": false,
@@ -1328,24 +1329,30 @@
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
                 "correct_gas_payment_limit_check": false,
+                "create_root_accumulator_object": false,
                 "debug_fatal_on_move_invariant_violation": false,
                 "dependency_linkage_error": false,
+                "deprecate_global_storage_ops": false,
+                "deprecate_global_storage_ops_during_deserialization": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
                 "disallow_new_modules_in_deps_only_packages": false,
                 "disallow_self_identifier": false,
                 "enable_accumulators": false,
+                "enable_address_balance_gas_payments": false,
                 "enable_authenticated_event_streams": false,
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,
                 "enable_coin_registry": false,
+                "enable_display_registry": false,
                 "enable_effects_v2": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_nitro_attestation": false,
                 "enable_nitro_attestation_upgraded_parsing": false,
+                "enable_non_exclusive_writes": false,
                 "enable_party_transfer": false,
                 "enable_poseidon": false,
                 "enable_ptb_execution_v2": false,
@@ -1380,6 +1387,7 @@
                 "passkey_auth": false,
                 "per_command_shared_object_transfer_rules": false,
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
+                "private_generics_verifier_v2": false,
                 "random_beacon": false,
                 "receive_objects": false,
                 "recompute_has_public_transfer_in_execution": false,
@@ -1887,6 +1895,7 @@
                   "u64": "256"
                 },
                 "max_type_to_layout_nodes": null,
+                "max_updates_per_settlement_txn": null,
                 "max_value_stack_size": {
                   "u64": "1024"
                 },
@@ -1986,6 +1995,13 @@
                 "transfer_transfer_internal_cost_base": {
                   "u64": "52"
                 },
+                "translation_metering_step_resolution": null,
+                "translation_per_command_base_charge": null,
+                "translation_per_input_base_charge": null,
+                "translation_per_linkage_entry_charge": null,
+                "translation_per_reference_node_charge": null,
+                "translation_per_type_node_charge": null,
+                "translation_pure_input_per_byte_charge": null,
                 "tx_context_derive_id_cost_base": {
                   "u64": "52"
                 },
@@ -5462,18 +5478,21 @@
             "properties": {
               "eventDigest": {
                 "type": "array",
-                "items": [
-                  {
-                    "type": "integer",
-                    "format": "uint64",
-                    "minimum": 0.0
-                  },
-                  {
-                    "$ref": "#/components/schemas/Digest"
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
+                "items": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "type": "integer",
+                      "format": "uint64",
+                      "minimum": 0.0
+                    },
+                    {
+                      "$ref": "#/components/schemas/Digest"
+                    }
+                  ],
+                  "maxItems": 2,
+                  "minItems": 2
+                }
               }
             },
             "additionalProperties": false
@@ -9000,7 +9019,8 @@
               "CoinDenyListStateCreate",
               "StoreExecutionTimeObservations",
               "AccumulatorRootCreate",
-              "CoinRegistryCreate"
+              "CoinRegistryCreate",
+              "DisplayRegistryCreate"
             ]
           },
           {
@@ -10566,7 +10586,8 @@
       "SuiWithdrawFrom": {
         "type": "string",
         "enum": [
-          "sender"
+          "sender",
+          "sponsor"
         ]
       },
       "SuiWithdrawalTypeArg": {

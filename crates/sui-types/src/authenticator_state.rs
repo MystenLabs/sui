@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use serde::{Deserialize, Serialize};
 
 use crate::base_types::SequenceNumber;
 use crate::dynamic_field::get_dynamic_field_from_store;
-use crate::error::{SuiError, SuiResult};
+use crate::error::{SuiErrorKind, SuiResult};
 use crate::object::Owner;
 use crate::storage::ObjectStore;
-use crate::{id::UID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS};
+use crate::{SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, id::UID};
 
 pub const AUTHENTICATOR_STATE_MODULE_NAME: &IdentStr = ident_str!("authenticator_state");
 pub const AUTHENTICATOR_STATE_STRUCT_NAME: &IdentStr = ident_str!("AuthenticatorState");
@@ -113,12 +113,12 @@ pub fn get_authenticator_state(
         return Ok(None);
     };
     let move_object = outer.data.try_as_move().ok_or_else(|| {
-        SuiError::SuiSystemStateReadError(
+        SuiErrorKind::SuiSystemStateReadError(
             "AuthenticatorState object must be a Move object".to_owned(),
         )
     })?;
     let outer = bcs::from_bytes::<AuthenticatorState>(move_object.contents())
-        .map_err(|err| SuiError::SuiSystemStateReadError(err.to_string()))?;
+        .map_err(|err| SuiErrorKind::SuiSystemStateReadError(err.to_string()))?;
 
     // No other versions exist yet.
     assert_eq!(outer.version, AUTHENTICATOR_STATE_VERSION);
@@ -126,7 +126,7 @@ pub fn get_authenticator_state(
     let id = outer.id.id.bytes;
     let inner: AuthenticatorStateInner =
         get_dynamic_field_from_store(&object_store, id, &outer.version).map_err(|err| {
-            SuiError::DynamicFieldReadError(format!(
+            SuiErrorKind::DynamicFieldReadError(format!(
                 "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
                 id, outer.version, err
             ))

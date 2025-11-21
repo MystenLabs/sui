@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::object_store::http::{get, DEFAULT_USER_AGENT, STRICT_PATH_ENCODE_SET};
 use crate::object_store::ObjectStoreGetExt;
+use crate::object_store::http::{DEFAULT_USER_AGENT, STRICT_PATH_ENCODE_SET, get};
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
-use object_store::path::Path;
 use object_store::GetResult;
-use percent_encoding::{utf8_percent_encode, PercentEncode};
+use object_store::path::Path;
+use percent_encoding::{PercentEncode, utf8_percent_encode};
 use reqwest::Client;
 use reqwest::ClientBuilder;
 use std::fmt;

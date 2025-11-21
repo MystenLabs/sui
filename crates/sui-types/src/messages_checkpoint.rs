@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{
-    random_object_ref, ExecutionData, ExecutionDigests, FullObjectRef, VerifiedExecutionData,
+    ExecutionData, ExecutionDigests, FullObjectRef, VerifiedExecutionData, random_object_ref,
 };
 use crate::base_types::{ObjectID, SequenceNumber};
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
-    default_hash, get_key_pair, AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo,
-    AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, RandomnessRound,
+    AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo, AuthoritySignInfoTrait,
+    AuthorityStrongQuorumSignInfo, RandomnessRound, default_hash, get_key_pair,
 };
 use crate::digests::{CheckpointArtifactsDigest, Digest, ObjectDigest};
 use crate::effects::{TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI};
@@ -22,7 +22,7 @@ use crate::sui_serde::AsProtocolVersion;
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
 use crate::transaction::{Transaction, TransactionData};
-use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
+use crate::{base_types::AuthorityName, committee::Committee, error::SuiErrorKind};
 use anyhow::Result;
 use fastcrypto::hash::Blake2b256;
 use fastcrypto::hash::MultisetHash;
@@ -144,7 +144,7 @@ impl CheckpointArtifact {
                         .iter()
                         .map(|(id, (seq, digest))| (id, seq, digest)),
                 )
-                .map_err(|e| SuiError::GenericAuthorityError {
+                .map_err(|e| SuiErrorKind::GenericAuthorityError {
                     error: format!("Failed to build Merkle tree: {}", e),
                 })?;
                 let root = tree.root().bytes();
@@ -180,10 +180,10 @@ impl CheckpointArtifacts {
             .iter()
             .any(|existing| existing.artifact_type() == artifact.artifact_type())
         {
-            return Err(SuiError::from(format!(
-                "Artifact {} already exists",
-                artifact.artifact_type()
-            )));
+            return Err(SuiErrorKind::GenericAuthorityError {
+                error: format!("Artifact {} already exists", artifact.artifact_type()),
+            }
+            .into());
         }
         self.artifacts.insert(artifact);
         Ok(())
@@ -205,9 +205,12 @@ impl CheckpointArtifacts {
             .map(|artifact| match artifact {
                 CheckpointArtifact::ObjectStates(states) => states,
             })
-            .ok_or(SuiError::GenericAuthorityError {
-                error: "Object states not found in checkpoint artifacts".to_string(),
-            })
+            .ok_or(
+                SuiErrorKind::GenericAuthorityError {
+                    error: "Object states not found in checkpoint artifacts".to_string(),
+                }
+                .into(),
+            )
     }
 
     pub fn digest(&self) -> SuiResult<CheckpointArtifactsDigest> {
@@ -395,10 +398,11 @@ impl CheckpointSummary {
     pub fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
         fp_ensure!(
             self.epoch == epoch,
-            SuiError::WrongEpoch {
+            SuiErrorKind::WrongEpoch {
                 expected_epoch: epoch,
                 actual_epoch: self.epoch,
             }
+            .into()
         );
         Ok(())
     }
@@ -455,10 +459,13 @@ impl CheckpointSummary {
                 CheckpointCommitment::CheckpointArtifactsDigest(digest) => Some(digest),
                 _ => None,
             })
-            .ok_or(SuiError::GenericAuthorityError {
-                error: "Checkpoint artifacts digest not found in checkpoint commitments"
-                    .to_string(),
-            })
+            .ok_or(
+                SuiErrorKind::GenericAuthorityError {
+                    error: "Checkpoint artifacts digest not found in checkpoint commitments"
+                        .to_string(),
+                }
+                .into(),
+            )
     }
 }
 
@@ -517,7 +524,7 @@ impl CertifiedCheckpointSummary {
             let content_digest = *contents.digest();
             fp_ensure!(
                 content_digest == self.data().content_digest,
-                SuiError::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, received content digest {:?}, received {} transactions", self.data(), content_digest, contents.size())}
+                SuiErrorKind::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, received content digest {:?}, received {} transactions", self.data(), content_digest, contents.size())}.into()
             );
         }
 
@@ -922,8 +929,8 @@ mod tests {
     use crate::messages_consensus::ConsensusDeterminedVersionAssignments;
     use crate::transaction::VerifiedTransaction;
     use fastcrypto::traits::KeyPair;
-    use rand::prelude::StdRng;
     use rand::SeedableRng;
+    use rand::prelude::StdRng;
 
     use super::*;
     use crate::utils::make_committee_key;
@@ -1015,9 +1022,11 @@ mod tests {
             CertifiedCheckpointSummary::new(summary, sign_infos, &committee).expect("Cert is OK");
 
         // Signature is correct on proposal, and with same transactions
-        assert!(checkpoint_cert
-            .verify_with_contents(&committee, Some(&set))
-            .is_ok());
+        assert!(
+            checkpoint_cert
+                .verify_with_contents(&committee, Some(&set))
+                .is_ok()
+        );
 
         // Make a bad proposal
         let signed_checkpoints: Vec<_> = keys
