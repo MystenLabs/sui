@@ -252,8 +252,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
     let main_reader_lo_task = track_main_reader_lo::<H>(
         main_reader_lo.clone(),
-        task.as_ref()
-            .map(|t| Duration::from_millis(t.reader_interval_ms)),
+        task.as_ref().map(|t| t.reader_interval),
         pruner_cancel.clone(),
         store.clone(),
     );

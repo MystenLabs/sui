@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use anyhow::{Context, bail, ensure};
 use futures::future;
@@ -62,6 +62,14 @@ pub struct IndexerArgs {
     #[arg(long, action = clap::ArgAction::Append)]
     pub pipeline: Vec<String>,
 
+    /// Additional configurations for running a tasked indexer.
+    #[clap(flatten)]
+    pub task: TaskArgs,
+}
+
+/// Command-line arguments for configuring a tasked indexer.
+#[derive(clap::Parser, Default, Debug, Clone)]
+pub struct TaskArgs {
     /// An optional task name for this indexer. When set, pipelines will record watermarks using the
     /// delimiter defined on the store. This allows the same pipelines to run under multiple
     /// indexers (e.g. for backfills or temporary workflows) while maintaining separate watermark
@@ -74,23 +82,12 @@ pub struct IndexerArgs {
     /// The framework ensures that tasked pipelines never commit checkpoints below the main
     /// pipeline’s pruner watermark. Requires `--reader-interval-ms`.
     #[arg(long, requires = "reader-interval-ms")]
-    pub task: Option<String>,
+    task: Option<String>,
 
     /// The interval in milliseconds at which each of the pipelines on a tasked indexer should
     /// refetch its main pipeline's reader watermark. This is required when `--task` is set.
     #[arg(long, requires = "task")]
-    pub reader_interval_ms: Option<u64>,
-}
-
-/// Configuration for a tasked indexer.
-#[derive(Clone)]
-pub(crate) struct Task {
-    /// Name of the tasked indexer, to be used with the delimiter defined on the indexer's store to
-    /// record pipeline watermarks.
-    task: String,
-    /// The interval in milliseconds at which each of the pipelines on a tasked indexer should
-    /// refecth its main pipeline's reader watermark.
-    reader_interval_ms: u64,
+    reader_interval_ms: Option<u64>,
 }
 
 pub struct Indexer<S: Store> {
@@ -155,6 +152,33 @@ pub struct Indexer<S: Store> {
     handles: Vec<JoinHandle<()>>,
 }
 
+/// Configuration for a tasked indexer.
+#[derive(Clone)]
+pub(crate) struct Task {
+    /// Name of the tasked indexer, to be used with the delimiter defined on the indexer's store to
+    /// record pipeline watermarks.
+    task: String,
+    /// The interval at which each of the pipelines on a tasked indexer should refecth its main
+    /// pipeline's reader watermark.
+    reader_interval: Duration,
+}
+
+impl TaskArgs {
+    pub fn tasked(task: String, reader_interval_ms: u64) -> Self {
+        Self {
+            task: Some(task),
+            reader_interval_ms: Some(reader_interval_ms),
+        }
+    }
+
+    fn into_task(self) -> Option<Task> {
+        Some(Task {
+            task: self.task?,
+            reader_interval: Duration::from_millis(self.reader_interval_ms?),
+        })
+    }
+}
+
 impl<S: Store> Indexer<S> {
     /// Create a new instance of the indexer framework from a store that implements the `Store`
     /// trait, along with `indexer_args`, `client_args`, and `ingestion_config`. Together, these
@@ -181,7 +205,6 @@ impl<S: Store> Indexer<S> {
             last_checkpoint,
             pipeline,
             task,
-            reader_interval_ms,
         } = indexer_args;
 
         let metrics = IndexerMetrics::new(metrics_prefix, registry);
@@ -194,11 +217,7 @@ impl<S: Store> Indexer<S> {
             cancel.clone(),
         )?;
 
-        let task = task.map(|t| Task {
-            task: t,
-            reader_interval_ms: reader_interval_ms
-                .expect("reader_interval_ms is required when task is set"),
-        });
+        let task = task.into_task();
 
         Ok(Self {
             store,
@@ -1704,8 +1723,7 @@ mod tests {
             first_checkpoint: Some(0),
             last_checkpoint: Some(15),
             pipeline: vec![],
-            task: Some("task".to_string()),
-            reader_interval_ms: Some(10),
+            task: TaskArgs::tasked("task".to_string(), 10),
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -1793,8 +1811,7 @@ mod tests {
             first_checkpoint: Some(9),
             last_checkpoint: Some(25),
             pipeline: vec![],
-            task: Some("task".to_string()),
-            reader_interval_ms: Some(10),
+            task: TaskArgs::tasked("task".to_string(), 10),
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -1894,8 +1911,7 @@ mod tests {
             first_checkpoint: Some(0),
             last_checkpoint: Some(500),
             pipeline: vec![],
-            task: Some("task".to_string()),
-            reader_interval_ms: Some(10),
+            task: TaskArgs::tasked("task".to_string(), 10),
         };
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
