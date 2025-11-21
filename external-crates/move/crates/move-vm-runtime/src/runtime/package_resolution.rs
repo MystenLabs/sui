@@ -189,8 +189,8 @@ pub fn jit_package_for_publish(
     verified_pkg: verification::ast::Package,
 ) -> VMResult<Arc<move_cache::Package>> {
     let version_id = verified_pkg.version_id;
-    if cache.cached_package_at(version_id).is_some() {
-        return Ok(cache.cached_package_at(version_id).unwrap());
+    if let Some(pkg) = cache.cached_package_at(version_id) {
+        return Ok(pkg);
     }
 
     let runtime_pkg = jit::translate_package(
@@ -217,8 +217,8 @@ pub fn jit_and_cache_package(
     // If the package is already in the cache, return it.
     // This is possible since the cache is shared and may be inserted into concurrently by other
     // VMs working over the same cache.
-    if cache.cached_package_at(version_id).is_some() {
-        return Ok(cache.cached_package_at(version_id).unwrap());
+    if let Some(pkg) = cache.cached_package_at(version_id) {
+        return Ok(pkg);
     }
 
     let runtime_pkg = jit::translate_package(
