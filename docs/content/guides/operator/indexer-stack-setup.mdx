@@ -14,8 +14,8 @@ The indexer consists of multiple pipelines that each read, transform, and write 
 
 #### Hardware requirements
 
-- **CPU:** 8 cores
-- **Memory:** 16GB
+- **CPU:** 2 cores per instance
+- **Memory:** 4GB per instance
 
 ### Run command
 
@@ -300,52 +300,38 @@ GraphQL RPC server reads data from the general-purpose indexer's database (Postg
 
 #### Hardware requirements
 
-- **CPU:** 8 cores
-- **Memory:** 32GB
+- **CPU:** 2 cores per instance
+- **Memory:** 4GB per instance
+
+Scale the number of nodes based on the desired read throughput requirements of your client applications.
 
 ### Run command
 
-GraphQL RPC server can access the [Archival Service](https://github.com/concepts/archival-store) by connecting either to a self-hosted service backed by your own Bigtable cluster or to a managed service operated by an RPC provider.
-
-#### Run command using Bigtable
-
-Each GraphQL instance is run using the same command below:
-```sh
-GOOGLE_APPLICATION_CREDENTIALS=<PATH_TO_BT_CREDENTIALS_JSON> sui-indexer-alt-graphql rpc \
-    --config CONFIG_FILE \
-    --indexer-config INDEXER_CONFIG_FILE \
-    --bigtable-instance BIGTABLE_INSTANCE \
-    --consistent-store-url CONSISTENT_STORE_URL \
-    --database-url DATABASE_URL \
-    --fullnode-rpc-url FULLNODE_RPC_URL
-```
-
-#### Run command using LedgerService gRPC
-
 :::info
 
-If you use Sui Foundation's public good archival service at archive.testnet.sui.io and archive.mainnet.sui.io, you may experience performance issues which will be addressed before GA release.
+If you use the Sui Foundation–hosted public good archival service on Testnet or Mainnet, you may encounter performance issues. The team will address these before the GraphQL RPC and Archival Service reach general availability.
 :::
 
-Each GraphQL instance is run using the same command below:
+Use the following command to run a GraphQL RPC server node:
 ```sh
 sui-indexer-alt-graphql rpc \
-    --config CONFIG_FILE \
-    --indexer-config INDEXER_CONFIG_FILE \
-    --ledger-grpc-url LEDGER_GRPC_URL \
-    --consistent-store-url CONSISTENT_STORE_URL \
-    --database-url DATABASE_URL \
-    --fullnode-rpc-url FULLNODE_RPC_URL
+    --config <PATH_TO_GRAPHQL_CONFIG_FILE> \
+    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_1> \
+    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_2> \
+    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_3> \
+    --ledger-grpc-url <LEDGER_GRPC_URL> \
+    --consistent-store-url <CONSISTENT_STORE_URL> \
+    --database-url <DATABASE_URL> \
+    --fullnode-rpc-url <FULLNODE_RPC_URL>
 ```
 
+Note that multiple `--indexer-config` parameters can be provided, one for each general-purpose indexer instance.
 
 | CLI param                        | Description                                                                        |
 |----------------------------------|------------------------------------------------------------------------------------|
 | `CONFIG_FILE`                    | Path to GraphQL configuration file                                                 |
-| `INDEXER_CONFIG_FILE`            | Path to indexer configuration file<br/>Can be set multiple times; once per indexer |
-| `BIGTABLE_INSTANCE`              | GCP Bigtable instance id                                                             |
-| `PATH_TO_BT_CREDENTIALS_JSON`    | Path to GCP Bigtable credentials JSON file                                       |
-| `LEDGER_GRPC_URL`                | URL to archival service's LedgerService gRPC API                                                        |
+| `INDEXER_CONFIG_FILE`            | Path to indexer configuration file that can be set multiple times                  |
+| `LEDGER_GRPC_URL`                | URL to archival service's LedgerService gRPC API                                   |
 | `CONSISTENT_STORE_URL`           | URL to [consistent store](#consistent-store-setup) API                             |
 | `DATABASE_URL`                   | Postgres database connection string                                                |
 | `FULLNODE_RPC_URL`               | URL to fullnode RPC API                                                            |
