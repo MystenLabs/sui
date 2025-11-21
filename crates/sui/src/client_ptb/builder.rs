@@ -932,6 +932,9 @@ impl<'a> PTBBuilder<'a> {
                 }
 
                 let build_config = MoveBuildConfig::default();
+              //                  // Save the initial current directory
+              //  let initial_dir = std::env::current_dir()
+              //      .map_err(|e| err!(pkg_loc, "Failed to get current directory: {e}"))?;
                 let root_pkg =
                     load_root_pkg_for_publish_upgrade(self.wallet, &build_config, package_path)
                         .await
@@ -947,6 +950,10 @@ impl<'a> PTBBuilder<'a> {
                 .await
                 .map_err(|e| err!(pkg_loc, "{e}"))?;
 
+                // Restore the initial directory so subsequent commands are not affected
+                std::env::set_current_dir(initial_dir)
+                    .map_err(|e| err!(pkg_loc, "Failed to restore initial directory: {e}"))?;
+
                 let compiled_modules = compiled_package.get_package_bytes(false);
 
                 let res = self.ptb.publish_upgradeable(
@@ -957,7 +964,9 @@ impl<'a> PTBBuilder<'a> {
             }
             // Update this command to not do as many things. It should result in a single command.
             ParsedPTBCommand::Upgrade(sp!(path_loc, package_path), mut arg) => {
-                let package_path = Path::new(&package_path);
+                let package_path = Path::new(&package_path)
+                    .canonicalize()
+                    .map_err(|e| err!(path_loc, "Failed to canonicalize package path: {e}"))?;
                 if !package_path.exists() {
                     error!(
                         path_loc,
@@ -965,6 +974,9 @@ impl<'a> PTBBuilder<'a> {
                         package_path.display()
                     );
                 }
+                // // Save the initial current directory
+                // let initial_dir = std::env::current_dir()
+                //     .map_err(|e| err!(path_loc, "Failed to get current directory: {e}"))?;
 
                 if let sp!(loc, PTBArg::Identifier(id)) = arg {
                     arg = self
@@ -1002,11 +1014,14 @@ impl<'a> PTBBuilder<'a> {
                     package_path,
                     ObjectID::from_address(upgrade_cap_id.into_inner()),
                     false, /* with_unpublished_dependencies */
-                    false, /* skip_dependency_verification */
+                    true, /* skip_dependency_verification */
                            // None,
                 )
                 .await
                 .map_err(|e| err!(path_loc, "{e}"))?;
+              //              // Restore the initial directory so subsequent commands are not affected
+              //  std::env::set_current_dir(initial_dir)
+              //      .map_err(|e| err!(path_loc, "Failed to restore initial directory: {e}"))?;
 
                 let package_digest = compiled_package.get_package_digest(false);
                 let package_id = compiled_package
