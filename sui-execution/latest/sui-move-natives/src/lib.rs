@@ -1399,7 +1399,7 @@ macro_rules! charge_cache_or_load_gas {
                 let config = get_extension!($context, ObjectRuntime)?.protocol_config;
                 if config.object_runtime_charge_cache_load_gas() {
                     let bytes = bytes_opt.unwrap_or(SUI_ADDRESS_LENGTH as usize);
-                    let cost = bytes * config.obj_access_cost_read_per_byte() as usize;
+                    let cost = 2 * bytes * config.obj_access_cost_read_per_byte() as usize;
                     native_charge_gas_early_exit!($context, InternalGas::new(cost as u64));
                 }
             }

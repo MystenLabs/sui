@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Module which defines instances of the poseidon hash functions. Available in Devnet only.
+/// Module which defines instances of the poseidon hash functions. Available in Devnet and Testnet.
 module sui::poseidon;
 
 use sui::bcs;

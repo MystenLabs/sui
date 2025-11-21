@@ -3,12 +3,19 @@
 
 use std::collections::HashMap;
 
+use anyhow::Context;
 use async_graphql::dataloader::Loader;
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
+use prost_types::FieldMask;
 use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::{base_types::ObjectID, object::Object, storage::ObjectKey};
 
-use crate::{bigtable_reader::BigtableReader, error::Error, pg_reader::PgReader};
+use crate::{
+    bigtable_reader::BigtableReader, error::Error, ledger_grpc_reader::LedgerGrpcReader,
+    pg_reader::PgReader,
+};
 
 /// Key for fetching the contents a particular version of an object.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -87,5 +94,50 @@ impl Loader<VersionedObjectKey> for BigtableReader {
             .into_iter()
             .map(|o| (VersionedObjectKey(o.id(), o.version().into()), o))
             .collect())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<VersionedObjectKey> for LedgerGrpcReader {
+    type Value = Object;
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[VersionedObjectKey],
+    ) -> Result<HashMap<VersionedObjectKey, Object>, Error> {
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let requests = keys
+            .iter()
+            .map(|key| {
+                let mut req = proto::GetObjectRequest::new(&key.0.into());
+                req.version = Some(key.1);
+                req
+            })
+            .collect();
+
+        let mut request = proto::BatchGetObjectsRequest::default();
+        request.requests = requests;
+        request.read_mask = Some(FieldMask::from_paths(["bcs"]));
+
+        let response = self.0.clone().batch_get_objects(request).await?;
+        let batch_response = response.into_inner();
+
+        let mut results = HashMap::new();
+        for obj_result in batch_response.objects {
+            if let Some(proto::get_object_result::Result::Object(object)) = obj_result.result {
+                let obj: Object = object
+                    .bcs
+                    .as_ref()
+                    .context("Missing bcs in object")?
+                    .deserialize()
+                    .context("Failed to deserialize object")?;
+                results.insert(VersionedObjectKey(obj.id(), obj.version().into()), obj);
+            }
+        }
+        Ok(results)
     }
 }

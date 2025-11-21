@@ -6,11 +6,12 @@ use move_binary_format::file_format::Visibility;
 use move_binary_format::normalized;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::StructTag;
+use mysten_common::fatal;
 use rand::rngs::StdRng;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_move_build::BuildConfig;
 use sui_protocol_config::{Chain, ProtocolConfig};
@@ -343,6 +344,7 @@ impl SurferState {
             rgp,
         );
         let tx = self.cluster.wallet.sign_transaction(&tx_data).await;
+        let start = Instant::now();
         let response = loop {
             match self
                 .cluster
@@ -354,7 +356,14 @@ impl SurferState {
                     break response;
                 }
                 Err(err) => {
-                    error!("Failed to publish package: {:?}", err);
+                    if start.elapsed() > Duration::from_secs(120) {
+                        fatal!(
+                            "Failed to publish package after 120 seconds: {:?} {}",
+                            err,
+                            tx.digest()
+                        );
+                    }
+                    error!("Failed to publish package: {:?} {}", err, tx.digest());
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             }

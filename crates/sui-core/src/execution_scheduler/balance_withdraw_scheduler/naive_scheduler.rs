@@ -7,10 +7,12 @@ use sui_types::base_types::SequenceNumber;
 use tokio::sync::watch;
 use tracing::{debug, instrument};
 
-use crate::execution_scheduler::balance_withdraw_scheduler::{
-    BalanceSettlement, ScheduleResult, ScheduleStatus,
-    balance_read::AccountBalanceRead,
-    scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
+use crate::{
+    accumulators::balance_read::AccountBalanceRead,
+    execution_scheduler::balance_withdraw_scheduler::{
+        BalanceSettlement, ScheduleResult, ScheduleStatus,
+        scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
+    },
 };
 
 /// A naive implementation of the balance withdraw scheduler that does not attempt to optimize the scheduling.

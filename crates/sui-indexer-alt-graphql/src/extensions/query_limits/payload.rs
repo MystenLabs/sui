@@ -78,6 +78,24 @@ impl<'r> TxPayloadRule<'r> {
             return Ok(());
         }
 
+        macro_rules! debit {
+            ($debit: expr) => {{
+                let debit: usize = $debit;
+                if debit > self.tx_payload_budget as usize {
+                    return Err(driver.err_at(
+                        value.pos,
+                        ErrorKind::PayloadSizeTx {
+                            limit: self.max_tx_payload_size,
+                        },
+                    ));
+                } else {
+                    // SAFETY: We know that debit <= self.tx_payload_budget, which is a u32, so
+                    // the cast and subtraction are both safe.
+                    self.tx_payload_budget -= debit as u32;
+                }
+            }};
+        }
+
         let mut stack = vec![&value.node];
         while let Some(v) = stack.pop() {
             match v {
@@ -85,53 +103,50 @@ impl<'r> TxPayloadRule<'r> {
 
                 V::String(s) => {
                     // Pay for the string, plus the quotes around it.
-                    let debit = s.len() + 2;
-                    if debit > self.tx_payload_budget as usize {
-                        return Err(driver.err_at(
-                            value.pos,
-                            ErrorKind::PayloadSizeTx {
-                                limit: self.max_tx_payload_size,
-                            },
-                        ));
-                    } else {
-                        // SAFETY: We know that debit <= self.tx_payload_budget, which is a u32, so
-                        // the cast and subtraction are both safe.
-                        self.tx_payload_budget -= debit as u32;
-                    }
+                    debit!(2 + s.len());
                 }
 
                 V::List(vs) => {
                     // Pay for the opening and closing brackets and every comma up-front so that
                     // deeply nested lists are not free.
-                    let debit = vs.len().saturating_sub(1) + 2;
-                    if debit > self.tx_payload_budget as usize {
-                        return Err(driver.err_at(
-                            value.pos,
-                            ErrorKind::PayloadSizeTx {
-                                limit: self.max_tx_payload_size,
-                            },
-                        ));
-                    } else {
-                        // SAFETY: We know that debit <= self.tx_payload_budget, which is a u32, so
-                        // the cast and subtraction are both safe.
-                        self.tx_payload_budget -= debit as u32;
-                        stack.extend(vs)
-                    }
+                    debit!(2 + vs.len().saturating_sub(1));
+                    stack.extend(vs);
                 }
 
-                V::Null
-                | V::Number(_)
-                | V::Boolean(_)
-                | V::Binary(_)
-                | V::Enum(_)
-                | V::Object(_) => {
-                    // Transaction payloads cannot be any of these types, so this request is
-                    // destined to fail. Ignore these values for now, so that it can fail later on
-                    // with a more legible error message.
-                    //
-                    // From a limits perspective, it is safe to ignore these values here, because
-                    // they will still be counted as part of the query payload (and so are still
-                    // subject to a limit).
+                V::Object(fs) => {
+                    // Pay for the opening and closing braces, colons, commas, and field names
+                    // up-front so that deeply nested objects are not free.
+                    debit!(
+                        2 // { and }
+                        +   fs.len().saturating_sub(1) // commas
+                        +   fs.keys().map(|k| k.as_str().len() + 1).sum::<usize>() // keys, colons
+                    );
+
+                    stack.extend(fs.values());
+                }
+
+                V::Number(n) => {
+                    // Estimate the string representation of the number.
+                    debit!(n.to_string().len());
+                }
+
+                V::Boolean(b) => {
+                    debit!(if *b { "true".len() } else { "false".len() });
+                }
+
+                V::Enum(name) => {
+                    // Pay for the enum name.
+                    debit!(name.len());
+                }
+
+                V::Binary(bs) => {
+                    // Pay for the Base64-encoded representation with quotes. Base64 encoding:
+                    // every 3 bytes becomes 4 characters.
+                    debit!(2 + bs.len().div_ceil(3) * 4);
+                }
+
+                V::Null => {
+                    debit!("null".len());
                 }
             }
         }
@@ -162,52 +177,73 @@ impl<'r> TxPayloadRule<'r> {
             return Ok(());
         };
 
+        macro_rules! debit {
+            ($debit: expr) => {{
+                let debit: usize = $debit;
+                if debit > self.tx_payload_budget as usize {
+                    return Err(driver.err_at(
+                        pos,
+                        ErrorKind::PayloadSizeTx {
+                            limit: self.max_tx_payload_size,
+                        },
+                    ));
+                } else {
+                    // SAFETY: We know that debit <= self.tx_payload_budget, which is a u32, so
+                    // the cast and subtraction are both safe.
+                    self.tx_payload_budget -= debit as u32;
+                }
+            }};
+        }
+
         let mut stack = vec![value];
         while let Some(value) = stack.pop() {
+            // The cases below are the same as those in `check_tx_arg`, but without having to
+            // handle variables and with no bare identifiers (all identifiers -- field names and
+            // enums -- are quoted).
             match &value {
+                // Pay for the string, plus the quotes around it.
                 CV::String(s) => {
-                    // Pay for the string, plus the quotes around it.
-                    let debit = s.len() + 2;
-                    if debit > self.tx_payload_budget as usize {
-                        return Err(driver.err_at(
-                            pos,
-                            ErrorKind::PayloadSizeTx {
-                                limit: self.max_tx_payload_size,
-                            },
-                        ));
-                    } else {
-                        // SAFETY: We know that debit <= self.tx_payload_budget, which is a u32, so
-                        // the cast and subtraction are both safe.
-                        self.tx_payload_budget -= debit as u32;
-                    }
+                    debit!(2 + s.len());
                 }
 
+                // Pay for the opening and closing brackets and every comma up-front so that deeply
+                // nested lists are not free.
                 CV::List(vs) => {
-                    // Pay for the opening and closing brackets and every comma up-front so that
-                    // deeply nested lists are not free.
-                    let debit = vs.len().saturating_sub(1) + 2;
-                    if debit > self.tx_payload_budget as usize {
-                        return Err(driver.err_at(
-                            pos,
-                            ErrorKind::PayloadSizeTx {
-                                limit: self.max_tx_payload_size,
-                            },
-                        ));
-                    } else {
-                        // SAFETY: We know that debit <= self.tx_payload_budget, which is a u32, so
-                        // the cast and subtraction are both safe.
-                        self.tx_payload_budget -= debit as u32;
-                        stack.extend(vs)
-                    }
+                    debit!(2 + vs.len().saturating_sub(1));
+                    stack.extend(vs);
                 }
 
-                CV::Null
-                | CV::Number(_)
-                | CV::Boolean(_)
-                | CV::Binary(_)
-                | CV::Enum(_)
-                | CV::Object(_) => {
-                    // As in `check_tx_arg`, these are safe to ignore.
+                // Pay for the opening and closing braces, colons, commas, and field names (with
+                // quotes) up-front so that deeply nested objects are not free.
+                CV::Object(fs) => {
+                    debit!(
+                        2 // { and }
+                        +   fs.len().saturating_sub(1) // commas
+                        +   fs.keys().map(|k| k.as_str().len() + 3).sum::<usize>() // keys, quotes, colons
+                    );
+
+                    stack.extend(fs.values());
+                }
+
+                CV::Number(n) => {
+                    debit!(n.to_string().len());
+                }
+
+                CV::Boolean(b) => {
+                    debit!(if *b { "true".len() } else { "false".len() });
+                }
+
+                // Pay for the enum name, with quotes.
+                CV::Enum(name) => {
+                    debit!(2 + name.as_str().len());
+                }
+
+                CV::Binary(bs) => {
+                    debit!(2 + bs.len().div_ceil(3) * 4);
+                }
+
+                CV::Null => {
+                    debit!("null".len());
                 }
             }
         }

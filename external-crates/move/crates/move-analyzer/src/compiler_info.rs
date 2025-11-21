@@ -7,77 +7,49 @@ use move_command_line_common::files::FileHash;
 use move_compiler::shared::ide as CI;
 use move_ir_types::location::Loc;
 
+/// Compiler information used during symbolication analysis.
+/// This is cached and used during typing analysis.
 #[derive(Default, Debug, Clone)]
-pub struct CompilerInfo {
+pub struct CompilerAnalysisInfo {
+    /// Macro call information
     pub macro_info: BTreeMap<Loc, CI::MacroCallInfo>,
+    /// Expanded lambda expressions
     pub expanded_lambdas: BTreeSet<Loc>,
-    pub dot_autocomplete_info: BTreeMap<FileHash, BTreeMap<Loc, CI::DotAutocompleteInfo>>,
-    pub path_autocomplete_info: BTreeMap<Loc, CI::AliasAutocompleteInfo>,
-    /// Locations of binders in enum variants that are expanded from an ellipsis (and should
-    /// not be displayed in any way by the IDE)
+    /// Ellipsis-generated binders (to filter from IDE)
     pub ellipsis_binders: BTreeSet<Loc>,
-    /// Locations of guard expressions
-    pub guards: BTreeMap<FileHash, BTreeSet<Loc>>,
 }
 
-impl CompilerInfo {
-    pub fn new() -> CompilerInfo {
-        CompilerInfo::default()
+/// Compiler information used for IDE autocomplete features.
+/// This is NOT cached, only kept in Symbols for IDE requests.
+#[derive(Default, Debug, Clone)]
+pub struct CompilerAutocompleteInfo {
+    /// Dot autocomplete information (obj.method)
+    pub dot_autocomplete_info: BTreeMap<FileHash, BTreeMap<Loc, CI::DotAutocompleteInfo>>,
+    /// Path autocomplete information (module::path)
+    pub path_autocomplete_info: BTreeMap<Loc, CI::AliasAutocompleteInfo>,
+}
+
+impl CompilerAnalysisInfo {
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    pub fn from(info: impl IntoIterator<Item = (Loc, CI::IDEAnnotation)>) -> Self {
-        let mut result = Self::new();
-        result.add_info(info);
-        result
-    }
-
-    pub fn add_info(&mut self, info: impl IntoIterator<Item = (Loc, CI::IDEAnnotation)>) {
-        for (loc, entry) in info {
-            match entry {
-                CI::IDEAnnotation::MacroCallInfo(info) => {
-                    // TODO: should we check this is not also an expanded lambda?
-                    // TODO: what if we find two macro calls?
-                    if let Some(_old) = self.macro_info.insert(loc, *info) {
-                        //                        eprintln!("Repeated macro info");
-                    }
-                }
-                CI::IDEAnnotation::ExpandedLambda => {
-                    self.expanded_lambdas.insert(loc);
-                }
-                CI::IDEAnnotation::DotAutocompleteInfo(info) => {
-                    // TODO: what if we find two autocomplete info sets? Intersection may be better
-                    // than union, as it's likely in a lambda body.
-                    if let Some(_old) = self
-                        .dot_autocomplete_info
-                        .entry(loc.file_hash())
-                        .or_default()
-                        .insert(loc, *info)
-                    {
-                        //                        eprintln!("Repeated autocomplete info");
-                    }
-                }
-                CI::IDEAnnotation::MissingMatchArms(_) => {
-                    // TODO: Not much to do with this yet.
-                }
-                CI::IDEAnnotation::EllipsisMatchEntries(_) => {
-                    self.ellipsis_binders.insert(loc);
-                }
-                CI::IDEAnnotation::PathAutocompleteInfo(info) => {
-                    self.path_autocomplete_info.insert(loc, *info);
-                }
-            }
-        }
-    }
-
-    pub fn get_macro_info(&mut self, loc: &Loc) -> Option<&CI::MacroCallInfo> {
+    pub fn get_macro_info(&self, loc: &Loc) -> Option<&CI::MacroCallInfo> {
         self.macro_info.get(loc)
     }
 
-    pub fn is_expanded_lambda(&mut self, loc: &Loc) -> bool {
+    pub fn is_expanded_lambda(&self, loc: &Loc) -> bool {
         self.expanded_lambdas.contains(loc)
     }
+}
 
-    pub fn get_autocomplete_info(
+impl CompilerAutocompleteInfo {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Get dot autocomplete information (for obj.field completions)
+    pub fn get_dot_autocomplete_info(
         &self,
         fhash: FileHash,
         loc: &Loc,
@@ -93,11 +65,46 @@ impl CompilerInfo {
         })
     }
 
-    pub fn inside_guard(&self, fhash: FileHash, loc: &Loc, gloc: &Loc) -> bool {
-        self.guards
-            .get(&fhash)
-            .and_then(|guard_locs| guard_locs.get(gloc))
-            .is_some()
-            && gloc.contains(loc)
+    /// Get path autocomplete information (for module::path completions)
+    pub fn get_path_autocomplete_info(&self, loc: &Loc) -> Option<&CI::AliasAutocompleteInfo> {
+        self.path_autocomplete_info.get(loc)
     }
+}
+
+/// Process compiler IDE annotations into analysis and autocomplete info.
+/// Returns (analysis_info, autocomplete_info)
+pub fn process_ide_annotations(
+    annotations: impl IntoIterator<Item = (Loc, CI::IDEAnnotation)>,
+) -> (CompilerAnalysisInfo, CompilerAutocompleteInfo) {
+    let mut analysis = CompilerAnalysisInfo::default();
+    let mut autocomplete = CompilerAutocompleteInfo::default();
+
+    for (loc, entry) in annotations {
+        match entry {
+            CI::IDEAnnotation::MacroCallInfo(info) => {
+                analysis.macro_info.insert(loc, *info);
+            }
+            CI::IDEAnnotation::ExpandedLambda => {
+                analysis.expanded_lambdas.insert(loc);
+            }
+            CI::IDEAnnotation::DotAutocompleteInfo(info) => {
+                autocomplete
+                    .dot_autocomplete_info
+                    .entry(loc.file_hash())
+                    .or_default()
+                    .insert(loc, *info);
+            }
+            CI::IDEAnnotation::PathAutocompleteInfo(info) => {
+                autocomplete.path_autocomplete_info.insert(loc, *info);
+            }
+            CI::IDEAnnotation::EllipsisMatchEntries(_) => {
+                analysis.ellipsis_binders.insert(loc);
+            }
+            CI::IDEAnnotation::MissingMatchArms(_) => {
+                // TODO: Not much to do with this yet.
+            }
+        }
+    }
+
+    (analysis, autocomplete)
 }

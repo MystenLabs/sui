@@ -6,7 +6,7 @@ keywords: [indexer, consistent store, graphql, setup, dex]
 
 <ImportContent source="indexer-graphql.mdx" mode="snippet" />
 
-See [GraphQL and General-Purpose Indexer](/concepts/graphql-indexer.mdx) for more information on the stack.
+See [GraphQL and General-Purpose Indexer](/concepts/data-access/graphql-indexer.mdx) for more information on the stack.
 
 ## Indexer setup
 
@@ -32,7 +32,7 @@ $ sui-indexer-alt indexer \
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `<CONFIG_FILE>`      | Path to indexer configuration file.                                                                                                  |
 | `<DATABASE_URL>`     | Postgres database connection string.                                                                                                 |
-| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/concepts/custom-indexing-framework#data-sources). |
+| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/concepts/data-access/custom-indexing-framework#data-sources). |
 
 Example:
 
@@ -216,7 +216,7 @@ $ sui-indexer-alt-consistent-store restore \
 | `<HTTP_ENDPOINT>` \*        | URL of formal snapshot API.                                                                                                               |
 | `<OBJECT_FILE_CONCURRENCY>` | Path to indexer configuration file.                                                                                                       |
 | `<PIPELINE_NAME>`           | Name of pipeline to restore. Can be set multiple times; once per pipeline.                                                                |
-| `<REMOTE_STORE_URL>`        | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/concepts/custom-indexing-framework#data-sources).      |
+| `<REMOTE_STORE_URL>`        | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/concepts/data-access/custom-indexing-framework#data-sources).      |
 | `<S3_BUCKET>` \*            | Name or URL of AWS S3 bucket containing [managed snapshots](https://docs.sui.io/guides/operator/snapshots#mysten-labs-managed-snapshots). |
 
 \* Must specify one of `<AZURE_BUCKET>`, `<GCS_ACCOUNT>`, `<HTTP_ENDPOINT>`, or `<S3_BUCKET>`.
@@ -249,7 +249,7 @@ $ sui-indexer-alt-consistent-store run \
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `<CONFIG_FILE>`      | Path to consistent store configuration file.                                                                                         |
 | `<DATABASE_PATH>`    | Path to RocksDB database.                                                                                                            |
-| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/concepts/custom-indexing-framework#data-sources). |
+| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/concepts/data-access/custom-indexing-framework#data-sources). |
 
 Example:
 
@@ -296,11 +296,11 @@ $ sui-indexer-alt-consistent-store run \
 
 ## Related links
 
-<RelatedLink to="/concepts/graphql-indexer" />
-<RelatedLink to="/concepts/graphql-rpc" />
-<RelatedLink to="/concepts/custom-indexing-framework" />
-<RelatedLink to="/concepts/custom-indexer/pipeline-architecture" />
-<RelatedLink to="/concepts/archival-store" />
+<RelatedLink to="/concepts/data-access/graphql-indexer" />
+<RelatedLink to="/concepts/data-access/graphql-rpc" />
+<RelatedLink to="/concepts/data-access/custom-indexing-framework" />
+<RelatedLink to="/concepts/data-access/pipeline-architecture" />
+<RelatedLink to="/concepts/data-access/archival-store" />
 <RelatedLink to="/guides/developer/advanced/custom-indexer" />
 <RelatedLink
 	href="https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt"

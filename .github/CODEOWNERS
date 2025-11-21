@@ -15,6 +15,9 @@ CHANGELOG.md
 # When native functions change, so we can evaluate cost impact
 /crates/sui-framework/src/natives/ @dariorussi
 
+# System packages tracking
+/crates/sui-framework/ @MystenLabs/devx-move
+
 # GraphQL RPC working group
 /crates/sui-default-config @MystenLabs/devx-indexers-and-rpcs
 /crates/sui-display @MystenLabs/devx-indexers-and-rpcs

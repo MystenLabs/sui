@@ -16,11 +16,12 @@ use tracing::{debug, error, warn};
 use url::Url;
 
 use crate::ingestion::Error as IngestionError;
+use crate::ingestion::MAX_GRPC_MESSAGE_SIZE_BYTES;
 use crate::ingestion::Result as IngestionResult;
 use crate::ingestion::local_client::LocalIngestionClient;
 use crate::ingestion::remote_client::RemoteIngestionClient;
 use crate::metrics::CheckpointLagMetricReporter;
-use crate::metrics::IndexerMetrics;
+use crate::metrics::IngestionMetrics;
 use crate::task::with_slow_future_monitor;
 use crate::types::full_checkpoint_content::{Checkpoint, CheckpointData};
 use async_trait::async_trait;
@@ -38,6 +39,32 @@ const SLOW_OPERATION_WARNING_THRESHOLD: Duration = Duration::from_secs(60);
 #[async_trait]
 pub(crate) trait IngestionClientTrait: Send + Sync {
     async fn fetch(&self, checkpoint: u64) -> FetchResult;
+}
+
+#[derive(clap::Args, Clone, Debug, Default)]
+#[group(required = true)]
+pub struct IngestionClientArgs {
+    /// Remote Store to fetch checkpoints from.
+    #[clap(long, group = "source")]
+    pub remote_store_url: Option<Url>,
+
+    /// Path to the local ingestion directory.
+    /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
+    #[clap(long, group = "source")]
+    pub local_ingestion_path: Option<PathBuf>,
+
+    /// Sui fullnode gRPC url to fetch checkpoints from.
+    /// If all remote_store_url, local_ingestion_path and rpc_api_url are provided, remote_store_url will be used.
+    #[clap(long, env, group = "source")]
+    pub rpc_api_url: Option<Url>,
+
+    /// Optional username for the gRPC service.
+    #[clap(long, env)]
+    pub rpc_username: Option<String>,
+
+    /// Optional password for the gRPC service.
+    #[clap(long, env)]
+    pub rpc_password: Option<String>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -71,50 +98,79 @@ pub enum FetchData {
 pub struct IngestionClient {
     client: Arc<dyn IngestionClientTrait>,
     /// Wrap the metrics in an `Arc` to keep copies of the client cheap.
-    metrics: Arc<IndexerMetrics>,
+    metrics: Arc<IngestionMetrics>,
     checkpoint_lag_reporter: Arc<CheckpointLagMetricReporter>,
 }
 
 impl IngestionClient {
-    pub(crate) fn new_remote(url: Url, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
+    /// Construct a new ingestion client. Its source is determined by `args`.
+    pub fn new(args: IngestionClientArgs, metrics: Arc<IngestionMetrics>) -> IngestionResult<Self> {
+        // TODO: Support stacking multiple ingestion clients for redundancy/failover.
+        let client = if let Some(url) = args.remote_store_url.as_ref() {
+            IngestionClient::new_remote(url.clone(), metrics.clone())?
+        } else if let Some(path) = args.local_ingestion_path.as_ref() {
+            IngestionClient::new_local(path.clone(), metrics.clone())
+        } else if let Some(rpc_api_url) = args.rpc_api_url.as_ref() {
+            IngestionClient::new_rpc(
+                rpc_api_url.clone(),
+                args.rpc_username,
+                args.rpc_password,
+                metrics.clone(),
+            )?
+        } else {
+            panic!("One of remote_store_url, local_ingestion_path or rpc_api_url must be provided");
+        };
+
+        Ok(client)
+    }
+
+    /// An ingestion client that fetches checkpoints from a remote store (an object store, over
+    /// HTTP).
+    pub fn new_remote(url: Url, metrics: Arc<IngestionMetrics>) -> IngestionResult<Self> {
         let client = Arc::new(RemoteIngestionClient::new(url)?);
         Ok(Self::new_impl(client, metrics))
     }
 
-    #[cfg(test)]
-    pub(crate) fn new_remote_with_timeout(
+    /// An ingestion client that fetches checkpoints from a remote store (an object store, over
+    /// HTTP), with a configured request timeout.
+    pub fn new_remote_with_timeout(
         url: Url,
         timeout: std::time::Duration,
-        metrics: Arc<IndexerMetrics>,
+        metrics: Arc<IngestionMetrics>,
     ) -> IngestionResult<Self> {
         let client = Arc::new(RemoteIngestionClient::new_with_timeout(url, timeout)?);
         Ok(Self::new_impl(client, metrics))
     }
 
-    pub(crate) fn new_local(path: PathBuf, metrics: Arc<IndexerMetrics>) -> Self {
+    /// An ingestion client that fetches checkpoints from a local directory.
+    pub fn new_local(path: PathBuf, metrics: Arc<IngestionMetrics>) -> Self {
         let client = Arc::new(LocalIngestionClient::new(path));
         Self::new_impl(client, metrics)
     }
 
-    pub(crate) fn new_rpc(
+    /// An ingestion client that fetches checkpoints from a fullnode, over gRPC.
+    pub fn new_rpc(
         url: Url,
         username: Option<String>,
         password: Option<String>,
-        metrics: Arc<IndexerMetrics>,
+        metrics: Arc<IngestionMetrics>,
     ) -> IngestionResult<Self> {
         let client = if let Some(username) = username {
             let mut headers = HeadersInterceptor::new();
             headers.basic_auth(username, password);
-            Client::new(url.to_string())?.with_headers(headers)
+            Client::new(url.to_string())?
+                .with_headers(headers)
+                .with_max_decoding_message_size(MAX_GRPC_MESSAGE_SIZE_BYTES)
         } else {
             Client::new(url.to_string())?
+                .with_max_decoding_message_size(MAX_GRPC_MESSAGE_SIZE_BYTES)
         };
         Ok(Self::new_impl(Arc::new(client), metrics))
     }
 
     pub(crate) fn new_impl(
         client: Arc<dyn IngestionClientTrait>,
-        metrics: Arc<IndexerMetrics>,
+        metrics: Arc<IngestionMetrics>,
     ) -> Self {
         let checkpoint_lag_reporter = CheckpointLagMetricReporter::new(
             metrics.ingested_checkpoint_timestamp_lag.clone(),
@@ -157,12 +213,12 @@ impl IngestionClient {
     /// Fetch checkpoint data by sequence number.
     ///
     /// Repeatedly retries transient errors with an exponential backoff (up to
-    /// [MAX_TRANSIENT_RETRY_INTERVAL]). Transient errors are either defined by the client
+    /// `MAX_TRANSIENT_RETRY_INTERVAL`). Transient errors are either defined by the client
     /// implementation that returns a [FetchError::Transient] error variant, or within this
     /// function if we fail to deserialize the result as [Checkpoint].
     ///
     /// The function will immediately return if the checkpoint is not found.
-    pub(crate) async fn fetch(&self, checkpoint: u64) -> IngestionResult<Arc<Checkpoint>> {
+    pub async fn fetch(&self, checkpoint: u64) -> IngestionResult<Arc<Checkpoint>> {
         let client = self.client.clone();
         let request = move || {
             let client = client.clone();
@@ -325,7 +381,7 @@ mod tests {
 
     fn setup_test() -> (IngestionClient, Arc<MockIngestionClient>) {
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
-        let metrics = IndexerMetrics::new(None, &registry);
+        let metrics = IngestionMetrics::new(None, &registry);
         let mock_client = Arc::new(MockIngestionClient::default());
         let client = IngestionClient::new_impl(mock_client.clone(), metrics);
         (client, mock_client)
