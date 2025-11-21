@@ -5,6 +5,7 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
+use rand::rngs::OsRng;
 use simulacrum::{AdvanceEpochConfig, Simulacrum};
 use std::{
     net::SocketAddr,
@@ -14,12 +15,19 @@ use std::{
         atomic::{AtomicUsize, Ordering},
     },
 };
-use sui_types::transaction::Transaction;
+use sui_types::{
+    supported_protocol_versions::{
+        Chain::{self, Mainnet},
+        ProtocolConfig,
+    },
+    transaction::Transaction,
+};
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
 use crate::{
     consistent_store::{self, start_consistent_store},
+    graphql::GraphQLClient,
     indexer::{self, start_indexer},
     rpc::start_rpc,
     types::*,
@@ -31,20 +39,30 @@ pub struct AppState {
     pub simulacrum: Arc<RwLock<Simulacrum>>,
     pub transaction_count: Arc<AtomicUsize>,
     pub forked_at_checkpoint: u64,
+    pub chain: Chain,
+    pub protocol_config: ProtocolConfig,
 }
 
 impl AppState {
-    pub async fn new(data_ingestion_path: PathBuf, database_url: Url) -> Self {
-        let mut simulacrum = Simulacrum::new();
+    pub async fn new(
+        data_ingestion_path: PathBuf,
+        database_url: Url,
+        chain: Chain,
+        protocol_version: u64,
+        protocol_config: ProtocolConfig,
+    ) -> Self {
+        let mut simulacrum = Simulacrum::new_with_protocol_version(OsRng, protocol_version.into());
         simulacrum.set_data_ingestion_path(data_ingestion_path);
         let simulacrum = Arc::new(RwLock::new(simulacrum));
-        let rpc = start_rpc(simulacrum.clone(), database_url)
+        let rpc = start_rpc(simulacrum.clone(), protocol_version, chain, database_url)
             .await
             .expect("Failed to start RPC server");
         Self {
             simulacrum,
             transaction_count: Arc::new(AtomicUsize::new(0)),
             forked_at_checkpoint: 0,
+            chain,
+            protocol_config,
         }
     }
 }
@@ -202,6 +220,9 @@ pub async fn start_server(
     data_ingestion_path: PathBuf,
     version: &'static str,
 ) -> Result<()> {
+    let client = GraphQLClient::new("https://graphql.mainnet.sui.io/graphql".to_string());
+    let protocol_version = client.fetch_protocol_version(0).await?;
+    let protocol_config = ProtocolConfig::get_for_version(protocol_version.into(), Mainnet);
     let data_ingestion_path_clone = data_ingestion_path.clone();
     let database_url =
         reqwest::Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt")?;
@@ -212,7 +233,16 @@ pub async fn start_server(
         }
     });
 
-    let state = Arc::new(AppState::new(data_ingestion_path_clone.clone(), database_url).await);
+    let state = Arc::new(
+        AppState::new(
+            data_ingestion_path_clone.clone(),
+            database_url,
+            Mainnet,
+            protocol_version,
+            protocol_config,
+        )
+        .await,
+    );
 
     let app = Router::new()
         .route("/health", get(health))

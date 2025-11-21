@@ -1,5 +1,6 @@
 mod commands;
 mod consistent_store;
+mod graphql;
 mod indexer;
 mod rpc;
 mod seeds;

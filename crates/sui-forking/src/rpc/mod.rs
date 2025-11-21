@@ -20,10 +20,13 @@ use sui_indexer_alt_jsonrpc::config::RpcConfig;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_pg_db::DbArgs;
+use sui_types::supported_protocol_versions::Chain;
 use tokio::task::JoinHandle;
 
 pub(crate) async fn start_rpc(
     simulacrum: Arc<RwLock<Simulacrum>>,
+    protocol_version: u64,
+    chain: Chain,
     database_url: Url,
 ) -> anyhow::Result<JoinHandle<()>> {
     let cancel = CancellationToken::new();
@@ -47,7 +50,11 @@ pub(crate) async fn start_rpc(
     )
     .await?;
     // let mut rpc = RpcService::new(RpcArgs::default(), &registry, cancel.clone()).unwrap();
-    rpc.add_module(read::Read(simulacrum.clone()))?;
+    rpc.add_module(read::Read {
+        simulacrum: simulacrum.clone(),
+        protocol_version,
+        chain,
+    })?;
     rpc.add_module(write::Write(simulacrum))?;
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;

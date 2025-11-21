@@ -63,9 +63,9 @@ pub enum Network {
 impl Network {
     pub fn graphql_url(&self) -> String {
         match self {
-            Network::Mainnet => "https://sui-mainnet.mystenlabs.com/graphql".to_string(),
-            Network::Testnet => "https://sui-testnet.mystenlabs.com/graphql".to_string(),
-            Network::Devnet => "https://sui-devnet.mystenlabs.com/graphql".to_string(),
+            Network::Mainnet => "https://graphql.mainnet.sui.io/graphql".to_string(),
+            Network::Testnet => "https://graphql.testnet.sui.io/graphql".to_string(),
+            Network::Devnet => "https://graphql.devnet.sui.io/graphql".to_string(),
             Network::Custom(url) => url.clone(),
         }
     }
