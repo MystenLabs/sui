@@ -78,6 +78,7 @@ impl ParsedDigest {
 
     pub fn is_coin_reservation_digest(digest: &ObjectDigest) -> bool {
         let inner = digest.inner();
+        // check if the last 20 bytes of digest match the magic number
         let last_20_bytes: &[u8; 20] = inner[12..32].try_into().unwrap();
         *last_20_bytes == COIN_RESERVATION_MAGIC
     }
@@ -91,10 +92,8 @@ impl TryFrom<ObjectDigest> for ParsedDigest {
     type Error = ParsedDigestError;
 
     fn try_from(digest: ObjectDigest) -> Result<Self, Self::Error> {
-        // check if the last 20 bytes of digest match the magic number
-        let inner = digest.inner();
-        let last_20_bytes: &[u8; 20] = inner[12..32].try_into().unwrap();
-        if *last_20_bytes == COIN_RESERVATION_MAGIC {
+        if ParsedDigest::is_coin_reservation_digest(&digest) {
+            let inner = digest.inner();
             let reservation_amount_bytes: &[u8; 8] = inner[0..8].try_into().unwrap();
             let epoch_bytes: &[u8; 4] = inner[8..12].try_into().unwrap();
 

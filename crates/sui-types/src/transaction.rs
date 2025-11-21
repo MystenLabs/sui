@@ -2766,18 +2766,10 @@ impl TransactionDataAPI for TransactionDataV1 {
 
             // TODO(address-balances): Use a protocol config parameter for max_withdraws.
             let max_withdraws = 10;
+            let mut num_reservations = 0;
 
-            for (count, withdraw) in self.kind.get_funds_withdrawals().enumerate() {
-                fp_ensure!(
-                    count < max_withdraws,
-                    UserInputError::InvalidWithdrawReservation {
-                        error: format!(
-                            "Maximum number of balance withdraw reservations is {max_withdraws}"
-                        ),
-                    }
-                    .into()
-                );
-
+            for withdraw in self.kind.get_funds_withdrawals() {
+                num_reservations += 1;
                 match withdraw.withdraw_from {
                     WithdrawFrom::Sender => (),
                     WithdrawFrom::Sponsor => {
@@ -2807,18 +2799,29 @@ impl TransactionDataAPI for TransactionDataV1 {
                     }
                 };
             }
-        }
 
-        for parsed in self.parsed_coin_reservations(context.chain_identifier) {
-            if parsed.epoch_id() != context.epoch {
-                return Err(SuiErrorKind::TransactionExpired.into());
-            }
-            if parsed.reservation_amount() == 0 {
-                return Err(UserInputError::InvalidWithdrawReservation {
-                    error: "Balance withdraw reservation amount must be non-zero".to_string(),
+            for parsed in self.parsed_coin_reservations(context.chain_identifier) {
+                num_reservations += 1;
+                if parsed.epoch_id() != context.epoch {
+                    return Err(SuiErrorKind::TransactionExpired.into());
                 }
-                .into());
+                if parsed.reservation_amount() == 0 {
+                    return Err(UserInputError::InvalidWithdrawReservation {
+                        error: "Balance withdraw reservation amount must be non-zero".to_string(),
+                    }
+                    .into());
+                }
             }
+
+            fp_ensure!(
+                num_reservations <= max_withdraws,
+                UserInputError::InvalidWithdrawReservation {
+                    error: format!(
+                        "Maximum number of balance withdraw reservations is {max_withdraws}"
+                    ),
+                }
+                .into()
+            );
         }
 
         if config.enable_accumulators()
