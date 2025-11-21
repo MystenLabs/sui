@@ -5,12 +5,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Seek, SeekFrom, Write as IoWrite};
 use std::net::SocketAddr;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
+
 use std::env;
-use std::io::Write as IoWrite;
-use std::net::SocketAddr;
 #[cfg(not(msim))]
 use std::str::FromStr;
-use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use expect_test::expect;
 use fastcrypto::encoding::{Base64, Encoding};
@@ -2580,6 +2578,9 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     assert_eq!(expect_original_id, data.addresses.original_id.0.into());
     assert_eq!(expect_upgrade_version, data.version.into());
 
+    Ok(())
+}
+
 // TODO: pkg-alt Figure out why to keep this?
 #[sim_test]
 // async fn test_package_management_on_upgrade_command_conflict() -> Result<(), anyhow::Error> {
@@ -2719,7 +2720,6 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
 //     expect.assert_eq(&err_string);
 //     Ok(())
 // }
-
 #[sim_test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;

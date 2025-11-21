@@ -431,7 +431,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 CachingResult::new(
                     Some(analyzed_pkg_info),
                     cached_pkg_info.edition,
-                    cached_pkg_info.compiler_info.clone(),
+                    cached_pkg_info.compiler_analysis_info.clone(),
                 )
             }
             None => {
@@ -446,8 +446,11 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                     compiler_flags,
                     overlay_fs_root.clone(),
                 ) {
-                    let analyzed_pkg_info =
-                        AnalyzedPkgInfo::new_precompiled_only(program_deps, dep_names);
+                    let analyzed_pkg_info = AnalyzedPkgInfo::new_precompiled_only(
+                        program_deps,
+                        dep_names,
+                        mapped_files_data.dep_hashes.clone(),
+                    );
                     CachingResult::new(Some(analyzed_pkg_info), None, None)
                 } else {
                     CachingResult::empty()
