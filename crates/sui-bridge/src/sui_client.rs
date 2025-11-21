@@ -882,9 +882,68 @@ impl SuiClientInner for sui_rpc::Client {
 
     async fn get_gas_data_panic_if_not_gas(
         &self,
-        _gas_object_id: ObjectID,
+        gas_object_id: ObjectID,
     ) -> (GasCoin, ObjectRef, Owner) {
-        todo!()
+        loop {
+            // Fetch object via gRPC
+            let response = match self
+                .clone()
+                .ledger_client()
+                .get_object(GetObjectRequest::new(&gas_object_id.into()))
+                .await
+            {
+                Ok(resp) => resp,
+                Err(e) => {
+                    warn!(
+                        "Can't get gas object via gRPC: {:?}: {:?}",
+                        gas_object_id, e
+                    );
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+            };
+
+            // let field_bcs = response.into_inner().object().contents().to_owned();
+
+            let proto_object = match response.into_inner().object {
+                Some(obj) => obj,
+                None => {
+                    warn!(
+                        "Can't get gas object: {:?}: No object returned",
+                        gas_object_id
+                    );
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+            };
+
+            // Deserialize object from BCS
+            let object: sui_types::object::Object = match proto_object
+                .bcs
+                .as_ref()
+                .ok_or_else(|| anyhow!("Missing BCS data"))
+                .and_then(|bcs| {
+                    bcs.deserialize()
+                        .map_err(|e| anyhow!("Failed to deserialize: {}", e))
+                }) {
+                Ok(obj) => obj,
+                Err(e) => {
+                    warn!("Can't get gas object: {:?}: {:?}", gas_object_id, e);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+            };
+
+            // Extract owner and compute object reference
+            let owner = object.owner.clone();
+            let object_ref = object.compute_object_reference();
+
+            // Try to convert to GasCoin
+            let gas_coin = GasCoin::try_from(&object)
+                .unwrap_or_else(|err| panic!("{} is not a gas coin: {err}", gas_object_id));
+
+            return (gas_coin, object_ref, owner);
+        }
     }
 }
 
