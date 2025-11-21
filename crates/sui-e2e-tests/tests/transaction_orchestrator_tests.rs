@@ -183,6 +183,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     // The tx should be erased in wal log.
     let pending_txes = orchestrator.load_all_pending_transactions_in_test()?;
     assert!(pending_txes.is_empty());
+    assert!(orchestrator.empty_pending_tx_log_in_test());
 
     Ok(())
 }
@@ -297,6 +298,13 @@ async fn test_tx_across_epoch_boundaries() {
         Ok(Some(effects_cert)) if effects_cert.epoch() == 1 => (),
         other => panic!("unexpected error: {:?}", other),
     }
+
+    let to = test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.transaction_orchestrator().unwrap());
+    assert!(to.empty_pending_tx_log_in_test());
+
     info!("test completed in {:?}", start.elapsed());
 }
 

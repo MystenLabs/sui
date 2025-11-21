@@ -941,6 +941,10 @@ where
     pub fn load_all_pending_transactions_in_test(&self) -> SuiResult<Vec<VerifiedTransaction>> {
         self.pending_tx_log.load_all_pending_transactions()
     }
+
+    pub fn empty_pending_tx_log_in_test(&self) -> bool {
+        self.pending_tx_log.is_empty()
+    }
 }
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 #[derive(Clone)]
