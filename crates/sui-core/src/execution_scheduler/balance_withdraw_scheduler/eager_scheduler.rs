@@ -196,8 +196,8 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                 .get(&object_id)
                 .copied()
                 .unwrap_or_default();
-            // Withdraw amounts must be bounded by reservations.
-            let net = u128::try_from(reserved.checked_add(settled).unwrap()).unwrap();
+            let net = u128::try_from(reserved.checked_add(settled).unwrap())
+                .expect("Withdraw amounts must be bounded by reservations");
             account_state.balance_lower_bound += net;
             debug!(
                 account_id = ?object_id,
