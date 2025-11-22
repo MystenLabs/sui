@@ -627,11 +627,23 @@ impl Object {
         }
     }
 
-    /// Construct an object that is represented by just its address. This does not check that the
-    /// object exists, so should not be used to "fetch" an address provided as user input. When the
-    /// object's contents are fetched from the latest version of that object as of the current
-    /// checkpoint.
+    /// Construct an object that is represented by just its address.
+    ///
+    /// This function first checks the execution context for freshly created/modified objects.
+    /// If found there, returns an Object with its contents already loaded. Otherwise, returns
+    /// an Object that will lazy-load its contents from the database when accessed.
+    ///
+    /// This does not verify that the object exists in the database (for the lazy-loading case),
+    /// so should not be used to "fetch" an address provided as user input. Contents from the
+    /// database are fetched from the latest version of that object available in the database,
+    /// which may not be as current as the checkpoint specified in scope.
     pub(crate) fn with_address(scope: Scope, address: NativeSuiAddress) -> Self {
+        // Check execution context first for freshly created/modified objects
+        if let Some(native_obj) = scope.execution_output_object_latest(address.into()) {
+            return Self::from_contents(scope.clone(), native_obj.clone());
+        }
+
+        // Fallback to lazy loading from database
         Self {
             super_: Address::with_address(scope, address),
             version_digest: None,

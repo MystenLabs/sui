@@ -17,7 +17,6 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffectsAPI,
     execution_status::ExecutionStatus as NativeExecutionStatus,
-    object::Object as NativeObject,
     signature::GenericSignature,
     transaction::{TransactionData, TransactionDataAPI},
 };
@@ -362,7 +361,7 @@ impl EffectsContents {
 
 impl TransactionEffects {
     /// Create a new TransactionEffects from an ExecutedTransaction.
-    fn from_executed_transaction(
+    pub(crate) fn from_executed_transaction(
         scope: Scope,
         executed_transaction: &ExecutedTransaction,
         transaction_data: TransactionData,
@@ -375,11 +374,9 @@ impl TransactionEffects {
         )
         .context("Failed to create TransactionContents from ExecutedTransaction")?;
 
-        let objects = extract_objects_from_executed_transaction(executed_transaction);
         let digest = contents
             .digest()
             .context("Failed to get digest from transaction contents")?;
-        let scope = scope.with_execution_output(objects);
 
         Ok(Self {
             digest,
@@ -388,35 +385,6 @@ impl TransactionEffects {
                 contents: Some(Arc::new(contents)),
             },
         })
-    }
-
-    /// Create a new TransactionEffects from a gRPC ExecuteTransactionResponse.
-    pub(crate) fn from_execution_response(
-        scope: Scope,
-        response: sui_rpc::proto::sui::rpc::v2::ExecuteTransactionResponse,
-        transaction_data: TransactionData,
-        signatures: Vec<GenericSignature>,
-    ) -> Result<Self, RpcError> {
-        let executed_transaction = response
-            .transaction
-            .as_ref()
-            .context("ExecuteTransactionResponse should have transaction")?;
-
-        Self::from_executed_transaction(scope, executed_transaction, transaction_data, signatures)
-    }
-
-    /// Create a new TransactionEffects from a gRPC SimulateTransactionResponse.
-    pub(crate) fn from_simulation_response(
-        scope: Scope,
-        response: sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse,
-        transaction_data: TransactionData,
-    ) -> Result<Self, RpcError> {
-        let executed_transaction = response
-            .transaction
-            .as_ref()
-            .context("SimulateTransactionResponse should have transaction")?;
-
-        Self::from_executed_transaction(scope, executed_transaction, transaction_data, vec![])
     }
 
     /// Load the effects from the store, and return it fully inflated (with contents already
@@ -498,17 +466,4 @@ impl From<Transaction> for TransactionEffects {
             contents: EffectsContents { scope, contents },
         }
     }
-}
-
-/// Extract input and output object contents from an ExecutedTransaction.
-fn extract_objects_from_executed_transaction(
-    executed_transaction: &ExecutedTransaction,
-) -> Vec<NativeObject> {
-    executed_transaction
-        .objects()
-        .objects()
-        .iter()
-        .filter_map(|obj| obj.bcs.as_ref())
-        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"))
-        .collect()
 }

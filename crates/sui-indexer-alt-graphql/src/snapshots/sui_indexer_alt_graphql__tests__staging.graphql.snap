@@ -3548,7 +3548,7 @@ type SharedInput {
 }
 
 """
-The result of simulating a transaction, including the predicted effects, events, and any errors.
+The result of simulating a transaction, including the predicted effects and any errors.
 """
 type SimulationResult {
 	"""
@@ -3563,12 +3563,6 @@ type SimulationResult {
 	`None` if the simulation was successful.
 	"""
 	error: String
-	"""
-	The events that would be emitted if the transaction were executed.
-	
-	`None` if the simulation failed or no events would be emitted.
-	"""
-	events: [Event!]
 	"""
 	The intermediate outputs for each command of the transaction simulation, including contents of mutated references and return values.
 	"""

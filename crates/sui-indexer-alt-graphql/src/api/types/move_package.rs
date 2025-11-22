@@ -522,7 +522,6 @@ impl MovePackage {
     /// user input. When the package's contents are fetched from the latest version of that object
     /// as of the current checkpoint.
     pub(crate) fn with_address(scope: Scope, address: NativeSuiAddress) -> Self {
-        // TODO: Look for the package in the scope (just-published packages).
         let super_ = Object::with_address(scope, address);
         Self {
             super_,
