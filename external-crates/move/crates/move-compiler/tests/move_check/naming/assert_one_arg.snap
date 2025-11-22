@@ -32,5 +32,11 @@ error[E13001]: feature is not supported in specified edition
 error[E03009]: unbound variable
   ┌─ tests/move_check/naming/assert_one_arg.move:5:22
   │
+2 │     fun foo(x: &mut u64) {
+  │             - Similarly named defintion found here
+  ·
 5 │         assert!(x != y);
-  │                      ^ Unbound variable 'y'
+  │                      ^
+  │                      │
+  │                      Unbound variable 'y'
+  │                      Did you mean: 'x'

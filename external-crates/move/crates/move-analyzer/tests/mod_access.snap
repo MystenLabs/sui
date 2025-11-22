@@ -5,7 +5,7 @@ source: crates/move-analyzer/tests/ide_testsuite.rs
 -- test 0 -------------------
 use line: 19, use_ndx: 1
 Use: 'M9', start: 32, end: 34
-Def: 'M9', line: 5, def char: 16
+Def: 'Symbols', line: 5, def char: 7
 TypeDef: no info
 On Hover:
 module Symbols::M9
@@ -15,7 +15,7 @@ module Symbols::M9
 -- test 1 -------------------
 use line: 20, use_ndx: 0
 Use: 'M9', start: 17, end: 19
-Def: 'M9', line: 5, def char: 16
+Def: 'Symbols', line: 5, def char: 7
 TypeDef: no info
 On Hover:
 module Symbols::M9
@@ -25,7 +25,7 @@ module Symbols::M9
 -- test 2 -------------------
 use line: 20, use_ndx: 3
 Use: 'M9', start: 55, end: 57
-Def: 'M9', line: 5, def char: 16
+Def: 'Symbols', line: 5, def char: 7
 TypeDef: no info
 On Hover:
 module Symbols::M9
@@ -35,7 +35,7 @@ module Symbols::M9
 -- test 3 -------------------
 use line: 23, use_ndx: 2
 Use: 'M9', start: 34, end: 36
-Def: 'M9', line: 5, def char: 16
+Def: 'Symbols', line: 5, def char: 7
 TypeDef: no info
 On Hover:
 module Symbols::M9
@@ -45,7 +45,7 @@ module Symbols::M9
 -- test 4 -------------------
 use line: 24, use_ndx: 0
 Use: 'M9', start: 21, end: 23
-Def: 'M9', line: 5, def char: 16
+Def: 'Symbols', line: 5, def char: 7
 TypeDef: no info
 On Hover:
 module Symbols::M9
@@ -55,7 +55,7 @@ module Symbols::M9
 -- test 5 -------------------
 use line: 28, use_ndx: 2
 Use: 'M1', start: 34, end: 36
-Def: 'M1', line: 0, def char: 16
+Def: 'Symbols', line: 0, def char: 7
 TypeDef: no info
 On Hover:
 module Symbols::M1
@@ -63,7 +63,7 @@ module Symbols::M1
 -- test 6 -------------------
 use line: 28, use_ndx: 4
 Use: 'ALIAS_M1', start: 51, end: 59
-Def: 'M1', line: 0, def char: 16
+Def: 'Symbols', line: 0, def char: 7
 TypeDef: no info
 On Hover:
 module Symbols::M1
@@ -71,7 +71,7 @@ module Symbols::M1
 -- test 7 -------------------
 use line: 34, use_ndx: 1
 Use: 'ANOTHER_ALIAS_M1', start: 17, end: 33
-Def: 'M1', line: 0, def char: 16
+Def: 'Symbols', line: 0, def char: 7
 TypeDef: no info
 On Hover:
 module Symbols::M1
@@ -79,7 +79,7 @@ module Symbols::M1
 -- test 8 -------------------
 use line: 34, use_ndx: 3
 Use: 'M9', start: 57, end: 59
-Def: 'M9', line: 5, def char: 16
+Def: 'Symbols', line: 5, def char: 7
 TypeDef: no info
 On Hover:
 module Symbols::M9

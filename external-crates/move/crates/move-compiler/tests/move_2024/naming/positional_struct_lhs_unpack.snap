@@ -8,8 +8,13 @@ info:
 error[E03009]: unbound variable
   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:6:13
   │
+5 │     fun f(x: Foo) {
+  │           - Similarly named defintion found here
 6 │         Foo(t, y) = x;
-  │             ^ Invalid assignment. Unbound variable 't'
+  │             ^
+  │             │
+  │             Invalid assignment. Unbound variable 't'
+  │             Did you mean: 'x'
 
 error[E04016]: too few arguments
   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:7:9
@@ -137,8 +142,14 @@ error[E04007]: incompatible types
 error[E03009]: unbound variable
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:20:13
    │
+18 │     fun h(x: Bar) {
+   │           - Similarly named defintion found here
+19 │         Foo(_, _) = x;
 20 │         Foo(t, y) = x;
-   │             ^ Invalid assignment. Unbound variable 't'
+   │             ^
+   │             │
+   │             Invalid assignment. Unbound variable 't'
+   │             Did you mean: 'x'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:21:9

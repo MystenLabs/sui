@@ -9,7 +9,7 @@ use crate::{
     },
     command_line as cli,
     diagnostics::{
-        DiagnosticReporter, Diagnostics, DiagnosticsFormat,
+        Diagnostic, DiagnosticReporter, Diagnostics, DiagnosticsFormat,
         codes::{DiagnosticsID, Severity},
         warning_filters::{
             FILTER_ALL, FilterName, FilterPrefix, WarningFilter, WarningFiltersBuilder,
@@ -1274,3 +1274,89 @@ impl IndexedPhysicalPackagePath {
         })
     }
 }
+
+//**************************************************************************************************
+// Levenshtein Candidate Suggestions
+//**************************************************************************************************
+
+const MAX_EDIT_DISTANCE: usize = 3;
+
+/// Computes the Levenshtein distance between two strings, but stops and returns None if the
+/// distance exceeds the given threshold.
+fn levenshtein_distance_with_threshold(a: &str, b: &str, threshold: usize) -> Option<usize> {
+    if a.len() > b.len() + threshold || b.len() > a.len() + threshold {
+        return None;
+    }
+
+    let mut cost = 0;
+    let mut a = a.chars();
+    let mut b = b.chars();
+    while let (Some(a_head), Some(b_head)) = (a.next(), b.next()) {
+        if a_head != b_head {
+            cost += 1;
+            if cost > threshold {
+                return None;
+            }
+        }
+    }
+    cost = cost + a.count() + b.count();
+    if cost > threshold { None } else { Some(cost) }
+}
+
+/// Suggests a candidate from the given candidates based on Levenshtein distance to the given name.
+/// The `to_string` function is used to convert each candidate to a string for comparison.
+/// Uses MAX_EDIT_DISTANCE as the threshold for suggestions, meaning that only candidates within
+/// that distance will be returned.
+pub(crate) fn suggest_levenshtein_candidate<F>(
+    candidates: impl IntoIterator<Item = F>,
+    name_str: &str,
+    to_string: impl Fn(&F) -> &str,
+) -> Option<F> {
+    let mut cur_candidate = None;
+    for candidate in candidates {
+        let candidate_str = to_string(&candidate);
+        if let Some(dist) =
+            levenshtein_distance_with_threshold(name_str, candidate_str, MAX_EDIT_DISTANCE)
+        {
+            if let Some((best_dist, _)) = &cur_candidate {
+                if dist < *best_dist {
+                    cur_candidate = Some((dist, candidate));
+                }
+            } else {
+                cur_candidate = Some((dist, candidate));
+            }
+        }
+    }
+    cur_candidate.map(|(_, candidate)| candidate)
+}
+
+/// Adds a suggestion to the given diagnostic at the given location, with an optional definition
+/// location.
+/// # Arguments
+/// * `diag` - The diagnostic to add the suggestion to.
+/// * `loc` - The location to add the suggestion at.
+/// * `suggestion` - The name of the suggestion to add.
+/// * `defn_loc` - An optional location of the definition of the suggested item, which will be
+///   indicated in the diagnostic if provided.
+pub(crate) fn add_suggestion(
+    diag: &mut Diagnostic,
+    loc: Loc,
+    suggestion: impl fmt::Display,
+    defn_loc: Option<Loc>,
+) {
+    let msg = format!("Did you mean: '{suggestion}'");
+    diag.add_secondary_label((loc, msg));
+    if let Some(loc) = defn_loc {
+        diag.add_secondary_label((loc, "Similarly named defintion found here"));
+    }
+}
+
+pub(crate) const UPPERCASE_LETTERS: [char; 26] = [
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
+    'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+];
+
+pub(crate) const LOWERCASE_LETTERS: [char; 26] = [
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
+    't', 'u', 'v', 'w', 'x', 'y', 'z',
+];

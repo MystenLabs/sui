@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/suggestions/suggestion_3.move:6:12
+  │
+6 │     use a::foo;
+  │            ^^^ Unused 'use' of alias 'foo'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/suggestions/suggestion_3.move:8:25
+  │
+6 │     use a::foo;
+  │            --- Similarly named defintion found here
+7 │     // Should suggest foo in pace of qoo
+8 │     public fun call() { qoo::goof() }
+  │                         ^^^
+  │                         │
+  │                         Could not resolve the name 'qoo'
+  │                         Did you mean: 'foo'

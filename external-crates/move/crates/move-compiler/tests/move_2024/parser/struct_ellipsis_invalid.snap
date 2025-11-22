@@ -25,5 +25,11 @@ error[E01002]: unexpected token
 error[E03009]: unbound variable
    ┌─ tests/move_2024/parser/struct_ellipsis_invalid.move:10:9
    │
+ 8 │     fun f(y: X): u64 {
+   │           - Similarly named defintion found here
+ 9 │         let .. = y;
 10 │         x
-   │         ^ Unbound variable 'x'
+   │         ^
+   │         │
+   │         Unbound variable 'x'
+   │         Did you mean: 'y'

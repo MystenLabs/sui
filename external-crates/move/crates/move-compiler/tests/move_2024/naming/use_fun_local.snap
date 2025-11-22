@@ -5,11 +5,16 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03005]: unbound unscoped name
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/use_fun_local.move:3:17
   │
+2 │     fun foo(f: u64) {
+  │         --- Similarly named defintion found here
 3 │         use fun f as u64.f;
-  │                 ^ Unbound function 'f' in current scope
+  │                 ^
+  │                 │
+  │                 Could not resolve the name 'f'
+  │                 Did you mean: 'foo'
 
 error[E02010]: invalid name
   ┌─ tests/move_2024/naming/use_fun_local.move:7:19
@@ -21,11 +26,17 @@ error[E02010]: invalid name
   │
   = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
 
-error[E03005]: unbound unscoped name
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/use_fun_local.move:8:17
   │
+2 │     fun foo(f: u64) {
+  │         --- Similarly named defintion found here
+  ·
 8 │         use fun f as u64.f;
-  │                 ^ Unbound function 'f' in current scope
+  │                 ^
+  │                 │
+  │                 Could not resolve the name 'f'
+  │                 Did you mean: 'foo'
 
 error[E03005]: unbound unscoped name
    ┌─ tests/move_2024/naming/use_fun_local.move:13:17

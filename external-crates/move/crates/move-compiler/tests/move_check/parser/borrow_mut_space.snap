@@ -8,8 +8,13 @@ info:
 error[E03009]: unbound variable
   ┌─ tests/move_check/parser/borrow_mut_space.move:6:11
   │
+5 │     public fun foo(_x: &mut S) {
+  │                    -- Similarly named defintion found here
 6 │         & mut x.f
-  │           ^^^ Unbound variable 'mut'
+  │           ^^^
+  │           │
+  │           Unbound variable 'mut'
+  │           Did you mean: '_x'
 
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/borrow_mut_space.move:6:15

@@ -200,6 +200,14 @@ impl<'env> Context<'env> {
         }
     }
 
+    // Push a number of macro lambda parameters onto the alias information in the path expander.
+    pub fn push_lambda_parameters<'a, I: IntoIterator<Item = &'a Name>>(&mut self, tparams: I) {
+        self.path_expander
+            .as_mut()
+            .unwrap()
+            .push_lambda_parameters(tparams.into_iter().collect::<Vec<_>>());
+    }
+
     // Push a number of type parameters onto the alias information in the path expander.
     pub fn push_type_parameters<'a, I: IntoIterator<Item = &'a Name>>(&mut self, tparams: I)
     where
@@ -522,6 +530,14 @@ fn unnecessary_alias_error(context: &mut Context, unnecessary: UnnecessaryAlias)
                 false,
                 "ICE cannot manually make type param aliases. \
                 We do not have nested TypeParam scopes"
+            );
+            return;
+        }
+        AliasEntry::LambdaParam(_) => {
+            debug_assert!(
+                false,
+                "ICE cannot manually make lambda param aliases. \
+                We do not have nested LambdaParam scopes"
             );
             return;
         }
@@ -1214,6 +1230,7 @@ fn module_(
         is_spec_module: _,
         is_extension,
         name,
+        name_loc,
         members,
         definition_mode: _,
     } = mdef;
@@ -1239,7 +1256,6 @@ fn module_(
         context.add_diag(diag!(Declarations::InvalidName, (name.loc(), msg)));
     }
 
-    let name_loc = name.0.loc;
     let current_module = sp(name_loc, ModuleIdent_::new(*context.cur_address(), name));
 
     // [NOTE: MOD-EXT] Extensions are currently injected directly into the original module before any
@@ -2619,9 +2635,11 @@ fn function_(
         let current_package = context.current_package();
         context.check_feature(current_package, FeatureGate::MacroFuns, macro_loc);
     }
+
     let visibility = visibility(pvisibility);
     let signature = function_signature(context, macro_, psignature);
     let body = function_body(context, pbody);
+
     if let Some((m, use_funs_builder)) = module_and_use_funs {
         let implicit = E::ImplicitUseFunCandidate {
             loc: name.loc(),
@@ -2646,6 +2664,7 @@ fn function_(
         signature,
         body,
     };
+    context.pop_alias_scope(None);
     context.pop_alias_scope(None);
     context.pop_warning_filter_scope();
     (name, fdef)
@@ -2676,6 +2695,10 @@ fn function_signature(
         .into_iter()
         .map(|(pmut, v, t)| (mutability(context, v.loc(), pmut), v, type_(context, t)))
         .collect::<Vec<_>>();
+    context.push_lambda_parameters(parameters.iter().filter_map(|(_, v, t)| match &t.value {
+        E::Type_::Fun(_, _) => Some(&v.0),
+        _ => None,
+    }));
     for (_, v, _) in &parameters {
         check_valid_function_parameter_name(context.reporter(), is_macro, v)
     }

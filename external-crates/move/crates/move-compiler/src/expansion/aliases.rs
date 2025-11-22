@@ -2,18 +2,23 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_ir_types::location::Loc;
-
 use crate::{
     diagnostics::Diagnostic,
     expansion::alias_map_builder::*,
     ice,
     shared::{unique_map::UniqueMap, unique_set::UniqueSet, *},
 };
+use move_ir_types::location::{Loc, sp};
+use move_symbol_pool::Symbol;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
 };
+
+//**************************************************************************************************
+// Type Definitions
+//**************************************************************************************************
 
 #[derive(Clone, Debug)]
 pub struct AliasSet {
@@ -34,10 +39,17 @@ pub struct AliasMap {
     previous: Option<Box<AliasMap>>,
 }
 
+//**************************************************************************************************
+// Traits
+//**************************************************************************************************
+
 trait NamespaceEntry: Copy {
     fn namespace(m: &AliasMap) -> &UniqueMap<Name, Self>;
     fn namespace_mut(m: &mut AliasMap) -> &mut UniqueMap<Name, Self>;
     fn alias_entry(name: Name, entry: Self) -> AliasEntry;
+    fn suggestion<F>(m: &AliasMap, name: Name, filter: F) -> Option<Name>
+    where
+        F: Fn(&Symbol, &Self) -> bool;
 
     fn find_custom(
         m: &mut AliasMap,
@@ -67,7 +79,7 @@ trait NamespaceEntry: Copy {
 }
 
 macro_rules! namespace_entry {
-    ($ty:ty, .$field:ident) => {
+    ($ty:ty, $ty_param:pat, .$field:ident) => {
         impl NamespaceEntry for $ty {
             fn namespace(m: &AliasMap) -> &UniqueMap<Name, Self> {
                 &m.$field
@@ -80,12 +92,32 @@ macro_rules! namespace_entry {
             fn alias_entry(name: Name, entry: Self) -> AliasEntry {
                 (name, entry).into()
             }
+
+            fn suggestion<F>(m: &AliasMap, name: Name, filter: F) -> Option<Name>
+            where
+                F: Fn(&Symbol, &Self) -> bool,
+            {
+                let candidates = m
+                    .$field
+                    .iter()
+                    .filter(|(_, name, value)| filter(name, value));
+                suggest_levenshtein_candidate(
+                    candidates,
+                    name.value.as_str(),
+                    |(_, candidate, _)| candidate.as_str(),
+                )
+                .map(|(loc, name, _)| sp(loc, *name))
+            }
         }
     };
 }
 
-namespace_entry!(LeadingAccessEntry, .leading_access);
-namespace_entry!(MemberEntry, .module_members);
+namespace_entry!(LeadingAccessEntry, LeadingAccessEntry::TypeParam, .leading_access);
+namespace_entry!(MemberEntry, MemberEntry::TypeParam, .module_members);
+
+//**************************************************************************************************
+// Impls
+//**************************************************************************************************
 
 impl AliasSet {
     pub fn new() -> Self {
@@ -124,13 +156,15 @@ impl AliasMap {
         }
     }
 
-    pub fn resolve_call(&mut self, name: &Name) -> Option<(Name, MemberEntry)> {
+    pub fn resolve_member(&mut self, name: &Name) -> Option<(Name, MemberEntry)> {
         let (name, entry) = MemberEntry::find(self, name)?;
         match &entry {
-            MemberEntry::Member(_, _) => Some((name, entry)),
-            // For code legacy reasons, don't resolve type parameters, they are just here for
-            // shadowing
+            MemberEntry::Member(_, _, _) => Some((name, entry)),
+            // Do not resolve to type parameters; they are kept as names during expansion.
             MemberEntry::TypeParam => None,
+            // Do not resolve to lambeda parameters; they are kept as names during expansion and
+            // handled during name resolution.
+            MemberEntry::LambdaParam => None,
         }
     }
 
@@ -139,7 +173,7 @@ impl AliasMap {
             NameSpace::LeadingAccess => self
                 .resolve_leading_access(name)
                 .map(|resolved| resolved.into()),
-            NameSpace::ModuleMembers => self.resolve_call(name).map(|resolved| resolved.into()),
+            NameSpace::ModuleMembers => self.resolve_member(name).map(|resolved| resolved.into()),
         }
     }
 
@@ -150,6 +184,66 @@ impl AliasMap {
             }
         }
         None
+    }
+
+    /// Determines if the provided name is a bound as a lambda parameter in the current or any
+    /// previous scope.
+    pub fn is_lambda_parameter(&self, name: &Name) -> bool {
+        let mut current_scope = Some(self);
+        loop {
+            let Some(scope) = current_scope else {
+                break false;
+            };
+            if let Some(entry) = scope.module_members.get(name) {
+                return matches!(entry, MemberEntry::LambdaParam);
+            }
+            current_scope = scope.previous.as_deref();
+        }
+    }
+
+    /// Finds a suggestion for a leading access name that is close to the given name.
+    /// The filter function is used to restrict the kinds of entries considered, so that we can
+    /// only suggest reasonable candidates (e.g., only suggest modules or addresses for friend
+    /// statements).
+    pub fn suggest_leading_access<F>(&self, filter_fn: F, name: &Name) -> Option<Name>
+    where
+        F: Fn(&Symbol, &LeadingAccessEntry) -> bool,
+    {
+        // Heuristic: We prefer closer-scope matches, even if they are not the closest in edit
+        // distance. This means we search the current scope first, then the previous ones.
+
+        // if this was actually a type parameter, we don't want to suggest anything.
+        if let Some(LeadingAccessEntry::TypeParam) = self.leading_access.get(name) {
+            return None;
+        }
+
+        LeadingAccessEntry::suggestion(self, *name, &filter_fn).or_else(|| {
+            self.previous
+                .as_ref()
+                .and_then(|prev| prev.suggest_leading_access(filter_fn, name))
+        })
+    }
+
+    /// Finds a suggestion for a member module that is close to the given name.
+    /// The filter function is used to restrict the kinds of entries considered, so that we can
+    /// only suggest reasonable candidates.
+    pub fn suggest_module_member<F>(&self, filter_fn: F, name: &Name) -> Option<Name>
+    where
+        F: Fn(&Symbol, &MemberEntry) -> bool,
+    {
+        // Heuristic: We prefer closer-scope matches, even if they are not the closest in edit
+        // distance. This means we search the current scope first, then the previous ones.
+
+        // if this was actually a type parameter, we don't want to suggest anything.
+        if let Some(MemberEntry::TypeParam) = self.module_members.get(name) {
+            return None;
+        }
+
+        MemberEntry::suggestion(self, *name, &filter_fn).or_else(|| {
+            self.previous
+                .as_ref()
+                .and_then(|prev| prev.suggest_module_member(filter_fn, name))
+        })
     }
 
     /// Pushes a new scope, adding all of the new items to it (shadowing the outer one).
@@ -239,6 +333,26 @@ impl AliasMap {
         self.previous = Some(Box::new(previous));
     }
 
+    /// Similar to add_and_shadow but just hides aliases now shadowed by a lambda parameter.
+    /// Lambda parameters are never resolved. We track them to apply appropriate shadowing to make
+    /// suggetions better.
+    pub fn push_lambda_parameters<'a, I: IntoIterator<Item = &'a Name>>(&mut self, lparams: I)
+    where
+        I::IntoIter: ExactSizeIterator,
+    {
+        let mut new_map = Self::new();
+        for lparam in lparams {
+            // ignore duplicates, they will be checked in naming
+            let _ = new_map
+                .module_members
+                .add(*lparam, MemberEntry::LambdaParam);
+        }
+
+        // set the previous scope
+        let previous = std::mem::replace(self, new_map);
+        self.previous = Some(Box::new(previous));
+    }
+
     /// Resets the alias map to the previous scope, and returns the set of unused aliases
     pub fn pop_scope(&mut self) -> AliasSet {
         let previous = self
@@ -252,7 +366,9 @@ impl AliasMap {
             match alias_entry {
                 AliasEntry::Module(name, _) => result.modules.add(name).unwrap(),
                 AliasEntry::Member(name, _, _) => result.members.add(name).unwrap(),
-                AliasEntry::Address(_, _) | AliasEntry::TypeParam(_) => (),
+                AliasEntry::Address(_, _)
+                | AliasEntry::TypeParam(_)
+                | AliasEntry::LambdaParam(_) => (),
             }
         }
         result
