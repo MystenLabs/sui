@@ -58,8 +58,8 @@ impl SuiFlavor {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BuildParams {
-    flavor: String,
-    edition: String,
+    pub flavor: String,
+    pub edition: String,
 }
 
 /// Note: Every field should be optional, and the system can

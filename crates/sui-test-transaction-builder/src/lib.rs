@@ -416,8 +416,11 @@ impl TestTransactionBuilder {
 
                         #[cfg(not(msim))]
                         {
-                            let compiled_package =
-                                BuildConfig::new_for_testing().build(&_path).unwrap();
+                            let mut build_config = BuildConfig::new_for_testing();
+                            if _with_unpublished_deps {
+                                build_config.config.set_unpublished_deps_to_zero = true;
+                            }
+                            let compiled_package = build_config.build(&_path).unwrap();
                             let all_module_bytes =
                                 compiled_package.get_package_bytes(_with_unpublished_deps);
                             let dependencies =

@@ -19,6 +19,7 @@ futures.workspace = true
 sui-json-rpc-types.workspace = true
 sui-move-build.workspace = true
 sui-package-management.workspace = true
+sui-package-alt.workspace = true
 sui-types.workspace = true
 sui-sdk.workspace = true
 serde.workspace = true
