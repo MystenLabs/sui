@@ -1,0 +1,257 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/sui-indexer-alt-consistent-store/src/store/synchronizer.rs`."><title>synchronizer.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="sui_indexer_alt_consistent_store" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0 (1159e78c4 2025-09-14)" data-channel="1.90.0" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../../../static.files/storage-68b7e25d.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">sui_indexer_alt_consistent_store/store/</div>synchronizer.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Mysten Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">use </span>std::{cmp::Ordering, collections::HashMap, sync::Arc, time::Duration};
+<a href=#5 id=5 data-nosnippet>5</a>
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>anyhow::{Context, bail};
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>futures::future;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>sui_indexer_alt_framework::task::with_slow_future_monitor;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>tokio::{
+<a href=#10 id=10 data-nosnippet>10</a>    sync::{Barrier, mpsc},
+<a href=#11 id=11 data-nosnippet>11</a>    task::JoinHandle,
+<a href=#12 id=12 data-nosnippet>12</a>};
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>tokio_util::sync::CancellationToken;
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>tracing::{debug, error, info, warn};
+<a href=#15 id=15 data-nosnippet>15</a>
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span><span class="kw">crate</span>::db::{Db, Watermark};
+<a href=#17 id=17 data-nosnippet>17</a>
+<a href=#18 id=18 data-nosnippet>18</a><span class="doccomment">/// The synchronizer will emit a message if it has been waiting to synchronize with other tasks for
+<a href=#19 id=19 data-nosnippet>19</a>/// this long without making progress.
+<a href=#20 id=20 data-nosnippet>20</a></span><span class="kw">const </span>SLOW_SYNC_WARNING_THRESHOLD: Duration = Duration::from_secs(<span class="number">60</span>);
+<a href=#21 id=21 data-nosnippet>21</a>
+<a href=#22 id=22 data-nosnippet>22</a><span class="doccomment">/// A service that coordinates writes to a database from various registered pipelines, with
+<a href=#23 id=23 data-nosnippet>23</a>/// generating snapshots for that database. The synchronizer ensures that all pipelines have made
+<a href=#24 id=24 data-nosnippet>24</a>/// the same amount of progress before taking a database-wide snapshot.
+<a href=#25 id=25 data-nosnippet>25</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Synchronizer {
+<a href=#26 id=26 data-nosnippet>26</a>    db: Arc&lt;Db&gt;,
+<a href=#27 id=27 data-nosnippet>27</a>
+<a href=#28 id=28 data-nosnippet>28</a>    <span class="doccomment">/// The last watermark written to the database for each registered pipeline. The value is
+<a href=#29 id=29 data-nosnippet>29</a>    /// `None` if the database has not yet seen a write for that pipeline.
+<a href=#30 id=30 data-nosnippet>30</a>    </span>last_watermarks: HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, <span class="prelude-ty">Option</span>&lt;Watermark&gt;&gt;,
+<a href=#31 id=31 data-nosnippet>31</a>
+<a href=#32 id=32 data-nosnippet>32</a>    <span class="doccomment">/// The first checkpoint to be fetched across any pipeline.
+<a href=#33 id=33 data-nosnippet>33</a>    </span>first_checkpoint: u64,
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a>    <span class="doccomment">/// A snapshot is taken every `stride` checkpoints, after pipelines have caught up with each
+<a href=#36 id=36 data-nosnippet>36</a>    /// other.
+<a href=#37 id=37 data-nosnippet>37</a>    </span>stride: u64,
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a>    <span class="doccomment">/// The size of queues that feed each synchronizer task.
+<a href=#40 id=40 data-nosnippet>40</a>    </span>buffer_size: usize,
+<a href=#41 id=41 data-nosnippet>41</a>
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="comment">// Cancellation token shared among all synchronizer tasks.
+<a href=#43 id=43 data-nosnippet>43</a>    </span>cancel: CancellationToken,
+<a href=#44 id=44 data-nosnippet>44</a>}
+<a href=#45 id=45 data-nosnippet>45</a>
+<a href=#46 id=46 data-nosnippet>46</a><span class="doccomment">/// Write access to each pipeline's synchronizer task.
+<a href=#47 id=47 data-nosnippet>47</a></span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">type </span>Queue = HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, mpsc::Sender&lt;(Watermark, rocksdb::WriteBatch)&gt;&gt;;
+<a href=#48 id=48 data-nosnippet>48</a>
+<a href=#49 id=49 data-nosnippet>49</a><span class="kw">impl </span>Synchronizer {
+<a href=#50 id=50 data-nosnippet>50</a>    <span class="doccomment">/// Create a new synchronizer service that coordinates write and snapshots to `db`.
+<a href=#51 id=51 data-nosnippet>51</a>    ///
+<a href=#52 id=52 data-nosnippet>52</a>    /// `stride` controls the number of checkpoints between snapshots, `buffer_size` controls the
+<a href=#53 id=53 data-nosnippet>53</a>    /// size of the channels that feed each synchronizer task.
+<a href=#54 id=54 data-nosnippet>54</a>    ///
+<a href=#55 id=55 data-nosnippet>55</a>    /// `first_checkpoint` is the first checkpoint the service expects to see written to for
+<a href=#56 id=56 data-nosnippet>56</a>    /// completely new pipelines. If `None`, the first checkpoint is assumed to be `0`.
+<a href=#57 id=57 data-nosnippet>57</a>    ///
+<a href=#58 id=58 data-nosnippet>58</a>    /// The service must be started by calling [Self::run], and it will stop if signalled on
+<a href=#59 id=59 data-nosnippet>59</a>    /// `cancel`, if it has been instructed to write data out-of-order, or if a write fails.
+<a href=#60 id=60 data-nosnippet>60</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new(
+<a href=#61 id=61 data-nosnippet>61</a>        db: Arc&lt;Db&gt;,
+<a href=#62 id=62 data-nosnippet>62</a>        stride: u64,
+<a href=#63 id=63 data-nosnippet>63</a>        buffer_size: usize,
+<a href=#64 id=64 data-nosnippet>64</a>        first_checkpoint: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#65 id=65 data-nosnippet>65</a>        cancel: CancellationToken,
+<a href=#66 id=66 data-nosnippet>66</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#67 id=67 data-nosnippet>67</a>        <span class="self">Self </span>{
+<a href=#68 id=68 data-nosnippet>68</a>            db,
+<a href=#69 id=69 data-nosnippet>69</a>            last_watermarks: HashMap::new(),
+<a href=#70 id=70 data-nosnippet>70</a>            first_checkpoint: first_checkpoint.unwrap_or(<span class="number">0</span>),
+<a href=#71 id=71 data-nosnippet>71</a>            stride,
+<a href=#72 id=72 data-nosnippet>72</a>            buffer_size,
+<a href=#73 id=73 data-nosnippet>73</a>            cancel,
+<a href=#74 id=74 data-nosnippet>74</a>        }
+<a href=#75 id=75 data-nosnippet>75</a>    }
+<a href=#76 id=76 data-nosnippet>76</a>
+<a href=#77 id=77 data-nosnippet>77</a>    <span class="doccomment">/// Register a new pipeline with the synchronizer service. The synchronizer will spin up a task
+<a href=#78 id=78 data-nosnippet>78</a>    /// for each pipeline, and make a channel available to send writes to that task, when it is
+<a href=#79 id=79 data-nosnippet>79</a>    /// started using [`Self::run`].
+<a href=#80 id=80 data-nosnippet>80</a>    ///
+<a href=#81 id=81 data-nosnippet>81</a>    /// Fails if the database fails to return the pipeline's watermark -- registering a brand new
+<a href=#82 id=82 data-nosnippet>82</a>    /// pipeline is not an error.
+<a href=#83 id=83 data-nosnippet>83</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>register_pipeline(<span class="kw-2">&amp;mut </span><span class="self">self</span>, pipeline: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#84 id=84 data-nosnippet>84</a>        <span class="kw">let </span>watermark = <span class="self">self
+<a href=#85 id=85 data-nosnippet>85</a>            </span>.db
+<a href=#86 id=86 data-nosnippet>86</a>            .commit_watermark(pipeline)
+<a href=#87 id=87 data-nosnippet>87</a>            .with_context(|| <span class="macro">format!</span>(<span class="string">"Failed to get {pipeline} initial watermark"</span>))<span class="question-mark">?</span>;
+<a href=#88 id=88 data-nosnippet>88</a>
+<a href=#89 id=89 data-nosnippet>89</a>        <span class="self">self</span>.last_watermarks.insert(pipeline, watermark);
+<a href=#90 id=90 data-nosnippet>90</a>        <span class="prelude-val">Ok</span>(())
+<a href=#91 id=91 data-nosnippet>91</a>    }
+<a href=#92 id=92 data-nosnippet>92</a>
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="doccomment">/// Start the service, accepting writes for registered pipelines. This consumes the service and
+<a href=#94 id=94 data-nosnippet>94</a>    /// returns a `JoinHandle&lt;()&gt;` that will complete when all its tasks have completed, and the
+<a href=#95 id=95 data-nosnippet>95</a>    /// `queue` data structure which gives access to the write side of the channels feeding each
+<a href=#96 id=96 data-nosnippet>96</a>    /// task.
+<a href=#97 id=97 data-nosnippet>97</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>run(<span class="self">self</span>) -&gt; anyhow::Result&lt;(JoinHandle&lt;()&gt;, Queue)&gt; {
+<a href=#98 id=98 data-nosnippet>98</a>        <span class="kw">let </span><span class="kw-2">mut </span>queue = Queue::new();
+<a href=#99 id=99 data-nosnippet>99</a>        <span class="kw">let </span><span class="kw-2">mut </span>tasks = Vec::new();
+<a href=#100 id=100 data-nosnippet>100</a>
+<a href=#101 id=101 data-nosnippet>101</a>        <span class="kw">let </span>pre_snap = Arc::new(Barrier::new(<span class="self">self</span>.last_watermarks.len()));
+<a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">let </span>post_snap = Arc::new(Barrier::new(<span class="self">self</span>.last_watermarks.len()));
+<a href=#103 id=103 data-nosnippet>103</a>
+<a href=#104 id=104 data-nosnippet>104</a>        <span class="comment">// Calculate the first checkpoint we will have data for, across all pipelines.
+<a href=#105 id=105 data-nosnippet>105</a>        </span><span class="kw">let </span><span class="prelude-val">Some</span>(init_checkpoint) = <span class="self">self
+<a href=#106 id=106 data-nosnippet>106</a>            </span>.last_watermarks
+<a href=#107 id=107 data-nosnippet>107</a>            .values()
+<a href=#108 id=108 data-nosnippet>108</a>            .map(|w| w.map_or(<span class="self">self</span>.first_checkpoint, |w| w.checkpoint_hi_inclusive))
+<a href=#109 id=109 data-nosnippet>109</a>            .max()
+<a href=#110 id=110 data-nosnippet>110</a>        <span class="kw">else </span>{
+<a href=#111 id=111 data-nosnippet>111</a>            <span class="macro">bail!</span>(<span class="string">"No pipelines registered with the synchronizer"</span>);
+<a href=#112 id=112 data-nosnippet>112</a>        };
+<a href=#113 id=113 data-nosnippet>113</a>
+<a href=#114 id=114 data-nosnippet>114</a>        <span class="comment">// The next snapshot should be taken at the next stride boundary after that initial
+<a href=#115 id=115 data-nosnippet>115</a>        // checkpoint.
+<a href=#116 id=116 data-nosnippet>116</a>        </span><span class="kw">let </span>next_snapshot_checkpoint = ((init_checkpoint / <span class="self">self</span>.stride) + <span class="number">1</span>) * <span class="self">self</span>.stride;
+<a href=#117 id=117 data-nosnippet>117</a>
+<a href=#118 id=118 data-nosnippet>118</a>        <span class="kw">for </span>(pipeline, last_watermark) <span class="kw">in </span><span class="self">self</span>.last_watermarks {
+<a href=#119 id=119 data-nosnippet>119</a>            <span class="kw">let </span>(tx, rx) = mpsc::channel(<span class="self">self</span>.buffer_size);
+<a href=#120 id=120 data-nosnippet>120</a>
+<a href=#121 id=121 data-nosnippet>121</a>            queue.insert(pipeline, tx);
+<a href=#122 id=122 data-nosnippet>122</a>            tasks.push(synchronizer(
+<a href=#123 id=123 data-nosnippet>123</a>                <span class="self">self</span>.db.clone(),
+<a href=#124 id=124 data-nosnippet>124</a>                rx,
+<a href=#125 id=125 data-nosnippet>125</a>                pipeline,
+<a href=#126 id=126 data-nosnippet>126</a>                <span class="self">self</span>.first_checkpoint,
+<a href=#127 id=127 data-nosnippet>127</a>                <span class="self">self</span>.stride,
+<a href=#128 id=128 data-nosnippet>128</a>                next_snapshot_checkpoint,
+<a href=#129 id=129 data-nosnippet>129</a>                last_watermark,
+<a href=#130 id=130 data-nosnippet>130</a>                pre_snap.clone(),
+<a href=#131 id=131 data-nosnippet>131</a>                post_snap.clone(),
+<a href=#132 id=132 data-nosnippet>132</a>                <span class="self">self</span>.cancel.child_token(),
+<a href=#133 id=133 data-nosnippet>133</a>            ));
+<a href=#134 id=134 data-nosnippet>134</a>        }
+<a href=#135 id=135 data-nosnippet>135</a>
+<a href=#136 id=136 data-nosnippet>136</a>        <span class="kw">let </span>handle = tokio::spawn(<span class="kw">async move </span>{
+<a href=#137 id=137 data-nosnippet>137</a>            future::join_all(tasks).<span class="kw">await</span>;
+<a href=#138 id=138 data-nosnippet>138</a>            <span class="macro">info!</span>(<span class="string">"Synchronizer gracefully shut down"</span>);
+<a href=#139 id=139 data-nosnippet>139</a>        });
+<a href=#140 id=140 data-nosnippet>140</a>
+<a href=#141 id=141 data-nosnippet>141</a>        <span class="prelude-val">Ok</span>((handle, queue))
+<a href=#142 id=142 data-nosnippet>142</a>    }
+<a href=#143 id=143 data-nosnippet>143</a>}
+<a href=#144 id=144 data-nosnippet>144</a>
+<a href=#145 id=145 data-nosnippet>145</a><span class="doccomment">/// The synchronizer task is responsible for landing writes to the database for a given `pipeline`.
+<a href=#146 id=146 data-nosnippet>146</a>/// It also coordinates with other synchronizers to take snapshots of the database every `stride`
+<a href=#147 id=147 data-nosnippet>147</a>/// checkpoints, starting from before the write of the `next_snapshot_checkpoint`.
+<a href=#148 id=148 data-nosnippet>148</a>///
+<a href=#149 id=149 data-nosnippet>149</a>/// Data arrives as a batch-per-checkpoint on `rx`, and must arrive in checkpoint sequence number
+<a href=#150 id=150 data-nosnippet>150</a>/// order (the synchronizer will report an error and stop if it detects an out-of-order batch).
+<a href=#151 id=151 data-nosnippet>151</a>///
+<a href=#152 id=152 data-nosnippet>152</a>/// `pre_snap` and `post_snap` are barriers shared among all synchronizers -- synchronizers wait on
+<a href=#153 id=153 data-nosnippet>153</a>/// `pre_snap` before a snapshot is to be taken, and on `post_snap` after the snapshot is taken
+<a href=#154 id=154 data-nosnippet>154</a>/// (and data from future checkpoints can be written).
+<a href=#155 id=155 data-nosnippet>155</a>///
+<a href=#156 id=156 data-nosnippet>156</a>/// The task will stop when it receives a shutdown signal on `cancel`, or if it detects an issue
+<a href=#157 id=157 data-nosnippet>157</a>/// during writes (an out-of-order batch, or an error during writes).
+<a href=#158 id=158 data-nosnippet>158</a></span><span class="kw">fn </span>synchronizer(
+<a href=#159 id=159 data-nosnippet>159</a>    db: Arc&lt;Db&gt;,
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw-2">mut </span>rx: mpsc::Receiver&lt;(Watermark, rocksdb::WriteBatch)&gt;,
+<a href=#161 id=161 data-nosnippet>161</a>    pipeline: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+<a href=#162 id=162 data-nosnippet>162</a>    first_checkpoint: u64,
+<a href=#163 id=163 data-nosnippet>163</a>    stride: u64,
+<a href=#164 id=164 data-nosnippet>164</a>    <span class="kw-2">mut </span>next_snapshot_checkpoint: u64,
+<a href=#165 id=165 data-nosnippet>165</a>    <span class="kw-2">mut </span>current_watermark: <span class="prelude-ty">Option</span>&lt;Watermark&gt;,
+<a href=#166 id=166 data-nosnippet>166</a>    pre_snap: Arc&lt;Barrier&gt;,
+<a href=#167 id=167 data-nosnippet>167</a>    post_snap: Arc&lt;Barrier&gt;,
+<a href=#168 id=168 data-nosnippet>168</a>    cancel: CancellationToken,
+<a href=#169 id=169 data-nosnippet>169</a>) -&gt; JoinHandle&lt;()&gt; {
+<a href=#170 id=170 data-nosnippet>170</a>    tokio::spawn(<span class="kw">async move </span>{
+<a href=#171 id=171 data-nosnippet>171</a>        <span class="kw">loop </span>{
+<a href=#172 id=172 data-nosnippet>172</a>            <span class="kw">let </span>next_checkpoint = current_watermark
+<a href=#173 id=173 data-nosnippet>173</a>                .as_ref()
+<a href=#174 id=174 data-nosnippet>174</a>                .map(|w| w.checkpoint_hi_inclusive + <span class="number">1</span>)
+<a href=#175 id=175 data-nosnippet>175</a>                .unwrap_or(first_checkpoint);
+<a href=#176 id=176 data-nosnippet>176</a>
+<a href=#177 id=177 data-nosnippet>177</a>            <span class="kw">match </span>next_snapshot_checkpoint.cmp(<span class="kw-2">&amp;</span>next_checkpoint) {
+<a href=#178 id=178 data-nosnippet>178</a>                <span class="comment">// The next checkpoint should be included in the next snapshot, so allow it to be
+<a href=#179 id=179 data-nosnippet>179</a>                // written.
+<a href=#180 id=180 data-nosnippet>180</a>                </span>Ordering::Greater =&gt; {}
+<a href=#181 id=181 data-nosnippet>181</a>
+<a href=#182 id=182 data-nosnippet>182</a>                <span class="comment">// If the next checkpoint is more than one checkpoint ahead of the next snapshot,
+<a href=#183 id=183 data-nosnippet>183</a>                // something has gone wrong.
+<a href=#184 id=184 data-nosnippet>184</a>                </span>Ordering::Less =&gt; {
+<a href=#185 id=185 data-nosnippet>185</a>                    <span class="macro">error!</span>(
+<a href=#186 id=186 data-nosnippet>186</a>                        pipeline,
+<a href=#187 id=187 data-nosnippet>187</a>                        next_snapshot_checkpoint, next_checkpoint, <span class="string">"Missed snapshot"
+<a href=#188 id=188 data-nosnippet>188</a>                    </span>);
+<a href=#189 id=189 data-nosnippet>189</a>                    <span class="kw">break</span>;
+<a href=#190 id=190 data-nosnippet>190</a>                }
+<a href=#191 id=191 data-nosnippet>191</a>
+<a href=#192 id=192 data-nosnippet>192</a>                <span class="comment">// The next checkpoint does not belong in the next snapshot, so wait for other
+<a href=#193 id=193 data-nosnippet>193</a>                // synchronizers to reach this point, and take the snapshot before proceeding.
+<a href=#194 id=194 data-nosnippet>194</a>                //
+<a href=#195 id=195 data-nosnippet>195</a>                // One arbitrary task (the "leader") is responsible for taking the snapshot, the others
+<a href=#196 id=196 data-nosnippet>196</a>                // just bump their own synchronization point and wait.
+<a href=#197 id=197 data-nosnippet>197</a>                </span>Ordering::Equal =&gt; {
+<a href=#198 id=198 data-nosnippet>198</a>                    <span class="macro">tokio::select!</span> {
+<a href=#199 id=199 data-nosnippet>199</a>                        w = with_slow_future_monitor(pre_snap.wait(), SLOW_SYNC_WARNING_THRESHOLD, || {
+<a href=#200 id=200 data-nosnippet>200</a>                            <span class="macro">warn!</span>(pipeline, <span class="string">"Synchronizer stuck, pre-snapshot"</span>)
+<a href=#201 id=201 data-nosnippet>201</a>                        }) =&gt; <span class="kw">if </span>w.is_leader() {
+<a href=#202 id=202 data-nosnippet>202</a>                            <span class="kw">if let </span><span class="prelude-val">Some</span>(watermark) = current_watermark {
+<a href=#203 id=203 data-nosnippet>203</a>                                db.take_snapshot(watermark);
+<a href=#204 id=204 data-nosnippet>204</a>                            } <span class="kw">else </span>{
+<a href=#205 id=205 data-nosnippet>205</a>                                <span class="macro">error!</span>(pipeline, next_snapshot_checkpoint, <span class="string">"No watermark available for snapshot"</span>);
+<a href=#206 id=206 data-nosnippet>206</a>                                <span class="kw">break</span>;
+<a href=#207 id=207 data-nosnippet>207</a>                            }
+<a href=#208 id=208 data-nosnippet>208</a>                        },
+<a href=#209 id=209 data-nosnippet>209</a>
+<a href=#210 id=210 data-nosnippet>210</a>                        <span class="kw">_ </span>= cancel.cancelled() =&gt; {
+<a href=#211 id=211 data-nosnippet>211</a>                            <span class="macro">info!</span>(pipeline, <span class="string">"Shutdown received before pre-snapshot barrier"</span>);
+<a href=#212 id=212 data-nosnippet>212</a>                            <span class="kw">break</span>;
+<a href=#213 id=213 data-nosnippet>213</a>                        }
+<a href=#214 id=214 data-nosnippet>214</a>                    }
+<a href=#215 id=215 data-nosnippet>215</a>
+<a href=#216 id=216 data-nosnippet>216</a>                    next_snapshot_checkpoint += stride;
+<a href=#217 id=217 data-nosnippet>217</a>                    <span class="macro">tokio::select!</span> {
+<a href=#218 id=218 data-nosnippet>218</a>                        <span class="kw">_ </span>= with_slow_future_monitor(post_snap.wait(), SLOW_SYNC_WARNING_THRESHOLD, || {
+<a href=#219 id=219 data-nosnippet>219</a>                            <span class="macro">warn!</span>(pipeline, <span class="string">"Synchronizer stuck, post-snapshot"</span>)
+<a href=#220 id=220 data-nosnippet>220</a>                        }) =&gt; {}
+<a href=#221 id=221 data-nosnippet>221</a>                        <span class="kw">_ </span>= cancel.cancelled() =&gt; {
+<a href=#222 id=222 data-nosnippet>222</a>                            <span class="macro">info!</span>(pipeline, <span class="string">"Shutdown received before post-snapshot barrier"</span>);
+<a href=#223 id=223 data-nosnippet>223</a>                            <span class="kw">break</span>;
+<a href=#224 id=224 data-nosnippet>224</a>                        }
+<a href=#225 id=225 data-nosnippet>225</a>                    }
+<a href=#226 id=226 data-nosnippet>226</a>                }
+<a href=#227 id=227 data-nosnippet>227</a>            }
+<a href=#228 id=228 data-nosnippet>228</a>
+<a href=#229 id=229 data-nosnippet>229</a>            <span class="macro">tokio::select!</span> {
+<a href=#230 id=230 data-nosnippet>230</a>                <span class="kw">_ </span>= cancel.cancelled() =&gt; {
+<a href=#231 id=231 data-nosnippet>231</a>                    <span class="macro">info!</span>(pipeline, <span class="string">"Shutdown received waiting for batch"</span>);
+<a href=#232 id=232 data-nosnippet>232</a>                    <span class="kw">break</span>;
+<a href=#233 id=233 data-nosnippet>233</a>                }
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a>                <span class="prelude-val">Some</span>((watermark, batch)) = rx.recv() =&gt; {
+<a href=#236 id=236 data-nosnippet>236</a>                    <span class="macro">debug!</span>(pipeline, <span class="question-mark">?</span>watermark, <span class="string">"Received batch"</span>);
+<a href=#237 id=237 data-nosnippet>237</a>                    <span class="kw">if </span>watermark.checkpoint_hi_inclusive != next_checkpoint {
+<a href=#238 id=238 data-nosnippet>238</a>                        <span class="macro">error!</span>(pipeline, <span class="question-mark">?</span>watermark, next_checkpoint, <span class="string">"Out-of-order batch"</span>);
+<a href=#239 id=239 data-nosnippet>239</a>                        <span class="kw">break</span>;
+<a href=#240 id=240 data-nosnippet>240</a>                    }
+<a href=#241 id=241 data-nosnippet>241</a>
+<a href=#242 id=242 data-nosnippet>242</a>                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = db.write(pipeline, watermark, batch) {
+<a href=#243 id=243 data-nosnippet>243</a>                        <span class="macro">error!</span>(pipeline, <span class="question-mark">?</span>e, <span class="string">"Failed to write batch"</span>);
+<a href=#244 id=244 data-nosnippet>244</a>                        <span class="kw">break</span>;
+<a href=#245 id=245 data-nosnippet>245</a>                    }
+<a href=#246 id=246 data-nosnippet>246</a>
+<a href=#247 id=247 data-nosnippet>247</a>                    current_watermark = <span class="prelude-val">Some</span>(watermark);
+<a href=#248 id=248 data-nosnippet>248</a>                }
+<a href=#249 id=249 data-nosnippet>249</a>            }
+<a href=#250 id=250 data-nosnippet>250</a>        }
+<a href=#251 id=251 data-nosnippet>251</a>
+<a href=#252 id=252 data-nosnippet>252</a>        <span class="macro">info!</span>(
+<a href=#253 id=253 data-nosnippet>253</a>            pipeline,
+<a href=#254 id=254 data-nosnippet>254</a>            next_snapshot_checkpoint, watermark = <span class="question-mark">?</span>current_watermark, <span class="string">"Stopping sync"
+<a href=#255 id=255 data-nosnippet>255</a>        </span>);
+<a href=#256 id=256 data-nosnippet>256</a>    })
+<a href=#257 id=257 data-nosnippet>257</a>}</code></pre></div></section></main></body></html>
