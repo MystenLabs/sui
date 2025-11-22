@@ -549,6 +549,12 @@ impl WritebackCache {
         std::mem::swap(self, &mut new);
     }
 
+    pub fn evict_executed_effects_from_cache_for_testing(&self, tx_digest: &TransactionDigest) {
+        self.cached.executed_effects_digests.invalidate(tx_digest);
+        self.cached.transaction_events.invalidate(tx_digest);
+        self.cached.transactions.invalidate(tx_digest);
+    }
+
     fn write_object_entry(
         &self,
         object_id: &ObjectID,
@@ -2080,6 +2086,16 @@ impl TransactionCacheRead for WritebackCache {
                 results
             },
         )
+    }
+
+    fn transaction_executed_in_last_epoch(
+        &self,
+        digest: &TransactionDigest,
+        current_epoch: EpochId,
+    ) -> SuiResult<bool> {
+        self.store
+            .perpetual_tables
+            .was_transaction_executed_in_last_epoch(digest, current_epoch)
     }
 
     fn notify_read_executed_effects_digests<'a>(
