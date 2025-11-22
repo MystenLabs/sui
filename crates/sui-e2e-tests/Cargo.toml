@@ -17,6 +17,7 @@ futures.workspace = true
 prometheus.workspace = true
 indexmap.workspace = true
 insta.workspace = true
+itertools.workspace = true
 jsonrpsee.workspace = true
 test-cluster.workspace = true
 rand.workspace = true
