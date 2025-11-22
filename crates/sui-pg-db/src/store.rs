@@ -24,7 +24,7 @@ pub use sui_indexer_alt_framework_store_traits::Store;
 impl store::Connection for Connection<'_> {
     async fn committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline_task: &str,
     ) -> anyhow::Result<Option<store::CommitterWatermark>> {
         let watermark: Option<(i64, i64, i64, i64)> = watermarks::table
             .select((
@@ -33,7 +33,7 @@ impl store::Connection for Connection<'_> {
                 watermarks::tx_hi,
                 watermarks::timestamp_ms_hi_inclusive,
             ))
-            .filter(watermarks::pipeline.eq(pipeline))
+            .filter(watermarks::pipeline.eq(pipeline_task))
             .first(self)
             .await
             .optional()?;
@@ -106,12 +106,12 @@ impl store::Connection for Connection<'_> {
 
     async fn set_committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline_task: &str,
         watermark: store::CommitterWatermark,
     ) -> anyhow::Result<bool> {
         // Create a StoredWatermark directly from CommitterWatermark
         let stored_watermark = StoredWatermark {
-            pipeline: pipeline.to_string(),
+            pipeline: pipeline_task.to_string(),
             epoch_hi_inclusive: watermark.epoch_hi_inclusive as i64,
             checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive as i64,
             tx_hi: watermark.tx_hi as i64,

@@ -18,7 +18,7 @@ use tracing::{debug, error, info, warn};
 use crate::{
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{CommitterConfig, WARN_PENDING_WATERMARKS, WatermarkPart, logging::WatermarkLogger},
-    store::{Connection, Store},
+    store::{Connection, Store, pipeline_task},
 };
 
 use super::Handler;
@@ -27,29 +27,32 @@ use super::Handler;
 /// updating its row in the `watermarks` table when a continuous run of checkpoints have landed
 /// since the last watermark update.
 ///
-/// It receives watermark "parts" that detail the proportion of each checkpoint's data that has
-/// been written out by the committer and periodically (on a configurable interval) checks if the
+/// It receives watermark "parts" that detail the proportion of each checkpoint's data that has been
+/// written out by the committer and periodically (on a configurable interval) checks if the
 /// watermark for the pipeline can be pushed forward. The watermark can be pushed forward if there
 /// is one or more complete (all data for that checkpoint written out) watermarks spanning
 /// contiguously from the current high watermark into the future.
 ///
-/// If it detects that more than [WARN_PENDING_WATERMARKS] watermarks have built up, it will issue
-/// a warning, as this could be the indication of a memory leak, and the caller probably intended
-/// to run the indexer with watermarking disabled (e.g. if they are running a backfill).
+/// If it detects that more than [WARN_PENDING_WATERMARKS] watermarks have built up, it will issue a
+/// warning, as this could be the indication of a memory leak, and the caller probably intended to
+/// run the indexer with watermarking disabled (e.g. if they are running a backfill).
 ///
 /// The task regularly traces its progress, outputting at a higher log level every
 /// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
 ///
-/// The task will shutdown if the `cancel` token is signalled, or if the `rx` channel closes and
-/// the watermark cannot be progressed.
+/// The task will shutdown if the `cancel` token is signalled, or if the `rx` channel closes and the
+/// watermark cannot be progressed.
 pub(super) fn commit_watermark<H: Handler + 'static>(
     mut next_checkpoint: u64,
     config: CommitterConfig,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
     store: H::Store,
+    task: Option<String>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
+    // SAFETY: on indexer instantiation, we've checked that the pipeline name is valid.
+    let pipeline_task = pipeline_task::<H::Store>(H::NAME, task.as_deref()).unwrap();
     tokio::spawn(async move {
         let mut poll = interval(config.watermark_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -80,7 +83,6 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             tokio::select! {
                 _ = cancel.cancelled() => {}
                 _ = poll.tick() => {}
-
                 Some(parts) = rx.recv() => {
                     for part in parts {
                         match precommitted.entry(part.checkpoint()) {
@@ -147,8 +149,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                     // must start at the lowest checkpoint across all pipelines, or because
                     // of a backfill, where the initial checkpoint has been overridden.
                     Ordering::Greater => {
-                        // Track how many we see to make sure it doesn't grow without
-                        // bound.
+                        // Track how many we see to make sure it doesn't grow without bound.
                         metrics
                             .total_watermarks_out_of_order
                             .with_label_values(&[H::NAME])
@@ -198,7 +199,10 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
                 // TODO: If initial_watermark is empty, when we update watermark
                 // for the first time, we should also update the low watermark.
-                match conn.set_committer_watermark(H::NAME, watermark).await {
+                match conn
+                    .set_committer_watermark(&pipeline_task, watermark)
+                    .await
+                {
                     // If there's an issue updating the watermark, log it but keep going,
                     // it's OK for the watermark to lag from a correctness perspective.
                     Err(e) => {
@@ -336,6 +340,7 @@ mod tests {
             config,
             watermark_rx,
             store_clone,
+            None,
             metrics,
             cancel_clone,
         );
