@@ -41,23 +41,16 @@ use super::Handler;
 /// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
 ///
 /// The task will shutdown if the `cancel` token is signalled, or if the `rx` channel closes and
-/// the watermark cannot be progressed. If `skip_watermark` is set, the task will shutdown
-/// immediately.
+/// the watermark cannot be progressed.
 pub(super) fn commit_watermark<H: Handler + 'static>(
     mut next_checkpoint: u64,
     config: CommitterConfig,
-    skip_watermark: bool,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
     store: H::Store,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        if skip_watermark {
-            info!(pipeline = H::NAME, "Skipping commit watermark task");
-            return;
-        }
-
         let mut poll = interval(config.watermark_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
@@ -341,7 +334,6 @@ mod tests {
         let commit_watermark_handle = commit_watermark::<H>(
             next_checkpoint,
             config,
-            false,
             watermark_rx,
             store_clone,
             metrics,

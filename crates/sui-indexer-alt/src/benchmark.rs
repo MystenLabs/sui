@@ -51,7 +51,6 @@ pub async fn run_benchmark(
         first_checkpoint: Some(first_checkpoint),
         last_checkpoint: Some(last_checkpoint),
         pipeline,
-        ..Default::default()
     };
 
     let client_args = ClientArgs {
