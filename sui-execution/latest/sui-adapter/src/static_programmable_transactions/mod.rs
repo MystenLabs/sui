@@ -64,6 +64,7 @@ pub fn execute<Mode: ExecutionMode>(
     };
     let txn = typing::translate_and_verify::<Mode>(&mut translation_meter, &env, txn)
         .map_err(|e| (e, vec![]))?;
+    drop(translation_meter);
     execution::interpreter::execute::<Mode>(
         &mut env,
         metrics,
