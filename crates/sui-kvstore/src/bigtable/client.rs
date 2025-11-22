@@ -642,11 +642,14 @@ impl BigTableClient {
                 idempotency: None,
             });
         }
-        let request = MutateRowsRequest {
+        let mut request = MutateRowsRequest {
             table_name: format!("{}{}", self.table_prefix, table_name),
             entries,
             ..MutateRowsRequest::default()
         };
+        if let Some(ref app_profile_id) = self.app_profile_id {
+            request.app_profile_id = app_profile_id.clone();
+        }
         let mut response = self.mutate_rows(request).await?;
         while let Some(part) = response.message().await? {
             for entry in part.entries {
