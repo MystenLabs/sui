@@ -841,12 +841,12 @@ impl SuiClientInner for sui_rpc::Client {
                 bridge_seq_num: seq_number,
             };
             let key_bytes = bcs::to_bytes(&key)?;
-            let key_type = sui_sdk_types::StructTag {
-                address: Address::from(BRIDGE_PACKAGE_ID),
-                module: sui_sdk_types::Identifier::from_static("message"),
-                name: sui_sdk_types::Identifier::from_static("BridgeMessageKey"),
-                type_params: vec![],
-            };
+            let key_type = sui_sdk_types::StructTag::new(
+                Address::from(BRIDGE_PACKAGE_ID),
+                sui_sdk_types::Identifier::from_static("message"),
+                sui_sdk_types::Identifier::from_static("BridgeMessageKey"),
+                vec![],
+            );
 
             records_id.derive_dynamic_child_id(&(key_type.into()), &key_bytes)
         };
