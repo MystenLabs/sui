@@ -277,6 +277,7 @@ const MAX_PROTOCOL_VERSION: u64 = 104;
 //              Set max updates per settlement txn to 100.
 // Version 103: Framework update: internal Coin methods
 // Version 104: Framework update: CoinRegistry follow up for Coin methods
+//              Enable address balances on devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4262,7 +4263,12 @@ impl ProtocolConfig {
                     cfg.feature_flags.deprecate_global_storage_ops = true;
                 }
                 103 => {}
-                104 => {}
+                104 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_accumulators = true;
+                        cfg.feature_flags.enable_address_balance_gas_payments = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4585,6 +4591,11 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators = true;
     }
 
+    pub fn disable_accumulators_for_testing(&mut self) {
+        self.feature_flags.enable_accumulators = false;
+        self.feature_flags.enable_address_balance_gas_payments = false;
+    }
+
     pub fn create_root_accumulator_object_for_testing(&mut self) {
         self.feature_flags.create_root_accumulator_object = true;
     }
@@ -4593,6 +4604,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
         self.feature_flags.enable_address_balance_gas_payments = true;
+    }
+
+    pub fn disable_address_balance_gas_payments_for_testing(&mut self) {
+        self.feature_flags.enable_address_balance_gas_payments = false;
     }
 
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
