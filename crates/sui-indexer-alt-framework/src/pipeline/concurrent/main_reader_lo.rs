@@ -30,11 +30,6 @@ pub(super) fn track_main_reader_lo<H: Handler + 'static>(
     store: H::Store,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        if reader_lo.get().is_some() {
-            info!(pipeline = H::NAME, "Skipping main reader lo task");
-            return;
-        }
-
         let Some(reader_interval) = reader_interval else {
             info!(
                 pipeline = H::NAME,

@@ -217,8 +217,6 @@ impl<S: Store> Indexer<S> {
             cancel.clone(),
         )?;
 
-        let task = task.into_task();
-
         Ok(Self {
             store,
             metrics,
@@ -235,7 +233,7 @@ impl<S: Store> Indexer<S> {
             first_ingestion_checkpoint: u64::MAX,
             next_sequential_checkpoint: None,
             handles: vec![],
-            task,
+            task: task.into_task(),
         })
     }
 
@@ -450,10 +448,10 @@ impl<T: TransactionalStore> Indexer<T> {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicU64, Ordering};
 
     use async_trait::async_trait;
     use sui_synthetic_ingestion::synthetic_ingestion;
+    use tokio::sync::watch;
     use tokio_util::sync::CancellationToken;
 
     use crate::FieldCount;
@@ -470,19 +468,14 @@ mod tests {
 
     /// A handler that can be controlled externally to block checkpoint processing.
     struct ControllableHandler {
-        /// Process up to this checkpoint number (inclusive).
-        pause_at_cp: Arc<AtomicU64>,
+        /// Process checkpoints less than or equal to this value.
+        process_below: watch::Receiver<u64>,
     }
 
     impl ControllableHandler {
-        fn with_limit(limit: u64) -> (Self, Arc<AtomicU64>) {
-            let pause_at_cp = Arc::new(AtomicU64::new(limit));
-            (
-                Self {
-                    pause_at_cp: pause_at_cp.clone(),
-                },
-                pause_at_cp,
-            )
+        fn with_limit(limit: u64) -> (Self, watch::Sender<u64>) {
+            let (tx, rx) = watch::channel(limit);
+            (Self { process_below: rx }, tx)
         }
     }
 
@@ -497,9 +490,12 @@ mod tests {
         ) -> anyhow::Result<Vec<Self::Value>> {
             let cp_num = checkpoint.summary.sequence_number;
 
-            while cp_num > self.pause_at_cp.load(Ordering::Relaxed) {
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
+            // Wait until the checkpoint is allowed to be processed
+            self.process_below
+                .clone()
+                .wait_for(|&limit| cp_num <= limit)
+                .await
+                .ok();
 
             Ok(vec![MockValue(cp_num)])
         }
@@ -1963,7 +1959,7 @@ mod tests {
 
     /// During a run, the tasked pipeline will stop sending checkpoints below the main pipeline's
     /// reader watermark to the committer. Committer watermark should still advance.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn test_tasked_pipelines_skip_checkpoints_trailing_main_reader_lo() {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
@@ -2009,7 +2005,7 @@ mod tests {
         .await
         .unwrap();
 
-        let (controllable_handler, pause_at_cp) = ControllableHandler::with_limit(100);
+        let (controllable_handler, process_below) = ControllableHandler::with_limit(100);
 
         let _ = tasked_indexer
             .concurrent_pipeline(controllable_handler, ConcurrentConfig::default())
@@ -2022,11 +2018,12 @@ mod tests {
             tasked_indexer.run().await.unwrap().await.unwrap();
         });
 
+        tokio::time::advance(std::time::Duration::from_secs(30)).await;
         store
             .wait_for_watermark(
                 &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap(),
                 100,
-                std::time::Duration::from_millis(100_000),
+                std::time::Duration::from_secs(1),
             )
             .await;
 
@@ -2046,9 +2043,9 @@ mod tests {
             .unwrap();
 
         // Sleep so that the new reader watermark can be picked up by the tasked indexer
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        tokio::time::advance(std::time::Duration::from_secs(5)).await;
         // Allow the processor to resume.
-        pause_at_cp.store(501, Ordering::Relaxed);
+        process_below.send(501).ok();
 
         indexer_handle.await.unwrap();
 
