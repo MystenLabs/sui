@@ -1,76 +1,121 @@
 ---
 title: Storage
 description: Historical data and storage pricing provide insights into the cost of operations on the Sui network.
+keywords: [ storage, storage architecture, storage fund, storage rebates, storage fees, validators, full nodes, checkpoints ]
 ---
 
-The cost of operating on any blockchain has two main components: **compute**, the power required to process logic, and **storage**, the digital space needed to store data and results.
+The cost of operating on any blockchain has two main components: **compute**, the power required to process logic (transactions), and **storage**, the digital space needed to store data and transaction results.
 
-Compute is relatively fixed on Sui, with hundreds of validators running 24-core, 128GB RAM machines.
-
-Because Sui achieves high throughput compared to other blockchains, storage costs can vary significantly.
+## Storage architecture
 
 The following table summarizes the main storage components:
 
-| Storage category    | Storage type         | Usage description                                                                                                                                                            | Mainnet storage needs (as of May 2024) |
+| Storage category    | Storage type         | Usage description                                                                                                                                                            | Mainnet storage needs (as of November 2025) |
 | ------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| Validators          | RocksDB, SSD storage | Validators store the latest consensus data on high-performance NVMe disks.                                                                                                   | ~200GB                                 |
-| Pruning full nodes  | RocksDB, SSD storage | Pruning full nodes maintain unpruned RocksDB indexes for efficient querying.                                                                                                 | ~1.6TB                                 |
-| Unpruned full nodes | RocksDB, SSD storage | Unpruned full nodes retain full object and transaction history for complete archival.                                                                                        | ~4.9TB                                 |
+| Validators          | RocksDB, SSD storage | Validators store the latest consensus data on high-performance NVMe disks.                                                                                                   | ~250-400GB                                 |
+| Pruning full nodes  | RocksDB, SSD storage | Pruning full nodes maintain unpruned RocksDB indexes for efficient querying.                                                                                                 | 2.5TB                                 |
+| Unpruned full nodes | RocksDB, SSD storage | Unpruned full nodes retain full object and transaction history for complete archival.                                                                                        | 16TB                               |
 | Full node snapshots | Cloud storage        | Snapshots of full node data are stored in cloud storage for validator or full node backup and recovery.                                                                      | ~1.6TB                                 |
-| State-sync archival | Cloud storage        | State-sync archival stores blockchain state data in cloud storage to support syncing of historical objects that might have been pruned.                                        | ~1.3TB                                 |
+| Checkpoints bucket  | Cloud storage        | Stores blockchain state data in cloud storage to support syncing of historical objects that might have been pruned.                                                          | ~30TB                                |
 
-## Validators
+
+### Validators
 
 Validators should enable pruning to limit database growth. Transaction-per-second (TPS) rates affect growth, but storing full transaction and object history is the main factor. Transaction type also influences data growth.
 
-![Storage](./images/storage.png)
+### Pruning full nodes
 
-The image above shows Mainnet growth in 2024:
-
-- Over a 90-day period with ~18 TPS, disk usage increased from 203GB to 215GB (~130MB per day).
-- Over a two-week period with ~183 TPS, disk usage grew from 215GB to 271GB (~4GB per day).
-
-These results show storage growth increases relative to TPS rates.
-
-## Pruning full nodes
-
-Pruning full nodes are similar in disk usage to validators because pruning settings are the same. There are two exceptions:
+Pruning full nodes are similar in disk usage to validators because pruning settings are the same. There are 2 exceptions:
 
 - Full nodes keep a `consensus_db`, which accounts for about half of validator disk usage.
+
 - If the node serves RPC queries, the `indexes/` directory in Mainnet consumes significant space. Currently, `indexes/` is 1.5TB and grows with TPS.
 
-The total disk usage of a pruned full node with indexes is ~1.6TB. With indexing disabled, usage is ~100GB.
+The total disk usage of a pruned full node with indexes is 2.5TB. This is the size of a single epoch's database snapshot.
 
-## Unpruned full nodes
+### Unpruned full nodes
 
 Unpruned full nodes are uncommon and apply to a few use cases:
 
 1. You need the entire chain state on one machine.
+
 2. You want to enable state-sync without using a cloud archival fallback. Using an unpruned node as a peer avoids configuring an archival bucket.
 
 Growth examples:
 
 - Over a 90-day period with ~18 TPS, usage increased from 3.4TB to 4.34TB (~10GB per day).
+
 - Over a two-week period with ~183 TPS, usage grew from 4.34TB to 4.92TB (~40GB per day).
 
-## Full node snapshots
+### Full node snapshots
 
-There are two types of [snapshots](/guides/operator/snapshots.mdx):
+There are 2 types of [snapshots](/guides/operator/snapshots.mdx):
 
 - **Database snapshots:** Equal in size to the database of the full node that produced them (1:1 copy).
-- **Formal snapshots:** Lightweight, ~30GB for recent Mainnet epochs (as of May 2024).
 
-## State-sync archival
+- **Formal snapshots:** Lightweight, ~30GB for recent Mainnet epochs.
 
-State-sync archival stores blockchain state data in a cloud storage bucket written by a full node or ingestion daemon.
+### Checkpoints bucket
+
+The checkpoints bucket stores blockchain state data in a cloud storage bucket written by a full node or ingestion daemon.
 
 Growth examples:
 
 - Over a 90-day period, usage increased from 867GB to 1.18TB (~3GB per day).
+
 - Over a two-week period, usage grew from 1.18TB to 1.32TB (~10GB per day).
+
+## Cost of storage
+
+Every transaction that creates or modifies objects incurs a storage fee.
+
+Compute is relatively fixed on Sui, with hundreds of validators running 24-core, 128GB RAM machines. However, because Sui achieves high throughput compared to other blockchains, storage costs can vary significantly. Periodically, a governance proposal on the network sets the storage fee, however there are some underlying factors that contribute to the data storage measurement.
+
+Currently, the storage fee is 76 MIST or 0.000000076 SUI per storage unit.
+
+:::tip
+
+You can check the current storage fee on the network using the following GraphQL query:
+```
+{
+  protocolConfigs {
+    config(key: "storage_gas_price") {
+      value
+    }
+  }
+}
+```
+
+You can run this query in your browser at https://graphql.mainnet.sui.io/graphql
+
+:::
+
+The total storage fee for a transaction is charged as part of the transaction's total gas fee.
+
+### Storage fund
+
+The total cost of storage for a transaction is based on each storage unit used in the transaction. Every byte of data is equal to 100 storage units. For reference, a kilobyte is equal to 100,000 storage units. If a transaction included a 1 kilobyte object, the storage fee would equal 7.6 million MIST or 0.0076 SUI.
+
+This fee is split into 2 parts:
+
+1. **Refundable deposit:** Locked in the _storage fund_ while the object exists. If the object is deleted or reduced in size, some of this deposit is returned as a _storage rebate_.
+
+2. **Non-refundable fee:** Permanently locked in the storage fund, removing that SUI from circulation forever.
+
+The storage fund is designed such that the network's current validators process and store data, but future validators are incentivized to maintain it. If users only paid when they store data on-chain, future validators would front the cost of storage without reimbursement. The storage fund resolves this by collecting fees when data is first stored, then redistributing it to validators throughout the entire time the data exists.
+
+The storage fund is locked and staked each epoch to compensate active validators. Excess staking rewards earned by the storage fund are reinvested back into it, ensuring the storage fund has the capability needed to compensate validators.
+
+### Storage rebates
+
+The design of the storage fund also incentivizes users to delete data if the cost of storing it exceeds the value of keeping it on-chain. By offering a rebate on storage fees, the system encourages users to free up space.
+
+If data is deleted from Sui, it would stop using storage resources and a portion of the original storage fee, currently set at 99%, would be returned to the gas fee payer as a rebate. The non-refundable portion of the storage fee (1%) is never returned. Immutable objects lock both their storage fee forever and cannot receive a rebate, as they cannot be deleted or modified.
 
 ## Related links
 
-<RelatedLink to="/guides/developer/advanced/custom-indexer.mdx" />
-<RelatedLink to="/guides/operator/snapshots.mdx" />
-<RelatedLink to="/guides/operator/archives.mdx" />
+<RelatedLink href="https://blog.sui.io/sui-storage-fund-deflationary/" label="Sui Storage Fund: Bringing Deflationary Pressure to SUI" desc="Learn how the storage fund creates deflationary pressure on SUI tokens." />
+
+<RelatedLink href="https://blog.sui.io/storage-fund-demystified/" label="Sui Storage Fund Demystified" desc="Understand the mechanics of the Sui storage fund." />
+
+<RelatedLink href="https://blog.sui.io/storage-fees-explained/" label="Storage Fees on Sui Explained" desc="Detailed explanation of how storage fees work on Sui." />

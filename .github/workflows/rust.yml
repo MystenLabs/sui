@@ -182,12 +182,7 @@ jobs:
     needs: [diff, rustfmt, clippy]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os:
-          - [ windows-ghcloud ]
-      fail-fast: false
+    runs-on: [ windows-ghcloud-128 ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:
@@ -195,20 +190,32 @@ jobs:
 
       - uses: taiki-e/install-action@nextest
 
-      - name: Install postgres (Windows)
-        shell: bash
-        run: |
-          choco install postgresql12 --force --params '/Password:root'
-          echo "C:\Program Files\PostgreSQL\12\bin" >> $GITHUB_PATH
-          echo "C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_PATH
-          echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
-          echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
-          echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
-
       - name: cargo build
         shell: bash
         run: |
           cargo build --all-features
+
+  windows-cli-tests:
+    needs: [diff, windows-build]
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    runs-on: [ windows-ghcloud-128 ]
+    env:
+      # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
+      # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
+      # non-deterministic `test` job.
+      SUI_SKIP_SIMTESTS: 1
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+
+      - uses: taiki-e/install-action@nextest
+
+      - name: cargo test Sui CLI
+        shell: bash
+        run: |
+          cargo nextest run -p sui --no-fail-fast --profile ci
 
   simtest:
     needs: [diff, rustfmt, clippy]

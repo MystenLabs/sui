@@ -37,7 +37,9 @@ impl BridgeClient {
         // Unwrap safe: we passed the `is_active_member` check above
         let member = committee.member(&authority_name).unwrap();
         Ok(Self {
-            inner: reqwest::Client::new(),
+            inner: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()?,
             authority: authority_name.clone(),
             base_url: Url::from_str(&member.base_url).ok(),
             committee,

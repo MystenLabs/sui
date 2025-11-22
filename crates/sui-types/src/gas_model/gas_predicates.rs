@@ -22,7 +22,7 @@ pub fn dont_charge_budget_on_storage_oog(gas_model_version: u64) -> bool {
 }
 
 /// If true, enable the check for gas price too high
-pub fn gas_price_too_high(gas_model_version: u64) -> bool {
+pub fn check_for_gas_price_too_high(gas_model_version: u64) -> bool {
     gas_model_version >= 4
 }
 

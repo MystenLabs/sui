@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 104;
+const MAX_PROTOCOL_VERSION: u64 = 105;
 
 // Record history of protocol version allocations here:
 //
@@ -276,7 +276,8 @@ const MAX_PROTOCOL_VERSION: u64 = 104;
 // Version 101: Framework update
 //              Set max updates per settlement txn to 100.
 // Version 103: Framework update: internal Coin methods
-// Version 104: Framework update: address aliases
+// Version 104: Framework update: CoinRegistry follow up for Coin methods
+// Version 105: Framework update: address aliases
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1743,10 +1744,6 @@ pub struct ProtocolConfig {
     /// checking.
     translation_per_reference_node_charge: Option<u64>,
 
-    /// The metering step resolution for translation costs. This is the granularity at which we
-    /// step up the metering for translation costs.
-    translation_metering_step_resolution: Option<u64>,
-
     /// The multiplier for each linkage entry when charging for linkage tables that we have
     /// created.
     translation_per_linkage_entry_charge: Option<u64>,
@@ -2299,7 +2296,6 @@ impl ProtocolConfig {
             debug_assert!(self.translation_pure_input_per_byte_charge.is_some());
             debug_assert!(self.translation_per_type_node_charge.is_some());
             debug_assert!(self.translation_per_reference_node_charge.is_some());
-            debug_assert!(self.translation_metering_step_resolution.is_some());
             debug_assert!(self.translation_per_linkage_entry_charge.is_some());
             debug_assert!(self.feature_flags.abstract_size_in_object_runtime);
             debug_assert!(self.feature_flags.object_runtime_charge_cache_load_gas);
@@ -2997,7 +2993,6 @@ impl ProtocolConfig {
             translation_pure_input_per_byte_charge: None,
             translation_per_type_node_charge: None,
             translation_per_reference_node_charge: None,
-            translation_metering_step_resolution: None,
             translation_per_linkage_entry_charge: None,
 
             max_updates_per_settlement_txn: None,
@@ -4285,6 +4280,7 @@ impl ProtocolConfig {
                 }
                 103 => {}
                 104 => {}
+                105 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4583,13 +4579,15 @@ impl ProtocolConfig {
             self.translation_pure_input_per_byte_charge = Some(1);
             self.translation_per_type_node_charge = Some(1);
             self.translation_per_reference_node_charge = Some(1);
-            self.translation_metering_step_resolution = Some(1000);
             self.translation_per_linkage_entry_charge = Some(10);
             if self.gas_model_version.is_some_and(|version| version <= 10) {
                 self.gas_model_version = Some(11);
             }
             self.feature_flags.abstract_size_in_object_runtime = true;
             self.feature_flags.object_runtime_charge_cache_load_gas = true;
+            self.dynamic_field_add_child_object_value_cost_per_byte = Some(1);
+            self.dynamic_field_borrow_child_object_child_ref_cost_per_byte = Some(1);
+            self.dynamic_field_remove_child_object_child_cost_per_byte = Some(1);
         }
     }
 

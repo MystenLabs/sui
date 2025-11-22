@@ -1204,6 +1204,22 @@ async fn start(
         info!("GraphQL started at {address}");
     }
 
+    // Update the wallet_context with the configured fullnode rpc url so client operations will
+    // succeed if a non-default port was provided.
+    let mut wallet_context = create_wallet_context(
+        FaucetConfig::default().wallet_client_timeout_secs,
+        config_dir.clone(),
+    )?;
+    if let Some(env) = wallet_context
+        .config
+        .envs
+        .iter_mut()
+        .find(|env| env.alias == "localnet")
+    {
+        env.rpc = fullnode_rpc_url.clone();
+    }
+    wallet_context.config.save()?;
+
     if let Some(input) = with_faucet {
         let faucet_address = parse_host_port(input, DEFAULT_FAUCET_PORT)
             .map_err(|_| anyhow!("Invalid faucet host and port"))?;
@@ -1249,11 +1265,7 @@ async fn start(
             .unwrap();
         }
 
-        let local_faucet = LocalFaucet::new(
-            create_wallet_context(config.wallet_client_timeout_secs, config_dir.clone())?,
-            config.clone(),
-        )
-        .await?;
+        let local_faucet = LocalFaucet::new(wallet_context, config.clone()).await?;
 
         let app_state = Arc::new(AppState {
             faucet: local_faucet,
@@ -1674,6 +1686,9 @@ async fn prompt_if_no_config(
             }
             .persisted(wallet_conf_path)
             .save()?;
+
+            let context = WalletContext::new(wallet_conf_path)?;
+            let _ = context.cache_chain_id(&context.get_client().await?).await?;
         }
     }
     Ok(())

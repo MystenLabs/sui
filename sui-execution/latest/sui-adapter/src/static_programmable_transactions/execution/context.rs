@@ -13,7 +13,7 @@ use crate::{
         env::Env,
         execution::values::{Local, Locals, Value},
         linkage::resolved_linkage::{ResolvedLinkage, RootedLinkage},
-        loading::ast::ObjectMutability,
+        loading::ast::{Datatype, ObjectMutability},
         typing::ast::{self as T, Type},
     },
 };
@@ -118,6 +118,8 @@ struct Locations {
     /// The runtime value for the input objects args
     input_object_metadata: Vec<(T::InputIndex, InputObjectMetadata)>,
     object_inputs: Locals,
+    input_withdrawal_metadata: Vec<T::WithdrawalInput>,
+    withdrawal_inputs: Locals,
     pure_input_bytes: IndexSet<Vec<u8>>,
     pure_input_metadata: Vec<T::PureInput>,
     pure_inputs: Locals,
@@ -170,6 +172,9 @@ impl Locations {
                 ResolvedLocation::Local(gas_locals.local(0)?)
             }
             T::Location::ObjectInput(i) => ResolvedLocation::Local(self.object_inputs.local(i)?),
+            T::Location::WithdrawalInput(i) => {
+                ResolvedLocation::Local(self.withdrawal_inputs.local(i)?)
+            }
             T::Location::Result(i, j) => {
                 let result = unwrap!(self.results.get_mut(i as usize), "bounds already verified");
                 ResolvedLocation::Local(result.local(j)?)
@@ -210,6 +215,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         gas_charger: &'gas mut GasCharger,
         pure_input_bytes: IndexSet<Vec<u8>>,
         object_inputs: Vec<T::ObjectInput>,
+        input_withdrawal_metadata: Vec<T::WithdrawalInput>,
         pure_input_metadata: Vec<T::PureInput>,
         receiving_input_metadata: Vec<T::ReceivingInput>,
     ) -> Result<Self, ExecutionError>
@@ -225,6 +231,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             object_values.push(Some(v));
         }
         let object_inputs = Locals::new(object_values)?;
+        let mut withdrawal_values = Vec::with_capacity(input_withdrawal_metadata.len());
+        for withdrawal_input in &input_withdrawal_metadata {
+            let v = load_withdrawal_arg(gas_charger, env, withdrawal_input)?;
+            withdrawal_values.push(Some(v));
+        }
+        let withdrawal_inputs = Locals::new(withdrawal_values)?;
         let pure_inputs = Locals::new_invalid(pure_input_metadata.len())?;
         let receiving_inputs = Locals::new_invalid(receiving_input_metadata.len())?;
         let gas = match gas_charger.gas_coin() {
@@ -272,6 +284,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 gas,
                 input_object_metadata,
                 object_inputs,
+                input_withdrawal_metadata,
+                withdrawal_inputs,
                 pure_input_bytes,
                 pure_input_metadata,
                 pure_inputs,
@@ -442,7 +456,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         linkage: &RootedLinkage,
     ) -> Result<(), ExecutionError> {
         let events = object_runtime_mut!(self)?.take_user_events();
-        let num_events = self.user_events.len() + events.len();
+        let Some(num_events) = self.user_events.len().checked_add(events.len()) else {
+            invariant_violation!("usize overflow, too many events emitted")
+        };
         let max_events = self.env.protocol_config.max_num_event_emit();
         if num_events as u64 > max_events {
             let err = max_event_error(max_events)
@@ -1085,6 +1101,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             T::Location::ObjectInput(i) => {
                 TxArgument::Input(self.locations.input_object_metadata[i as usize].0.0)
             }
+            T::Location::WithdrawalInput(i) => TxArgument::Input(
+                self.locations.input_withdrawal_metadata[i as usize]
+                    .original_input_index
+                    .0,
+            ),
             T::Location::PureInput(i) => TxArgument::Input(
                 self.locations.pure_input_metadata[i as usize]
                     .original_input_index
@@ -1208,6 +1229,7 @@ fn load_object_arg_impl(
     else {
         invariant_violation!("Expected a Move object");
     };
+    assert_expected_move_object_type(&object_metadata.type_, move_obj.type_())?;
     let contained_uids = {
         let fully_annotated_layout = env.fully_annotated_layout(&ty)?;
         get_all_uids(&fully_annotated_layout, move_obj.contents()).map_err(|e| {
@@ -1226,6 +1248,22 @@ fn load_object_arg_impl(
     let v = Value::deserialize(env, move_obj.contents(), ty)?;
     charge_gas_!(meter, env, charge_copy_loc, &v)?;
     Ok((object_metadata, v))
+}
+
+fn load_withdrawal_arg(
+    meter: &mut GasCharger,
+    env: &Env,
+    withdrawal: &T::WithdrawalInput,
+) -> Result<Value, ExecutionError> {
+    let T::WithdrawalInput {
+        original_input_index: _,
+        ty: _,
+        owner,
+        amount,
+    } = withdrawal;
+    let loaded = Value::funds_accumulator_withdrawal(*owner, *amount);
+    charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
+    Ok(loaded)
 }
 
 fn load_pure_value(
@@ -1323,4 +1361,95 @@ unsafe fn create_written_object<Mode: ExecutionMode>(
             Mode::packages_are_predefined(),
         )
     }
+}
+
+/// Assert the type inferred matches the object's type. This has already been done during loading,
+/// but is checked again as an invariant. This may be removed safely at a later time if needed.
+fn assert_expected_move_object_type(
+    actual: &Type,
+    expected: &MoveObjectType,
+) -> Result<(), ExecutionError> {
+    let Type::Datatype(actual) = actual else {
+        invariant_violation!("Expected a datatype for a Move object");
+    };
+    let (a, m, n) = actual.qualified_ident();
+    assert_invariant!(
+        a == &expected.address(),
+        "Actual address does not match expected. actual: {actual:?} vs expected: {expected:?}"
+    );
+    assert_invariant!(
+        m == expected.module(),
+        "Actual module does not match expected. actual: {actual:?} vs expected: {expected:?}"
+    );
+    assert_invariant!(
+        n == expected.name(),
+        "Actual struct does not match expected. actual: {actual:?} vs expected: {expected:?}"
+    );
+    let actual_type_arguments = &actual.type_arguments;
+    let expected_type_arguments = expected.type_params();
+    assert_invariant!(
+        actual_type_arguments.len() == expected_type_arguments.len(),
+        "Actual type arg length does not match expected. \
+       actual: {actual:?} vs expected: {expected:?}",
+    );
+    for (actual_ty, expected_ty) in actual_type_arguments.iter().zip(&expected_type_arguments) {
+        assert_expected_type(actual_ty, expected_ty)?;
+    }
+    Ok(())
+}
+
+/// Assert the type inferred matches the expected type. This has already been done during typing,
+/// but is checked again as an invariant. This may be removed safely at a later time if needed.
+fn assert_expected_type(actual: &Type, expected: &TypeTag) -> Result<(), ExecutionError> {
+    match (actual, expected) {
+        (Type::Bool, TypeTag::Bool)
+        | (Type::U8, TypeTag::U8)
+        | (Type::U16, TypeTag::U16)
+        | (Type::U32, TypeTag::U32)
+        | (Type::U64, TypeTag::U64)
+        | (Type::U128, TypeTag::U128)
+        | (Type::U256, TypeTag::U256)
+        | (Type::Address, TypeTag::Address)
+        | (Type::Signer, TypeTag::Signer) => Ok(()),
+        (Type::Vector(inner_actual), TypeTag::Vector(inner_expected)) => {
+            assert_expected_type(&inner_actual.element_type, inner_expected)
+        }
+        (Type::Datatype(actual_dt), TypeTag::Struct(expected_st)) => {
+            assert_expected_data_type(actual_dt, expected_st)
+        }
+        _ => invariant_violation!(
+            "Type mismatch between actual: {actual:?} and expected: {expected:?}"
+        ),
+    }
+}
+/// Assert the type inferred matches the expected type. This has already been done during typing,
+/// but is checked again as an invariant. This may be removed safely at a later time if needed.
+fn assert_expected_data_type(
+    actual: &Datatype,
+    expected: &StructTag,
+) -> Result<(), ExecutionError> {
+    let (a, m, n) = actual.qualified_ident();
+    assert_invariant!(
+        a == &expected.address,
+        "Actual address does not match expected. actual: {actual:?} vs expected: {expected:?}"
+    );
+    assert_invariant!(
+        m == expected.module.as_ident_str(),
+        "Actual module does not match expected. actual: {actual:?} vs expected: {expected:?}"
+    );
+    assert_invariant!(
+        n == expected.name.as_ident_str(),
+        "Actual struct does not match expected. actual: {actual:?} vs expected: {expected:?}"
+    );
+    let actual_type_arguments = &actual.type_arguments;
+    let expected_type_arguments = &expected.type_params;
+    assert_invariant!(
+        actual_type_arguments.len() == expected_type_arguments.len(),
+        "Actual type arg length does not match expected. \
+       actual: {actual:?} vs expected: {expected:?}",
+    );
+    for (actual_ty, expected_ty) in actual_type_arguments.iter().zip(expected_type_arguments) {
+        assert_expected_type(actual_ty, expected_ty)?;
+    }
+    Ok(())
 }

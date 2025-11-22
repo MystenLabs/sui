@@ -323,7 +323,7 @@ impl TransactionExecutionApi {
 
 #[async_trait]
 impl WriteApiServer for TransactionExecutionApi {
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     async fn execute_transaction_block(
         &self,
         tx_bytes: Base64,

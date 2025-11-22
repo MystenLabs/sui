@@ -5,7 +5,7 @@ use crate::abi::EthBridgeConfig;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::error::BridgeError;
 use crate::eth_client::EthClient;
-use crate::metered_eth_provider::MeteredEthHttpProvier;
+use crate::metered_eth_provider::MeteredEthHttpProvider;
 use crate::metered_eth_provider::new_metered_eth_provider;
 use crate::metrics::BridgeMetrics;
 use crate::sui_client::SuiBridgeClient;
@@ -255,7 +255,7 @@ impl BridgeNodeConfig {
     async fn prepare_for_eth(
         &self,
         metrics: Arc<BridgeMetrics>,
-    ) -> anyhow::Result<(Arc<EthClient<MeteredEthHttpProvier>>, Vec<EthAddress>)> {
+    ) -> anyhow::Result<(Arc<EthClient<MeteredEthHttpProvider>>, Vec<EthAddress>)> {
         info!("Creating Ethereum client provider");
         let bridge_proxy_address = EthAddress::from_str(&self.eth.eth_bridge_proxy_address)?;
         let provider = Arc::new(
@@ -311,7 +311,7 @@ impl BridgeNodeConfig {
         );
 
         let eth_client = Arc::new(
-            EthClient::<MeteredEthHttpProvier>::new(
+            EthClient::<MeteredEthHttpProvider>::new(
                 &self.eth.eth_rpc_url,
                 HashSet::from_iter(vec![
                     bridge_proxy_address,
@@ -416,7 +416,7 @@ pub struct BridgeServerConfig {
     pub eth_bridge_proxy_address: EthAddress,
     pub metrics_port: u16,
     pub sui_client: Arc<SuiBridgeClient>,
-    pub eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
+    pub eth_client: Arc<EthClient<MeteredEthHttpProvider>>,
     /// A list of approved governance actions. Action in this list will be signed when requested by client.
     pub approved_governance_actions: Vec<BridgeAction>,
 }
@@ -427,7 +427,7 @@ pub struct BridgeClientConfig {
     pub gas_object_ref: ObjectRef,
     pub metrics_port: u16,
     pub sui_client: Arc<SuiBridgeClient>,
-    pub eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
+    pub eth_client: Arc<EthClient<MeteredEthHttpProvider>>,
     pub db_path: PathBuf,
     pub eth_contracts: Vec<EthAddress>,
     // See `BridgeNodeConfig` for the explanation of following two fields.
