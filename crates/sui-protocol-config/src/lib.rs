@@ -2283,20 +2283,7 @@ impl ProtocolConfig {
     }
 
     pub fn enable_ptb_execution_v2(&self) -> bool {
-        let enabled = self.feature_flags.enable_ptb_execution_v2;
-        // PTB execution v2 requires gas model version > 10 and the translation charges to be set.
-        if enabled {
-            debug_assert!(self.translation_per_command_base_charge.is_some());
-            debug_assert!(self.translation_per_input_base_charge.is_some());
-            debug_assert!(self.translation_pure_input_per_byte_charge.is_some());
-            debug_assert!(self.translation_per_type_node_charge.is_some());
-            debug_assert!(self.translation_per_reference_node_charge.is_some());
-            debug_assert!(self.translation_per_linkage_entry_charge.is_some());
-            debug_assert!(self.feature_flags.abstract_size_in_object_runtime);
-            debug_assert!(self.feature_flags.object_runtime_charge_cache_load_gas);
-            debug_assert!(self.gas_model_version.is_some_and(|version| version > 10));
-        }
-        enabled
+        self.feature_flags.enable_ptb_execution_v2
     }
 
     pub fn better_adapter_type_resolution_errors(&self) -> bool {
@@ -4262,7 +4249,21 @@ impl ProtocolConfig {
                     cfg.feature_flags.deprecate_global_storage_ops = true;
                 }
                 103 => {}
-                104 => {}
+                104 => {
+                    cfg.translation_per_command_base_charge = Some(1);
+                    cfg.translation_per_input_base_charge = Some(1);
+                    cfg.translation_pure_input_per_byte_charge = Some(1);
+                    cfg.translation_per_type_node_charge = Some(1);
+                    cfg.translation_per_reference_node_charge = Some(1);
+                    cfg.translation_per_linkage_entry_charge = Some(10);
+                    cfg.gas_model_version = Some(11);
+                    cfg.feature_flags.abstract_size_in_object_runtime = true;
+                    cfg.feature_flags.object_runtime_charge_cache_load_gas = true;
+                    cfg.dynamic_field_add_child_object_value_cost_per_byte = Some(1);
+                    cfg.dynamic_field_borrow_child_object_child_ref_cost_per_byte = Some(1);
+                    cfg.dynamic_field_remove_child_object_child_cost_per_byte = Some(1);
+                    cfg.feature_flags.enable_ptb_execution_v2 = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4542,31 +4543,6 @@ impl ProtocolConfig {
 
     pub fn set_consensus_batched_block_sync_for_testing(&mut self, val: bool) {
         self.feature_flags.consensus_batched_block_sync = val;
-    }
-
-    /// NB: We are setting a number of feature flags and protocol config fields here to to
-    /// facilitate testing of PTB execution v2. These feature flags and config fields should be set
-    /// with or before enabling PTB execution v2 in a real protocol upgrade.
-    pub fn set_enable_ptb_execution_v2_for_testing(&mut self, val: bool) {
-        self.feature_flags.enable_ptb_execution_v2 = val;
-        // Remove this and set these fields when we move this to be set for a specific protocol
-        // version.
-        if val {
-            self.translation_per_command_base_charge = Some(1);
-            self.translation_per_input_base_charge = Some(1);
-            self.translation_pure_input_per_byte_charge = Some(1);
-            self.translation_per_type_node_charge = Some(1);
-            self.translation_per_reference_node_charge = Some(1);
-            self.translation_per_linkage_entry_charge = Some(10);
-            if self.gas_model_version.is_some_and(|version| version <= 10) {
-                self.gas_model_version = Some(11);
-            }
-            self.feature_flags.abstract_size_in_object_runtime = true;
-            self.feature_flags.object_runtime_charge_cache_load_gas = true;
-            self.dynamic_field_add_child_object_value_cost_per_byte = Some(1);
-            self.dynamic_field_borrow_child_object_child_ref_cost_per_byte = Some(1);
-            self.dynamic_field_remove_child_object_child_cost_per_byte = Some(1);
-        }
     }
 
     pub fn set_record_time_estimate_processed_for_testing(&mut self, val: bool) {
