@@ -19,7 +19,6 @@ mod checked {
     use std::fs::File;
     use std::io::BufWriter;
     use std::sync::Mutex;
-    use similar::TextDiff;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
     use sui_types::balance::{
@@ -28,6 +27,7 @@ mod checked {
     };
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
+    use sui_types::gas_model::tables::GasDetails;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::LimitsMetrics;
     use sui_types::object::OBJECT_START_VERSION;
@@ -69,7 +69,6 @@ mod checked {
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::{ExecutionTiming, ResultWithTimings};
     use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
-    use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::gas::{GasCostSummary, GasUsageReport};
     use sui_types::id::UID;
@@ -100,7 +99,7 @@ mod checked {
             let enc = FrameEncoder::new(enc);
             let mut writer = Writer::from_writer(enc);
             writer
-                .write_record(&[
+                .write_record([
                     "tx_digest",
                     "gas_budget",
                     "new_computation_cost",
@@ -111,6 +110,13 @@ mod checked {
                     "old_storage_rebate",
                     "new_gas_used",
                     "old_gas_used",
+                    "new_instructions",
+                    "old_instructions",
+                    "new_stack_height",
+                    "old_stack_hight",
+                    "new_memory_allocated",
+                    "old_memory_allocated",
+                    "translation",
                 ])
                 .expect("failed to write gas header");
             Mutex::new(writer)
@@ -120,13 +126,15 @@ mod checked {
         transaction_digest: String,
         new_gas: &GasUsageReport,
         old_gas: &GasUsageReport,
+        new_details: &GasDetails,
+        old_details: &GasDetails,
     ) {
         if new_gas.cost_summary == old_gas.cost_summary {
             return;
         }
         let mut writer = CSV_WRITER.lock().unwrap();
         writer
-            .write_record(&[
+            .write_record([
                 &transaction_digest,
                 &new_gas.gas_budget.to_string(),
                 &new_gas.cost_summary.computation_cost.to_string(),
@@ -137,6 +145,13 @@ mod checked {
                 &old_gas.cost_summary.storage_rebate.to_string(),
                 &new_gas.gas_used.to_string(),
                 &old_gas.gas_used.to_string(),
+                &new_details.instructions_executed.to_string(),
+                &old_details.instructions_executed.to_string(),
+                &new_details.stack_height.to_string(),
+                &old_details.stack_height.to_string(),
+                &new_details.memory_allocated.to_string(),
+                &old_details.memory_allocated.to_string(),
+                &new_details.transl_gas_used.to_string(),
             ])
             .expect("failed to write gas row");
         writer.flush().expect("failed to flush gas writer");
@@ -208,7 +223,8 @@ mod checked {
 
         compare_effects::<Mode>(&normal_effects, &new_effects);
 
-        normal_effects
+        let (temp_store, gas_status, effects, _gas_details, timing, res) = normal_effects;
+        (temp_store, gas_status, effects, timing, res)
     }
 
     #[instrument(name = "new_tx_execute_to_effects", level = "debug", skip_all)]
@@ -232,6 +248,7 @@ mod checked {
         InnerTemporaryStore,
         SuiGasStatus,
         TransactionEffects,
+        GasDetails,
         Vec<ExecutionTiming>,
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
@@ -305,6 +322,8 @@ mod checked {
             execution_params,
             trace_builder_opt,
         );
+
+        let gas_details = gas_charger.move_gas_status().gas_details();
 
         let status = if let Err(error) = &execution_result {
             // Elaborate errors in logs if they are unexpected or their status is terse.
@@ -398,6 +417,7 @@ mod checked {
             inner,
             gas_charger.into_gas_status(),
             effects,
+            gas_details,
             timings,
             execution_result,
         )
@@ -408,6 +428,7 @@ mod checked {
             InnerTemporaryStore,
             SuiGasStatus,
             TransactionEffects,
+            GasDetails,
             Vec<ExecutionTiming>,
             Result<Mode::ExecutionResults, ExecutionError>,
         ),
@@ -415,6 +436,7 @@ mod checked {
             InnerTemporaryStore,
             SuiGasStatus,
             TransactionEffects,
+            GasDetails,
             Vec<ExecutionTiming>,
             Result<Mode::ExecutionResults, ExecutionError>,
         ),
@@ -453,6 +475,8 @@ mod checked {
             normal_effects.2.transaction_digest().to_string(),
             &new_effects.1.gas_usage_report(),
             &normal_effects.1.gas_usage_report(),
+            &new_effects.3,
+            &normal_effects.3,
         );
 
         if !ok {
