@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::marker::PhantomData;
-use std::ops::Range;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
@@ -58,9 +57,7 @@ impl WriterVariant {
 /// Generic batch struct that works for all entry types
 pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + ParquetSchema> {
     inner: Mutex<Option<WriterVariant>>,
-    dir_prefix: String,
-    current_epoch: Mutex<EpochId>,
-    checkpoint_range: Mutex<Option<Range<u64>>>,
+    pub(crate) dir_prefix: String,
     current_file_bytes: Mutex<Option<Bytes>>,
     _phantom: PhantomData<T>,
 }
@@ -77,8 +74,6 @@ impl<T: AnalyticsMetadata + Serialize + ParquetSchema + 'static> Default for Ana
         Self {
             inner: Mutex::new(None),
             dir_prefix: T::PIPELINE.dir_prefix().as_ref().to_string(),
-            current_epoch: Mutex::new(0),
-            checkpoint_range: Mutex::new(None),
             current_file_bytes: Mutex::new(None),
             _phantom: PhantomData,
         }
@@ -110,20 +105,6 @@ impl<T: AnalyticsMetadata + Serialize + ParquetSchema> AnalyticsBatch<T> {
         Ok(())
     }
 
-    /// Set the current epoch
-    fn set_epoch(&self, epoch: EpochId) {
-        *self.current_epoch.lock().unwrap() = epoch;
-    }
-
-    /// Update checkpoint range (initializes on first checkpoint)
-    fn update_checkpoint_range(&self, checkpoint: u64) {
-        let mut range = self.checkpoint_range.lock().unwrap();
-        match range.as_mut() {
-            Some(r) => r.end = checkpoint,
-            None => *range = Some(checkpoint..checkpoint),
-        }
-    }
-
     /// Get the current file bytes if available (cloned to avoid holding the lock)
     fn current_file_bytes(&self) -> Option<Bytes> {
         self.current_file_bytes.lock().unwrap().clone()
@@ -136,25 +117,6 @@ impl<T: AnalyticsMetadata + Serialize + ParquetSchema> AnalyticsBatch<T> {
             Some(writer) => writer.rows(),
             None => Ok(0),
         }
-    }
-
-    /// Get the object store path for the current file
-    fn object_store_path(&self, format: FileFormat) -> Result<object_store::path::Path> {
-        let range = self
-            .checkpoint_range
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("No checkpoint range set"))?;
-        let path = crate::construct_file_path(
-            &self.dir_prefix,
-            *self.current_epoch.lock().unwrap(),
-            range,
-            format,
-        );
-        Ok(object_store::path::Path::from(
-            path.to_string_lossy().as_ref(),
-        ))
     }
 
     /// Flush the current batch and store the bytes
@@ -227,12 +189,7 @@ where
             return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending;
         };
 
-        let epoch = first.get_epoch();
-        let checkpoint = first.get_checkpoint_sequence_number();
-
-        batch.set_epoch(epoch);
-        batch.update_checkpoint_range(checkpoint);
-
+        // Write all rows to batch (no more side-effect checkpoint tracking!)
         if let Err(e) = batch.write_rows(
             std::iter::once(first).chain(values.by_ref()),
             self.config.file_format,
@@ -247,6 +204,7 @@ where
     async fn commit<'a>(
         &self,
         batch: &Self::Batch,
+        watermarks: &[sui_indexer_alt_framework::pipeline::WatermarkPart],
         conn: &mut <Self::Store as sui_indexer_alt_framework::store::Store>::Connection<'a>,
     ) -> Result<usize> {
         // Ensure the batch is flushed before committing
@@ -257,10 +215,30 @@ where
         };
 
         let row_count = batch.row_count()?;
-        let object_path = batch.object_store_path(self.config.file_format)?;
+
+        // Extract checkpoint range from watermarks (guaranteed to be contiguous)
+        let checkpoint_range =
+            sui_indexer_alt_framework::pipeline::WatermarkPart::checkpoint_range(watermarks)
+                .ok_or_else(|| anyhow::anyhow!("No watermarks provided"))?;
+
+        let epoch = watermarks
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("No watermarks provided"))?
+            .watermark
+            .epoch_hi_inclusive;
+
+        let object_path = crate::construct_file_path(
+            &batch.dir_prefix,
+            epoch,
+            checkpoint_range,
+            self.config.file_format,
+        );
+
+        let object_store_path =
+            object_store::path::Path::from(object_path.to_string_lossy().as_ref());
 
         conn.object_store()
-            .put(&object_path, file_bytes.into())
+            .put(&object_store_path, file_bytes.into())
             .await?;
 
         Ok(row_count)

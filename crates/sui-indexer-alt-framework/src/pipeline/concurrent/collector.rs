@@ -313,6 +313,7 @@ mod tests {
         async fn commit<'a>(
             &self,
             _batch: &Self::Batch,
+            _watermarks: &[WatermarkPart],
             _conn: &mut Connection<'a>,
         ) -> anyhow::Result<usize> {
             tokio::time::sleep(Duration::from_millis(1000)).await;

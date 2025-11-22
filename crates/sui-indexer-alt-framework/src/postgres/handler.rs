@@ -113,6 +113,7 @@ where
     async fn commit<'a>(
         &self,
         batch: &Self::Batch,
+        _watermarks: &[crate::pipeline::WatermarkPart],
         conn: &mut <Self::Store as crate::store::Store>::Connection<'a>,
     ) -> anyhow::Result<usize> {
         H::commit(batch, conn).await

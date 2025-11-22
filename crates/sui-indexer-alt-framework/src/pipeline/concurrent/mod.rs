@@ -110,9 +110,20 @@ pub trait Handler: Processor {
     ) -> BatchStatus;
 
     /// Commit the batch to the database, returning the number of rows affected.
+    ///
+    /// The `watermarks` parameter contains metadata about all checkpoints represented in this batch.
+    /// Each watermark part includes:
+    /// - The checkpoint sequence number
+    /// - The epoch
+    /// - The transaction high watermark
+    /// - The timestamp
+    /// - How many rows from that checkpoint are in this batch
+    ///
+    /// Watermarks can be used to extract checkpoint ranges for file naming or other metadata purposes.
     async fn commit<'a>(
         &self,
         batch: &Self::Batch,
+        watermarks: &[WatermarkPart],
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize>;
 
@@ -408,6 +419,7 @@ mod tests {
         async fn commit<'a>(
             &self,
             batch: &Self::Batch,
+            _watermarks: &[WatermarkPart],
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
             // Group values by checkpoint

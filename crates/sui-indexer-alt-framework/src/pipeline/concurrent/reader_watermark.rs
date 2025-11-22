@@ -118,7 +118,7 @@ mod tests {
     use crate::{
         metrics::IndexerMetrics,
         mocks::store::*,
-        pipeline::{Processor, concurrent::BatchStatus},
+        pipeline::{Processor, WatermarkPart, concurrent::BatchStatus},
     };
 
     use super::*;
@@ -160,6 +160,7 @@ mod tests {
         async fn commit<'a>(
             &self,
             _batch: &Self::Batch,
+            _watermarks: &[WatermarkPart],
             _conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(0)

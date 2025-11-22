@@ -79,6 +79,7 @@ impl concurrent::Handler for TxCounts {
     async fn commit<'a>(
         &self,
         values: &Vec<Self::Value>,
+        _watermarks: &[sui_indexer_alt_framework::pipeline::WatermarkPart],
         conn: &mut sui_pg_db::Connection<'a>,
     ) -> anyhow::Result<usize> {
         Ok(diesel::insert_into(tx_counts::table)

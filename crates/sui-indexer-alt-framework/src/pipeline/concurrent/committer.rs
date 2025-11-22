@@ -60,6 +60,7 @@ pub(super) fn committer<H: Handler + 'static>(
                      watermark,
                  }| {
                     let batch = Arc::new(batch);
+                    let watermark = Arc::new(watermark); // Arc to share between closure iterations
                     let handler = handler.clone();
                     let tx = tx.clone();
                     let db = db.clone();
@@ -82,9 +83,13 @@ pub(super) fn committer<H: Handler + 'static>(
                     let highest_checkpoint_timestamp =
                         watermark.iter().map(|w| w.timestamp_ms()).max();
 
+                    // Clone watermark Arc for the commit closure
+                    let watermark_for_commit = watermark.clone();
+
                     use backoff::Error as BE;
                     let commit = move || {
                         let batch = batch.clone();
+                        let watermark = watermark_for_commit.clone(); // Clone Arc for this iteration
                         let handler = handler.clone();
                         let db = db.clone();
                         let metrics = metrics.clone();
@@ -118,7 +123,7 @@ pub(super) fn committer<H: Handler + 'static>(
                                 BE::transient(Break::Err(e))
                             })?;
 
-                            let affected = handler.commit(&batch, &mut conn).await;
+                            let affected = handler.commit(&batch, &watermark, &mut conn).await;
                             let elapsed = guard.stop_and_record();
 
                             match affected {
@@ -193,7 +198,7 @@ pub(super) fn committer<H: Handler + 'static>(
                             }
                         };
 
-                        if tx.send(watermark).await.is_err() {
+                        if tx.send((*watermark).clone()).await.is_err() {
                             info!(pipeline = H::NAME, "Watermark closed channel");
                             return Err(Break::Cancel);
                         }
@@ -287,6 +292,7 @@ mod tests {
         async fn commit<'a>(
             &self,
             batch: &Self::Batch,
+            _watermarks: &[WatermarkPart],
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
             for value in batch {

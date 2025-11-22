@@ -46,13 +46,13 @@ struct IndexedCheckpoint<P: Processor> {
 
 /// A representation of the proportion of a watermark.
 #[derive(Debug, Clone)]
-struct WatermarkPart {
+pub struct WatermarkPart {
     /// The watermark itself
-    watermark: CommitterWatermark,
+    pub watermark: CommitterWatermark,
     /// The number of rows from this watermark that are in this part
-    batch_rows: usize,
+    pub batch_rows: usize,
     /// The total number of rows from this watermark
-    total_rows: usize,
+    pub total_rows: usize,
 }
 
 /// Internal type used by workers to propagate errors or shutdown signals up to their
@@ -107,11 +107,11 @@ impl<P: Processor> IndexedCheckpoint<P> {
 }
 
 impl WatermarkPart {
-    fn checkpoint(&self) -> u64 {
+    pub fn checkpoint(&self) -> u64 {
         self.watermark.checkpoint_hi_inclusive
     }
 
-    fn timestamp_ms(&self) -> u64 {
+    pub fn timestamp_ms(&self) -> u64 {
         self.watermark.timestamp_ms_hi_inclusive
     }
 
@@ -139,6 +139,31 @@ impl WatermarkPart {
             batch_rows: rows,
             total_rows: self.total_rows,
         }
+    }
+
+    /// Extract the contiguous checkpoint range from a slice of watermarks.
+    ///
+    /// IMPORTANT: Watermarks within a single batch are GUARANTEED to represent consecutive
+    /// checkpoints (including empty ones), because the collector processes checkpoints in order
+    /// from a BTreeMap. This means you can safely use the min..max range for file naming.
+    ///
+    /// Returns None if the watermarks slice is empty.
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Watermarks for checkpoints 5, 6 (empty), and 7
+    /// let watermarks = vec![
+    ///     WatermarkPart { checkpoint: 5, batch_rows: 10, ... },
+    ///     WatermarkPart { checkpoint: 6, batch_rows: 0, ... },  // empty checkpoint!
+    ///     WatermarkPart { checkpoint: 7, batch_rows: 5, ... },
+    /// ];
+    /// let range = WatermarkPart::checkpoint_range(&watermarks);
+    /// assert_eq!(range, Some(5..8)); // Includes empty checkpoint 6
+    /// ```
+    pub fn checkpoint_range(watermarks: &[WatermarkPart]) -> Option<std::ops::Range<u64>> {
+        let min = watermarks.iter().map(|w| w.checkpoint()).min()?;
+        let max = watermarks.iter().map(|w| w.checkpoint()).max()?;
+        Some(min..max + 1)
     }
 }
 

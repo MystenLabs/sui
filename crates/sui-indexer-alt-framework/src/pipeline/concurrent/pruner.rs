@@ -360,7 +360,7 @@ mod tests {
         FieldCount,
         metrics::IndexerMetrics,
         mocks::store::*,
-        pipeline::{Processor, concurrent::BatchStatus},
+        pipeline::{Processor, WatermarkPart, concurrent::BatchStatus},
     };
 
     use super::*;
@@ -398,6 +398,7 @@ mod tests {
         async fn commit<'a>(
             &self,
             batch: &Self::Batch,
+            _watermarks: &[WatermarkPart],
             _conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(batch.len())

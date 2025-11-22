@@ -56,6 +56,7 @@ impl Handler for EpochsPipeline {
     async fn commit<'a>(
         &self,
         batch: &Self::Batch,
+        _watermarks: &[sui_indexer_alt_framework::pipeline::WatermarkPart],
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize> {
         let Some(epoch_checkpoint) = batch else {
