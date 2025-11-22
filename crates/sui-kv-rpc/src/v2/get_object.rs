@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
@@ -72,18 +73,19 @@ pub(crate) async fn batch_get_objects(
             )
         })
         .collect();
-    let objects = client.get_objects(&object_keys).await?;
-    let mut objects_iter = objects.into_iter().peekable();
+    let response: HashMap<_, _> = client
+        .get_objects(&object_keys)
+        .await?
+        .into_iter()
+        .map(|obj| ((obj.id(), obj.version()), obj))
+        .collect();
+
     let objects = object_keys
         .into_iter()
         .map(|object_key| {
-            if let Some(obj) = objects_iter.peek()
-                && object_key.0 == obj.id()
-                && object_key.1 == obj.version()
-            {
-                let object = objects_iter.next().expect("invariant's checked above");
+            if let Some(object) = response.get(&(object_key.0, object_key.1)) {
                 let mut message = Object::default();
-                message.merge(&object, &read_mask);
+                message.merge(object, &read_mask);
                 return GetObjectResult::new_object(message);
             }
             let err: RpcError =

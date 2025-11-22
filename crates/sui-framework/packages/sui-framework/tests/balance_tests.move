@@ -4,12 +4,12 @@
 #[test_only]
 module sui::coin_balance_tests;
 
+use std::unit_test::destroy;
 use sui::balance;
 use sui::coin;
 use sui::pay;
 use sui::sui::SUI;
 use sui::test_scenario;
-use sui::test_utils;
 
 #[test]
 fun type_morphing() {
@@ -57,7 +57,7 @@ fun test_balance() {
     assert!(balance2.value() == 333);
     assert!(balance3.value() == 334);
 
-    test_utils::destroy(balance1);
-    test_utils::destroy(balance2);
-    test_utils::destroy(balance3);
+    destroy(balance1);
+    destroy(balance2);
+    destroy(balance3);
 }

@@ -8,11 +8,12 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use sui_indexer_alt_graphql::{
-    RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
+    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, config::RpcConfig as GraphQlConfig,
+    start_rpc as start_graphql,
 };
 use sui_indexer_alt_reader::{
-    bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
-    fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
+    consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs,
+    system_package_task::SystemPackageTaskArgs,
 };
 use sui_macros::sim_test;
 use sui_pg_db::{DbArgs, temp::get_available_port};
@@ -171,10 +172,9 @@ async fn create_graphql_test_cluster(validator_cluster: &TestCluster) -> GraphQl
     // Start GraphQL server that connects directly to TestCluster's RPC
     let graphql_handle = start_graphql(
         None, // No database - GraphQL will use fullnode RPC for executeTransaction
-        None, // No bigtable
         fullnode_args,
         DbArgs::default(),
-        BigtableArgs::default(),
+        GraphQlKvArgs::default(),
         ConsistentReaderArgs::default(),
         graphql_args,
         SystemPackageTaskArgs::default(),

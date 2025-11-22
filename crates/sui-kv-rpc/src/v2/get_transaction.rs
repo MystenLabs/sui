@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::str::FromStr;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader, TransactionData};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
@@ -82,18 +83,18 @@ pub async fn batch_get_transactions(
         .iter()
         .map(|digest| TransactionDigest::from_str(digest))
         .collect::<Result<Vec<_>, _>>()?;
-    let transactions = client.get_transactions(&digests).await?;
-    let mut tx_iter = transactions.into_iter().peekable();
+    let response: HashMap<_, _> = client
+        .get_transactions(&digests)
+        .await?
+        .into_iter()
+        .map(|tx| (*tx.transaction.digest(), tx))
+        .collect();
+
     let transactions = digests
         .into_iter()
         .map(|digest| {
-            if let Some(tx) = tx_iter.peek()
-                && tx.transaction.digest() == &digest
-            {
-                return match transaction_to_response(
-                    tx_iter.next().expect("invariant's checked above"),
-                    &read_mask,
-                ) {
+            if let Some(tx) = response.get(&digest) {
+                return match transaction_to_response(tx.clone(), &read_mask) {
                     Ok(tx) => GetTransactionResult::new_transaction(tx),
                     Err(err) => GetTransactionResult::new_error(err.into_status_proto()),
                 };

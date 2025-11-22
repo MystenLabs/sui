@@ -11,7 +11,7 @@ use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use arc_swap::{ArcSwap, ArcSwapOption};
-use consensus_core::{BlockStatus, ConnectionStatus};
+use consensus_core::BlockStatus;
 use dashmap::DashMap;
 use dashmap::try_result::TryResult;
 use futures::FutureExt;
@@ -23,6 +23,7 @@ use mysten_common::debug_fatal;
 use mysten_metrics::{
     GaugeGuard, InflightGuardFutureExt, LATENCY_SEC_BUCKETS, spawn_monitored_task,
 };
+use mysten_network::anemo_connection_monitor::ConnectionStatus;
 use parking_lot::RwLockReadGuard;
 use prometheus::Histogram;
 use prometheus::HistogramVec;

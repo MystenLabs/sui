@@ -279,10 +279,6 @@ mod test {
             unimplemented!()
         }
 
-        fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
-            unimplemented!()
-        }
-
         fn set_propagation_delay(&self, _propagation_delay: Round) -> Result<(), CoreError> {
             Ok(())
         }
@@ -316,8 +312,6 @@ mod test {
     #[async_trait]
     #[async_trait::async_trait]
     impl NetworkClient for FakeNetworkClient {
-        const SUPPORT_STREAMING: bool = true;
-
         async fn send_block(
             &self,
             _peer: AuthorityIndex,

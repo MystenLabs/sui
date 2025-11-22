@@ -255,6 +255,75 @@ impl TestEnvironment {
             })
             .unwrap()
     }
+
+    async fn simulate_receive_ref(
+        &self,
+        parent: ObjectRef,
+        child: ObjectRef,
+        function: &'static str,
+    ) -> anyhow::Result<()> {
+        use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
+        use sui_rpc::proto::sui::rpc::v2::{
+            Argument, Command, Input, MoveCall, ProgrammableTransaction,
+            SimulateTransactionRequest, Transaction, TransactionKind,
+        };
+
+        let sender = self.test_cluster.get_address_0();
+        let mut client =
+            TransactionExecutionServiceClient::connect(self.test_cluster.rpc_url().to_owned())
+                .await?;
+
+        let mut unresolved_transaction = Transaction::default();
+        unresolved_transaction.kind = Some(TransactionKind::from({
+            let mut ptb = ProgrammableTransaction::default();
+            ptb.inputs = vec![
+                {
+                    let mut message = Input::default();
+                    message.object_id = Some(parent.0.to_canonical_string(true));
+                    message
+                },
+                {
+                    let mut message = Input::default();
+                    message.object_id = Some(child.0.to_canonical_string(true));
+                    message
+                },
+            ];
+            ptb.commands = vec![Command::from({
+                let mut message = MoveCall::default();
+                message.package = Some(self.move_package.to_canonical_string(true));
+                message.module = Some("tto".to_string());
+                message.function = Some(function.to_string());
+                message.arguments = vec![Argument::new_input(0), Argument::new_input(1)];
+                message
+            })];
+            ptb
+        }));
+        unresolved_transaction.sender = Some(sender.to_string());
+
+        let mut request = SimulateTransactionRequest::default();
+        request.transaction = Some(unresolved_transaction);
+
+        client.simulate_transaction(request).await?;
+        Ok(())
+    }
+}
+
+#[sim_test]
+async fn simulate_receive_of_object_by_immut_ref() {
+    let env = TestEnvironment::new().await;
+    let (parent, child) = env.start().await;
+    env.simulate_receive_ref(parent, child, "receive_by_immutable_ref")
+        .await
+        .unwrap();
+}
+
+#[sim_test]
+async fn simulate_receive_of_object_by_mut_ref() {
+    let env = TestEnvironment::new().await;
+    let (parent, child) = env.start().await;
+    env.simulate_receive_ref(parent, child, "receive_by_mutable_ref")
+        .await
+        .unwrap();
 }
 
 async fn publish_move_package(test_cluster: &TestCluster) -> ObjectRef {

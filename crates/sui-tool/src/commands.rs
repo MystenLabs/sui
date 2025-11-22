@@ -340,12 +340,6 @@ pub enum ToolCommand {
         #[clap(long = "verbose")]
         verbose: bool,
 
-        /// If provided, all checkpoint summaries from genesis to the end of the target epoch
-        /// will be downloaded and (if --verify is provided) full checkpoint chain verification
-        /// will be performed. If omitted, only end of epoch checkpoint summaries will be
-        /// downloaded, and (if --verify is provided) will be verified via committee signature.
-        #[clap(long = "all-checkpoints")]
-        all_checkpoints: bool,
         /// Number of retries for failed HTTP requests when downloading snapshot files.
         /// Defaults to 3 retries. Set to 0 to disable retries.
         #[clap(long = "max-retries", default_value = "3")]
@@ -690,7 +684,6 @@ impl ToolCommand {
                 no_sign_request,
                 latest,
                 verbose,
-                all_checkpoints,
                 max_retries,
             } => {
                 if !verbose {
@@ -823,7 +816,6 @@ impl ToolCommand {
                     num_parallel_downloads,
                     network,
                     verify,
-                    all_checkpoints,
                     max_retries,
                 )
                 .await?;
@@ -842,6 +834,13 @@ impl ToolCommand {
                 verbose,
                 max_retries,
             } => {
+                if no_sign_request {
+                    anyhow::bail!(
+                        "The --no-sign-request flag is no longer supported. \
+                        Please use S3 or GCS buckets with --snapshot-bucket-type and --snapshot-bucket instead. \
+                        For more information, see: https://docs.sui.io/guides/operator/snapshots#mysten-labs-managed-snapshots"
+                    );
+                }
                 if !verbose {
                     tracing_handle
                         .update_log("off")

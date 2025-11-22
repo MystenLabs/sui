@@ -458,15 +458,6 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
                 },
             }.into()),
             RunInfo {
-                gas_price_too_low: true,
-                ..
-            } => Err(SuiErrorKind::UserInputError {
-                error: UserInputError::GasPriceUnderRGP {
-                    gas_price: self.gas_price,
-                    reference_gas_price: exec.get_reference_gas_price(),
-                },
-            }.into()),
-            RunInfo {
                 gas_price_too_high: true,
                 ..
             } => Err(SuiErrorKind::UserInputError {
@@ -490,6 +481,15 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
                 error: UserInputError::GasBudgetTooLow {
                     gas_budget: self.gas,
                     min_budget: PROTOCOL_CONFIG.base_tx_cost_fixed() * self.gas_price,
+                },
+            }.into()),
+            RunInfo {
+                gas_price_too_low: true,
+                ..
+            } => Err(SuiErrorKind::UserInputError {
+                error: UserInputError::GasPriceUnderRGP {
+                    gas_price: self.gas_price,
+                    reference_gas_price: exec.get_reference_gas_price(),
                 },
             }.into()),
             RunInfo {

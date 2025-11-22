@@ -4,18 +4,20 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
-use sui_sdk::SuiClient;
-use sui_types::base_types::{ObjectRef, SuiAddress};
-use sui_types::error::{SuiErrorKind, UserInputError};
+use sui_rpc::client::Client;
+use sui_rpc::proto::sui::rpc::v2::{Object, owner::OwnerKind};
+use sui_sdk_types::{Address, TypeTag};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::rpc_proto_conversions::ObjectReferenceExt;
 use sui_types::transaction::{Argument, Command, ObjectArg, ProgrammableTransaction};
 
-use crate::types::internal_operation::MAX_GAS_COINS;
 use crate::{Currency, errors::Error};
 
 use super::{
-    MAX_COMMAND_ARGS, TransactionObjectData, TryConstructTransaction, budget_from_dry_run,
+    MAX_COMMAND_ARGS, TransactionObjectData, TryConstructTransaction, simulate_transaction,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -30,7 +32,7 @@ pub struct PayCoin {
 impl TryConstructTransaction for PayCoin {
     async fn try_fetch_needed_objects(
         self,
-        client: &SuiClient,
+        client: &mut Client,
         gas_price: Option<u64>,
         budget: Option<u64>,
     ) -> Result<TransactionObjectData, Error> {
@@ -42,49 +44,46 @@ impl TryConstructTransaction for PayCoin {
         } = self;
 
         let amount = amounts.iter().sum::<u64>();
-        let coin_objs: Vec<ObjectRef> = client
-            .coin_read_api()
-            .select_coins(
-                sender,
-                Some(currency.metadata.coin_type.clone()),
-                amount.into(),
-                vec![],
-            )
-            .await?
-            .iter()
-            .map(|coin| coin.object_ref())
-            .collect();
-
-        let budget = match budget {
-            Some(budget) => budget,
-            None => {
-                let pt = pay_coin_pt(recipients, amounts, &coin_objs, &currency)?;
-                budget_from_dry_run(client, pt, sender, gas_price).await?
-            }
-        };
-
-        let gas_coins = client
-            .coin_read_api()
-            .select_coins(sender, None, budget as u128, vec![])
+        let coin_type = TypeTag::from_str(&currency.metadata.coin_type)
+            .map_err(|e| Error::DataError(format!("Invalid coin type: {}", e)))?;
+        let all_coins = client
+            .select_coins(&Address::from(sender), &coin_type, amount, &[])
             .await?;
-        if gas_coins.len() > MAX_GAS_COINS {
-            return Err(SuiErrorKind::UserInputError {
-                error: UserInputError::SizeLimitExceeded {
-                    limit: "maximum number of gas payment objects".to_string(),
-                    value: MAX_GAS_COINS.to_string(),
-                },
-            }
-            .into());
-        }
 
-        let gas_coins_iter = gas_coins.into_iter();
-        let total_sui_balance = gas_coins_iter.clone().map(|c| c.balance).sum::<u64>() as i128;
-        let gas_coins = gas_coins_iter.map(|c| c.object_ref()).collect();
+        let (party_objects, non_party_objects): (Vec<_>, Vec<_>) = all_coins
+            .iter()
+            .partition(|obj| obj.owner().kind() == OwnerKind::ConsensusAddress);
+
+        let coins: Vec<ObjectRef> = non_party_objects
+            .iter()
+            .map(|obj: &&Object| obj.object_reference().try_to_object_ref())
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let party_coins: Vec<(ObjectID, SequenceNumber)> = party_objects
+            .iter()
+            .map(|obj: &&Object| -> Result<_, Error> {
+                let id = ObjectID::from_str(obj.object_id())
+                    .map_err(|e| Error::DataError(format!("Invalid party object ID: {}", e)))?;
+                let start_version = SequenceNumber::from_u64(obj.owner().version());
+                Ok((id, start_version))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // If budget is provided, we still need to select gas coins
+        let pt = pay_coin_pt(recipients, amounts, &coins, &party_coins, &currency)?;
+        let (budget, gas_coin_objs) =
+            simulate_transaction(client, pt, sender, vec![], gas_price, budget).await?;
+
+        let total_sui_balance = gas_coin_objs.iter().map(|c| c.balance()).sum::<u64>() as i128;
+        let gas_coins = gas_coin_objs
+            .iter()
+            .map(|obj: &Object| obj.object_reference().try_to_object_ref())
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(TransactionObjectData {
             gas_coins,
-            extra_gas_coins: vec![],
-            objects: coin_objs,
+            objects: coins,
+            party_objects: party_coins,
             total_sui_balance,
             budget,
         })
@@ -98,26 +97,49 @@ pub fn pay_coin_pt(
     recipients: Vec<SuiAddress>,
     amounts: Vec<u64>,
     coins: &[ObjectRef],
+    party_coins: &[(ObjectID, SequenceNumber)],
     currency: &Currency,
 ) -> anyhow::Result<ProgrammableTransaction> {
     if recipients.len() != amounts.len() {
         return Err(anyhow!("Amounts length does not match recipients"));
     }
-    if coins.is_empty() {
+    if coins.is_empty() && party_coins.is_empty() {
         return Err(anyhow!("Cannot PayCoin without any coins"));
     }
 
-    let mut commands = 0;
     let mut builder = ProgrammableTransactionBuilder::new();
 
-    let mut merged = coins
+    let all_chunks: Vec<Vec<ObjectArg>> = coins
         .chunks(MAX_COMMAND_ARGS)
+        .map(|chunk| {
+            chunk
+                .iter()
+                .map(|&o| ObjectArg::ImmOrOwnedObject(o))
+                .collect::<Vec<_>>()
+        })
+        .chain(party_coins.chunks(MAX_COMMAND_ARGS).map(|chunk| {
+            chunk
+                .iter()
+                .map(|&(id, initial_shared_version)| ObjectArg::SharedObject {
+                    id,
+                    initial_shared_version,
+                    mutability: sui_types::transaction::SharedObjectMutability::Mutable,
+                })
+                .collect::<Vec<_>>()
+        }))
+        .collect();
+
+    let mut commands = 0;
+    let mut merged: Vec<Argument> = all_chunks
+        .into_iter()
         .map(|chunk| -> anyhow::Result<Argument> {
             let mut to_merge: Vec<Argument> = chunk
-                .iter()
-                .map(|&o| builder.obj(ObjectArg::ImmOrOwnedObject(o)))
+                .into_iter()
+                .map(|o| builder.obj(o))
                 .collect::<Result<Vec<Argument>, anyhow::Error>>()?;
-            let merge_into = to_merge.pop().expect("Already checked for non-zero length");
+            let merge_into = to_merge
+                .pop()
+                .expect("chunks() guarantees non-empty chunks");
             if !to_merge.is_empty() {
                 builder.command(Command::MergeCoins(merge_into, to_merge));
                 commands += 1;
@@ -128,7 +150,7 @@ pub fn pay_coin_pt(
     // Accumulate all dust coins into a single one
     let single_coin = merged
         .pop()
-        .expect("Already checked for non-zero coins above");
+        .expect("At least one of coins or party_coins is non-empty");
     if !merged.is_empty() {
         builder.command(Command::MergeCoins(single_coin, merged));
         commands += 1;

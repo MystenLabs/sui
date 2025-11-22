@@ -1,14 +1,53 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+use std::fmt;
 use std::mem;
-use std::{collections::BTreeSet, fmt};
+use std::sync::Arc;
 
-use super::lexer::{Lexeme, OwnedLexeme, Token};
-use super::peek::Peekable2Ext;
+use move_core_types::annotated_visitor;
+use move_core_types::language_storage::TypeTag;
 
+use crate::v2::lexer::Lexeme;
+use crate::v2::lexer::OwnedLexeme;
+use crate::v2::lexer::Token;
+use crate::v2::peek::Peekable2Ext;
+
+/// Errors related to the display format as a whole.
+///
+/// NB. Limit errors (`Too*`) are duplicated here and in `FormatError` because they occur while
+/// working on a format, and need to be propagated up to the Display overall.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("Duplicate name {0:?}")]
+    NameDuplicate(String),
+
+    #[error("Name pattern {0:?} produced no output")]
+    NameEmpty(String),
+
+    #[error("Name pattern {0:?} did not evaluate to a string")]
+    NameInvalid(String),
+
+    #[error("Error evaluating name pattern {0:?}: {1}")]
+    NameError(String, FormatError),
+
+    #[error("Display contains too many elements")]
+    TooBig,
+
+    #[error("Display tries to load too many objects")]
+    TooManyLoads,
+
+    #[error("Display produces too much output")]
+    TooMuchOutput,
+}
+
+/// Errors related to a single format string.
+#[derive(thiserror::Error, Debug, Clone)]
+pub enum FormatError {
+    #[error("BCS error: {0}")]
+    Bcs(#[from] bcs::Error),
+
     #[error("Hex {0} contains invalid character")]
     InvalidHexCharacter(OwnedLexeme),
 
@@ -21,14 +60,23 @@ pub enum Error {
     #[error("Odd number of characters in hex {0}")]
     OddHexLiteral(OwnedLexeme),
 
-    #[error("Display format contains too many elements")]
+    #[error("Storage error: {0}")]
+    Store(Arc<anyhow::Error>),
+
+    #[error("Display contains too many elements")]
     TooBig,
 
-    #[error("Display format is nested too deeply")]
+    #[error("Format is nested too deeply")]
     TooDeep,
 
-    #[error("Display format tries to load too many objects")]
+    #[error("Display tries to load too many objects")]
     TooManyLoads,
+
+    #[error("Display produces too much output")]
+    TooMuchOutput,
+
+    #[error("Invalid transform: {0}")]
+    TransformInvalid(&'static str),
 
     #[error("Unexpected end-of-string, expected {expect}")]
     UnexpectedEos { expect: ExpectedSet },
@@ -39,20 +87,33 @@ pub enum Error {
         expect: ExpectedSet,
     },
 
-    #[error("vector at offset {offset} requires 1 type parameter, found {arity}")]
+    #[error("Vector at offset {offset} requires 1 type parameter, found {arity}")]
     VectorArity { offset: usize, arity: usize },
+
+    #[error("Internal error: vector without element type")]
+    VectorNoType,
+
+    #[error(
+        "Vector literal's element type, could be {} or {}",
+        .0.to_canonical_display(true),
+        .1.to_canonical_display(true),
+    )]
+    VectorTypeMismatch(TypeTag, TypeTag),
+
+    #[error("Deserialization error: {0}")]
+    Visitor(#[from] annotated_visitor::Error),
 }
 
 /// The set of patterns that the parser tried to match against the next token, in a given
 /// invocation of `match_token!` or `match_token_opt!`. This is used to provide a clearer error
 /// message.
 #[derive(Debug, Clone)]
-pub(crate) struct ExpectedSet {
+pub struct ExpectedSet {
     /// Other sets of patterns that were attempted on the same location.
-    pub prev: Vec<ExpectedSet>,
+    prev: Vec<ExpectedSet>,
 
     /// The set of patterns that were tried in this invocation.
-    pub tried: &'static [Expected],
+    tried: &'static [Expected],
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -71,19 +132,21 @@ pub(crate) enum Match<T> {
     Tried(Option<usize>, ExpectedSet),
 }
 
-impl Error {
+impl FormatError {
     // Indicate that `tried` was also tried at `offset`, in case the error is related to other
     // tokens that were tried at the same location.
     pub(crate) fn also_tried(self, offset: Option<usize>, tried: ExpectedSet) -> Self {
         match (offset, self) {
-            (Some(offset), Error::UnexpectedToken { actual, expect }) if offset == actual.2 => {
-                Error::UnexpectedToken {
+            (Some(offset), FormatError::UnexpectedToken { actual, expect })
+                if offset == actual.2 =>
+            {
+                FormatError::UnexpectedToken {
                     actual,
                     expect: expect.union(tried),
                 }
             }
 
-            (None, Error::UnexpectedEos { expect }) => Error::UnexpectedEos {
+            (None, FormatError::UnexpectedEos { expect }) => FormatError::UnexpectedEos {
                 expect: expect.union(tried),
             },
 
@@ -118,14 +181,14 @@ impl ExpectedSet {
         self
     }
 
-    pub(crate) fn into_error(self, actual: Option<&Lexeme<'_>>) -> Error {
+    pub(crate) fn into_error(self, actual: Option<&Lexeme<'_>>) -> FormatError {
         if let Some(actual) = actual {
-            Error::UnexpectedToken {
+            FormatError::UnexpectedToken {
                 actual: actual.detach(),
                 expect: self,
             }
         } else {
-            Error::UnexpectedEos { expect: self }
+            FormatError::UnexpectedEos { expect: self }
         }
     }
 }
@@ -176,5 +239,11 @@ impl fmt::Display for ExpectedSet {
         }
 
         Ok(())
+    }
+}
+
+impl From<std::fmt::Error> for FormatError {
+    fn from(_: std::fmt::Error) -> Self {
+        FormatError::TooMuchOutput
     }
 }

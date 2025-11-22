@@ -65,7 +65,7 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
         &mut self,
         num_type_references: u64,
     ) -> Result<(), ExecutionError> {
-        let amount = self.reference_cost_formula(num_type_references.max(1));
+        let amount = self.reference_cost_formula(num_type_references.max(1))?;
         let amount =
             amount.saturating_mul(self.protocol_config.translation_per_reference_node_charge());
         self.charge(amount)
@@ -86,8 +86,11 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
     // cost = (num_type_references * (num_type_references + 1)) / 2
     //
     // Take &self to access protocol config if needed in the future.
-    fn reference_cost_formula(&self, n: u64) -> u64 {
-        (n.saturating_mul(n + 1)) / 2
+    fn reference_cost_formula(&self, n: u64) -> Result<u64, ExecutionError> {
+        let Some(n_succ) = n.checked_add(1) else {
+            invariant_violation!("u64 overflow when calculating type reference cost")
+        };
+        Ok(n.saturating_mul(n_succ) / 2)
     }
 
     // Charge gas using a point charge mechanism based on the cumulative number of units charged so
@@ -112,7 +115,8 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
         debug_assert!(self.protocol_config.translation_metering_step_resolution() > 0);
         let point_multiplier = self
             .charged
-            .saturating_div(self.protocol_config.translation_metering_step_resolution())
+            .checked_div(self.protocol_config.translation_metering_step_resolution())
+            .unwrap_or(0)
             .max(1);
         debug_assert!(point_multiplier > 0);
         debug_assert!(amount > 0);

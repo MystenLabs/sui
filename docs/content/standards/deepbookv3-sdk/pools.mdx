@@ -2,7 +2,25 @@
 title: Pools SDK
 sidebar_label: Pools
 description: Learn how to use the DeepBookV3 SDK to read the state of a pool.
-keywords: [ deepbook design, deepbookv3, deep book, pool, poolregistry, balancemanager, pool shared object, poolregister shared object, balancemanager shared object, book, state, vault, governance, history, account, bigvector ]
+keywords:
+  [
+    deepbook design,
+    deepbookv3,
+    deep book,
+    pool,
+    poolregistry,
+    balancemanager,
+    pool shared object,
+    poolregister shared object,
+    balancemanager shared object,
+    book,
+    state,
+    vault,
+    governance,
+    history,
+    account,
+    bigvector,
+  ]
 ---
 
 Pools are shared objects that represent a market. See [Query the Pool](../deepbookv3/query-the-pool.mdx) for more information on pools.
@@ -15,12 +33,11 @@ The DeepBookV3 SDK exposes functions that you can call to read the state of a po
 Input amounts, quantities, and prices should be provided in standard decimal format (e.g., `10.5` SUI, `0.00001` nBTC). The SDK handles conversion to base units internally. Returned amounts are also in standard decimal format.
 :::
 
-
 ### account
 
 Use `account` to retrieve the account information for a `BalanceManager` in a pool, which has the following form:
 
-```tsx
+```ts
 {
   epoch: '511',
   open_orders: {
@@ -44,12 +61,10 @@ Use `account` to retrieve the account information for a `BalanceManager` in a po
 
 **Parameters**
 
-- `poolKey`: String that identifies the pool to query. 
+- `poolKey`: String that identifies the pool to query.
 - `balanceManagerKey`: key of the balance manager defined in the SDK.
 
-```tsx
-async account(poolKey: string, managerKey: string) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="account" signatureOnly />
 
 ### accountOpenOrders
 
@@ -60,18 +75,16 @@ Use `accountOpenOrders` to retrieve open orders for the balance manager and pool
 - `poolKey`: String that identifies the pool to query.
 - `managerKey`: String that identifies the balance manager to query.
 
-```tsx
-async accountOpenOrders(poolKey: string, managerKey: string) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="accountOpenOrders" signatureOnly />
 
 ### checkManagerBalance
 
 Use `checkManagerBalance` to check the balance manager for a specific coin. The call returns a `Promise` in the form:
 
 ```
-{ 
+{
   coinType: string,
-  balance: number 
+  balance: number
 }
 ```
 
@@ -80,15 +93,13 @@ Use `checkManagerBalance` to check the balance manager for a specific coin. The 
 - `managerKey`: String that identifies the balance manager to query.
 - `coinKey`: String that identifies the coin to query the balance of.
 
-```tsx
-async checkManagerBalance(managerKey: string, coinKey: string) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="checkManagerBalance" signatureOnly />
 
 ### getOrder
 
 Use `getOrder` to retrieve an order's information. The call returns a `Promise` in the `Order` struct, which has the following form:
 
-```tsx
+```ts
 {
   balance_manager_id: {
     bytes: '0x6149bfe6808f0d6a9db1c766552b7ae1df477f5885493436214ed4228e842393'
@@ -110,21 +121,21 @@ Use `getOrder` to retrieve an order's information. The call returns a `Promise` 
 `poolKey`: String that identifies the pool to query.
 `orderId`: ID of the order to query.
 
-```tsx
-async getOrder(poolKey: string, orderId: string) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getOrder" signatureOnly />
 
 ### getQuoteQuantityOut
 
 Use `getQuoteQuantityOut` to retrieve the quote quantity out for the base quantity you provide. The call returns a `Promise` in the form:
+
 ```
-{ 
+{
   baseQuantity: number,
   baseOut: number,
   quoteOut: number,
-  deepRequired: number 
+  deepRequired: number
 }
 ```
+
 where `deepRequired` is the amount of DEEP required for the dry run.
 
 **Parameters**
@@ -132,13 +143,12 @@ where `deepRequired` is the amount of DEEP required for the dry run.
 - `poolKey`: String that identifies the pool to query.
 - `baseQuantity`: Number that defines the base quantity you want to convert.
 
- ```tsx
-async getQuoteQuantityOut(poolKey: string, baseQuantity: number) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getQuoteQuantityOut" signatureOnly />
 
 ### getBaseQuantityOut
 
 Use `getBaseQuantityOut` to retrieve the base quantity out for the quote quantity that you provide. The call returns a `Promise` in the form:
+
 ```
 {
   quoteQuantity: number,
@@ -147,6 +157,7 @@ Use `getBaseQuantityOut` to retrieve the base quantity out for the quote quantit
   deepRequired: number
 }
 ```
+
 where `deepRequired` is the amount of DEEP required for the dry run.
 
 **Parameters**
@@ -154,13 +165,12 @@ where `deepRequired` is the amount of DEEP required for the dry run.
 - `poolKey`: String that identifies the pool to query.
 - `quoteQuantity`: Number that defines the quote quantity you want to convert.
 
-```tsx
-async getBaseQuantityOut(poolKey: string, quoteQuantity: number) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getBaseQuantityOut" signatureOnly />
 
 ### getQuantityOut
 
 Use `getQuantityOut` to retrieve the output quantities for the base or quote quantity you provide. You provide values for both quantities, but only one of them can be non-zero. The call returns a `Promise` with the form:
+
 ```
 {
   baseQuantity: number,
@@ -170,6 +180,7 @@ Use `getQuantityOut` to retrieve the output quantities for the base or quote qua
   deepRequired: number
 }
 ```
+
 where `deepRequired` is the amount of DEEP required for the dry run.
 
 **Parameters**
@@ -178,13 +189,12 @@ where `deepRequired` is the amount of DEEP required for the dry run.
 - `baseQuantity`: Number that defines the base quantity you want to convert. Set to `0` if using quote quantity.
 - `quoteQuantity`: Number that defines the quote quantity you want to convert. Set to `0` if using base quantity.
 
-```tsx
-async getQuantityOut(poolKey: string, baseQuantity: number, quoteQuantity: number) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getQuantityOut" signatureOnly />
 
 ### getLevel2Range
 
 Use `getLevel2Range` to retrieve level 2 order book within the boundary price range you provide. The call returns a `Promise` in the form:
+
 ```
 {
   prices: Array<number>,
@@ -199,14 +209,13 @@ Use `getLevel2Range` to retrieve level 2 order book within the boundary price ra
 - `priceHigh`: Number for upper bound of price range.
 - `isBid`: Boolean when set to `true` gets bid orders, else retrieve ask orders.
 
- ```tsx
-async getLevel2Range(poolKey: string, priceLow: number, priceHigh: number, isBid: boolean) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getLevel2Range" signatureOnly />
 
 ### getLevel2TicksFromMid
 
 Use `getLevel2TicksFromMid` to retrieve level 2 order book ticks from mid-price for a pool with the ID you provide. The call returns a `Promise` in the form:
-```
+
+```ts
 {
   bid_prices: Array<number>,
   bid_quantities: Array<number>,
@@ -220,15 +229,13 @@ Use `getLevel2TicksFromMid` to retrieve level 2 order book ticks from mid-price 
 - `poolKey`: String that identifies the pool to query.
 - `ticks`: Number of ticks from mid-price.
 
- ```tsx
-async getLevel2TicksFromMid(poolKey: string, ticks: number) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getLevel2TicksFromMid" signatureOnly />
 
 ### lockedBalance
 
 Use `lockedBalance` to retrieve a `BalanceManager` locked balance in the pool. The call returns a `Promise` in the `Order` struct, which has the following form:
 
-```tsx
+```ts
 {
   base: 5.5,
 	quote: 2,
@@ -240,15 +247,13 @@ Use `lockedBalance` to retrieve a `BalanceManager` locked balance in the pool. T
 
 `poolKey`: String that identifies the pool to query. `balanceManagerKey`: key of the balance manager defined in the SDK.
 
-```tsx
-async lockedBalance(poolKey: string, balanceManagerKey: string) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="lockedBalance" signatureOnly />
 
 ### poolTradeParams
 
 Use `poolTradeParams` to retrieve the trade params for the pool, which has the following form:
 
-```tsx
+```ts
 {
   takerFee: 0.001,
 	makerFee: 0.0005,
@@ -260,29 +265,25 @@ Use `poolTradeParams` to retrieve the trade params for the pool, which has the f
 
 - `poolKey`: String that identifies the pool to query.
 
-```tsx
-async poolTradeParams(poolKey: string) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="poolTradeParams" signatureOnly />
 
 ### vaultBalances
 
 Use `vaultBalances` to get the vault balances for a pool with the ID you provide. The call returns a `Promise` in the form:
 
-```tsx
+```ts
 {
-  base: number, 
-  quote: number, 
+  base: number,
+  quote: number,
   deep: number
-} 
+}
 ```
 
 **Parameters**
 
 - `poolKey`: String that identifies the pool to query.
 
-```tsx
-async vaultBalances(poolKey: string) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="vaultBalances" signatureOnly />
 
 ### getPoolIdByAssets
 
@@ -293,9 +294,7 @@ Use `getPoolIdByAssets` to retrieve the pool ID for the asset types you provide.
 - `baseType`: String of the type of base asset.
 - `quoteType`: String of the type of quote asset.
 
-```tsx
-async getPoolIdByAssets(baseType: string, quoteType: string) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getPoolIdByAssets" signatureOnly />
 
 ### midPrice
 
@@ -305,11 +304,9 @@ Use `midPrice` to retrieve the mid price for a pool with the ID that you provide
 
 - `poolKey`: String that identifies the pool to query.
 
-```tsx
-async midPrice(poolKey: string) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="midPrice" signatureOnly />
 
-### whitelisted
+### `whitelisted`
 
 Use `whitelisted` to check if the pool with the ID you provide is whitelisted. The call returns a `Promise` as a boolean indicating whether the pool is whitelisted.
 
@@ -317,12 +314,163 @@ Use `whitelisted` to check if the pool with the ID you provide is whitelisted. T
 
 - `poolKey`: String that identifies the pool to query.
 
-```tsx
-async whitelisted(poolKey: string) {}
-```
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="whitelisted" signatureOnly />
+
+### `poolBookParams`
+
+Use `poolBookParams` to retrieve the book parameters for a pool, including tick size, lot size, and min size. The call returns a `Promise` with the book parameters.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="poolBookParams" signatureOnly />
+
+### `getOrders`
+
+Use `getOrders` to retrieve multiple orders from a pool. The call returns a `Promise` with an array of order information.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+- `orderIds`: Array of strings representing the order IDs to retrieve.
+
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getOrders" signatureOnly />
+
+### `getPoolDeepPrice`
+
+Use `getPoolDeepPrice` to get the DEEP price conversion for a pool. The call returns a `Promise` with the DEEP price information.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool to query.
+
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getPoolDeepPrice" signatureOnly />
+
+## Administrative functions
+
+The SDK provides administrative functions for pool management.
+
+### `addDeepPricePoint`
+
+Use `addDeepPricePoint` to add a DEEP price point for a target pool using a reference pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `targetPoolKey`: String that identifies the target pool.
+- `referencePoolKey`: String that identifies the reference pool.
+
+<ImportContent source="/packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="addDeepPricePoint" signatureOnly />
+
+### `updatePoolAllowedVersions`
+
+Use `updatePoolAllowedVersions` to update the allowed package versions for a pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+
+<ImportContent source="/packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="updatePoolAllowedVersions" signatureOnly />
+
+### `burnDeep`
+
+Use `burnDeep` to burn DEEP tokens from a pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+
+<ImportContent source="/packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="burnDeep" signatureOnly />
+
+### `createPermissionlessPool`
+
+Use `createPermissionlessPool` to create a new permissionless pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `params`: `CreatePermissionlessPoolParams` object containing:
+  - `baseCoinKey`: String that identifies the base coin.
+  - `quoteCoinKey`: String that identifies the quote coin.
+  - `tickSize`: Number representing the tick size.
+  - `lotSize`: Number representing the lot size.
+  - `minSize`: Number representing the minimum order size.
+  - `deepCoin`: Optional `TransactionArgument` for DEEP token payment.
+
+<ImportContent source="/packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="createPermissionlessPool" signatureOnly />
+
+### `getBalanceManagerIds`
+
+Use `getBalanceManagerIds` to get all balance manager IDs for a specific owner. The call returns a `Promise` with an array of balance manager IDs.
+
+**Parameters**
+
+- `owner`: String representing the owner address.
+
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getBalanceManagerIds" signatureOnly />
+
+## Referral functions
+
+The SDK provides functions to manage referrals and earn referral fees from trading activity.
+
+### `mintReferral`
+
+Use `mintReferral` to create a new referral for a pool with a specified multiplier. The multiplier determines what percentage of trading fees are allocated to the referrer. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `multiplier`: Number representing the referral multiplier (e.g., 0.1 for 10%).
+
+<ImportContent source="/packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="mintReferral" signatureOnly />
+
+### `updateReferralMultiplier`
+
+Use `updateReferralMultiplier` to update the multiplier for an existing referral. Only the referral owner can update the multiplier. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `referral`: String representing the referral ID.
+- `multiplier`: Number representing the new referral multiplier.
+
+<ImportContent source="/packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="updateReferralMultiplier" signatureOnly />
+
+### `claimReferralRewards`
+
+Use `claimReferralRewards` to claim accumulated referral fees. Returns an object with `baseRewards`, `quoteRewards`, and `deepRewards`. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `referral`: String representing the referral ID.
+
+<ImportContent source="/packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="claimReferralRewards" signatureOnly />
+
+### `getReferralBalances`
+
+Use `getReferralBalances` to view the current accumulated balances for a referral without claiming them. The call returns a `Promise` with the balances in base, quote, and DEEP tokens.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `referral`: String representing the referral ID.
+
+<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getReferralBalances" signatureOnly />
 
 ## Related links
 
-<RelatedLink href="https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3" label="DeepBookV3 Indexer repository" desc="The DeepBookV3 SDK repository on GitHub." />
-<RelatedLink href="https://www.npmjs.com/package/@mysten/deepbook-v3" label="DeepBookV3 SDK node package" desc="The DeepBookV3 SDK node package on NPM." />
-<RelatedLink href="https://github.com/MystenLabs/deepbookv3" label="DeepBookV3 repository" desc="The DeepBookV3 repository on GitHub." />
+<RelatedLink
+	href="https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3"
+	label="DeepBookV3 Indexer repository"
+	desc="The DeepBookV3 SDK repository on GitHub."
+/>
+<RelatedLink
+	href="https://www.npmjs.com/package/@mysten/deepbook-v3"
+	label="DeepBookV3 SDK node package"
+	desc="The DeepBookV3 SDK node package on NPM."
+/>
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3"
+	label="DeepBookV3 repository"
+	desc="The DeepBookV3 repository on GitHub."
+/>

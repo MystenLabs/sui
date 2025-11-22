@@ -20,6 +20,7 @@ use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::identifier::{IdentStr, Identifier};
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use mysten_metrics::monitored_scope;
+use nonempty::NonEmpty;
 use sui_json::{SuiJsonValue, primitive_type};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::accumulator_event::AccumulatorEvent;
@@ -822,7 +823,8 @@ impl From<AccumulatorOperation> for SuiAccumulatorOperation {
 pub enum SuiAccumulatorValue {
     Integer(u64),
     IntegerTuple(u64, u64),
-    EventDigest(u64 /* event index in the transaction */, Digest),
+    #[schemars(with = "Vec<(u64, Digest)>")]
+    EventDigest(NonEmpty<(u64 /* event index in the transaction */, Digest)>),
 }
 
 impl From<AccumulatorValue> for SuiAccumulatorValue {
@@ -830,7 +832,7 @@ impl From<AccumulatorValue> for SuiAccumulatorValue {
         match value {
             AccumulatorValue::Integer(value) => Self::Integer(value),
             AccumulatorValue::IntegerTuple(value1, value2) => Self::IntegerTuple(value1, value2),
-            AccumulatorValue::EventDigest(idx, value) => Self::EventDigest(idx, value),
+            AccumulatorValue::EventDigest(digests) => Self::EventDigest(digests),
         }
     }
 }
@@ -2388,6 +2390,7 @@ impl SuiCallArg {
                 },
                 withdraw_from: match arg.withdraw_from {
                     WithdrawFrom::Sender => SuiWithdrawFrom::Sender,
+                    WithdrawFrom::Sponsor => SuiWithdrawFrom::Sponsor,
                 },
             }),
         })
@@ -2486,6 +2489,7 @@ pub enum SuiWithdrawalTypeArg {
 #[serde(rename_all = "camelCase")]
 pub enum SuiWithdrawFrom {
     Sender,
+    Sponsor,
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]

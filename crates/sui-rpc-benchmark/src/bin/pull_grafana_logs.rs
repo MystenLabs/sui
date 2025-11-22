@@ -205,16 +205,13 @@ async fn run() -> Result<(), Box<dyn Error>> {
         "UNKNOWN_NET".to_string()
     };
 
-    let query = if net == "mainnet-proxy" {
-        format!(r#"{{namespace="{}"}} |= "{}""#, namespace, "Request:")
+    let default_substring = if net == "mainnet-proxy" {
+        "Request:"
     } else {
-        let substring =
-            env::var("SUBSTRING").unwrap_or_else(|_| "Sampled read request".to_string());
-        format!(
-            r#"{{namespace="{}", container="sui-edge-proxy-mysten"}} |= "{}""#,
-            namespace, substring
-        )
+        "Sampled read request"
     };
+    let substring = env::var("SUBSTRING").unwrap_or_else(|_| default_substring.to_string());
+    let query = format!(r#"{{namespace="{}"}} |= "{}""#, namespace, substring);
     debug!("Query: {}", query);
 
     let now = chrono::Utc::now();

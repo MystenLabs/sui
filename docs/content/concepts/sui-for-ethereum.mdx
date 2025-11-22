@@ -1,0 +1,117 @@
+---
+title: Ethereum -> Sui
+description: Build your first dApp on Sui if you have EVM experience
+keywords: [ ethereum, solidity, EVM,  ]
+pagination_prev: null
+---
+
+If you have worked with Ethereum Virtual Machine (EVM) before, the biggest difference when developing on Sui is the programming language. Sui uses **Move** and EVM uses **Solidity**.
+
+| Topic | Solidity | Move |
+|------|------|---------|
+| Account vs object-centric models | Custom ownership logic written within contracts typically using _mappings_. Only Ethereum coins are first class citizens with global APIs. All ownership APIs are contract specific. | Object ownership inherent to Sui, objects are first class citizens and encompass everything _owned_ on Sui. |
+| Data storage | Data is stored in the smart contract. | Data is stored in Move objects. |
+| Inheritance | Supports multiple inheritance, including polymorphism. | No interfaces, no polymorphism. However, Move has generics, like `Type<T>`. |
+| Dynamic dispatch | Allowed | Not allowed |
+| Asset/Token accessibility | Bound to smart contract. | Anyone can access shared objects. Owned objects can only be accessed by object owner. |
+| Access control | Identity/role-based access control through `Ownable` and `AccessControl` contract. | Mostly [capability based access control](https://move-book.com/programmability/capability.html) through owned objects. Identity/role-based access control is possible. |
+| Contract upgrades | Proxy contract forwards user transactions. | New contracts must be [layout-compatible](/concepts/sui-move-concepts/packages/upgrade#upgrade-requirements) with the old one. Need to consider versioning shared objects. |
+| Development environment | Hardhat, Foundry | [Move VSCode extension](https://marketplace.visualstudio.com/items?itemName=mysten.move). |
+| Mutate contract state | Sending transactions through compile time ABI interface. | Sending transaction through runtime [programmable transaction block](/concepts/transactions/prog-txn-blocks.mdx) (PTB) construction. |
+
+## Object model
+
+Objects store data in Move and everything in Move is an object. This includes the smart contracts (Move packages), on-chain addresses, coins, and NFTs.
+
+For simplicity, you can think of objects as _assets_ or NFTs. Objects have ownerships.
+
+## Ownership
+
+There are some nuances to object ownership, but key types include:
+
+- **Address-owned objects:** These objects are owned by a single address. You can transfer or receive these objects without interacting with a smart contract. For example, currency, NFTs, or tokens gating access to certain functions.
+- **Shared objects:** Publicly accessible objects that anyone can use. Mutating the data stored in these objects typically involves defining rules in the smart contract.
+
+For all types of ownership on Sui, see [Object Ownership](/concepts/object-ownership.mdx).
+
+## Access control
+
+Identity or role-based access control is widely used through OpenZeppelin's `Ownable` and `AccessControl` contracts in Solidity.
+
+Because object ownership is inherent in Sui, access to contract functions are typically gated through [capability object](https://move-book.com/programmability/capability/).
+
+These objects are issued to users and thus grant them the rights to call certain functions. Function calls fail if a user does not own the object a function expects.
+
+You can still implement address-based checks. However, the recommendation is to use capability objects as much as possible for better security.
+
+You can read more in [The Move Book](https://move-book.com/programmability/capability/#address-check-vs-capability).
+
+In this example, a new user can only be created by presenting an `AdminCap` object during the function call.
+
+```Move
+/// Grants the owner the right to create new users in the system.
+public struct AdminCap {}
+
+/// Creates a new user in the system. Requires the `AdminCap` capability to be
+/// passed as the first argument.
+public fun new(_: &AdminCap, ctx: &mut TxContext): User {
+    User { id: object::new(ctx) }
+}
+```
+
+## Mutating objects
+
+In Solidity, data structures such as `Mapping` are defined and stored in a contract. Mutating the data involves signing a transaction regardless of whether the signer owns the data or not.
+
+In Move, the logic that mutates the data is defined in the contract, but the data is stored in Move objects.
+
+To mutate the data, the owner of the objects needs to call the contract functions using a PTB. The ownership check is done at a protocol level so transactions fail if the signer does not have access to the referenced objects.
+
+## Programmable transaction blocks
+
+In Solidity, if you want to do something that chains together the results of multiple contract calls or across different contracts, you need to have a function in the smart contract that composes other function calls. Chaining function calls with atomicity guarantees is not available on the client side.
+
+In Move, PTBs solve this problem. PTBs give builders the ability to chain contract calls together with atomicity guarantees during runtime. A Sui PTB can have up to 1,024 different contract calls in it, or other actions. PTBs effectively provide a limited scripting language that is straightforward yet expressive, powerful, and secure.
+
+Builders on Sui leverage PTBs to provide experiences that would otherwise be intractable. A good example is a DeFi aggregator that routes token swaps across multiple DeFi protocols with the best price. On Sui, the aggregator would use a single PTB with the guarantee that the transaction would execute at the displayed price or it would revert completely. The PTB is one of the most powerful Sui features. Experience shows builders who are most successful on Sui are the ones who learn to leverage this feature early and often, leaning into it rather than treating it just as a way to batch transactions.
+
+See [Programmable Transaction Blocks](/concepts/transactions/prog-txn-blocks.mdx) for details on PTBs.
+
+## More comparison
+
+| Topic | Sui | Ethereum |
+|-------|-----|----------|
+| Digital signature algorithm | `Ed25519`, `secp256k1`, `secp256r1` | `secp256k1` |
+| Consensus mechanism | DPoS | PoS |
+| VM and its languages | MoveVM, Move Lang | EVM, Solidity, Vyper |
+| Chain data structure | DAG | Blocks |
+| Common standards (coin, token, NFT, and so on) | Currency Standard, Closed-Loop Token | ERC-20, ERC-721, ERC-1155 |
+| Coin names, name of the smallest unit | SUI, MIST | ETH, Wei |
+| Available frameworks for development | Sui CLI | Foundry, Hardhat |
+| L1/L2 | No L2, relies on fast L1 | Many L2s |
+| Governance | On-chain governance | EIP + Node Operator consensus |
+| Bridges | Supported | Supported |
+| Network security (stake required for control) | 66% of total stake | 51% of total stake |
+| Smart contract auditing | Less auditing required, language does some of the lifting (object model). | Solidity provides less protection requiring greater auditing. |
+| Private transactions | Public by design. | Public by design, L2 and third party supports private transactions. |
+| TVL | ~1 billion | ~46 billion |
+| Implementation languages for clients | Rust, TypeScript | Many |
+| Eventing | Indexed by sender, object ID, type, timestamp. | Indexed by topic. |
+| Indexing | High level transaction data + objects, coins, and so on. | High level transaction data. |
+| Oracles | Third party | Third party |
+| Network upgrade strategy | Protocol flags and framework upgrades are voted on by validators then enabled. | EIPs + Hardforking, no on-chain mechanism. |
+| IDE | VSCode | Many |
+| Transaction lifecycle | Two round trips from client to validators to generate a transaction certificate (guaranteeing execution) another round trip for shared objects to ensure ordering. Very low latency. | Transaction gossiped to network, verified added to mempool, validators select transactions from mempool. Random validator proposes a block, other validators vote yes or no on block. After a sufficient number of blocks have passed a transaction is considered final. High latency due to block height requirement for finality. |
+| Parallel execution vs Ethereum serial execution, fast path | Transactions that can be parallel are run in parallel. | Every transaction is sequentially run. |
+| Storage fees, storage rebates, storage accounts to pay for fees over time | Low, rebates on destroying objects. | High, no rebates. |
+| Contract immutability | Native mutable and immutable support using upgrade capabilities. | Not native, requires auditing the Solidity code deployed. Can be discerned by some operation codes. |
+| Contract upgrading | Native, upgrade capability mediated. | Achieved using proxy pattern to delegate calls. Upgrades change where calls are directed to. |
+| Composability | Call any number of functions within a single transaction using PTBs. Compose by taking the output of one contract call and passing it into another. Ensures atomic execution. | Each call is its own transaction that must be processed individually and serialized by the chain. Requires careful publishing to ensure execution. Not atomic. |
+| Token royalties | Enforced by the chain. | Only enforceable by marketplaces. |
+
+## Related links
+
+<RelatedLink to="/concepts/sui-move-concepts" />
+<RelatedLink to="/concepts/object-ownership" />
+<RelatedLink to="/concepts/transactions/prog-txn-blocks" />
+<RelatedLink href="https://move-book.com/programmability/dynamic-object-fields.html)" label="Dynamic Object Fields" desc="Learn more about Dynamic Object Fields in The Move Book." />

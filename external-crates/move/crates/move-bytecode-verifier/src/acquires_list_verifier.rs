@@ -23,6 +23,7 @@ use move_binary_format::{
 };
 use move_bytecode_verifier_meter::Meter;
 use move_core_types::vm_status::StatusCode;
+use move_vm_config::verifier::VerifierConfig;
 
 pub(crate) struct AcquiresVerifier<'a> {
     module: &'a CompiledModule,
@@ -34,11 +35,15 @@ pub(crate) struct AcquiresVerifier<'a> {
 
 impl<'a> AcquiresVerifier<'a> {
     pub(crate) fn verify(
+        verifier_config: &VerifierConfig,
         module: &'a CompiledModule,
         index: FunctionDefinitionIndex,
         function_definition: &'a FunctionDefinition,
         _meter: &mut (impl Meter + ?Sized), // currently unused
     ) -> PartialVMResult<()> {
+        if verifier_config.deprecate_global_storage_ops {
+            return Ok(());
+        }
         let annotated_acquires: BTreeSet<_> = function_definition
             .acquires_global_resources
             .iter()

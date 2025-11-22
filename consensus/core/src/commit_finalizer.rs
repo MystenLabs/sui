@@ -113,15 +113,21 @@ impl CommitFinalizer {
 
     async fn run(mut self, mut receiver: UnboundedReceiver<CommittedSubDag>) {
         while let Some(committed_sub_dag) = receiver.recv().await {
-            let finalized_commits = if self.context.protocol_config.mysticeti_fastpath() {
+            let already_finalized = !self.context.protocol_config.mysticeti_fastpath()
+                || committed_sub_dag.recovered_rejected_transactions;
+            let finalized_commits = if !already_finalized {
                 self.process_commit(committed_sub_dag).await
             } else {
                 vec![committed_sub_dag]
             };
             if !finalized_commits.is_empty() {
+                // Transaction certifier state should be GC'ed as soon as new commits are finalized.
+                // But this is done outside of process_commit(), because during recovery process_commit()
+                // is not called to finalize commits, but GC still needs to run.
+                self.try_update_gc_round(finalized_commits.last().unwrap().leader.round);
                 let mut dag_state = self.dag_state.write();
-                if self.context.protocol_config.mysticeti_fastpath() {
-                    // Records commits that have been finalized and their rejected transactions.
+                if !already_finalized {
+                    // Records rejected transactions in newly finalized commits.
                     for commit in &finalized_commits {
                         dag_state.add_finalized_commit(
                             commit.commit_ref,
@@ -247,16 +253,6 @@ impl CommitFinalizer {
                     .inc_by(indirect_finalized_commits.len() as u64);
                 finalized_commits.extend(indirect_finalized_commits);
             }
-        }
-
-        // GC TransactionCertifier state only with finalized commits, to ensure unfinalized transactions
-        // can access their reject votes from TransactionCertifier.
-        if let Some(last_commit) = finalized_commits.last() {
-            let gc_round = self
-                .dag_state
-                .read()
-                .calculate_gc_round(last_commit.leader.round);
-            self.transaction_certifier.run_gc(gc_round);
         }
 
         self.context
@@ -701,6 +697,16 @@ impl CommitFinalizer {
         finalized_commits
     }
 
+    fn try_update_gc_round(&mut self, last_finalized_commit_round: Round) {
+        // GC TransactionCertifier state only with finalized commits, to ensure unfinalized transactions
+        // can access their reject votes from TransactionCertifier.
+        let gc_round = self
+            .dag_state
+            .read()
+            .calculate_gc_round(last_finalized_commit_round);
+        self.transaction_certifier.run_gc(gc_round);
+    }
+
     #[cfg(test)]
     fn is_empty(&self) -> bool {
         self.pending_commits.is_empty() && self.blocks.read().is_empty()
@@ -791,8 +797,9 @@ mod tests {
     use parking_lot::RwLock;
 
     use crate::{
-        TestBlock, VerifiedBlock, block::BlockTransactionVotes, dag_state::DagState,
-        linearizer::Linearizer, storage::mem_store::MemStore, test_dag_builder::DagBuilder,
+        TestBlock, VerifiedBlock, block::BlockTransactionVotes, block_verifier::NoopBlockVerifier,
+        dag_state::DagState, linearizer::Linearizer, storage::mem_store::MemStore,
+        test_dag_builder::DagBuilder,
     };
 
     use super::*;
@@ -823,8 +830,12 @@ mod tests {
         let linearizer = Linearizer::new(context.clone(), dag_state.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let (commit_sender, _commit_receiver) = unbounded_channel("consensus_commit_output");
         let commit_finalizer = CommitFinalizer::new(
             context.clone(),

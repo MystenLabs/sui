@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 
 use consensus_core::{
     CommitFinalizer, CommittedSubDag, Context, DagBuilder, DagState, Linearizer, MemStore,
-    TransactionCertifier,
+    NoopBlockVerifier, TransactionCertifier,
 };
 use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
 use mysten_metrics::monitored_mpsc;
@@ -35,8 +35,12 @@ impl BenchFixture {
         let linearizer = Linearizer::new(context.clone(), dag_state.clone());
         let (blocks_sender, _blocks_receiver) =
             monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+            blocks_sender,
+        );
         let (commit_sender, _commit_receiver) =
             monitored_mpsc::unbounded_channel("consensus_commit_output");
         let commit_finalizer = CommitFinalizer::new(

@@ -24,7 +24,7 @@ use crate::{
 use move_binary_format::{
     CompiledModule,
     errors::{Location, PartialVMError, VMError},
-    file_format::{AbilitySet, TypeParameterIndex},
+    file_format::{Ability, AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
     annotated_value,
@@ -38,9 +38,11 @@ use std::{cell::OnceCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     Identifier, TypeTag,
+    balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectID, TxContext},
     error::{ExecutionError, ExecutionErrorKind},
     execution_status::TypeArgumentError,
+    funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
     gas_coin::GasCoin,
     move_package::{UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::Object,
@@ -247,6 +249,24 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         self.adapter_type_from_vm_type(&vm_type)
     }
 
+    /// Load the type and layout for a struct tag.
+    /// This is an optimization to avoid loading the VM type twice when both adapter type and type
+    /// layout are needed.
+    pub fn load_type_and_layout_from_struct(
+        &self,
+        tag: &StructTag,
+    ) -> Result<(Type, MoveTypeLayout), ExecutionError> {
+        let vm_type =
+            self.load_vm_type_from_type_tag(None, &TypeTag::Struct(Box::new(tag.clone())))?;
+        let type_layout = self
+            .vm
+            .get_runtime()
+            .type_to_type_layout(&vm_type)
+            .map_err(|e| self.convert_vm_error(e))?;
+        self.adapter_type_from_vm_type(&vm_type)
+            .map(|ty| (ty, type_layout))
+    }
+
     pub fn type_layout_for_struct(
         &self,
         tag: &StructTag,
@@ -273,6 +293,34 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
 
     pub fn tx_context_type(&self) -> Result<Type, ExecutionError> {
         get_or_init_ty!(self, tx_context_type, TxContext::type_())
+    }
+
+    pub fn balance_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
+        let Some(abilities) = AbilitySet::from_u8(Ability::Store as u8) else {
+            invariant_violation!("Unable to create balance abilities");
+        };
+        let (a, m, n) = RESOLVED_BALANCE_STRUCT;
+        let module = ModuleId::new(*a, m.to_owned());
+        Ok(Type::Datatype(Rc::new(Datatype {
+            abilities,
+            module,
+            name: n.to_owned(),
+            type_arguments: vec![inner_type],
+        })))
+    }
+
+    pub fn withdrawal_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
+        let Some(abilities) = AbilitySet::from_u8(Ability::Drop as u8) else {
+            invariant_violation!("Unable to create withdrawal abilities");
+        };
+        let (a, m, n) = RESOLVED_WITHDRAWAL_STRUCT;
+        let module = ModuleId::new(*a, m.to_owned());
+        Ok(Type::Datatype(Rc::new(Datatype {
+            abilities,
+            module,
+            name: n.to_owned(),
+            type_arguments: vec![inner_type],
+        })))
     }
 
     pub fn vector_type(&self, element_type: Type) -> Result<Type, ExecutionError> {

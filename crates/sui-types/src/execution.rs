@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    MoveTypeTagTrait, SUI_SYSTEM_ADDRESS,
     accumulator_event::AccumulatorEvent,
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
@@ -13,10 +14,16 @@ use crate::{
     transaction::{Argument, Command, SharedObjectMutability},
     type_input::TypeInput,
 };
-use move_core_types::language_storage::TypeTag;
+use move_core_types::{
+    identifier::Identifier,
+    language_storage::{StructTag, TypeTag},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
+
+const SUI_SYSTEM_STATE_INNER_MODULE: &str = "sui_system_state_inner";
+const EXECUTION_TIME_OBSERVATION_CHUNK_KEY_STRUCT: &str = "ExecutionTimeObservationChunkKey";
 
 /// A type containing all of the information needed to work in execution with an object whose
 /// consensus stream is ended, and when committing the execution effects of the transaction.
@@ -293,6 +300,22 @@ impl ExecutionTimeObservationKey {
             ExecutionTimeObservationKey::MakeMoveVec => Duration::from_millis(1),
             ExecutionTimeObservationKey::Upgrade => Duration::from_millis(3),
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Serialize, Deserialize)]
+pub struct ExecutionTimeObservationChunkKey {
+    pub chunk_index: u64,
+}
+
+impl MoveTypeTagTrait for ExecutionTimeObservationChunkKey {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Struct(Box::new(StructTag {
+            address: SUI_SYSTEM_ADDRESS,
+            module: Identifier::new(SUI_SYSTEM_STATE_INNER_MODULE).unwrap(),
+            name: Identifier::new(EXECUTION_TIME_OBSERVATION_CHUNK_KEY_STRUCT).unwrap(),
+            type_params: vec![],
+        }))
     }
 }
 

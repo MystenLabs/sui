@@ -92,6 +92,8 @@ pub fn run(args: Args) -> crate::Result<()> {
             "axum-extra".to_owned(),
             // consistent-store uses a newer version of bincode with breaking interface changes
             "bincode".to_owned(),
+            // TODO: remove once we've migrated ethers to alloy: https://linear.app/mysten-labs/issue/BR-191
+            "reqwest".to_owned(),
         ],
     };
 

@@ -8,7 +8,7 @@ use itertools::Itertools;
 use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
 use prometheus::Registry;
-use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
+use sui_protocol_config::ProtocolConfig;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
@@ -17,7 +17,6 @@ use crate::{
     authority_service::AuthorityService,
     block_manager::BlockManager,
     block_verifier::SignedBlockVerifier,
-    broadcaster::Broadcaster,
     commit_observer::CommitObserver,
     commit_syncer::{CommitSyncer, CommitSyncerHandle},
     commit_vote_monitor::CommitVoteMonitor,
@@ -28,10 +27,7 @@ use crate::{
     leader_schedule::LeaderSchedule,
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{
-        NetworkClient as _, NetworkManager, anemo_network::AnemoManager,
-        tonic_network::TonicManager,
-    },
+    network::{NetworkManager, tonic_network::TonicManager},
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::PeerRoundTracker,
@@ -46,13 +42,12 @@ use crate::{
 /// It hides the details of the implementation from the caller, MysticetiManager.
 #[allow(private_interfaces)]
 pub enum ConsensusAuthority {
-    WithAnemo(AuthorityNode<AnemoManager>),
     WithTonic(AuthorityNode<TonicManager>),
 }
 
 impl ConsensusAuthority {
     pub async fn start(
-        network_type: ConsensusNetwork,
+        network_type: NetworkType,
         epoch_start_timestamp_ms: u64,
         own_index: AuthorityIndex,
         committee: Committee,
@@ -71,25 +66,7 @@ impl ConsensusAuthority {
         boot_counter: u64,
     ) -> Self {
         match network_type {
-            ConsensusNetwork::Anemo => {
-                let authority = AuthorityNode::start(
-                    epoch_start_timestamp_ms,
-                    own_index,
-                    committee,
-                    parameters,
-                    protocol_config,
-                    protocol_keypair,
-                    network_keypair,
-                    clock,
-                    transaction_verifier,
-                    commit_consumer,
-                    registry,
-                    boot_counter,
-                )
-                .await;
-                Self::WithAnemo(authority)
-            }
-            ConsensusNetwork::Tonic => {
+            NetworkType::Tonic => {
                 let authority = AuthorityNode::start(
                     epoch_start_timestamp_ms,
                     own_index,
@@ -112,14 +89,12 @@ impl ConsensusAuthority {
 
     pub async fn stop(self) {
         match self {
-            Self::WithAnemo(authority) => authority.stop().await,
             Self::WithTonic(authority) => authority.stop().await,
         }
     }
 
     pub fn transaction_client(&self) -> Arc<TransactionClient> {
         match self {
-            Self::WithAnemo(authority) => authority.transaction_client(),
             Self::WithTonic(authority) => authority.transaction_client(),
         }
     }
@@ -127,18 +102,14 @@ impl ConsensusAuthority {
     #[cfg(test)]
     fn context(&self) -> &Arc<Context> {
         match self {
-            Self::WithAnemo(authority) => &authority.context,
             Self::WithTonic(authority) => &authority.context,
         }
     }
+}
 
-    #[allow(unused)]
-    fn sync_last_known_own_block_enabled(&self) -> bool {
-        match self {
-            Self::WithAnemo(authority) => authority.sync_last_known_own_block,
-            Self::WithTonic(authority) => authority.sync_last_known_own_block,
-        }
-    }
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum NetworkType {
+    Tonic,
 }
 
 pub(crate) struct AuthorityNode<N>
@@ -155,12 +126,8 @@ where
     proposed_block_handler: JoinHandle<()>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
-    // Only one of broadcaster and subscriber gets created, depending on
-    // if streaming is supported.
-    broadcaster: Option<Broadcaster>,
-    subscriber: Option<Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>>,
+    subscriber: Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>,
     network_manager: N,
-    sync_last_known_own_block: bool,
 }
 
 impl<N> AuthorityNode<N>
@@ -239,18 +206,6 @@ where
         let mut network_manager = N::new(context.clone(), network_keypair);
         let network_client = network_manager.client();
 
-        // REQUIRED: Broadcaster must be created before Core, to start listening on the
-        // broadcast channel in order to not miss blocks and cause test failures.
-        let broadcaster = if N::Client::SUPPORT_STREAMING {
-            None
-        } else {
-            Some(Broadcaster::new(
-                context.clone(),
-                network_client.clone(),
-                &signals_receivers,
-            ))
-        };
-
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
         let store = Arc::new(RocksDBStore::new(store_path));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -262,13 +217,9 @@ where
 
         let transaction_certifier = TransactionCertifier::new(
             context.clone(),
+            block_verifier.clone(),
             dag_state.clone(),
             commit_consumer.block_sender.clone(),
-        );
-        // TODO(fastpath): recover incrementally by chunk inside CommitObserver::new()
-        transaction_certifier.recover(
-            block_verifier.as_ref(),
-            commit_consumer.replay_after_commit_index,
         );
 
         let mut proposed_block_handler = ProposedBlockHandler::new(
@@ -313,10 +264,6 @@ where
             tx_consumer,
             transaction_certifier.clone(),
             block_manager,
-            // For streaming RPC, Core will be notified when consumer is available.
-            // For non-streaming RPC, there is no way to know so default to true.
-            // When there is only one (this) authority, assume subscriber exists.
-            !N::Client::SUPPORT_STREAMING || context.committee.size() == 1,
             commit_observer,
             core_signals,
             protocol_keypair,
@@ -378,7 +325,7 @@ where
             store,
         ));
 
-        let subscriber = if N::Client::SUPPORT_STREAMING {
+        let subscriber = {
             let s = Subscriber::new(
                 context.clone(),
                 network_client,
@@ -390,9 +337,7 @@ where
                     s.subscribe(peer);
                 }
             }
-            Some(s)
-        } else {
-            None
+            s
         };
 
         network_manager.install_service(network_service).await;
@@ -412,10 +357,8 @@ where
             proposed_block_handler,
             leader_timeout_handle,
             core_thread_handle,
-            broadcaster,
             subscriber,
             network_manager,
-            sync_last_known_own_block,
         }
     }
 
@@ -440,15 +383,9 @@ where
         self.proposed_block_handler.abort();
         self.leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
-        // When using streaming, all subscribers to broadcasted blocks stop after this.
         self.core_thread_handle.stop().await;
-        if let Some(mut broadcaster) = self.broadcaster.take() {
-            broadcaster.stop();
-        }
-        // Stop outgoing long lived streams before stopping network server.
-        if let Some(subscriber) = self.subscriber.take() {
-            subscriber.stop();
-        }
+        // Stop block subscriptions before stopping network server.
+        self.subscriber.stop();
         self.network_manager.stop().await;
 
         self.context
@@ -493,7 +430,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_authority_start_and_stop(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(NetworkType::Tonic)] network_type: NetworkType,
     ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
         let registry = Registry::new();
@@ -539,7 +476,7 @@ mod tests {
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
     async fn test_authority_committee(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(NetworkType::Tonic)] network_type: NetworkType,
         #[values(5, 10)] gc_depth: u32,
     ) {
         telemetry_subscribers::init_for_testing();
@@ -644,7 +581,7 @@ mod tests {
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
     async fn test_small_committee(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+        #[values(NetworkType::Tonic)] network_type: NetworkType,
         #[values(1, 2, 3)] num_authorities: usize,
     ) {
         telemetry_subscribers::init_for_testing();
@@ -766,15 +703,11 @@ mod tests {
                 &dir,
                 committee.clone(),
                 keypairs.clone(),
-                ConsensusNetwork::Tonic,
+                NetworkType::Tonic,
                 boot_counters[index],
                 protocol_config.clone(),
             )
             .await;
-            assert!(
-                authority.sync_last_known_own_block_enabled(),
-                "Expected syncing of last known own block to be enabled as all authorities are of empty db and boot for first time."
-            );
             boot_counters[index] += 1;
             commit_receivers.push(commit_receiver);
             block_receivers.push(block_receiver);
@@ -819,15 +752,11 @@ mod tests {
             &dir,
             committee.clone(),
             keypairs.clone(),
-            ConsensusNetwork::Tonic,
+            NetworkType::Tonic,
             boot_counters[index_1],
             protocol_config.clone(),
         )
         .await;
-        assert!(
-            authority.sync_last_known_own_block_enabled(),
-            "Authority should have the sync of last own block enabled"
-        );
         boot_counters[index_1] += 1;
         authorities.insert(index_1, authority);
         temp_dirs.insert(index_1, dir);
@@ -840,15 +769,11 @@ mod tests {
             &temp_dirs[&index_2],
             committee.clone(),
             keypairs,
-            ConsensusNetwork::Tonic,
+            NetworkType::Tonic,
             boot_counters[index_2],
             protocol_config.clone(),
         )
         .await;
-        assert!(
-            !authority.sync_last_known_own_block_enabled(),
-            "Authority should not have attempted to sync the last own block"
-        );
         boot_counters[index_2] += 1;
         authorities.insert(index_2, authority);
         sleep(Duration::from_secs(5)).await;
@@ -874,7 +799,7 @@ mod tests {
         db_dir: &TempDir,
         committee: Committee,
         keypairs: Vec<(NetworkKeyPair, ProtocolKeyPair)>,
-        network_type: ConsensusNetwork,
+        network_type: NetworkType,
         boot_counter: u64,
         protocol_config: ProtocolConfig,
     ) -> (

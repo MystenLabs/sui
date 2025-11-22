@@ -53,7 +53,7 @@ export default function Home() {
             <HomeCard title="Developers">
               <Link
                 className={`${styles.cardLink} plausible-event-name=homepage+start+button`}
-                to="./guides/developer/getting-started"
+                to="./guides/developer/getting-started/sui-install"
               >
                 Getting started
               </Link>

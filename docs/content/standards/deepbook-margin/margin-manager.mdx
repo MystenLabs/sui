@@ -1,0 +1,152 @@
+---
+title: Margin Manager
+description: Learn about the margin manager and how it enables leveraged trading on DeepBook.
+keywords:
+  [
+    margin manager,
+    marginmanager,
+    leveraged trading,
+    margin trading,
+    borrow,
+    repay,
+    liquidation,
+    collateral,
+    deepbook margin,
+  ]
+---
+
+The `MarginManager` is a shared object that wraps a `BalanceManager` and provides the necessary capabilities to deposit, withdraw, trade, and manage leveraged positions. It enables users to borrow assets from margin pools to amplify their trading positions while managing risk through collateralization.
+
+Each `MarginManager` is associated with a specific DeepBook pool and can borrow from margin pools that allow trading on that pool. The margin manager tracks borrowed positions and enforces risk ratio limits to maintain system solvency.
+
+## API
+
+Following are the different public functions that the `MarginManager` exposes.
+
+### Create a `MarginManager`
+
+The `new()` function creates and shares a `MarginManager` in one transaction. It validates that margin trading is enabled for the specified pool.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="new"
+	noComments
+/>
+
+### Create a `MarginManager` with initializer
+
+The `new_with_initializer()` function creates a `MarginManager` and returns it along with an initializer hot potato. The initializer ensures the margin manager is properly shared after creation using the `share()` function.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="new_with_initializer,share"
+	noComments
+/>
+
+### Set or unset referral
+
+The owner of a `MarginManager` can set or unset a referral for trading fee benefits.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="set_referral,unset_referral"
+/>
+
+### Deposit funds
+
+Only the owner can deposit funds into the `MarginManager`. The deposited asset must be either the base asset, quote asset, or DEEP token.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="deposit"
+/>
+
+### Withdraw funds
+
+Only the owner can withdraw funds from the `MarginManager`. Withdrawals are subject to risk ratio limits when the manager has active loans.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="withdraw"
+/>
+
+### Borrow assets
+
+Borrow base or quote assets from margin pools to increase position sizes. Borrowing is subject to risk ratio limits and the margin pool must allow trading on the manager's DeepBook pool.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="borrow_base,borrow_quote"
+/>
+
+### Repay loans
+
+Repay borrowed assets to reduce debt. You can specify an exact amount or repay all available balance up to the total debt.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="repay_base,repay_quote"
+/>
+
+### Liquidate position
+
+Liquidate an undercollateralized margin manager. The liquidator provides repayment and receives collateral assets plus a liquidation reward. The margin pool might also receive a reward or incur bad debt depending on the position's health.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="liquidate"
+/>
+
+### Calculate risk ratio
+
+Returns the risk ratio of the margin manager, which represents the ratio of assets to debt. Higher ratios indicate healthier positions.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="risk_ratio"
+/>
+
+### Read endpoints
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="balance_manager,calculate_assets,calculate_debts,owner,deepbook_pool,margin_pool_id,borrowed_shares,borrowed_base_shares,borrowed_quote_shares,has_base_debt"
+/>
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3/tree/main/packages/deepbook_margin"
+	label="DeepBook Margin package"
+	desc="The DeepBook Margin package on GitHub."
+/>

@@ -1,0 +1,104 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 7-26:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5411200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 28-30:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 32-34:
+//# programmable --sender A --inputs object(2,0) 1
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 4, lines 36-38:
+//# programmable --sender A --inputs object(2,0) @A
+//> 0: P::M::wrap(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(4,0)
+mutated: object(0,0)
+wrapped: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2546000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 5, lines 40-42:
+//# programmable --sender A --inputs object(4,0) @A
+//> 0: P::M::unwrap(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1))
+mutated: object(0,0)
+unwrapped: object(2,0)
+deleted: object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 2520540, non_refundable_storage_fee: 25460
+
+task 6, lines 44-45:
+//# programmable --sender A --inputs object(2,0)
+//> 0: MergeCoins(Gas, [Input(0)])
+mutated: object(0,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 7, line 47:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 8, lines 49-64:
+//# run-graphql
+Response: {
+  "data": {
+    "objectVersions": {
+      "pageInfo": {
+        "hasNextPage": false
+      },
+      "nodes": [
+        {
+          "version": 2,
+          "asMoveObject": {
+            "contents": {
+              "json": {
+                "balance": "42",
+                "id": "0x0d3cdda4062f7fc8c47b50b6db0d053d8c4eaa841bc152a1b1ffdbe0915a180c"
+              }
+            }
+          }
+        },
+        {
+          "version": 3,
+          "asMoveObject": {
+            "contents": {
+              "json": {
+                "balance": "41",
+                "id": "0x0d3cdda4062f7fc8c47b50b6db0d053d8c4eaa841bc152a1b1ffdbe0915a180c"
+              }
+            }
+          }
+        },
+        {
+          "version": 5,
+          "asMoveObject": {
+            "contents": {
+              "json": {
+                "balance": "41",
+                "id": "0x0d3cdda4062f7fc8c47b50b6db0d053d8c4eaa841bc152a1b1ffdbe0915a180c"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

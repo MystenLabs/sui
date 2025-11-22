@@ -11,7 +11,7 @@ use serde::Deserialize;
 use serde_json::json;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use sui_indexer_alt_e2e_tests::{OffchainCluster, OffchainClusterConfig};
-use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::{ClientArgs, ingestion_client::IngestionClientArgs};
 use sui_indexer_alt_graphql::config::{RpcConfig as GraphQlConfig, ZkLoginConfig, ZkLoginEnv};
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -71,7 +71,10 @@ impl FullCluster {
 
         let offchain = OffchainCluster::new(
             ClientArgs {
-                local_ingestion_path: Some(ingestion_dir),
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some(ingestion_dir),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             OffchainClusterConfig {

@@ -394,6 +394,21 @@ impl Database {
         Ok(())
     }
 
+    #[cfg(tidehunter)]
+    pub fn drop_cells_in_range(
+        &self,
+        ks: tidehunter::KeySpace,
+        from_inclusive: &[u8],
+        to_inclusive: &[u8],
+    ) -> anyhow::Result<()> {
+        if let Storage::TideHunter(db) = &self.storage {
+            db.drop_cells_in_range(ks, from_inclusive, to_inclusive)?;
+        } else {
+            panic!("drop_cells_in_range called on non-TideHunter storage");
+        }
+        Ok(())
+    }
+
     pub fn compact_range_cf<K: AsRef<[u8]>>(
         &self,
         cf_name: &str,
@@ -655,6 +670,25 @@ impl<K, V> DBMap<K, V> {
         end: Vec<u8>,
     ) -> Result<(), TypedStoreError> {
         self.db.compact_range_cf(cf_name, Some(start), Some(end));
+        Ok(())
+    }
+
+    #[cfg(tidehunter)]
+    pub fn drop_cells_in_range<J: Serialize>(
+        &self,
+        from_inclusive: &J,
+        to_inclusive: &J,
+    ) -> Result<(), TypedStoreError>
+    where
+        K: Serialize,
+    {
+        let from_buf = be_fix_int_ser(from_inclusive);
+        let to_buf = be_fix_int_ser(to_inclusive);
+        if let ColumnFamily::TideHunter((ks, _)) = &self.column_family {
+            self.db
+                .drop_cells_in_range(*ks, &from_buf, &to_buf)
+                .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
+        }
         Ok(())
     }
 
@@ -1817,6 +1851,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
 }
 
 // Drops a database if there is no other handle to it, with retries and timeout.
+#[cfg(not(tidehunter))]
 pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksdb::Error> {
     let mut backoff = backoff::ExponentialBackoff {
         max_elapsed_time: Some(timeout),
@@ -1831,6 +1866,11 @@ pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksd
             },
         }
     }
+}
+
+#[cfg(tidehunter)]
+pub async fn safe_drop_db(path: PathBuf, _: Duration) -> Result<(), std::io::Error> {
+    std::fs::remove_dir_all(path)
 }
 
 fn populate_missing_cfs(

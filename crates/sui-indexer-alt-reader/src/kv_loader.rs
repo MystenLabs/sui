@@ -28,12 +28,13 @@ use crate::{
     checkpoints::CheckpointKey,
     error::Error,
     events::{StoredTransactionEvents, TransactionEventsKey},
+    ledger_grpc_reader::{CheckpointedTransaction, LedgerGrpcReader},
     objects::VersionedObjectKey,
     pg_reader::PgReader,
     transactions::TransactionKey,
 };
 
-/// A loader for point lookups in kv stores backed by either Bigtable or Postgres.
+/// A loader for point lookups in kv stores backed by either Bigtable, Postgres, or KV gRPC.
 /// Supported lookups:
 /// - Objects by id and version
 /// - Checkpoints by sequence number
@@ -42,13 +43,16 @@ use crate::{
 pub enum KvLoader {
     Bigtable(Arc<DataLoader<BigtableReader>>),
     Pg(Arc<DataLoader<PgReader>>),
+    LedgerGrpc(Arc<DataLoader<LedgerGrpcReader>>),
 }
 
 /// A wrapper for the contents of a transaction, either from Bigtable, Postgres, or just executed.
 #[allow(clippy::large_enum_variant)]
+#[derive(Clone)]
 pub enum TransactionContents {
     Bigtable(KVTransactionData),
     Pg(StoredTransaction),
+    LedgerGrpc(CheckpointedTransaction),
     ExecutedTransaction {
         effects: Box<TransactionEffects>,
         events: Option<Vec<Event>>,
@@ -59,8 +63,8 @@ pub enum TransactionContents {
 
 /// A wrapper for the contents of a transaction's events, either from Bigtable or Postgres.
 pub enum TransactionEventsContents {
-    Bigtable(KVTransactionEventsData),
-    Pg(StoredTransactionEvents),
+    Deserialized(KVTransactionEventsData),
+    Serialized(StoredTransactionEvents),
 }
 
 impl KvLoader {
@@ -70,6 +74,10 @@ impl KvLoader {
 
     pub fn new_with_pg(pg_loader: Arc<DataLoader<PgReader>>) -> Self {
         Self::Pg(pg_loader)
+    }
+
+    pub fn new_with_ledger_grpc(ledger_grpc_loader: Arc<DataLoader<LedgerGrpcReader>>) -> Self {
+        Self::LedgerGrpc(ledger_grpc_loader)
     }
 
     pub async fn load_one_object(
@@ -92,6 +100,7 @@ impl KvLoader {
                         })
                 })
                 .transpose(),
+            Self::LedgerGrpc(loader) => loader.load_one(key).await,
         }
     }
 
@@ -115,6 +124,7 @@ impl KvLoader {
 
                 Ok(results)
             }
+            Self::LedgerGrpc(loader) => loader.load_many(keys).await,
         }
     }
 
@@ -149,6 +159,7 @@ impl KvLoader {
                     Ok((summary, contents, signature))
                 })
                 .transpose(),
+            Self::LedgerGrpc(loader) => loader.load_one(key).await,
         }
     }
 
@@ -163,6 +174,10 @@ impl KvLoader {
                 .await?
                 .map(TransactionContents::Bigtable)),
             Self::Pg(loader) => Ok(loader.load_one(key).await?.map(TransactionContents::Pg)),
+            Self::LedgerGrpc(loader) => Ok(loader
+                .load_one(key)
+                .await?
+                .map(TransactionContents::LedgerGrpc)),
         }
     }
 
@@ -179,13 +194,19 @@ impl KvLoader {
                 .load_many(keys)
                 .await?
                 .into_iter()
-                .map(|(key, stored)| (key.0, TransactionEventsContents::Bigtable(stored)))
+                .map(|(key, data)| (key.0, TransactionEventsContents::Deserialized(data)))
                 .collect()),
             Self::Pg(loader) => Ok(loader
                 .load_many(keys)
                 .await?
                 .into_iter()
-                .map(|(key, stored)| (key.0, TransactionEventsContents::Pg(stored)))
+                .map(|(key, stored)| (key.0, TransactionEventsContents::Serialized(stored)))
+                .collect()),
+            Self::LedgerGrpc(loader) => Ok(loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, data)| (key.0, TransactionEventsContents::Deserialized(data)))
                 .collect()),
         }
     }
@@ -211,12 +232,17 @@ impl KvLoader {
                 .into_iter()
                 .map(|(key, stored)| (key.0, TransactionContents::Pg(stored)))
                 .collect()),
+            Self::LedgerGrpc(loader) => Ok(loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(key, txn)| (key.0, TransactionContents::LedgerGrpc(txn)))
+                .collect()),
         }
     }
 }
 
 impl TransactionContents {
-    /// Create a TransactionContents from an ExecutedTransaction.
     pub fn from_executed_transaction(
         executed_transaction: &ExecutedTransaction,
         transaction_data: TransactionData,
@@ -253,6 +279,7 @@ impl TransactionContents {
             Self::Pg(stored) => bcs::from_bytes(&stored.raw_transaction)
                 .context("Failed to deserialize transaction data"),
             Self::Bigtable(kv) => Ok(kv.transaction.data().transaction_data().clone()),
+            Self::LedgerGrpc(txn) => Ok(txn.transaction_data.as_ref().clone()),
             Self::ExecutedTransaction {
                 transaction_data, ..
             } => Ok(transaction_data.as_ref().clone()),
@@ -264,6 +291,7 @@ impl TransactionContents {
             Self::Pg(stored) => TransactionDigest::try_from(stored.tx_digest.clone())
                 .context("Failed to deserialize transaction digest"),
             Self::Bigtable(kv) => Ok(*kv.transaction.digest()),
+            Self::LedgerGrpc(txn) => Ok(*txn.effects.as_ref().transaction_digest()),
             Self::ExecutedTransaction { effects, .. } => Ok(*effects.as_ref().transaction_digest()),
         }
     }
@@ -277,6 +305,7 @@ impl TransactionContents {
                 Ok(effects.digest())
             }
             Self::Bigtable(kv) => Ok(kv.effects.digest()),
+            Self::LedgerGrpc(txn) => Ok(txn.effects.digest()),
             Self::ExecutedTransaction { effects, .. } => Ok(effects.digest()),
         }
     }
@@ -287,6 +316,7 @@ impl TransactionContents {
                 bcs::from_bytes(&stored.user_signatures).context("Failed to deserialize signatures")
             }
             Self::Bigtable(kv) => Ok(kv.transaction.tx_signatures().to_vec()),
+            Self::LedgerGrpc(txn) => Ok(txn.signatures.clone()),
             Self::ExecutedTransaction { signatures, .. } => Ok(signatures.clone()),
         }
     }
@@ -297,6 +327,7 @@ impl TransactionContents {
                 bcs::from_bytes(&stored.raw_effects).context("Failed to deserialize effects")
             }
             Self::Bigtable(kv) => Ok(kv.effects.clone()),
+            Self::LedgerGrpc(txn) => Ok(txn.effects.as_ref().clone()),
             Self::ExecutedTransaction { effects, .. } => Ok(effects.as_ref().clone()),
         }
     }
@@ -307,6 +338,7 @@ impl TransactionContents {
                 bcs::from_bytes(&stored.events).context("Failed to deserialize events")
             }
             Self::Bigtable(kv) => Ok(kv.events.clone().unwrap_or_default().data),
+            Self::LedgerGrpc(txn) => Ok(txn.events.clone().unwrap_or_default()),
             Self::ExecutedTransaction { events, .. } => Ok(events.clone().unwrap_or_default()),
         }
     }
@@ -315,6 +347,8 @@ impl TransactionContents {
         match self {
             Self::Pg(stored) => Ok(stored.raw_transaction.clone()),
             Self::Bigtable(kv) => bcs::to_bytes(kv.transaction.data().transaction_data())
+                .context("Failed to serialize transaction"),
+            Self::LedgerGrpc(txn) => bcs::to_bytes(txn.transaction_data.as_ref())
                 .context("Failed to serialize transaction"),
             Self::ExecutedTransaction {
                 transaction_data, ..
@@ -328,6 +362,9 @@ impl TransactionContents {
         match self {
             Self::Pg(stored) => Ok(stored.raw_effects.clone()),
             Self::Bigtable(kv) => bcs::to_bytes(&kv.effects).context("Failed to serialize effects"),
+            Self::LedgerGrpc(txn) => {
+                bcs::to_bytes(txn.effects.as_ref()).context("Failed to serialize effects")
+            }
             Self::ExecutedTransaction { effects, .. } => {
                 bcs::to_bytes(effects.as_ref()).context("Failed to serialize effects")
             }
@@ -338,7 +375,8 @@ impl TransactionContents {
         match self {
             Self::Pg(stored) => stored.timestamp_ms as u64,
             Self::Bigtable(kv) => kv.timestamp,
-            Self::ExecutedTransaction { .. } => 0, // No timestamp until checkpointed
+            Self::LedgerGrpc(txn) => txn.timestamp_ms.unwrap_or_default(),
+            Self::ExecutedTransaction { .. } => 0,
         }
     }
 
@@ -346,7 +384,8 @@ impl TransactionContents {
         match self {
             Self::Pg(stored) => Some(stored.cp_sequence_number as u64),
             Self::Bigtable(kv) => Some(kv.checkpoint_number),
-            Self::ExecutedTransaction { .. } => None, // No checkpoint until indexed
+            Self::LedgerGrpc(txn) => txn.cp_sequence_number,
+            Self::ExecutedTransaction { .. } => None,
         }
     }
 }
@@ -354,17 +393,17 @@ impl TransactionContents {
 impl TransactionEventsContents {
     pub fn events(&self) -> anyhow::Result<Vec<Event>> {
         match self {
-            Self::Pg(stored) => {
+            Self::Serialized(stored) => {
                 bcs::from_bytes(&stored.events).context("Failed to deserialize events")
             }
-            Self::Bigtable(kv) => Ok(kv.events.clone()),
+            Self::Deserialized(kv) => Ok(kv.events.clone()),
         }
     }
 
     pub fn timestamp_ms(&self) -> u64 {
         match self {
-            Self::Pg(stored) => stored.timestamp_ms as u64,
-            Self::Bigtable(kv) => kv.timestamp_ms,
+            Self::Serialized(stored) => stored.timestamp_ms as u64,
+            Self::Deserialized(kv) => kv.timestamp_ms,
         }
     }
 }

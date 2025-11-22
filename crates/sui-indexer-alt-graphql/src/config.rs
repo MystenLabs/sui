@@ -265,7 +265,7 @@ impl Limits {
             tx_payload_args: BTreeSet::from([
                 ("Mutation", "executeTransaction", "txBytes"),
                 ("Mutation", "executeTransaction", "signatures"),
-                ("Query", "simulateTransaction", "txBytes"),
+                ("Query", "simulateTransaction", "transaction"),
                 ("Query", "verifyZkloginSignature", "bytes"),
                 ("Query", "verifyZkloginSignature", "signature"),
             ]),

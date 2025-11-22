@@ -76,6 +76,7 @@ use serde_with::DeserializeAs;
 use serde_with::SerializeAs;
 use serde_with::serde_as;
 use shared_crypto::intent::HashingIntentScope;
+use std::borrow::Cow;
 use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
@@ -309,18 +310,24 @@ impl MoveObjectType {
         }
     }
 
-    pub fn type_params(&self) -> Vec<TypeTag> {
+    pub fn type_params(&self) -> Vec<Cow<'_, TypeTag>> {
         match &self.0 {
-            MoveObjectType_::GasCoin => vec![GAS::type_tag()],
+            MoveObjectType_::GasCoin => vec![Cow::Owned(GAS::type_tag())],
             MoveObjectType_::StakedSui => vec![],
-            MoveObjectType_::Coin(inner) => vec![inner.clone()],
+            MoveObjectType_::Coin(inner) => vec![Cow::Borrowed(inner)],
             MoveObjectType_::SuiBalanceAccumulatorField => {
                 Self::balance_accumulator_field_type_params(GAS::type_tag())
+                    .into_iter()
+                    .map(Cow::Owned)
+                    .collect()
             }
             MoveObjectType_::BalanceAccumulatorField(inner) => {
                 Self::balance_accumulator_field_type_params(inner.clone())
+                    .into_iter()
+                    .map(Cow::Owned)
+                    .collect()
             }
-            MoveObjectType_::Other(s) => s.type_params.clone(),
+            MoveObjectType_::Other(s) => s.type_params.iter().map(Cow::Borrowed).collect(),
         }
     }
 
@@ -1130,6 +1137,10 @@ pub const RESOLVED_TX_CONTEXT: (&AccountAddress, &IdentStr, &IdentStr) = (
 
 pub const URL_MODULE_NAME: &IdentStr = ident_str!("url");
 pub const URL_STRUCT_NAME: &IdentStr = ident_str!("Url");
+
+pub const VEC_MAP_MODULE_NAME: &IdentStr = ident_str!("vec_map");
+pub const VEC_MAP_STRUCT_NAME: &IdentStr = ident_str!("VecMap");
+pub const VEC_MAP_ENTRY_STRUCT_NAME: &IdentStr = ident_str!("Entry");
 
 pub fn move_ascii_str_layout() -> A::MoveStructLayout {
     A::MoveStructLayout {

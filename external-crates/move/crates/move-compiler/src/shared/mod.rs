@@ -729,7 +729,7 @@ pub struct Flags {
     ide_mode: bool,
 
     /// Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]`
-    /// annodations during compiltaion.
+    /// annotations during compilation.
     #[arg(
         long = "mode",
         value_name = "MODE",

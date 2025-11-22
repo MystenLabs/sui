@@ -99,8 +99,13 @@ impl EffectsCertifier {
             }
         };
 
-        let mut retrier =
-            RequestRetrier::new(authority_aggregator, client_monitor, tx_type, vec![]);
+        let mut retrier = RequestRetrier::new(
+            authority_aggregator,
+            client_monitor,
+            tx_type,
+            vec![],
+            vec![],
+        );
         let ping_type = get_ping_type(&tx_digest, tx_type);
 
         // Setting this to None at first because if the full effects are already provided,

@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::env;
 use std::io::Write as IoWrite;
 use std::net::SocketAddr;
+use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
+
+use std::env;
 #[cfg(not(msim))]
 use std::str::FromStr;
-use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use expect_test::expect;
 use fastcrypto::encoding::{Base64, Encoding};

@@ -4,7 +4,7 @@ INCLUDING DEPENDENCY D
 BUILDING test
 
 Summary generation successful. Summaries stored in 'package_summaries'
-External Command `ls -1 package_summaries/`:
+External Command `LC_ALL=C ls -1 package_summaries/`:
 A
 CA
 DA

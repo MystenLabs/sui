@@ -1,0 +1,9 @@
+---
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
+---
+  Module: unpack
+    Function: unpack (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : 0x0::unpack::S = Move(lcl_0)
+        reg_1 : bool, reg_2 : u64 = Unpack<S>(reg_0 : 0x0::unpack::S)
+        Return(reg_1 : bool, reg_2 : u64)

@@ -36,8 +36,8 @@ module action {
             },
             0x0::action::Action::ChangeSpeed => {
                 let 0x0::action::Action::ChangeSpeed { pos0: reg_13 } = &l2;
-                let 0x0::action::Action::ChangeSpeed { pos0: reg_15 } = l3;
-                let l4 = reg_15 : &mut 0x0::action::Action;
+                let 0x0::action::Action::ChangeSpeed { pos0: reg_15 } = &mut l3;
+                let l4 = reg_15 : &mut u64;
                 *l4 = l1
                 return 
             },
@@ -55,12 +55,12 @@ module action {
             0x0::action::Action::MoveTo => {
                 let 0x0::action::Action::MoveTo { x: reg_7, y: reg_8 } = &l2;
                 let 0x0::action::Action::MoveTo { x: reg_10, y: reg_11 } = &l3;
-                let l1 =         *reg_10 : &0x0::action::Action;
+                let l1 =         *reg_10 : &u64;
             },
             0x0::action::Action::ChangeSpeed => {
                 let 0x0::action::Action::ChangeSpeed { pos0: reg_14 } = &l2;
                 let 0x0::action::Action::ChangeSpeed { pos0: reg_16 } = &l3;
-                l1 =         *reg_16 : &0x0::action::Action;
+                l1 =         *reg_16 : &u64;
             },
         }
     }

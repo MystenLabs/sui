@@ -8,7 +8,9 @@ import TabItem from '@theme/TabItem';
 First, install `suiup`:
 
 ```sh
-$ curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | sh
+$ curl -sSfL \
+  https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh \
+  | sh
 ```
 
 Then, install Sui:
@@ -19,6 +21,19 @@ $ suiup install sui@testnet
 
 For alternative installation methods, refer to the [`suiup` repository](https://github.com/MystenLabs/suiup).
 
+:::danger
+
+Installing Sui with `suiup` does not configure the client. To use `sui` commands, you must [configure the Sui client](/guides/developer/getting-started/configure-sui-client.mdx).
+
+To confirm that Sui installed correctly:
+
+1. Open a terminal or console
+2. Type `sui --version` and press Enter
+
+If you receive a "command not found" error, verify the Sui binaries directory is in your `PATH` environment variable.
+
+:::
+
 </TabItem>
 
 <TabItem label="Homebrew" value="brew">
@@ -28,6 +43,14 @@ You must have [Homebrew](https://brew.sh/) installed before running the followin
 ```sh
 $ brew install sui
 ```
+
+To confirm that Sui installed correctly:
+
+1. Open a terminal or console
+2. Type `sui --version` and press Enter
+
+If you receive a "command not found" error, verify the Sui binaries directory is in your `PATH` environment variable.
+
 
 </TabItem>
 
@@ -40,6 +63,13 @@ $ choco install sui
 ```
 
 Find more [versions of Sui for Windows](https://community.chocolatey.org/packages/sui) on the Chocolatey community website.
+
+To confirm that Sui installed correctly:
+
+1. Open a terminal or console
+2. Type `sui --version` and press Enter
+
+If you receive a "command not found" error, verify the Sui binaries directory is in your `PATH` environment variable.
 
 </TabItem>
 

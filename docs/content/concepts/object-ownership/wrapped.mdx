@@ -70,9 +70,9 @@ public fun new(scarcity: u8, style: u8, ctx: &mut TxContext): Object {
 
 ```
 
-You can also enable a swap/trade between your object and others' objects. For example, define a function that takes two objects from two addresses and swaps their ownership. But this doesn't work in Sui. Only object owners can send a transaction to mutate the object. So one person cannot send a transaction that would swap their own object with someone else's object.
+You can also enable a swap or trade between your object and others' objects. For example, define a function that takes two objects from two addresses and swaps their ownership. This doesn't work in Sui. Only object owners can send a transaction to mutate the object. One person cannot send a transaction that would swap their own object with someone else's object.
 
-Another common solution is to send your object to a pool - such as an NFT marketplace or a staking pool - and perform the swap in the pool (either right away, or later when there is demand). Other chapters explore the concept of shared objects that can be mutated by anyone, and show how it enables anyone to operate in a shared object pool. This chapter focuses on how to achieve the same effect using owned objects. Transactions using only owned objects are faster and less expensive (in terms of gas) than using shared objects, since they do not require consensus in Sui.
+Another common solution is to send your object to a pool, such as an NFT marketplace or a staking pool, and perform the swap in the pool, either right away, or later when there is demand. Transactions using only owned objects are faster and less expensive (in terms of gas) than using shared objects, because they do not require consensus in Sui.
 
 To swap objects, the same address must own both objects. Anyone who wants to swap their object can send their objects to the third party, such as a site that offers swapping services, and the third party helps perform the swap and send the objects to the appropriate owner. To ensure that you retain custody of your objects (such as coins and NFTs) and not give full custody to the third party, use direct wrapping. To define a wrapper object type:
 
@@ -154,9 +154,9 @@ Finally, the service merges together the `fee1` and `fee2`, and returns it.  The
 fee1.join(fee2);
 ```
 
-After this call, the two objects are swapped and the service provider takes the service fee.
+After this call, the 2 objects are swapped and the service provider takes the service fee.
 
-Since the contract defined only one way to deal with `SwapRequest` - `execute_swap` - there is no other way the service operator can interact with `SwapRequest` despite its ownership.
+Because the contract defined only one way to deal with `SwapRequest` (`execute_swap`), there is no other way the service operator can interact with `SwapRequest` despite its ownership.
 
 Find the full source code in the [trusted_swap](https://github.com/MystenLabs/sui/blob/main/examples/move/trusted_swap) example.
 

@@ -227,13 +227,35 @@ pub struct NodeConfig {
     pub transaction_driver_config: Option<TransactionDriverConfig>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct TransactionDriverConfig {
     /// The list of validators that are allowed to submit MFP transactions to (via the transaction driver).
     /// Each entry is a validator display name.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed_submission_validators: Vec<String>,
+
+    /// The list of validators that are blocked from submitting block transactions to (via the transaction driver).
+    /// Each entry is a validator display name.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked_submission_validators: Vec<String>,
+
+    /// Enable early transaction validation before submission to consensus.
+    /// This checks for non-retriable errors (like old object versions) and rejects
+    /// transactions early to provide fast feedback to clients.
+    /// Note: Currently used in TransactionOrchestrator, but may be moved to TransactionDriver in future.
+    #[serde(default = "bool_true")]
+    pub enable_early_validation: bool,
+}
+
+impl Default for TransactionDriverConfig {
+    fn default() -> Self {
+        Self {
+            allowed_submission_validators: vec![],
+            blocked_submission_validators: vec![],
+            enable_early_validation: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -699,6 +721,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Arden".to_string(),                                                    // Arden partner
         "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
         "EveFrontier".to_string(),
+        "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz".to_string(), // Decot, external partner
     ]);
 
     // providers that are available for mainnet and testnet.
@@ -716,6 +739,8 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
         "Arden".to_string(),
         "FanTV".to_string(),
+        "EveFrontier".to_string(),
+        "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz".to_string(), // Decot, external partner
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
@@ -1577,15 +1602,31 @@ where
     let mut processed_options = Vec::new();
 
     for (key, value) in raw_options {
-        match read_credential_from_path_or_literal(&value) {
-            Ok(processed_value) => processed_options.push((key, processed_value)),
-            Err(e) => {
-                return Err(D::Error::custom(format!(
-                    "Failed to read credential for key '{}': {}",
-                    key, e
-                )));
+        // GCS service_account keys expect a file path, not the file content
+        // All other keys (AWS credentials, service_account_key) should read file content
+        let is_service_account_path = matches!(
+            key.as_str(),
+            "google_service_account"
+                | "service_account"
+                | "google_service_account_path"
+                | "service_account_path"
+        );
+
+        let processed_value = if is_service_account_path {
+            value
+        } else {
+            match read_credential_from_path_or_literal(&value) {
+                Ok(processed) => processed,
+                Err(e) => {
+                    return Err(D::Error::custom(format!(
+                        "Failed to read credential for key '{}': {}",
+                        key, e
+                    )));
+                }
             }
-        }
+        };
+
+        processed_options.push((key, processed_value));
     }
 
     Ok(processed_options)
@@ -1736,6 +1777,66 @@ remote-store-options:
         assert_eq!(config.remote_store_options.len(), 2);
         assert_eq!(config.remote_store_options[0].1, "literal_access_key");
         assert_eq!(config.remote_store_options[1].1, "literal_secret_key");
+    }
+
+    #[test]
+    fn test_remote_store_options_gcs_service_account_path_preserved() {
+        let temp_dir = std::env::temp_dir();
+        let service_account_file = temp_dir.join("test_service_account.json");
+        let aws_key_file = temp_dir.join("test_aws_key");
+
+        std::fs::write(&service_account_file, r#"{"type": "service_account"}"#).unwrap();
+        std::fs::write(&aws_key_file, "aws_key_value").unwrap();
+
+        let yaml_config = format!(
+            r#"
+object-store-config: null
+concurrency: 5
+ingestion-url: "gs://my-bucket"
+remote-store-options:
+  - ["service_account", "{}"]
+  - ["google_service_account_path", "{}"]
+  - ["aws_access_key_id", "{}"]
+"#,
+            service_account_file.to_string_lossy(),
+            service_account_file.to_string_lossy(),
+            aws_key_file.to_string_lossy()
+        );
+
+        let config: StateArchiveConfig = serde_yaml::from_str(&yaml_config).unwrap();
+
+        assert_eq!(config.remote_store_options.len(), 3);
+
+        // service_account should preserve the file path, not read the content
+        let service_account_option = config
+            .remote_store_options
+            .iter()
+            .find(|(key, _)| key == "service_account")
+            .unwrap();
+        assert_eq!(
+            service_account_option.1,
+            service_account_file.to_string_lossy()
+        );
+
+        // google_service_account_path should also preserve the file path
+        let gcs_path_option = config
+            .remote_store_options
+            .iter()
+            .find(|(key, _)| key == "google_service_account_path")
+            .unwrap();
+        assert_eq!(gcs_path_option.1, service_account_file.to_string_lossy());
+
+        // AWS key should read the file content
+        let aws_option = config
+            .remote_store_options
+            .iter()
+            .find(|(key, _)| key == "aws_access_key_id")
+            .unwrap();
+        assert_eq!(aws_option.1, "aws_key_value");
+
+        // Clean up
+        std::fs::remove_file(&service_account_file).ok();
+        std::fs::remove_file(&aws_key_file).ok();
     }
 }
 

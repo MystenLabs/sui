@@ -14,6 +14,7 @@ sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 test-cluster.workspace = true
+mysten-common.workspace = true
 
 async-trait.workspace = true
 bcs.workspace = true

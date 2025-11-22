@@ -707,6 +707,13 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
     ) -> Option<Vec<ObjectKey>> {
         None
     }
+
+    fn get_transaction_checkpoint(
+        &self,
+        _digest: &sui_types::digests::TransactionDigest,
+    ) -> Option<CheckpointSequenceNumber> {
+        None
+    }
 }
 
 impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RpcStateReader for Simulacrum<T, V> {

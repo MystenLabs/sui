@@ -24,26 +24,10 @@ task 3, line 44:
 Checkpoint created: 1
 
 task 4, lines 46-48:
-//# view-object 2,0
+//# view-object 2,0 --hide-contents
 Owner: Object ID: ( _ )
 Version: 2
-Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead> {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,0),
-        },
-    },
-    name: sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead> {
-        address: test,
-    },
-    value: sui::accumulator_settlement::EventStreamHead {
-        mmr: vector[
-            39021536621379244625798247183457257465981868071676095292953618201971959361717u256,
-        ],
-        checkpoint_seq: 0u64,
-        num_events: 1u64,
-    },
-}
+Type: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead>
 
 task 5, line 49:
 //# run test::event_streams::emit_event --sender A --args 20
@@ -57,27 +41,10 @@ task 6, line 51:
 Checkpoint created: 2
 
 task 7, lines 53-55:
-//# view-object 2,0
+//# view-object 2,0 --hide-contents
 Owner: Object ID: ( _ )
 Version: 3
-Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead> {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,0),
-        },
-    },
-    name: sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead> {
-        address: test,
-    },
-    value: sui::accumulator_settlement::EventStreamHead {
-        mmr: vector[
-            0u256,
-            16983959129471002147689479940376827459035665866161805665179733185891982365467u256,
-        ],
-        checkpoint_seq: 0u64,
-        num_events: 2u64,
-    },
-}
+Type: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead>
 
 task 8, line 56:
 //# run test::event_streams::emit_event --sender A --args 30
@@ -91,27 +58,10 @@ task 9, line 58:
 Checkpoint created: 3
 
 task 10, lines 60-62:
-//# view-object 2,0
+//# view-object 2,0 --hide-contents
 Owner: Object ID: ( _ )
 Version: 4
-Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead> {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,0),
-        },
-    },
-    name: sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead> {
-        address: test,
-    },
-    value: sui::accumulator_settlement::EventStreamHead {
-        mmr: vector[
-            18034566202545178058518406810170448253752565357001847901315957605872994022758u256,
-            16983959129471002147689479940376827459035665866161805665179733185891982365467u256,
-        ],
-        checkpoint_seq: 0u64,
-        num_events: 3u64,
-    },
-}
+Type: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead>
 
 task 11, line 63:
 //# run test::event_streams::emit_event --sender A --args 40
@@ -125,28 +75,10 @@ task 12, line 65:
 Checkpoint created: 4
 
 task 13, lines 67-69:
-//# view-object 2,0
+//# view-object 2,0 --hide-contents
 Owner: Object ID: ( _ )
 Version: 5
-Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead> {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,0),
-        },
-    },
-    name: sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead> {
-        address: test,
-    },
-    value: sui::accumulator_settlement::EventStreamHead {
-        mmr: vector[
-            0u256,
-            0u256,
-            77297270003914326723704885458224340541096273344840704707510635402306518620110u256,
-        ],
-        checkpoint_seq: 0u64,
-        num_events: 4u64,
-    },
-}
+Type: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead>
 
 task 14, line 70:
 //# run test::event_streams::mint_and_emit --sender A --args 50
@@ -161,25 +93,7 @@ task 15, line 72:
 Checkpoint created: 5
 
 task 16, lines 74-77:
-//# view-object 2,0
+//# view-object 2,0 --hide-contents
 Owner: Object ID: ( _ )
 Version: 6
-Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead> {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,0),
-        },
-    },
-    name: sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead> {
-        address: test,
-    },
-    value: sui::accumulator_settlement::EventStreamHead {
-        mmr: vector[
-            80996952019692080424116667881890530485542689470567924018457073874515694334329u256,
-            0u256,
-            77297270003914326723704885458224340541096273344840704707510635402306518620110u256,
-        ],
-        checkpoint_seq: 0u64,
-        num_events: 5u64,
-    },
-}
+Type: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead>
