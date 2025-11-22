@@ -1019,6 +1019,7 @@ impl SuiNode {
                 prometheus_registry,
                 checkpoint_store,
                 chain_identifier,
+                config.state_snapshot_write_config.archive_interval_epochs,
             )?;
             Ok(Some(snapshot_uploader.start()))
         } else {
