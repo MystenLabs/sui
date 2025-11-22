@@ -55,6 +55,8 @@ pub struct IngestionLayer {
     pub retry_interval_ms: Option<u64>,
     pub streaming_backoff_initial_batch_size: Option<usize>,
     pub streaming_backoff_max_batch_size: Option<usize>,
+    pub streaming_connection_timeout_ms: Option<u64>,
+    pub streaming_statement_timeout_ms: Option<u64>,
 }
 
 #[DefaultConfig]
@@ -178,6 +180,12 @@ impl IngestionLayer {
             streaming_backoff_max_batch_size: self
                 .streaming_backoff_max_batch_size
                 .unwrap_or(base.streaming_backoff_max_batch_size),
+            streaming_connection_timeout_ms: self
+                .streaming_connection_timeout_ms
+                .unwrap_or(base.streaming_connection_timeout_ms),
+            streaming_statement_timeout_ms: self
+                .streaming_statement_timeout_ms
+                .unwrap_or(base.streaming_statement_timeout_ms),
         })
     }
 }
@@ -290,6 +298,12 @@ impl Merge for IngestionLayer {
             streaming_backoff_max_batch_size: other
                 .streaming_backoff_max_batch_size
                 .or(self.streaming_backoff_max_batch_size),
+            streaming_connection_timeout_ms: other
+                .streaming_connection_timeout_ms
+                .or(self.streaming_connection_timeout_ms),
+            streaming_statement_timeout_ms: other
+                .streaming_statement_timeout_ms
+                .or(self.streaming_statement_timeout_ms),
         })
     }
 }
@@ -390,6 +404,8 @@ impl From<IngestionConfig> for IngestionLayer {
             retry_interval_ms: Some(config.retry_interval_ms),
             streaming_backoff_initial_batch_size: Some(config.streaming_backoff_initial_batch_size),
             streaming_backoff_max_batch_size: Some(config.streaming_backoff_max_batch_size),
+            streaming_connection_timeout_ms: Some(config.streaming_connection_timeout_ms),
+            streaming_statement_timeout_ms: Some(config.streaming_statement_timeout_ms),
         }
     }
 }
