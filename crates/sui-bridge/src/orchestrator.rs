@@ -242,7 +242,11 @@ where
                     .await
                     .expect("Sending event to monitor channel should not fail");
 
-                match bridge_event.try_into_bridge_action(log.tx_hash, log.log_index_in_tx) {
+                match bridge_event.try_into_bridge_action(
+                    log.tx_hash,
+                    log.log_index_in_tx,
+                    // log.block_timestamp,
+                ) {
                     Ok(Some(action)) => {
                         metrics.last_observed_actions_seq_num.with_label_values(&[
                             action.chain_id().to_string().as_str(),
@@ -405,6 +409,7 @@ mod tests {
             tx_hash: log.transaction_hash.unwrap(),
             block_number: log_block_num,
             log_index_in_tx,
+            block_timestamp_ms: 0,
         };
         let end_block_num = log_block_num + 15;
 

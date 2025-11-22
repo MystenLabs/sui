@@ -22,7 +22,7 @@ use crate::{
 use ethers::abi::{ParamType, long_signature};
 use ethers::types::Address as EthAddress;
 use ethers::types::{
-    Block, BlockNumber, Filter, FilterBlockOption, Log, TransactionReceipt, TxHash, U64,
+    Block, BlockNumber, Filter, FilterBlockOption, Log, TransactionReceipt, TxHash, U256, U64,
     ValueOrArray,
 };
 use fastcrypto::encoding::{Encoding, Hex};
@@ -204,6 +204,20 @@ pub fn mock_get_logs(
     ).unwrap();
 
     for log in logs {
+        if let Some(block_number) = log.block_number {
+            let block = Block::<TxHash> {
+                number: Some(block_number),
+                timestamp: U256::from(1),
+                ..Default::default()
+            };
+            mock_provider
+                .add_response(
+                    "eth_getBlockByNumber",
+                    (format!("0x{:x}", block_number.as_u64()), false),
+                    block,
+                )
+                .unwrap();
+        }
         mock_provider
             .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
                 "eth_getTransactionReceipt",
@@ -278,6 +292,7 @@ pub fn get_test_log_and_action(
             sui_adjusted_amount,
             sui_address,
             eth_address: source_address,
+            // block_timestamp: None,
         },
     });
     (log, bridge_action)
