@@ -292,6 +292,12 @@ pub struct SubmitTxRequest {
     pub ping_type: Option<PingType>,
 }
 
+impl From<Transaction> for SubmitTxRequest {
+    fn from(transaction: Transaction) -> Self {
+        Self::new_transaction(transaction)
+    }
+}
+
 impl SubmitTxRequest {
     pub fn new_transaction(transaction: Transaction) -> Self {
         Self {

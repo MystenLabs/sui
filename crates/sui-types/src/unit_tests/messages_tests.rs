@@ -832,7 +832,9 @@ fn test_sponsored_transaction_validity_check() {
     };
     let kind = TransactionKind::programmable(pt);
     TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
-        .validity_check(&ProtocolConfig::get_for_max_version_UNSAFE())
+        .validity_check(&TxValidityCheckContext::from_cfg_for_testing(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+        ))
         .unwrap();
 
     let pt = {
@@ -852,7 +854,9 @@ fn test_sponsored_transaction_validity_check() {
     };
     let kind = TransactionKind::programmable(pt);
     TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
-        .validity_check(&ProtocolConfig::get_for_max_version_UNSAFE())
+        .validity_check(&TxValidityCheckContext::from_cfg_for_testing(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+        ))
         .unwrap();
 
     let pt = {
@@ -862,7 +866,9 @@ fn test_sponsored_transaction_validity_check() {
     };
     let kind = TransactionKind::programmable(pt);
     TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
-        .validity_check(&ProtocolConfig::get_for_max_version_UNSAFE())
+        .validity_check(&TxValidityCheckContext::from_cfg_for_testing(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+        ))
         .unwrap();
 
     // Pay
@@ -879,7 +885,9 @@ fn test_sponsored_transaction_validity_check() {
     };
     let kind = TransactionKind::programmable(pt);
     TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
-        .validity_check(&ProtocolConfig::get_for_max_version_UNSAFE())
+        .validity_check(&TxValidityCheckContext::from_cfg_for_testing(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+        ))
         .unwrap();
 
     // TransferSui
@@ -890,7 +898,9 @@ fn test_sponsored_transaction_validity_check() {
     };
     let kind = TransactionKind::programmable(pt);
     TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
-        .validity_check(&ProtocolConfig::get_for_max_version_UNSAFE())
+        .validity_check(&TxValidityCheckContext::from_cfg_for_testing(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+        ))
         .unwrap();
 
     // PaySui
@@ -901,7 +911,9 @@ fn test_sponsored_transaction_validity_check() {
     };
     let kind = TransactionKind::programmable(pt);
     TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
-        .validity_check(&ProtocolConfig::get_for_max_version_UNSAFE())
+        .validity_check(&TxValidityCheckContext::from_cfg_for_testing(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+        ))
         .unwrap();
 
     // PayAllSui
@@ -912,7 +924,9 @@ fn test_sponsored_transaction_validity_check() {
     };
     let kind = TransactionKind::programmable(pt);
     TransactionData::new_with_gas_data(kind, sender, gas_data)
-        .validity_check(&ProtocolConfig::get_for_max_version_UNSAFE())
+        .validity_check(&TxValidityCheckContext::from_cfg_for_testing(
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+        ))
         .unwrap();
 }
 

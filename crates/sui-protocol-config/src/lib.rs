@@ -761,6 +761,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
 
+    // Enable coin reservation
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_reservation_obj_refs: bool,
+
     // If true, create the root accumulator object in the change epoch transaction.
     // This must be enabled and shipped before `enable_accumulators` is set to true.
     #[serde(skip_serializing_if = "is_false")]
@@ -2018,6 +2022,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators(&self) -> bool {
         self.feature_flags.enable_accumulators
+    }
+
+    pub fn enable_coin_reservation_obj_refs(&self) -> bool {
+        self.feature_flags.enable_coin_reservation_obj_refs
     }
 
     pub fn create_root_accumulator_object(&self) -> bool {
@@ -4559,6 +4567,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
+    }
+
+    pub fn enable_coin_reservation_for_testing(&mut self) {
+        self.feature_flags.enable_coin_reservation_obj_refs = true;
     }
 
     pub fn create_root_accumulator_object_for_testing(&mut self) {
