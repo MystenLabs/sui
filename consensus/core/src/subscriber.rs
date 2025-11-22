@@ -118,6 +118,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
         last_received: Round,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
+        const MIN_TIMEOUT: Duration = Duration::from_millis(500);
         // When not immediately retrying, limit retry delay between 100ms and 10s.
         const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
         const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(10);
@@ -155,7 +156,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
             retries += 1;
 
             let mut blocks = match network_client
-                .subscribe_blocks(peer, last_received, MAX_RETRY_INTERVAL)
+                .subscribe_blocks(peer, last_received, MIN_TIMEOUT.max(delay))
                 .await
             {
                 Ok(blocks) => {
