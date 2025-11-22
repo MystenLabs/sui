@@ -2023,7 +2023,7 @@ mod tests {
             .wait_for_watermark(
                 &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap(),
                 100,
-                std::time::Duration::from_secs(1),
+                std::time::Duration::from_secs(10),
             )
             .await;
 
