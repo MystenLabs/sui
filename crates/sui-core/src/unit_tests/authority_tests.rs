@@ -5751,7 +5751,7 @@ async fn test_arity_mismatch() {
 
     assert_eq!(
         execution_error_source,
-        Some("Expected 1 argument calling function 'is_none', but found 0".to_string()),
+        Some("Expected 1 argument calling function '0000000000000000000000000000000000000000000000000000000000000001::option::is_none', but found 0".to_string()),
     )
 }
 
