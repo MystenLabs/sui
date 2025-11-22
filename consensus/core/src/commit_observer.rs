@@ -100,10 +100,12 @@ impl CommitObserver {
         }
 
         // Send scores as part of the first sub dag, if the leader schedule has been updated.
+        // With multi-leader, committed_sub_dags may be empty if all leaders were already committed
+        // (e.g., from commit sync when local already processed via local committer).
         let schedule_updated = self
             .leader_schedule
             .leader_schedule_updated(&self.dag_state);
-        if schedule_updated {
+        if schedule_updated && !committed_sub_dags.is_empty() {
             let reputation_scores_desc = self
                 .leader_schedule
                 .leader_swap_table
