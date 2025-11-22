@@ -224,7 +224,7 @@ impl EpochStartConfiguration {
         // We only need to implement this function for the latest version.
         // When a new version is introduced, this function should be updated.
         match self {
-            Self::V9(config) => Self::V9(EpochStartConfigurationV9 {
+            Self::V10(config) => Self::V10(EpochStartConfigurationV10 {
                 system_state: config.system_state.new_at_next_epoch_for_testing(),
                 epoch_digest: config.epoch_digest,
                 flags: config.flags.clone(),
@@ -241,6 +241,8 @@ impl EpochStartConfiguration {
                     .coin_registry_obj_initial_shared_version,
                 display_registry_obj_initial_shared_version: config
                     .display_registry_obj_initial_shared_version,
+                alias_state_obj_initial_shared_version: config
+                    .alias_state_obj_initial_shared_version,
             }),
             _ => panic!(
                 "This function is only implemented for the latest version of EpochStartConfiguration"
