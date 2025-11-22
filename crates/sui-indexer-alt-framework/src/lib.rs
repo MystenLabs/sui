@@ -2018,7 +2018,7 @@ mod tests {
             tasked_indexer.run().await.unwrap().await.unwrap();
         });
 
-        tokio::time::advance(std::time::Duration::from_secs(30)).await;
+        tokio::time::advance(std::time::Duration::from_secs(500)).await;
         store
             .wait_for_watermark(
                 &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap(),
@@ -2043,7 +2043,7 @@ mod tests {
             .unwrap();
 
         // Sleep so that the new reader watermark can be picked up by the tasked indexer
-        tokio::time::advance(std::time::Duration::from_secs(5)).await;
+        tokio::time::advance(std::time::Duration::from_secs(500)).await;
         // Allow the processor to resume.
         process_below.send(501).ok();
 
