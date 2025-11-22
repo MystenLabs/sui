@@ -353,25 +353,26 @@ impl CheckpointStore {
         );
 
         // Only insert the genesis checkpoint if the DB is empty and doesn't have it already
-        if self
-            .get_checkpoint_by_digest(checkpoint.digest())
-            .unwrap()
-            .is_none()
-        {
-            if epoch_store.epoch() == checkpoint.epoch {
-                epoch_store
-                    .put_genesis_checkpoint_in_builder(checkpoint.data(), &contents)
-                    .unwrap();
-            } else {
-                debug!(
-                    validator_epoch =% epoch_store.epoch(),
-                    genesis_epoch =% checkpoint.epoch(),
-                    "Not inserting checkpoint builder data for genesis checkpoint",
-                );
+        match self.get_checkpoint_by_sequence_number(0).unwrap() {
+            Some(existing_checkpoint) => {
+                assert_eq!(existing_checkpoint.digest(), checkpoint.digest())
             }
-            self.insert_checkpoint_contents(contents).unwrap();
-            self.insert_verified_checkpoint(&checkpoint).unwrap();
-            self.update_highest_synced_checkpoint(&checkpoint).unwrap();
+            None => {
+                if epoch_store.epoch() == checkpoint.epoch {
+                    epoch_store
+                        .put_genesis_checkpoint_in_builder(checkpoint.data(), &contents)
+                        .unwrap();
+                } else {
+                    debug!(
+                        validator_epoch =% epoch_store.epoch(),
+                        genesis_epoch =% checkpoint.epoch(),
+                        "Not inserting checkpoint builder data for genesis checkpoint",
+                    );
+                }
+                self.insert_checkpoint_contents(contents).unwrap();
+                self.insert_verified_checkpoint(&checkpoint).unwrap();
+                self.update_highest_synced_checkpoint(&checkpoint).unwrap();
+            }
         }
     }
 
