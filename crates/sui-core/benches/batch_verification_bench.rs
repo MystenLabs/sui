@@ -13,6 +13,7 @@ use std::sync::Arc;
 use sui_core::test_utils::{make_cert_with_large_committee, make_dummy_tx};
 use sui_types::committee::Committee;
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, get_key_pair};
+use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::transaction::CertifiedTransaction;
 
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
@@ -75,6 +76,7 @@ fn async_verifier_bench(c: &mut Criterion) {
                         .unwrap();
                     let batch_verifier = Arc::new(SignatureVerifier::new_with_batch_size(
                         committee.clone(),
+                        Arc::new(InMemoryStorage::new(vec![])),
                         batch_size,
                         metrics.clone(),
                         vec![],
@@ -83,6 +85,7 @@ fn async_verifier_bench(c: &mut Criterion) {
                         true,
                         true,
                         Some(30),
+                        true,
                         true,
                     ));
 

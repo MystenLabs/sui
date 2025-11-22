@@ -697,7 +697,7 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
         &self,
         _sequence_number: Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
         _digest: &sui_types::messages_checkpoint::CheckpointContentsDigest,
-    ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
+    ) -> Option<sui_types::messages_checkpoint::VersionedFullCheckpointContents> {
         todo!()
     }
 

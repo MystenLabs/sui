@@ -14,6 +14,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::Committee;
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, get_key_pair};
 use sui_types::gas::GasCostSummary;
+use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
 };
@@ -141,6 +142,7 @@ async fn test_async_verifier() {
     let metrics = SignatureVerifierMetrics::new(&registry);
     let verifier = Arc::new(SignatureVerifier::new(
         committee.clone(),
+        Arc::new(InMemoryStorage::new(vec![])),
         metrics,
         vec![],
         ZkLoginEnv::Test,
@@ -148,6 +150,7 @@ async fn test_async_verifier() {
         true,
         true,
         Some(30),
+        true,
         true,
     ));
 

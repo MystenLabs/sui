@@ -1253,7 +1253,10 @@ async fn test_access_old_object_pruned() {
                     state
                         .handle_transaction(
                             &epoch_store,
-                            epoch_store.verify_transaction(tx.clone()).unwrap()
+                            epoch_store
+                                .verify_transaction_require_no_aliases(tx.clone())
+                                .unwrap()
+                                .into_tx()
                         )
                         .await
                         .unwrap_err(),

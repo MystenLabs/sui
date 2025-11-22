@@ -54,7 +54,10 @@ pub async fn certify_transaction(
     let epoch_store = authority.load_epoch_store_one_call_per_task();
     // TODO: Move this check to a more appropriate place.
     transaction.validity_check(&epoch_store.tx_validity_check_context())?;
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
 
     let response = authority
         .handle_transaction(&epoch_store, transaction.clone())
@@ -306,8 +309,9 @@ pub fn init_transfer_transaction(
     let tx = to_sender_signed_transaction(data, secret);
     authority_state
         .epoch_store_for_testing()
-        .verify_transaction(tx)
+        .verify_transaction_require_no_aliases(tx)
         .unwrap()
+        .into_tx()
 }
 
 pub fn init_certified_transfer_transaction(
@@ -337,7 +341,10 @@ pub fn init_certified_transaction(
     authority_state: &AuthorityState,
 ) -> VerifiedCertificate {
     let epoch_store = authority_state.epoch_store_for_testing();
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
 
     let vote = VerifiedSignedTransaction::new(
         0,
@@ -360,7 +367,10 @@ pub async fn certify_shared_obj_transaction_no_execution(
     transaction: Transaction,
 ) -> Result<(VerifiedCertificate, AssignedVersions), SuiError> {
     let epoch_store = authority.load_epoch_store_one_call_per_task();
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
     let response = authority
         .handle_transaction(&epoch_store, transaction.clone())
         .await?;

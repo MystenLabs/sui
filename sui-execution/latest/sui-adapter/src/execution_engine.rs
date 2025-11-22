@@ -798,6 +798,10 @@ mod checked {
                             assert!(protocol_config.enable_display_registry());
                             builder = setup_display_registry_create(builder);
                         }
+                        EndOfEpochTransactionKind::AliasStateCreate => {
+                            assert!(protocol_config.account_aliases());
+                            builder = setup_alias_state_create(builder);
+                        }
                     }
                 }
                 unreachable!(
@@ -1513,6 +1517,21 @@ mod checked {
             .move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),
                 ident_str!("display_registry").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate display_registry_create transaction!");
+        builder
+    }
+
+    fn setup_alias_state_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("alias").to_owned(),
                 ident_str!("create").to_owned(),
                 vec![],
                 vec![],

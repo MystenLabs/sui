@@ -48,6 +48,7 @@ pub struct ValidatorConfigBuilder {
     global_state_hash_v2: bool,
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
     chain_override: Option<Chain>,
+    state_sync_config: Option<StateSyncConfig>,
 }
 
 impl ValidatorConfigBuilder {
@@ -140,6 +141,11 @@ impl ValidatorConfigBuilder {
         self
     }
 
+    pub fn with_state_sync_config(mut self, config: StateSyncConfig) -> Self {
+        self.state_sync_config = Some(config);
+        self
+    }
+
     pub fn build(
         self,
         validator: ValidatorGenesisConfig,
@@ -176,9 +182,16 @@ impl ValidatorConfigBuilder {
             external_address: Some(validator.p2p_address),
             // Set a shorter timeout for checkpoint content download in tests, since
             // checkpoint pruning also happens much faster, and network is local.
-            state_sync: Some(StateSyncConfig {
-                checkpoint_content_timeout_ms: Some(10_000),
-                ..Default::default()
+            state_sync: Some(if let Some(mut config) = self.state_sync_config {
+                if config.checkpoint_content_timeout_ms.is_none() {
+                    config.checkpoint_content_timeout_ms = Some(10_000);
+                }
+                config
+            } else {
+                StateSyncConfig {
+                    checkpoint_content_timeout_ms: Some(10_000),
+                    ..Default::default()
+                }
             }),
             ..Default::default()
         };
@@ -295,6 +308,7 @@ pub struct FullnodeConfigBuilder {
     chain_override: Option<Chain>,
     transaction_driver_config: Option<TransactionDriverConfig>,
     rpc_config: Option<sui_config::RpcConfig>,
+    state_sync_config: Option<StateSyncConfig>,
 }
 
 impl FullnodeConfigBuilder {
@@ -431,6 +445,11 @@ impl FullnodeConfigBuilder {
         self
     }
 
+    pub fn with_state_sync_config(mut self, config: StateSyncConfig) -> Self {
+        self.state_sync_config = Some(config);
+        self
+    }
+
     pub fn build<R: rand::RngCore + rand::CryptoRng>(
         self,
         rng: &mut R,
@@ -478,9 +497,16 @@ impl FullnodeConfigBuilder {
                 seed_peers,
                 // Set a shorter timeout for checkpoint content download in tests, since
                 // checkpoint pruning also happens much faster, and network is local.
-                state_sync: Some(StateSyncConfig {
-                    checkpoint_content_timeout_ms: Some(10_000),
-                    ..Default::default()
+                state_sync: Some(if let Some(mut config) = self.state_sync_config {
+                    if config.checkpoint_content_timeout_ms.is_none() {
+                        config.checkpoint_content_timeout_ms = Some(10_000);
+                    }
+                    config
+                } else {
+                    StateSyncConfig {
+                        checkpoint_content_timeout_ms: Some(10_000),
+                        ..Default::default()
+                    }
                 }),
                 ..Default::default()
             }

@@ -20,6 +20,9 @@ use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, SequenceNumber};
 use sui_types::crypto::RandomnessRound;
 use sui_types::error::SuiResult;
+use sui_types::executable_transaction::{
+    TrustedExecutableTransactionWithAliases, VerifiedExecutableTransactionWithAliases,
+};
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::messages_consensus::AuthorityIndex;
@@ -66,7 +69,7 @@ pub(crate) struct ConsensusCommitOutput {
     // we can move deferred_txns to the ConsensusOutputCache and save disk bandwidth.
     deferred_txns: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>,
     // TODO(commit-handler-rewrite): remove the original once we no longer need to support the old consensus handler
-    deferred_txns_v2: Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)>,
+    deferred_txns_v2: Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>,
     // deferred txns that have been loaded and can be removed
     deleted_deferred_txns: BTreeSet<DeferralKey>,
 
@@ -192,7 +195,7 @@ impl ConsensusCommitOutput {
     pub fn defer_transactions(
         &mut self,
         key: DeferralKey,
-        transactions: Vec<VerifiedExecutableTransaction>,
+        transactions: Vec<VerifiedExecutableTransactionWithAliases>,
     ) {
         self.deferred_txns_v2.push((key, transactions));
     }
@@ -294,15 +297,19 @@ impl ConsensusCommitOutput {
             &tables.deferred_transactions_v2,
             &self.deleted_deferred_txns,
         )?;
+        batch.delete_batch(
+            &tables.deferred_transactions_with_aliases_v2,
+            &self.deleted_deferred_txns,
+        )?;
 
         batch.insert_batch(
-            &tables.deferred_transactions_v2,
+            &tables.deferred_transactions_with_aliases_v2,
             self.deferred_txns_v2.into_iter().map(|(key, txs)| {
                 (
                     key,
                     txs.into_iter()
                         .map(|tx| {
-                            let tx: TrustedExecutableTransaction = tx.serializable();
+                            let tx: TrustedExecutableTransactionWithAliases = tx.serializable();
                             tx
                         })
                         .collect::<Vec<_>>(),
@@ -389,12 +396,13 @@ pub(crate) struct ConsensusOutputCache {
     // deferred transactions is only used by consensus handler so there should never be lock contention
     // - hence no need for a DashMap.
     pub(crate) deferred_transactions_v2:
-        Mutex<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransaction>>>,
+        Mutex<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>>>,
 
     // user_signatures_for_checkpoints is written to by consensus handler and read from by checkpoint builder
     // The critical sections are small in both cases so a DashMap is probably not helpful.
+    #[allow(clippy::type_complexity)]
     pub(crate) user_signatures_for_checkpoints:
-        Mutex<HashMap<TransactionDigest, Vec<GenericSignature>>>,
+        Mutex<HashMap<TransactionDigest, Vec<(GenericSignature, Option<SequenceNumber>)>>>,
 
     executed_in_epoch: RwLock<DashMap<TransactionDigest, ()>>,
     executed_in_epoch_cache: MokaCache<TransactionDigest, ()>,
@@ -897,7 +905,7 @@ impl ConsensusOutputQuarantine {
         epoch_store: &AuthorityPerEpochStore,
         current_round: Round,
         for_randomness: bool,
-        transactions: &[VerifiedExecutableTransaction],
+        transactions: &[VerifiedExecutableTransactionWithAliases],
     ) -> SuiResult<impl IntoIterator<Item = (ObjectID, u64)>> {
         let protocol_config = epoch_store.protocol_config();
         let tables = epoch_store.tables()?;
@@ -921,7 +929,7 @@ impl ConsensusOutputQuarantine {
         };
         let mut shared_input_object_ids: Vec<_> = transactions
             .iter()
-            .flat_map(|tx| tx.shared_input_objects().map(|obj| obj.id))
+            .flat_map(|tx| tx.tx().shared_input_objects().map(|obj| obj.id))
             .collect();
         shared_input_object_ids.sort();
         shared_input_object_ids.dedup();

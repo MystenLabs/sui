@@ -192,7 +192,7 @@ async fn by_checkpoint(
     for tx in pg_lo..pg_hi {
         let ix = (tx - cp_lo) as usize;
         let digest = digests
-            .get(ix)
+            .get_digests(ix)
             .context("Transaction out of bounds in checkpoint")?
             .transaction
             .inner()

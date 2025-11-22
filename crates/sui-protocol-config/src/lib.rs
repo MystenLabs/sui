@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 104;
+const MAX_PROTOCOL_VERSION: u64 = 105;
 
 // Record history of protocol version allocations here:
 //
@@ -277,6 +277,7 @@ const MAX_PROTOCOL_VERSION: u64 = 104;
 //              Set max updates per settlement txn to 100.
 // Version 103: Framework update: internal Coin methods
 // Version 104: Framework update: CoinRegistry follow up for Coin methods
+// Version 105: Framework update: address aliases
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -885,6 +886,10 @@ struct FeatureFlags {
     // If true, deprecate global storage ops everywhere.
     #[serde(skip_serializing_if = "is_false")]
     deprecate_global_storage_ops: bool,
+
+    // Enables account aliases.
+    #[serde(skip_serializing_if = "is_false")]
+    account_aliases: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2405,6 +2410,18 @@ impl ProtocolConfig {
 
     pub fn deprecate_global_storage_ops(&self) -> bool {
         self.feature_flags.deprecate_global_storage_ops
+    }
+
+    pub fn account_aliases(&self) -> bool {
+        let account_aliases = self.feature_flags.account_aliases;
+        assert!(
+            !account_aliases || self.mysticeti_fastpath(),
+            "Account aliases requires Mysticeti fastpath to be enabled"
+        );
+        if account_aliases {
+            // TODO: when flag for disabling CertifiedTransaction is added, add assertion for it here.
+        }
+        account_aliases
     }
 }
 
@@ -4263,6 +4280,7 @@ impl ProtocolConfig {
                 }
                 103 => {}
                 104 => {}
+                105 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4525,6 +4543,10 @@ impl ProtocolConfig {
 
     pub fn set_correct_gas_payment_limit_check_for_testing(&mut self, val: bool) {
         self.feature_flags.correct_gas_payment_limit_check = val;
+    }
+
+    pub fn set_account_aliases_for_testing(&mut self, val: bool) {
+        self.feature_flags.account_aliases = val;
     }
 
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {

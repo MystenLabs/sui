@@ -97,7 +97,9 @@ impl AuthorityAPI for LocalAuthorityClient {
                 error: e.to_string(),
             })?;
         let transaction = epoch_store
-            .verify_transaction(deserialized_transaction.clone())
+            // Alias versions can be ignored for test authority client; we don't submit to
+            // consensus and no one else is voting.
+            .verify_transaction_with_current_aliases(deserialized_transaction.clone())
             .map(|_| VerifiedTransaction::new_from_verified(deserialized_transaction))?;
         state.handle_vote_transaction(&epoch_store, transaction.clone())?;
         if self.fault_config.fail_after_vote_transaction {
@@ -148,7 +150,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let transaction = epoch_store
             .signature_verifier
-            .verify_tx(transaction.data())
+            .verify_tx_require_no_aliases(transaction.data())
             .map(|_| VerifiedTransaction::new_from_verified(transaction))?;
         let result = state.handle_transaction(&epoch_store, transaction).await;
         if self.fault_config.fail_after_handle_transaction {

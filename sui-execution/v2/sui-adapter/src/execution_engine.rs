@@ -669,6 +669,9 @@ mod checked {
                         EndOfEpochTransactionKind::DisplayRegistryCreate => {
                             panic!("EndOfEpochTransactionKind::DisplayRegistryCreate should not exist in v2");
                         }
+                        EndOfEpochTransactionKind::AliasStateCreate => {
+                            panic!("EndOfEpochTransactionKind::AliasStateCreate should not exist in v2");
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")

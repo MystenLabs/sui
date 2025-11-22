@@ -61,7 +61,7 @@ use sui_types::{
     digests::CheckpointDigest,
     messages_checkpoint::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, EndOfEpochData,
-        FullCheckpointContents, VerifiedCheckpoint, VerifiedCheckpointContents,
+        VerifiedCheckpoint, VerifiedCheckpointContents, VersionedFullCheckpointContents,
     },
     storage::WriteStore,
 };
@@ -425,6 +425,7 @@ where
             self.checkpoint_event_sender.clone(),
             self.config.checkpoint_content_download_concurrency(),
             self.config.checkpoint_content_download_tx_concurrency(),
+            self.config.use_get_checkpoint_contents_v2(),
             self.config.checkpoint_content_timeout(),
             target_checkpoint_contents_sequence_receiver,
         );
@@ -1228,6 +1229,7 @@ async fn sync_checkpoint_contents<S>(
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     checkpoint_content_download_concurrency: usize,
     checkpoint_content_download_tx_concurrency: u64,
+    use_get_checkpoint_contents_v2: bool,
     timeout: Duration,
     mut target_sequence_channel: watch::Receiver<CheckpointSequenceNumber>,
 ) where
@@ -1287,6 +1289,7 @@ async fn sync_checkpoint_contents<S>(
                             network.clone(),
                             &store,
                             peer_heights.clone(),
+                            use_get_checkpoint_contents_v2,
                             timeout,
                             checkpoint,
                         ));
@@ -1320,6 +1323,7 @@ async fn sync_checkpoint_contents<S>(
                 network.clone(),
                 &store,
                 peer_heights.clone(),
+                use_get_checkpoint_contents_v2,
                 timeout,
                 next_checkpoint,
             ));
@@ -1344,6 +1348,7 @@ async fn sync_one_checkpoint_contents<S>(
     network: anemo::Network,
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
+    use_get_checkpoint_contents_v2: bool,
     timeout: Duration,
     checkpoint: VerifiedCheckpoint,
 ) -> Result<VerifiedCheckpoint, VerifiedCheckpoint>
@@ -1372,7 +1377,14 @@ where
     )
     .with_checkpoint(*checkpoint.sequence_number());
     let now = tokio::time::Instant::now();
-    let Some(_contents) = get_full_checkpoint_contents(peers, &store, &checkpoint, timeout).await
+    let Some(_contents) = get_full_checkpoint_contents(
+        peers,
+        &store,
+        &checkpoint,
+        use_get_checkpoint_contents_v2,
+        timeout,
+    )
+    .await
     else {
         // Delay completion in case of error so we don't hammer the network with retries.
         let duration = peer_heights
@@ -1395,8 +1407,9 @@ async fn get_full_checkpoint_contents<S>(
     peers: PeerBalancer,
     store: S,
     checkpoint: &VerifiedCheckpoint,
+    use_get_checkpoint_contents_v2: bool,
     timeout: Duration,
-) -> Option<FullCheckpointContents>
+) -> Option<VersionedFullCheckpointContents>
 where
     S: WriteStore,
 {
@@ -1416,13 +1429,21 @@ where
             peer.inner().peer_id(),
         );
         let request = Request::new(digest).with_timeout(timeout);
-        if let Some(contents) = peer
-            .get_checkpoint_contents(request)
-            .await
-            .tap_err(|e| trace!("{e:?}"))
-            .ok()
-            .and_then(Response::into_inner)
-            .tap_none(|| trace!("peer unable to help sync"))
+        let contents = if use_get_checkpoint_contents_v2 {
+            peer.get_checkpoint_contents_v2(request)
+                .await
+                .tap_err(|e| trace!("{e:?}"))
+                .ok()
+                .and_then(Response::into_inner)
+        } else {
+            peer.get_checkpoint_contents(request)
+                .await
+                .tap_err(|e| trace!("{e:?}"))
+                .ok()
+                .and_then(Response::into_inner)
+                .map(VersionedFullCheckpointContents::V1)
+        };
+        if let Some(contents) = contents.tap_none(|| trace!("peer unable to help sync"))
             && contents.verify_digests(digest).is_ok()
         {
             let verified_contents = VerifiedCheckpointContents::new_unchecked(contents.clone());

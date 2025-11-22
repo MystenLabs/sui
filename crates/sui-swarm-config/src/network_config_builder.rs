@@ -97,6 +97,7 @@ pub struct ConfigBuilder<R = OsRng> {
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
     global_state_hash_v2_enabled_config: Option<GlobalStateHashV2EnabledConfig>,
+    state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
     #[cfg(msim)]
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
 }
@@ -124,6 +125,7 @@ impl ConfigBuilder {
             max_submit_position: None,
             submit_delay_step_override_millis: None,
             global_state_hash_v2_enabled_config: None,
+            state_sync_config: None,
             #[cfg(msim)]
             execution_time_observer_config: None,
         }
@@ -331,9 +333,15 @@ impl<R> ConfigBuilder<R> {
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
+            state_sync_config: self.state_sync_config,
             #[cfg(msim)]
             execution_time_observer_config: self.execution_time_observer_config,
         }
+    }
+
+    pub fn with_state_sync_config(mut self, config: sui_config::p2p::StateSyncConfig) -> Self {
+        self.state_sync_config = Some(config);
+        self
     }
 
     fn get_or_init_genesis_config(&mut self) -> &mut GenesisConfig {
@@ -513,6 +521,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
 
                 if let Some(path) = &self.data_ingestion_dir {
                     builder = builder.with_data_ingestion_dir(path.clone());
+                }
+
+                if let Some(state_sync_config) = &self.state_sync_config {
+                    builder = builder.with_state_sync_config(state_sync_config.clone());
                 }
 
                 #[cfg(msim)]

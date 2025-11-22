@@ -204,6 +204,17 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
+                .name("get_checkpoint_contents_v2")
+                .route_name("GetCheckpointContentsV2")
+                .request_type("sui_types::messages_checkpoint::CheckpointContentsDigest")
+                .response_type(
+                    "Option<sui_types::messages_checkpoint::VersionedFullCheckpointContents>",
+                )
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
                 .name("get_checkpoint_availability")
                 .route_name("GetCheckpointAvailability")
                 .request_type("()")

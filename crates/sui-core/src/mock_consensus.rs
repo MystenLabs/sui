@@ -130,6 +130,21 @@ impl MockConsensusClient {
                         );
                     }
                 }
+                ConsensusTransactionKind::UserTransactionV2(tx) => {
+                    if tx.tx().is_consensus_tx() {
+                        validator.execution_scheduler().enqueue(
+                            vec![(
+                                VerifiedExecutableTransaction::new_from_consensus(
+                                    VerifiedTransaction::new_unchecked(tx.tx().clone()),
+                                    0,
+                                )
+                                .into(),
+                                env,
+                            )],
+                            &epoch_store,
+                        );
+                    }
+                }
                 _ => {}
             }
         }

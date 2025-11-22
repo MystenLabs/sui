@@ -22,9 +22,9 @@ use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::EndOfEpochData;
-use sui_types::messages_checkpoint::FullCheckpointContents;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::messages_checkpoint::VerifiedCheckpointContents;
+use sui_types::messages_checkpoint::VersionedFullCheckpointContents;
 use sui_types::object::Object;
 use sui_types::storage::BalanceInfo;
 use sui_types::storage::BalanceIterator;
@@ -136,7 +136,7 @@ impl ReadStore for RocksDbStore {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Option<VersionedFullCheckpointContents> {
         #[cfg(debug_assertions)]
         if let Some(sequence_number) = sequence_number {
             // When sequence_number is provided as an optimization, we want to ensure that
@@ -201,10 +201,12 @@ impl ReadStore for RocksDbStore {
                         return None;
                     }
                 }
-                Some(FullCheckpointContents::from_contents_and_execution_data(
-                    contents,
-                    transactions.into_iter(),
-                ))
+                Some(
+                    VersionedFullCheckpointContents::from_contents_and_execution_data(
+                        contents,
+                        transactions.into_iter(),
+                    ),
+                )
             })
     }
 
@@ -471,7 +473,7 @@ impl ReadStore for RestReadStore {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Option<VersionedFullCheckpointContents> {
         self.rocks
             .get_full_checkpoint_contents(sequence_number, digest)
     }

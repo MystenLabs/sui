@@ -45,7 +45,9 @@ pub async fn send_and_confirm_transaction(
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
     transaction.validity_check(&epoch_store.tx_validity_check_context())?;
-    let transaction = epoch_store.verify_transaction(transaction)?;
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)?
+        .into_tx();
     let response = authority
         .handle_sign_transaction(&epoch_store, transaction.clone())
         .await?;

@@ -24,13 +24,14 @@ use sui_types::messages_checkpoint::{
     SignedCheckpointSummary,
 };
 use sui_types::transaction::SharedObjectMutability;
+use sui_types::transaction::VerifiedTransactionWithAliases;
 use sui_types::utils::{make_committee_key_num, to_sender_signed_transaction};
 use sui_types::{
     base_types::{ExecutionDigests, ObjectID, SuiAddress},
     object::Object,
     transaction::{
         CallArg, CertifiedTransaction, ObjectArg, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
-        TransactionData, VerifiedTransaction,
+        TransactionData,
     },
 };
 use tokio::time::sleep;
@@ -100,8 +101,9 @@ pub async fn test_certificates_with_gas_objects(
         .unwrap();
 
         let transaction = epoch_store
-            .verify_transaction(to_sender_signed_transaction(data, &keypair))
-            .unwrap();
+            .verify_transaction_require_no_aliases(to_sender_signed_transaction(data, &keypair))
+            .unwrap()
+            .into_tx();
 
         // Submit the transaction and assemble a certificate.
         let response = authority
@@ -127,7 +129,7 @@ pub async fn test_user_transaction(
     keypair: &AccountKeyPair,
     gas_object: Object,
     input_objects: Vec<Object>,
-) -> VerifiedTransaction {
+) -> VerifiedTransactionWithAliases {
     let epoch_store = authority.load_epoch_store_one_call_per_task();
     let rgp = epoch_store.reference_gas_price();
 
@@ -176,7 +178,7 @@ pub async fn test_user_transaction(
     .unwrap();
 
     epoch_store
-        .verify_transaction(to_sender_signed_transaction(data, keypair))
+        .verify_transaction_with_current_aliases(to_sender_signed_transaction(data, keypair))
         .unwrap()
 }
 
