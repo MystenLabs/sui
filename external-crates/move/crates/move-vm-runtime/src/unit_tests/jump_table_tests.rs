@@ -180,7 +180,7 @@ fn test_flatten_and_renumber_blocks_empty() {
     let blocks = BTreeMap::new();
     let mut jump_tables = vec![];
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
     assert!(result.is_empty());
 }
 
@@ -192,7 +192,7 @@ fn test_flatten_and_renumber_blocks_single_block() {
     blocks.insert(0u16, vec![input::Bytecode::LdU64(42), input::Bytecode::Pop]);
     let mut jump_tables = vec![];
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
     assert_eq!(result.len(), 2);
     assert!(matches!(result[0], input::Bytecode::LdU64(42)));
     assert!(matches!(result[1], input::Bytecode::Pop));
@@ -214,7 +214,7 @@ fn test_flatten_and_renumber_blocks_multiple_blocks() {
     );
     let mut jump_tables = vec![];
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
     assert_eq!(result.len(), 5);
     // Verify the blocks were flattened in order
     assert!(matches!(result[0], input::Bytecode::LdU64(42)));
@@ -239,7 +239,7 @@ fn test_flatten_and_renumber_blocks_branch_targets() {
     );
     let mut jump_tables = vec![];
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
     assert_eq!(result.len(), 4);
 
     // Verify that branch targets were renumbered
@@ -265,7 +265,7 @@ fn test_flatten_and_renumber_blocks_with_jump_table() {
     blocks.insert(10u16, vec![input::Bytecode::LdU64(2)]);
     blocks.insert(20u16, vec![input::Bytecode::LdU64(3)]);
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
 
     // Verify the bytecode was flattened correctly
     assert_eq!(result.len(), 3);
@@ -305,7 +305,7 @@ fn test_flatten_and_renumber_blocks_variant_switch() {
     blocks.insert(5u16, vec![input::Bytecode::LdU64(100)]);
     blocks.insert(10u16, vec![input::Bytecode::LdU64(200)]);
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
 
     // Verify flattening
     assert_eq!(result.len(), 4);
@@ -319,4 +319,47 @@ fn test_flatten_and_renumber_blocks_variant_switch() {
     assert_eq!(updated_table[0], 0); // Block 0 -> offset 0
     assert_eq!(updated_table[1], 2); // Block 5 -> offset 2
     assert_eq!(updated_table[2], 3); // Block 10 -> offset 3
+}
+
+#[test]
+fn test_flatten_and_renumber_blocks_overflow_protection() {
+    use crate::jit::optimization::ast as input;
+
+    // Test that we properly detect overflow when bytecode offset exceeds u16::MAX
+    let mut blocks = BTreeMap::new();
+
+    let large_vec = vec![input::Bytecode::Nop; (u16::MAX as usize) + 1];
+    blocks.insert(0u16, large_vec);
+
+    let mut jump_tables = vec![];
+
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+    assert!(result.is_err());
+
+    let err = result.unwrap_err();
+    let msg = format!("{:?}", err);
+    assert!(msg.contains("exceeds u16::MAX") || msg.contains("overflow"));
+}
+
+#[test]
+fn test_flatten_and_renumber_blocks_offset_overflow_protection() {
+    use crate::jit::optimization::ast as input;
+
+    // Test that we properly detect overflow when cumulative offset exceeds u16::MAX
+    let mut blocks = BTreeMap::new();
+
+    let block1 = vec![input::Bytecode::Nop; u16::MAX as usize];
+    let block2 = vec![input::Bytecode::Nop; 2];
+
+    blocks.insert(0u16, block1);
+    blocks.insert(1u16, block2);
+
+    let mut jump_tables = vec![];
+
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+    assert!(result.is_err());
+
+    let err = result.unwrap_err();
+    let msg = format!("{:?}", err);
+    assert!(msg.contains("overflow") || msg.contains("exceeds u16::MAX"));
 }
