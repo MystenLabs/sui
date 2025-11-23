@@ -7,8 +7,12 @@ publish = false
 edition = "2024"
 
 [dependencies]
+anyhow.workspace = true
 futures.workspace = true
+tap.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "time", "macros"] }
+tracing.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["full"] }
+tokio = { workspace = true, features = ["full", "test-util"] }
