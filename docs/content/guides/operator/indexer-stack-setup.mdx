@@ -305,17 +305,17 @@ GraphQL RPC server reads data from the general-purpose indexer's database (Postg
 
 Scale the number of nodes based on the desired read throughput requirements of your client applications.
 
-### Dependencies of the GraphQL RPC server
+### GraphQL RPC server dependencies
 
 The GraphQL RPC server relies on multiple backend services to fulfill different types of queries:
-- Archival service (`--ledger-grpc-url`) provides historical data required for most GraphQL queries involving the contents of checkpoint, objects, and transactions.
+- Archival service (`--ledger-grpc-url`) provides historical data for most queries involving checkpoints, objects, and transactions.
 - Consistent store (`--consistent-store-url`) serves live data for queries related to current object and balance ownership.
-- Postgres database (`--database-url`) is the backing store for all queries, except for direct object and transaction lookups, which are handled by the archival service.
-- Fullnode RPC (`--fullnode-rpc-url`) is used for transaction simulation and execution.
+- Postgres database (`--database-url`) is the primary store for most queries, except for direct object and transaction lookups handled by the Archival service.
+- Fullnode RPC (`--fullnode-rpc-url`) powers transaction simulation and execution.
 
-Make sure to supply the appropriate service URLs in your run command based on the types of queries you want the GraphQL server to support.
+Set the appropriate service URLs in your run command based on the query types your GraphQL RPC server needs to support.
 
-### Run command
+### Run `sui-indexer-alt-graphql`
 
 :::info
 
@@ -340,12 +340,12 @@ Multiple `--indexer-config` parameters can be provided, one for each general-pur
 
 | CLI parameter                        | Description                                                                        |
 |----------------------------------|------------------------------------------------------------------------------------|
-| `CONFIG_FILE`                    | Path to GraphQL configuration file                                                 |
-| `INDEXER_CONFIG_FILE`            | Path to indexer configuration file; can be set multiple times                  |
-| `LEDGER_GRPC_URL`                | URL to archival service's LedgerService gRPC API                                   |
-| `CONSISTENT_STORE_URL`           | URL to [consistent store](#consistent-store-setup) API                             |
+| `CONFIG_FILE`                    | Path to GraphQL RPC server configuration file                                                 |
+| `INDEXER_CONFIG_FILE`            | Path to general-purpose indexer configuration file; can be set multiple times for different pipelines                 |
+| `LEDGER_GRPC_URL`                | URL to Archival service's `LedgerService` gRPC API                                   |
+| `CONSISTENT_STORE_URL`           | URL to [Consistent store](#consistent-store-setup) API                             |
 | `DATABASE_URL`                   | Postgres database connection string                                                |
-| `FULLNODE_RPC_URL`               | URL to fullnode RPC API                                                            |
+| `FULLNODE_RPC_URL`               | URL to full node RPC                                                            |
 
 
 Example:
@@ -367,7 +367,7 @@ sui-indexer-alt-graphql rpc \
 
 ### Configuration recommendations
 
-The default GraphQL API configuration is provided in the `examples` directory of the Sui repo.
+The default GraphQL RPC configuration is provided in the `examples` directory of the Sui repo.
 
 <ImportContent source="/examples/prod-config/graphql.toml" mode="code" />
 |-----------------------------------------------------------------------------------------------|-----------------------------------|
