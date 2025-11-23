@@ -14639,8 +14639,12 @@ dependencies = [
 name = "sui-futures"
 version = "1.63.0"
 dependencies = [
+ "anyhow",
  "futures",
+ "tap",
+ "thiserror 1.0.69",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
