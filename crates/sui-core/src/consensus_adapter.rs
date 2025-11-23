@@ -1047,7 +1047,10 @@ impl ConsensusAdapter {
     ) -> (Vec<ConsensusPosition>, BlockStatusReceiver) {
         let ack_start = Instant::now();
         let mut retries: u32 = 0;
-        let mut backoff = mysten_common::backoff::ExponentialBackoff::new(Duration::from_secs(10));
+        let mut backoff = mysten_common::backoff::ExponentialBackoff::new(
+            Duration::from_millis(100),
+            Duration::from_secs(10),
+        );
 
         let (consensus_positions, status_waiter) = loop {
             let span = debug_span!("client_submit");

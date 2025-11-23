@@ -586,7 +586,8 @@ impl EffectsCertifier {
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let effects_start = Instant::now();
-        let backoff = ExponentialBackoff::new(MAX_WAIT_FOR_EFFECTS_RETRY_DELAY);
+        let backoff =
+            ExponentialBackoff::new(Duration::from_millis(100), MAX_WAIT_FOR_EFFECTS_RETRY_DELAY);
         let ping_type = raw_request.get_ping_type();
         // This loop should only retry errors that are retriable without new submission.
         for (attempt, delay) in backoff.enumerate() {
