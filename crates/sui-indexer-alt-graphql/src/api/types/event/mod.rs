@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use anyhow::Context as _;
 use async_graphql::{Context, Object, connection::Connection};
 use diesel::{prelude::QueryableByName, sql_types::BigInt};
@@ -24,11 +26,13 @@ use crate::{
     error::RpcError,
     pagination::Page,
     scope::Scope,
+    task::watermark::Watermarks,
 };
 
 use super::{
-    address::Address, move_module::MoveModule, move_package::MovePackage, move_type::MoveType,
-    move_value::MoveValue, transaction::Transaction,
+    address::Address, available_range::AvailableRangeKey, move_module::MoveModule,
+    move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
+    transaction::Transaction,
 };
 
 pub(crate) mod filter;
@@ -124,8 +128,13 @@ impl Event {
     ) -> Result<Connection<String, Event>, RpcError> {
         let pg_reader: &PgReader = ctx.data()?;
 
-        // TODO: (henry) Use watermarks once we have a strategy for kv pruning.
-        let reader_lo = 0;
+        let watermarks: &Arc<Watermarks> = ctx.data()?;
+        let available_range_key = AvailableRangeKey {
+            type_: "Query".to_string(),
+            field: Some("events".to_string()),
+            filters: Some(filter.active_filters()),
+        };
+        let reader_lo = available_range_key.reader_lo(watermarks)?;
 
         let Some(mut query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
             return Ok(Connection::new(false, false));
