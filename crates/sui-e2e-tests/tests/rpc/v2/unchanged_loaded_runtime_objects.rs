@@ -398,11 +398,15 @@ async fn test_tto_receive_twice() {
         .transaction
         .unwrap();
 
-    assert_eq!(t.effects().unchanged_loaded_runtime_objects().len(), 1);
-    assert_eq!(
-        t.effects().unchanged_loaded_runtime_objects()[0].object_id(),
-        coin.0.as_str(),
-    );
+    // assert_eq!(t.effects().unchanged_loaded_runtime_objects().len(), 1);
+    // assert_eq!(
+    //     t.effects().unchanged_loaded_runtime_objects()[0].object_id(),
+    //     coin.0.as_str(),
+    // );
+    // Since the adapter rewrite, the usage of Receiving of the same type causes a move, meaning
+    // that a given receiving input cannot be used twice for the same type, as such, this
+    // text can no longer run, and will hit an error during memory safety checking before execution.
+    assert_eq!(t.effects().unchanged_loaded_runtime_objects().len(), 0);
     // received object does not show up in changed obejcts
     assert!(
         !t.effects()

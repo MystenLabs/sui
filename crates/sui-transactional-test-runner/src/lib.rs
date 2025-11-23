@@ -10,7 +10,6 @@ pub mod programmable_transaction_test_parser;
 mod simulator_persisted_store;
 pub mod test_adapter;
 
-use move_command_line_common::testing::InstaOptions;
 pub use move_transactional_test_runner::framework::{
     create_adapter, run_tasks_with_adapter, run_test_impl,
 };
@@ -53,35 +52,14 @@ use sui_types::transaction::TransactionKind;
 use sui_types::transaction::{InputObjects, TransactionData};
 use test_adapter::{PRE_COMPILED, SuiTestAdapter};
 
-use crate::test_adapter::ENABLE_PTB_V2;
-
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    ENABLE_PTB_V2.set(false).unwrap();
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
     run_test_impl::<SuiTestAdapter>(path, Some(std::sync::Arc::new(PRE_COMPILED.clone())), None)
         .await?;
-    Ok(())
-}
-
-#[cfg_attr(not(msim), tokio::main)]
-#[cfg_attr(msim, msim::main)]
-pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    ENABLE_PTB_V2.set(true).unwrap();
-    let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
-        .with_env()
-        .init();
-    let mut options = InstaOptions::new();
-    options.suffix("v2");
-    run_test_impl::<SuiTestAdapter>(
-        path,
-        Some(std::sync::Arc::new(PRE_COMPILED.clone())),
-        Some(options),
-    )
-    .await?;
     Ok(())
 }
 

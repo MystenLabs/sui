@@ -23,8 +23,8 @@ task 3, lines 40-44:
 //> 0: test::m1::cap();
 //> TransferObjects([Result(0)], Input(0));
 // not an object (but sneaky)
-Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Object passed to TransferObject does not have public transfer, i.e. the `store` ability
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTransferObject }, source: None, command: Some(1) } }
 
 task 4, lines 45-51:
 //# programmable --sender A --inputs @A
@@ -33,8 +33,8 @@ task 4, lines 45-51:
 //> 1: test::m1::cup<test::m1::Cap>(Result(0));
 //> TransferObjects([Result(1)], Input(0));
 // one object, one not
-Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(2) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Object passed to TransferObject does not have public transfer, i.e. the `store` ability
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTransferObject }, source: None, command: Some(2) } }
 
 task 5, lines 52-57:
 //# programmable --sender A --inputs @A
@@ -42,8 +42,8 @@ task 5, lines 52-57:
 //> 1: test::m1::cap();
 //> TransferObjects([Result(0), Result(1)], Input(0));
 // one object, one not (but sneaky)
-Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(2) } }
+Error: Transaction Effects Status: Invalid command argument at 1. Object passed to TransferObject does not have public transfer, i.e. the `store` ability
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidTransferObject }, source: None, command: Some(2) } }
 
 task 6, lines 58-63:
 //# programmable --sender A --inputs @A
