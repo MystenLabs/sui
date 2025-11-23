@@ -357,11 +357,6 @@ impl<'a> GasStatus<'a> {
         self.cost_table
     }
 
-    /// Return the gas left.
-    pub fn remaining_gas(&self) -> Gas {
-        self.gas_left.to_unit_round_down()
-    }
-
     /// Charge a given amount of gas and fail if not enough gas units are left.
     pub fn deduct_gas(&mut self, amount: InternalGas) -> PartialVMResult<()> {
         if !self.charge {
