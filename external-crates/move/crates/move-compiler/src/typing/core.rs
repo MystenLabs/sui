@@ -2365,28 +2365,53 @@ pub fn solve_constraints(context: &mut Context) {
         match constraint {
             VarConstraint::Num(loc) => {
                 let tvar = sp(loc, Type_::Var(var));
-                match unfold_type(&subst, tvar.clone()).value {
-                    Type_::UnresolvedError | Type_::Anything => {
-                        let next_subst =
-                            join(&mut context.tvar_counter, subst, &Type_::u64(loc), &tvar)
-                                .unwrap()
-                                .0;
-                        subst = next_subst;
-                    }
-                    _ => (),
+                let ty = unfold_type(&subst, tvar.clone());
+
+                // If we never ground the type, emit a warning about defaulting to u64
+                if matches!(ty.value, Type_::Anything) {
+                    let msg = "Could not determine a concrete type for this numeric \
+                                   literal, so defaulting to 'u64'";
+                    let mut diag = diag!(TypeSafety::MissingLiteralType, (loc, msg));
+                    diag.add_note(
+                        "To avoid this warning, add an explicit type annotation, \
+                                       e.g., '<num>u64'",
+                    );
+                    context.add_diag(diag);
+                }
+
+                // In the Anything and Error cases, we default to u64
+                if matches!(ty.value, Type_::UnresolvedError | Type_::Anything) {
+                    let next_subst =
+                        join(&mut context.tvar_counter, subst, &Type_::u64(loc), &tvar)
+                            .unwrap()
+                            .0;
+                    subst = next_subst;
                 }
             }
             VarConstraint::String(loc) => {
                 let tvar = sp(loc, Type_::Var(var));
-                match unfold_type(&subst, tvar.clone()).value {
-                    Type_::UnresolvedError | Type_::Anything => {
-                        let ty = Type_::vector(loc, Type_::u8(loc));
-                        let next_subst = join(&mut context.tvar_counter, subst, &ty, &tvar)
-                            .unwrap()
-                            .0;
-                        subst = next_subst;
-                    }
-                    _ => (),
+
+                let ty = unfold_type(&subst, tvar.clone());
+
+                // If we never ground the type, emit a warning about defaulting to vector<u8>
+                if matches!(ty.value, Type_::Anything) {
+                    let msg = "Could not determine a concrete type for this string \
+                                   literal, so defaulting to 'vector<u8>'";
+                    let mut diag = diag!(TypeSafety::MissingLiteralType, (loc, msg));
+                    diag.add_note(
+                        "To avoid this warning, add an explicit annotation, \
+                                       e.g., 'b\"<const>\"'",
+                    );
+                    context.add_diag(diag);
+                }
+
+                // In the Anything and Error cases, we default to vector<u8>
+                if matches!(ty.value, Type_::UnresolvedError | Type_::Anything) {
+                    let ty = Type_::vector(loc, Type_::u8(loc));
+                    let next_subst = join(&mut context.tvar_counter, subst, &ty, &tvar)
+                        .unwrap()
+                        .0;
+                    subst = next_subst;
                 }
             }
             VarConstraint::Divergent(loc) => {

@@ -10,5 +10,5 @@ public fun borrow<K: copy + drop + store, V: store>(_table: &mut Table<K, V>, _k
 }
 
 public fun index_by_reference<T: store>(table: &mut Table<u64, T>) {
-    table[&1].push_back(3);
+    table[&1u64].push_back(3u64);
 }

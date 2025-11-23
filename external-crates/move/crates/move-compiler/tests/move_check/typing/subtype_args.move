@@ -7,16 +7,16 @@ module 0x8675309::M {
     fun imm_imm<T>(_x: &T, _y: &T) {}
 
     fun t0() {
-        imm(&mut 0);
-        imm(&0);
+        imm(&mut 0u64);
+        imm(&0u64);
 
         imm(&mut S{});
         imm(&S{});
     }
 
     fun t1() {
-        imm_mut(&mut 0, &mut 0);
-        mut_imm(&mut 0, &mut 0);
-        imm_imm(&mut 0, &mut 0);
+        imm_mut(&mut 0, &mut 0u64);
+        mut_imm(&mut 0u64, &mut 0);
+        imm_imm(&mut 0u64, &mut 0);
     }
 }

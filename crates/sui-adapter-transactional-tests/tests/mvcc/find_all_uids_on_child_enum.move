@@ -56,8 +56,8 @@ module test::m {
             wrapped: wrapped_a(ctx),
             many: vector[wrapped_a(ctx), wrapped_b(ctx)],
         };
-        field::add(&mut s.id, KEY, 0);
-        field::add(&mut s.other, KEY, 0);
+        field::add(&mut s.id, KEY, 0u64);
+        field::add(&mut s.other, KEY, 0u64);
         s
     }
 
@@ -68,9 +68,9 @@ module test::m {
         };
         match (&mut w) {
             Wrapped::A { id, other } => {
-                field::add(id, KEY, 0);
+                field::add(id, KEY, 0u64);
                 match (other) {
-                    Inner::A(id) => field::add(id, KEY, 0),
+                    Inner::A(id) => field::add(id, KEY, 0u64),
                     Inner::B(..) => assert!(false),
                 }
             },
@@ -86,9 +86,9 @@ module test::m {
         };
         match (&mut w) {
             Wrapped::B { id, other } => {
-                field::add(id, KEY, 0);
+                field::add(id, KEY, 0u64);
                 match (other) {
-                    Inner::B(id) => field::add(id, KEY, 0),
+                    Inner::B(id) => field::add(id, KEY, 0u64),
                     Inner::A(..) => assert!(false),
                 }
             },

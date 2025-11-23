@@ -4,7 +4,7 @@ module 0x8675309::M {
         (freeze<u64>(x): &mut u64);
         (freeze<vector<bool>>(&any()): &mut vector<bool>);
 
-        (assert!(42, true): ());
+        (assert!(42u64, true): ());
         (assert!(true && false, *x): bool);
         assert!(true || false, 0u8);
     }

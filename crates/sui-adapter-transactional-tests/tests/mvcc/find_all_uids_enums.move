@@ -38,8 +38,8 @@ module test::m {
             wrapped: wrapped(ctx),
             many: vector[wrapped(ctx), wrapped(ctx)],
         };
-        field::add(&mut s.id, KEY, 0);
-        field::add(s.other.get_wrapped_uid(), KEY, 0);
+        field::add(&mut s.id, KEY, 0u64);
+        field::add(s.other.get_wrapped_uid(), KEY, 0u64);
         s
     }
 
@@ -48,8 +48,8 @@ module test::m {
             id: object::new(ctx),
             other: EnumWrapper::Wrapped(object::new(ctx)),
         };
-        field::add(&mut w.id, KEY, 0);
-        field::add(w.other.get_wrapped_uid(), KEY, 0);
+        field::add(&mut w.id, KEY, 0u64);
+        field::add(w.other.get_wrapped_uid(), KEY, 0u64);
         w
     }
 

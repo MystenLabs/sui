@@ -26,13 +26,13 @@ module test::m {
 
     public fun b(ctx: &mut TxContext): B {
         let mut b = B { id: object::new(ctx) };
-        field::add(&mut b.id, KEY, 0);
+        field::add(&mut b.id, KEY, 0u64);
         b
 
     }
 
     public fun bump(b: &mut B) {
-        let f = field::borrow_mut(&mut b.id, KEY);
+        let f = field::borrow_mut<_, u64>(&mut b.id, KEY);
         *f = *f + 1;
     }
 

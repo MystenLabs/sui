@@ -14,7 +14,7 @@ fun simple_all_functions() {
     let mut table = linked_table::new(scenario.ctx());
     check_ordering(&table, &vector[]);
     // add fields
-    table.push_back(b"hello", 0);
+    table.push_back(b"hello", 0u64);
     check_ordering(&table, &vector[b"hello"]);
     table.push_back(b"goodbye", 1);
     // check they exist
@@ -81,7 +81,7 @@ fun push_front_singleton() {
     let mut scenario = test_scenario::begin(sender);
     let mut table = linked_table::new(scenario.ctx());
     check_ordering(&table, &vector[]);
-    table.push_front(b"hello", 0);
+    table.push_front(b"hello", 0u64);
     assert!(table.contains(b"hello"));
     check_ordering(&table, &vector[b"hello"]);
     scenario.end();
@@ -94,7 +94,7 @@ fun push_back_singleton() {
     let mut scenario = test_scenario::begin(sender);
     let mut table = linked_table::new(scenario.ctx());
     check_ordering(&table, &vector[]);
-    table.push_back(b"hello", 0);
+    table.push_back(b"hello", 0u64);
     assert!(table.contains(b"hello"));
     check_ordering(&table, &vector[b"hello"]);
     scenario.end();
@@ -108,7 +108,7 @@ fun push_front_duplicate() {
     let mut scenario = test_scenario::begin(sender);
     let mut table = linked_table::new(scenario.ctx());
     table.push_front(b"hello", 0);
-    table.push_front(b"hello", 0);
+    table.push_front(b"hello", 0u64);
     abort 42
 }
 
@@ -118,7 +118,7 @@ fun push_back_duplicate() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut table = linked_table::new(scenario.ctx());
-    table.push_back(b"hello", 0);
+    table.push_back(b"hello", 0u64);
     table.push_back(b"hello", 0);
     abort 42
 }
@@ -129,7 +129,7 @@ fun push_mixed_duplicate() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut table = linked_table::new(scenario.ctx());
-    table.push_back(b"hello", 0);
+    table.push_back(b"hello", 0u64);
     table.push_front(b"hello", 0);
     abort 42
 }
@@ -190,7 +190,7 @@ fun destroy_non_empty() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut table = linked_table::new(scenario.ctx());
-    table.push_back(0, 0);
+    table.push_back(0u64, 0u64);
     table.destroy_empty();
     scenario.end();
 }
@@ -213,7 +213,7 @@ fun sanity_check_drop() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut table = linked_table::new(scenario.ctx());
-    table.push_back(0, 0);
+    table.push_back(0u64, 0u64);
     assert!(table.length() == 1);
     scenario.end();
     table.drop();
@@ -226,7 +226,7 @@ fun sanity_check_size() {
     let mut table = linked_table::new(scenario.ctx());
     assert!(table.is_empty());
     assert!(table.length() == 0);
-    table.push_back(0, 0);
+    table.push_back(0u64, 0u64);
     assert!(!table.is_empty());
     assert!(table.length() == 1);
     table.push_back(1, 0);
@@ -242,7 +242,7 @@ fun test_all_orderings() {
     let mut scenario = test_scenario::begin(sender);
     let ctx = scenario.ctx();
     let keys = vector[b"a", b"b", b"c"];
-    let values = vector[3, 2, 1];
+    let values = vector[3, 2, 1u64];
     let all_bools = vector[
         vector[true, true, true],
         vector[true, false, true],

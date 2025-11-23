@@ -12,7 +12,7 @@ module M {
             use 0x3::Mango::baz;
             use 0x3::Salsa::{Self, foo as bar, foo};
 
-            0
+            0u64
         }; x;
         {
             {

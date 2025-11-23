@@ -3,7 +3,7 @@ module 0x7::N {
     use 0x7::M;
 
     public fun foo<T1, T2>(): u64 {
-        let mut x = 3;
+        let mut x = 3u64;
         let y = &mut x;
         let z = M::sum(4);
         _ = y;

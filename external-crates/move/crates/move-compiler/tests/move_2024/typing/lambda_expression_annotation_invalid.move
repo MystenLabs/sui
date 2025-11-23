@@ -17,13 +17,13 @@ fun bad_types() {
 }
 
 fun non_lambda() {
-    do!((|x| { x }: u8), 42);
+    do!((|x| { x }: u8), 42u64);
     do!(((|x| { x }: bool): |bool| -> bool), false);
 }
 
 fun bad_arity() {
-    do!((|x| { x }: |u8, u8| -> u8), 42);
-    do2!((|x, y| { x + y }: |u8| -> u8), 42);
+    do!((|x| { x }: |u8, u8| -> u8), 42u64);
+    do2!((|x, y| { x + y }: |u8| -> u8), 42u64);
 
     do!(((|_| { false }: |u8| -> bool): |u8, u8| -> bool), 0);
     do!(((|_| { false }: |u8, u8| -> bool): |u8| -> bool), 0);

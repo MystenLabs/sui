@@ -5,7 +5,7 @@ module 0x42::m {
 
     #[allow(dead_code)]
     public fun t00(): u64 {
-        if ('name: { return 'name 10 } == 10) {
+        if ('name: { return 'name 10u64 } == 10) {
             'outer: loop {
                 return 10
             }
@@ -16,7 +16,7 @@ module 0x42::m {
 
     #[allow(dead_code)]
     public fun t01(): u64 {
-        if ('name:  { return 'name 20 } == 10) {
+        if ('name:  { return 'name 20u64 } == 10) {
             'outer: loop {
                 return 20
             }
@@ -32,12 +32,12 @@ module 0x42::m {
     #[allow(dead_code)]
     public fun t02(): u64 {
         let x = 'outer: loop {
-            if ('name: { return 'name 20 } == 10) {
+            if ('name: { return 'name 20u64 } == 10u64) {
                 'outer: loop {
                     return 20
                 }
             };
-            break 'outer 10
+            break 'outer 10u64
         };
         while (x != x) {
             return 20
@@ -48,12 +48,12 @@ module 0x42::m {
     #[allow(dead_code)]
     public fun t03(): u64 {
         let x = 'outer: loop {
-            if ('name:  { return 'name 20 } == 10) {
+            if ('name:  { return 'name 20u64 } == 10u64) {
                 'outer: loop {
                     return 20
                 }
             };
-            break 'outer 20
+            break 'outer 20u64
         };
         while (x == x) {
             return 10
@@ -66,18 +66,18 @@ module 0x42::m {
         let a = 'all: {
             loop {
                 let x = 'outer: loop {
-                    if ('name:  { return 'name 20 } == 10) {
+                    if ('name:  { return 'name 20u64 } == 10u64) {
                         'outer: loop {
                             return 20
                         }
                     };
-                    break 'outer 20
+                    break 'outer 20u64
                 };
                 while (x == x) {
-                    return 'all 10
+                    return 'all 10u64
                 }
             };
-            20
+            20u64
         };
         a
     }
@@ -87,18 +87,18 @@ module 0x42::m {
         let a = 'all: {
             loop {
                 let x = 'outer: loop {
-                    if ('name:  { return 'name 20 } == 10) {
+                    if ('name:  { return 'name 20u64 } == 10u64) {
                         'outer: loop {
                             return 20
                         }
                     };
-                    break 'outer 20
+                    break 'outer 20u64
                 };
                 while (x == x) {
                     return 10
                 }
             };
-            20
+            20u64
         };
         a
     }

@@ -7,6 +7,6 @@ module a::m {
     }
 
     fun t() {
-        foo!(0);
+        foo!(0u64);
     }
 }

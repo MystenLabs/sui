@@ -3,7 +3,7 @@ module a::m {
     public struct S<T> has copy, drop { x: T }
 
     fun t() {
-        0 as S<_>;
+        0u64 as S<_>;
     }
 
 }

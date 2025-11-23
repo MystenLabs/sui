@@ -8,8 +8,8 @@ info:
 error[E04006]: invalid subtype
   ┌─ tests/move_check/typing/subtype_assign_invalid.move:5:17
   │
-5 │         let _x: &mut u64 = &0;
-  │                 ^^^^^^^^   -- Given: '&{integer}'
+5 │         let _x: &mut u64 = &0u64;
+  │                 ^^^^^^^^   ----- Given: '&u64'
   │                 │           
   │                 Invalid type annotation
   │                 Expected: '&mut u64'
@@ -19,8 +19,8 @@ error[E04006]: invalid subtype
    │
  9 │         let (x, y): (&mut u64, &mut u64);
    │                      -------- Expected: '&mut u64'
-10 │         (x, y) = (&0, &0);
-   │          ^        -- Given: '&{integer}'
+10 │         (x, y) = (&0u64, &0u64);
+   │          ^        ----- Given: '&u64'
    │          │         
    │          Invalid assignment to variable 'x'
 
@@ -29,9 +29,9 @@ error[E04006]: invalid subtype
    │
  9 │         let (x, y): (&mut u64, &mut u64);
    │                                -------- Expected: '&mut u64'
-10 │         (x, y) = (&0, &0);
-   │             ^         -- Given: '&{integer}'
-   │             │          
+10 │         (x, y) = (&0u64, &0u64);
+   │             ^            ----- Given: '&u64'
+   │             │             
    │             Invalid assignment to variable 'y'
 
 error[E04006]: invalid subtype
@@ -39,8 +39,8 @@ error[E04006]: invalid subtype
    │
 12 │         let (x, y): (&mut u64, &u64);
    │                      -------- Expected: '&mut u64'
-13 │         (x, y) = (&0, &0);
-   │          ^        -- Given: '&{integer}'
+13 │         (x, y) = (&0u64, &0);
+   │          ^        ----- Given: '&u64'
    │          │         
    │          Invalid assignment to variable 'x'
 
@@ -49,7 +49,7 @@ error[E04006]: invalid subtype
    │
 15 │         let (x, y): (&u64, &mut u64);
    │                            -------- Expected: '&mut u64'
-16 │         (x, y)= (&0, &0);
-   │             ^        -- Given: '&{integer}'
+16 │         (x, y)= (&0, &0u64);
+   │             ^        ----- Given: '&u64'
    │             │         
    │             Invalid assignment to variable 'y'

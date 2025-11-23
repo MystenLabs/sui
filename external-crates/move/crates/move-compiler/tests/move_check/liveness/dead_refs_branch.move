@@ -3,14 +3,14 @@ module 0x8675309::M {
         let x = 0;
         let x_ref = &mut x;
         if (cond) {
-            *x_ref = 0;
+            *x_ref = 0u64;
         };
         _ = x;
         _ = move x;
     }
 
     fun t1(cond: bool) {
-        let x = 0;
+        let x = 0u64;
         let x_ref = &mut x;
         if (cond) {
         } else {
@@ -24,14 +24,14 @@ module 0x8675309::M {
         let x = 0;
         let x_ref = &mut x;
         if (cond) {
-            *move x_ref = 0;
+            *move x_ref = 0u64;
         };
         _ = x;
         _ = move x;
     }
 
     fun t3(cond: bool) {
-        let x = 0;
+        let x = 0u64;
         let x_ref = &mut x;
         if (cond) {
             *move x_ref = 0;

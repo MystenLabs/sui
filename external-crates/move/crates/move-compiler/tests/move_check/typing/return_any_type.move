@@ -2,7 +2,7 @@ module 0x8675309::M {
     struct Coin {}
 
     fun t0() {
-        0 + (return ());
+        0u64 + (return ());
     }
 
     fun t1() {

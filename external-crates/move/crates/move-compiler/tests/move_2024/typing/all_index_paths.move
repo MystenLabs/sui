@@ -82,11 +82,11 @@ module a::m {
         (move t2).u.vs[2].w.xs[m+1].y;
         (move t2).u.vs[2].w.xs[m+1].y.z;
         move t2.u;
-        (move t2.u).vs[2];
-        (move t2.u).vs[2].w;
-        (move t2.u).vs[2].w.xs[m+1];
-        (move t2.u).vs[2].w.xs[m+1].y;
-        (move t2.u).vs[2].w.xs[m+1].y.z;
+        (move t2.u).vs[2u64];
+        (move t2.u).vs[2u64].w;
+        (move t2.u).vs[2u64].w.xs[m+1];
+        (move t2.u).vs[2u64].w.xs[m+1].y;
+        (move t2.u).vs[2u64].w.xs[m+1].y.z;
         move VEC.id();
     }
 

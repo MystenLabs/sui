@@ -5,10 +5,10 @@ fun main() {
     if (true) {
         x = 42;
     } else {
-        y = 0;
+        y = 0u64;
         y;
     };
-    assert!(x == 42, 42);
+    assert!(x == 42u64, 42);
 }
 }
 

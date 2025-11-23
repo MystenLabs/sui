@@ -23,7 +23,7 @@ entry fun t0(ctx: &mut TxContext) {
 entry fun t1(obj: &mut Obj) {
     let id = &mut obj.id;
 
-    let mut i = 0;
+    let mut i = 0u64;
     while (i < 500) {
         add<u64, u64>(id, i, i);
         i = i + 1;
@@ -32,7 +32,7 @@ entry fun t1(obj: &mut Obj) {
 
 entry fun t2(obj: &Obj) {
     let id = &obj.id;
-    let mut i = 0;
+    let mut i = 0u64;
     while (i < 500) {
         assert!(exists_with_type<u64, u64>(id, i), 0);
         i = i + 1;
@@ -41,7 +41,7 @@ entry fun t2(obj: &Obj) {
 
 entry fun t3(obj: &Obj) {
     let id = &obj.id;
-    let mut i = 0;
+    let mut i = 0u64;
     while (i < 500) {
         assert!(!exists_with_type<u64, bool>(id, i), 0);
         i = i + 1;
@@ -50,7 +50,7 @@ entry fun t3(obj: &Obj) {
 
 entry fun t4(obj: &Obj) {
     let id = &obj.id;
-    let mut i = 0;
+    let mut i = 0u64;
     while (i < 500) {
         assert!(*borrow(id, i) == i, 0);
         i = i + 1;

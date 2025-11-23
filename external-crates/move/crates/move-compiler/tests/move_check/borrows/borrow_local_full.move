@@ -8,7 +8,7 @@ module 0x8675309::M {
     }
 
     fun t0() {
-        let v = 0;
+        let v = 0u64;
         let x = &mut v;
         let y = &mut v;
         *x;

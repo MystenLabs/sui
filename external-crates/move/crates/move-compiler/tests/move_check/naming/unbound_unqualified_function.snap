@@ -20,5 +20,5 @@ error[E03005]: unbound unscoped name
 error[E03005]: unbound unscoped name
   ┌─ tests/move_check/naming/unbound_unqualified_function.move:5:10
   │
-5 │         *bar() = 0;
+5 │         *bar() = 0u64;
   │          ^^^ Unbound function 'bar' in current scope

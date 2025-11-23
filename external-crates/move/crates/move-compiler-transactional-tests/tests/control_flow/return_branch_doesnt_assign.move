@@ -5,7 +5,7 @@ fun main() {
     if (true) {
         return ()
     } else {
-        x = 0
+        x = 0u64
     };
     assert!(x == 5, 42);
 }

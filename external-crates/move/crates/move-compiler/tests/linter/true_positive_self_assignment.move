@@ -5,7 +5,7 @@ module a::m {
         p = p; // warn
         p;
 
-        let x = 0;
+        let x = 0u64;
         x;
         x = x; // warn
         x;
@@ -15,7 +15,7 @@ module a::m {
         x = copy x; // warn
 
         let other;
-        (p, other, x) = (p, 0, x); // warn x2
+        (p, other, x) = (p, 0u64, x); // warn x2
         p;
         x;
         other;
@@ -49,7 +49,7 @@ module a::m {
         *copy r = *r;
         *move r = *copy r;
 
-        let x = 0;
+        let x = 0u64;
         *&mut x = *&mut x;
     }
 }

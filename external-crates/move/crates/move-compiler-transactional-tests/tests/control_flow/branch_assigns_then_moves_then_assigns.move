@@ -1,8 +1,8 @@
 //# run
 module 0x42::m {
 fun main() {
-    let x;
-    let y;
+    let x: u64;
+    let y: u64;
     if (true) {
         x = 1;
         y = move x;

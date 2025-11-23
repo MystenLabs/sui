@@ -26,14 +26,14 @@ module M {
         0x42::X::f_private();
         freeze(&mut x);
         assert!(true, 42);
-        if (true) 0 else 1;
+        if (true) 0u64 else 1;
         loop ();
         loop { break; continue; };
         while (true) ();
-        x = 1;
+        x = 1u64;
         return 0;
         abort 0;
-        *(&mut 0) = 0;
+        *(&mut 0u64) = 0;
         b.f = 0;
         b.f;
         *&b.f;

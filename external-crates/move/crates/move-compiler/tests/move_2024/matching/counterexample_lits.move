@@ -5,13 +5,13 @@ module 0x42::m {
     }
 
     fun t0(): u64 {
-        match (Tuple2::Ctor(0, 1)) {
-            Tuple2::Ctor(0, _) => 0,
+        match (Tuple2::Ctor(0, 1u64)) {
+            Tuple2::Ctor(0u64, _) => 0,
         }
     }
 
     fun t1(): u64 {
-        match (Tuple2::Ctor(0, 1)) {
+        match (Tuple2::Ctor(0, 1u64)) {
             Tuple2::Ctor(x, _) => x
         }
     }
@@ -45,16 +45,16 @@ module 0x42::m {
     }
 
     fun t6(): u64 {
-        match (Tuple2::Ctor(0, 1)) {
+        match (Tuple2::Ctor(0u64, 1u64)) {
             Tuple2::Ctor(0, _) => 0,
             Tuple2::Ctor(3, _) => 3
         }
     }
 
     fun t7(): u64 {
-        match (Tuple2::Ctor(0, 1)) {
+        match (Tuple2::Ctor(0, 1u64)) {
             Tuple2::Ctor(0, _) => 0,
-            Tuple2::Ctor(3, _) => 3,
+            Tuple2::Ctor(3u64, _) => 3,
             Tuple2::Ctor(7, _) => 7,
             Tuple2::Ctor(4, _) => 4
         }

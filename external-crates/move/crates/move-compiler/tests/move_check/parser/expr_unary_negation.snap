@@ -8,7 +8,7 @@ info:
 error[E04016]: too few arguments
   ┌─ tests/move_check/parser/expr_unary_negation.move:5:5
   │
-5 │     assert!(((1 - -2) == 3) && (-(1 - 2) == 1), 100);
+5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
   │     ^^^^^^^^^^^^^^^^^
   │     │      │
   │     │      Found 0 argument(s) here
@@ -17,7 +17,7 @@ error[E04016]: too few arguments
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/expr_unary_negation.move:5:19
   │
-5 │     assert!(((1 - -2) == 3) && (-(1 - 2) == 1), 100);
+5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
   │                   ^
   │                   │
   │                   Unexpected '-'
@@ -26,17 +26,17 @@ error[E01002]: unexpected token
 error[E04007]: incompatible types
   ┌─ tests/move_check/parser/expr_unary_negation.move:5:23
   │
-5 │     assert!(((1 - -2) == 3) && (-(1 - 2) == 1), 100);
-  │     ----------------- ^^ - Found: integer. It is not compatible with the other type.
+5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
+  │     ----------------- ^^ ---- Found: 'u64'. It is not compatible with the other type.
   │     │                 │   
   │     │                 Incompatible arguments to '=='
   │     Found: '()'. It is not compatible with the other type.
 
 error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/expr_unary_negation.move:5:27
+  ┌─ tests/move_check/parser/expr_unary_negation.move:5:30
   │
-5 │     assert!(((1 - -2) == 3) && (-(1 - 2) == 1), 100);
-  │                           ^
-  │                           │
-  │                           Unexpected ')'
-  │                           Expected ';'
+5 │     assert!(((1 - -2) == 3u64) && (-(1 - 2) == 1), 100);
+  │                              ^
+  │                              │
+  │                              Unexpected ')'
+  │                              Expected ';'

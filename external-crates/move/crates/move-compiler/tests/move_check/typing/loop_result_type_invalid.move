@@ -12,7 +12,7 @@ module M {
     }
 
     fun t1(): u64 {
-        loop { let _x = 0; break }
+        loop { let _x = 0u64; break }
     }
 
     fun t2() {

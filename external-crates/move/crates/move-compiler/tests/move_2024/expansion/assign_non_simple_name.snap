@@ -128,5 +128,5 @@ error[E01009]: invalid assignment
 error[E03009]: unbound variable
    ┌─ tests/move_2024/expansion/assign_non_simple_name.move:38:9
    │
-38 │         Y = 0;
+38 │         Y = 0u64;
    │         ^ Invalid assignment. Unbound variable 'Y'

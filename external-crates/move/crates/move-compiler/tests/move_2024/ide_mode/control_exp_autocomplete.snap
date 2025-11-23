@@ -40,7 +40,7 @@ error[E01002]: unexpected token
 warning[W09002]: unused variable
    ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:19:13
    │
-19 │         let n = (42 as u32);
+19 │         let n = (42u64 as u32);
    │             ^ Unused local variable 'n'. Consider removing or prefixing with an underscore: '_n'
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

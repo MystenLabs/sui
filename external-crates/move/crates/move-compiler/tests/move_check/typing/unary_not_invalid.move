@@ -6,11 +6,11 @@ module 0x8675309::M {
     fun t0(r: R) {
         !&true;
         !&false;
-        !0;
-        !1;
+        !0u64;
+        !1u64;
         !r;
         !r;
-        !(0, false);
+        !(0u64, false);
         !();
     }
 }

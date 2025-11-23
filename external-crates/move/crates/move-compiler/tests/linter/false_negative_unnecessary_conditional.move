@@ -7,7 +7,7 @@ module a::m {
 
     // we don't do this check after constant folding
     public fun t1(condition: bool) {
-        if (condition) 1 + 1 else 2;
+        if (condition) 1 + 1u64 else 2;
     }
 
     fun foo() {}

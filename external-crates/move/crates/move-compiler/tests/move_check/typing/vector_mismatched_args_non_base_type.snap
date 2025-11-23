@@ -8,8 +8,8 @@ info:
 error[E04004]: expected a single non-reference type
   ┌─ tests/move_check/typing/vector_mismatched_args_non_base_type.move:7:9
   │
-7 │         vector<&mut u64>[&0];
-  │         ^^^^^^^^^^^^^^^^^^^^
+7 │         vector<&mut u64>[&0u64];
+  │         ^^^^^^^^^^^^^^^^^^^^^^^
   │         │      │
   │         │      Expected a single non-reference type, but found: '&mut u64'
   │         Invalid 'vector' type
@@ -17,19 +17,19 @@ error[E04004]: expected a single non-reference type
 error[E04006]: invalid subtype
   ┌─ tests/move_check/typing/vector_mismatched_args_non_base_type.move:7:9
   │
-7 │         vector<&mut u64>[&0];
-  │         ^^^^^^^^^^^^^^^^^^^^
+7 │         vector<&mut u64>[&0u64];
+  │         ^^^^^^^^^^^^^^^^^^^^^^^
   │         │      │         │
-  │         │      │         Given: '&{integer}'
+  │         │      │         Given: '&u64'
   │         │      Expected: '&mut u64'
   │         Invalid 'vector' instantiation. Invalid argument type
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/vector_mismatched_args_non_base_type.move:8:9
   │
-8 │         vector[(), (0, 1)];
-  │         ^^^^^^^^^^^^^^^^^^
+8 │         vector[(), (0u64, 1u64)];
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^
   │         │      │   │
-  │         │      │   Found: '({integer}, {integer})'. It is not compatible with the other type.
+  │         │      │   Found: '(u64, u64)'. It is not compatible with the other type.
   │         │      Found: '()'. It is not compatible with the other type.
   │         Invalid 'vector' instantiation. Incompatible argument

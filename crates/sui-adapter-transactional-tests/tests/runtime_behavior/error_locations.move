@@ -20,12 +20,12 @@ module test::m {
 
     entry fun math() {
         // should be offset 2
-        0 - 1;
+        0 - 1u64;
     }
 
     entry fun vector_() {
         // should be offset 4
-        std::vector::borrow(&vector[0], 1);
+        std::vector::borrow(&vector[0u64], 1);
     }
 }
 

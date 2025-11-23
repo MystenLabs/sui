@@ -8,26 +8,26 @@ info:
 error[E04004]: expected a single non-reference type
   ┌─ tests/move_check/typing/pack_multiple.move:5:9
   │
-5 │         Box { f: (0, 1) };
-  │         ^^^^^^^^^^^^^^^^^
+5 │         Box { f: (0u64, 1u64) };
+  │         ^^^^^^^^^^^^^^^^^^^^^^^
   │         │        │
-  │         │        Expected a single non-reference type, but found: '({integer}, {integer})'
+  │         │        Expected a single non-reference type, but found: '(u64, u64)'
   │         Invalid type argument
 
 error[E04004]: expected a single non-reference type
   ┌─ tests/move_check/typing/pack_multiple.move:6:9
   │
-6 │         Box { f: (0, 1, 2) };
-  │         ^^^^^^^^^^^^^^^^^^^^
+6 │         Box { f: (0u64, 1u64, 2u64) };
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   │         │        │
-  │         │        Expected a single non-reference type, but found: '({integer}, {integer}, {integer})'
+  │         │        Expected a single non-reference type, but found: '(u64, u64, u64)'
   │         Invalid type argument
 
 error[E04004]: expected a single non-reference type
   ┌─ tests/move_check/typing/pack_multiple.move:7:9
   │
-7 │         Box { f: (true, Box { f: 0 }) };
-  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+7 │         Box { f: (true, Box { f: 0u64 }) };
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   │         │        │
-  │         │        Expected a single non-reference type, but found: '(bool, 0x8675309::M::Box<{integer}>)'
+  │         │        Expected a single non-reference type, but found: '(bool, 0x8675309::M::Box<u64>)'
   │         Invalid type argument

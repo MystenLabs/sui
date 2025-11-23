@@ -67,7 +67,7 @@ fun test_24_hours_windows() {
             ),
             0,
         );
-        i = i + 1;
+        i = i + 1u64;
     };
     let record = limiter.transfer_records().get(&route);
     let mut expected_value = 24000 * 5 * usd_value_multiplier();

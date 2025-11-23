@@ -10,8 +10,8 @@ error[E04007]: incompatible types
    │
 12 │ public fun index_by_reference<T: store>(table: &mut Table<u64, T>) {
    │                                                           --- Expected: 'u64'
-13 │     table[&1].push_back(3);
-   │     ^^^^^^^^^
+13 │     table[&1u64].push_back(3u64);
+   │     ^^^^^^^^^^^^
    │     │     │
-   │     │     Given: '&{integer}'
+   │     │     Given: '&u64'
    │     Invalid call of 'a::m::borrow'. Invalid argument for parameter '_k'

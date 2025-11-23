@@ -6,19 +6,19 @@ info:
   lint: false
 ---
 error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/invalid_call_lhs_value.move:3:10
+  ┌─ tests/move_check/parser/invalid_call_lhs_value.move:3:13
   │
-3 │         5();
-  │          ^
-  │          │
-  │          Unexpected '('
-  │          Expected ';'
+3 │         5u64();
+  │             ^
+  │             │
+  │             Unexpected '('
+  │             Expected ';'
 
 error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/invalid_call_lhs_value.move:4:10
+  ┌─ tests/move_check/parser/invalid_call_lhs_value.move:4:13
   │
-4 │         5(0, 1);
-  │          ^
-  │          │
-  │          Unexpected '('
-  │          Expected ';'
+4 │         5u64(0, 1);
+  │             ^
+  │             │
+  │             Unexpected '('
+  │             Expected ';'

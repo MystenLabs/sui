@@ -2,18 +2,18 @@ module 0x8675309::M {
     struct S {}
 
     fun t0() {
-        let _x: &mut u64 = &0;
+        let _x: &mut u64 = &0u64;
     }
 
     fun t1() {
         let (x, y): (&mut u64, &mut u64);
-        (x, y) = (&0, &0);
+        (x, y) = (&0u64, &0u64);
 
         let (x, y): (&mut u64, &u64);
-        (x, y) = (&0, &0);
+        (x, y) = (&0u64, &0);
 
         let (x, y): (&u64, &mut u64);
-        (x, y)= (&0, &0);
+        (x, y)= (&0, &0u64);
     }
 
 }

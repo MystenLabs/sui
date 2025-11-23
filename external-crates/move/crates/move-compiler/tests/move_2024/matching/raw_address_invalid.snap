@@ -11,11 +11,11 @@ error[E04007]: incompatible types
  7 │ public fun match_e(e: &E, rx: &u64, ry: &u64): (&u64, &u64) {
    │                        - Expected: '0x42::m::E'
    ·
-10 │         0x42 => (rx, ry),
-   │         ^^^^
+10 │         0x42u64 => (rx, ry),
+   │         ^^^^^^^
    │         │
    │         Invalid pattern
-   │         Given: integer
+   │         Given: 'u64'
 
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/matching/raw_address_invalid.move:11:9

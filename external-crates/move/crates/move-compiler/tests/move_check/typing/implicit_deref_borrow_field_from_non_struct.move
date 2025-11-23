@@ -3,8 +3,8 @@ module 0x8675309::M {
     struct R {}
 
     fun t0(u: u64, cond: bool, addr: address) {
-        0.f;
-        0.g;
+        0u64.f;
+        0u64.g;
         u.value;
         cond.value;
         addr.R;

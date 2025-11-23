@@ -16,7 +16,7 @@ module a::m {
 
     #[allow(dead_code)]
     fun t(cond: bool): Y {
-        vector [0] .length();
+        vector [0u64] .length();
         vector<bool> [] .length();
         0u64.next();
         (0: u64).next();

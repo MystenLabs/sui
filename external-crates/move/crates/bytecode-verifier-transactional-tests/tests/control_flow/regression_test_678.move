@@ -7,7 +7,7 @@ module 0x42::test_case {
     }
 
     fun remove_tx(foo: &mut Foo) {
-        let i = 0;
+        let i = 0u64;
         while (i < 64) {
             i = i + 1;
 

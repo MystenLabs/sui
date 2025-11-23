@@ -10,6 +10,6 @@ error[E06002]: use of unassigned variable
   │
 3 │     let x;
   │         - The variable 'x' might not have a value. The variable must be assigned a value before being used.
-4 │     if (true) x = 42;
+4 │     if (true) x = 42u64;
 5 │     assert!(x == 42, 42);
   │             ^ Invalid usage of unassigned variable 'x'
