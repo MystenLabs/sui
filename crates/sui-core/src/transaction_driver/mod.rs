@@ -178,7 +178,10 @@ where
             .with_label_values(&[tx_type.as_str(), ping_label])
             .inc();
 
-        let mut backoff = ExponentialBackoff::new(MAX_DRIVE_TRANSACTION_RETRY_DELAY);
+        let mut backoff = ExponentialBackoff::new(
+            Duration::from_millis(100),
+            MAX_DRIVE_TRANSACTION_RETRY_DELAY,
+        );
         let mut attempts = 0;
         let mut latest_retriable_error = None;
 
