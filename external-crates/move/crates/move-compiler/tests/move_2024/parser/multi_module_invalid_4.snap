@@ -6,12 +6,12 @@ info:
   lint: false
 ---
 error[E02004]: invalid 'module' declaration
-  ┌─ tests/move_2024/parser/top_level_module_double_invalid.move:7:11
+  ┌─ tests/move_2024/parser/multi_module_invalid_4.move:6:18
   │
-1 │ module a::m;
+3 │ module a::n { }
   │           - Previous module defined here
   ·
-7 │ module a::n;
-  │           ^ Cannot define an additional 'module' via label in a file with multiple modules
+6 │ extend module a::p;
+  │                  ^ Cannot define an additional 'module' via label in a file with multiple modules
   │
   = Either move each 'module' into its own file or define each addiitional module as 'module <name> { contents }'
