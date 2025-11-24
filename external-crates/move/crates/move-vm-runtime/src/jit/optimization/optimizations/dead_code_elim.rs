@@ -126,9 +126,11 @@ fn eliminate_unreachable(context: &mut BlockContext<'_, '_, '_>, code: &mut Vec<
             *context.changed = true;
             continue;
         }
-        if instr.is_unconditional_branch() {
-            *context.changed = true;
-            output_code = vec![];
+        // If we see a branch it should be the last instruction in the block.
+        // Sanity check that this is the case.
+        #[cfg(debug_assertions)]
+        if instr.is_branch() {
+            debug_assert!(output_code.is_empty());
         }
         output_code.push(instr);
     }
