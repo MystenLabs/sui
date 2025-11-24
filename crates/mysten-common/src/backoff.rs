@@ -53,14 +53,15 @@ impl ExponentialBackoff {
     /// Sets the approximate ratio of consecutive backoff delays, before jitters are applied.
     /// Setting this to Duration::ZERO disables jittering.
     ///
-    /// Default factor is 1.5.
+    /// Default is 1.2.
     pub fn factor(mut self, factor: f64) -> ExponentialBackoff {
         self.factor = factor;
         self
     }
 
     /// Sets the maximum jitter per delay.
-    /// Default maximum jitter is 50ms.
+    ///
+    /// Default is the initial delay.
     pub fn max_jitter(mut self, max_jitter: Duration) -> ExponentialBackoff {
         self.max_jitter = max_jitter;
         self
