@@ -1049,7 +1049,16 @@ async fn start(
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     info!("Cluster started");
 
-    let fullnode_rpc_url = format!("http://{fullnode_rpc_address}");
+    let fullnode_rpc_ip = match fullnode_rpc_address.ip() {
+        IpAddr::V4(v4) if v4.is_unspecified() => Ipv4Addr::LOCALHOST,
+        IpAddr::V6(v6) if v6.is_unspecified() => Ipv4Addr::LOCALHOST,
+        IpAddr::V4(v4) => v4,
+        IpAddr::V6(v6) => v6.to_ipv4().ok_or_else(|| {
+            anyhow!("Fullnode RPC address must be an IPv4 address or unspecified address")
+        })?,
+    };
+
+    let fullnode_rpc_url = format!("http://{fullnode_rpc_ip}:{}", fullnode_rpc_address.port(),);
     info!("Fullnode RPC URL: {fullnode_rpc_url}");
 
     let prometheus_registry = Registry::new();
@@ -1249,21 +1258,12 @@ async fn start(
                 .await
                 .unwrap();
 
-            // On windows, using 0.0.0.0 will usually yield in an networking error. This localnet ip
-            // address must bind to 127.0.0.1 if the default 0.0.0.0 is used.
-            let localnet_ip = if fullnode_rpc_address.ip() == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))
-            {
-                format!("http://127.0.0.1:{}", fullnode_rpc_address.port())
-            } else {
-                fullnode_rpc_url
-            };
-
             SuiClientConfig {
                 keystore,
                 external_keys: None,
                 envs: vec![SuiEnv {
                     alias: "localnet".to_string(),
-                    rpc: localnet_ip,
+                    rpc: fullnode_rpc_url.clone(),
                     ws: None,
                     basic_auth: None,
                     chain_id: None,
