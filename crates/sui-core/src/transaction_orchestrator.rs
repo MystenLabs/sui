@@ -1,24 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/*
-Transaction Orchestrator is a Node component that utilizes Quorum Driver to
-submit transactions to validators for finality, and proactively executes
-finalized transactions locally, when possible.
-*/
-
 use std::net::SocketAddr;
 use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use futures::FutureExt;
-use futures::future::{Either, Future, select};
 use futures::stream::{FuturesUnordered, StreamExt};
 use mysten_common::in_antithesis;
-use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use mysten_metrics::{add_server_timing, spawn_logged_monitored_task};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
@@ -29,7 +20,6 @@ use prometheus::{
 };
 use rand::Rng;
 use sui_config::NodeConfig;
-use sui_protocol_config::Chain;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
@@ -38,7 +28,7 @@ use sui_types::messages_grpc::{SubmitTxRequest, TxType};
 use sui_types::quorum_driver_types::{
     EffectsFinalityInfo, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
     ExecuteTransactionResponseV3, FinalizedEffects, IsTransactionExecutedLocally,
-    QuorumDriverError, QuorumDriverResult,
+    QuorumDriverError,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{Transaction, TransactionData, VerifiedTransaction};
@@ -48,14 +38,12 @@ use tokio::time::{Instant, sleep, timeout};
 use tracing::{Instrument, debug, error_span, info, instrument, warn};
 
 use crate::authority::AuthorityState;
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
-use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
 use crate::transaction_driver::{
     QuorumTransactionResponse, SubmitTransactionOptions, TransactionDriver, TransactionDriverError,
-    TransactionDriverMetrics, choose_transaction_driver_percentage,
+    TransactionDriverMetrics,
 };
 
 // How long to wait for local execution (including parents) before a timeout
@@ -67,14 +55,17 @@ const WAIT_FOR_FINALITY_TIMEOUT: Duration = Duration::from_secs(90);
 
 pub type QuorumTransactionEffectsResult =
     Result<(Transaction, QuorumTransactionResponse), (TransactionDigest, QuorumDriverError)>;
+
+/// Transaction Orchestrator is a Node component that utilizes Transaction Driver to
+/// submit transactions to validators for finality. It adds inflight deduplication,
+/// waiting for local execution, recovery, early validation, and epoch change handling
+/// on top of Transaction Driver.
+/// This is used by node RPC service to support transaction submission and finality waiting.
 pub struct TransactionOrchestrator<A: Clone> {
-    quorum_driver_handler: Arc<QuorumDriverHandler<A>>,
     validator_state: Arc<AuthorityState>,
     pending_tx_log: Arc<WritePathPendingTransactionLog>,
-    notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
     metrics: Arc<TransactionOrchestratorMetrics>,
     transaction_driver: Arc<TransactionDriver<A>>,
-    td_percentage: u8,
     td_allowed_submission_list: Vec<String>,
     td_blocked_submission_list: Vec<String>,
     enable_early_validation: bool,
@@ -121,21 +112,12 @@ where
         node_config: &NodeConfig,
     ) -> Self {
         let metrics = Arc::new(TransactionOrchestratorMetrics::new(prometheus_registry));
-
-        let qd_metrics = Arc::new(QuorumDriverMetrics::new(prometheus_registry));
-        let notifier = Arc::new(NotifyRead::new());
-        let reconfig_observer = Arc::new(reconfig_observer);
-        let quorum_driver_handler = Arc::new(
-            QuorumDriverHandlerBuilder::new(validators.clone(), qd_metrics.clone())
-                .with_notifier(notifier.clone())
-                .with_reconfig_observer(reconfig_observer.clone())
-                .start(),
-        );
-
         let td_metrics = Arc::new(TransactionDriverMetrics::new(prometheus_registry));
         let client_metrics = Arc::new(
             crate::validator_client_monitor::ValidatorClientMetrics::new(prometheus_registry),
         );
+        let reconfig_observer = Arc::new(reconfig_observer);
+
         let transaction_driver = TransactionDriver::new(
             validators.clone(),
             reconfig_observer.clone(),
@@ -144,12 +126,10 @@ where
             client_metrics,
         );
 
-        let epoch_store = validator_state.load_epoch_store_one_call_per_task();
-        let td_percentage = if !epoch_store.protocol_config().mysticeti_fastpath() {
-            0
-        } else {
-            choose_transaction_driver_percentage(Some(epoch_store.get_chain_identifier()))
-        };
+        let pending_tx_log = Arc::new(WritePathPendingTransactionLog::new(
+            parent_path.join("fullnode_pending_transactions"),
+        ));
+        Self::start_task_to_recover_txes_in_log(pending_tx_log.clone(), transaction_driver.clone());
 
         let td_allowed_submission_list = node_config
             .transaction_driver_config
@@ -170,11 +150,6 @@ where
             );
         }
 
-        let pending_tx_log = Arc::new(WritePathPendingTransactionLog::new(
-            parent_path.join("fullnode_pending_transactions"),
-        ));
-        Self::start_task_to_recover_txes_in_log(pending_tx_log.clone(), transaction_driver.clone());
-
         let enable_early_validation = node_config
             .transaction_driver_config
             .as_ref()
@@ -182,13 +157,10 @@ where
             .unwrap_or(true);
 
         Self {
-            quorum_driver_handler,
             validator_state,
             pending_tx_log,
-            notifier,
             metrics,
             transaction_driver,
-            td_percentage,
             td_allowed_submission_list,
             td_blocked_submission_list,
             enable_early_validation,
@@ -363,9 +335,6 @@ where
         let include_output_objects = request.include_output_objects;
         let include_auxiliary_data = request.include_auxiliary_data;
 
-        // Track whether TD is being used for this transaction
-        let using_td = Arc::new(AtomicBool::new(false));
-
         let finality_timeout = std::env::var("WAIT_FOR_FINALITY_TIMEOUT_SECS")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -404,10 +373,8 @@ where
                 0
             };
 
-            let epoch_store = epoch_store.clone();
             let request = request.clone();
             let verified_transaction = verified_transaction.clone();
-            let using_td = using_td.clone();
 
             let future = async move {
                 if delay_ms > 0 {
@@ -415,12 +382,10 @@ where
                     sleep(Duration::from_millis(delay_ms)).await;
                 }
                 self.execute_transaction_impl(
-                    &epoch_store,
                     request,
                     verified_transaction,
                     client_addr,
                     Some(finality_timeout),
-                    using_td,
                 )
                 .await
             }
@@ -524,15 +489,6 @@ where
                             };
                             break Ok((resp, false));
                         }
-                        Err(QuorumDriverError::PendingExecutionInTransactionOrchestrator) => {
-                            debug!(
-                                "Transaction is already being processed"
-                            );
-                            // Avoid overriding errors with transaction already being processed.
-                            if last_execution_error.is_none() {
-                                last_execution_error = Some(QuorumDriverError::PendingExecutionInTransactionOrchestrator);
-                            }
-                        }
                         Err(e) => {
                             debug!(?e, "Execution attempt failed, wait for other attempts");
                             last_execution_error = Some(e);
@@ -547,9 +503,14 @@ where
 
                 // A timeout has occurred while waiting for finality
                 _ = &mut timeout_future => {
-                    debug!("Timeout waiting for transaction finality.");
+                    if let Some(e) = last_execution_error {
+                        debug!("Timeout waiting for transaction finality. Last execution error: {e}");
+                    } else {
+                        debug!("Timeout waiting for transaction finality.");
+                    }
                     self.metrics.wait_for_finality_timeout.inc();
 
+                    // TODO: Return the last execution error.
                     break Err(QuorumDriverError::TimeoutBeforeFinality);
                 }
             }
@@ -559,14 +520,11 @@ where
     #[instrument(level = "error", skip_all)]
     async fn execute_transaction_impl(
         &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         request: ExecuteTransactionRequestV3,
         verified_transaction: VerifiedTransaction,
         client_addr: Option<SocketAddr>,
         finality_timeout: Option<Duration>,
-        using_td: Arc<AtomicBool>,
     ) -> Result<QuorumTransactionResponse, QuorumDriverError> {
-        let tx_digest = *verified_transaction.digest();
         debug!("TO Received transaction execution request.");
 
         let timer = Instant::now();
@@ -586,57 +544,17 @@ where
             in_flight.dec();
         });
 
-        // Select TransactionDriver or QuorumDriver for submission.
-        let (response, driver_type) = if self.should_use_transaction_driver(epoch_store, tx_digest)
-        {
-            // Mark that we're using TD before submitting.
-            using_td.store(true, Ordering::Release);
-
-            (
-                self.submit_with_transaction_driver(
-                    &self.transaction_driver,
-                    &request,
-                    client_addr,
-                    &verified_transaction,
-                    good_response_metrics,
-                    finality_timeout,
-                )
-                .await?,
-                "transaction_driver",
+        let response = self
+            .submit_with_transaction_driver(
+                &self.transaction_driver,
+                &request,
+                client_addr,
+                &verified_transaction,
+                good_response_metrics,
+                finality_timeout,
             )
-        } else {
-            // Submit transaction through QuorumDriver.
-            using_td.store(false, Ordering::Release);
-
-            let resp = self
-                .submit_with_quorum_driver(
-                    epoch_store.clone(),
-                    verified_transaction.clone(),
-                    request,
-                    client_addr,
-                )
-                .await
-                .map_err(|e| {
-                    warn!("QuorumDriverInternalError: {e:?}");
-                    QuorumDriverError::QuorumDriverInternalError(e)
-                })?
-                .await
-                .map_err(|e| {
-                    warn!("QuorumDriverInternalError: {e:?}");
-                    QuorumDriverError::QuorumDriverInternalError(e)
-                })??;
-
-            (
-                QuorumTransactionResponse {
-                    effects: FinalizedEffects::new_from_effects_cert(resp.effects_cert.into()),
-                    events: resp.events,
-                    input_objects: resp.input_objects,
-                    output_objects: resp.output_objects,
-                    auxiliary_data: resp.auxiliary_data,
-                },
-                "quorum_driver",
-            )
-        };
+            .await?;
+        let driver_type = "transaction_driver";
 
         add_server_timing("wait_for_finality done");
 
@@ -704,51 +622,6 @@ where
         }
     }
 
-    /// Submits the transaction to Quorum Driver for execution.
-    /// Returns an awaitable Future.
-    #[instrument(name = "tx_orchestrator_submit", level = "trace", skip_all)]
-    async fn submit_with_quorum_driver(
-        &self,
-        epoch_store: Arc<AuthorityPerEpochStore>,
-        transaction: VerifiedTransaction,
-        request: ExecuteTransactionRequestV3,
-        client_addr: Option<SocketAddr>,
-    ) -> SuiResult<impl Future<Output = SuiResult<QuorumDriverResult>> + '_> {
-        let tx_digest = *transaction.digest();
-
-        let ticket = self.notifier.register_one(&tx_digest);
-        self.quorum_driver()
-            .submit_transaction_no_ticket(request.clone(), client_addr)
-            .await?;
-
-        // It's possible that the transaction effects is already stored in DB at this point.
-        // So we also subscribe to that. If we hear from `effects_await` first, it means
-        // the ticket misses the previous notification, and we want to ask quorum driver
-        // to form a certificate for us again, to serve this request.
-        let cache_reader = self.validator_state.get_transaction_cache_reader().clone();
-        let qd = self.clone_quorum_driver();
-        Ok(async move {
-            let digests = [tx_digest];
-            let effects_await =
-                epoch_store.within_alive_epoch(cache_reader.notify_read_executed_effects(
-                    "TransactionOrchestrator::notify_read_submit_with_qd",
-                    &digests,
-                ));
-            // let-and-return necessary to satisfy borrow checker.
-            #[allow(clippy::let_and_return)]
-            let res = match select(ticket, effects_await.boxed()).await {
-                Either::Left((quorum_driver_response, _)) => Ok(quorum_driver_response),
-                Either::Right((_, unfinished_quorum_driver_task)) => {
-                    debug!("Effects are available in DB, use quorum driver to get a certificate");
-                    qd.submit_transaction_no_ticket(request, client_addr)
-                        .await?;
-                    Ok(unfinished_quorum_driver_task.await)
-                }
-            };
-            res
-        })
-    }
-
     #[instrument(
         name = "tx_orchestrator_wait_for_finalized_tx_executed_locally_with_timeout",
         level = "debug",
@@ -802,40 +675,12 @@ where
         }
     }
 
-    fn should_use_transaction_driver(
-        &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_digest: TransactionDigest,
-    ) -> bool {
-        const MAX_PERCENTAGE: u8 = 100;
-        let unknown_network = epoch_store.get_chain() == Chain::Unknown;
-        let v = if unknown_network {
-            rand::thread_rng().gen_range(1..=MAX_PERCENTAGE)
-        } else {
-            let v = u32::from_le_bytes(tx_digest.inner()[..4].try_into().unwrap());
-            (v % (MAX_PERCENTAGE as u32) + 1) as u8
-        };
-        debug!(
-            "Choosing whether to use transaction driver: {} vs {}",
-            v, self.td_percentage
-        );
-        v <= self.td_percentage
-    }
-
     pub fn authority_state(&self) -> &Arc<AuthorityState> {
         &self.validator_state
     }
 
     pub fn transaction_driver(&self) -> &Arc<TransactionDriver<A>> {
         &self.transaction_driver
-    }
-
-    fn quorum_driver(&self) -> &Arc<QuorumDriverHandler<A>> {
-        &self.quorum_driver_handler
-    }
-
-    fn clone_quorum_driver(&self) -> Arc<QuorumDriverHandler<A>> {
-        self.quorum_driver_handler.clone()
     }
 
     pub fn clone_authority_aggregator(&self) -> Arc<AuthorityAggregator<A>> {

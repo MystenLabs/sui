@@ -95,6 +95,12 @@ where
         node_config: Option<&NodeConfig>,
         client_metrics: Arc<ValidatorClientMetrics>,
     ) -> Arc<Self> {
+        if std::env::var("TRANSACTION_DRIVER").is_ok() {
+            tracing::warn!(
+                "Transaction Driver is the only supported driver for transaction submission. Setting TRANSACTION_DRIVER is a no-op."
+            );
+        }
+
         let shared_swap = Arc::new(ArcSwap::new(authority_aggregator));
 
         // Extract validator client monitor config from NodeConfig or use default
@@ -484,28 +490,6 @@ where
 
         self.authority_aggregator.store(new_authorities);
     }
-}
-
-// Chooses the percentage of transactions to be driven by TransactionDriver.
-pub fn choose_transaction_driver_percentage(
-    chain_id: Option<sui_types::digests::ChainIdentifier>,
-) -> u8 {
-    if let Ok(v) = std::env::var("TRANSACTION_DRIVER")
-        && let Ok(tx_driver_percentage) = v.parse::<u8>()
-        && (0..=100).contains(&tx_driver_percentage)
-    {
-        return tx_driver_percentage;
-    }
-
-    if let Some(chain_identifier) = chain_id
-        && chain_identifier.chain() == sui_protocol_config::Chain::Unknown
-    {
-        // Kep test coverage for QD.
-        return 50;
-    }
-
-    // Default to 100% everywhere
-    100
 }
 
 // Inner state of TransactionDriver.
