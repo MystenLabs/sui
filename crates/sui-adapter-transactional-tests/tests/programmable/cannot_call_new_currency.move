@@ -6,12 +6,12 @@
 //# init --addresses test=0x0 --accounts A
 
 //# publish --sender A
-module test::m1 {
-    use std::string::String;
+module test::m1;
 
-    public fun name(): String {
-        b"A".to_string()
-    }
+use std::string::String;
+
+public fun name(): String {
+  b"A".to_string()
 }
 
 //# programmable --sender A --inputs object(0xc) @A 6u8
@@ -19,5 +19,3 @@ module test::m1 {
 //> 1: sui::coin_registry::new_currency<sui::kiosk::Kiosk>(Input(0), Input(2), Result(0), Result(0), Result(0), Result(0));
 //> 2: sui::coin_registry::finalize<sui::kiosk::Kiosk>(NestedResult(1,0));
 //> 3: TransferObjects([NestedResult(1,1), Result(2)], Input(1));
-
-
