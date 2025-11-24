@@ -194,8 +194,7 @@ impl Default for PrunerConfig {
 /// time.
 ///
 /// The pipeline also maintains a row in the `watermarks` table for the pipeline which tracks the
-/// watermark below which all data has been committed (modulo pruning), as long as `skip_watermark`
-/// is not true.
+/// watermark below which all data has been committed (modulo pruning).
 ///
 /// Checkpoint data is fed into the pipeline through the `checkpoint_rx` channel, and internal
 /// channels are created to communicate between its various components. The pipeline can be
@@ -205,7 +204,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
     next_checkpoint: u64,
     config: ConcurrentConfig,
-    skip_watermark: bool,
     store: H::Store,
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     metrics: Arc<IndexerMetrics>,
@@ -255,7 +253,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let committer = committer::<H>(
         handler.clone(),
         committer_config.clone(),
-        skip_watermark,
         committer_rx,
         committer_tx,
         store.clone(),
@@ -266,7 +263,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let commit_watermark = commit_watermark::<H>(
         next_checkpoint,
         committer_config,
-        skip_watermark,
         watermark_rx,
         store.clone(),
         metrics.clone(),
@@ -412,12 +408,10 @@ mod tests {
             let metrics = IndexerMetrics::new(None, &Registry::default());
             let cancel = CancellationToken::new();
 
-            let skip_watermark = false;
             let pipeline_handle = pipeline(
                 DataPipeline,
                 next_checkpoint,
                 config,
-                skip_watermark,
                 store.clone(),
                 checkpoint_rx,
                 metrics,
