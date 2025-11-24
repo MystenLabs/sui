@@ -450,6 +450,10 @@ mod tests {
 
             result
         }
+
+        fn validate_manifest(_: &ParsedManifest) -> Result<(), String> {
+            Ok(())
+        }
     }
 
     /// Loading a package includes the implicit dependencies, and the system dependencies are
