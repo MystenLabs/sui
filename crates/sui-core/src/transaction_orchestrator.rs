@@ -524,15 +524,6 @@ where
                             };
                             break Ok((resp, false));
                         }
-                        Err(QuorumDriverError::PendingExecutionInTransactionOrchestrator) => {
-                            debug!(
-                                "Transaction is already being processed"
-                            );
-                            // Avoid overriding errors with transaction already being processed.
-                            if last_execution_error.is_none() {
-                                last_execution_error = Some(QuorumDriverError::PendingExecutionInTransactionOrchestrator);
-                            }
-                        }
                         Err(e) => {
                             debug!(?e, "Execution attempt failed, wait for other attempts");
                             last_execution_error = Some(e);
