@@ -1,25 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// Defines the `Permit` type, which can be used to constrain the logic of a
+/// generic function to be authorized only by the module that defines the type
+/// parameter.
+///
+/// ```move
+/// module example::use_permit;
+///
+/// use std::internal;
+///
+/// public struct MyType { /* ... */ }
+///
+/// public fun test_permit() {
+///    let permit = internal::permit<MyType>();
+///    /* external_module::call_with_permit(permit); */
+/// }
+/// ```
+///
+/// To write a function that is guarded by a `Permit`, require it as an argument.
+///
+/// ```move
+/// // Silly mockup of a type registry where a type can be registered only by
+/// // the module that defines the type.
+/// module example::type_registry;
+///
+/// use std::internal;
+///
+/// public fun register_type<T>(_: internal::Permit<T> /* ... */) {
+///   /* ... */
+/// }
+/// ```
 module std::internal;
 
 /// Witness of the `T` type. Can be instantiated only by the module that defines
 /// the `T`, as well as by the `Owner<T>` instance.
-public struct Witness<phantom T> has drop {}
+public struct Permit<phantom T>() has drop;
 
-/// A storable factory for the `Witness` type. Represents ownership over
-/// the `T` type, and allows delegating the ability to construct the `Witness<T>`.
-public struct Owner<phantom T> has drop, store {}
-
-/// Construct a new `Witness` for the `T` type. Aborts if the caller is not the
-/// defining module of the `T` type.
-public fun witness<T /* internal */>(): Witness<T> { Witness {} }
-
-/// Construct a new `Owner` for the `T` type. Aborts if the caller is not the
-/// defining module of the `T` type.
-public fun new_owner<T /* internal */>(): Owner<T> { Owner {} }
-
-/// Spawn a new `Witness` as an `Owner` of the `T` type. Unlike `witness` and
-/// `new_owner`, this function does not not have an internal requirement for the
-/// caller.
-public fun spawn_witness<T>(_: &Owner<T>): Witness<T> { Witness {} }
+/// Construct a new `Permit` for the type `T`.
+/// Can only be instantiated by the module that defines the `T`. Aborts otherwise.
+public fun permit<T>(): Permit<T> { Permit() }
