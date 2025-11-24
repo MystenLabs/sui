@@ -28,8 +28,9 @@ move-clippy = [
     "-Aclippy::needless_borrows_for_generic_args",
 ]
 
+[build]
+rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes", "-A", "unknown_lints", "-A", "mismatched_lifetime_syntaxes"]
+
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "link-args=/STACK:8388608"] # increase stack size to 8MB for Windows to avoid stack overflow in main thread
 
-[build]
-rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes", "-A", "unknown_lints", "-A", "mismatched_lifetime_syntaxes"]
