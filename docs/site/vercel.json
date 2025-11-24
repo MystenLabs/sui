@@ -159,6 +159,10 @@
       { "source": "/concepts/graphql-rpc", "destination": "/concepts/data-access/graphql-rpc"},
       { "source": "/concepts/custom-indexing-framework", "destination": "/concepts/data-access/custom-indexing-framework"},
       { "source": "/concepts/custom-indexer/pipeline-architecture", "destination": "/concepts/data-access/pipeline-architecture"},
-      { "source": "/concepts/archival-store", "destination": "/concepts/data-access/archival-store"}
+      { "source": "/concepts/archival-store", "destination": "/concepts/data-access/archival-store"},
+      { "source": "/concepts/transactions/transaction-auth/signatures.mdx", "destination": "/concepts/transactions/transaction-auth.mdx"},
+      { "source": "/concepts/transactions/transaction-auth/keys-addresses", "destination": "/concepts/transactions/transaction-auth.mdx"},
+      { "source": "/concepts/cryptography/transaction-auth/keys-addresses", "destination": "/concepts/transactions/transaction-auth.mdx"},
+      { "source": "/concepts/cryptography/transaction-auth/:path*", "destination": "/concepts/transactions/transaction-auth/:path*"}
     ]
   }

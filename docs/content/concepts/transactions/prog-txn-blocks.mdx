@@ -326,7 +326,7 @@ This example demonstrates a PTB's execution flow. Suppose you want to buy two it
 
 The inputs include the friend's address, the marketplace object, and the coin split value. The commands split off the coin, call the marketplace function, send the gas coin and one object, grab your address (through `sui::tx_context::sender`), and send the remaining object to yourself.
 
-### Initial state
+#### Initial state
 
 ```rust
 Gas Coin: Coin<SUI> { id: gas_coin, balance: 1_000_000u64 }
@@ -340,13 +340,13 @@ After maximum gas budget of `500_000` is deducted:
 Gas Coin: Coin<SUI> { id: gas_coin, balance: 500_000u64 }
 ```
 
-### Command 0: `SplitCoins(GasCoin, [Input(2)])`
+#### Command 0: `SplitCoins(GasCoin, [Input(2)])`
 
 Accesses gas coin by mutable reference, loads `Input(2)` as `100u64` (copied, not moved). Creates new coin.
 
 **Changes:** Gas coin balance decreases to `499_900u64`. New result: `[Coin<SUI> { id: new_coin, value: 100u64 }]`
 
-### Command 1: `MoveCall("some_package", "some_marketplace", "buy_two", ...)`
+#### Command 1: `MoveCall("some_package", "some_marketplace", "buy_two", ...)`
 
 Calls `buy_two(marketplace: &mut Marketplace, coin: Coin<Sui>, ctx: &mut TxContext): (Item, Item)`
 
@@ -354,25 +354,25 @@ Uses `Input(1)` by mutable reference (marketplace), `NestedResult(0, 0)` by valu
 
 **Changes:** Coin at `Results[0][0]` is moved (`_`). New results: `[Item { id: id1 }, Item { id: id2 }]`
 
-### Command 2: `TransferObjects([GasCoin, NestedResult(1, 0)], Input(0))`
+#### Command 2: `TransferObjects([GasCoin, NestedResult(1, 0)], Input(0))`
 
 Transfers gas coin and first item to `0x808`. Both objects taken by value (moved).
 
 **Changes:** Gas coin moved (`_`). First item moved (`_`). Empty result vector added.
 
-### Command 3: `MoveCall("sui", "tx_context", "sender", [], [])`
+#### Command 3: `MoveCall("sui", "tx_context", "sender", [], [])`
 
 Calls `sender(ctx: &TxContext): address`. Returns sender's address.
 
 **Changes:** New result: `[sender_address]`
 
-### Command 4: `TransferObjects([NestedResult(1, 1)], NestedResult(3, 0))`
+#### Command 4: `TransferObjects([NestedResult(1, 1)], NestedResult(3, 0))`
 
 Transfers second item to sender. Item moved by value, address copied by value.
 
 **Changes:** Second item moved (`_`). Empty result vector added.
 
-### Final state
+#### Final state
 
 ```rust
 Gas Coin: _ (moved)
@@ -386,7 +386,7 @@ Results: [
 ]
 ```
 
-### End of execution checks
+#### End of execution checks
 
 - Input objects: Gas coin moved. Marketplace remains shared (mutated).
 

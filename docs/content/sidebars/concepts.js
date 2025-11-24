@@ -40,8 +40,6 @@ const concepts = [
 					id: 'concepts/transactions/transaction-auth',
 				},
 				items: [
-					'concepts/transactions/transaction-auth/keys-addresses',
-					'concepts/transactions/transaction-auth/signatures',
 					'concepts/transactions/transaction-auth/multisig',
 					'concepts/transactions/transaction-auth/offline-signing',
 					'concepts/transactions/transaction-auth/intent-signing',
