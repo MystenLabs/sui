@@ -367,9 +367,10 @@ sui-indexer-alt-graphql rpc \
 
 ### Generating Configuration
 
-GraphQL's configuration file is optional and if it is not provided, all default values are used. To customize the configuration, a file with the default settings can be output using the following command, and then edited:
+You can run the GraphQL RPC server without a configuration file, which will use default values. To customize settings, generate a config file using the command below and edit it as needed:
 
 ```sh
+
 sui-indexer-alt-graphql generate-config > <PATH_TO_GRAPHQL_CONFIG_FILE>
 ```
 
