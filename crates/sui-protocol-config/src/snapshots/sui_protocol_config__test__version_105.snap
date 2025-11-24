@@ -109,6 +109,7 @@ feature_flags:
   allow_unbounded_system_objects: true
   type_tags_in_object_runtime: true
   create_root_accumulator_object: true
+  enable_ptb_execution_v2: true
   better_adapter_type_resolution_errors: true
   record_time_estimate_processed: true
   dependency_linkage_error: true
@@ -121,6 +122,8 @@ feature_flags:
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
   enable_coin_registry: true
+  abstract_size_in_object_runtime: true
+  object_runtime_charge_cache_load_gas: true
   additional_borrow_checks: true
   use_new_commit_handler: true
   better_loader_errors: true
@@ -208,7 +211,7 @@ obj_access_cost_delete_per_byte: 40
 obj_access_cost_verify_per_byte: 200
 max_type_to_layout_nodes: 512
 max_ptb_value_size: 1048576
-gas_model_version: 10
+gas_model_version: 11
 obj_data_cost_refundable: 100
 obj_metadata_cost_non_refundable: 50
 storage_rebate_rate: 9900
@@ -229,13 +232,13 @@ dynamic_field_hash_type_and_key_value_cost_per_byte: 2
 dynamic_field_hash_type_and_key_type_tag_cost_per_byte: 2
 dynamic_field_add_child_object_cost_base: 100
 dynamic_field_add_child_object_type_cost_per_byte: 10
-dynamic_field_add_child_object_value_cost_per_byte: 10
+dynamic_field_add_child_object_value_cost_per_byte: 1
 dynamic_field_add_child_object_struct_tag_cost_per_byte: 10
 dynamic_field_borrow_child_object_cost_base: 100
-dynamic_field_borrow_child_object_child_ref_cost_per_byte: 10
+dynamic_field_borrow_child_object_child_ref_cost_per_byte: 1
 dynamic_field_borrow_child_object_type_cost_per_byte: 10
 dynamic_field_remove_child_object_cost_base: 100
-dynamic_field_remove_child_object_child_cost_per_byte: 2
+dynamic_field_remove_child_object_child_cost_per_byte: 1
 dynamic_field_remove_child_object_type_cost_per_byte: 2
 dynamic_field_has_child_object_cost_base: 100
 dynamic_field_has_child_object_with_ty_cost_base: 100
@@ -428,4 +431,10 @@ gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
 use_object_per_epoch_marker_table_v2: true
 consensus_commit_rate_estimation_window_size: 10
+translation_per_command_base_charge: 1
+translation_per_input_base_charge: 1
+translation_pure_input_per_byte_charge: 1
+translation_per_type_node_charge: 1
+translation_per_reference_node_charge: 1
+translation_per_linkage_entry_charge: 10
 max_updates_per_settlement_txn: 100
