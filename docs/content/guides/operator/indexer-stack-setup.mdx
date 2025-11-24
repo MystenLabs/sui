@@ -14,10 +14,10 @@ The indexer consists of multiple pipelines that each read, transform, and write 
 
 #### Hardware requirements
 
-- **CPU:** 8 cores
-- **Memory:** 16GB
+- **CPU:** 2 cores per instance
+- **Memory:** 4GB per instance
 
-### Run command
+### Run `sui-indexer-alt`
 
 Run an indexer instance using this command for each of the configuration files that follow:
 
@@ -293,6 +293,85 @@ $ sui-indexer-alt-consistent-store run \
 	<summary>`consistent-store.toml`</summary>
 	<ImportContent source="examples/prod-config/consistent-store.toml" mode="code" />
 </details>
+
+## GraphQL RPC server setup
+
+GraphQL RPC server reads data from the general-purpose indexer's database (Postgres), the consistent store, and the [archival service](/concepts/data-access/archival-store.mdx).
+
+#### Hardware requirements
+
+- **CPU:** 2 cores per instance
+- **Memory:** 4GB per instance
+
+Scale the number of nodes based on the desired read throughput requirements of your client applications.
+
+### GraphQL RPC server dependencies
+
+The GraphQL RPC server relies on multiple backend services to fulfill different types of queries:
+- Archival service (`--ledger-grpc-url`) provides historical data for most queries involving checkpoints, objects, and transactions.
+- Consistent store (`--consistent-store-url`) serves live data for queries related to current object and balance ownership.
+- Postgres database (`--database-url`) is the primary store for most queries, except for direct object and transaction lookups handled by the Archival service.
+- Fullnode RPC (`--fullnode-rpc-url`) powers transaction simulation and execution.
+
+Set the appropriate service URLs in your run command based on the query types your GraphQL RPC server needs to support.
+
+### Run `sui-indexer-alt-graphql`
+
+:::info
+
+If you use the Sui Foundation–hosted public good archival service on Testnet or Mainnet, you may encounter performance issues. The team will address these before the GraphQL RPC and Archival Service reach general availability.
+
+:::
+
+Use the following command to run a GraphQL RPC server node:
+```sh
+sui-indexer-alt-graphql rpc \
+    --config <PATH_TO_GRAPHQL_CONFIG_FILE> \
+    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_1> \
+    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_2> \
+    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_3> \
+    --ledger-grpc-url <LEDGER_GRPC_URL> \
+    --consistent-store-url <CONSISTENT_STORE_URL> \
+    --database-url <DATABASE_URL> \
+    --fullnode-rpc-url <FULLNODE_RPC_URL>
+```
+
+Multiple `--indexer-config` parameters can be provided, one for each general-purpose indexer instance.
+
+| CLI parameter                        | Description                                                                        |
+|----------------------------------|------------------------------------------------------------------------------------|
+| `CONFIG_FILE`                    | Path to GraphQL RPC server configuration file                                                 |
+| `INDEXER_CONFIG_FILE`            | Path to general-purpose indexer configuration file; can be set multiple times for different pipelines                 |
+| `LEDGER_GRPC_URL`                | URL to Archival service's `LedgerService` gRPC API                                   |
+| `CONSISTENT_STORE_URL`           | URL to [Consistent store](#consistent-store-setup) API                             |
+| `DATABASE_URL`                   | Postgres database connection string                                                |
+| `FULLNODE_RPC_URL`               | URL to full node RPC                                                            |
+
+
+Example:
+```sh
+sui-indexer-alt-graphql rpc \
+    --config graphql.toml \
+    --indexer-config events.toml \
+    --indexer-config misc.toml \
+    --indexer-config obj_versions.toml \
+    --indexer-config tx_affected_addresses.toml \
+    --indexer-config tx_affected_objects.toml \
+    --indexer-config tx_calls.toml \
+    --indexer-config tx_kinds.toml \
+    --ledger-grpc-url https://archive.mainnet.sui.io:443 \
+    --consistent-store-url https://localhost:7001 \
+    --database-url postgres://username:password@localhost:5432/database \
+    --fullnode-rpc-url https://localhost:9000
+```
+
+### Configuration recommendations
+
+The default GraphQL RPC configuration is provided in the `examples` directory of the Sui repo.
+
+<ImportContent source="/examples/prod-config/graphql.toml" mode="code" />
+|-----------------------------------------------------------------------------------------------|-----------------------------------|
+| [`graphql.toml`](https://github.com/MystenLabs/sui/blob/main/examples/prod-config/graphql.toml) | Default GraphQL API configuration |
 
 ## Related links
 
