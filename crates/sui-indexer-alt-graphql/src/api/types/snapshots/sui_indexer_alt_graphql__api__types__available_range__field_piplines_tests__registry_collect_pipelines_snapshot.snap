@@ -68,6 +68,9 @@ Address.transactions
 AddressOwner.address
   => {}
 
+AliasStateCreateTransaction._
+  => {}
+
 AuthenticatorStateCreateTransaction._
   => {}
 
