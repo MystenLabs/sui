@@ -19,7 +19,6 @@ use sui_indexer_alt_schema::{
     schema::{kv_epoch_starts, kv_genesis},
 };
 use sui_types::transaction::TransactionDataAPI;
-use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 pub struct BootstrapGenesis {
@@ -31,13 +30,9 @@ pub struct BootstrapGenesis {
 /// the information stored there. If the database has been bootstrapped before, this function will
 /// simply read the previously bootstrapped information. Otherwise, it will wait until the first
 /// checkpoint is available and extract the necessary information from there.
-///
-/// Can be cancelled via the `cancel` token, or through an interrupt signal (which will also cancel
-/// the token).
 pub async fn bootstrap(
     indexer: &Indexer<Db>,
     retry_interval: Duration,
-    cancel: CancellationToken,
     bootstrap_genesis: Option<BootstrapGenesis>,
 ) -> Result<StoredGenesis> {
     info!("Bootstrapping indexer with genesis information");
@@ -73,13 +68,11 @@ pub async fn bootstrap(
         // - Get the Genesis system transaction from the genesis checkpoint.
         // - Get the system state object that was written out by the system transaction.
         None => {
-            let genesis_checkpoint = tokio::select! {
-                cp = indexer.ingestion_client().wait_for(0, retry_interval) =>
-                    cp.context("Failed to fetch genesis checkpoint")?,
-                _ = cancel.cancelled() => {
-                    bail!("Cancelled before genesis checkpoint was available");
-                }
-            };
+            let genesis_checkpoint = indexer
+                .ingestion_client()
+                .wait_for(0, retry_interval)
+                .await
+                .context("Failed to fetch genesis checkpoint")?;
 
             let Checkpoint {
                 summary: checkpoint_summary,

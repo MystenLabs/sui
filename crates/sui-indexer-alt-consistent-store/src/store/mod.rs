@@ -7,9 +7,9 @@ use std::{path::Path, sync::Arc, time::Duration};
 use anyhow::{Context as _, anyhow, bail};
 use prometheus::Registry;
 use scoped_futures::ScopedBoxFuture;
+use sui_indexer_alt_framework::service::Service;
 use sui_indexer_alt_framework::store::{self, CommitterWatermark, Store as _};
 use synchronizer::Queue;
-use tokio::task::JoinHandle;
 
 use crate::db::config::DbConfig;
 use crate::db::{Db, Watermark};
@@ -105,13 +105,13 @@ impl<S: Schema> Store<S> {
 
     /// Run the provided synchronizer, and register its queue with the store. This will fail if the
     /// store already has a synchronizer running.
-    pub(crate) fn sync(&self, s: Synchronizer) -> anyhow::Result<JoinHandle<()>> {
-        let (handle, queue) = s.run()?;
+    pub(crate) fn sync(&self, s: Synchronizer) -> anyhow::Result<Service> {
+        let (service, queue) = s.run()?;
         self.0
             .queue
             .set(queue)
             .map_err(|_| anyhow!("Store already has synchronizer"))?;
-        Ok(handle)
+        Ok(service)
     }
 }
 
@@ -225,7 +225,6 @@ mod tests {
     use scoped_futures::ScopedFutureExt;
     use sui_indexer_alt_framework::store::{Connection as _, TransactionalStore};
     use tokio::time::{self, error::Elapsed};
-    use tokio_util::sync::CancellationToken;
 
     use crate::db::map::DbMap;
 
@@ -330,17 +329,10 @@ mod tests {
         let stride = 1;
         let buffer_size = 10;
         let first_checkpoint = None;
-        let cancel = CancellationToken::new();
-        let mut sync = Synchronizer::new(
-            store.db().clone(),
-            stride,
-            buffer_size,
-            first_checkpoint,
-            cancel.clone(),
-        );
+        let mut sync = Synchronizer::new(store.db().clone(), stride, buffer_size, first_checkpoint);
 
         sync.register_pipeline("test").unwrap();
-        let h_sync = store.sync(sync).unwrap();
+        let _svc = store.sync(sync).unwrap();
 
         write(&store, "test", 0, |s, b| {
             s.a.insert("x".to_owned(), 42, b)?;
@@ -357,9 +349,6 @@ mod tests {
         let s = store.schema();
         assert_eq!(s.a.get(0, "x".to_owned()).unwrap(), Some(42));
         assert_eq!(s.b.get(0, 42).unwrap(), Some("x".to_owned()));
-
-        cancel.cancel();
-        h_sync.await.unwrap();
     }
 
     #[tokio::test]
@@ -371,18 +360,11 @@ mod tests {
         let stride = 1;
         let buffer_size = 10;
         let first_checkpoint = None;
-        let cancel = CancellationToken::new();
-        let mut sync = Synchronizer::new(
-            store.db().clone(),
-            stride,
-            buffer_size,
-            first_checkpoint,
-            cancel.clone(),
-        );
+        let mut sync = Synchronizer::new(store.db().clone(), stride, buffer_size, first_checkpoint);
 
         sync.register_pipeline("a").unwrap();
         sync.register_pipeline("b").unwrap();
-        let h_sync = store.sync(sync).unwrap();
+        let _svc = store.sync(sync).unwrap();
 
         write(&store, "a", 0, |s, b| {
             s.a.insert("x".to_owned(), 42, b)?;
@@ -411,9 +393,6 @@ mod tests {
         let s = store.schema();
         assert_eq!(s.a.get(0, "x".to_owned()).unwrap(), Some(42));
         assert_eq!(s.b.get(0, 42).unwrap(), Some("x".to_owned()));
-
-        cancel.cancel();
-        h_sync.await.unwrap();
     }
 
     #[tokio::test]
@@ -448,26 +427,16 @@ mod tests {
         let stride = 1;
         let buffer_size = 10;
         let first_checkpoint = None;
-        let cancel = CancellationToken::new();
-        let mut sync = Synchronizer::new(
-            store.db().clone(),
-            stride,
-            buffer_size,
-            first_checkpoint,
-            cancel.clone(),
-        );
+        let mut sync = Synchronizer::new(store.db().clone(), stride, buffer_size, first_checkpoint);
 
         sync.register_pipeline("b").unwrap();
-        let h_sync = store.sync(sync).unwrap();
+        let _svc = store.sync(sync).unwrap();
 
         // When there is existing data, the synchronizer will take a snapshot to make it available
         // before the store sees any writes.
         wait_until(|| async { has_range(&store, None, Some(0)) })
             .await
             .unwrap();
-
-        cancel.cancel();
-        h_sync.await.unwrap();
     }
 
     #[tokio::test]
@@ -507,27 +476,17 @@ mod tests {
         let stride = 1;
         let buffer_size = 10;
         let first_checkpoint = None;
-        let cancel = CancellationToken::new();
-        let mut sync = Synchronizer::new(
-            store.db().clone(),
-            stride,
-            buffer_size,
-            first_checkpoint,
-            cancel.clone(),
-        );
+        let mut sync = Synchronizer::new(store.db().clone(), stride, buffer_size, first_checkpoint);
 
         sync.register_pipeline("a").unwrap();
         sync.register_pipeline("b").unwrap();
-        let h_sync = store.sync(sync).unwrap();
+        let _svc = store.sync(sync).unwrap();
 
         // When there is existing data, the synchronizer will take a snapshot to make it available
         // before the store sees any writes.
         wait_until(|| async { has_range(&store, None, Some(0)) })
             .await
             .unwrap();
-
-        cancel.cancel();
-        h_sync.await.unwrap();
     }
 
     #[tokio::test]
@@ -562,18 +521,11 @@ mod tests {
         let stride = 1;
         let buffer_size = 10;
         let first_checkpoint = None;
-        let cancel = CancellationToken::new();
-        let mut sync = Synchronizer::new(
-            store.db().clone(),
-            stride,
-            buffer_size,
-            first_checkpoint,
-            cancel.clone(),
-        );
+        let mut sync = Synchronizer::new(store.db().clone(), stride, buffer_size, first_checkpoint);
 
         sync.register_pipeline("a").unwrap();
         sync.register_pipeline("b").unwrap();
-        let h_sync = store.sync(sync).unwrap();
+        let _svc = store.sync(sync).unwrap();
 
         // The pipelines are not in sync to begin with, so the synchronizer is waiting for the
         // writes for the other pipeline in order to take a snapshot.
@@ -620,9 +572,6 @@ mod tests {
         let s = store.schema();
         assert_eq!(s.a.get(1, "x".to_owned()).unwrap(), Some(42));
         assert_eq!(s.b.get(1, 42).unwrap(), Some("y".to_owned()));
-
-        cancel.cancel();
-        h_sync.await.unwrap();
     }
 
     #[tokio::test]
@@ -635,18 +584,11 @@ mod tests {
         let stride = 1;
         let buffer_size = 10;
         let first_checkpoint = None;
-        let cancel = CancellationToken::new();
-        let mut sync = Synchronizer::new(
-            store.db().clone(),
-            stride,
-            buffer_size,
-            first_checkpoint,
-            cancel.clone(),
-        );
+        let mut sync = Synchronizer::new(store.db().clone(), stride, buffer_size, first_checkpoint);
 
         // Register a different pipeline, but not "test"
         sync.register_pipeline("other").unwrap();
-        let h_sync = store.sync(sync).unwrap();
+        let _svc = store.sync(sync).unwrap();
 
         let err = write(&store, "test", 0, |_, _| Ok(()))
             .await
@@ -656,9 +598,6 @@ mod tests {
         // If pipelines are not registered with the synchronizer before it is associated with the
         // store, writes to them will fail.
         assert!(err.contains("No \"test\" synchronizer queue"), "{err}");
-
-        cancel.cancel();
-        h_sync.await.unwrap();
     }
 
     #[tokio::test]
@@ -671,14 +610,7 @@ mod tests {
         let stride = 1;
         let buffer_size = 10;
         let first_checkpoint = None;
-        let cancel = CancellationToken::new();
-        let sync = Synchronizer::new(
-            store.db().clone(),
-            stride,
-            buffer_size,
-            first_checkpoint,
-            cancel.clone(),
-        );
+        let sync = Synchronizer::new(store.db().clone(), stride, buffer_size, first_checkpoint);
 
         // Don't register any pipelines
         let err = store.sync(sync).unwrap_err().to_string();
@@ -698,17 +630,10 @@ mod tests {
         let stride = 1;
         let buffer_size = 10;
         let first_checkpoint = Some(100);
-        let cancel = CancellationToken::new();
-        let mut sync = Synchronizer::new(
-            store.db().clone(),
-            stride,
-            buffer_size,
-            first_checkpoint,
-            cancel.clone(),
-        );
+        let mut sync = Synchronizer::new(store.db().clone(), stride, buffer_size, first_checkpoint);
 
         sync.register_pipeline("test").unwrap();
-        let h_sync = store.sync(sync).unwrap();
+        let _svc = store.sync(sync).unwrap();
 
         write(&store, "test", 100, |s, b| {
             s.a.insert("x".to_owned(), 42, b)?;
@@ -727,9 +652,6 @@ mod tests {
         let s = store.schema();
         assert_eq!(s.a.get(100, "x".to_owned()).unwrap(), Some(42));
         assert_eq!(s.b.get(100, 42).unwrap(), Some("x".to_owned()));
-
-        cancel.cancel();
-        h_sync.await.unwrap();
     }
 
     #[tokio::test]
@@ -742,17 +664,10 @@ mod tests {
         let stride = 3;
         let buffer_size = 10;
         let first_checkpoint = None;
-        let cancel = CancellationToken::new();
-        let mut sync = Synchronizer::new(
-            store.db().clone(),
-            stride,
-            buffer_size,
-            first_checkpoint,
-            cancel.clone(),
-        );
+        let mut sync = Synchronizer::new(store.db().clone(), stride, buffer_size, first_checkpoint);
 
         sync.register_pipeline("test").unwrap();
-        let h_sync = store.sync(sync).unwrap();
+        let _svc = store.sync(sync).unwrap();
 
         // Write a run of checkpoints.
         for cp in 0..=10 {
@@ -794,9 +709,6 @@ mod tests {
 
         // Going back beyond the first checkpoint results in an empty range.
         assert_eq!(None, d.snapshot_range(1));
-
-        cancel.cancel();
-        h_sync.await.unwrap();
     }
 
     #[tokio::test]
@@ -809,17 +721,10 @@ mod tests {
         let stride = 1;
         let buffer_size = 10;
         let first_checkpoint = Some(100);
-        let cancel = CancellationToken::new();
-        let mut sync = Synchronizer::new(
-            store.db().clone(),
-            stride,
-            buffer_size,
-            first_checkpoint,
-            cancel.clone(),
-        );
+        let mut sync = Synchronizer::new(store.db().clone(), stride, buffer_size, first_checkpoint);
 
         sync.register_pipeline("test").unwrap();
-        let h_sync = store.sync(sync).unwrap();
+        let _svc = store.sync(sync).unwrap();
 
         let err = store
             .transaction(|c| {
@@ -838,9 +743,6 @@ mod tests {
             .to_string();
 
         assert!(err.contains("No watermark set during transaction"), "{err}");
-
-        cancel.cancel();
-        h_sync.await.unwrap();
     }
 
     #[tokio::test]
@@ -853,17 +755,10 @@ mod tests {
         let stride = 1;
         let buffer_size = 10;
         let first_checkpoint = None;
-        let cancel = CancellationToken::new();
-        let mut sync = Synchronizer::new(
-            store.db().clone(),
-            stride,
-            buffer_size,
-            first_checkpoint,
-            cancel.clone(),
-        );
+        let mut sync = Synchronizer::new(store.db().clone(), stride, buffer_size, first_checkpoint);
 
         sync.register_pipeline("test").unwrap();
-        let h_sync = store.sync(sync).unwrap();
+        let mut svc = store.sync(sync).unwrap();
 
         write(&store, "test", 0, |s, b| {
             s.a.insert("x".to_owned(), 42, b)?;
@@ -880,11 +775,11 @@ mod tests {
         .unwrap();
 
         // The out of order batch will appear to succeed, but the synchronizer will detect the
-        // situation and stop gracefully.
-        time::timeout(Duration::from_millis(500), h_sync)
+        // situation and stop gracefully, with an error.
+        time::timeout(Duration::from_millis(500), svc.join())
             .await
             .unwrap()
-            .unwrap();
+            .unwrap_err();
 
         // The first write made it through, but the second one did not.
         let s = store.schema();

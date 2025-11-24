@@ -13,7 +13,7 @@ clap.workspace = true
 prometheus.workspace = true
 prometheus-closure-metric.workspace = true
 tokio.workspace = true
-tokio-util.workspace = true
 tracing.workspace = true
 
+sui-futures.workspace = true
 sui-pg-db.workspace = true

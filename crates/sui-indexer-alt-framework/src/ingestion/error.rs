@@ -20,9 +20,6 @@ pub enum Error {
     #[error("No subscribers for ingestion service")]
     NoSubscribers,
 
-    #[error("Shutdown signal received, stopping ingestion service")]
-    Cancelled,
-
     #[error(transparent)]
     RpcClientError(#[from] tonic::Status),
 
