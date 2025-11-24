@@ -15157,9 +15157,9 @@ dependencies = [
  "clap",
  "prometheus",
  "prometheus-closure-metric",
+ "sui-futures",
  "sui-pg-db",
  "tokio",
- "tokio-util 0.7.13",
  "tracing",
 ]
 
