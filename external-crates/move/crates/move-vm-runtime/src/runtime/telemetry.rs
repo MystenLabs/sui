@@ -7,6 +7,8 @@ use std::{
     time::Duration,
 };
 
+use serde::{Deserialize, Serialize};
+
 use crate::cache::move_cache::MoveCache;
 
 // -------------------------------------------------------------------------------------------------
@@ -18,7 +20,7 @@ use crate::cache::move_cache::MoveCache;
 // -----------------------------------------------
 
 /// Runtime Telemetry Information for reporting
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MoveRuntimeTelemetry {
     // -------------------------------------------
     // Telemetry Derived from Cache over Execution
