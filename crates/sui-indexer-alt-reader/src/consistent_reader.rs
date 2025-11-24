@@ -16,7 +16,6 @@ use sui_types::{
     TypeTag,
     base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber},
 };
-use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::instrument;
 use url::Url;
@@ -24,13 +23,6 @@ use url::Url;
 pub use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha as proto;
 
 use crate::metrics::ConsistentReaderMetrics;
-
-/// Like `anyhow::bail!`, but returns this module's `Error` type, not `anyhow::Error`.
-macro_rules! bail {
-    ($e:expr) => {
-        return Err(Error::Internal(anyhow!($e)));
-    };
-}
 
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct ConsistentReaderArgs {
@@ -49,7 +41,6 @@ pub struct ConsistentReader {
     client: Option<Client>,
     timeout: Option<Duration>,
     metrics: Arc<ConsistentReaderMetrics>,
-    cancel: CancellationToken,
 }
 
 /// Response from a paginated query.
@@ -92,7 +83,6 @@ impl ConsistentReader {
         prefix: Option<&str>,
         args: ConsistentReaderArgs,
         registry: &Registry,
-        cancel: CancellationToken,
     ) -> Result<Self, Error> {
         let client = if let Some(url) = &args.consistent_store_url {
             let mut endpoint = Channel::from_shared(url.to_string())
@@ -116,7 +106,6 @@ impl ConsistentReader {
             client,
             timeout,
             metrics,
-            cancel,
         })
     }
 
@@ -377,15 +366,10 @@ impl ConsistentReader {
             );
         }
 
-        let response = tokio::select! {
-            _ = self.cancel.cancelled() => {
-                bail!("Request cancelled");
-            }
-
-            r = response(client, request) => {
-                r.map(|r| r.into_inner()).map_err(Into::into)
-            }
-        };
+        let response = response(client, request)
+            .await
+            .map(|r| r.into_inner())
+            .map_err(Into::into);
 
         if response.is_ok() {
             self.metrics
