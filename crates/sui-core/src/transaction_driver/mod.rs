@@ -219,7 +219,7 @@ where
                                 .observe(attempts as f64);
                             if request.transaction.is_some() {
                                 tracing::info!(
-                                    "Failed to finalize transaction with non-retriable error after {} attempts: {}",
+                                    "User transaction failed to finalize (attempt {}), with non-retriable error: {}",
                                     attempts,
                                     e
                                 );
@@ -228,7 +228,7 @@ where
                         }
                         if request.transaction.is_some() {
                             tracing::info!(
-                                "Failed to finalize transaction (attempt {}): {}. Retrying ...",
+                                "User transaction failed to finalize (attempt {}): {}. Retrying ...",
                                 attempts,
                                 e
                             );
@@ -269,7 +269,7 @@ where
                         };
                         if request.transaction.is_some() {
                             tracing::info!(
-                                "Transaction timed out after {} attempts. Last error: {}",
+                                "User transaction timed out after {} attempts. Last error: {}",
                                 attempts,
                                 e
                             );
