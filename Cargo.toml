@@ -74,6 +74,12 @@ exclude = [
   "external-crates/move/move-execution/v2/crates/move-stdlib-natives",
   "external-crates/move/move-execution/v2/crates/move-vm-runtime",
   "external-crates/move/move-execution/v2/crates/move-vm-types",
+  "external-crates/move/move-execution/replay_cut/crates/bytecode-verifier-tests",
+  "external-crates/move/move-execution/replay_cut/crates/move-abstract-interpreter",
+  "external-crates/move/move-execution/replay_cut/crates/move-bytecode-verifier",
+  "external-crates/move/move-execution/replay_cut/crates/move-stdlib-natives",
+  "external-crates/move/move-execution/replay_cut/crates/move-vm-runtime",
+  "external-crates/move/move-execution/replay_cut/crates/move-vm-types",
 ]
 
 members = [
@@ -207,6 +213,9 @@ members = [
   "sui-execution/latest/sui-adapter",
   "sui-execution/latest/sui-move-natives",
   "sui-execution/latest/sui-verifier",
+  "sui-execution/replay_cut/sui-adapter",
+  "sui-execution/replay_cut/sui-move-natives",
+  "sui-execution/replay_cut/sui-verifier",
   "sui-execution/v0/sui-adapter",
   "sui-execution/v0/sui-move-natives",
   "sui-execution/v0/sui-verifier",
