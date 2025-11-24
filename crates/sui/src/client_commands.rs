@@ -20,8 +20,8 @@ use std::{
 use anyhow::{Context, anyhow, bail, ensure};
 use bip32::DerivationPath;
 use clap::*;
-use fastcrypto::{
 use colored::Colorize;
+use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
 };
