@@ -15940,6 +15940,7 @@ dependencies = [
  "bin-version",
  "clap",
  "indexmap 2.8.0",
+ "move-compiler",
  "move-core-types",
  "move-package-alt",
  "move-package-alt-compilation",

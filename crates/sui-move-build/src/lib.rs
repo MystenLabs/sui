@@ -19,7 +19,6 @@ use move_bytecode_utils::{Modules, layout::SerdeLayoutBuilder, module_cache::Get
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
     diagnostics::{Diagnostics, report_diagnostics_to_buffer, report_warnings},
-    editions::Edition,
     linters::LINT_WARNING_PREFIX,
     shared::files::MappedFiles,
 };
@@ -219,12 +218,6 @@ impl BuildConfig {
         self,
         root_pkg: &mut RootPackage<SuiFlavor>,
     ) -> anyhow::Result<CompiledPackage> {
-        if (!cfg!(debug_assertions) || cfg!(test))
-            && root_pkg.package_info().edition() == Some(Edition::DEVELOPMENT)
-        {
-            return Err(Edition::DEVELOPMENT.unknown_edition_error());
-        }
-
         let result = if self.print_diags_to_stderr {
             self.compile_package(root_pkg, &mut std::io::stderr())
         } else {

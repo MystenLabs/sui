@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::schema::{
     Environment, EnvironmentID, EnvironmentName, LockfileDependencyInfo, PackageName,
-    ReplacementDependency,
+    ParsedManifest, ReplacementDependency,
 };
 
 use super::MoveFlavor;
@@ -65,5 +65,9 @@ impl MoveFlavor for Vanilla {
         _environment: &EnvironmentID,
     ) -> BTreeMap<PackageName, ReplacementDependency> {
         BTreeMap::new()
+    }
+
+    fn validate_manifest(_: &ParsedManifest) -> Result<(), String> {
+        Ok(())
     }
 }

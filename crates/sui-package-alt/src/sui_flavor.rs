@@ -7,6 +7,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
+use move_compiler::editions::Edition;
 use move_package_alt::{
     dependency::{self, CombinedDependency, PinnedDependencyInfo},
     errors::{FileHandle, PackageResult},
@@ -14,8 +15,8 @@ use move_package_alt::{
     git::GitCache,
     schema::{
         EnvironmentID, EnvironmentName, GitSha, LockfileDependencyInfo, LockfileGitDepInfo,
-        ManifestDependencyInfo, ManifestGitDependency, PackageName, ReplacementDependency,
-        SystemDepName,
+        ManifestDependencyInfo, ManifestGitDependency, PackageName, ParsedManifest,
+        ReplacementDependency, SystemDepName,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -143,6 +144,14 @@ impl MoveFlavor for SuiFlavor {
         }
 
         deps
+    }
+
+    fn validate_manifest(manifest: &ParsedManifest) -> Result<(), String> {
+        if manifest.package.edition == Some(Edition::DEVELOPMENT) {
+            Err(Edition::DEVELOPMENT.unknown_edition_error().to_string())
+        } else {
+            Ok(())
+        }
     }
 }
 

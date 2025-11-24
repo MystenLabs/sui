@@ -64,6 +64,9 @@ pub enum ManifestErrorKind {
         "The `{name}` dependency is implicitly provided and should not be defined in your manifest."
     )]
     ExplicitImplicit { name: PackageName },
+
+    #[error("{0}")]
+    FlavorRejectedManifest(String),
 }
 
 pub type ManifestResult<T> = Result<T, ManifestError>;
@@ -129,6 +132,14 @@ impl ManifestError {
             ErrorLocation::WholeFile(path) => {
                 Diagnostic::error().with_message(format!("Error while loading `{path:?}`: {self}"))
             }
+        }
+    }
+
+    /// Create an error object representing a flavor rejection of the manifest
+    pub(crate) fn flavor_rejected_manifest(manifest_handle: FileHandle, message: String) -> Self {
+        Self {
+            location: ErrorLocation::WholeFile(manifest_handle.path().to_path_buf()),
+            kind: Box::new(ManifestErrorKind::FlavorRejectedManifest(message)),
         }
     }
 }
