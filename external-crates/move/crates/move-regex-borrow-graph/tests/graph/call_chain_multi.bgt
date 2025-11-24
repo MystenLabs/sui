@@ -1,5 +1,5 @@
 0 = &mut local_0
-1 = & local_1
+1 = &local_1
 writable: 0
 2 = &mut 0.a
 writable: 2

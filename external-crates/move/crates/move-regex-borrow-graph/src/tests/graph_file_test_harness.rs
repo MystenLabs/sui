@@ -47,7 +47,14 @@ struct BorrowArrangement {
     ops: Vec<BorrowTestOp>,
 }
 
+struct BorrowArrangementParser {
+    ops: Vec<BorrowTestOp>,
+    mutables: Vec<usize>,
+    defined: Vec<usize>,
+}
+
 impl BorrowOp {
+    #[allow(dead_code)]
     fn is_mutable(&self) -> bool {
         match self {
             BorrowOp::Local { is_mutable, .. } => *is_mutable,
@@ -58,184 +65,261 @@ impl BorrowOp {
     }
 }
 
+/// Like assert, but returns Err with message instead of panicking.
+/// Take multiple message arguments for convenience.
+macro_rules! test_assert {
+    ($cond:expr, $($msg:expr),+) => {
+        if !($cond) {
+            let msg = format!($($msg),+);
+            return Err(msg);
+        }
+    };
+}
+
 impl BorrowArrangement {
     fn from_file(file: &std::path::Path) -> Result<Self, String> {
-        // Sanity check: that mutable set exists, and each mutable borrow is from a mutable base
-        // or a local.
-        fn sanity_check(ops: &[BorrowTestOp]) -> Result<(), String> {
-            let mut mutable = BTreeSet::new();
-            let mut defined = BTreeSet::new();
+        BorrowArrangementParser::parse_from_file(file)
+    }
+}
 
-            /// Like assert, but returns Err with message instead of panicking.
-            /// Take multiple message arguments for convenience.
-            macro_rules! test_assert {
-                ($cond:expr, $($msg:expr),+) => {
-                    if !($cond) {
-                        let msg = format!($($msg),+);
-                        return Err(msg);
-                    }
-                };
-            }
+impl BorrowArrangementParser {
+    fn parse_from_file(file: &std::path::Path) -> Result<BorrowArrangement, String> {
+        let mut parser = BorrowArrangementParser {
+            ops: Vec::new(),
+            mutables: Vec::new(),
+            defined: Vec::new(),
+        };
+        parser.parse(file)?;
+        parser.into_borrow_arrangement()
+    }
 
-            for op in ops {
-                match op {
-                    BorrowTestOp::Check { writables, .. } => {
-                        for m in writables {
-                            test_assert!(
-                                defined.contains(m),
-                                "Invalid: expected writable {} not defined",
-                                m
-                            );
-                            // test_assert!(
-                            //     mutables.contains(m),
-                            //     "Invalid: expected {} to be mutable",
-                            //     m
-                            // );
-                        }
-                    }
-                    BorrowTestOp::Assign { lhs, rhs } => {
-                        match rhs {
-                            BorrowOp::Local { .. } | BorrowOp::Call { .. } => (),
-                            BorrowOp::Alias { base, is_mutable } => {
-                                test_assert!(
-                                    !is_mutable || mutable.contains(base),
-                                    "Invalud: alias {} mutable from immutable base {}",
-                                    lhs,
-                                    base
-                                );
-                            }
-                            BorrowOp::BorrowField {
-                                base, is_mutable, ..
-                            } => {
-                                test_assert!(
-                                    !is_mutable || mutable.contains(base),
-                                    "Invalid: mutable field borrow {} mutable from immutable base {}",
-                                    lhs,
-                                    base
-                                );
-                            }
-                        }
-
-                        test_assert!(
-                            !defined.contains(lhs),
-                            "Invalid: lhs {} already defined",
-                            lhs
-                        );
-                        defined.insert(lhs);
-
-                        if rhs.is_mutable() {
-                            mutable.insert(lhs);
-                        }
-                    }
-                }
-            }
-            Ok(())
-        }
-
-        // line := "writable: n,.."
-        //       | "<ndx> = <ref> <base>"
-        //       | "<ndx> = <ref> <base>.<label>"
-        //       | "<ndx> = <ref> call(<arg1>, ...)"
-        // base := <ndx> | "local_<local_id>"
-        // ref  := "&" | "&mut"
-        fn parse_line(line: usize, contents: &str) -> BorrowTestOp {
-            if let Some(writables) = contents.strip_prefix("writable:") {
-                let writables = writables.trim();
-                // if no writables, then empty vec
-                let writables = {
-                    if writables.is_empty() {
-                        vec![]
-                    } else {
-                        writables
-                            .split(',')
-                            .map(|s| s.trim().parse().expect("Invalid mutable index"))
-                            .collect()
-                    }
-                };
-                return BorrowTestOp::Check { line, writables };
-            }
-
-            let parts: Vec<&str> = contents.split('=').map(|s| s.trim()).collect();
-            assert!(parts.len() == 2, "Invalid line format");
-            let lhs = parts[0];
-            let rhs = parts[1];
-
-            let lhs: usize = lhs.parse().expect("Invalid index on LHS");
-
-            let rhs = {
-                let rhs_parts: Vec<&str> = rhs.split_whitespace().collect();
-                assert!(rhs_parts.len() >= 2, "Invalid RHS format");
-                let ref_kind = rhs_parts[0];
-                let is_mutable = match ref_kind {
-                    "&" => false,
-                    "&mut" => true,
-                    _ => panic!("Invalid reference kind"),
-                };
-                let target = rhs_parts[1];
-
-                if let Some(local_id) = target.strip_prefix("local_") {
-                    let local_id: u8 = local_id.parse().expect("Invalid local id");
-                    BorrowOp::Local {
-                        local_id,
-                        is_mutable,
-                    }
-                } else if target.contains(".") {
-                    let base_and_field: Vec<&str> = target.split('.').collect();
-                    assert!(base_and_field.len() == 2, "Invalid field borrow format");
-                    let base: usize = base_and_field[0]
-                        .parse()
-                        .expect("Invalid base index for field borrow");
-                    let label: char = base_and_field[1]
-                        .chars()
-                        .next()
-                        .expect("Invalid label for field borrow");
-                    BorrowOp::BorrowField {
-                        base,
-                        label,
-                        is_mutable,
-                    }
-                } else if let Some(args) = target.strip_prefix("call") {
-                    let args_str = args.trim_matches(|c| c == '(' || c == ')');
-                    let args: Vec<usize> = if args_str.is_empty() {
-                        Vec::new()
-                    } else {
-                        args_str
-                            .split(',')
-                            .map(|s| s.trim().parse().expect("Invalid call argument"))
-                            .collect()
-                    };
-                    BorrowOp::Call { args, is_mutable }
-                } else {
-                    let base: usize = target.parse().expect("Invalid base index for alias");
-                    BorrowOp::Alias { base, is_mutable }
-                }
-            };
-
-            BorrowTestOp::Assign { lhs, rhs }
-        }
-
+    fn parse(&mut self, file: &std::path::Path) -> Result<(), String> {
         let content = std::fs::read_to_string(file).expect("Unable to read file");
         let lines = content.lines();
 
+        let mut error_msgs = Vec::new();
+
         // Subsequent lines: operations
-        let mut ops = Vec::new();
         for (ndx, line) in lines.enumerate() {
             let line = line.trim();
             if line.is_empty() || line.starts_with("//") {
                 continue;
             }
 
-            let op = parse_line(ndx + 1, line);
-            // Parse operation
-            ops.push(op);
+            // Statefully parse the line
+
+            if let Err(msg) = self.parse_line(ndx + 1, line) {
+                error_msgs.push(msg);
+            }
         }
 
-        if ops.is_empty() {
-            panic!("No operations found in file");
+        if !error_msgs.is_empty() {
+            return Err(error_msgs.join("\n"));
         }
 
-        sanity_check(&ops)?;
+        test_assert!(!self.ops.is_empty(), "No operations found in file");
+        Ok(())
+    }
 
+    fn check_defined(&self, line: usize, index: usize) -> Result<(), String> {
+        if !self.defined.contains(&index) {
+            return Err(format!(
+                "Line {line}: Reference {index} used before definition"
+            ));
+        }
+        Ok(())
+    }
+
+    fn check_not_defined(&self, line: usize, index: usize) -> Result<(), String> {
+        if self.defined.contains(&index) {
+            return Err(format!("Line {line}: Reference {index} already defined"));
+        }
+        Ok(())
+    }
+
+    fn check_mutable(&self, line: usize, index: usize) -> Result<(), String> {
+        if !self.mutables.contains(&index) {
+            return Err(format!(
+                "Line {line}: Reference {index} used as mutable but is not mutable"
+            ));
+        }
+        Ok(())
+    }
+
+    fn record_mutability(&mut self, index: usize, is_mutable: bool) {
+        if is_mutable {
+            self.mutables.push(index);
+        }
+    }
+
+    fn is_mutable(&self, index: usize) -> bool {
+        self.mutables.contains(&index)
+    }
+
+    // line  := "writable: n,.."
+    //        | <ndx> "=" <ref> "local_"<local>
+    //        | <ndx> "=" "alias" <base>
+    //        | <ndx> "=" "freeze" <base>
+    //        | <ndx> "=" <ref> <base>.<label>
+    //        | <ndx> "=" <ref> call(<base>, ...)"
+    // base  := <ndx>
+    // local := <ndx>
+    // ref   := "&" | "&mut "
+    // labal := { c | c is a single char }
+    fn parse_line(&mut self, line: usize, contents: &str) -> Result<(), String> {
+        fn parse_mut_or_imm_opt(contents: &str) -> Option<(bool, &str)> {
+            if let Some(rest) = contents.strip_prefix("&mut ") {
+                Some((true, rest))
+            } else if let Some(rest) = contents.strip_prefix("&") {
+                Some((false, rest))
+            } else {
+                None
+            }
+        }
+
+        fn parse_usize(line: usize, s: &str) -> Result<usize, String> {
+            s.trim()
+                .parse()
+                .map_err(|_| format!("Line {line}: Expected a number, but got '{}'", s))
+        }
+
+        if let Some(writables) = contents.strip_prefix("writable:") {
+            let writables = writables.trim();
+            // if no writables, then empty vec
+            let writables = {
+                if writables.is_empty() {
+                    vec![]
+                } else {
+                    writables
+                        .split(',')
+                        .map(|s| parse_usize(line, s.trim()))
+                        .collect::<Result<_, _>>()?
+                }
+            };
+            for writable in &writables {
+                self.check_defined(line, *writable)?;
+            }
+            self.ops.push(BorrowTestOp::Check { line, writables });
+            return Ok(());
+        }
+
+        let parts: Vec<&str> = contents.split('=').map(|s| s.trim()).collect();
+        if parts.len() != 2 {
+            return Err(format!("Line {line}: Invalid line format"));
+        }
+        let lhs = parts[0];
+        let rhs = parts[1];
+
+        let lhs = parse_usize(line, lhs)?;
+        self.check_not_defined(line, lhs)?;
+        // Push the LHS so that even if the RHS is malformed so that we don't produce undefined ref
+        // errors later, and we also catch re-definition errors.
+        self.defined.push(lhs);
+
+        let mut_opt = parse_mut_or_imm_opt(rhs);
+
+        let (mut_ref, rhs) = match mut_opt {
+            Some((is_mutable, rest)) => (Some(is_mutable), rest),
+            None => (None, rhs),
+        };
+
+        if let Some(rest) = rhs.strip_prefix("alias") {
+            test_assert!(mut_ref.is_none(), "Alias cannot specify mutability");
+
+            let base_str = rest.trim();
+            let base = parse_usize(line, base_str)?;
+
+            self.check_defined(line, base)?;
+            let is_mutable = self.is_mutable(base);
+
+            self.record_mutability(lhs, is_mutable);
+            let op = BorrowOp::Alias { base, is_mutable };
+            self.ops.push(BorrowTestOp::Assign { lhs, rhs: op });
+            Ok(())
+        } else if let Some(rest) = rhs.strip_prefix("freeze") {
+            test_assert!(mut_ref.is_none(), "Freeze cannot specify mutability");
+
+            let base_str = rest.trim();
+            let base = parse_usize(line, base_str)?;
+
+            self.check_defined(line, base)?;
+            self.check_mutable(line, base)?;
+            let is_mutable = false;
+
+            self.record_mutability(lhs, is_mutable);
+            let op = BorrowOp::Alias { base, is_mutable };
+            self.ops.push(BorrowTestOp::Assign { lhs, rhs: op });
+            Ok(())
+        } else if let Some(local_id) = rhs.strip_prefix("local_") {
+            test_assert!(mut_ref.is_some(), "Local must specify mutability");
+            let is_mutable = mut_ref.unwrap();
+
+            let local_id: u8 = local_id
+                .parse()
+                .map_err(|_| format!("Line {line}: Invalid local id '{}'", local_id))?;
+
+            self.record_mutability(lhs, is_mutable);
+            let op = BorrowOp::Local {
+                local_id,
+                is_mutable,
+            };
+            self.ops.push(BorrowTestOp::Assign { lhs, rhs: op });
+            Ok(())
+        } else if let Some(rest) = rhs.strip_prefix("call(") {
+            test_assert!(mut_ref.is_some(), "Call must specify mutability");
+            let is_mutable = mut_ref.unwrap();
+
+            let Some(args_str) = rest.strip_suffix(')') else {
+                return Err(format!("Line {line}: Did not find suffix ')' for call"));
+            };
+            let args: Vec<usize> = if args_str.trim().is_empty() {
+                vec![]
+            } else {
+                args_str
+                    .split(',')
+                    .map(|s| parse_usize(line, s.trim()))
+                    .collect::<Result<_, _>>()?
+            };
+
+            for arg in &args {
+                self.check_defined(line, *arg)?;
+            }
+            self.record_mutability(lhs, mut_ref.unwrap());
+            let op = BorrowOp::Call { args, is_mutable };
+            self.ops.push(BorrowTestOp::Assign { lhs, rhs: op });
+            Ok(())
+        } else if let [base, label] = &rhs.split('.').collect::<Vec<_>>()[..] {
+            test_assert!(label.chars().count() == 1, "Invalid field borrow label");
+            // Field borrow
+            test_assert!(mut_ref.is_some(), "Field borrow must specify mutability");
+            let base: usize = parse_usize(line, base)?;
+            let Some(label) = label.chars().last() else {
+                return Err(format!("Line {line}: Invalid field borrow, missing label"));
+            };
+
+            self.check_defined(line, base)?;
+            let is_mutable = mut_ref.unwrap();
+            if is_mutable {
+                self.check_mutable(line, base)?;
+            }
+
+            self.record_mutability(lhs, is_mutable);
+            self.ops.push(BorrowTestOp::Assign {
+                lhs,
+                rhs: BorrowOp::BorrowField {
+                    base,
+                    label,
+                    is_mutable,
+                },
+            });
+            Ok(())
+        } else {
+            Err(format!("Line {line}: Invalid RHS format"))
+        }
+    }
+
+    fn into_borrow_arrangement(self) -> Result<BorrowArrangement, String> {
+        let BorrowArrangementParser { ops, .. } = self;
         let locals = ops
             .iter()
             .filter_map(|op| {
@@ -321,7 +405,7 @@ fn build_and_check_graph_from_arrangement(
                         .collect::<Vec<_>>()
                         .join("\n");
                     return Err(format!(
-                        "Writability check failed as line {line}:\n{failure_msg}"
+                        "Writability check failed at line {line}:\n{failure_msg}"
                     ));
                 }
             }

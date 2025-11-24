@@ -1,10 +1,10 @@
 0 = &mut local_0
 writable: 0
-1 = & local_1
+1 = &local_1
 writable: 0
 2 = &mut local_1
 writable: 0,2
-3 = & call(1,2)
+3 = &call(1,2)
 writable: 0
 4 = &mut local_2
 writable: 0,4
@@ -14,17 +14,17 @@ writable: 0,5
 writable: 0,6
 7 = &mut call(0,6)
 writable: 7
-8 = & 7.b
+8 = &7.b
 writable:
-9 = & 6
+9 = freeze 6
 writable:
 10 = &mut call(9)
 writable: 10
-11 = & local_0
+11 = &local_0
 writable: 10
 12 = &mut local_3
 writable: 10,12
-13 = &mut 12
+13 = alias 12
 writable: 10,12,13
-14 = & call(13,3)
+14 = &call(13,3)
 writable: 10

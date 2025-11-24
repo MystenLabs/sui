@@ -1,5 +1,4 @@
 ---
 source: crates/move-regex-borrow-graph/tests/borrow_graph_tests.rs
 ---
-Writability check failed at line 5:
-  Ref 3 is not writable
+Line 2: Invalid RHS format

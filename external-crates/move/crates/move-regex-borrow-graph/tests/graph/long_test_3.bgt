@@ -2,21 +2,21 @@
 writable: 0
 1 = &mut local_1
 writable: 0,1
-2 = &mut 1
+2 = alias 1
 writable: 0,1,2
-3 = & call(0,2)
+3 = &call(0,2)
 writable:
 4 = &mut local_2
 writable: 4
-5 = & 4.a
+5 = &4.a
 writable:
 6 = &mut local_3
 writable: 6
 7 = &mut call(6)
 writable: 7
-8 = &mut 7
+8 = alias 7
 writable: 7,8
-9 = & call(8,4)
+9 = &call(8,4)
 writable:
 10 = &mut local_4
 writable: 10
