@@ -1,0 +1,75 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+#![deny(clippy::arithmetic_side_effects)]
+
+use crate::{
+    data_store::cached_package_store::CachedPackageStore,
+    execution_mode::ExecutionMode,
+    execution_value::ExecutionState,
+    gas_charger::GasCharger,
+    static_programmable_transactions::{
+        env::Env, linkage::analysis::LinkageAnalyzer, metering::translation_meter,
+    },
+};
+use move_trace_format::format::MoveTraceBuilder;
+use move_vm_runtime::move_vm::MoveVM;
+use std::{cell::RefCell, rc::Rc, sync::Arc};
+use sui_protocol_config::ProtocolConfig;
+use sui_types::{
+    base_types::TxContext, error::ExecutionError, execution::ResultWithTimings,
+    metrics::LimitsMetrics, storage::BackingPackageStore, transaction::ProgrammableTransaction,
+};
+
+// TODO we might replace this with a new one
+pub use crate::data_store::legacy::linkage_view::LinkageView;
+
+pub mod env;
+pub mod execution;
+pub mod linkage;
+pub mod loading;
+pub mod metering;
+pub mod spanned;
+pub mod typing;
+
+pub fn execute<Mode: ExecutionMode>(
+    protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
+    vm: &MoveVM,
+    state_view: &mut dyn ExecutionState,
+    package_store: &dyn BackingPackageStore,
+    tx_context: Rc<RefCell<TxContext>>,
+    gas_charger: &mut GasCharger,
+    txn: ProgrammableTransaction,
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
+    let package_store = CachedPackageStore::new(Box::new(package_store));
+    let linkage_analysis =
+        LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e, vec![]))?;
+
+    let mut env = Env::new(
+        protocol_config,
+        vm,
+        state_view,
+        &package_store,
+        &linkage_analysis,
+    );
+    let mut translation_meter =
+        translation_meter::TranslationMeter::new(protocol_config, gas_charger);
+
+    let txn = {
+        let tx_context_ref = tx_context.borrow();
+        loading::translate::transaction(&mut translation_meter, &env, &tx_context_ref, txn)
+            .map_err(|e| (e, vec![]))?
+    };
+    let txn = typing::translate_and_verify::<Mode>(&mut translation_meter, &env, txn)
+        .map_err(|e| (e, vec![]))?;
+    execution::interpreter::execute::<Mode>(
+        &mut env,
+        metrics,
+        tx_context,
+        gas_charger,
+        txn,
+        trace_builder_opt,
+    )
+}

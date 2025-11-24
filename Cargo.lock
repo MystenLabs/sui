@@ -7870,6 +7870,13 @@ name = "move-abstract-interpreter"
 version = "0.1.0"
 
 [[package]]
+name = "move-abstract-interpreter-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "itertools 0.13.0",
+]
+
+[[package]]
 name = "move-abstract-interpreter-v2"
 version = "0.1.0"
 dependencies = [
@@ -7980,6 +7987,21 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-config",
+]
+
+[[package]]
+name = "move-bytecode-verifier-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-interpreter",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-regex-borrow-graph",
+ "move-vm-config",
+ "petgraph 0.8.1",
 ]
 
 [[package]]
@@ -8508,6 +8530,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stdlib-natives-replay_cut"
+version = "0.1.1"
+dependencies = [
+ "hex",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-runtime-replay_cut",
+ "move-vm-types-replay_cut",
+ "sha2 0.9.9",
+ "sha3 0.9.1",
+ "smallvec",
+]
+
+[[package]]
 name = "move-stdlib-natives-v0"
 version = "0.1.1"
 dependencies = [
@@ -8677,6 +8713,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-vm-runtime-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "better_any",
+ "fail",
+ "move-binary-format",
+ "move-bytecode-verifier-replay_cut",
+ "move-core-types",
+ "move-trace-format",
+ "move-vm-config",
+ "move-vm-types-replay_cut",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
 name = "move-vm-runtime-v0"
 version = "0.1.0"
 dependencies = [
@@ -8725,6 +8779,18 @@ dependencies = [
  "parking_lot 0.11.2",
  "smallvec",
  "tracing",
+]
+
+[[package]]
+name = "move-vm-types-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-profiler",
+ "serde",
+ "smallvec",
 ]
 
 [[package]]
@@ -13534,6 +13600,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-adapter-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "indexmap 2.8.0",
+ "leb128",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-replay_cut",
+ "move-core-types",
+ "move-regex-borrow-graph",
+ "move-trace-format",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-runtime-replay_cut",
+ "move-vm-types-replay_cut",
+ "mysten-common",
+ "mysten-metrics",
+ "nonempty",
+ "parking_lot 0.12.3",
+ "serde",
+ "serde_json",
+ "sui-macros",
+ "sui-move-natives-replay_cut",
+ "sui-protocol-config",
+ "sui-types",
+ "sui-verifier-replay_cut",
+ "tracing",
+]
+
+[[package]]
 name = "sui-adapter-transactional-tests"
 version = "0.1.0"
 dependencies = [
@@ -14396,34 +14495,41 @@ version = "0.1.0"
 dependencies = [
  "cargo_metadata 0.15.4",
  "move-abstract-interpreter",
+ "move-abstract-interpreter-replay_cut",
  "move-abstract-interpreter-v2",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-replay_cut",
  "move-bytecode-verifier-v0",
  "move-bytecode-verifier-v1",
  "move-bytecode-verifier-v2",
  "move-trace-format",
  "move-vm-config",
  "move-vm-runtime",
+ "move-vm-runtime-replay_cut",
  "move-vm-runtime-v0",
  "move-vm-runtime-v1",
  "move-vm-runtime-v2",
+ "move-vm-types-replay_cut",
  "move-vm-types-v0",
  "move-vm-types-v1",
  "move-vm-types-v2",
  "petgraph 0.5.1",
  "sui-adapter-latest",
+ "sui-adapter-replay_cut",
  "sui-adapter-v0",
  "sui-adapter-v1",
  "sui-adapter-v2",
  "sui-move-natives-latest",
+ "sui-move-natives-replay_cut",
  "sui-move-natives-v0",
  "sui-move-natives-v1",
  "sui-move-natives-v2",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
+ "sui-verifier-replay_cut",
  "sui-verifier-v0",
  "sui-verifier-v1",
  "sui-verifier-v2",
@@ -15663,6 +15769,28 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-runtime",
+ "rand 0.8.5",
+ "smallvec",
+ "sui-protocol-config",
+ "sui-types",
+ "tracing",
+]
+
+[[package]]
+name = "sui-move-natives-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "better_any",
+ "fastcrypto",
+ "fastcrypto-vdf",
+ "fastcrypto-zkp",
+ "indexmap 2.8.0",
+ "move-binary-format",
+ "move-core-types",
+ "move-stdlib-natives-replay_cut",
+ "move-vm-runtime-replay_cut",
+ "move-vm-types-replay_cut",
  "rand 0.8.5",
  "smallvec",
  "sui-protocol-config",
@@ -17033,6 +17161,21 @@ dependencies = [
  "move-bytecode-utils",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "sui-protocol-config",
+ "sui-types",
+]
+
+[[package]]
+name = "sui-verifier-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-replay_cut",
  "move-core-types",
  "move-vm-config",
  "sui-protocol-config",
