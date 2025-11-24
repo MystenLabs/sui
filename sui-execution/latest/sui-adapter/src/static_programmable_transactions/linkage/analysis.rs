@@ -257,13 +257,7 @@ mod input_type_resolution_analysis {
             CallArg::FundsWithdrawal(f) => {
                 let FundsWithdrawalArg { type_arg, .. } = f;
                 match type_arg {
-                    WithdrawalTypeArg::Balance(inner) => {
-                        let Ok(tag) = inner.to_type_tag() else {
-                            invariant_violation!(
-                                "Invalid type tag in funds withdrawal argument: {:?}",
-                                inner
-                            );
-                        };
+                    WithdrawalTypeArg::Balance(tag) => {
                         let ids = tag.all_addresses().into_iter().map(ObjectID::from);
                         resolution_table.add_type_linkages_to_table(ids, package_store)?;
                     }

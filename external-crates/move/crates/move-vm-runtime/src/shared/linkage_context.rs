@@ -4,7 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMResult};
-use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::{
+    account_address::AccountAddress,
+    language_storage::{ModuleId, TypeTag},
+};
 
 use crate::shared::types::{OriginalId, VersionId};
 

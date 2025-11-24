@@ -340,6 +340,11 @@ pub enum ToolCommand {
         /// Defaults to 3 retries. Set to 0 to disable retries.
         #[clap(long = "max-retries", default_value = "3")]
         max_retries: usize,
+
+        /// Backfill epoch transaction digests. Defaults to true.
+        /// Required for validators, optional for fullnodes.
+        #[clap(long = "backfill-txn-digests", default_value = "false")]
+        backfill_txn_digests: bool,
     },
 
     #[clap(name = "replay")]
@@ -668,6 +673,7 @@ impl ToolCommand {
                 latest,
                 verbose,
                 max_retries,
+                backfill_txn_digests,
             } => {
                 if !verbose {
                     tracing_handle
@@ -796,6 +802,7 @@ impl ToolCommand {
                     network,
                     verify,
                     max_retries,
+                    backfill_txn_digests,
                 )
                 .await?;
             }
