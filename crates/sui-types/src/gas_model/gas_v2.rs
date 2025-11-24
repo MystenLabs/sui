@@ -24,6 +24,7 @@ mod checked {
     /// After execution a call to `GasStatus::bucketize` will round the computation
     /// cost to `cost` for the bucket ([`min`, `max`]) the gas used falls into.
     #[allow(dead_code)]
+    #[derive(Clone)]
     pub(crate) struct ComputationBucket {
         min: u64,
         max: u64,
@@ -81,6 +82,7 @@ mod checked {
     }
 
     /// A list of constant costs of various operations in Sui.
+    #[derive(Clone)]
     pub struct SuiCostTable {
         /// A flat fee charged for every transaction. This is also the minimum amount of
         /// gas charged for a transaction.
@@ -167,7 +169,7 @@ mod checked {
     }
 
     #[allow(dead_code)]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct SuiGasStatus {
         // GasStatus as used by the VM, that is all the VM sees
         pub gas_status: GasStatus,

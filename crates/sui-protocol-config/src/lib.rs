@@ -4236,7 +4236,6 @@ impl ProtocolConfig {
                 }
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
-                    cfg.execution_version = Some(u64::MAX);
                 }
                 100 => {
                     cfg.feature_flags.private_generics_verifier_v2 = true;

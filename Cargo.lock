@@ -14516,6 +14516,7 @@ dependencies = [
  "move-vm-types-v1",
  "move-vm-types-v2",
  "petgraph 0.5.1",
+ "similar",
  "sui-adapter-latest",
  "sui-adapter-replay_cut",
  "sui-adapter-v0",
@@ -14533,6 +14534,7 @@ dependencies = [
  "sui-verifier-v0",
  "sui-verifier-v1",
  "sui-verifier-v2",
+ "tracing",
 ]
 
 [[package]]
