@@ -1105,6 +1105,9 @@ ecvrf_verify
 ed25519_verify
 	public fun
 	0x2::ed25519
+is_feature_enabled
+	public(package) fun
+	0x2::protocol_config
 hash_to_input
 	public fun
 	0x2::vdf

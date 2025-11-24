@@ -66,6 +66,7 @@ party.yaml
 pay.yaml
 poseidon.yaml
 priority_queue.yaml
+protocol_config.yaml
 prover.yaml
 random.yaml
 sui.yaml
