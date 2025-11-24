@@ -1,0 +1,50 @@
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+#![forbid(unsafe_code)]
+#![allow(clippy::doc_overindented_list_items)]
+
+//! Verifies bytecode sanity.
+
+// Bounds checks are implemented in the `vm` crate.
+pub mod ability_cache;
+pub mod ability_field_requirements;
+pub mod absint;
+pub mod check_duplication;
+pub mod code_unit_verifier;
+pub mod constants;
+pub mod control_flow;
+pub mod control_flow_v5;
+pub mod cyclic_dependencies;
+pub mod data_defs;
+pub mod dependencies;
+pub mod friends;
+pub mod instantiation_loops;
+pub mod instruction_consistency;
+pub mod limits;
+pub mod loop_summary;
+pub mod script_signature;
+pub mod signature;
+pub mod verifier;
+
+pub use check_duplication::DuplicationChecker;
+pub use code_unit_verifier::CodeUnitVerifier;
+pub use data_defs::RecursiveDataDefChecker;
+pub use instruction_consistency::InstructionConsistency;
+pub use script_signature::{
+    FnCheckScriptSignature, legacy_script_signature_checks, no_additional_script_signature_checks,
+};
+pub use signature::SignatureChecker;
+pub use verifier::{
+    verify_module_unmetered, verify_module_with_config_for_test, verify_module_with_config_metered,
+    verify_module_with_config_unmetered,
+};
+
+mod acquires_list_verifier;
+mod locals_safety;
+mod reference_safety;
+mod regex_reference_safety;
+mod regression_tests;
+mod stack_usage_verifier;
+mod type_safety;
