@@ -16,10 +16,10 @@ use super::paths::PackagePath;
 use super::{compute_digest, package_lock::PackageSystemLock};
 use crate::dependency::FetchedDependency;
 use crate::errors::FileHandle;
-use crate::{compatibility::legacy::LegacyData, package::manifest::ManifestError};
 use crate::{
     compatibility::legacy::LegacyData,
     dependency::Pinned,
+    package::manifest::ManifestError,
     schema::{
         CachedPackageInfo, DefaultDependency, ManifestDependencyInfo, ParsedManifest, Publication,
     },
