@@ -7,7 +7,7 @@ use crate::{BootstrapGenesis, config::IndexerConfig, setup_indexer};
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
     IndexerArgs,
-    ingestion::ClientArgs,
+    ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
     postgres::{DbArgs, reset_database},
 };
 use sui_indexer_alt_schema::MIGRATIONS;
@@ -55,7 +55,10 @@ pub async fn run_benchmark(
     };
 
     let client_args = ClientArgs {
-        local_ingestion_path: Some(ingestion_path.clone()),
+        ingestion: IngestionClientArgs {
+            local_ingestion_path: Some(ingestion_path.clone()),
+            ..Default::default()
+        },
         ..Default::default()
     };
 

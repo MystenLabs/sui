@@ -126,7 +126,10 @@ impl BenchmarkBank {
 
         if !effects.is_ok() {
             effects.print_gas_summary();
-            panic!("Could not generate coins for workload...");
+            panic!(
+                "Could not generate coins for workload.... Got error: {:?}",
+                effects
+            );
         }
 
         let updated_gas = effects

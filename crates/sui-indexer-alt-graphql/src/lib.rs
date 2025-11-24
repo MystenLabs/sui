@@ -31,10 +31,11 @@ use prometheus::Registry;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use sui_indexer_alt_reader::{
-    bigtable_reader::{BigtableArgs, BigtableReader},
+    bigtable_reader::BigtableReader,
     consistent_reader::{ConsistentReader, ConsistentReaderArgs},
     fullnode_client::{FullnodeArgs, FullnodeClient},
     kv_loader::KvLoader,
+    ledger_grpc_reader::LedgerGrpcReader,
     package_resolver::{DbPackageStore, PackageCache},
     pg_reader::PgReader,
 };
@@ -257,10 +258,9 @@ pub fn schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
 /// will signal cancellation on the token when it is shutting down.
 ///
 /// Access to most reads is controlled by the `database_url` -- if it is `None`, those reads will
-/// not work. KV queries can optionally be served by a Bigtable instance, if `bigtable_instance` is
-/// provided, otherwise these requests are served by the database. If a `bigtable_instance` is
-/// provided, the `GOOGLE_APPLICATION_CREDENTIALS` environment variable must point to the
-/// credentials JSON file.
+/// not work. KV queries can optionally be served by a Bigtable instance or Ledger gRPC service
+/// via `kv_args`. If a Bigtable instance is configured, the `GOOGLE_APPLICATION_CREDENTIALS`
+/// environment variable must point to the credentials JSON file.
 ///
 /// `version` is the version string reported in response headers by the service as part of every
 /// request.
@@ -269,10 +269,9 @@ pub fn schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
 /// and will clean these up on shutdown as well.
 pub async fn start_rpc(
     database_url: Option<Url>,
-    bigtable_instance: Option<String>,
     fullnode_args: FullnodeArgs,
     db_args: DbArgs,
-    bigtable_args: BigtableArgs,
+    kv_args: args::KvArgs,
     consistent_reader_args: ConsistentReaderArgs,
     args: RpcArgs,
     system_package_task_args: SystemPackageTaskArgs,
@@ -303,15 +302,24 @@ pub async fn start_rpc(
     )
     .await?;
 
-    let bigtable_reader = if let Some(instance_id) = bigtable_instance {
+    let bigtable_reader = if let Some(instance_id) = kv_args.bigtable_instance.as_ref() {
         let reader = BigtableReader::new(
-            instance_id,
+            instance_id.clone(),
             "indexer-alt-graphql".to_owned(),
-            bigtable_args,
+            kv_args.bigtable_args(),
             registry,
         )
         .await?;
 
+        Some(reader)
+    } else {
+        None
+    };
+
+    let ledger_grpc_reader = if let Some(ledger_grpc_url) = kv_args.ledger_grpc_url.as_ref() {
+        let reader = LedgerGrpcReader::new(ledger_grpc_url.clone(), kv_args.ledger_grpc_args())
+            .await
+            .context("Failed to create Ledger gRPC reader")?;
         Some(reader)
     } else {
         None
@@ -328,6 +336,8 @@ pub async fn start_rpc(
     let pg_loader = Arc::new(pg_reader.as_data_loader());
     let kv_loader = if let Some(reader) = bigtable_reader.as_ref() {
         KvLoader::new_with_bigtable(Arc::new(reader.as_data_loader()))
+    } else if let Some(reader) = ledger_grpc_reader.as_ref() {
+        KvLoader::new_with_ledger_grpc(Arc::new(reader.as_data_loader()))
     } else {
         KvLoader::new_with_pg(pg_loader.clone())
     };
@@ -354,6 +364,7 @@ pub async fn start_rpc(
         pg_pipelines,
         pg_reader.clone(),
         bigtable_reader,
+        ledger_grpc_reader,
         consistent_reader.clone(),
         metrics.clone(),
         cancel.child_token(),

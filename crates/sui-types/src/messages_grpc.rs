@@ -285,6 +285,7 @@ pub struct RawExecutedData {
 
 // =========== SubmitTx types ===========
 
+/// Contains either a transaction, or the type of Ping request.
 #[derive(Clone, Debug)]
 pub struct SubmitTxRequest {
     pub transaction: Option<Transaction>,

@@ -5,6 +5,7 @@ use crate::static_programmable_transactions::{
     linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
 };
 use indexmap::{IndexMap, IndexSet};
+use move_core_types::{account_address::AccountAddress, u256::U256};
 use move_vm_types::values::VectorSpecialization;
 use std::{cell::OnceCell, vec};
 use sui_types::base_types::{ObjectID, ObjectRef};
@@ -19,6 +20,8 @@ pub struct Transaction {
     pub bytes: IndexSet<Vec<u8>>,
     // All input objects
     pub objects: Vec<ObjectInput>,
+    /// All Withdrawal inputs
+    pub withdrawals: Vec<WithdrawalInput>,
     /// All pure inputs
     pub pure: Vec<PureInput>,
     /// All receiving inputs
@@ -59,6 +62,16 @@ pub struct ReceivingInput {
     pub ty: Type,
     // Information about where this constraint came from
     pub constraint: BytesConstraint,
+}
+
+#[derive(Debug)]
+pub struct WithdrawalInput {
+    pub original_input_index: InputIndex,
+    /// The full type `sui::funds_accumulator::Withdrawal<T>`
+    pub ty: Type,
+    pub owner: AccountAddress,
+    /// This amount is verified to be <= the max for the type described by the `T` in `ty`
+    pub amount: U256,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -142,6 +155,7 @@ pub enum Location {
     TxContext,
     GasCoin,
     ObjectInput(u16),
+    WithdrawalInput(u16),
     PureInput(u16),
     ReceivingInput(u16),
     Result(u16, u16),

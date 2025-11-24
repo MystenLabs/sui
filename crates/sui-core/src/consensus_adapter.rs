@@ -739,9 +739,11 @@ impl ConsensusAdapter {
         // In addition to that, within_alive_epoch ensures that all pending consensus
         // adapter tasks are stopped before reconfiguration can proceed.
         //
-        // This is essential because narwhal workers reuse same ports when narwhal restarts,
-        // this means we might be sending transactions from previous epochs to narwhal of
-        // new epoch if we have not had this barrier.
+        // This is essential because after epoch change, this validator may exit the committee and become a full node.
+        // So it is no longer able to submit to consensus.
+        //
+        // Also, submission to consensus is not gated on epoch. Although it is ok to submit user transactions
+        // to the new epoch, we want to cancel system transaction submissions from the current epoch to the new epoch.
         epoch_store
             .within_alive_epoch(self.submit_and_wait_inner(
                 transactions,
@@ -769,7 +771,7 @@ impl ConsensusAdapter {
                 "Performing a ping check, pinging consensus to get a consensus position in next block"
             );
             let (consensus_positions, _status_waiter) = self
-                .submit_inner(&transactions, epoch_store, &[], "ping", false)
+                .submit_inner(&transactions, epoch_store, &[], "ping")
                 .await;
 
             if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
@@ -917,13 +919,7 @@ impl ConsensusAdapter {
                 loop {
                     // Submit the transaction to consensus and return the submit result with a status waiter
                     let (consensus_positions, status_waiter) = self
-                        .submit_inner(
-                            &transactions,
-                            epoch_store,
-                            &transaction_keys,
-                            tx_type,
-                            is_soft_bundle,
-                        )
+                        .submit_inner(&transactions, epoch_store, &transaction_keys, tx_type)
                         .await;
 
                     if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
@@ -1050,11 +1046,13 @@ impl ConsensusAdapter {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction_keys: &[SequencedConsensusTransactionKey],
         tx_type: &str,
-        is_soft_bundle: bool,
     ) -> (Vec<ConsensusPosition>, BlockStatusReceiver) {
         let ack_start = Instant::now();
         let mut retries: u32 = 0;
-        let is_dkg = !transactions.is_empty() && transactions[0].is_dkg();
+        let mut backoff = mysten_common::backoff::ExponentialBackoff::new(
+            Duration::from_millis(100),
+            Duration::from_secs(10),
+        );
 
         let (consensus_positions, status_waiter) = loop {
             let span = debug_span!("client_submit");
@@ -1065,11 +1063,10 @@ impl ConsensusAdapter {
                 .await
             {
                 Err(err) => {
-                    // This can happen during reconfig, or when consensus has full internal buffers
-                    // and needs to back pressure, so retry a few times before logging warnings.
-                    if retries > 30 || (retries > 3 && (is_soft_bundle || !is_dkg)) {
+                    // This can happen during reconfig, so keep retrying until succeed.
+                    if cfg!(msim) || retries > 3 {
                         warn!(
-                            "Failed to submit transactions {transaction_keys:?} to consensus: {err:?}. Retry #{retries}"
+                            "Failed to submit transactions {transaction_keys:?} to consensus: {err}. Retry #{retries}"
                         );
                     }
                     self.metrics
@@ -1078,13 +1075,7 @@ impl ConsensusAdapter {
                         .inc();
                     retries += 1;
 
-                    if is_dkg {
-                        // Shorter delay for DKG messages, which are time-sensitive and happen at
-                        // start-of-epoch when submit errors due to active reconfig are likely.
-                        time::sleep(Duration::from_millis(100)).await;
-                    } else {
-                        time::sleep(Duration::from_secs(10)).await;
-                    };
+                    time::sleep(backoff.next().unwrap()).await;
                 }
                 Ok((consensus_positions, status_waiter)) => {
                     break (consensus_positions, status_waiter);
@@ -1462,7 +1453,7 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
 
                 let result = tokio::time::timeout(
                     timeout,
-                    this.submit_inner(&[transaction], &epoch_store, &[key], tx_type, false),
+                    this.submit_inner(&[transaction], &epoch_store, &[key], tx_type),
                 )
                 .await;
 

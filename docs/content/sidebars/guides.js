@@ -49,11 +49,9 @@ const guides = [
 			'guides/developer/sui-101/using-events',
 			'guides/developer/sui-101/local-network',
 			'guides/developer/sui-101/connect',
-			'guides/developer/sui-101/data-serving',
 			'guides/developer/sui-101/access-time',
 			'guides/developer/sui-101/sign-and-send-txn',
 			'guides/developer/sui-101/sponsor-txn',
-			'guides/developer/sui-101/avoid-equivocation',
 			'guides/developer/sui-101/common-errors',
 
 			{

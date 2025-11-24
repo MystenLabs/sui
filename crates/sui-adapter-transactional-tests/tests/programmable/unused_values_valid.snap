@@ -51,5 +51,5 @@ task 6, lines 56-58:
 //# programmable --sender A
 //> 0: test::m1::copyable();
 //> test::m1::borrow_and_copy(Result(0), Result(0));
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+Error: Transaction Effects Status: Unused result without the drop ability. Command result 0, return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }, source: Some("The value has copy, but not drop. Its last usage must be by-value so it can be taken."), command: None } }

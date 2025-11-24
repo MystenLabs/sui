@@ -107,8 +107,8 @@ fn test_accumulator_field_type_params() {
     // Check type_params returns the correct Field type parameters
     let type_params = move_type.type_params();
     assert_eq!(type_params.len(), 2);
-    assert_eq!(type_params[0], key_type);
-    assert_eq!(type_params[1], u128_type);
+    assert_eq!(&*type_params[0], &key_type);
+    assert_eq!(&*type_params[1], &u128_type);
 }
 
 #[test]

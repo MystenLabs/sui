@@ -11,12 +11,16 @@ use serde::Serialize;
 
 use crate::{
     SUI_FRAMEWORK_PACKAGE_ID,
+    balance::{
+        BALANCE_MODULE_NAME, BALANCE_REDEEM_FUNDS_FUNCTION_NAME, BALANCE_SEND_FUNDS_FUNCTION_NAME,
+    },
     base_types::{FullObjectID, FullObjectRef, ObjectID, ObjectRef, SuiAddress},
     move_package::PACKAGE_MODULE_NAME,
     transaction::{
         Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, ProgrammableTransaction,
         SharedObjectMutability,
     },
+    type_input::TypeInput,
 };
 
 #[cfg(test)]
@@ -276,6 +280,38 @@ impl ProgrammableTransactionBuilder {
             Argument::GasCoin
         };
         self.command(Command::TransferObjects(vec![coin_arg], rec_arg));
+    }
+
+    pub fn redeem_funds(&mut self, amount: u64, type_arg: TypeTag) -> anyhow::Result<Argument> {
+        let withdrawal_arg =
+            FundsWithdrawalArg::balance_from_sender(amount, TypeInput::from(type_arg.clone()));
+        let withdrawal_arg = self.funds_withdrawal(withdrawal_arg)?;
+        Ok(self.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            BALANCE_MODULE_NAME.to_owned(),
+            BALANCE_REDEEM_FUNDS_FUNCTION_NAME.to_owned(),
+            vec![type_arg],
+            vec![withdrawal_arg],
+        ))
+    }
+
+    pub fn transfer_balance(
+        &mut self,
+        recipient: SuiAddress,
+        amount: u64,
+        type_arg: TypeTag,
+    ) -> anyhow::Result<()> {
+        let rec_arg = self.pure(recipient).unwrap();
+        let balance = self.redeem_funds(amount, type_arg.clone())?;
+
+        self.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            BALANCE_MODULE_NAME.to_owned(),
+            BALANCE_SEND_FUNDS_FUNCTION_NAME.to_owned(),
+            vec![type_arg],
+            vec![balance, rec_arg],
+        );
+        Ok(())
     }
 
     pub fn pay_all_sui(&mut self, recipient: SuiAddress) {

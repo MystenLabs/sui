@@ -157,17 +157,13 @@ where
                     .await
                     .expect("Sending event to monitor channel should not fail");
 
-                if let Some(action) = bridge_event
-                    .try_into_bridge_action(sui_event.id.tx_digest, sui_event.id.event_seq as u16)
-                {
+                if let Some(mut action) = bridge_event.try_into_bridge_action() {
                     metrics.last_observed_actions_seq_num.with_label_values(&[
                         action.chain_id().to_string().as_str(),
                         action.action_type().to_string().as_str(),
                     ]);
 
-                    //XXX update to the new token transfer action which just requests signing via a
-                    //different route
-                    // action = action.update_to_token_transfer();
+                    action = action.update_to_token_transfer();
 
                     actions.push(action);
                 }
@@ -334,8 +330,8 @@ mod tests {
         .await;
 
         let identifier = Identifier::from_str("test_sui_watcher_task").unwrap();
-        let (sui_event, bridge_action) = get_test_sui_event_and_action(identifier.clone());
-        // bridge_action = bridge_action.update_to_token_transfer();
+        let (sui_event, mut bridge_action) = get_test_sui_event_and_action(identifier.clone());
+        bridge_action = bridge_action.update_to_token_transfer();
         sui_events_tx
             .send((identifier.clone(), vec![sui_event.clone()]))
             .await

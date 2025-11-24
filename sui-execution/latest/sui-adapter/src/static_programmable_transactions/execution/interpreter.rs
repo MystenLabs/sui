@@ -69,6 +69,7 @@ where
     let T::Transaction {
         bytes,
         objects,
+        withdrawals,
         pure,
         receiving,
         withdrawal_conversions: _,
@@ -81,6 +82,7 @@ where
         gas_charger,
         bytes,
         objects,
+        withdrawals,
         pure,
         receiving,
     )?;

@@ -1278,7 +1278,7 @@ async fn test_entry_point_vector_error() {
         &ExecutionStatus::Failure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::InvalidValueUsage,
+                kind: CommandArgumentError::ArgumentWithoutValue,
             },
             command: Some(1)
         }
@@ -1327,7 +1327,7 @@ async fn test_entry_point_vector_error() {
         &ExecutionStatus::Failure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::InvalidValueUsage,
+                kind: CommandArgumentError::ArgumentWithoutValue,
             },
             command: Some(1)
         }
@@ -1665,7 +1665,7 @@ async fn test_entry_point_vector_any_error() {
         &ExecutionStatus::Failure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::InvalidValueUsage,
+                kind: CommandArgumentError::ArgumentWithoutValue,
             },
             command: Some(1)
         }
@@ -1713,7 +1713,7 @@ async fn test_entry_point_vector_any_error() {
         &ExecutionStatus::Failure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::InvalidValueUsage,
+                kind: CommandArgumentError::ArgumentWithoutValue,
             },
             command: Some(1)
         }
@@ -2566,7 +2566,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
         effects.status(),
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::command_argument_error(
-                CommandArgumentError::TypeMismatch,
+                CommandArgumentError::InvalidMakeMoveVecNonObjectArgument,
                 0
             ),
             command: Some(0)

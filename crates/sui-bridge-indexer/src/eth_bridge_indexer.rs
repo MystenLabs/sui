@@ -14,7 +14,7 @@ use prometheus::IntGauge;
 use sui_bridge::error::BridgeError;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::eth_syncer::EthSyncer;
-use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
+use sui_bridge::metered_eth_provider::MeteredEthHttpProvider;
 use sui_bridge::retry_with_max_elapsed_time;
 use sui_indexer_builder::Task;
 use tap::tap::TapFallible;
@@ -50,7 +50,7 @@ pub struct RawEthData {
 // Create max log query range
 const MAX_LOG_QUERY_RANGE: u64 = 1000;
 pub struct EthSubscriptionDatasource {
-    eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
+    eth_client: Arc<EthClient<MeteredEthHttpProvider>>,
     addresses: Vec<EthAddress>,
     eth_ws_url: String,
     metrics: Box<dyn IndexerMetricProvider>,
@@ -60,7 +60,7 @@ pub struct EthSubscriptionDatasource {
 impl EthSubscriptionDatasource {
     pub async fn new(
         eth_sui_bridge_contract_addresses: Vec<EthAddress>,
-        eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
+        eth_client: Arc<EthClient<MeteredEthHttpProvider>>,
         eth_ws_url: String,
         metrics: Box<dyn IndexerMetricProvider>,
         genesis_block: u64,
@@ -229,7 +229,7 @@ impl EthSubscriptionDatasource {
 pub struct EthFinalizedSyncDatasource {
     bridge_addresses: Vec<EthAddress>,
     eth_http_url: String,
-    eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
+    eth_client: Arc<EthClient<MeteredEthHttpProvider>>,
     metrics: Box<dyn IndexerMetricProvider>,
     bridge_metrics: Arc<BridgeMetrics>,
     genesis_block: u64,
@@ -238,7 +238,7 @@ pub struct EthFinalizedSyncDatasource {
 impl EthFinalizedSyncDatasource {
     pub async fn new(
         eth_sui_bridge_contract_addresses: Vec<EthAddress>,
-        eth_client: Arc<EthClient<MeteredEthHttpProvier>>,
+        eth_client: Arc<EthClient<MeteredEthHttpProvider>>,
         eth_http_url: String,
         metrics: Box<dyn IndexerMetricProvider>,
         bridge_metrics: Arc<BridgeMetrics>,
@@ -320,7 +320,7 @@ impl Datasource<RawEthData> for EthFinalizedSyncDatasource {
 
 async fn loop_retrieve_and_process_live_finalized_logs(
     task: Task,
-    client: Arc<EthClient<MeteredEthHttpProvier>>,
+    client: Arc<EthClient<MeteredEthHttpProvider>>,
     provider: Arc<Provider<Http>>,
     addresses: Vec<EthAddress>,
     data_sender: DataSender<RawEthData>,
@@ -369,7 +369,7 @@ async fn loop_retrieve_and_process_live_finalized_logs(
 
 async fn loop_retrieve_and_process_log_range(
     task: Task,
-    client: Arc<EthClient<MeteredEthHttpProvier>>,
+    client: Arc<EthClient<MeteredEthHttpProvider>>,
     provider: Arc<Provider<Http>>,
     addresses: Vec<EthAddress>,
     data_sender: DataSender<RawEthData>,

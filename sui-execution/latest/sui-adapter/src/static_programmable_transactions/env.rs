@@ -38,11 +38,13 @@ use move_vm_types::{data_store::DataStore, loaded_data::runtime_types as vm_runt
 use std::{cell::OnceCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
+    Identifier, Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag, TypeTag,
+    balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectID, TxContext},
     coin::RESOLVED_COIN_STRUCT,
     error::{ExecutionError, ExecutionErrorKind},
     execution_status::TypeArgumentError,
+    funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
     gas_coin::GasCoin,
     move_package::{UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::Object,
@@ -319,6 +321,34 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             invariant_violation!("Unable to create coin abilities");
         };
         let (a, m, n) = RESOLVED_COIN_STRUCT;
+        let module = ModuleId::new(*a, m.to_owned());
+        Ok(Type::Datatype(Rc::new(Datatype {
+            abilities,
+            module,
+            name: n.to_owned(),
+            type_arguments: vec![inner_type],
+        })))
+    }
+
+    pub fn balance_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
+        let Some(abilities) = AbilitySet::from_u8(Ability::Store as u8) else {
+            invariant_violation!("Unable to create balance abilities");
+        };
+        let (a, m, n) = RESOLVED_BALANCE_STRUCT;
+        let module = ModuleId::new(*a, m.to_owned());
+        Ok(Type::Datatype(Rc::new(Datatype {
+            abilities,
+            module,
+            name: n.to_owned(),
+            type_arguments: vec![inner_type],
+        })))
+    }
+
+    pub fn withdrawal_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
+        let Some(abilities) = AbilitySet::from_u8(Ability::Drop as u8) else {
+            invariant_violation!("Unable to create withdrawal abilities");
+        };
+        let (a, m, n) = RESOLVED_WITHDRAWAL_STRUCT;
         let module = ModuleId::new(*a, m.to_owned());
         Ok(Type::Datatype(Rc::new(Datatype {
             abilities,

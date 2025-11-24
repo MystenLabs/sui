@@ -8,7 +8,9 @@ use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
 use sui_indexer_alt_framework::{
     cluster::IndexerCluster,
-    ingestion::ClientArgs,
+    ingestion::{
+        ClientArgs, ingestion_client::IngestionClientArgs, streaming_client::StreamingClientArgs,
+    },
     pipeline::{
         Processor,
         concurrent::{self, BatchStatus, ConcurrentConfig},
@@ -132,10 +134,14 @@ async fn test_indexer_cluster_with_grpc_streaming() {
 
     // Set up the indexer with gRPC streaming endpoint from TestCluster
     let client_args = ClientArgs {
-        local_ingestion_path: Some(checkpoint_dir.path().to_owned()),
+        ingestion: IngestionClientArgs {
+            local_ingestion_path: Some(checkpoint_dir.path().to_owned()),
+            ..Default::default()
+        },
         // Use the TestCluster's RPC URL as the gRPC streaming endpoint
-        streaming_url: Some(test_cluster.rpc_url().parse().unwrap()),
-        ..Default::default()
+        streaming: StreamingClientArgs {
+            streaming_url: Some(test_cluster.rpc_url().parse().unwrap()),
+        },
     };
 
     // Create writer/reader for database operations

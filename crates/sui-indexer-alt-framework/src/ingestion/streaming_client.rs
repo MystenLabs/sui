@@ -24,6 +24,13 @@ pub trait CheckpointStreamingClient {
     async fn connect(&mut self) -> Result<CheckpointStream>;
 }
 
+#[derive(clap::Args, Clone, Debug, Default)]
+pub struct StreamingClientArgs {
+    /// gRPC endpoint for streaming checkpoints
+    #[clap(long, env)]
+    pub streaming_url: Option<Uri>,
+}
+
 /// gRPC-based implementation of the CheckpointStreamingClient trait.
 pub struct GrpcStreamingClient {
     uri: Uri,

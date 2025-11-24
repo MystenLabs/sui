@@ -37,6 +37,7 @@ enum SplatLocation {
 #[derive(Debug, Clone, Copy)]
 enum InputKind {
     Object,
+    Withdrawal,
     Pure,
     Receiving,
 }
@@ -50,6 +51,7 @@ struct Context {
     bytes_idx_remapping: IndexMap<T::InputIndex, T::ByteIndex>,
     receiving_refs: IndexMap<T::InputIndex, ObjectRef>,
     objects: IndexMap<T::InputIndex, T::ObjectInput>,
+    withdrawals: IndexMap<T::InputIndex, T::WithdrawalInput>,
     pure: IndexMap<(T::InputIndex, Type), T::PureInput>,
     receiving: IndexMap<(T::InputIndex, Type), T::ReceivingInput>,
     withdrawal_conversions: IndexMap<T::Location, T::WithdrawalConversion>,
@@ -70,6 +72,7 @@ impl Context {
             bytes_idx_remapping: IndexMap::new(),
             receiving_refs: IndexMap::new(),
             objects: IndexMap::new(),
+            withdrawals: IndexMap::new(),
             pure: IndexMap::new(),
             withdrawal_conversions: IndexMap::new(),
             receiving: IndexMap::new(),
@@ -106,6 +109,18 @@ impl Context {
                     context.objects.insert(idx, o);
                     InputKind::Object
                 }
+                (L::InputArg::FundsWithdrawal(withdrawal), L::InputType::Fixed(input_ty)) => {
+                    let L::FundsWithdrawalArg { ty, owner, amount } = withdrawal;
+                    debug_assert!(ty == input_ty);
+                    let withdrawal = T::WithdrawalInput {
+                        original_input_index: idx,
+                        ty,
+                        owner,
+                        amount,
+                    };
+                    context.withdrawals.insert(idx, withdrawal);
+                    InputKind::Withdrawal
+                }
                 (arg, ty) => invariant_violation!(
                     "Input arg, type mismatch. Unexpected {arg:?} with type {ty:?}"
                 ),
@@ -140,6 +155,7 @@ impl Context {
         let Self {
             bytes,
             objects,
+            withdrawals,
             pure,
             receiving,
             commands,
@@ -147,11 +163,13 @@ impl Context {
             ..
         } = self;
         let objects = objects.into_iter().map(|(_, o)| o).collect();
+        let withdrawals = withdrawals.into_iter().map(|(_, w)| w).collect();
         let pure = pure.into_iter().map(|(_, p)| p).collect();
         let receiving = receiving.into_iter().map(|(_, r)| r).collect();
         T::Transaction {
             bytes,
             objects,
+            withdrawals,
             pure,
             receiving,
             withdrawal_conversions,
@@ -259,6 +277,17 @@ impl Context {
                     };
                     T::Location::ObjectInput(index as u16)
                 }
+                InputKind::Withdrawal => {
+                    let Some((withdrawal_index, _, withdrawal_input)) =
+                        self.withdrawals.get_full(&i)
+                    else {
+                        invariant_violation!("Unbound withdrawal input {}", i.0)
+                    };
+                    (
+                        T::Location::WithdrawalInput(withdrawal_index as u16),
+                        withdrawal_input.ty.clone(),
+                    )
+                }
                 InputKind::Pure | InputKind::Receiving => return Ok(None),
             },
         };
@@ -287,6 +316,12 @@ impl Context {
                         invariant_violation!("Unbound object input {}", i.0)
                     };
                     T::Location::ObjectInput(index as u16)
+                }
+                InputKind::Withdrawal => {
+                    let Some(index) = self.withdrawals.get_index_of(&i) else {
+                        invariant_violation!("Unbound withdrawal input {}", i.0)
+                    };
+                    T::Location::WithdrawalInput(index as u16)
                 }
                 InputKind::Pure => {
                     let ty = match expected_ty {
@@ -393,8 +428,12 @@ fn command<Mode: ExecutionMode>(
             let parameter_tys = match tx_context_kind {
                 TxContextKind::None => &function.signature.parameters,
                 TxContextKind::Mutable | TxContextKind::Immutable => {
-                    let n = function.signature.parameters.len();
-                    &function.signature.parameters[0..n - 1]
+                    let Some(n_) = function.signature.parameters.len().checked_sub(1) else {
+                        invariant_violation!(
+                            "A function with a TxContext should have at least one parameter"
+                        )
+                    };
+                    &function.signature.parameters[0..n_]
                 }
             };
             let num_args = arg_locs.len();
@@ -637,8 +676,12 @@ where
     let _args_len = args.len();
     let mut res = vec![];
     for (arg_idx, arg) in args.enumerate() {
-        splat_arg(context, &mut res, arg)
-            .map_err(|e| e.into_execution_error(start_idx + arg_idx))?;
+        splat_arg(context, &mut res, arg).map_err(|e| {
+            let Some(idx) = start_idx.checked_add(arg_idx) else {
+                return make_invariant_violation!("usize overflow when calculating argument index");
+            };
+            e.into_execution_error(idx)
+        })?
     }
     debug_assert_eq!(res.len(), _args_len);
     Ok(res)
@@ -656,7 +699,10 @@ fn arguments(
         .zip(expected_tys)
         .enumerate()
         .map(|(i, (location, expected_ty))| {
-            argument(env, context, start_idx + i, location, expected_ty)
+            let Some(idx) = start_idx.checked_add(i) else {
+                invariant_violation!("usize overflow when calculating argument index");
+            };
+            argument(env, context, idx, location, expected_ty)
         })
         .collect()
 }
@@ -762,7 +808,10 @@ fn constrained_arguments<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
         .into_iter()
         .enumerate()
         .map(|(i, location)| {
-            constrained_argument_(env, context, start_idx + i, location, is_valid, err_case)
+            let Some(idx) = start_idx.checked_add(i) else {
+                invariant_violation!("usize overflow when calculating argument index");
+            };
+            constrained_argument_(env, context, idx, location, is_valid, err_case)
         })
         .collect()
 }
@@ -1193,6 +1242,7 @@ mod consumed_shared_objects {
             let T::Transaction {
                 bytes: _,
                 objects,
+                withdrawals: _,
                 pure: _,
                 receiving: _,
                 withdrawal_conversions: _,
@@ -1296,6 +1346,7 @@ mod consumed_shared_objects {
             // no shared objects in these locations
             T::Location::TxContext
             | T::Location::GasCoin
+            | T::Location::WithdrawalInput(_)
             | T::Location::PureInput(_)
             | T::Location::ReceivingInput(_) => (),
             T::Location::ObjectInput(i) => {

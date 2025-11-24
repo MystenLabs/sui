@@ -1,39 +1,79 @@
 ---
 title: Consensus
 description: Overview of the Sui consensus mechanism.
+keywords: [ consensus, mysticeti, delegated proof of stake, proof of stake, dpos ]
 ---
 
-The purpose of consensus in blockchains is to agree on a consistent order and ensure the availability of transactions.
+_Consensus_ is the process by which the majority of nodes on a blockchain network agree on the current state of the network, including which transactions to finalize and commit to the chain's permanent history. This process prevents malicious or faulty nodes from altering the network incorrectly.
 
-On Sui, consensus has a straightforward API. Validators submit different user transactions to consensus concurrently. The consensus outputs a consistent stream of transactions across all well-behaving validators.
+## Validator nodes
 
-Sui uses the Mysticeti protocol to optimize for both low latency and high throughput. Mysticeti provides the following benefits:
+To participate in consensus, validators must [stake SUI tokens](/guides/operator/validator/validator-rewards.mdx) on the network. Sui uses delegated roof-of-stake (DPoS) to determine which validators operate the network and their voting power. Validators are incentivized to participate in good faith through a share of transaction fees, [staking rewards](/guides/operator/validator/validator-rewards.mdx), and slashing of stake and staking rewards in case of misbehavior.
 
-- Supports multiple validators proposing blocks in parallel, which uses the full bandwidth of the network and provides censorship resistance. These are features of DAG-based consensus protocols.
-- Requires only three rounds of messages to commit blocks from the DAGs. This is the same as practical Byzantine Fault Tolerance and matches the theoretical minimum.
-- Allows voting and certifying leaders on blocks in parallel, which reduces median and tail latencies.
-- Tolerates unavailable leaders without significantly increasing commit latencies.
+### Epochs
 
-## Transaction throughput
+An [_epoch_](/concepts/sui-architecture/epochs.mdx) is a duration of time where the Sui validators and their stakes do not change. An epoch is about 24 hours on both [Mainnet](/concepts/sui-architecture/networks.mdx) and [Testnet](/concepts/sui-architecture/networks.mdx). At an epoch boundary, [reconfiguration](/concepts/sui-architecture/epochs.mdx) might occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as genesis and the new set of validators as the operators. Besides validator set changes, [tokenomics](/concepts/tokenomics.mdx) operations such as staking and un-staking, and distribution of staking rewards are also processed at epoch boundaries.
 
-Compared to other state-of-the-art consensus protocols, Mysticeti can theoretically handle more than twice as many transactions with half the observed latency. In a controlled environment using 10 nodes, Mysticeti handles 300,000 transactions per second (TPS) before latency crosses the one-second marker. With 50 nodes, test results show 400,000 TPS before latency exceeds one second. In the same tests, other top performing consensus mechanisms do not reach 150,000 TPS and their observed latency starts at about two seconds.
+### Quorums
+
+A _quorum_ is a set of [validators](/guides/operator/validator/validator-config.mdx) whose combined voting power is greater than two-thirds (>2/3) of the total during a particular epoch. For example, in a Sui instance operated by 4 validators that all have the same voting power, any group containing 3 validators is a quorum.
+
+The quorum size of >2/3 ensures Byzantine fault tolerance (BFT). A validator commits a transaction only if the transaction is accompanied by cryptographic signatures from a quorum. Sui calls the combination of the transaction and the quorum signatures on its bytes a _certificate_. The policy of committing only certificates ensures Byzantine fault tolerance: if >2/3 of the validators faithfully follow the protocol, they are guaranteed to eventually agree on both the set of committed certificates and their effects.
+
+## Write requests
+
+A validator can handle 2 types of write requests: transactions and certificates. At a high level, a client:
+
+- Communicates a transaction to a quorum of validators to collect the signatures required to form a certificate.
+
+- Submits a certificate to a validator to commit state changes on that validator.
+
+### Transactions
+
+When a validator receives a transaction from a client, it first performs transaction validity checks to verify the sender's signature. If the checks pass, the validator locks all [owned-objects](/concepts/object-ownership/address-owned.mdx) and signs the transaction bytes, then returns the signature to the client. The client repeats this process with multiple validators until it has collected signatures on its transaction from a quorum, thereby forming a certificate.
+
+The process of collecting validator signatures on a transaction into a certificate and the process of submitting certificates can be performed in parallel. The client can simultaneously multicast transactions and certificates to an arbitrary number of validators. Alternatively, a client can outsource either or both of these tasks to a third-party service provider. This provider must be trusted for liveness, as it can refuse to form a certificate, but not for safety, as it cannot change the effects of the transaction and does not need the user's secret key.
+
+### Certificates and certified transactions {#certificates}
+
+After the client forms a certificate, it submits it to the validators, which perform certificate validity checks. These checks ensure the signers are validators in the current epoch and the signatures are cryptographically valid. If the checks pass, the validators execute the transaction inside the certificate. Execution of a transaction either succeeds and commits all of its effects, or aborts and has no effect other than debiting the transaction's gas input. Some reasons a transaction might abort include an explicit abort instruction, a runtime error such as division by zero, or exceeding the maximum gas budget. Whether it succeeds or aborts, the validator durably stores the certificate indexed by the hash of its inner transaction.
+
+If a client collects a quorum of signatures on the effects of the transaction, then the client has a promise of finality. This means that transaction effects persist on the shared database and are committed and visible to everyone by the end of the epoch. This does not mean that the latency is a full epoch, because you can use the effects certificate to convince anyone of the transaction's finality, as well as to access the effects and issue new transactions. As with transactions, you can parallelize the process of sharing a certificate with validators and (if desired) outsource to a third-party service provider.
+
+## Mysticeti
+
+Sui uses a [directed acyclic graph](https://en.wikipedia.org/wiki/Directed_acyclic_graph)-based consensus protocol called _Mysticeti_ that optimizes for both low latency and high throughput. Mysticeti supports multiple validators proposing blocks in parallel, which uses the full bandwidth of the network and provides censorship resistance. Mysticeti only requires 3 rounds of messages to commit blocks from the DAGs. This is the same as practical BFT and matches the theoretical minimum.
+
+Mysticeti also allows voting and certifying leaders on blocks in parallel, which reduces median and tail latencies, and tolerates unavailable leaders without significantly increasing commit latencies.
+
+The order of transactions in the consensus output determines the relative order in which they can operate on each shared object. Executions of transactions touching different shared objects are parallelized on multiple cores.
+
+If the total execution cost of transactions in a consensus commit exceeds a threshold, transactions can be cancelled post consensus to avoid overloading the system.
+
+### Transaction throughput
+
+In a controlled environment using 10 nodes, Mysticeti handles 300,000 transactions per second (TPS) before latency crosses the 1-second marker. With 50 nodes, test results show 400,000 TPS before latency exceeds 1 second. In the same tests, other top performing consensus mechanisms do not reach 150,000 TPS and their observed latency starts at about 2 seconds.
 
 On average, testing shows Mysticeti reaches consensus commitment in about **0.5 seconds** with a sustained throughput of **200,000 TPS**.
 
 ![Throughput and latency graph](./images/thruput_latency.png)
 
-## Decision rule
+### Decision rule
 
-The decision rule at the core of Mysticeti optimizes operational efficiency. Traditional consensus decision rules require explicit block validation and certification. This process increases communication overhead because validators must sign and broadcast votes to reach consensus. By contrast, Mysticeti provides implicit commitment, which reduces inter-node communication and lowers bandwidth usage.
+Traditional consensus decision rules require explicit block validation and certification. This process increases communication overhead because validators must sign and broadcast votes to reach consensus. By contrast, Mysticeti provides implicit commitment, which reduces inter-node communication and lowers bandwidth usage.
 
-## Finality
+### Finality
 
-Finality is the guarantee that a transaction or block, after confirmation, is permanently added to the network and cannot be altered or reversed. In traditional blockchain consensus, confirming transactions can take time because they rely on other transactions to reference them before they are considered final. This process slows down if network activity decreases or if there are many competing transactions. Mysticeti simplifies this process by finalizing transactions immediately upon inclusion in the structure. As a result, there is no need to wait for additional confirmations or network activity, which makes Mysticeti faster and more reliable for confirming transactions in less active or challenging network conditions.
+Finality is the guarantee that a transaction or block, after confirmation, is permanently added to the network and cannot be altered or reversed. In traditional blockchain consensus, confirming transactions can take time because they rely on other transactions to reference them before they are considered final. This process slows down if network activity decreases or if there are many competing transactions.
+
+Mysticeti simplifies this process by finalizing transactions immediately upon inclusion in the structure. As a result, there is no need to wait for additional confirmations or network activity, which makes Mysticeti faster and more reliable for confirming transactions in less active or challenging network conditions.
 
 For more details, including correctness proofs, see the [MYSTICETI: Reaching the Latency Limits with Uncertified DAGs](/paper/mysticeti.pdf) whitepaper.
 
 ## Related links
 
-<RelatedLink to="/concepts/sui-architecture/transaction-lifecycle.mdx" />
+<RelatedLink to="/concepts/transactions/transaction-lifecycle.mdx" />
+
 <RelatedLink to="/concepts/sui-architecture/sui-security.mdx" />
+
 <RelatedLink href="https://docs.sui.io/paper/mysticeti.pdf" label="MYSTICETI: Reaching the Latency Limits with Uncertified DAGs" desc="Whitepaper that documents the Mysticeti protocol." />

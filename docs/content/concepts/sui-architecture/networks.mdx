@@ -1,6 +1,57 @@
 ---
 title: Networks
-draft: true
+description: Sui operates multiple networks including Mainnet for production, Testnet for staging, Devnet for developing new features, and Localnet for local development.
+keywords: [ networks, mainnet, testnet, devnet, localnet, sui networks, rpc endpoints ]
 ---
 
-Content coming soon
+Sui has several networks available, each serving a different purpose. Each network is comprised of _nodes_. Nodes provide resources to the network and participate in activities such as validating on-chain transactions through a process called [_consensus_](/concepts/sui-architecture/consensus.mdx). There are 2 types of nodes on each Sui network:
+
+- **Full node:** Can validate blockchain activity including transactions, checkpoints, and epoch changes. 
+
+- **Validator node:** Responsible for signing transactions, staking, gas price references, and tallying rules, in addition to validating blockchain activity.
+
+Full nodes are not able to sign transactions and only have access to a read-only view of the network's state. They are capable of storing and maintaining the chain's full history, and can validate the integrity of the chain by re-executing transactions after a quorum of validators has committed them. 
+
+Validator nodes can sign transactions but only store the latest transactions.
+
+Learn more about [nodes on Sui](/guides/operator.mdx).
+
+## Mainnet
+
+Mainnet is responsible for all production environment applications and transactions. All activity on Mainnet costs real SUI or MIST tokens, which have a value of fiat currency. SUI or MIST must be bought from an exchange, and excess SUI or MIST can be sold at a later date on the exchange for its fiat value. All activity on Mainnet is public and can be viewed through explorers such as [suiscan](https://suiscan.xyz/mainnet/home).
+
+[Epochs](/concepts/sui-architecture/epochs.mdx) on Mainnet are approximately 24 hours long. Data is always persisted on the network. Learn more about [data storage and storage fees](/concepts/sui-architecture/sui-storage.mdx).
+
+The RPC URL for Mainnet is: `https://fullnode.mainnet.sui.io:443`.
+
+## Testnet
+
+Testnet is a staging network designed for developers to test their code before placing it in production. Activity on Testnet uses Testnet SUI and MIST tokens, which can be obtained through a [faucet](/guides/developer/getting-started/get-coins.mdx). Testnet tokens have no real value and cannot be exchanged for fiat currency.
+
+All activity on Testnet is public and can be viewed through explorers such as [SuiVision](https://testnet.suivision.xyz/).
+
+[Epochs](/concepts/sui-architecture/epochs.mdx) on Testnet are approximately 24 hours long. Data on Testnet is not guaranteed to be persisted because data might be wiped occasionally. It should not be relied on for permanent storage. Testnet data persists through the regular update process, and planned data wipes are announced ahead of time.
+
+The RPC URL for Testnet is: `https://fullnode.testnet.sui.io:443`.
+
+## Devnet
+
+Devnet is an unstable network used to develop new features. If you want to write code against upcoming Sui features, you can use this network for early testing before the feature is finalized and released.
+
+All activity on Devnet is public and can be viewed through explorers such as [suiscan](https://suiscan.xyz/devnet/home).
+
+[Epochs](/concepts/sui-architecture/epochs.mdx) on Devnet are 1 hour long. Devnet is not recommended for new developers because it is better suited for advanced use cases. Data on Devnet is wiped **weekly** as part of its [scheduled update process](https://sui.io/networkinfo).
+
+The RPC URL for Devnet is: `https://fullnode.devnet.sui.io:443`.
+
+## Localnet
+
+Localnet is used to run an instance of the Sui network on your local computer. Developing on a local network provides an optimized workflow in an environment you control. You can set custom network configuration parameters, such as data persistence and a local faucet.
+
+:::tip
+
+A local faucet enables you to mint as many Testnet tokens as you need for your development process, avoiding the limitations imposed on public faucets for Testnet. 
+
+:::
+
+Learn more about [creating a local Sui network](/guides/developer/sui-101/local-network.mdx).
