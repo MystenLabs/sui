@@ -13,7 +13,6 @@ use sui_indexer_alt_reader::{
     pg_reader::db::DbArgs,
 };
 use sui_package_resolver::Resolver;
-use tokio_util::sync::CancellationToken;
 use url::Url;
 
 use crate::{config::RpcConfig, metrics::RpcMetrics};
@@ -57,9 +56,8 @@ impl Context {
         config: RpcConfig,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
-        cancel: CancellationToken,
     ) -> Result<Self, anyhow::Error> {
-        let pg_reader = PgReader::new(None, database_url, db_args, registry, cancel).await?;
+        let pg_reader = PgReader::new(None, database_url, db_args, registry).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = if let Some(instance_id) = bigtable_instance {
