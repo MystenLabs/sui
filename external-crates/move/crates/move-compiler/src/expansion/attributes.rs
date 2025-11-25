@@ -362,7 +362,7 @@ fn attribute(
                     if result.errors.is_empty() {
                         specs.push(result.result.unwrap().access);
                     } else {
-                        if let Some(mi) = context.path_expander.as_mut().name_access_chain_to_module_ident(chain) {
+                        if let Some(mi) = context.name_access_chain_to_module_ident(chain) {
                             spec_modules.push(mi);
                         } else {
                             for err in result.errors {
