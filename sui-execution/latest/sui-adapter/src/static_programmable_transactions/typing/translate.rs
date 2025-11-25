@@ -935,7 +935,8 @@ fn apply_conversion(
         Type::Reference(_, inner) => &**inner,
         ty => ty,
     };
-    if let Some(expected_inner) = coin_inner_type(expected_ty)
+    if env.protocol_config.enable_accumulators()
+        && let Some(expected_inner) = coin_inner_type(expected_ty)
         && let Some(actual_withdrawal_inner) = withdrawal_inner_type(&actual_ty)
         && let Some(actual_inner) = balance_inner_type(actual_withdrawal_inner)
         && actual_inner == expected_inner

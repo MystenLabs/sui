@@ -126,6 +126,11 @@ mod refine {
         ast: &mut T::Transaction,
         moved_locations: &BTreeSet<T::Location>,
     ) -> Result<(), ExecutionError> {
+        // withdrawal conversions not empty ==> accumulators enabled
+        assert_invariant!(
+            ast.withdrawal_conversions.is_empty() || env.protocol_config.enable_accumulators(),
+            "Withdrawal conversions should be empty if accumulators are not enabled"
+        );
         for conversion_info in ast.withdrawal_conversions.values().filter(|conversion| {
             let conversion_location = T::Location::Result(conversion.conversion_result, 0);
             !moved_locations.contains(&conversion_location)
