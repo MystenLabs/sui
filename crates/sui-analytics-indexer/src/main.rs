@@ -4,7 +4,7 @@
 use anyhow::Result;
 use prometheus::Registry;
 use std::env;
-use sui_analytics_indexer::JobConfig;
+use sui_analytics_indexer::{JobConfig, start_analytics_indexer};
 use tracing::info;
 
 #[tokio::main]
@@ -16,19 +16,9 @@ async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     assert_eq!(args.len(), 2, "configuration yaml file is required");
 
-    // Parse the config
     let config: JobConfig = serde_yaml::from_str(&std::fs::read_to_string(&args[1])?)?;
     info!("Parsed config: {:#?}", config);
 
-    info!("Using sui-indexer-alt-framework");
-    run_with_alt_framework(config).await
-}
-
-async fn run_with_alt_framework(config: JobConfig) -> Result<()> {
-    use std::time::Duration;
-    use sui_analytics_indexer::indexer_alt::{AnalyticsIndexerConfig, start_analytics_indexer};
-
-    // Setup metrics
     let registry_service = mysten_metrics::start_prometheus_server(
         format!(
             "{}:{}",
@@ -41,24 +31,15 @@ async fn run_with_alt_framework(config: JobConfig) -> Result<()> {
 
     let cancel = tokio_util::sync::CancellationToken::new();
 
-    // Create analytics indexer config from job config
-    let analytics_config = AnalyticsIndexerConfig {
-        job_config: config,
-        write_concurrency: 10,
-        watermark_interval: Duration::from_secs(60),
-        first_checkpoint: None,
-        last_checkpoint: None,
-    };
+    let is_bounded_job = config.last_checkpoint.is_some();
 
-    let mut h_indexer = start_analytics_indexer(analytics_config, registry, cancel.clone()).await?;
+    let mut h_indexer = start_analytics_indexer(config, registry, cancel.clone()).await?;
 
     enum ExitReason {
         Completed,
         UserInterrupt,
         Terminated,
     }
-
-    let is_bounded_job = false; // TODO: detect from config
 
     let exit_reason = tokio::select! {
         res = &mut h_indexer => {

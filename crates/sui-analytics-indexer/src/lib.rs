@@ -99,6 +99,14 @@ fn default_file_format() -> FileFormat {
     FileFormat::Parquet
 }
 
+fn default_write_concurrency() -> usize {
+    10
+}
+
+fn default_watermark_interval_secs() -> u64 {
+    60
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FileFormat {
@@ -154,6 +162,14 @@ pub struct JobConfig {
     // This is private to enforce using the PipelineConfig struct
     #[serde(rename = "tasks")]
     pipeline_configs: Vec<PipelineConfig>,
+
+    // Indexer framework configuration
+    #[serde(default = "default_write_concurrency")]
+    pub write_concurrency: usize,
+    #[serde(default = "default_watermark_interval_secs")]
+    pub watermark_interval_secs: u64,
+    pub first_checkpoint: Option<u64>,
+    pub last_checkpoint: Option<u64>,
 }
 
 impl JobConfig {
@@ -494,176 +510,128 @@ pub trait ParquetSchema {
     fn get_column(&self, idx: usize) -> ParquetValue;
 }
 
-// New framework-based indexer implementation
-pub mod indexer_alt {
-    use super::*;
-    use anyhow::Context;
-    use std::sync::Arc;
+// Functions
+
+pub async fn start_analytics_indexer(
+    config: JobConfig,
+    registry: prometheus::Registry,
+    cancel: tokio_util::sync::CancellationToken,
+) -> Result<tokio::task::JoinHandle<()>> {
     use std::time::Duration;
     use sui_indexer_alt_framework::pipeline::CommitterConfig;
     use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
     use sui_indexer_alt_framework::{Indexer, ingestion::IngestionConfig};
     use sui_indexer_alt_object_store::ObjectStore;
-    use tokio_util::sync::CancellationToken;
 
-    pub struct AnalyticsIndexerConfig {
-        pub job_config: JobConfig,
-        pub write_concurrency: usize,
-        pub watermark_interval: Duration,
-        pub first_checkpoint: Option<u64>,
-        pub last_checkpoint: Option<u64>,
-    }
+    info!("Starting analytics indexer with framework");
+    info!("Job config: {:#?}", config);
 
-    impl Default for AnalyticsIndexerConfig {
-        fn default() -> Self {
-            Self {
-                job_config: JobConfig {
-                    rest_url: "https://checkpoints.mainnet.sui.io".to_string(),
-                    client_metric_host: default_client_metric_host(),
-                    client_metric_port: default_client_metric_port(),
-                    remote_store_config: ObjectStoreConfig::default(),
-                    batch_size: default_batch_size(),
-                    data_limit: default_data_limit(),
-                    remote_store_url: default_remote_store_url(),
-                    remote_store_options: vec![],
-                    remote_store_timeout_secs: default_remote_store_timeout_secs(),
-                    package_cache_path: default_package_cache_path(),
-                    checkpoint_root: default_checkpoint_root(),
-                    bq_service_account_key_file: None,
-                    bq_project_id: None,
-                    bq_dataset_id: None,
-                    sf_account_identifier: None,
-                    sf_warehouse: None,
-                    sf_database: None,
-                    sf_schema: None,
-                    sf_username: None,
-                    sf_role: None,
-                    sf_password_file: None,
-                    pipeline_configs: vec![],
-                },
-                write_concurrency: 10,
-                watermark_interval: Duration::from_secs(60),
-                first_checkpoint: None,
-                last_checkpoint: None,
-            }
-        }
-    }
+    // Setup object store from remote_store_config
+    let object_store = create_object_store_from_config(
+        &config.remote_store_config,
+        config.remote_store_timeout_secs,
+    )
+    .await?;
 
-    pub async fn start_analytics_indexer(
-        config: AnalyticsIndexerConfig,
-        registry: prometheus::Registry,
-        cancel: CancellationToken,
-    ) -> Result<tokio::task::JoinHandle<()>> {
-        info!("Starting analytics indexer with framework");
-        info!("Job config: {:#?}", config.job_config);
+    let store = ObjectStore::new(object_store.clone());
 
-        // Setup object store from remote_store_config
-        let object_store = create_object_store_from_config(
-            &config.job_config.remote_store_config,
-            config.job_config.remote_store_timeout_secs,
+    // Create package cache for handlers that need it
+    let package_cache = Arc::new(PackageCache::new(
+        &config.package_cache_path,
+        &config.rest_url,
+    ));
+
+    // Create the indexer args from config
+    let indexer_args = sui_indexer_alt_framework::IndexerArgs {
+        first_checkpoint: config.first_checkpoint,
+        last_checkpoint: config.last_checkpoint,
+        pipeline: vec![],
+        task: Default::default(),
+    };
+
+    let client_args = sui_indexer_alt_framework::ingestion::ClientArgs {
+        ingestion: sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs {
+            remote_store_url: Some(url::Url::parse(&config.remote_store_url)?),
+            local_ingestion_path: None,
+            rpc_api_url: None,
+            rpc_username: None,
+            rpc_password: None,
+        },
+        streaming: sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs {
+            streaming_url: None,
+        },
+    };
+
+    let ingestion_config = IngestionConfig {
+        checkpoint_buffer_size: config.data_limit,
+        ingest_concurrency: config.batch_size,
+        retry_interval_ms: 5000,
+        streaming_backoff_initial_batch_size: 10,
+        streaming_backoff_max_batch_size: 10000,
+    };
+
+    let concurrent_config = ConcurrentConfig {
+        committer: CommitterConfig {
+            write_concurrency: config.write_concurrency,
+            watermark_interval_ms: Duration::from_secs(config.watermark_interval_secs).as_millis()
+                as u64,
+            ..Default::default()
+        },
+        pruner: None,
+    };
+
+    let mut indexer = Indexer::new(
+        store.clone(),
+        indexer_args,
+        client_args,
+        ingestion_config,
+        None,
+        &registry,
+        cancel.clone(),
+    )
+    .await?;
+
+    // Register pipelines for each enabled file type
+    for pipeline_config in config.pipeline_configs() {
+        info!(
+            "Registering pipeline: {} with file type: {:?}",
+            pipeline_config.pipeline_name, pipeline_config.pipeline
+        );
+
+        register_pipeline(
+            &mut indexer,
+            pipeline_config,
+            Some(package_cache.clone()),
+            concurrent_config.clone(),
         )
         .await?;
-
-        let store = ObjectStore::new(object_store.clone());
-
-        // Create package cache for handlers that need it
-        let package_cache = Arc::new(PackageCache::new(
-            &config.job_config.package_cache_path,
-            &config.job_config.rest_url,
-        ));
-
-        // Create the indexer args from config
-        let indexer_args = sui_indexer_alt_framework::IndexerArgs {
-            first_checkpoint: config.first_checkpoint,
-            last_checkpoint: config.last_checkpoint,
-            pipeline: vec![],
-            task: Default::default(),
-        };
-
-        let client_args = sui_indexer_alt_framework::ingestion::ClientArgs {
-            ingestion:
-                sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs {
-                    remote_store_url: Some(url::Url::parse(&config.job_config.remote_store_url)?),
-                    local_ingestion_path: None,
-                    rpc_api_url: None,
-                    rpc_username: None,
-                    rpc_password: None,
-                },
-            streaming:
-                sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs {
-                    streaming_url: None,
-                },
-        };
-
-        let ingestion_config = IngestionConfig {
-            checkpoint_buffer_size: config.job_config.data_limit,
-            ingest_concurrency: config.job_config.batch_size,
-            retry_interval_ms: 5000,
-            streaming_backoff_initial_batch_size: 10,
-            streaming_backoff_max_batch_size: 10000,
-        };
-
-        let concurrent_config = ConcurrentConfig {
-            committer: CommitterConfig {
-                write_concurrency: config.write_concurrency,
-                watermark_interval_ms: config.watermark_interval.as_millis() as u64,
-                ..Default::default()
-            },
-            pruner: None,
-        };
-
-        let mut indexer = Indexer::new(
-            store.clone(),
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-            cancel.clone(),
-        )
-        .await?;
-
-        // Register pipelines for each enabled file type
-        for pipeline_config in &config.job_config.pipeline_configs {
-            info!(
-                "Registering pipeline: {} with file type: {:?}",
-                pipeline_config.pipeline_name, pipeline_config.pipeline
-            );
-
-            register_pipeline(
-                &mut indexer,
-                pipeline_config,
-                Some(package_cache.clone()),
-                concurrent_config.clone(),
-            )
-            .await?;
-        }
-
-        // Start the indexer
-        let handle = indexer.run().await?;
-
-        Ok(handle)
     }
 
-    async fn register_pipeline(
-        indexer: &mut Indexer<ObjectStore>,
-        pipeline_config: &PipelineConfig,
-        package_cache: Option<Arc<PackageCache>>,
-        config: ConcurrentConfig,
-    ) -> Result<()> {
-        pipeline_config
-            .pipeline
-            .register_handler(indexer, pipeline_config, package_cache, config)
-            .await
-    }
+    // Start the indexer
+    let handle = indexer.run().await?;
 
-    async fn create_object_store_from_config(
-        config: &ObjectStoreConfig,
-        _timeout_secs: u64,
-    ) -> Result<Arc<dyn object_store::ObjectStore>> {
-        let store = config
-            .make()
-            .context("Failed to create object store from configuration")?;
-        Ok(store)
-    }
+    Ok(handle)
+}
+
+async fn register_pipeline(
+    indexer: &mut Indexer<sui_indexer_alt_object_store::ObjectStore>,
+    pipeline_config: &PipelineConfig,
+    package_cache: Option<Arc<PackageCache>>,
+    config: sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig,
+) -> Result<()> {
+    pipeline_config
+        .pipeline
+        .register_handler(indexer, pipeline_config, package_cache, config)
+        .await
+}
+
+async fn create_object_store_from_config(
+    config: &ObjectStoreConfig,
+    _timeout_secs: u64,
+) -> Result<Arc<dyn object_store::ObjectStore>> {
+    use anyhow::Context;
+    let store = config
+        .make()
+        .context("Failed to create object store from configuration")?;
+    Ok(store)
 }
