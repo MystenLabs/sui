@@ -11,6 +11,8 @@ base64.workspace = true
 bcs.workspace = true
 clap.workspace = true
 const-str.workspace = true
+cynic.workspace = true
+cynic-codegen.workspace = true
 diesel = { workspace = true, features = ["chrono", "postgres"] }
 fastcrypto.workspace = true
 jsonrpsee.workspace = true
@@ -40,6 +42,9 @@ sui-pg-db.workspace = true
 sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true
 sui-types.workspace = true
+
+[build-dependencies]
+cynic-codegen.workspace = true
 
 [lints]
 workspace = true
