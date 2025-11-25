@@ -1191,37 +1191,11 @@ fn check_internal_permit(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
             "The type {} is not declared in the current module",
             error_format(first_ty, &Subst::empty()),
         );
-        let mut diag = diag!(
-            PRIVATE_TRANSFER_CALL_DIAG,
+        let diag = diag!(
+            INTERNAL_PERMIT_CALL_DIAG,
             (loc, msg),
             (first_ty.loc, ty_msg)
         );
-        if first_ty
-            .value
-            .has_ability_(Ability_::Store)
-            .is_some_and(|b| b)
-        {
-            let store_loc = if let Some((first_ty_module, first_ty_name)) = &first_ty_tn {
-                let abilities = context
-                    .info
-                    .datatype_declared_abilities(first_ty_module, first_ty_name);
-                abilities.ability_loc_(Ability_::Store).unwrap()
-            } else {
-                first_ty
-                    .value
-                    .abilities(first_ty.loc)
-                    .expect("ICE abilities should have been expanded")
-                    .ability_loc_(Ability_::Store)
-                    .unwrap()
-            };
-            let store_msg = format!(
-                "The object has '{}' so '{}::public_{}' can be called instead",
-                Ability_::Store,
-                module,
-                name
-            );
-            diag.add_secondary_label((store_loc, store_msg))
-        }
         context.add_diag(diag)
     }
 }

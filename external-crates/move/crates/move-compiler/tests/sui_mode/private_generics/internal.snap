@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02009]: invalid private transfer call
+error[Sui E02011]: invalid internal permit call
    ┌─ tests/sui_mode/private_generics/internal.move:18:5
    │
 18 │     internal::permit<NonInternalType>();
@@ -14,7 +14,7 @@ error[Sui E02009]: invalid private transfer call
    │     │                The type 'a::other::NonInternalType' is not declared in the current module
    │     Invalid call to an internal function. The function 'std::internal::permit' is restricted to being called in the module that defines the type, 'a::other'
 
-error[Sui E02009]: invalid private transfer call
+error[Sui E02011]: invalid internal permit call
    ┌─ tests/sui_mode/private_generics/internal.move:28:5
    │
 28 │     internal::permit<Permit<Internal>>();
