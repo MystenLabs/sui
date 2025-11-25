@@ -222,7 +222,8 @@ impl Default for Parameters {
                 Parameters::default_propagation_delay_stop_proposal_threshold(),
             dag_state_cached_rounds: Parameters::default_dag_state_cached_rounds(),
             commit_sync_parallel_fetches: Parameters::default_commit_sync_parallel_fetches(),
-            commit_sync_observer_parallel_fetches: Parameters::default_commit_sync_observer_parallel_fetches(),
+            commit_sync_observer_parallel_fetches:
+                Parameters::default_commit_sync_observer_parallel_fetches(),
             commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
             anemo: AnemoParameters::default(),
