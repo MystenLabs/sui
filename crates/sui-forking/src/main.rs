@@ -13,11 +13,13 @@ use tracing::info;
 
 use crate::commands::{Args, Commands};
 use crate::consistent_store::start_consistent_store;
+use crate::seeds::{InitialSeeds, Network, fetch_owned_objects};
 use crate::server::start_server;
 use crate::types::{AdvanceClockRequest, ApiResponse, ExecuteTxRequest, ForkingStatus};
 use indexer::{IndexerConfig, start_indexer};
 use std::env::temp_dir;
 use std::path::PathBuf;
+use std::str::FromStr;
 use sui_indexer_alt_consistent_store::config::ServiceConfig;
 use sui_pg_db::DbArgs;
 
@@ -71,6 +73,7 @@ async fn main() -> Result<()> {
             port,
             network,
             data_dir,
+            accounts,
         } => {
             let info = if let Some(c) = checkpoint {
                 format!(
@@ -83,8 +86,14 @@ async fn main() -> Result<()> {
                     network, host, port
                 )
             };
-            // info!("{info}");
-            // println!("{info}");
+            let graphql_endpoint = Network::from_str(&network)?;
+
+            let mut seeds = vec![];
+            for addr in accounts.accounts.iter() {
+                let owned_objects = fetch_owned_objects(&graphql_endpoint, *addr).await?;
+                seeds.extend(owned_objects);
+            }
+            info!("Downloaded seeds for {} accounts", accounts.accounts.len());
             info!("Starting forking server...");
             let data_ingestion_path = mysten_common::tempdir().unwrap().keep();
             start_server(host, port, data_ingestion_path, VERSION).await?

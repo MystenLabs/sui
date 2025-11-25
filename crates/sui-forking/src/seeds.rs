@@ -1,55 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Result};
-use std::path::PathBuf;
+use anyhow::{Context, Result, anyhow};
+use clap::Parser;
+use cynic::QueryBuilder;
+use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
+use std::{collections::BTreeSet, path::PathBuf};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     object::Object,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Parser, Clone, Debug)]
 pub struct InitialSeeds {
     /// Specific accounts to track ownership for
-    pub tracked_accounts: Vec<SuiAddress>,
-
-    /// Package IDs to include (beyond system packages which are always included)
-    pub additional_packages: Vec<ObjectID>,
-
-    /// Specific objects to pre-fetch
-    pub seed_objects: Vec<ObjectID>,
+    #[clap(long, value_delimiter = ',')]
+    pub accounts: Vec<SuiAddress>,
 }
 
-impl Default for InitialSeeds {
-    fn default() -> Self {
-        Self {
-            tracked_accounts: Vec::new(),
-            additional_packages: Vec::new(),
-            seed_objects: Vec::new(),
-        }
-    }
-}
-
-impl InitialSeeds {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn with_accounts(mut self, accounts: Vec<SuiAddress>) -> Self {
-        self.tracked_accounts = accounts;
-        self
-    }
-
-    pub fn with_packages(mut self, packages: Vec<ObjectID>) -> Self {
-        self.additional_packages = packages;
-        self
-    }
-
-    pub fn with_objects(mut self, objects: Vec<ObjectID>) -> Self {
-        self.seed_objects = objects;
-        self
-    }
-}
+// ======= TEMP IMPLEMENTATION HACKED TOGETHER TO UNDERSTAND HOW THIS WORKS =======
 
 /// Configuration for the network to fork from
 #[derive(Clone, Debug)]
@@ -84,69 +53,132 @@ impl std::str::FromStr for Network {
     }
 }
 
-/// Loader for fetching initial seed data from GraphQL RPC
-pub struct SeedLoader {
-    graphql_url: String,
-    client: reqwest::Client,
+// Register the schema which was loaded in the build.rs call.
+#[cynic::schema("rpc")]
+mod schema {}
+
+#[derive(cynic::QueryVariables, Debug)]
+pub struct AddressVariable {
+    pub address: SuiAddressScalar,
+    pub after: Option<String>,
 }
 
-impl SeedLoader {
-    pub fn new(graphql_url: String) -> Self {
-        Self {
-            graphql_url,
-            client: reqwest::Client::new(),
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(graphql_type = "Query", variables = "AddressVariable")]
+pub struct AddressQuery {
+    #[arguments(address: $address)]
+    pub address: Option<ObjectsQuery>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(graphql_type = "Address", variables = "AddressVariable")]
+pub struct ObjectsQuery {
+    #[arguments(after: $after)]
+    pub objects: Option<MoveObjectConnection>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+pub struct MoveObjectConnection {
+    pub edges: Vec<MoveObjectEdge>,
+    pub page_info: PageInfo,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+pub struct PageInfo {
+    pub end_cursor: Option<String>,
+    pub has_next_page: bool,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+pub struct MoveObjectEdge {
+    pub cursor: String,
+    pub node: MoveObject,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+pub struct MoveObject {
+    pub object_bcs: Option<Base64>,
+}
+
+#[derive(cynic::Scalar, Debug, Clone)]
+#[cynic(graphql_type = "Base64")]
+pub struct Base64(pub String);
+
+#[derive(cynic::Scalar, Debug, Clone)]
+#[cynic(graphql_type = "SuiAddress")]
+pub struct SuiAddressScalar(pub String);
+
+/// Fetch all owned objects for a given address using GraphQL with pagination
+pub async fn fetch_owned_objects(
+    graphql_endpoint: &Network,
+    address: SuiAddress,
+) -> Result<Vec<Object>> {
+    let client = reqwest::Client::new();
+    let mut all_objects = Vec::new();
+    let mut cursor: Option<String> = None;
+    let mut has_next_page = true;
+
+    while has_next_page {
+        let query = AddressQuery::build(AddressVariable {
+            after: cursor.clone(),
+            address: SuiAddressScalar(address.to_string()),
+        });
+
+        let response = client
+            .post(graphql_endpoint.graphql_url())
+            .json(&query)
+            .send()
+            .await
+            .context("Failed to send GraphQL request")?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error response".to_string());
+            anyhow::bail!(
+                "GraphQL request failed with status {}: {}",
+                status,
+                error_text
+            );
         }
+
+        let graphql_response: cynic::GraphQlResponse<AddressQuery> = response
+            .json()
+            .await
+            .context("Failed to parse GraphQL response")?;
+
+        if let Some(errors) = &graphql_response.errors {
+            let error_messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+            anyhow::bail!("GraphQL errors: {}", error_messages.join(", "));
+        }
+
+        let data = graphql_response
+            .data
+            .ok_or_else(|| anyhow!("No data in GraphQL response"))?;
+
+        let address_data = data
+            .address
+            .ok_or_else(|| anyhow!("Address not found in response"))?;
+
+        let objects_connection = address_data
+            .objects
+            .ok_or_else(|| anyhow!("No objects connection in response"))?;
+
+        for edge in objects_connection.edges {
+            if let Some(bcs_data) = edge.node.object_bcs {
+                let bytes = CryptoBase64::decode(&bcs_data.0)
+                    .context("Failed to decode base64 object data")?;
+                let obj: Object =
+                    bcs::from_bytes(&bytes).context("Failed to deserialize object from BCS")?;
+                all_objects.push(obj);
+            }
+        }
+
+        has_next_page = objects_connection.page_info.has_next_page;
+        cursor = objects_connection.page_info.end_cursor;
     }
 
-    /// Load all seeds into the checkpoint ingestion directory
-    /// This writes checkpoint files that will be consumed by sui-indexer-alt
-    pub async fn load_seeds(
-        &self,
-        ingestion_dir: &PathBuf,
-        checkpoint: u64,
-        seeds: &InitialSeeds,
-    ) -> Result<()> {
-        tracing::info!(
-            "Loading initial seeds at checkpoint {} into {}",
-            checkpoint,
-            ingestion_dir.display()
-        );
-
-        std::fs::create_dir_all(ingestion_dir)
-            .context("Failed to create ingestion directory")?;
-
-        // TODO: Implement actual seed loading
-        // 1. Fetch system packages (0x1, 0x2, 0x3) at checkpoint
-        // 2. Fetch tracked account objects
-        // 3. Fetch additional packages
-        // 4. Fetch specific objects
-        // 5. Write checkpoint data to ingestion directory
-
-        tracing::info!("Seed loading complete");
-        Ok(())
-    }
-
-    async fn fetch_system_packages(&self, checkpoint: u64) -> Result<Vec<Object>> {
-        // Fetch 0x1 (Move stdlib), 0x2 (Sui framework), 0x3 (Sui system)
-        todo!("Implement GraphQL queries for system packages")
-    }
-
-    async fn fetch_owned_objects(
-        &self,
-        account: SuiAddress,
-        checkpoint: u64,
-    ) -> Result<Vec<Object>> {
-        // Query GraphQL for objects owned by account at checkpoint
-        todo!("Implement GraphQL query for owned objects")
-    }
-
-    async fn fetch_package(&self, package_id: ObjectID, checkpoint: u64) -> Result<Object> {
-        // Fetch package by ID at checkpoint
-        todo!("Implement GraphQL query for package")
-    }
-
-    async fn fetch_object(&self, object_id: ObjectID, checkpoint: u64) -> Result<Object> {
-        // Fetch object by ID at checkpoint
-        todo!("Implement GraphQL query for object")
-    }
+    Ok(all_objects)
 }
