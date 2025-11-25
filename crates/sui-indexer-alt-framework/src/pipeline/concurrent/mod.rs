@@ -1,26 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, atomic::AtomicU64},
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{
+    sync::{SetOnce, mpsc},
+    task::JoinHandle,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::{metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::Checkpoint};
+use crate::{
+    Task, metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::Checkpoint,
+};
 
 use super::{CommitterConfig, PIPELINE_BUFFER, Processor, WatermarkPart, processor::processor};
 
 use self::{
-    collector::collector, commit_watermark::commit_watermark, committer::committer, pruner::pruner,
-    reader_watermark::reader_watermark,
+    collector::collector, commit_watermark::commit_watermark, committer::committer,
+    main_reader_lo::track_main_reader_lo, pruner::pruner, reader_watermark::reader_watermark,
 };
 
 mod collector;
 mod commit_watermark;
 mod committer;
+mod main_reader_lo;
 mod pruner;
 mod reader_watermark;
 
@@ -205,6 +214,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     next_checkpoint: u64,
     config: ConcurrentConfig,
     store: H::Store,
+    task: Option<Task>,
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -233,6 +243,15 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let pruner_cancel = cancel.child_token();
     let handler = Arc::new(handler);
 
+    let main_reader_lo = Arc::new(SetOnce::<AtomicU64>::new());
+
+    let main_reader_lo_task = track_main_reader_lo::<H>(
+        main_reader_lo.clone(),
+        task.as_ref().map(|t| t.reader_interval),
+        pruner_cancel.clone(),
+        store.clone(),
+    );
+
     let processor = processor(
         handler.clone(),
         checkpoint_rx,
@@ -246,6 +265,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer_config.clone(),
         collector_rx,
         collector_tx,
+        main_reader_lo.clone(),
         metrics.clone(),
         cancel.clone(),
     );
@@ -265,6 +285,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer_config,
         watermark_rx,
         store.clone(),
+        task.as_ref().map(|t| t.task.clone()),
         metrics.clone(),
         cancel,
     );
@@ -288,7 +309,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);
 
         pruner_cancel.cancel();
-        let _ = futures::join!(reader_watermark, pruner);
+        let _ = futures::join!(main_reader_lo_task, reader_watermark, pruner);
     })
 }
 
@@ -413,6 +434,7 @@ mod tests {
                 next_checkpoint,
                 config,
                 store.clone(),
+                None,
                 checkpoint_rx,
                 metrics,
                 cancel.clone(),
