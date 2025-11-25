@@ -161,6 +161,13 @@ pub struct PipelineConfig {
     #[serde(default = "default_max_row_count")]
     pub max_row_count: usize,
     pub package_id_filter: Option<String>,
+    /// Snowflake table to monitor
+    pub sf_table_id: Option<String>,
+    /// Snowflake column containing checkpoint numbers
+    pub sf_checkpoint_col_id: Option<String>,
+    /// Whether to report max checkpoint from Snowflake table
+    #[serde(default)]
+    pub report_sf_max_table_checkpoint: bool,
 }
 
 #[derive(
@@ -448,6 +455,73 @@ pub trait ParquetSchema {
     fn get_column(&self, idx: usize) -> ParquetValue;
 }
 
+#[async_trait::async_trait]
+pub trait MaxCheckpointReader: Send + Sync + 'static {
+    async fn max_checkpoint(&self) -> Result<i64>;
+}
+
+struct SnowflakeMaxCheckpointReader {
+    query: String,
+    api: snowflake_api::SnowflakeApi,
+}
+
+impl SnowflakeMaxCheckpointReader {
+    pub async fn new(
+        account_identifier: &str,
+        warehouse: &str,
+        database: &str,
+        schema: &str,
+        user: &str,
+        role: &str,
+        passwd: &str,
+        table_id: &str,
+        col_id: &str,
+    ) -> Result<Self> {
+        let api = snowflake_api::SnowflakeApi::with_password_auth(
+            account_identifier,
+            Some(warehouse),
+            Some(database),
+            Some(schema),
+            user,
+            Some(role),
+            passwd,
+        )
+        .expect("Failed to build sf api client");
+        Ok(SnowflakeMaxCheckpointReader {
+            query: format!("SELECT max({}) from {}", col_id, table_id),
+            api,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl MaxCheckpointReader for SnowflakeMaxCheckpointReader {
+    async fn max_checkpoint(&self) -> Result<i64> {
+        use arrow::array::Int32Array;
+        use snowflake_api::QueryResult;
+
+        let res = self.api.exec(&self.query).await?;
+        match res {
+            QueryResult::Arrow(a) => {
+                if let Some(record_batch) = a.first() {
+                    let col = record_batch.column(0);
+                    let col_array = col
+                        .as_any()
+                        .downcast_ref::<Int32Array>()
+                        .expect("Failed to downcast arrow column");
+                    Ok(col_array.value(0) as i64)
+                } else {
+                    Ok(-1)
+                }
+            }
+            QueryResult::Json(_j) => Err(anyhow!("Unexpected query result")),
+            QueryResult::Empty => Err(anyhow!("Unexpected query result")),
+        }
+    }
+}
+
+// Functions
+
 pub async fn build_analytics_indexer(
     config: JobConfig,
     registry: prometheus::Registry,
@@ -552,4 +626,151 @@ async fn create_object_store_from_config(
         .make()
         .context("Failed to create object store from configuration")?;
     Ok(store)
+}
+
+fn load_password(path: &str) -> Result<String> {
+    use std::fs;
+    Ok(fs::read_to_string(path)?.trim().to_string())
+}
+
+/// Spawn background tasks to monitor Snowflake table checkpoints
+pub fn spawn_snowflake_monitors(
+    config: &JobConfig,
+    metrics: crate::analytics_metrics::AnalyticsMetrics,
+    cancel: tokio_util::sync::CancellationToken,
+) -> Result<Vec<tokio::task::JoinHandle<()>>> {
+    let mut handles = Vec::new();
+
+    for pipeline_config in config.pipeline_configs() {
+        if !pipeline_config.report_sf_max_table_checkpoint {
+            continue;
+        }
+
+        let sf_table_id = pipeline_config
+            .sf_table_id
+            .as_ref()
+            .ok_or_else(|| {
+                anyhow!(
+                    "Missing sf_table_id for pipeline {}",
+                    pipeline_config.pipeline_name
+                )
+            })?
+            .clone();
+
+        let sf_checkpoint_col_id = pipeline_config
+            .sf_checkpoint_col_id
+            .as_ref()
+            .ok_or_else(|| {
+                anyhow!(
+                    "Missing sf_checkpoint_col_id for pipeline {}",
+                    pipeline_config.pipeline_name
+                )
+            })?
+            .clone();
+
+        let account_identifier = config
+            .sf_account_identifier
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing sf_account_identifier"))?
+            .clone();
+
+        let warehouse = config
+            .sf_warehouse
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing sf_warehouse"))?
+            .clone();
+
+        let database = config
+            .sf_database
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing sf_database"))?
+            .clone();
+
+        let schema = config
+            .sf_schema
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing sf_schema"))?
+            .clone();
+
+        let username = config
+            .sf_username
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing sf_username"))?
+            .clone();
+
+        let role = config
+            .sf_role
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing sf_role"))?
+            .clone();
+
+        let password = load_password(
+            config
+                .sf_password_file
+                .as_ref()
+                .ok_or_else(|| anyhow!("Missing sf_password_file"))?,
+        )?;
+
+        let pipeline_name = pipeline_config.pipeline_name.clone();
+        let metrics = metrics.clone();
+        let cancel = cancel.clone();
+
+        let handle = tokio::spawn(async move {
+            info!("Starting Snowflake monitor for pipeline: {}", pipeline_name);
+
+            let reader = match SnowflakeMaxCheckpointReader::new(
+                &account_identifier,
+                &warehouse,
+                &database,
+                &schema,
+                &username,
+                &role,
+                &password,
+                &sf_table_id,
+                &sf_checkpoint_col_id,
+            )
+            .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to create Snowflake reader for {}: {}",
+                        pipeline_name,
+                        e
+                    );
+                    return;
+                }
+            };
+
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+            loop {
+                tokio::select! {
+                    _ = cancel.cancelled() => {
+                        break;
+                    }
+                    _ = interval.tick() => {
+                        match reader.max_checkpoint().await {
+                            Ok(max_cp) => {
+                                metrics
+                                    .max_checkpoint_on_store
+                                    .with_label_values(&[&pipeline_name])
+                                    .set(max_cp);
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Failed to query Snowflake max checkpoint for {}: {}",
+                                    pipeline_name,
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        handles.push(handle);
+    }
+
+    Ok(handles)
 }

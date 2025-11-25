@@ -4,7 +4,8 @@
 use anyhow::Result;
 use prometheus::Registry;
 use std::env;
-use sui_analytics_indexer::{JobConfig, build_analytics_indexer};
+use sui_analytics_indexer::analytics_metrics::AnalyticsMetrics;
+use sui_analytics_indexer::{JobConfig, build_analytics_indexer, spawn_snowflake_monitors};
 use tracing::info;
 
 #[tokio::main]
@@ -32,6 +33,12 @@ async fn main() -> Result<()> {
     let cancel = tokio_util::sync::CancellationToken::new();
 
     let is_bounded_job = config.last_checkpoint.is_some();
+
+    // Create metrics for Snowflake monitoring
+    let metrics = AnalyticsMetrics::new(&registry);
+
+    // Spawn Snowflake monitor tasks (if configured)
+    let sf_handles = spawn_snowflake_monitors(&config, metrics, cancel.clone())?;
 
     let indexer = build_analytics_indexer(config, registry, cancel.clone()).await?;
     let mut h_indexer = indexer.run().await?;
@@ -61,6 +68,9 @@ async fn main() -> Result<()> {
     cancel.cancel();
     info!("Waiting for graceful shutdown...");
     let _ = h_indexer.await;
+    for handle in sf_handles {
+        let _ = handle.await;
+    }
 
     match exit_reason {
         ExitReason::Completed => Ok(()),
