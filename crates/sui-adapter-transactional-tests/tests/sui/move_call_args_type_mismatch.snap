@@ -12,7 +12,7 @@ gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 
 task 2, lines 14-16:
 //# run Test::M::create --args 10
 Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 2 arguments calling function 'create', but found 1"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 2 arguments calling function 'Test::M::create', but found 1"), command: Some(0) } }
 
 task 3, line 17:
 //# run Test::M::create --args 10 10

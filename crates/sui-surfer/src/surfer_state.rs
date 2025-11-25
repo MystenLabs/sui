@@ -347,6 +347,8 @@ impl SurferState {
             rgp,
         );
         let tx = self.cluster.wallet.sign_transaction(&tx_data).await;
+        let tx_digest = *tx.digest();
+        info!(?tx_digest, "Publishing package");
         let start = Instant::now();
         let response = loop {
             match self
@@ -361,12 +363,12 @@ impl SurferState {
                 Err(err) => {
                     if start.elapsed() > Duration::from_secs(120) {
                         fatal!(
-                            "Failed to publish package after 120 seconds: {:?} {}",
+                            "Failed to publish package after 120 seconds: {} {}",
                             err,
                             tx.digest()
                         );
                     }
-                    error!("Failed to publish package: {:?} {}", err, tx.digest());
+                    error!(?tx_digest, "Failed to publish package: {}", err);
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             }

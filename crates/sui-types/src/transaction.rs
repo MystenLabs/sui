@@ -2072,29 +2072,6 @@ impl TransactionData {
         )
     }
 
-    pub fn new_transfer_funds_to_address_balance(
-        recipient: SuiAddress,
-        sender: SuiAddress,
-        amount: u64,
-        type_arg: TypeTag,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-        gas_price: u64,
-    ) -> anyhow::Result<Self> {
-        let pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            builder.transfer_balance(recipient, amount, type_arg)?;
-            builder.finish()
-        };
-        Ok(Self::new_programmable(
-            sender,
-            vec![gas_payment],
-            pt,
-            gas_budget,
-            gas_price,
-        ))
-    }
-
     pub fn new_transfer_sui_allow_sponsor(
         recipient: SuiAddress,
         sender: SuiAddress,

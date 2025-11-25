@@ -82,11 +82,6 @@ pub enum QuorumDriverError {
         category: ErrorCategory,
         details: String,
     },
-
-    #[error(
-        "Transaction is already being processed in transaction orchestrator (most likely by quorum driver), wait for results"
-    )]
-    PendingExecutionInTransactionOrchestrator,
 }
 
 pub type GroupedErrors = Vec<(SuiError, StakeUnit, Vec<ConciseAuthorityPublicKeyBytes>)>;

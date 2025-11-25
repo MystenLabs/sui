@@ -97,5 +97,5 @@ task 6, lines 115-130:
 //> test::m::play<test::m::C>(Result(2));
 //> test::m::play<test::m::D>(Result(3));
 //> test::m::close(Result(0), Result(1), Result(2), Result(3));
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(9) } }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

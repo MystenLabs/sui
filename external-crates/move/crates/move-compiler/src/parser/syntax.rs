@@ -4547,10 +4547,12 @@ fn parse_module(
     let mut stop_parsing = false;
     while context.tokens.peek() != Tok::RBrace {
         // If we are in semicolon mode, EOF is a fine place to stop.
-        // If we see the `module` keyword, this is most-likely someone defining a second module
-        // (erroneously), so we also bail in that case.
+        // If we see the `module` keyword, we are defining a second module, so bail
         if matches!(definition_mode, ModuleDefinitionMode::Semicolon)
-            && (context.tokens.peek() == Tok::EOF || context.tokens.peek() == Tok::Module)
+            && (context.tokens.peek() == Tok::EOF
+                || context.tokens.peek() == Tok::Module
+                || (context.tokens.peek() == Tok::Identifier
+                    && context.tokens.content() == EXTEND_MODIFIER))
         {
             stop_parsing = true;
             break;
@@ -4671,6 +4673,11 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                 }
             }
         }
+        // If we find `extend` or `module`, bail out.
+        Tok::Module => Err(ErrCase::ContinueToModule(attributes)),
+        Tok::Identifier if context.tokens.content() == EXTEND_MODIFIER => {
+            Err(ErrCase::ContinueToModule(attributes))
+        }
         // Regular move constructs
         Tok::Friend => Ok(ModuleMember::Friend(parse_friend_decl(
             attributes, context,
@@ -4755,14 +4762,7 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                             ),
                         )
                     };
-                    if tok == Tok::Module
-                        || (tok == Tok::Identifier && context.tokens.content() == EXTEND_MODIFIER)
-                    {
-                        context.add_diag(*diag);
-                        Err(ErrCase::ContinueToModule(attributes))
-                    } else {
-                        Err(ErrCase::Unknown(diag))
-                    }
+                    Err(ErrCase::Unknown(diag))
                 }
             }
         }
@@ -4860,12 +4860,12 @@ fn parse_file_def(
             if matches!(module.definition_mode, ModuleDefinitionMode::Semicolon)
                 && let Some(prev) = defs.last()
             {
-                let msg = "Cannot define a 'module' label form in a file with multiple modules";
+                let msg = "Cannot define an additional 'module' via label in a file with multiple modules";
                 let mut diag = diag!(Declarations::InvalidModule, (module.name.loc(), msg));
-                diag.add_secondary_label((prev.name_loc(), "Previous definition here"));
+                diag.add_secondary_label((prev.name_loc(), "Previous module defined here"));
                 diag.add_note(
-                    "Either move each 'module' label and definitions into its own file or \
-                            define each as 'module <name> { contents }'",
+                    "Either move each 'module' into its own file or \
+                            define each addiitional module as 'module <name> { contents }'",
                 );
                 context.add_diag(diag);
             }

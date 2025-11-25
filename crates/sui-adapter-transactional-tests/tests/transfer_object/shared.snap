@@ -50,8 +50,8 @@ Contents: test::m::S2 {
 
 task 6, line 35:
 //# transfer-object 2,0 --sender A --recipient B
-Error: Transaction Effects Status: Invalid Transfer Object, object does not have public transfer.
-Debug of error: InvalidTransferObject at command Some(0)
+Error: Transaction Effects Status: Invalid command argument at 0. Object passed to TransferObject does not have public transfer, i.e. the `store` ability
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidTransferObject } at command Some(0)
 
 task 7, line 37:
 //# transfer-object 3,0 --sender A --recipient B
