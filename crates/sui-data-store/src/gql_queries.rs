@@ -4,12 +4,12 @@
 //! GQL Queries
 //! Interface to the rpc for the gql schema defined in `crates\sui-indexer-alt-graphql/schema.graphql`.
 //! Built in 3 modules: epoch_query, txn_query, object_query.
-//! No GQL type escapes this module. From here we return structures defined by the replay tool
+//! No GQL type escapes this module. From here we return structures defined in this crate
 //! or bcs encoded data of runtime structures.
 //!
 //! This module is private to the `DataStore` and packcaged in its own module for convenience.
 
-use crate::{DataStore, replay_interface::EpochData};
+use crate::{EpochData, stores::DataStore};
 use anyhow::{Context, Error, anyhow};
 use cynic::QueryBuilder;
 use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
@@ -204,7 +204,7 @@ pub(crate) mod object_query {
     use sui_types::object::Object;
 
     use super::*;
-    use crate::replay_interface;
+    use crate::{ObjectKey as GqlObjectKey, VersionQuery};
 
     #[derive(cynic::Scalar, Debug, Clone)]
     #[cynic(graphql_type = "SuiAddress")]
@@ -236,10 +236,7 @@ pub(crate) mod object_query {
     }
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(
-        graphql_type = "Object",
-        schema_module = "crate::data_stores::gql_queries::schema"
-    )]
+    #[cynic(graphql_type = "Object", schema_module = "crate::gql_queries::schema")]
     pub(crate) struct ObjectFragment {
         #[allow(dead_code)]
         pub address: SuiAddress,
@@ -253,7 +250,7 @@ pub(crate) mod object_query {
     const MAX_KEYS_SIZE: usize = 30;
 
     pub(crate) async fn query(
-        keys: &[replay_interface::ObjectKey],
+        keys: &[GqlObjectKey],
         data_store: &DataStore,
     ) -> Result<Vec<Option<(Object, u64)>>, Error> {
         let mut keys = keys
@@ -306,20 +303,20 @@ pub(crate) mod object_query {
         Ok(objects)
     }
 
-    impl From<replay_interface::ObjectKey> for ObjectKey {
-        fn from(key: replay_interface::ObjectKey) -> Self {
+    impl From<GqlObjectKey> for ObjectKey {
+        fn from(key: GqlObjectKey) -> Self {
             ObjectKey {
                 address: SuiAddress(key.object_id.to_string()),
                 version: match key.version_query {
-                    replay_interface::VersionQuery::Version(v) => Some(v),
+                    VersionQuery::Version(v) => Some(v),
                     _ => None,
                 },
                 root_version: match key.version_query {
-                    replay_interface::VersionQuery::RootVersion(v) => Some(v),
+                    VersionQuery::RootVersion(v) => Some(v),
                     _ => None,
                 },
                 at_checkpoint: match key.version_query {
-                    replay_interface::VersionQuery::AtCheckpoint(v) => Some(v),
+                    VersionQuery::AtCheckpoint(v) => Some(v),
                     _ => None,
                 },
             }

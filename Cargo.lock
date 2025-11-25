@@ -14255,6 +14255,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-data-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "chrono",
+ "csv",
+ "cynic",
+ "cynic-codegen",
+ "fastcrypto",
+ "lru 0.10.0",
+ "reqwest 0.12.9",
+ "serde",
+ "sui-config",
+ "sui-types",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-deepbook-indexer"
 version = "0.1.0"
 dependencies = [
@@ -16154,11 +16174,8 @@ dependencies = [
  "chrono",
  "clap",
  "csv",
- "cynic",
- "cynic-codegen",
  "fastcrypto",
  "futures",
- "lru 0.10.0",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-cli",
@@ -16169,11 +16186,11 @@ dependencies = [
  "move-package",
  "move-trace-format",
  "prometheus",
- "reqwest 0.12.9",
  "serde",
  "serde_json",
  "similar",
  "sui-config",
+ "sui-data-store",
  "sui-execution",
  "sui-framework",
  "sui-json-rpc-types",

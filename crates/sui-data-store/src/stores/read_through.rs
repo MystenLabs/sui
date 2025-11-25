@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::replay_interface::{
+use crate::{
     EpochData, EpochStore, ObjectKey, ObjectStore, ReadDataStore, ReadWriteDataStore, SetupStore,
     StoreSummary, TransactionInfo, TransactionStore,
 };

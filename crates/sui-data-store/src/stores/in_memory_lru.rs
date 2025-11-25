@@ -1,19 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! LRU in-memory implementation of the replay interfaces: `TransactionStore`, `EpochStore`, and
-//! `ObjectStore`.
+//! LRU in-memory implementation of the data store interfaces: `TransactionStore`, `EpochStore`,
+//! and `ObjectStore`.
 //!
 //! Very similar to `InMemoryStore`, but entries are kept in bounded `LruCache`s.
-//! This is useful to avoid unbounded memory growth when replaying many transactions.
+//! This is useful to avoid unbounded memory growth under heavy load.
 
 use crate::{
-    Node,
-    replay_interface::{
-        EpochData, EpochStore, EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter,
-        SetupStore, StoreSummary, TransactionInfo, TransactionStore, TransactionStoreWriter,
-        VersionQuery,
-    },
+    EpochData, EpochStore, EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore,
+    StoreSummary, TransactionInfo, TransactionStore, TransactionStoreWriter, VersionQuery,
+    node::Node,
 };
 use anyhow::{Error, Result};
 use lru::LruCache;
@@ -38,7 +35,7 @@ const DEFAULT_OBJECT_CAP: usize = 50_000;
 const DEFAULT_ROOT_MAP_CAP: usize = 50_000;
 const DEFAULT_CHECKPOINT_MAP_CAP: usize = 50_000;
 
-/// LRU-backed store implementing the replay interfaces
+/// LRU-backed store implementing the data store interfaces.
 struct LruMemoryStoreInner {
     node: Node,
     transaction_cache: LruCache<String, TransactionInfo>,

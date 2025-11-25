@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! In-memory implementation of the replay interfaces: `TransactionStore`, `EpochStore`, and `ObjectStore`.
+//! In-memory implementation of the data store interfaces: `TransactionStore`, `EpochStore`, and `ObjectStore`.
 //! The `InMemoryStore` provides fast in-memory lookups.
 //!
 //! This store is purely cache-based - it only returns data that has been explicitly stored in memory.
@@ -24,12 +24,9 @@
 //! ```
 
 use crate::{
-    Node,
-    replay_interface::{
-        EpochData, EpochStore, EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter,
-        SetupStore, StoreSummary, TransactionInfo, TransactionStore, TransactionStoreWriter,
-        VersionQuery,
-    },
+    EpochData, EpochStore, EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore,
+    StoreSummary, TransactionInfo, TransactionStore, TransactionStoreWriter, VersionQuery,
+    node::Node,
 };
 use anyhow::{Error, Result};
 use std::{
@@ -46,7 +43,7 @@ use sui_types::{
     supported_protocol_versions::{Chain, ProtocolConfig},
 };
 
-/// In-memory store implementing the replay interfaces
+/// In-memory store implementing the data store interfaces.
 struct InMemoryStoreInner {
     node: Node,
     transaction_cache: BTreeMap<String, TransactionInfo>,
