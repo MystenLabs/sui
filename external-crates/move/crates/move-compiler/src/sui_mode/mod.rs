@@ -171,19 +171,19 @@ pub const PRIVATE_TRANSFER_CALL_DIAG: DiagnosticInfo = custom(
     /* code */ 9,
     "invalid private transfer call",
 );
-pub const INTERNAL_PERMIT_CALL_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
-    Severity::NonblockingError,
-    /* category */ TYPING,
-    /* code */ 11,
-    "invalid internal permit call",
-);
 pub const DYNAMIC_COIN_CREATION_CALL_DIAG: DiagnosticInfo = custom(
     SUI_DIAG_PREFIX,
     Severity::NonblockingError,
     /* category */ TYPING,
     /* code */ 10,
     "invalid coin creation call",
+);
+pub const INTERNAL_PERMIT_CALL_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 11,
+    "invalid internal permit call",
 );
 
 // Bridge supported asset
