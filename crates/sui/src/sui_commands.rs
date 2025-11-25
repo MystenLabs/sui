@@ -1176,12 +1176,26 @@ async fn start(
             no_ide: false,
         };
 
+        // on Windows, a client needs to connect to 127.0.0.1 if the server is listening on
+        // 0.0.0.0:port.
+        let consistent_store_url = consistent_store_url
+            .as_ref()
+            .map(|url| Url::parse(url))
+            .transpose()
+            .context("Failed to parse consistent store URL")?
+            .map(|mut url| {
+                if url.host_str() == Some("0.0.0.0") {
+                    let port = url.port();
+                    url.set_host(Some("127.0.0.1")).ok();
+                    if let Some(p) = port {
+                        url.set_port(Some(p)).ok();
+                    }
+                }
+                url
+            });
+
         let consistent_reader_args = ConsistentReaderArgs {
-            consistent_store_url: consistent_store_url
-                .as_ref()
-                .map(|url| Url::parse(url))
-                .transpose()
-                .context("Failed to parse consistent store URL")?,
+            consistent_store_url,
             ..Default::default()
         };
 
