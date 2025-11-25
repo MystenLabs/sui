@@ -81,6 +81,12 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_commit_sync_parallel_fetches")]
     pub commit_sync_parallel_fetches: usize,
 
+    // For observer nodes with a target validator, this controls the maximum number of
+    // parallel fetches. This can be higher than commit_sync_parallel_fetches since
+    // all fetches go to a single validator, reducing network overhead concerns.
+    #[serde(default = "Parameters::default_commit_sync_observer_parallel_fetches")]
+    pub commit_sync_observer_parallel_fetches: usize,
+
     // Number of commits to fetch in a batch, also the maximum number of commits returned per fetch.
     // If this value is set too small, fetching becomes inefficient.
     // If this value is set too large, it can result in load imbalance and stragglers.
@@ -178,6 +184,11 @@ impl Parameters {
         8
     }
 
+    pub(crate) fn default_commit_sync_observer_parallel_fetches() -> usize {
+        // Observers can use higher parallelism since all fetches go to a single validator
+        16
+    }
+
     pub(crate) fn default_commit_sync_batch_size() -> u32 {
         if cfg!(msim) {
             // Exercise commit sync.
@@ -211,6 +222,7 @@ impl Default for Parameters {
                 Parameters::default_propagation_delay_stop_proposal_threshold(),
             dag_state_cached_rounds: Parameters::default_dag_state_cached_rounds(),
             commit_sync_parallel_fetches: Parameters::default_commit_sync_parallel_fetches(),
+            commit_sync_observer_parallel_fetches: Parameters::default_commit_sync_observer_parallel_fetches(),
             commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
             anemo: AnemoParameters::default(),

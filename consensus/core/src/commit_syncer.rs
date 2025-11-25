@@ -394,12 +394,22 @@ impl<C: NetworkClient> CommitSyncer<C> {
         // Cap parallel fetches based on configured limit and committee size, to avoid overloading the network.
         // Also when there are too many fetched blocks that cannot be sent to Core before an earlier fetch
         // has not finished, reduce parallelism so the earlier fetch can retry on a better host and succeed.
-        let target_parallel_fetches = self
-            .inner
-            .context
-            .parameters
-            .commit_sync_parallel_fetches
-            .min(self.inner.context.committee.size() * 2 / 3)
+        // For observer nodes with a target validator, use the observer-specific limit and bypass
+        // the committee size constraint since all fetches go to a single validator.
+        let base_parallel_fetches = if self.target_validator_index.is_some() {
+            self.inner
+                .context
+                .parameters
+                .commit_sync_observer_parallel_fetches
+        } else {
+            self.inner
+                .context
+                .parameters
+                .commit_sync_parallel_fetches
+                .min(self.inner.context.committee.size() * 2 / 3)
+        };
+
+        let target_parallel_fetches = base_parallel_fetches
             .min(
                 self.inner
                     .context
@@ -416,10 +426,12 @@ impl<C: NetworkClient> CommitSyncer<C> {
             let Some(commit_range) = self.pending_fetches.pop_first() else {
                 break;
             };
+            let is_observer = self.target_validator_index.is_some();
             self.inflight_fetches.spawn(Self::fetch_loop(
                 self.inner.clone(),
                 commit_range,
                 self.target_validator_index,
+                is_observer,
             ));
         }
 
@@ -442,6 +454,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         inner: Arc<Inner<C>>,
         commit_range: CommitRange,
         target_validator_index: Option<AuthorityIndex>,
+        is_observer: bool,
     ) -> (CommitIndex, CertifiedCommits) {
         // Individual request base timeout.
         const TIMEOUT: Duration = Duration::from_secs(10);
@@ -502,6 +515,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                         authority,
                         commit_range.clone(),
                         request_timeout,
+                        is_observer,
                     ),
                 )
                 .await
@@ -557,6 +571,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         target_authority: AuthorityIndex,
         commit_range: CommitRange,
         timeout: Duration,
+        is_observer: bool,
     ) -> ConsensusResult<CertifiedCommits> {
         let _timer = inner
             .context
@@ -603,7 +618,15 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 let inner = inner.clone();
                 async move {
                     // 4. Send out pipelined fetch requests to avoid overloading the target authority.
-                    sleep(timeout * i as u32 / num_chunks).await;
+                    // For observers, use minimal delay since the target validator is dedicated to serving the observer.
+                    let pipeline_delay = if is_observer {
+                        // Minimal delay for observer mode - just enough to avoid overwhelming a single connection
+                        timeout * i as u32 / (num_chunks * 4).max(1)
+                    } else {
+                        // Standard delay for validators
+                        timeout * i as u32 / num_chunks
+                    };
+                    sleep(pipeline_delay).await;
                     // TODO: add some retries.
                     let serialized_blocks = inner
                         .network_client
