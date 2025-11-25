@@ -28,9 +28,6 @@ pub enum Node {
     Mainnet,
     /// Sui testnet
     Testnet,
-    // TODO: define once we have stable end points.
-    //       Use `Custom` for now.
-    // Devnet,
     /// Custom network with a user-provided URL
     Custom(String),
 }
@@ -41,7 +38,6 @@ impl Node {
         match self {
             Node::Mainnet => Chain::Mainnet,
             Node::Testnet => Chain::Testnet,
-            // Node::Devnet => Chain::Unknown,
             Node::Custom(_) => Chain::Unknown,
         }
     }
@@ -51,7 +47,6 @@ impl Node {
         match self {
             Node::Mainnet => "mainnet".to_string(),
             Node::Testnet => "testnet".to_string(),
-            // Node::Devnet => "devnet".to_string(),
             Node::Custom(url) => url.clone(),
         }
     }
@@ -61,7 +56,6 @@ impl Node {
         match self {
             Node::Mainnet => MAINNET_GQL_URL,
             Node::Testnet => TESTNET_GQL_URL,
-            // Node::Devnet => "",
             Node::Custom(_url) => todo!("custom gql url not implemented"),
         }
     }
@@ -84,7 +78,6 @@ impl FromStr for Node {
         match s {
             "mainnet" => Ok(Node::Mainnet),
             "testnet" => Ok(Node::Testnet),
-            // "devnet" => Ok(Node::Devnet),
             _ => Ok(Node::Custom(s.to_string())),
         }
     }
