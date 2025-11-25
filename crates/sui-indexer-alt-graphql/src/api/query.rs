@@ -6,7 +6,6 @@ use async_graphql::{Context, Object, Result, connection::Connection};
 use futures::future::try_join_all;
 use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
 use sui_rpc::proto::sui::rpc::v2 as proto;
-use sui_types::digests::ChainIdentifier;
 
 use crate::{
     api::{
@@ -20,6 +19,7 @@ use crate::{
     error::{RpcError, bad_user_input, upcast},
     pagination::{Page, PaginationConfig},
     scope::Scope,
+    task::chain_identifier::ChainIdentifier,
 };
 
 use super::{
@@ -82,8 +82,8 @@ impl Query {
 
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
-        let chain_id: ChainIdentifier = *ctx.data()?;
-        Ok(chain_id.to_string())
+        let chain_id: &ChainIdentifier = ctx.data()?;
+        Ok(chain_id.wait().await.to_string())
     }
 
     /// Fetch a checkpoint by its sequence number, or the latest checkpoint if no sequence number is provided.
