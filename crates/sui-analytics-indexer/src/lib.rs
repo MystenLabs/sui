@@ -198,11 +198,6 @@ pub struct PipelineConfig {
     #[serde(default)]
     pub report_sf_max_table_checkpoint: bool,
     pub package_id_filter: Option<String>,
-    /// Enable backfill mode to match existing checkpoint ranges
-    #[serde(default)]
-    pub backfill_mode: bool,
-    /// Epoch to backfill (required when backfill_mode is true)
-    pub starting_epoch: Option<u64>,
 }
 
 impl PipelineConfig {
@@ -261,78 +256,6 @@ pub(crate) fn construct_file_path(
         ))
 }
 
-/// Parse checkpoint range from a file path
-/// Example: "events/epoch_42/1000_2437.parquet" -> Some(1000..2437)
-pub fn parse_checkpoint_range_from_path(path: &str) -> Option<Range<u64>> {
-    let path = std::path::Path::new(path);
-    let filename = path.file_stem()?.to_str()?;
-
-    // Parse "1000_2437" -> 1000..2437
-    let parts: Vec<&str> = filename.split('_').collect();
-    if parts.len() >= 2 {
-        let start: u64 = parts[parts.len() - 2].parse().ok()?;
-        let end: u64 = parts[parts.len() - 1].parse().ok()?;
-        Some(start..end)
-    } else {
-        None
-    }
-}
-
-/// Discover existing checkpoint ranges from object store
-/// Returns sorted list of (checkpoint_range, file_path) tuples
-/// Fails if ranges have gaps (not contiguous)
-pub async fn discover_checkpoint_ranges(
-    object_store: &dyn object_store::ObjectStore,
-    pipeline: Pipeline,
-    epoch: u64,
-) -> Result<Vec<(Range<u64>, String)>> {
-    let prefix = format!("{}/epoch_{}/", pipeline.dir_prefix().as_ref(), epoch);
-    let prefix_path = object_store::path::Path::from(prefix.as_str());
-
-    let mut ranges = Vec::new();
-
-    use futures::TryStreamExt;
-    let list_stream = object_store.list(Some(&prefix_path));
-    let objects: Vec<_> = list_stream.try_collect().await?;
-
-    for meta in objects {
-        let path = meta.location.to_string();
-
-        if let Some(range) = parse_checkpoint_range_from_path(&path) {
-            ranges.push((range, path));
-        }
-    }
-
-    if ranges.is_empty() {
-        anyhow::bail!(
-            "No existing files found for {}/epoch_{}",
-            pipeline.dir_prefix().as_ref(),
-            epoch
-        );
-    }
-
-    // Sort by checkpoint start
-    ranges.sort_by_key(|(range, _)| range.start);
-
-    // Validate ranges are contiguous (fail fast if gaps detected)
-    for i in 0..ranges.len().saturating_sub(1) {
-        let current_end = ranges[i].0.end;
-        let next_start = ranges[i + 1].0.start;
-
-        if current_end != next_start {
-            anyhow::bail!(
-                "Gap detected in checkpoint ranges: range {} ends at {}, but range {} starts at {}",
-                i,
-                current_end,
-                i + 1,
-                next_start
-            );
-        }
-    }
-
-    Ok(ranges)
-}
-
 impl Pipeline {
     pub(crate) fn dir_prefix(&self) -> Path {
         match self {
@@ -356,274 +279,122 @@ impl Pipeline {
         pipeline_config: &PipelineConfig,
         package_cache: Option<Arc<PackageCache>>,
         config: ConcurrentConfig,
-        object_store: Arc<dyn object_store::ObjectStore>,
     ) -> Result<()> {
         match self {
             Pipeline::Checkpoint => {
-                let handler = if pipeline_config.backfill_mode {
-                    let epoch = pipeline_config.starting_epoch.ok_or_else(|| {
-                        anyhow!("starting_epoch required when backfill_mode is true")
-                    })?;
-                    let target_ranges =
-                        discover_checkpoint_ranges(object_store.as_ref(), *self, epoch).await?;
-                    info!(
-                        "Backfill mode enabled for Checkpoint pipeline, discovered {} ranges for epoch {}",
-                        target_ranges.len(),
-                        epoch
-                    );
-                    CheckpointHandler::new_backfill(
-                        CheckpointProcessor,
-                        pipeline_config.clone(),
-                        target_ranges,
+                indexer
+                    .concurrent_pipeline(
+                        CheckpointHandler::new(CheckpointProcessor, pipeline_config.clone()),
+                        config,
                     )
-                } else {
-                    CheckpointHandler::new(CheckpointProcessor, pipeline_config.clone())
-                };
-                indexer.concurrent_pipeline(handler, config).await?;
+                    .await?;
             }
             Pipeline::Transaction => {
-                let handler = if pipeline_config.backfill_mode {
-                    let epoch = pipeline_config.starting_epoch.ok_or_else(|| {
-                        anyhow!("starting_epoch required when backfill_mode is true")
-                    })?;
-                    let target_ranges =
-                        discover_checkpoint_ranges(object_store.as_ref(), *self, epoch).await?;
-                    info!(
-                        "Backfill mode enabled for Transaction pipeline, discovered {} ranges for epoch {}",
-                        target_ranges.len(),
-                        epoch
-                    );
-                    TransactionHandler::new_backfill(
-                        TransactionProcessor,
-                        pipeline_config.clone(),
-                        target_ranges,
+                indexer
+                    .concurrent_pipeline(
+                        TransactionHandler::new(TransactionProcessor, pipeline_config.clone()),
+                        config,
                     )
-                } else {
-                    TransactionHandler::new(TransactionProcessor, pipeline_config.clone())
-                };
-                indexer.concurrent_pipeline(handler, config).await?;
+                    .await?;
             }
             Pipeline::TransactionBCS => {
-                let handler = if pipeline_config.backfill_mode {
-                    let epoch = pipeline_config.starting_epoch.ok_or_else(|| {
-                        anyhow!("starting_epoch required when backfill_mode is true")
-                    })?;
-                    let target_ranges =
-                        discover_checkpoint_ranges(object_store.as_ref(), *self, epoch).await?;
-                    info!(
-                        "Backfill mode enabled for TransactionBCS pipeline, discovered {} ranges for epoch {}",
-                        target_ranges.len(),
-                        epoch
-                    );
-                    TransactionBCSHandler::new_backfill(
-                        TransactionBCSProcessor,
-                        pipeline_config.clone(),
-                        target_ranges,
+                indexer
+                    .concurrent_pipeline(
+                        TransactionBCSHandler::new(
+                            TransactionBCSProcessor,
+                            pipeline_config.clone(),
+                        ),
+                        config,
                     )
-                } else {
-                    TransactionBCSHandler::new(TransactionBCSProcessor, pipeline_config.clone())
-                };
-                indexer.concurrent_pipeline(handler, config).await?;
+                    .await?;
             }
             Pipeline::Event => {
                 let cache = package_cache
                     .clone()
                     .ok_or_else(|| anyhow!("Package cache required for Event handler"))?;
-                let handler = if pipeline_config.backfill_mode {
-                    let epoch = pipeline_config.starting_epoch.ok_or_else(|| {
-                        anyhow!("starting_epoch required when backfill_mode is true")
-                    })?;
-                    let target_ranges =
-                        discover_checkpoint_ranges(object_store.as_ref(), *self, epoch).await?;
-                    info!(
-                        "Backfill mode enabled for Event pipeline, discovered {} ranges for epoch {}",
-                        target_ranges.len(),
-                        epoch
-                    );
-                    EventHandler::new_backfill(
-                        EventProcessor::new(cache),
-                        pipeline_config.clone(),
-                        target_ranges,
+                indexer
+                    .concurrent_pipeline(
+                        EventHandler::new(EventProcessor::new(cache), pipeline_config.clone()),
+                        config,
                     )
-                } else {
-                    EventHandler::new(EventProcessor::new(cache), pipeline_config.clone())
-                };
-                indexer.concurrent_pipeline(handler, config).await?;
+                    .await?;
             }
             Pipeline::MoveCall => {
-                let handler = if pipeline_config.backfill_mode {
-                    let epoch = pipeline_config.starting_epoch.ok_or_else(|| {
-                        anyhow!("starting_epoch required when backfill_mode is true")
-                    })?;
-                    let target_ranges =
-                        discover_checkpoint_ranges(object_store.as_ref(), *self, epoch).await?;
-                    info!(
-                        "Backfill mode enabled for MoveCall pipeline, discovered {} ranges for epoch {}",
-                        target_ranges.len(),
-                        epoch
-                    );
-                    MoveCallHandler::new_backfill(
-                        MoveCallProcessor,
-                        pipeline_config.clone(),
-                        target_ranges,
+                indexer
+                    .concurrent_pipeline(
+                        MoveCallHandler::new(MoveCallProcessor, pipeline_config.clone()),
+                        config,
                     )
-                } else {
-                    MoveCallHandler::new(MoveCallProcessor, pipeline_config.clone())
-                };
-                indexer.concurrent_pipeline(handler, config).await?;
+                    .await?;
             }
             Pipeline::Object => {
                 let cache = package_cache
                     .clone()
                     .ok_or_else(|| anyhow!("Package cache required for Object handler"))?;
-                let handler = if pipeline_config.backfill_mode {
-                    let epoch = pipeline_config.starting_epoch.ok_or_else(|| {
-                        anyhow!("starting_epoch required when backfill_mode is true")
-                    })?;
-                    let target_ranges =
-                        discover_checkpoint_ranges(object_store.as_ref(), *self, epoch).await?;
-                    info!(
-                        "Backfill mode enabled for Object pipeline, discovered {} ranges for epoch {}",
-                        target_ranges.len(),
-                        epoch
-                    );
-                    ObjectHandler::new_backfill(
-                        ObjectProcessor::new(cache, &pipeline_config.package_id_filter),
-                        pipeline_config.clone(),
-                        target_ranges,
+                indexer
+                    .concurrent_pipeline(
+                        ObjectHandler::new(
+                            ObjectProcessor::new(cache, &pipeline_config.package_id_filter),
+                            pipeline_config.clone(),
+                        ),
+                        config,
                     )
-                } else {
-                    ObjectHandler::new(
-                        ObjectProcessor::new(cache, &pipeline_config.package_id_filter),
-                        pipeline_config.clone(),
-                    )
-                };
-                indexer.concurrent_pipeline(handler, config).await?;
+                    .await?;
             }
             Pipeline::DynamicField => {
                 let cache = package_cache
                     .clone()
                     .ok_or_else(|| anyhow!("Package cache required for DynamicField handler"))?;
-                let handler = if pipeline_config.backfill_mode {
-                    let epoch = pipeline_config.starting_epoch.ok_or_else(|| {
-                        anyhow!("starting_epoch required when backfill_mode is true")
-                    })?;
-                    let target_ranges =
-                        discover_checkpoint_ranges(object_store.as_ref(), *self, epoch).await?;
-                    info!(
-                        "Backfill mode enabled for DynamicField pipeline, discovered {} ranges for epoch {}",
-                        target_ranges.len(),
-                        epoch
-                    );
-                    DynamicFieldHandler::new_backfill(
-                        DynamicFieldProcessor::new(cache),
-                        pipeline_config.clone(),
-                        target_ranges,
+                indexer
+                    .concurrent_pipeline(
+                        DynamicFieldHandler::new(
+                            DynamicFieldProcessor::new(cache),
+                            pipeline_config.clone(),
+                        ),
+                        config,
                     )
-                } else {
-                    DynamicFieldHandler::new(
-                        DynamicFieldProcessor::new(cache),
-                        pipeline_config.clone(),
-                    )
-                };
-                indexer.concurrent_pipeline(handler, config).await?;
+                    .await?;
             }
             Pipeline::TransactionObjects => {
-                let handler = if pipeline_config.backfill_mode {
-                    let epoch = pipeline_config.starting_epoch.ok_or_else(|| {
-                        anyhow!("starting_epoch required when backfill_mode is true")
-                    })?;
-                    let target_ranges =
-                        discover_checkpoint_ranges(object_store.as_ref(), *self, epoch).await?;
-                    info!(
-                        "Backfill mode enabled for TransactionObjects pipeline, discovered {} ranges for epoch {}",
-                        target_ranges.len(),
-                        epoch
-                    );
-                    TransactionObjectsHandler::new_backfill(
-                        TransactionObjectsProcessor,
-                        pipeline_config.clone(),
-                        target_ranges,
+                indexer
+                    .concurrent_pipeline(
+                        TransactionObjectsHandler::new(
+                            TransactionObjectsProcessor,
+                            pipeline_config.clone(),
+                        ),
+                        config,
                     )
-                } else {
-                    TransactionObjectsHandler::new(
-                        TransactionObjectsProcessor,
-                        pipeline_config.clone(),
-                    )
-                };
-                indexer.concurrent_pipeline(handler, config).await?;
+                    .await?;
             }
             Pipeline::MovePackage => {
-                let handler = if pipeline_config.backfill_mode {
-                    let epoch = pipeline_config.starting_epoch.ok_or_else(|| {
-                        anyhow!("starting_epoch required when backfill_mode is true")
-                    })?;
-                    let target_ranges =
-                        discover_checkpoint_ranges(object_store.as_ref(), *self, epoch).await?;
-                    info!(
-                        "Backfill mode enabled for MovePackage pipeline, discovered {} ranges for epoch {}",
-                        target_ranges.len(),
-                        epoch
-                    );
-                    PackageHandler::new_backfill(
-                        PackageProcessor,
-                        pipeline_config.clone(),
-                        target_ranges,
+                indexer
+                    .concurrent_pipeline(
+                        PackageHandler::new(PackageProcessor, pipeline_config.clone()),
+                        config,
                     )
-                } else {
-                    PackageHandler::new(PackageProcessor, pipeline_config.clone())
-                };
-                indexer.concurrent_pipeline(handler, config).await?;
+                    .await?;
             }
             Pipeline::MovePackageBCS => {
-                let handler = if pipeline_config.backfill_mode {
-                    let epoch = pipeline_config.starting_epoch.ok_or_else(|| {
-                        anyhow!("starting_epoch required when backfill_mode is true")
-                    })?;
-                    let target_ranges =
-                        discover_checkpoint_ranges(object_store.as_ref(), *self, epoch).await?;
-                    info!(
-                        "Backfill mode enabled for MovePackageBCS pipeline, discovered {} ranges for epoch {}",
-                        target_ranges.len(),
-                        epoch
-                    );
-                    PackageBCSHandler::new_backfill(
-                        PackageBCSProcessor,
-                        pipeline_config.clone(),
-                        target_ranges,
+                indexer
+                    .concurrent_pipeline(
+                        PackageBCSHandler::new(PackageBCSProcessor, pipeline_config.clone()),
+                        config,
                     )
-                } else {
-                    PackageBCSHandler::new(PackageBCSProcessor, pipeline_config.clone())
-                };
-                indexer.concurrent_pipeline(handler, config).await?;
+                    .await?;
             }
             Pipeline::WrappedObject => {
                 let cache = package_cache
                     .clone()
                     .ok_or_else(|| anyhow!("Package cache required for WrappedObject handler"))?;
-                let handler = if pipeline_config.backfill_mode {
-                    let epoch = pipeline_config.starting_epoch.ok_or_else(|| {
-                        anyhow!("starting_epoch required when backfill_mode is true")
-                    })?;
-                    let target_ranges =
-                        discover_checkpoint_ranges(object_store.as_ref(), *self, epoch).await?;
-                    info!(
-                        "Backfill mode enabled for WrappedObject pipeline, discovered {} ranges for epoch {}",
-                        target_ranges.len(),
-                        epoch
-                    );
-                    WrappedObjectHandler::new_backfill(
-                        WrappedObjectProcessor::new(cache),
-                        pipeline_config.clone(),
-                        target_ranges,
+                indexer
+                    .concurrent_pipeline(
+                        WrappedObjectHandler::new(
+                            WrappedObjectProcessor::new(cache),
+                            pipeline_config.clone(),
+                        ),
+                        config,
                     )
-                } else {
-                    WrappedObjectHandler::new(
-                        WrappedObjectProcessor::new(cache),
-                        pipeline_config.clone(),
-                    )
-                };
-                indexer.concurrent_pipeline(handler, config).await?;
+                    .await?;
             }
         }
         Ok(())
@@ -864,7 +635,6 @@ pub mod indexer_alt {
                 pipeline_config,
                 Some(package_cache.clone()),
                 concurrent_config.clone(),
-                object_store.clone(),
             )
             .await?;
         }
@@ -880,17 +650,10 @@ pub mod indexer_alt {
         pipeline_config: &PipelineConfig,
         package_cache: Option<Arc<PackageCache>>,
         config: ConcurrentConfig,
-        object_store: Arc<dyn object_store::ObjectStore>,
     ) -> Result<()> {
         pipeline_config
             .pipeline
-            .register_handler(
-                indexer,
-                pipeline_config,
-                package_cache,
-                config,
-                object_store,
-            )
+            .register_handler(indexer, pipeline_config, package_cache, config)
             .await
     }
 
@@ -902,52 +665,5 @@ pub mod indexer_alt {
             .make()
             .context("Failed to create object store from configuration")?;
         Ok(store)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_checkpoint_range_from_path_parquet() {
-        let path = "events/epoch_42/1000_2437.parquet";
-        let range = parse_checkpoint_range_from_path(path);
-        assert_eq!(range, Some(1000..2437));
-    }
-
-    #[test]
-    fn test_parse_checkpoint_range_from_path_csv() {
-        let path = "checkpoints/epoch_100/5000_10000.csv";
-        let range = parse_checkpoint_range_from_path(path);
-        assert_eq!(range, Some(5000..10000));
-    }
-
-    #[test]
-    fn test_parse_checkpoint_range_from_path_no_extension() {
-        let path = "events/epoch_42/1000_2437";
-        let range = parse_checkpoint_range_from_path(path);
-        assert_eq!(range, Some(1000..2437));
-    }
-
-    #[test]
-    fn test_parse_checkpoint_range_from_path_invalid() {
-        let path = "events/epoch_42/invalid.parquet";
-        let range = parse_checkpoint_range_from_path(path);
-        assert_eq!(range, None);
-    }
-
-    #[test]
-    fn test_parse_checkpoint_range_from_path_single_number() {
-        let path = "events/epoch_42/1000.parquet";
-        let range = parse_checkpoint_range_from_path(path);
-        assert_eq!(range, None);
-    }
-
-    #[test]
-    fn test_parse_checkpoint_range_from_path_with_underscores() {
-        let path = "move_package/epoch_5/100_200.parquet";
-        let range = parse_checkpoint_range_from_path(path);
-        assert_eq!(range, Some(100..200));
     }
 }

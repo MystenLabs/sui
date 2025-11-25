@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::marker::PhantomData;
-use std::ops::Range;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
@@ -55,25 +54,11 @@ impl WriterVariant {
     }
 }
 
-/// Batching mode for analytics handler
-#[derive(Clone, Default)]
-pub enum BatchingMode {
-    /// Live mode - normal forward processing (current behavior)
-    #[default]
-    Live,
-    /// Backfill mode - match existing checkpoint ranges
-    Backfill {
-        target_ranges: Arc<Vec<(Range<u64>, String)>>,
-        current_range_idx: Arc<Mutex<usize>>,
-    },
-}
-
 /// Generic batch struct that works for all entry types
 pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + ParquetSchema> {
     inner: Mutex<Option<WriterVariant>>,
     pub(crate) dir_prefix: String,
     current_file_bytes: Mutex<Option<Bytes>>,
-    batching_mode: Arc<Mutex<Option<BatchingMode>>>,
     _phantom: PhantomData<T>,
 }
 
@@ -81,7 +66,6 @@ pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + ParquetSchema> {
 pub struct AnalyticsHandler<P, B> {
     processor: P,
     config: PipelineConfig,
-    batching_mode: Arc<Mutex<Option<BatchingMode>>>,
     _batch: PhantomData<B>,
 }
 
@@ -91,7 +75,6 @@ impl<T: AnalyticsMetadata + Serialize + ParquetSchema + 'static> Default for Ana
             inner: Mutex::new(None),
             dir_prefix: T::PIPELINE.dir_prefix().as_ref().to_string(),
             current_file_bytes: Mutex::new(None),
-            batching_mode: Arc::new(Mutex::new(None)),
             _phantom: PhantomData,
         }
     }
@@ -153,25 +136,6 @@ impl<P, B> AnalyticsHandler<P, B> {
         Self {
             processor,
             config,
-            batching_mode: Arc::new(Mutex::new(Some(BatchingMode::Live))),
-            _batch: PhantomData,
-        }
-    }
-
-    pub fn new_backfill(
-        processor: P,
-        config: PipelineConfig,
-        target_ranges: Vec<(Range<u64>, String)>,
-    ) -> Self {
-        let batching_mode = BatchingMode::Backfill {
-            target_ranges: Arc::new(target_ranges),
-            current_range_idx: Arc::new(Mutex::new(0)),
-        };
-
-        Self {
-            processor,
-            config,
-            batching_mode: Arc::new(Mutex::new(Some(batching_mode))),
             _batch: PhantomData,
         }
     }
@@ -221,81 +185,20 @@ where
         batch: &mut Self::Batch,
         values: &mut std::vec::IntoIter<Self::Value>,
     ) -> sui_indexer_alt_framework::pipeline::concurrent::BatchStatus {
-        // Initialize batch with handler's batching mode if not set
-        {
-            let mut batch_mode = batch.batching_mode.lock().unwrap();
-            if batch_mode.is_none() {
-                *batch_mode = self.batching_mode.lock().unwrap().clone();
-            }
+        let Some(first) = values.next() else {
+            return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending;
+        };
+
+        // Write all rows to batch (no more side-effect checkpoint tracking!)
+        if let Err(e) = batch.write_rows(
+            std::iter::once(first).chain(values.by_ref()),
+            self.config.file_format,
+        ) {
+            tracing::error!("Failed to write rows to batch: {}", e);
+            return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending;
         }
 
-        let batch_mode = batch
-            .batching_mode
-            .lock()
-            .unwrap()
-            .clone()
-            .unwrap_or(BatchingMode::Live);
-        match &batch_mode {
-            BatchingMode::Live => {
-                let Some(first) = values.next() else {
-                    return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending;
-                };
-
-                // Write all rows to batch
-                if let Err(e) = batch.write_rows(
-                    std::iter::once(first).chain(values.by_ref()),
-                    self.config.file_format,
-                ) {
-                    tracing::error!("Failed to write rows to batch: {}", e);
-                    return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending;
-                }
-
-                sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending
-            }
-            BatchingMode::Backfill {
-                target_ranges,
-                current_range_idx,
-            } => {
-                let current_idx = *current_range_idx.lock().unwrap();
-
-                if current_idx >= target_ranges.len() {
-                    return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending;
-                }
-
-                let target = &target_ranges[current_idx];
-                let target_end = target.0.end;
-
-                let mut rows_to_write = Vec::new();
-                for value in values.by_ref() {
-                    let checkpoint = value.get_checkpoint_sequence_number();
-
-                    if checkpoint >= target_end {
-                        // Reached target boundary - force batch commit
-                        if !rows_to_write.is_empty() {
-                            if let Err(e) =
-                                batch.write_rows(rows_to_write.into_iter(), self.config.file_format)
-                            {
-                                tracing::error!("Failed to write rows to batch: {}", e);
-                            }
-                        }
-                        return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Ready;
-                    }
-
-                    rows_to_write.push(value);
-                }
-
-                // Write accumulated rows
-                if !rows_to_write.is_empty() {
-                    if let Err(e) =
-                        batch.write_rows(rows_to_write.into_iter(), self.config.file_format)
-                    {
-                        tracing::error!("Failed to write rows to batch: {}", e);
-                    }
-                }
-
-                sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending
-            }
-        }
+        sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending
     }
 
     async fn commit<'a>(
@@ -313,64 +216,30 @@ where
 
         let row_count = batch.row_count()?;
 
-        // Determine file path based on batching mode
-        let batch_mode = batch
-            .batching_mode
-            .lock()
-            .unwrap()
-            .clone()
-            .unwrap_or(BatchingMode::Live);
-        let file_path = match &batch_mode {
-            BatchingMode::Live => {
-                // Extract checkpoint range from watermarks (guaranteed to be contiguous)
-                let checkpoint_range =
-                    sui_indexer_alt_framework::pipeline::WatermarkPart::checkpoint_range(
-                        watermarks,
-                    )
-                    .ok_or_else(|| anyhow::anyhow!("No watermarks provided"))?;
+        // Extract checkpoint range from watermarks (guaranteed to be contiguous)
+        let checkpoint_range =
+            sui_indexer_alt_framework::pipeline::WatermarkPart::checkpoint_range(watermarks)
+                .ok_or_else(|| anyhow::anyhow!("No watermarks provided"))?;
 
-                let epoch = watermarks
-                    .first()
-                    .ok_or_else(|| anyhow::anyhow!("No watermarks provided"))?
-                    .watermark
-                    .epoch_hi_inclusive;
+        let epoch = watermarks
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("No watermarks provided"))?
+            .watermark
+            .epoch_hi_inclusive;
 
-                let object_path = crate::construct_file_path(
-                    &batch.dir_prefix,
-                    epoch,
-                    checkpoint_range,
-                    self.config.file_format,
-                );
+        let object_path = crate::construct_file_path(
+            &batch.dir_prefix,
+            epoch,
+            checkpoint_range,
+            self.config.file_format,
+        );
 
-                object_path.to_string_lossy().to_string()
-            }
-            BatchingMode::Backfill {
-                target_ranges,
-                current_range_idx,
-            } => {
-                // Use exact path from target ranges
-                let current_idx = *current_range_idx.lock().unwrap();
-                if current_idx >= target_ranges.len() {
-                    anyhow::bail!("Current range index out of bounds");
-                }
-                target_ranges[current_idx].1.clone()
-            }
-        };
-
-        let object_store_path = object_store::path::Path::from(file_path.as_str());
+        let object_store_path =
+            object_store::path::Path::from(object_path.to_string_lossy().as_ref());
 
         conn.object_store()
             .put(&object_store_path, file_bytes.into())
             .await?;
-
-        // Increment range index in backfill mode after successful commit
-        if let Some(BatchingMode::Backfill {
-            current_range_idx, ..
-        }) = batch.batching_mode.lock().unwrap().as_ref()
-        {
-            let mut idx = current_range_idx.lock().unwrap();
-            *idx += 1;
-        }
 
         Ok(row_count)
     }
