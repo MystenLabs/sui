@@ -1,3 +1,4 @@
+use crate::seeds::InitialSeeds;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
@@ -26,6 +27,9 @@ pub enum Commands {
 
         #[clap(long)]
         data_dir: Option<String>,
+
+        #[clap(flatten)]
+        accounts: InitialSeeds,
     },
     /// Advance checkpoint by 1
     AdvanceCheckpoint {
@@ -58,4 +62,3 @@ pub enum Commands {
         tx_bytes: String,
     },
 }
-
