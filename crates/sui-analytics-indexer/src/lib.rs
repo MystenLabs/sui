@@ -69,10 +69,6 @@ fn default_remote_store_url() -> String {
     "https://checkpoints.mainnet.sui.io".to_string()
 }
 
-fn default_package_cache_path() -> PathBuf {
-    PathBuf::from("/opt/sui/db/package_cache")
-}
-
 fn default_max_row_count() -> usize {
     100000
 }
@@ -117,9 +113,8 @@ pub struct JobConfig {
     /// Remote store URL.
     #[serde(default = "default_remote_store_url")]
     pub remote_store_url: String,
-    /// Directory to contain the package cache for pipelines
-    #[serde(default = "default_package_cache_path")]
-    pub package_cache_path: PathBuf,
+    /// Optional working directory for temporary files (defaults to system temp dir)
+    pub work_dir: Option<PathBuf>,
     pub sf_account_identifier: Option<String>,
     pub sf_warehouse: Option<String>,
     pub sf_database: Option<String>,
@@ -520,8 +515,6 @@ impl MaxCheckpointReader for SnowflakeMaxCheckpointReader {
     }
 }
 
-// Functions
-
 pub async fn build_analytics_indexer(
     config: JobConfig,
     registry: prometheus::Registry,
@@ -531,11 +524,21 @@ pub async fn build_analytics_indexer(
 
     let store = ObjectStore::new(object_store.clone());
 
+    let work_dir = if let Some(ref work_dir) = config.work_dir {
+        tempfile::Builder::new()
+            .prefix("sui-analytics-indexer-")
+            .tempdir_in(work_dir)?
+            .keep()
+    } else {
+        tempfile::Builder::new()
+            .prefix("sui-analytics-indexer-")
+            .tempdir()?
+            .keep()
+    };
+
     // Create package cache for handlers that need it
-    let package_cache = Arc::new(PackageCache::new(
-        &config.package_cache_path,
-        &config.rest_url,
-    ));
+    let package_cache_path = work_dir.join("package_cache");
+    let package_cache = Arc::new(PackageCache::new(&package_cache_path, &config.rest_url));
 
     // Create the indexer args from config
     let indexer_args = sui_indexer_alt_framework::IndexerArgs {
