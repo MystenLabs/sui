@@ -744,33 +744,32 @@ fn get_manifest_address_info(
     original_id: Option<AccountAddress>,
     published_at: Option<String>,
 ) -> Result<Option<PublishAddresses>> {
-    // If we have a published-at address, we must have an original-id set (if it's 0x0, we cannot derive it).
-    if published_at.is_some()
-        && (original_id.is_none() || original_id.is_some_and(|id| id == AccountAddress::ZERO))
-    {
-        bail!("If `published-at` is defined in Move.toml, `original-id` must also be defined.");
-    }
-
-    let Some(original_id) = original_id else {
-        return Ok(None);
-    };
-
-    // We cannot support "0x0" as the "original-id" of a published package.
-    if original_id == AccountAddress::ZERO {
-        return Ok(None);
-    }
-
-    if let Some(published_at) = published_at {
-        let published_at = parse_address_literal(&published_at)?;
-        Ok(Some(PublishAddresses {
-            published_at: crate::schema::PublishedID(published_at),
-            original_id: crate::schema::OriginalID(original_id),
-        }))
-    } else {
-        Ok(Some(PublishAddresses {
-            published_at: crate::schema::PublishedID(original_id),
-            original_id: crate::schema::OriginalID(original_id),
-        }))
+    // 1. If we have published-at, but not original, we return None
+    // 2. If we have original, we use that as the address, as long as it is not 0x0
+    // 3. If we have neither, we return None
+    // 4. If we have both, we split them accordingly.
+    match (published_at, original_id) {
+        (Some(_), None) => Ok(None),
+        (None, None) => Ok(None),
+        (None, Some(original_id)) => {
+            if original_id == AccountAddress::ZERO {
+                return Ok(None);
+            }
+            Ok(Some(PublishAddresses {
+                published_at: crate::schema::PublishedID(original_id),
+                original_id: crate::schema::OriginalID(original_id),
+            }))
+        }
+        (Some(published_at), Some(original_id)) => {
+            if original_id == AccountAddress::ZERO {
+                return Ok(None);
+            }
+            let published_at = parse_address_literal(&published_at)?;
+            Ok(Some(PublishAddresses {
+                published_at: crate::schema::PublishedID(published_at),
+                original_id: crate::schema::OriginalID(original_id),
+            }))
+        }
     }
 }
 
@@ -840,10 +839,8 @@ mod tests {
         let original_id = None;
         let published_at = Some("0x2".to_string());
         let result = get_manifest_address_info(original_id, published_at);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains(
-            "If `published-at` is defined in Move.toml, `original-id` must also be defined."
-        ));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), None);
     }
 
     #[test]
@@ -859,10 +856,8 @@ mod tests {
         let original_id = Some(AccountAddress::ZERO);
         let published_at = Some("0x2".to_string());
         let result = get_manifest_address_info(original_id, published_at);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains(
-            "If `published-at` is defined in Move.toml, `original-id` must also be defined."
-        ));
+
+        assert_eq!(result.unwrap(), None);
     }
 
     #[test]
