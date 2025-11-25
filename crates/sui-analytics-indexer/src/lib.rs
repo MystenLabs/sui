@@ -512,18 +512,18 @@ pub trait ParquetSchema {
 
 // Functions
 
-pub async fn start_analytics_indexer(
+pub async fn build_analytics_indexer(
     config: JobConfig,
     registry: prometheus::Registry,
     cancel: tokio_util::sync::CancellationToken,
-) -> Result<tokio::task::JoinHandle<()>> {
+) -> Result<Indexer<sui_indexer_alt_object_store::ObjectStore>> {
     use std::time::Duration;
     use sui_indexer_alt_framework::pipeline::CommitterConfig;
     use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
     use sui_indexer_alt_framework::{Indexer, ingestion::IngestionConfig};
     use sui_indexer_alt_object_store::ObjectStore;
 
-    info!("Starting analytics indexer with framework");
+    info!("Building analytics indexer");
     info!("Job config: {:#?}", config);
 
     // Setup object store from remote_store_config
@@ -607,10 +607,7 @@ pub async fn start_analytics_indexer(
         .await?;
     }
 
-    // Start the indexer
-    let handle = indexer.run().await?;
-
-    Ok(handle)
+    Ok(indexer)
 }
 
 async fn register_pipeline(

@@ -4,7 +4,7 @@
 use anyhow::Result;
 use prometheus::Registry;
 use std::env;
-use sui_analytics_indexer::{JobConfig, start_analytics_indexer};
+use sui_analytics_indexer::{JobConfig, build_analytics_indexer};
 use tracing::info;
 
 #[tokio::main]
@@ -33,7 +33,8 @@ async fn main() -> Result<()> {
 
     let is_bounded_job = config.last_checkpoint.is_some();
 
-    let mut h_indexer = start_analytics_indexer(config, registry, cancel.clone()).await?;
+    let indexer = build_analytics_indexer(config, registry, cancel.clone()).await?;
+    let mut h_indexer = indexer.run().await?;
 
     enum ExitReason {
         Completed,
