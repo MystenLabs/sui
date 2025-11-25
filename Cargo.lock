@@ -16399,6 +16399,7 @@ dependencies = [
  "futures-core",
  "jsonrpsee",
  "move-core-types",
+ "mysten-common",
  "prometheus",
  "rand 0.8.5",
  "reqwest 0.12.9",
