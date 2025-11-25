@@ -56,10 +56,10 @@ fn is_upgraded(context: &NativeContext) -> PartialVMResult<bool> {
         .enable_nitro_attestation_upgraded_parsing())
 }
 
-fn is_all_pcrs_included(context: &NativeContext) -> PartialVMResult<bool> {
+fn is_all_nonzero_pcrs_included(context: &NativeContext) -> PartialVMResult<bool> {
     Ok(get_extension!(context, ObjectRuntime)?
         .protocol_config
-        .enable_nitro_attestation_all_pcrs_parsing())
+        .enable_nitro_attestation_all_nonzero_pcrs_parsing())
 }
 
 pub fn load_nitro_attestation_internal(
@@ -93,7 +93,7 @@ pub fn load_nitro_attestation_internal(
     match parse_nitro_attestation(
         &attestation_bytes,
         is_upgraded(context)?,
-        is_all_pcrs_included(context)?,
+        is_all_nonzero_pcrs_included(context)?,
     ) {
         Ok((signature, signed_message, payload)) => {
             let cert_chain_length = payload.get_cert_chain_length();

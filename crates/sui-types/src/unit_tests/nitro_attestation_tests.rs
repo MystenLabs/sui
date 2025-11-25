@@ -335,16 +335,18 @@ fn invalid_cose() {
 
 #[test]
 fn attestation_parse_all_pcrs() {
-    // all pcrs included, if flag is true.
+    // parse with flag true, pcr16 should be present, in addition to 0, 1, 2, 4.
     let parsed_all_pcrs =
         parse_nitro_attestation(&Hex::decode(VALID_PCR16_ATTESTATION).unwrap(), true, true)
             .unwrap();
-    assert!(
+    assert_eq!(
         parsed_all_pcrs
             .2
             .pcr_map
             .keys()
-            .all(|k| (0..=31).contains(k))
+            .cloned()
+            .collect::<Vec<_>>(),
+        vec![0, 1, 2, 4, 16]
     );
     assert_eq!(*parsed_all_pcrs.2.pcr_map.get(&16).unwrap(), Hex::decode("28827566f8b004a75ccd77ffab1813059cfc384b3b23f926728263fecb03e97d4928fbef613791fcb233d7b16ad74b94").unwrap());
     let res = verify_nitro_attestation(
@@ -359,6 +361,8 @@ fn attestation_parse_all_pcrs() {
     let parsed =
         parse_nitro_attestation(&Hex::decode(VALID_PCR16_ATTESTATION).unwrap(), true, false)
             .unwrap();
-    assert!(parsed.2.pcr_map.keys().len() == 6);
-    assert!(!parsed.2.pcr_map.contains_key(&16));
+    assert_eq!(
+        parsed.2.pcr_map.keys().cloned().collect::<Vec<_>>(),
+        vec![0, 1, 2, 3, 4, 8]
+    );
 }
