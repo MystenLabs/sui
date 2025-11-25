@@ -1870,7 +1870,8 @@ fn socket_addr_to_url(addr: SocketAddr) -> Result<Url, anyhow::Error> {
         .with_context(|| format!("Failed to parse {addr} into a Url"))
 }
 
-/// Resolves an unspecified ip address to a localhost IP address.
+/// Resolves an unspecified ip address to a localhost IP address. Particularly on Windows, clients
+/// cannot connect to 0.0.0.0 addresses.
 fn normalize_bind_addr(addr: SocketAddr) -> IpAddr {
     match addr.ip() {
         IpAddr::V4(v4) if v4.is_unspecified() => IpAddr::V4(Ipv4Addr::LOCALHOST),
