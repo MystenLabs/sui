@@ -47,7 +47,6 @@ pub mod package_store;
 pub mod parquet;
 pub mod tables;
 
-// Re-export handler traits and generic batch struct for public API
 pub use handlers::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata};
 
 fn default_client_metric_host() -> String {
@@ -56,10 +55,6 @@ fn default_client_metric_host() -> String {
 
 fn default_client_metric_port() -> u16 {
     8081
-}
-
-fn default_checkpoint_root() -> PathBuf {
-    PathBuf::from("/tmp")
 }
 
 fn default_batch_size() -> usize {
@@ -74,28 +69,12 @@ fn default_remote_store_url() -> String {
     "https://checkpoints.mainnet.sui.io".to_string()
 }
 
-fn default_remote_store_timeout_secs() -> u64 {
-    5
-}
-
 fn default_package_cache_path() -> PathBuf {
     PathBuf::from("/opt/sui/db/package_cache")
 }
 
-fn default_checkpoint_interval() -> u64 {
-    10000
-}
-
-fn default_max_file_size_mb() -> u64 {
-    100
-}
-
 fn default_max_row_count() -> usize {
     100000
-}
-
-fn default_time_interval_s() -> u64 {
-    600
 }
 
 fn default_file_format() -> FileFormat {
@@ -138,22 +117,9 @@ pub struct JobConfig {
     /// Remote store URL.
     #[serde(default = "default_remote_store_url")]
     pub remote_store_url: String,
-    /// These are key-value config pairs that are defined in the object_store crate
-    /// <https://docs.rs/object_store/latest/object_store/gcp/enum.GoogleConfigKey.html>
-    #[serde(default)]
-    pub remote_store_options: Vec<(String, String)>,
-    /// Remote store timeout
-    #[serde(default = "default_remote_store_timeout_secs")]
-    pub remote_store_timeout_secs: u64,
     /// Directory to contain the package cache for pipelines
     #[serde(default = "default_package_cache_path")]
     pub package_cache_path: PathBuf,
-    /// Root directory to contain the temporary directory for checkpoint entries.
-    #[serde(default = "default_checkpoint_root")]
-    pub checkpoint_root: PathBuf,
-    pub bq_service_account_key_file: Option<String>,
-    pub bq_project_id: Option<String>,
-    pub bq_dataset_id: Option<String>,
     pub sf_account_identifier: Option<String>,
     pub sf_warehouse: Option<String>,
     pub sf_database: Option<String>,
@@ -191,41 +157,10 @@ pub struct PipelineConfig {
     /// File format to use (csv or parquet)
     #[serde(default = "default_file_format")]
     pub file_format: FileFormat,
-    /// Number of checkpoints to process before uploading to the datastore.
-    #[serde(default = "default_checkpoint_interval")]
-    pub checkpoint_interval: u64,
-    /// Maximum file size in mb before uploading to the datastore.
-    #[serde(default = "default_max_file_size_mb")]
-    pub max_file_size_mb: u64,
     /// Maximum number of rows before uploading to the datastore.
     #[serde(default = "default_max_row_count")]
     pub max_row_count: usize,
-    /// Checkpoint sequence number to start the download from
-    pub starting_checkpoint_seq_num: Option<u64>,
-    /// Time to process in seconds before uploding to the datastore.
-    #[serde(default = "default_time_interval_s")]
-    pub time_interval_s: u64,
-    /// Remote object store path prefix to use while writing
-    #[serde(default)]
-    remote_store_path_prefix: Option<String>,
-    pub bq_table_id: Option<String>,
-    pub bq_checkpoint_col_id: Option<String>,
-    #[serde(default)]
-    pub report_bq_max_table_checkpoint: bool,
-    pub sf_table_id: Option<String>,
-    pub sf_checkpoint_col_id: Option<String>,
-    #[serde(default)]
-    pub report_sf_max_table_checkpoint: bool,
     pub package_id_filter: Option<String>,
-}
-
-impl PipelineConfig {
-    pub fn remote_store_path_prefix(&self) -> Result<Option<Path>> {
-        self.remote_store_path_prefix
-            .as_ref()
-            .map(|pb| Ok(Path::from(pb.as_str())))
-            .transpose()
-    }
 }
 
 #[derive(
@@ -513,22 +448,12 @@ pub trait ParquetSchema {
     fn get_column(&self, idx: usize) -> ParquetValue;
 }
 
-// Functions
-
 pub async fn build_analytics_indexer(
     config: JobConfig,
     registry: prometheus::Registry,
     cancel: tokio_util::sync::CancellationToken,
 ) -> Result<Indexer<sui_indexer_alt_object_store::ObjectStore>> {
-    info!("Building analytics indexer");
-    info!("Job config: {:#?}", config);
-
-    // Setup object store from remote_store_config
-    let object_store = create_object_store_from_config(
-        &config.remote_store_config,
-        config.remote_store_timeout_secs,
-    )
-    .await?;
+    let object_store = create_object_store_from_config(&config.remote_store_config).await?;
 
     let store = ObjectStore::new(object_store.clone());
 
@@ -621,7 +546,6 @@ async fn register_pipeline(
 
 async fn create_object_store_from_config(
     config: &ObjectStoreConfig,
-    _timeout_secs: u64,
 ) -> Result<Arc<dyn object_store::ObjectStore>> {
     use anyhow::Context;
     let store = config
