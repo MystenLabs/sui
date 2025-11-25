@@ -297,6 +297,22 @@ impl<'env> Context<'env> {
         )
     }
 
+    pub fn name_access_chain_to_module_access_unsafe(
+        &mut self,
+        access: Access,
+        chain: P::NameAccessChain,
+    ) -> PathExpanderResult<AccessPath> {
+        let Context {
+            path_expander,
+            defn_context: inner_context,
+            ..
+        } = self;
+        path_expander
+            .as_mut()
+            .unwrap()
+            .name_access_chain_to_module_access(inner_context, access, chain)
+    }
+
     pub fn name_access_chain_to_module_ident(
         &mut self,
         chain: P::NameAccessChain,

@@ -247,6 +247,7 @@ pub enum Attribute_ {
     SpecOnly {
         inv_target: Option<NameAccessChain>,
         loop_inv: Option<LoopInvariantInfo>,
+        explicit_specs: Vec<NameAccessChain>,
     },
 }
 
@@ -1777,63 +1778,105 @@ impl AstDebug for Attribute_ {
             }
             A::RandomTest => {
                 w.write("rand_test");
-            },
-            A::Spec { focus, prove, skip, target, no_opaque, ignore_abort, boogie_opt, timeout }  => {
+            }
+            A::Spec {
+                focus,
+                prove,
+                skip,
+                target,
+                no_opaque,
+                ignore_abort,
+                boogie_opt,
+                timeout,
+            } => {
                 w.write("spec(");
                 let mut first = true;
                 if *focus {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write("focus");
                     first = false;
                 }
                 if *prove {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write("prove");
                     first = false;
                 }
                 if skip.is_some() {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write(format!("skip({})", skip.clone().unwrap()));
                     first = false;
                 }
                 if let Some(target) = target {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write(format!("target = {}", target));
                     first = false;
                 }
                 if *no_opaque {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write("no_opaque");
                     first = false;
                 }
                 if *ignore_abort {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write(format!("ignore_abort = {}", ignore_abort));
                 }
                 if boogie_opt.is_some() {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write(format!("boogie_opt({})", boogie_opt.clone().unwrap()));
                 }
                 if timeout.is_some() {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write(format!("timeout({})", timeout.clone().unwrap()));
                 }
                 w.write(")");
-            },
-            A::SpecOnly { inv_target, loop_inv } => {
+            }
+            A::SpecOnly {
+                inv_target,
+                loop_inv,
+                explicit_specs,
+            } => {
                 let li = if let Some(loop_inv) = loop_inv {
-                    format!("loop_inv(target={}, label={})", loop_inv.target.to_string(), loop_inv.label)
+                    format!(
+                        "loop_inv(target={}, label={})",
+                        loop_inv.target.to_string(),
+                        loop_inv.label
+                    )
                 } else {
                     "".to_string()
                 };
 
                 if inv_target.is_some() {
-                    w.write(format!("spec_only({li} inv_target={})", inv_target.clone().unwrap()));
+                    w.write(format!(
+                        "spec_only({li} inv_target={})",
+                        inv_target.clone().unwrap()
+                    ));
                 } else {
                     w.write(format!("spec_only({li})"));
                 }
-
-            },
+                if !explicit_specs.is_empty() {
+                    w.write(" explicit_specs(");
+                    w.comma(explicit_specs, |w, spec| {
+                        spec.ast_debug(w);
+                    });
+                    w.write(")");
+                }
+            }
         }
     }
 }

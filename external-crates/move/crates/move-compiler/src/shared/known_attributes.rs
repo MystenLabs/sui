@@ -200,6 +200,8 @@ pub enum VerificationAttribute {
     SpecOnly {
         inv_target: Option<ModuleAccess>,
         loop_inv: Option<LoopInvariantInfo>,
+        explicit_specs: Vec<ModuleAccess>,
+        explicit_spec_modules: Vec<ModuleIdent>,
     },
 }
 
@@ -222,7 +224,9 @@ impl AttributePosition {
 impl AttributeKind_ {
     pub const fn name(&self) -> &'static str {
         match self {
-            AttributeKind_::BytecodeInstruction => BytecodeInstructionAttribute::BYTECODE_INSTRUCTION,
+            AttributeKind_::BytecodeInstruction => {
+                BytecodeInstructionAttribute::BYTECODE_INSTRUCTION
+            }
             AttributeKind_::Allow => DiagnosticAttribute::ALLOW,
             AttributeKind_::DefinesPrimitive => DefinesPrimitiveAttribute::DEFINES_PRIM,
             AttributeKind_::Deprecation => DeprecationAttribute::DEPRECATED,
@@ -291,7 +295,6 @@ impl VerificationAttribute {
     pub const SPEC: &'static str = "spec";
     pub const SPEC_ONLY: &'static str = "spec_only";
 
-
     // Spec arguments
     pub const PROVE_NAME: &'static str = "prove";
     pub const SKIP_NAME: &'static str = "skip";
@@ -307,6 +310,7 @@ impl VerificationAttribute {
     pub const LOOP_INV_NAME: &'static str = "loop_inv";
     pub const LOOP_INV_TARGET_NAME: &'static str = "target";
     pub const LOOP_INV_LABEL_NAME: &'static str = "label";
+    pub const EXPLICIT_SPEC_NAME: &'static str = "include";
 
     pub const fn name(&self) -> &str {
         match self {
@@ -333,7 +337,7 @@ impl VerificationAttribute {
 
         match self {
             Self::Spec { .. } => &FUNCTION_POSITIONS,
-            Self::SpecOnly { .. } => &VERIFY_ONLY_POSITIONS
+            Self::SpecOnly { .. } => &VERIFY_ONLY_POSITIONS,
         }
     }
 
@@ -948,60 +952,111 @@ impl AstDebug for ExpectedFailure {
 impl AstDebug for VerificationAttribute {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
-            VerificationAttribute::Spec { focus, prove, skip, target, no_opaque, ignore_abort, boogie_opt, timeout } => {
+            VerificationAttribute::Spec {
+                focus,
+                prove,
+                skip,
+                target,
+                no_opaque,
+                ignore_abort,
+                boogie_opt,
+                timeout,
+            } => {
                 w.write("spec(");
                 let mut first = true;
                 if *focus {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write("focus");
                     first = false;
                 }
                 if *prove {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write("prove");
                     first = false;
                 }
                 if skip.is_some() {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write(format!("skip({})", skip.clone().unwrap()));
                     first = false;
                 }
                 if let Some(target) = target {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write(format!("target = {}", target));
                     first = false;
                 }
                 if *no_opaque {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write("no_opaque");
                     first = false;
                 }
                 if *ignore_abort {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write(format!("ignore_abort = {}", ignore_abort));
                 }
                 if boogie_opt.is_some() {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write(format!("boogie_opt({})", boogie_opt.clone().unwrap()));
                 }
                 if timeout.is_some() {
-                    if !first { w.write(", "); }
+                    if !first {
+                        w.write(", ");
+                    }
                     w.write(format!("timeout({})", timeout.unwrap()));
                 }
                 w.write(")");
             }
-            VerificationAttribute::SpecOnly { inv_target, loop_inv } => {
+            VerificationAttribute::SpecOnly {
+                inv_target,
+                loop_inv,
+                explicit_specs,
+                explicit_spec_modules,
+            } => {
                 let li = if let Some(loop_inv) = loop_inv {
-                    format!("loop_inv(target={}, label={})", loop_inv.target.to_string(), loop_inv.label)
+                    format!(
+                        "loop_inv(target={}, label={})",
+                        loop_inv.target.to_string(),
+                        loop_inv.label
+                    )
                 } else {
                     "".to_string()
                 };
 
                 if inv_target.is_some() {
-                    w.write(format!("spec_only({li} inv_target={})", inv_target.clone().unwrap()));
+                    w.write(format!(
+                        "spec_only({li} inv_target={})",
+                        inv_target.clone().unwrap()
+                    ));
                 } else {
                     w.write(format!("spec_only({li})"));
-                } 
+                }
+                if !explicit_specs.is_empty() {
+                    w.write(" explicit_specs(");
+                    w.comma(explicit_specs, |w, spec| {
+                        spec.ast_debug(w);
+                    });
+                    w.write(")");
+                }
+                if !explicit_spec_modules.is_empty() {
+                    w.write(" explicit_spec_modules(");
+                    w.comma(explicit_spec_modules, |w, spec_module| {
+                        w.write(spec_module.value.module.to_string());
+                    });
+                    w.write(")");
+                }
             }
         }
     }

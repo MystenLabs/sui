@@ -23,8 +23,8 @@ use crate::{
     },
     shared::{
         ide::{AutocompleteMethod, IDEAnnotation, IDEInfo},
-        known_attributes::{TestingAttribute, ModeAttribute},
-        matching::{new_match_var_name, MatchContext},
+        known_attributes::{ModeAttribute, TestingAttribute},
+        matching::{MatchContext, new_match_var_name},
         program_info::*,
         stdlib_definitions::StdlibName,
         string_utils::{debug_print, format_oxford_list},

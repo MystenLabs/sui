@@ -571,9 +571,11 @@ impl Attributes {
         modes.contains_(&ModeAttribute::TEST.into())
     }
 
-     pub fn is_spec_or_spec_only(&self) -> bool {
-        self.get_(&known_attributes::AttributeKind_::Spec).is_some() || 
-        self.get_(&known_attributes::AttributeKind_::SpecOnly).is_some() 
+    pub fn is_spec_or_spec_only(&self) -> bool {
+        self.get_(&known_attributes::AttributeKind_::Spec).is_some()
+            || self
+                .get_(&known_attributes::AttributeKind_::SpecOnly)
+                .is_some()
     }
 }
 

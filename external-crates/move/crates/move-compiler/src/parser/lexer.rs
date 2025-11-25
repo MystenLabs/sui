@@ -93,7 +93,7 @@ pub enum Tok {
     MinusGreater,
     For,
     Invariant,
-    Spec
+    Spec,
 }
 
 impl fmt::Display for Tok {
@@ -176,7 +176,7 @@ impl fmt::Display for Tok {
             MinusGreater => "->",
             For => "for",
             Invariant => "invariant",
-            Spec => "spec"
+            Spec => "spec",
         };
         fmt::Display::fmt(s, formatter)
     }

@@ -4,9 +4,12 @@
 use crate::{
     parser::{
         ast::{self as P},
-        filter::{filter_program, FilterContext},
+        filter::{FilterContext, filter_program},
     },
-    shared::{known_attributes::{ModeAttribute, VerificationAttribute}, CompilationEnv},
+    shared::{
+        CompilationEnv,
+        known_attributes::{ModeAttribute, VerificationAttribute},
+    },
 };
 
 use move_symbol_pool::Symbol;
@@ -56,7 +59,8 @@ impl FilterContext for Context<'_> {
         let mut allowed_modes = self.env.modes().clone();
 
         // ADDON FOR SPECS. EXPERIMENTAL
-        if self.env.verify_mode() { // modes contains VERIFY_ONLY
+        if self.env.verify_mode() {
+            // modes contains VERIFY_ONLY
             allowed_modes.insert(VerificationAttribute::SPEC.into());
             allowed_modes.insert(VerificationAttribute::SPEC_ONLY.into());
             allowed_modes.insert(ModeAttribute::TEST_ONLY.into());
