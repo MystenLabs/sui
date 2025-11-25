@@ -76,9 +76,11 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -90,9 +92,11 @@ validator_configs:
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -104,6 +108,7 @@ validator_configs:
       Unknown:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -238,9 +243,11 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -252,9 +259,11 @@ validator_configs:
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -266,6 +275,7 @@ validator_configs:
       Unknown:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -400,9 +410,11 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -414,9 +426,11 @@ validator_configs:
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -428,6 +442,7 @@ validator_configs:
       Unknown:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -562,9 +577,11 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -576,9 +593,11 @@ validator_configs:
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -590,6 +609,7 @@ validator_configs:
       Unknown:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -724,9 +744,11 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -738,9 +760,11 @@ validator_configs:
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -752,6 +776,7 @@ validator_configs:
       Unknown:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -886,9 +911,11 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -900,9 +927,11 @@ validator_configs:
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -914,6 +943,7 @@ validator_configs:
       Unknown:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
@@ -1048,9 +1078,11 @@ validator_configs:
       Mainnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -1062,9 +1094,11 @@ validator_configs:
       Testnet:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
+        - EveFrontier
         - Facebook
         - FanTV
         - Google
@@ -1076,6 +1110,7 @@ validator_configs:
       Unknown:
         - Apple
         - Arden
+        - "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz"
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3

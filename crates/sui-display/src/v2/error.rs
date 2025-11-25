@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+use std::fmt;
 use std::mem;
 use std::sync::Arc;
-use std::{collections::BTreeSet, fmt};
 
-use move_core_types::{annotated_visitor, language_storage::TypeTag};
+use move_core_types::annotated_visitor;
+use move_core_types::language_storage::TypeTag;
 
-use super::lexer::{Lexeme, OwnedLexeme, Token};
-use super::peek::Peekable2Ext;
+use crate::v2::lexer::Lexeme;
+use crate::v2::lexer::OwnedLexeme;
+use crate::v2::lexer::Token;
+use crate::v2::peek::Peekable2Ext;
 
 /// Errors related to the display format as a whole.
 ///

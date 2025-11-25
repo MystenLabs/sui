@@ -116,7 +116,6 @@ pub(crate) struct NodeMetrics {
     pub(crate) block_timestamp_drift_ms: IntCounterVec,
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) blocks_pruned_on_commit: IntCounterVec,
-    pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
     pub(crate) commit_observer_last_recovered_commit_index: IntGauge,
     pub(crate) core_add_blocks_batch_size: Histogram,
     pub(crate) core_check_block_refs_batch_size: Histogram,
@@ -326,12 +325,6 @@ impl NodeMetrics {
                 "blocks_pruned_on_commit",
                 "Number of blocks that got pruned due to garbage collection during a commit. This is not an accurate metric and measures the pruned blocks on the edge of the commit.",
                 &["authority", "commit_status"],
-                registry,
-            ).unwrap(),
-            broadcaster_rtt_estimate_ms: register_int_gauge_vec_with_registry!(
-                "broadcaster_rtt_estimate_ms",
-                "Estimated RTT latency per peer authority, for block sending in Broadcaster",
-                &["peer"],
                 registry,
             ).unwrap(),
             commit_observer_last_recovered_commit_index: register_int_gauge_with_registry!(

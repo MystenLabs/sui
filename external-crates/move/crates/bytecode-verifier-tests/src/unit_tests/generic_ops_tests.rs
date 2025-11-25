@@ -7,6 +7,7 @@ use move_bytecode_verifier::InstructionConsistency;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
+use move_vm_config::verifier::VerifierConfig;
 
 // Make a Module with 2 structs and 2 resources with one field each, and 2 functions.
 // One of the struct/resource and one of the function is generic, the other "normal".
@@ -208,7 +209,7 @@ fn generic_call_to_non_generic_func() {
         type_parameters: SignatureIndex(2),
     });
     module.signatures.push(Signature(vec![SignatureToken::U64]));
-    let err = InstructionConsistency::verify_module(&module)
+    let err = InstructionConsistency::verify_module(&VerifierConfig::default(), &module)
         .expect_err("CallGeneric to non generic function must fail");
     assert_eq!(
         err.major_status(),
@@ -225,7 +226,7 @@ fn non_generic_call_to_generic_func() {
         code: vec![Bytecode::Call(FunctionHandleIndex(1)), Bytecode::Ret],
         jump_tables: vec![],
     });
-    let err = InstructionConsistency::verify_module(&module)
+    let err = InstructionConsistency::verify_module(&VerifierConfig::default(), &module)
         .expect_err("Call to generic function must fail");
     assert_eq!(
         err.major_status(),
@@ -254,7 +255,7 @@ fn generic_pack_on_non_generic_struct() {
             type_parameters: SignatureIndex(2),
         });
     module.signatures.push(Signature(vec![SignatureToken::U64]));
-    let err = InstructionConsistency::verify_module(&module)
+    let err = InstructionConsistency::verify_module(&VerifierConfig::default(), &module)
         .expect_err("PackGeneric to non generic struct must fail");
     assert_eq!(
         err.major_status(),
@@ -276,7 +277,7 @@ fn non_generic_pack_on_generic_struct() {
         ],
         jump_tables: vec![],
     });
-    let err = InstructionConsistency::verify_module(&module)
+    let err = InstructionConsistency::verify_module(&VerifierConfig::default(), &module)
         .expect_err("Pack to generic struct must fail");
     assert_eq!(
         err.major_status(),
@@ -306,7 +307,7 @@ fn generic_unpack_on_non_generic_struct() {
             type_parameters: SignatureIndex(2),
         });
     module.signatures.push(Signature(vec![SignatureToken::U64]));
-    let err = InstructionConsistency::verify_module(&module)
+    let err = InstructionConsistency::verify_module(&VerifierConfig::default(), &module)
         .expect_err("UnpackGeneric to non generic struct must fail");
     assert_eq!(
         err.major_status(),
@@ -336,7 +337,7 @@ fn non_generic_unpack_on_generic_struct() {
             type_parameters: SignatureIndex(2),
         });
     module.signatures.push(Signature(vec![SignatureToken::U64]));
-    let err = InstructionConsistency::verify_module(&module)
+    let err = InstructionConsistency::verify_module(&VerifierConfig::default(), &module)
         .expect_err("Unpack to generic struct must fail");
     assert_eq!(
         err.major_status(),
@@ -368,7 +369,7 @@ fn generic_mut_borrow_field_on_non_generic_struct() {
         field: 0,
     });
     module.signatures.push(Signature(vec![SignatureToken::U64]));
-    let err = InstructionConsistency::verify_module(&module)
+    let err = InstructionConsistency::verify_module(&VerifierConfig::default(), &module)
         .expect_err("MutBorrowFieldGeneric to non generic struct must fail");
     assert_eq!(
         err.major_status(),
@@ -402,7 +403,7 @@ fn non_generic_mut_borrow_field_on_generic_struct() {
         field: 0,
     });
     module.signatures.push(Signature(vec![SignatureToken::U64]));
-    let err = InstructionConsistency::verify_module(&module)
+    let err = InstructionConsistency::verify_module(&VerifierConfig::default(), &module)
         .expect_err("MutBorrowField to generic struct must fail");
     assert_eq!(
         err.major_status(),
@@ -434,7 +435,7 @@ fn generic_borrow_field_on_non_generic_struct() {
         field: 0,
     });
     module.signatures.push(Signature(vec![SignatureToken::U64]));
-    let err = InstructionConsistency::verify_module(&module)
+    let err = InstructionConsistency::verify_module(&VerifierConfig::default(), &module)
         .expect_err("ImmBorrowFieldGeneric to non generic struct must fail");
     assert_eq!(
         err.major_status(),
@@ -468,7 +469,7 @@ fn non_generic_borrow_field_on_generic_struct() {
         field: 0,
     });
     module.signatures.push(Signature(vec![SignatureToken::U64]));
-    let err = InstructionConsistency::verify_module(&module)
+    let err = InstructionConsistency::verify_module(&VerifierConfig::default(), &module)
         .expect_err("ImmBorrowField to generic struct must fail");
     assert_eq!(
         err.major_status(),

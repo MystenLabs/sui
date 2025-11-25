@@ -7,7 +7,6 @@ use std::fs::File;
 use std::io::BufReader;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use anyhow::anyhow;
 use clap::Parser;
@@ -17,11 +16,10 @@ use serde_json::{Value, json};
 use sui_config::{SUI_KEYSTORE_FILENAME, sui_config_dir};
 use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
-use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_rpc::client::Client as GrpcClient;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{KeypairTraits, SuiKeyPair, ToFromBytes};
 use tracing::info;
-use tracing::log::warn;
 
 #[derive(Parser)]
 #[clap(name = "sui-rosetta", rename_all = "kebab-case", author, version)]
@@ -129,28 +127,15 @@ impl RosettaServerCommand {
                 info!(
                     "Starting Rosetta Online Server with remote Sui full node [{full_node_url}]."
                 );
-                let sui_client = wait_for_sui_client(full_node_url).await;
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
-                let rosetta = RosettaOnlineServer::new(env, sui_client);
+                let client = GrpcClient::new(&full_node_url)
+                    .map_err(|e| anyhow::anyhow!("Failed to create gRPC client: {}", e))?;
+                let rosetta = RosettaOnlineServer::new(env, client);
                 rosetta.serve(addr).await;
             }
         };
         Ok(())
-    }
-}
-
-async fn wait_for_sui_client(rpc_address: String) -> SuiClient {
-    loop {
-        match SuiClientBuilder::default().build(&rpc_address).await {
-            Ok(client) => return client,
-            Err(e) => {
-                warn!(
-                    "Error connecting to Sui RPC server [{rpc_address}]: {e}, retrying in 5 seconds."
-                );
-                tokio::time::sleep(Duration::from_millis(5000)).await;
-            }
-        }
     }
 }
 

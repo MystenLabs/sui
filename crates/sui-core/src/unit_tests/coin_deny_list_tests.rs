@@ -10,7 +10,7 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use std::sync::Arc;
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
-use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr};
 use sui_types::crypto::{AccountKeyPair, get_account_key_pair};
 use sui_types::deny_list_v1::{CoinDenyCap, RegulatedCoinMetadata};
@@ -215,16 +215,46 @@ async fn test_regulated_coin_v2_types() {
 // using the funds withdrawal argument in programmable transactions.
 #[tokio::test]
 async fn test_regulated_coin_v2_funds_withdraw_deny() {
+    telemetry_subscribers::init_for_testing();
     let env = new_authority_and_publish("coin_deny_list_v2").await;
 
     let metadata = env.extract_v2_metadata().await;
     let regulated_coin_type = metadata.regulated_coin_type();
     let deny_list_object_init_version = env.get_latest_object_ref(&SUI_DENY_LIST_OBJECT_ID).await.1;
-    let env_gas_ref = env.get_latest_object_ref(&env.gas_object_id).await;
+    let mut env_gas_ref = env.get_latest_object_ref(&env.gas_object_id).await;
     let deny_cap_ref = env.get_latest_object_ref(&metadata.deny_cap_id).await;
 
     // Create a new account that will be denied for the regulated coin.
     let (denied_address, denied_keypair) = get_account_key_pair();
+
+    env.authority
+        .settle_transactions_for_testing(0, std::slice::from_ref(&env.publish_effects))
+        .await;
+
+    {
+        // Fund the denied address
+        let tx = TestTransactionBuilder::new(
+            env.sender,
+            env_gas_ref,
+            env.authority.reference_gas_price_for_testing().unwrap(),
+        )
+        .transfer_funds_to_address_balance(
+            FundSource::address_fund(),
+            vec![(100_000_000, denied_address)],
+            regulated_coin_type.clone(),
+        )
+        .build_and_sign(&env.keypair);
+        let effects = send_and_confirm_transaction_(&env.authority, None, tx, true)
+            .await
+            .unwrap()
+            .1;
+        assert!(effects.status().is_ok(), "Funding should succeed");
+        env_gas_ref = effects.gas_object().0;
+
+        env.authority
+            .settle_transactions_for_testing(1, std::slice::from_ref(&effects))
+            .await;
+    }
 
     // Add the denied address to the regulated coin deny list.
     let add_tx = TestTransactionBuilder::new(
@@ -392,6 +422,7 @@ async fn new_authority_and_publish(path: &str) -> TestEnv {
 
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config.enable_accumulators_for_testing();
     protocol_config
         .set_per_object_congestion_control_mode_for_testing(PerObjectCongestionControlMode::None);
 

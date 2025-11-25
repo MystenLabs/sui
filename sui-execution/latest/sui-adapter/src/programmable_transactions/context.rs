@@ -45,6 +45,7 @@ mod checked {
     };
     use move_vm_types::loaded_data::runtime_types::Type;
     use mysten_common::debug_fatal;
+    use nonempty::nonempty;
     use std::{
         borrow::Borrow,
         cell::RefCell,
@@ -1551,7 +1552,7 @@ mod checked {
                             );
                         };
                         let digest = event.digest();
-                        AccumulatorValue::EventDigest(event_idx, digest)
+                        AccumulatorValue::EventDigest(nonempty![(event_idx, digest)])
                     }
                 };
 

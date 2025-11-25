@@ -113,6 +113,8 @@ pub(crate) struct ObjectRuntimeState {
     // is correct.
     settlement_input_sui: u64,
     settlement_output_sui: u64,
+    accumulator_merge_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
+    accumulator_split_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
 }
 
 #[derive(Tid)]
@@ -200,6 +202,8 @@ impl<'a> ObjectRuntime<'a> {
                 received: IndexMap::new(),
                 settlement_input_sui: 0,
                 settlement_output_sui: 0,
+                accumulator_merge_totals: BTreeMap::new(),
+                accumulator_split_totals: BTreeMap::new(),
             },
             is_metered,
             protocol_config,
@@ -371,6 +375,47 @@ impl<'a> ObjectRuntime<'a> {
         target_ty: TypeTag,
         value: MoveAccumulatorValue,
     ) -> PartialVMResult<()> {
+        if let MoveAccumulatorValue::U64(amount) = value {
+            let key = (target_addr, target_ty.clone());
+
+            match action {
+                MoveAccumulatorAction::Merge => {
+                    let current = self
+                        .state
+                        .accumulator_merge_totals
+                        .get(&key)
+                        .copied()
+                        .unwrap_or(0);
+                    let new_total = current + amount as u128;
+                    if new_total > u64::MAX as u128 {
+                        return Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
+                            .with_message(format!(
+                                "accumulator merge overflow: total merges {} exceed u64::MAX",
+                                new_total
+                            )));
+                    }
+                    self.state.accumulator_merge_totals.insert(key, new_total);
+                }
+                MoveAccumulatorAction::Split => {
+                    let current = self
+                        .state
+                        .accumulator_split_totals
+                        .get(&key)
+                        .copied()
+                        .unwrap_or(0);
+                    let new_total = current + amount as u128;
+                    if new_total > u64::MAX as u128 {
+                        return Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
+                            .with_message(format!(
+                                "accumulator split overflow: total splits {} exceed u64::MAX",
+                                new_total
+                            )));
+                    }
+                    self.state.accumulator_split_totals.insert(key, new_total);
+                }
+            }
+        }
+
         let event = MoveAccumulatorEvent {
             accumulator_id,
             action,
@@ -641,6 +686,8 @@ impl ObjectRuntimeState {
             accumulator_events,
             settlement_input_sui,
             settlement_output_sui,
+            accumulator_merge_totals: _,
+            accumulator_split_totals: _,
         } = self;
 
         // The set of new ids is a subset of the generated ids.

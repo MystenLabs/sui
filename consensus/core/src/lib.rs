@@ -9,7 +9,6 @@ mod base_committer;
 mod block;
 mod block_manager;
 mod block_verifier;
-mod broadcaster;
 mod commit;
 mod commit_consumer;
 mod commit_finalizer;
@@ -61,10 +60,6 @@ pub use commit::{CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef, C
 pub use commit_consumer::{CommitConsumerArgs, CommitConsumerMonitor};
 pub use context::Clock;
 pub use metrics::Metrics;
-pub use network::{
-    connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle, ConnectionStatus},
-    metrics::{MetricsMakeCallbackHandler, NetworkRouteMetrics, QuinnConnectionMetrics},
-};
 pub use transaction::{
     BlockStatus, ClientError, TransactionClient, TransactionVerifier, ValidationError,
 };

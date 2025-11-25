@@ -2608,19 +2608,22 @@ impl AuthorityPerEpochStore {
     pub async fn transactions_executed_in_checkpoint_notify(
         &self,
         digests: Vec<TransactionDigest>,
-    ) -> Result<(), SuiError> {
-        let registrations = self
+    ) -> Result<Vec<CheckpointSequenceNumber>, SuiError> {
+        let tables = self.tables()?;
+
+        Ok(self
             .executed_transactions_to_checkpoint_notify_read
-            .register_all(&digests);
-
-        let unprocessed_keys_registrations = registrations
-            .into_iter()
-            .zip(self.transactions_executed_in_checkpoint(digests.into_iter())?)
-            .filter(|(_, processed)| !*processed)
-            .map(|(registration, _)| registration);
-
-        join_all(unprocessed_keys_registrations).await;
-        Ok(())
+            .read(
+                "transactions_executed_in_checkpoint_notify",
+                &digests,
+                |digests| {
+                    tables
+                        .executed_transactions_to_checkpoint
+                        .multi_get(digests)
+                        .expect("db error")
+                },
+            )
+            .await)
     }
 
     pub fn has_received_end_of_publish_from(&self, authority: &AuthorityName) -> bool {

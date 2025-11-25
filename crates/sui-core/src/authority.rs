@@ -2,6 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulators::AccumulatorSettlementTxBuilder;
+use crate::accumulators::balance_read::AccountBalanceRead;
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
@@ -388,7 +390,7 @@ const GAS_LATENCY_RATIO_BUCKETS: &[f64] = &[
     3000.0, 4000.0, 5000.0, 6000.0, 7000.0, 8000.0, 9000.0, 10000.0, 50000.0, 100000.0, 1000000.0,
 ];
 
-pub const DEV_INSPECT_GAS_COIN_VALUE: u64 = 1_000_000_000_000_000;
+pub const DEV_INSPECT_GAS_COIN_VALUE: u64 = 1_000_000_000_000_000_000;
 
 // Transaction author should have observed the input objects as finalized output,
 // so usually the wait does not need to be long.
@@ -1024,6 +1026,12 @@ impl AuthorityState {
             self.get_backing_package_store().as_ref(),
         )?;
 
+        let withdraws = tx_data.process_funds_withdrawals_for_signing()?;
+
+        self.execution_cache_trait_pointers
+            .child_object_resolver
+            .check_balances_available(&withdraws)?;
+
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             Some(tx_digest),
             &input_object_kinds,
@@ -1241,6 +1249,17 @@ impl AuthorityState {
             return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
         }
 
+        // Accept executed transactions, instead of voting to reject them.
+        // Execution is limited to the current epoch. Otherwise there can be a race where
+        // the transaction is accepted but the executed effects are pruned.
+        if let Some(effects) = self
+            .get_transaction_cache_reader()
+            .get_executed_effects(transaction.digest())
+            && effects.executed_epoch() == epoch_store.epoch()
+        {
+            return Ok(());
+        }
+
         let result =
             self.handle_transaction_impl(transaction, false /* sign */, epoch_store)?;
         assert!(
@@ -1269,6 +1288,8 @@ impl AuthorityState {
         {
             return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
         }
+
+        transaction.validity_check(&epoch_store.tx_validity_check_context())?;
 
         let checked_input_objects =
             self.handle_transaction_deny_checks(transaction, epoch_store)?;
@@ -2101,10 +2122,14 @@ impl AuthorityState {
                     error!("Error dumping state for transaction {}: {e}", tx_digest);
                 }
             }
+            let expected_effects = self
+                .get_transaction_cache_reader()
+                .get_effects(&expected_effects_digest);
             error!(
                 ?tx_digest,
                 ?expected_effects_digest,
                 actual_effects = ?effects,
+                expected_effects = ?expected_effects,
                 "fork detected!"
             );
             if let Err(e) = self.checkpoint_store.record_transaction_fork_detected(
@@ -3889,6 +3914,66 @@ impl AuthorityState {
         // see also assert in AuthorityState::process_certificate
         // on the epoch store and execution lock epoch match
         Ok(new_epoch_store)
+    }
+
+    pub async fn settle_transactions_for_testing(
+        &self,
+        ckpt_seq: CheckpointSequenceNumber,
+        effects: &[TransactionEffects],
+    ) {
+        let builder = AccumulatorSettlementTxBuilder::new(
+            Some(self.get_transaction_cache_reader().as_ref()),
+            effects,
+            ckpt_seq,
+            0,
+        );
+        let epoch_store = self.epoch_store_for_testing();
+        let epoch = epoch_store.epoch();
+        let (settlements, barrier) = builder.build_tx(
+            epoch_store.protocol_config(),
+            epoch,
+            epoch_store
+                .epoch_start_config()
+                .accumulator_root_obj_initial_shared_version()
+                .unwrap(),
+            ckpt_seq,
+            ckpt_seq,
+        );
+
+        let mut settlements: Vec<_> = settlements
+            .into_iter()
+            .map(|tx| {
+                VerifiedExecutableTransaction::new_system(
+                    VerifiedTransaction::new_system_transaction(tx),
+                    epoch,
+                )
+            })
+            .collect();
+        let barrier = VerifiedExecutableTransaction::new_system(
+            VerifiedTransaction::new_system_transaction(barrier),
+            epoch,
+        );
+
+        settlements.push(barrier);
+
+        let assigned_versions = epoch_store
+            .assign_shared_object_versions_for_tests(
+                self.get_object_cache_reader().as_ref(),
+                &settlements,
+            )
+            .unwrap();
+
+        let version_map = assigned_versions.into_map();
+
+        for tx in settlements {
+            let env = ExecutionEnv::new()
+                .with_assigned_versions(version_map.get(&tx.key()).unwrap().clone());
+            let (effects, _) = self
+                .try_execute_immediately(&tx, env, &epoch_store)
+                .await
+                .unwrap();
+            assert!(effects.status().is_ok());
+        }
     }
 
     /// Advance the epoch store to the next epoch for testing only.

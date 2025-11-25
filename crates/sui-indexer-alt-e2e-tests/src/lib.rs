@@ -23,9 +23,14 @@ use sui_indexer_alt_consistent_store::{
     args::RpcArgs as ConsistentArgs, args::TlsArgs as ConsistentTlsArgs,
     config::ServiceConfig as ConsistentConfig, start_service as start_consistent_store,
 };
-use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs, postgres::schema::watermarks};
+use sui_indexer_alt_framework::{
+    IndexerArgs,
+    ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
+    postgres::schema::watermarks,
+};
 use sui_indexer_alt_graphql::{
-    RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
+    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, config::RpcConfig as GraphQlConfig,
+    start_rpc as start_graphql,
 };
 use sui_indexer_alt_jsonrpc::{
     NodeArgs as JsonRpcNodeArgs, RpcArgs as JsonRpcArgs, config::RpcConfig as JsonRpcConfig,
@@ -410,10 +415,9 @@ impl OffchainCluster {
 
         let graphql = start_graphql(
             Some(database_url.clone()),
-            None,
             fullnode_args,
             DbArgs::default(),
-            BigtableArgs::default(),
+            GraphQlKvArgs::default(),
             consistent_reader_args,
             graphql_args,
             SystemPackageTaskArgs::default(),
@@ -693,11 +697,11 @@ pub fn local_ingestion_client_args() -> (ClientArgs, TempDir) {
         .context("Failed to create data ingestion path")
         .unwrap();
     let client_args = ClientArgs {
-        local_ingestion_path: Some(temp_dir.path().to_owned()),
-        remote_store_url: None,
-        rpc_api_url: None,
-        rpc_username: None,
-        rpc_password: None,
+        ingestion: IngestionClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            ..Default::default()
+        },
+        ..Default::default()
     };
     (client_args, temp_dir)
 }

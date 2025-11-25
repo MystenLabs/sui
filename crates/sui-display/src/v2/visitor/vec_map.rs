@@ -6,10 +6,13 @@ use move_core_types::annotated_visitor as AV;
 use move_core_types::language_storage::StructTag;
 use move_core_types::u256::U256;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use sui_types::base_types::{VEC_MAP_ENTRY_STRUCT_NAME, VEC_MAP_MODULE_NAME, VEC_MAP_STRUCT_NAME};
+use sui_types::base_types::VEC_MAP_ENTRY_STRUCT_NAME;
+use sui_types::base_types::VEC_MAP_MODULE_NAME;
+use sui_types::base_types::VEC_MAP_STRUCT_NAME;
 
 use crate::v2::error::FormatError;
-use crate::v2::value::{Accessor, Value};
+use crate::v2::value::Accessor;
+use crate::v2::value::Value;
 use crate::v2::visitor::extractor::Extractor;
 
 /// A visitor that looks for a specific key in a `0x2::vec_map::VecMap<_, _>` and continues

@@ -902,6 +902,14 @@ impl SuiError {
 }
 
 impl SuiErrorKind {
+    /// Returns the variant name of the error. Sub-variants within UserInputError are unpacked too.
+    pub fn to_variant_name(&self) -> &'static str {
+        match &self {
+            SuiErrorKind::UserInputError { error } => error.into(),
+            _ => self.into(),
+        }
+    }
+
     pub fn individual_error_indicates_epoch_change(&self) -> bool {
         matches!(
             self,

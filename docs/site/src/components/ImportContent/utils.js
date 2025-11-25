@@ -310,7 +310,7 @@ exports.returnFunctions = (source, functions, language, sig) => {
         ),
         // C) class method
         new RegExp(
-          String.raw`^(\s*)(?:(?:public|private|protected)\s+)?(?:static\s+)?(?:async\s+)?${escapeRegex(fn)}\s*$begin:math:text$[^)]*$end:math:text$\s*\{`,
+          String.raw`^(\s*)(?:(?:public|private|protected)\s+)?(?:static\s+)?(?:async\s+)?${escapeRegex(fn)}\s*\([\s\S]*?\)\s*\{`,
           "m",
         ),
         // D) class field arrow, allowing curried arrows before body

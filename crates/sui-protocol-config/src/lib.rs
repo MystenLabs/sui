@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 102;
+const MAX_PROTOCOL_VERSION: u64 = 104;
 
 // Record history of protocol version allocations here:
 //
@@ -275,6 +275,8 @@ const MAX_PROTOCOL_VERSION: u64 = 102;
 // Version 100: Framework update
 // Version 101: Framework update
 //              Set max updates per settlement txn to 100.
+// Version 103: Framework update: internal Coin methods
+// Version 104: Framework update: CoinRegistry follow up for Coin methods
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -879,6 +881,10 @@ struct FeatureFlags {
     // DO NOT ENABLE outside of the transaction test runner.
     #[serde(skip_serializing_if = "is_false")]
     enable_non_exclusive_writes: bool,
+
+    // If true, deprecate global storage ops everywhere.
+    #[serde(skip_serializing_if = "is_false")]
+    deprecate_global_storage_ops: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1733,10 +1739,6 @@ pub struct ProtocolConfig {
     /// checking.
     translation_per_reference_node_charge: Option<u64>,
 
-    /// The metering step resolution for translation costs. This is the granularity at which we
-    /// step up the metering for translation costs.
-    translation_metering_step_resolution: Option<u64>,
-
     /// The multiplier for each linkage entry when charging for linkage tables that we have
     /// created.
     translation_per_linkage_entry_charge: Option<u64>,
@@ -2281,21 +2283,7 @@ impl ProtocolConfig {
     }
 
     pub fn enable_ptb_execution_v2(&self) -> bool {
-        let enabled = self.feature_flags.enable_ptb_execution_v2;
-        // PTB execution v2 requires gas model version > 10 and the translation charges to be set.
-        if enabled {
-            debug_assert!(self.translation_per_command_base_charge.is_some());
-            debug_assert!(self.translation_per_input_base_charge.is_some());
-            debug_assert!(self.translation_pure_input_per_byte_charge.is_some());
-            debug_assert!(self.translation_per_type_node_charge.is_some());
-            debug_assert!(self.translation_per_reference_node_charge.is_some());
-            debug_assert!(self.translation_metering_step_resolution.is_some());
-            debug_assert!(self.translation_per_linkage_entry_charge.is_some());
-            debug_assert!(self.feature_flags.abstract_size_in_object_runtime);
-            debug_assert!(self.feature_flags.object_runtime_charge_cache_load_gas);
-            debug_assert!(self.gas_model_version.is_some_and(|version| version > 10));
-        }
-        enabled
+        self.feature_flags.enable_ptb_execution_v2
     }
 
     pub fn better_adapter_type_resolution_errors(&self) -> bool {
@@ -2400,6 +2388,10 @@ impl ProtocolConfig {
             PerObjectCongestionControlMode::ExecutionTimeEstimate(ref params)
                 if params.observations_chunk_size.is_some()
         )
+    }
+
+    pub fn deprecate_global_storage_ops(&self) -> bool {
+        self.feature_flags.deprecate_global_storage_ops
     }
 }
 
@@ -2971,7 +2963,6 @@ impl ProtocolConfig {
             translation_pure_input_per_byte_charge: None,
             translation_per_type_node_charge: None,
             translation_per_reference_node_charge: None,
-            translation_metering_step_resolution: None,
             translation_per_linkage_entry_charge: None,
 
             max_updates_per_settlement_txn: None,
@@ -4255,6 +4246,23 @@ impl ProtocolConfig {
                                 observations_chunk_size: Some(18),
                             },
                         );
+                    cfg.feature_flags.deprecate_global_storage_ops = true;
+                }
+                103 => {}
+                104 => {
+                    cfg.translation_per_command_base_charge = Some(1);
+                    cfg.translation_per_input_base_charge = Some(1);
+                    cfg.translation_pure_input_per_byte_charge = Some(1);
+                    cfg.translation_per_type_node_charge = Some(1);
+                    cfg.translation_per_reference_node_charge = Some(1);
+                    cfg.translation_per_linkage_entry_charge = Some(10);
+                    cfg.gas_model_version = Some(11);
+                    cfg.feature_flags.abstract_size_in_object_runtime = true;
+                    cfg.feature_flags.object_runtime_charge_cache_load_gas = true;
+                    cfg.dynamic_field_add_child_object_value_cost_per_byte = Some(1);
+                    cfg.dynamic_field_borrow_child_object_child_ref_cost_per_byte = Some(1);
+                    cfg.dynamic_field_remove_child_object_child_cost_per_byte = Some(1);
+                    cfg.feature_flags.enable_ptb_execution_v2 = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4315,6 +4323,12 @@ impl ProtocolConfig {
         } else {
             self.additional_borrow_checks()
         };
+        let deprecate_global_storage_ops = if signing_limits.is_some() {
+            // always turn on additional vector borrow checks during signing
+            true
+        } else {
+            self.deprecate_global_storage_ops()
+        };
 
         VerifierConfig {
             max_loop_depth: Some(self.max_loop_depth() as usize),
@@ -4344,6 +4358,7 @@ impl ProtocolConfig {
             private_generics_verifier_v2: self.private_generics_verifier_v2(),
             sanity_check_with_regex_reference_safety: sanity_check_with_regex_reference_safety
                 .map(|limit| limit as u128),
+            deprecate_global_storage_ops,
         }
     }
 
@@ -4351,15 +4366,15 @@ impl ProtocolConfig {
         &self,
         override_deprecate_global_storage_ops_during_deserialization: Option<bool>,
     ) -> BinaryConfig {
-        let deprecate_global_storage_ops_during_deserialization =
+        let deprecate_global_storage_ops =
             override_deprecate_global_storage_ops_during_deserialization
-                .unwrap_or_else(|| self.deprecate_global_storage_ops_during_deserialization());
+                .unwrap_or_else(|| self.deprecate_global_storage_ops());
         BinaryConfig::new(
             self.move_binary_format_version(),
             self.min_move_binary_format_version_as_option()
                 .unwrap_or(VERSION_1),
             self.no_extraneous_module_bytes(),
-            deprecate_global_storage_ops_during_deserialization,
+            deprecate_global_storage_ops,
             TableConfig {
                 module_handles: self.binary_module_handles_as_option().unwrap_or(u16::MAX),
                 datatype_handles: self.binary_struct_handles_as_option().unwrap_or(u16::MAX),
@@ -4528,29 +4543,6 @@ impl ProtocolConfig {
 
     pub fn set_consensus_batched_block_sync_for_testing(&mut self, val: bool) {
         self.feature_flags.consensus_batched_block_sync = val;
-    }
-
-    /// NB: We are setting a number of feature flags and protocol config fields here to to
-    /// facilitate testing of PTB execution v2. These feature flags and config fields should be set
-    /// with or before enabling PTB execution v2 in a real protocol upgrade.
-    pub fn set_enable_ptb_execution_v2_for_testing(&mut self, val: bool) {
-        self.feature_flags.enable_ptb_execution_v2 = val;
-        // Remove this and set these fields when we move this to be set for a specific protocol
-        // version.
-        if val {
-            self.translation_per_command_base_charge = Some(1);
-            self.translation_per_input_base_charge = Some(1);
-            self.translation_pure_input_per_byte_charge = Some(1);
-            self.translation_per_type_node_charge = Some(1);
-            self.translation_per_reference_node_charge = Some(1);
-            self.translation_metering_step_resolution = Some(1000);
-            self.translation_per_linkage_entry_charge = Some(10);
-            if self.gas_model_version.is_some_and(|version| version <= 10) {
-                self.gas_model_version = Some(11);
-            }
-            self.feature_flags.abstract_size_in_object_runtime = true;
-            self.feature_flags.object_runtime_charge_cache_load_gas = true;
-        }
     }
 
     pub fn set_record_time_estimate_processed_for_testing(&mut self, val: bool) {

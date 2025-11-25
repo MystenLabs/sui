@@ -36,6 +36,9 @@ pub async fn build_eth_transaction(
         BridgeAction::SuiToEthBridgeAction(_) => {
             unreachable!()
         }
+        BridgeAction::SuiToEthTokenTransfer(_) => {
+            unreachable!()
+        }
         BridgeAction::EthToSuiBridgeAction(_) => {
             unreachable!()
         }

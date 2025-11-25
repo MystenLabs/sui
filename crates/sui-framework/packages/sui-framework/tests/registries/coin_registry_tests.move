@@ -405,34 +405,135 @@ fun update_legacy_fail() {
     abort
 }
 
+// === Borrow Legacy CoinMetadata ===
+
+#[test]
+// Scenario:
+// 1. create a new Currency and finalize it
+// 2. borrow the legacy metadata and check the values
+// 3. mutate the legacy metadata
+// 4. return the legacy metadata back to the currency
+// 5. borrow the legacy metadata again and check the values
+fun borrow_legacy_coin_metadata() {
+    let ctx = &mut tx_context::dummy();
+    let (builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let (mut currency, metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    // Borrow the legacy metadata and check the values.
+    let (mut legacy, borrow) = currency.borrow_legacy_metadata(ctx);
+    let legacy_id = object::id(&legacy); // Ensure preservation of the object ID.
+
+    assert_eq!(legacy.get_decimals(), currency.decimals());
+    assert_eq!(legacy.get_symbol(), currency.symbol().to_ascii());
+    assert_eq!(legacy.get_name(), currency.name());
+    assert_eq!(legacy.get_description(), currency.description());
+    assert_eq!(
+        legacy.get_icon_url().destroy_or!(abort).inner_url(),
+        currency.icon_url().to_ascii(),
+    );
+
+    // mutate legacy cm
+    coin::update_name(&t_cap, &mut legacy, b"New name".to_string());
+
+    // Return and borrow once again.
+    currency.return_borrowed_legacy_metadata(legacy, borrow, ctx);
+    let (legacy, borrow) = currency.borrow_legacy_metadata(ctx);
+
+    // Change in legacy CM were wiped clean to be in sync with the currency.
+    assert_eq!(legacy.get_name(), currency.name());
+    assert_eq!(object::id(&legacy), legacy_id); // ID is preserved!
+
+    // Return it back to the currency.
+    currency.return_borrowed_legacy_metadata(legacy, borrow, ctx);
+
+    destroy(t_cap);
+    destroy(currency);
+    destroy(metadata_cap);
+}
+
+#[test, expected_failure(abort_code = coin_registry::EBorrowLegacyMetadata)]
+fun try_borrowing_from_migrated_currency_fail() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ctx);
+    let (_t_cap, legacy) = new_builder().build_legacy(COIN_REGISTRY_TESTS {}, ctx);
+    let mut currency = registry.migrate_legacy_metadata_for_testing(&legacy, ctx);
+    let (_borrowed_legacy, _borrow) = currency.borrow_legacy_metadata(ctx);
+
+    abort
+}
+
+#[test, expected_failure(abort_code = coin_registry::EDuplicateBorrow)]
+fun borrow_legacy_coin_metadata_twice() {
+    let ctx = &mut tx_context::dummy();
+    let (builder, _t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
+    let (mut currency, _metadata_cap) = builder.finalize_unwrap_for_testing(ctx);
+
+    let (legacy_1, borrow_1) = currency.borrow_legacy_metadata(ctx);
+    let (legacy_2, borrow_2) = currency.borrow_legacy_metadata(ctx);
+
+    currency.return_borrowed_legacy_metadata(legacy_1, borrow_1, ctx);
+    currency.return_borrowed_legacy_metadata(legacy_2, borrow_2, ctx);
+
+    abort
+}
+
 // === Test Scenario + Receiving ===
 
-#[test, expected_failure] // TODO: Once system address is defined, change the test
-fun receive_promote() {
-    let mut test = test_scenario::begin(@0x0);
-    let mut registry = coin_registry::create_coin_data_registry_for_testing(test.ctx());
+#[test]
+fun otw_currency_promotion() {
+    let mut test = test_scenario::begin(@0);
     let (builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, test.ctx());
     let metadata_cap = builder.finalize(test.ctx());
 
     test.next_tx(@10);
 
-    // Get Receiving<Currency<COIN_REGISTRY_TESTS>>
+    // Get Receiving<Currency<COIN_REGISTRY_TESTS>> from 0xC address
     let currency = test_scenario::most_recent_receiving_ticket<Currency<COIN_REGISTRY_TESTS>>(
         &object::sui_coin_registry_address().to_id(),
     );
 
-    registry.finalize_registration(currency, test.ctx());
+    destroy(metadata_cap);
+    destroy(currency);
+    destroy(t_cap);
+    test.end();
+}
 
-    test.next_tx(@10);
+#[test]
+fun new_currency_is_shared() {
+    let mut test = test_scenario::begin(@0);
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(test.ctx());
+    let (builder, t_cap) = new_builder().build_dynamic(&mut registry, test.ctx());
+    let metadata_cap = builder.finalize(test.ctx());
 
-    let mut currency = test.take_shared<Currency<COIN_REGISTRY_TESTS>>();
+    test.next_tx(@0);
 
-    currency.make_supply_fixed(t_cap);
+    let mut currency = test.take_shared<Currency<TestDynamic>>();
     currency.delete_metadata_cap(metadata_cap);
-
     test_scenario::return_shared(currency);
 
     destroy(registry);
+    destroy(t_cap);
+
+    test.end();
+}
+
+#[test]
+fun new_currency_is_shared_and_metadata_cap_is_deleted() {
+    let mut test = test_scenario::begin(@0);
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(test.ctx());
+    let (builder, t_cap) = new_builder().build_dynamic(&mut registry, test.ctx());
+    builder.finalize_and_delete_metadata_cap(test.ctx());
+
+    test.next_tx(@0);
+
+    let currency = test.take_shared<Currency<TestDynamic>>();
+    assert!(currency.is_metadata_cap_claimed());
+    assert!(currency.is_metadata_cap_deleted());
+    test_scenario::return_shared(currency);
+
+    destroy(registry);
+    destroy(t_cap);
+
     test.end();
 }
 

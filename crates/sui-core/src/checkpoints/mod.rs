@@ -264,17 +264,7 @@ impl CheckpointStoreTables {
             ("epoch_last_checkpoint_map", config_u64.clone()),
             (
                 "watermarks",
-                ThConfig::new_with_config(
-                    4,
-                    1,
-                    KeyType::uniform(1),
-                    apply_relocation_filter(
-                        watermarks_config.clone(),
-                        pruner_watermarks.checkpoint_id.clone(),
-                        |(watermark, _): (CheckpointSequenceNumber, CheckpointDigest)| watermark,
-                        false,
-                    ),
-                ),
+                ThConfig::new_with_config(4, 1, KeyType::uniform(1), watermarks_config.clone()),
             ),
             (
                 "transaction_fork_detected",

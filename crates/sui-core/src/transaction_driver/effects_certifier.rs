@@ -99,8 +99,13 @@ impl EffectsCertifier {
             }
         };
 
-        let mut retrier =
-            RequestRetrier::new(authority_aggregator, client_monitor, tx_type, vec![]);
+        let mut retrier = RequestRetrier::new(
+            authority_aggregator,
+            client_monitor,
+            tx_type,
+            vec![],
+            vec![],
+        );
         let ping_type = get_ping_type(&tx_digest, tx_type);
 
         // Setting this to None at first because if the full effects are already provided,
@@ -581,7 +586,8 @@ impl EffectsCertifier {
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let effects_start = Instant::now();
-        let backoff = ExponentialBackoff::new(MAX_WAIT_FOR_EFFECTS_RETRY_DELAY);
+        let backoff =
+            ExponentialBackoff::new(Duration::from_millis(100), MAX_WAIT_FOR_EFFECTS_RETRY_DELAY);
         let ping_type = raw_request.get_ping_type();
         // This loop should only retry errors that are retriable without new submission.
         for (attempt, delay) in backoff.enumerate() {

@@ -10,7 +10,7 @@ use sui_bridge_indexer_alt::handlers::token_transfer_data_handler::TokenTransfer
 use sui_bridge_indexer_alt::handlers::token_transfer_handler::TokenTransferHandler;
 use sui_bridge_indexer_alt::metrics::BridgeIndexerMetrics;
 use sui_bridge_schema::MIGRATIONS;
-use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::{ClientArgs, ingestion_client::IngestionClientArgs};
 use sui_indexer_alt_framework::postgres::DbArgs;
 use sui_indexer_alt_framework::{Indexer, IndexerArgs};
 use sui_indexer_alt_metrics::{MetricsArgs, MetricsService};
@@ -68,11 +68,11 @@ async fn main() -> Result<(), anyhow::Error> {
         db_args,
         indexer_args,
         ClientArgs {
-            remote_store_url: Some(remote_store_url),
-            local_ingestion_path: None,
-            rpc_api_url: None,
-            rpc_username: None,
-            rpc_password: None,
+            ingestion: IngestionClientArgs {
+                remote_store_url: Some(remote_store_url),
+                ..Default::default()
+            },
+            ..Default::default()
         },
         Default::default(),
         Some(&MIGRATIONS),

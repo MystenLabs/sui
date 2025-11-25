@@ -7,7 +7,9 @@ use tracing::{debug, error};
 use url::Url;
 
 use crate::ingestion::Result as IngestionResult;
-use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
+use crate::ingestion::ingestion_client::{
+    FetchData, FetchError, FetchResult, IngestionClientTrait,
+};
 
 /// Default timeout for remote checkpoint fetches.
 /// This prevents requests from hanging indefinitely due to network issues,
@@ -37,7 +39,6 @@ impl RemoteIngestionClient {
         })
     }
 
-    #[cfg(test)]
     pub fn new_with_timeout(url: Url, timeout: Duration) -> IngestionResult<Self> {
         Ok(Self {
             url,
@@ -143,10 +144,10 @@ impl IngestionClientTrait for RemoteIngestionClient {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::ingestion::client::IngestionClient;
     use crate::ingestion::error::Error;
+    use crate::ingestion::ingestion_client::IngestionClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
-    use crate::metrics::tests::test_metrics;
+    use crate::metrics::tests::test_ingestion_metrics;
     use axum::http::StatusCode;
     use std::sync::{
         Mutex,
@@ -170,7 +171,7 @@ pub(crate) mod tests {
     }
 
     fn remote_test_client(uri: String) -> IngestionClient {
-        IngestionClient::new_remote(Url::parse(&uri).unwrap(), test_metrics()).unwrap()
+        IngestionClient::new_remote(Url::parse(&uri).unwrap(), test_ingestion_metrics()).unwrap()
     }
 
     #[tokio::test]
@@ -294,7 +295,7 @@ pub(crate) mod tests {
         let ingestion_client = IngestionClient::new_remote_with_timeout(
             Url::parse(&server.uri()).unwrap(),
             Duration::from_secs(2),
-            test_metrics(),
+            test_ingestion_metrics(),
         )
         .unwrap();
 

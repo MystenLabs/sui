@@ -28,7 +28,12 @@ async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
 
     let fname = || path.file_name().unwrap().to_string_lossy().to_string();
     let file_contents = std::fs::read_to_string(path).unwrap();
-    let shlexed = shlex::split(&file_contents).unwrap();
+    let file_contents = file_contents.trim();
+    let shlexed: Vec<_> = shlex::split(file_contents)
+        .unwrap()
+        .into_iter()
+        .filter(|s| !s.trim().is_empty())
+        .collect();
     let file_contents = to_source_string(shlexed.clone());
 
     // Parsing
@@ -93,9 +98,13 @@ async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
             results.push(format!("{:?}", e));
         }
     }
+    use normalize_line_endings::normalized;
 
     // === FINALLY DO THE ASSERTION ===
-    insta::assert_snapshot!(fname(), results.join("\n"));
+    insta::assert_snapshot!(
+        fname(),
+        &String::from_iter(normalized(results.join("\n").chars()))
+    );
 
     Ok(())
 }

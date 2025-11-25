@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    fmt,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fmt;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 /// A writer that tracks an output budget (measured in bytes) shared across multiple writers.
 /// Writes will fail once the total number of bytes sent to be written, across all writers, exceeds

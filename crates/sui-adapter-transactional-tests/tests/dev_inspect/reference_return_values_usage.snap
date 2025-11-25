@@ -45,5 +45,5 @@ task 4, lines 67-73:
 //> 3: test::m::borrow_f(Result(0));
 //> test::m::check(Result(3), Input(0));
 //> test::m::delete(Result(0));
-Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 6, instruction: 7, function_name: Some("check") }, 0) in command 4
-Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 6, instruction: 7, function_name: Some("check") }, 0) in command 4
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0

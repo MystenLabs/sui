@@ -16,7 +16,7 @@ For uniqueness, each blob uploaded to Walrus also creates a corresponding [`Blob
 
 `Metadata` dynamic fields are a key-value extension that allows an on-chain object’s data to be augmented at runtime. If set, this dynamic field acts as [a mapping of key-value attribute pairs](https://docs.wal.app/usage/client-cli.html?highlight=attribute#blob-attributes). 
 
-You can use the [custom indexer framework](/concepts/custom-indexing-framework) to extend the existing functionality of Walrus.
+You can use the [custom indexer framework](/concepts/data-access/custom-indexing-framework) to extend the existing functionality of Walrus.
 
 :::info 
 
@@ -60,7 +60,7 @@ LIMIT $2;
 
 ## Custom indexer implementation
 
-This example uses a [sequential pipeline](../../../../concepts/custom-indexer/pipeline-architecture.mdx#sequential-pipeline-architecture), ensuring each checkpoint is committed once in strict order and as a single atomic operation. The sequential pipeline architecture is not required for this project, but it is a more straightforward option than implementing the concurrent architecture. You can always [scale up to the concurrent pipeline](../../../../concepts/custom-indexer/pipeline-architecture.mdx#decision-framework) if and when your project requires it.
+This example uses a [sequential pipeline](/concepts/data-access/pipeline-architecture.mdx#sequential-pipeline-architecture), ensuring each checkpoint is committed once in strict order and as a single atomic operation. The sequential pipeline architecture is not required for this project, but it is a more straightforward option than implementing the concurrent architecture. You can always [scale up to the concurrent pipeline](/concepts/data-access/pipeline-architecture.mdx#decision-framework) if and when your project requires it.
 
 This implementation tracks the latest object state at checkpoint boundary. When the `Metadata` dynamic field is created, mutated, wrapped or deleted, or unwrapped, it appears among the transaction output under the object changes. You can see an [example transaction](https://suivision.xyz/txblock/3Qcuo2FaTZL5wfdi7JzPELcmkuZm7hVfdNrkLrdkKioN?tab=Changes) on Testnet that creates the field. These dynamic fields have type `0x2::dynamic_field::Field<vector<u8>, 0xabc...123::metadata::Metadata>`.
 
@@ -72,7 +72,7 @@ This implementation tracks the latest object state at checkpoint boundary. When 
 
 ### `Processor`
 
-All pipelines implement the same [`Processor` trait](../../../../concepts/custom-indexer/pipeline-architecture.mdx#seq-processor), which defines the logic to transform a checkpoint from the ingestion task into an intermediate or final form to commit to the store. Data flows into and out of the processor, potentially out of order.
+All pipelines implement the same [`Processor` trait](/concepts/data-access/pipeline-architecture.mdx#seq-processor), which defines the logic to transform a checkpoint from the ingestion task into an intermediate or final form to commit to the store. Data flows into and out of the processor, potentially out of order.
 
 #### `process` function
 

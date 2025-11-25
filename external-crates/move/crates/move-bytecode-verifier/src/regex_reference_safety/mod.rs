@@ -24,19 +24,26 @@ use move_binary_format::{
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
+use move_vm_config::verifier::VerifierConfig;
 use std::num::NonZeroU64;
 
 use self::abstract_state::ValueKind;
 
 struct ReferenceSafetyAnalysis<'a> {
+    config: &'a VerifierConfig,
     module: &'a CompiledModule,
     function_context: &'a FunctionContext<'a>,
     stack: AbstractStack<AbstractValue>,
 }
 
 impl<'a> ReferenceSafetyAnalysis<'a> {
-    fn new(module: &'a CompiledModule, function_context: &'a FunctionContext<'a>) -> Self {
+    fn new(
+        config: &'a VerifierConfig,
+        module: &'a CompiledModule,
+        function_context: &'a FunctionContext<'a>,
+    ) -> Self {
         Self {
+            config,
             module,
             function_context,
             stack: AbstractStack::new(),
@@ -55,13 +62,14 @@ impl<'a> ReferenceSafetyAnalysis<'a> {
 }
 
 pub fn verify(
+    config: &VerifierConfig,
     module: &CompiledModule,
     function_context: &FunctionContext,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     let initial_state = AbstractState::new(function_context)?;
 
-    let mut verifier = ReferenceSafetyAnalysis::new(module, function_context);
+    let mut verifier = ReferenceSafetyAnalysis::new(config, module, function_context);
     analyze_function(function_context, meter, &mut verifier, initial_state)
 }
 
@@ -515,6 +523,7 @@ fn execute_inner(
         | Bytecode::MutBorrowGlobalGenericDeprecated(_)
         | Bytecode::ImmBorrowGlobalDeprecated(_)
         | Bytecode::ImmBorrowGlobalGenericDeprecated(_) => {
+            safe_assert!(!verifier.config.deprecate_global_storage_ops);
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Unsupported deprecated bytecode".to_string()),

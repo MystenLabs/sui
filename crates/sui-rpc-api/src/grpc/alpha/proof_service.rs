@@ -42,6 +42,7 @@ impl ProofService for ProofServiceImpl {
 fn build_ocs_inclusion_proof(
     checkpoint: &sui_types::full_checkpoint_content::Checkpoint,
     object_id: ObjectID,
+    checkpoint_seq: u64,
 ) -> Result<(OcsInclusionProof, ObjectRef), RpcError> {
     let effects_refs: Vec<&_> = checkpoint
         .transactions
@@ -57,8 +58,11 @@ fn build_ocs_inclusion_proof(
 
     let object_ref_from_checkpoint = object_states.get(&object_id).ok_or_else(|| {
         RpcError::new(
-            tonic::Code::NotFound,
-            format!("Object {} not found in checkpoint", object_id),
+            tonic::Code::FailedPrecondition,
+            format!(
+                "Object {} was not written at checkpoint {}",
+                object_id, checkpoint_seq
+            ),
         )
     })?;
 
@@ -199,7 +203,7 @@ fn get_object_inclusion_proof_impl(
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
     let (proto_inclusion_proof, object_ref) =
-        build_ocs_inclusion_proof(&checkpoint_data, object_id)?;
+        build_ocs_inclusion_proof(&checkpoint_data, object_id, checkpoint_seq)?;
 
     let object = reader
         .get_object_by_key(&object_id, object_ref.1)

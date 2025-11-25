@@ -34,6 +34,7 @@ pub struct VerifierConfig {
     pub better_loader_errors: bool,
     pub private_generics_verifier_v2: bool,
     pub sanity_check_with_regex_reference_safety: Option</* meter limit */ u128>,
+    pub deprecate_global_storage_ops: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +84,7 @@ impl Default for VerifierConfig {
             better_loader_errors: true,
             private_generics_verifier_v2: false,
             sanity_check_with_regex_reference_safety: Some(8_000_000),
+            deprecate_global_storage_ops: true,
         }
     }
 }

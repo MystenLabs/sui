@@ -59,13 +59,17 @@ use sui_indexer_alt_consistent_store::{
     args::RpcArgs as ConsistentArgs, config::ServiceConfig as ConsistentConfig,
     start_service as start_consistent_store,
 };
-use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs};
+use sui_indexer_alt_framework::{
+    IndexerArgs,
+    ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
+};
 use sui_indexer_alt_graphql::{
-    RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
+    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, config::RpcConfig as GraphQlConfig,
+    start_rpc as start_graphql,
 };
 use sui_indexer_alt_reader::{
-    bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
-    fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
+    consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs,
+    system_package_task::SystemPackageTaskArgs,
 };
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::read_key;
@@ -1085,7 +1089,10 @@ async fn start(
 
     let pipelines = if let Some(ref db_url) = database_url {
         let client_args = ClientArgs {
-            local_ingestion_path: data_ingestion_dir.clone(),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: data_ingestion_dir.clone(),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -1117,7 +1124,10 @@ async fn start(
             .context("Invalid consistent store host and port")?;
 
         let client_args = ClientArgs {
-            local_ingestion_path: data_ingestion_dir.clone(),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: data_ingestion_dir.clone(),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -1175,10 +1185,9 @@ async fn start(
 
         let handle = start_graphql(
             database_url.clone(),
-            None,
             fullnode_args,
             DbArgs::default(),
-            BigtableArgs::default(),
+            GraphQlKvArgs::default(),
             consistent_reader_args,
             graphql_args,
             SystemPackageTaskArgs::default(),
@@ -1194,6 +1203,22 @@ async fn start(
 
         info!("GraphQL started at {address}");
     }
+
+    // Update the wallet_context with the configured fullnode rpc url so client operations will
+    // succeed if a non-default port was provided.
+    let mut wallet_context = create_wallet_context(
+        FaucetConfig::default().wallet_client_timeout_secs,
+        config_dir.clone(),
+    )?;
+    if let Some(env) = wallet_context
+        .config
+        .envs
+        .iter_mut()
+        .find(|env| env.alias == "localnet")
+    {
+        env.rpc = fullnode_rpc_url.clone();
+    }
+    wallet_context.config.save()?;
 
     if let Some(input) = with_faucet {
         let faucet_address = parse_host_port(input, DEFAULT_FAUCET_PORT)
@@ -1240,11 +1265,7 @@ async fn start(
             .unwrap();
         }
 
-        let local_faucet = LocalFaucet::new(
-            create_wallet_context(config.wallet_client_timeout_secs, config_dir.clone())?,
-            config.clone(),
-        )
-        .await?;
+        let local_faucet = LocalFaucet::new(wallet_context, config.clone()).await?;
 
         let app_state = Arc::new(AppState {
             faucet: local_faucet,
@@ -1665,6 +1686,9 @@ async fn prompt_if_no_config(
             }
             .persisted(wallet_conf_path)
             .save()?;
+
+            let context = WalletContext::new(wallet_conf_path)?;
+            let _ = context.cache_chain_id(&context.get_client().await?).await?;
         }
     }
     Ok(())

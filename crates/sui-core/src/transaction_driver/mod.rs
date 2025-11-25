@@ -55,6 +55,10 @@ pub struct SubmitTransactionOptions {
     /// When submitting a transaction, only the validators in the allowed validator list can be used to submit the transaction to.
     /// When the allowed validator list is empty, any validator can be used.
     pub allowed_validators: Vec<String>,
+
+    /// When submitting a transaction, the validators in the blocked validator list cannot be used to submit the transaction to.
+    /// When the blocked validator list is empty, no restrictions are applied.
+    pub blocked_validators: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -83,6 +87,7 @@ impl<A> TransactionDriver<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    // TODO: accept a TransactionDriverConfig to set default allowed & blocked validators.
     pub fn new(
         authority_aggregator: Arc<AuthorityAggregator<A>>,
         reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
@@ -90,6 +95,12 @@ where
         node_config: Option<&NodeConfig>,
         client_metrics: Arc<ValidatorClientMetrics>,
     ) -> Arc<Self> {
+        if std::env::var("TRANSACTION_DRIVER").is_ok() {
+            tracing::warn!(
+                "Transaction Driver is the only supported driver for transaction submission. Setting TRANSACTION_DRIVER is a no-op."
+            );
+        }
+
         let shared_swap = Arc::new(ArcSwap::new(authority_aggregator));
 
         // Extract validator client monitor config from NodeConfig or use default
@@ -116,109 +127,17 @@ where
         driver
     }
 
-    // Runs a background task to send ping transactions to all validators to perform latency checks to test both the fast path and the consensus path.
-    async fn run_latency_checks(self: Arc<Self>) {
-        const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_secs(15);
-        const MAX_JITTER: Duration = Duration::from_secs(10);
-        const PING_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
-
-        let mut interval = interval(INTERVAL_BETWEEN_RUNS);
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-
-        loop {
-            interval.tick().await;
-
-            let mut tasks = JoinSet::new();
-
-            for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
-                Self::ping_for_tx_type(
-                    self.clone(),
-                    &mut tasks,
-                    tx_type,
-                    MAX_JITTER,
-                    PING_REQUEST_TIMEOUT,
-                );
-            }
-
-            while let Some(result) = tasks.join_next().await {
-                if let Err(e) = result {
-                    tracing::info!("Error while driving ping transaction: {}", e);
-                }
-            }
-        }
+    /// Returns the authority aggregator wrapper which upgrades on epoch changes.
+    pub fn authority_aggregator(&self) -> &Arc<ArcSwap<AuthorityAggregator<A>>> {
+        &self.authority_aggregator
     }
 
-    /// Pings all validators for e2e latency with the provided transaction type.
-    fn ping_for_tx_type(
-        self: Arc<Self>,
-        tasks: &mut JoinSet<()>,
-        tx_type: TxType,
-        max_jitter: Duration,
-        ping_timeout: Duration,
-    ) {
-        // We are iterating over the single writer and shared object transaction types to test both the fast path and the consensus path.
-        let auth_agg = self.authority_aggregator.load().clone();
-        let validators = auth_agg.committee.names().cloned().collect::<Vec<_>>();
-
-        self.metrics
-            .latency_check_runs
-            .with_label_values(&[tx_type.as_str()])
-            .inc();
-
-        for name in validators {
-            let display_name = auth_agg.get_display_name(&name);
-            let delay_ms = rand::thread_rng().gen_range(0..max_jitter.as_millis()) as u64;
-            let self_clone = self.clone();
-
-            let task = async move {
-                // Add some random delay to the task to avoid all tasks running at the same time
-                if delay_ms > 0 {
-                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
-                }
-                let start_time = Instant::now();
-
-                let ping_type = if tx_type == TxType::SingleWriter {
-                    PingType::FastPath
-                } else {
-                    PingType::Consensus
-                };
-
-                // Now send a ping transaction to the chosen validator for the provided tx type
-                match self_clone
-                    .drive_transaction(
-                        SubmitTxRequest::new_ping(ping_type),
-                        SubmitTransactionOptions {
-                            allowed_validators: vec![display_name.clone()],
-                            ..Default::default()
-                        },
-                        Some(ping_timeout),
-                    )
-                    .await
-                {
-                    Ok(_) => {
-                        tracing::debug!(
-                            "Ping transaction to validator {} for tx type {} completed end to end in {} seconds",
-                            display_name,
-                            tx_type.as_str(),
-                            start_time.elapsed().as_secs_f64()
-                        );
-                    }
-                    Err(err) => {
-                        tracing::info!(
-                            "Failed to get certified finalized effects for tx type {}, for ping transaction to validator {}: {}",
-                            tx_type.as_str(),
-                            display_name,
-                            err
-                        );
-                    }
-                }
-            };
-
-            tasks.spawn(task);
-        }
-    }
-
-    /// Drives transaction to submission and effects certification. Ping requests are derived from the submitted payload.
+    /// Drives transaction to finalization.
+    ///
+    /// Internally, retries the attempt to finalize a transaction until:
+    /// - The transaction is finalized.
+    /// - The transaction observes a non-retriable error.
+    /// - Timeout is reached.
     #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.as_ref().map(|t| t.digest()), ping = %request.ping_type.is_some()))]
     pub async fn drive_transaction(
         &self,
@@ -265,7 +184,10 @@ where
             .with_label_values(&[tx_type.as_str(), ping_label])
             .inc();
 
-        let mut backoff = ExponentialBackoff::new(MAX_DRIVE_TRANSACTION_RETRY_DELAY);
+        let mut backoff = ExponentialBackoff::new(
+            Duration::from_millis(100),
+            MAX_DRIVE_TRANSACTION_RETRY_DELAY,
+        );
         let mut attempts = 0;
         let mut latest_retriable_error = None;
 
@@ -304,18 +226,22 @@ where
                                 .transaction_retries
                                 .with_label_values(&["failure", tx_type.as_str(), ping_label])
                                 .observe(attempts as f64);
+                            if request.transaction.is_some() {
+                                tracing::info!(
+                                    "User transaction failed to finalize (attempt {}), with non-retriable error: {}",
+                                    attempts,
+                                    e
+                                );
+                            }
+                            return Err(e);
+                        }
+                        if request.transaction.is_some() {
                             tracing::info!(
-                                "Failed to finalize transaction with non-retriable error after {} attempts: {}",
+                                "User transaction failed to finalize (attempt {}): {}. Retrying ...",
                                 attempts,
                                 e
                             );
-                            return Err(e);
                         }
-                        tracing::info!(
-                            "Failed to finalize transaction (attempt {}): {}. Retrying ...",
-                            attempts,
-                            e
-                        );
                         // Buffer the latest retriable error to be returned in case of timeout
                         latest_retriable_error = Some(e);
                     }
@@ -350,11 +276,13 @@ where
                             attempts,
                             timeout: duration,
                         };
-                        tracing::info!(
-                            "Transaction timed out after {} attempts. Last error: {}",
-                            attempts,
-                            e
-                        );
+                        if request.transaction.is_some() {
+                            tracing::info!(
+                                "User transaction timed out after {} attempts. Last error: {}",
+                                attempts,
+                                e
+                            );
+                        }
                         Err(e)
                     })
             }
@@ -428,6 +356,108 @@ where
         result
     }
 
+    // Runs a background task to send ping transactions to all validators to perform latency checks to test both the fast path and the consensus path.
+    async fn run_latency_checks(self: Arc<Self>) {
+        const INTERVAL_BETWEEN_RUNS: Duration = Duration::from_secs(15);
+        const MAX_JITTER: Duration = Duration::from_secs(10);
+        const PING_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+
+        let mut interval = interval(INTERVAL_BETWEEN_RUNS);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+        loop {
+            interval.tick().await;
+
+            let mut tasks = JoinSet::new();
+
+            for tx_type in [TxType::SingleWriter, TxType::SharedObject] {
+                Self::ping_for_tx_type(
+                    self.clone(),
+                    &mut tasks,
+                    tx_type,
+                    MAX_JITTER,
+                    PING_REQUEST_TIMEOUT,
+                );
+            }
+
+            while let Some(result) = tasks.join_next().await {
+                if let Err(e) = result {
+                    tracing::debug!("Error while driving ping transaction: {}", e);
+                }
+            }
+        }
+    }
+
+    /// Pings all validators for e2e latency with the provided transaction type.
+    fn ping_for_tx_type(
+        self: Arc<Self>,
+        tasks: &mut JoinSet<()>,
+        tx_type: TxType,
+        max_jitter: Duration,
+        ping_timeout: Duration,
+    ) {
+        // We are iterating over the single writer and shared object transaction types to test both the fast path and the consensus path.
+        let auth_agg = self.authority_aggregator.load().clone();
+        let validators = auth_agg.committee.names().cloned().collect::<Vec<_>>();
+
+        self.metrics
+            .latency_check_runs
+            .with_label_values(&[tx_type.as_str()])
+            .inc();
+
+        for name in validators {
+            let display_name = auth_agg.get_display_name(&name);
+            let delay_ms = rand::thread_rng().gen_range(0..max_jitter.as_millis()) as u64;
+            let self_clone = self.clone();
+
+            let task = async move {
+                // Add some random delay to the task to avoid all tasks running at the same time
+                if delay_ms > 0 {
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                }
+                let start_time = Instant::now();
+
+                let ping_type = if tx_type == TxType::SingleWriter {
+                    PingType::FastPath
+                } else {
+                    PingType::Consensus
+                };
+
+                // Now send a ping transaction to the chosen validator for the provided tx type
+                match self_clone
+                    .drive_transaction(
+                        SubmitTxRequest::new_ping(ping_type),
+                        SubmitTransactionOptions {
+                            allowed_validators: vec![display_name.clone()],
+                            ..Default::default()
+                        },
+                        Some(ping_timeout),
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        tracing::debug!(
+                            "Ping transaction to validator {} for tx type {} completed end to end in {} seconds",
+                            display_name,
+                            tx_type.as_str(),
+                            start_time.elapsed().as_secs_f64()
+                        );
+                    }
+                    Err(err) => {
+                        tracing::debug!(
+                            "Failed to get certified finalized effects for tx type {}, for ping transaction to validator {}: {}",
+                            tx_type.as_str(),
+                            display_name,
+                            err
+                        );
+                    }
+                }
+            };
+
+            tasks.spawn(task);
+        }
+    }
+
     fn enable_reconfig(
         self: &Arc<Self>,
         reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
@@ -460,29 +490,6 @@ where
 
         self.authority_aggregator.store(new_authorities);
     }
-}
-
-// Chooses the percentage of transactions to be driven by TransactionDriver.
-pub fn choose_transaction_driver_percentage(
-    chain_id: Option<sui_types::digests::ChainIdentifier>,
-) -> u8 {
-    if let Ok(v) = std::env::var("TRANSACTION_DRIVER")
-        && let Ok(tx_driver_percentage) = v.parse::<u8>()
-        && tx_driver_percentage > 0
-        && tx_driver_percentage <= 100
-    {
-        return tx_driver_percentage;
-    }
-
-    if let Some(chain_identifier) = chain_id
-        && chain_identifier.chain() == sui_protocol_config::Chain::Unknown
-    {
-        // Kep test coverage for QD.
-        return 50;
-    }
-
-    // Default to 100% everywhere
-    100
 }
 
 // Inner state of TransactionDriver.
