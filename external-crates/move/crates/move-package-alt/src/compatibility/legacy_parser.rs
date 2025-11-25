@@ -744,8 +744,8 @@ fn get_manifest_address_info(
     original_id: Option<AccountAddress>,
     published_at: Option<String>,
 ) -> Result<Option<PublishAddresses>> {
-    // 1. If we have published-at, we use that as the address
-    // 2. If we have original-id, we use that as the address, as long as it is not 0x0
+    // 1. If we have published-at, but not original, we return None
+    // 2. If we have original, we use that as the address, as long as it is not 0x0
     // 3. If we have neither, we return None
     // 4. If we have both, we split them accordingly.
     match (published_at, original_id) {
