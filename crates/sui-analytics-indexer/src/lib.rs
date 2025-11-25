@@ -11,10 +11,16 @@ use num_enum::TryFromPrimitive;
 use object_store::path::Path;
 use package_store::PackageCache;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use strum_macros::EnumIter;
 use tracing::info;
 
 use sui_config::object_storage_config::ObjectStoreConfig;
+use sui_indexer_alt_framework::Indexer;
+use sui_indexer_alt_framework::ingestion::IngestionConfig;
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_indexer_alt_object_store::ObjectStore;
 use sui_types::base_types::EpochId;
 use sui_types::dynamic_field::DynamicFieldType;
 
@@ -32,9 +38,6 @@ use crate::handlers::transaction_objects_handler::{
 };
 use crate::handlers::wrapped_object_handler::{WrappedObjectHandler, WrappedObjectProcessor};
 use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
-use sui_indexer_alt_framework::Indexer;
-use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
-use sui_indexer_alt_object_store::ObjectStore;
 
 pub mod analytics_metrics;
 pub mod csv;
@@ -517,12 +520,6 @@ pub async fn build_analytics_indexer(
     registry: prometheus::Registry,
     cancel: tokio_util::sync::CancellationToken,
 ) -> Result<Indexer<sui_indexer_alt_object_store::ObjectStore>> {
-    use std::time::Duration;
-    use sui_indexer_alt_framework::pipeline::CommitterConfig;
-    use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
-    use sui_indexer_alt_framework::{Indexer, ingestion::IngestionConfig};
-    use sui_indexer_alt_object_store::ObjectStore;
-
     info!("Building analytics indexer");
     info!("Job config: {:#?}", config);
 
