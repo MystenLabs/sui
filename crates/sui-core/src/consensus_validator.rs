@@ -312,6 +312,7 @@ mod tests {
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::crypto::deterministic_random_account_key;
     use sui_types::error::{SuiErrorKind, UserInputError};
+    use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::messages_checkpoint::{
         CheckpointContents, CheckpointSignatureMessage, CheckpointSummary, SignedCheckpointSummary,
     };
@@ -319,11 +320,13 @@ mod tests {
     use sui_types::{
         base_types::{ExecutionDigests, ObjectID},
         crypto::Ed25519SuiSignature,
+        effects::TransactionEffectsAPI as _,
         messages_consensus::ConsensusTransaction,
         object::Object,
         signature::GenericSignature,
     };
 
+    use crate::authority::ExecutionEnv;
     use crate::{
         authority::test_authority_builder::TestAuthorityBuilder,
         checkpoints::CheckpointServiceNoop,
@@ -623,5 +626,69 @@ mod tests {
 
         let res = validator.verify_batch(&[&bytes]);
         assert!(res.is_ok(), "{res:?}");
+    }
+
+    #[sim_test]
+    async fn accept_already_executed_transaction() {
+        let (sender, keypair) = deterministic_random_account_key();
+
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .committee_size(NonZeroUsize::new(1).unwrap())
+                .with_objects(vec![gas_object.clone(), owned_object.clone()])
+                .build();
+
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .build()
+            .await;
+
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+
+        // Create a transaction and execute it.
+        let transaction = test_user_transaction(
+            &state,
+            sender,
+            &keypair,
+            gas_object.clone(),
+            vec![owned_object.clone()],
+        )
+        .await;
+        let tx_digest = *transaction.digest();
+        let cert = VerifiedExecutableTransaction::new_from_quorum_execution(transaction.clone(), 0);
+        let (executed_effects, _) = state
+            .try_execute_immediately(&cert, ExecutionEnv::new(), &state.epoch_store_for_testing())
+            .await
+            .unwrap();
+
+        // Verify the transaction is executed.
+        let read_effects = state
+            .get_transaction_cache_reader()
+            .get_executed_effects(&tx_digest)
+            .expect("Transaction should be executed");
+        assert_eq!(read_effects, executed_effects);
+        assert_eq!(read_effects.executed_epoch(), epoch_store.epoch());
+
+        // Now try to vote on the already executed transaction
+        let serialized_tx = bcs::to_bytes(&ConsensusTransaction::new_user_transaction_message(
+            &state.name,
+            transaction.into_inner().clone(),
+        ))
+        .unwrap();
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            Arc::new(NoopConsensusOverloadChecker {}),
+            Arc::new(CheckpointServiceNoop {}),
+            SuiTxValidatorMetrics::new(&Default::default()),
+        );
+        let rejected_transactions = validator
+            .verify_and_vote_batch(&BlockRef::MAX, &[&serialized_tx])
+            .expect("Verify and vote should succeed");
+
+        // The executed transaction should NOT be rejected.
+        assert!(rejected_transactions.is_empty());
     }
 }
