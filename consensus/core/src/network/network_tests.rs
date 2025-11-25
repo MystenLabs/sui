@@ -9,11 +9,10 @@ use consensus_types::block::Round;
 use futures::StreamExt as _;
 use parking_lot::Mutex;
 use rstest::rstest;
-use tokio::time::sleep;
 
 use super::{
-    ExtendedSerializedBlock, NetworkClient, NetworkManager, anemo_network::AnemoManager,
-    test_network::TestService, tonic_network::TonicManager,
+    ExtendedSerializedBlock, NetworkClient, NetworkManager, test_network::TestService,
+    tonic_network::TonicManager,
 };
 use crate::{
     block::{TestBlock, VerifiedBlock},
@@ -26,18 +25,6 @@ trait ManagerBuilder {
         context: Arc<Context>,
         network_keypair: NetworkKeyPair,
     ) -> impl NetworkManager<Mutex<TestService>>;
-}
-
-struct AnemoManagerBuilder {}
-
-impl ManagerBuilder for AnemoManagerBuilder {
-    fn build(
-        &self,
-        context: Arc<Context>,
-        network_keypair: NetworkKeyPair,
-    ) -> impl NetworkManager<Mutex<TestService>> {
-        AnemoManager::new(context, network_keypair)
-    }
 }
 
 struct TonicManagerBuilder {}
@@ -77,7 +64,7 @@ fn service_with_own_blocks() -> Arc<Mutex<TestService>> {
 #[rstest]
 #[tokio::test]
 async fn send_and_receive_blocks_with_auth(
-    #[values(AnemoManagerBuilder {}, TonicManagerBuilder {})] manager_builder: impl ManagerBuilder,
+    #[values(TonicManagerBuilder {})] manager_builder: impl ManagerBuilder,
 ) {
     let (context, keys) = Context::new_for_test(4);
 
@@ -100,9 +87,6 @@ async fn send_and_receive_blocks_with_auth(
     let client_1 = manager_1.client();
     let service_1 = service_with_own_blocks();
     manager_1.install_service(service_1.clone()).await;
-
-    // Wait for anemo to initialize.
-    sleep(Duration::from_secs(5)).await;
 
     // Test that servers can receive client RPCs.
     let test_block_0 = VerifiedBlock::new_for_test(TestBlock::new(9, 0).build());

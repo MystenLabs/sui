@@ -42,25 +42,33 @@ const BATCH_SIZE_BUCKETS: &[f64] = &[
     1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0, 20000.0,
 ];
 
+/// Metrics specific to the ingestion service.
 #[derive(Clone)]
-pub struct IndexerMetrics {
+pub struct IngestionMetrics {
     // Statistics related to fetching data from the remote store.
     pub total_ingested_checkpoints: IntCounter,
     pub total_ingested_transactions: IntCounter,
     pub total_ingested_events: IntCounter,
-    pub total_ingested_inputs: IntCounter,
-    pub total_ingested_outputs: IntCounter,
+    pub total_ingested_objects: IntCounter,
     pub total_ingested_bytes: IntCounter,
     pub total_ingested_transient_retries: IntCounterVec,
     pub total_ingested_not_found_retries: IntCounter,
+    pub total_ingested_permanent_errors: IntCounterVec,
+    pub total_streamed_checkpoints: IntCounter,
+    pub total_stream_disconnections: IntCounter,
+    pub total_streaming_connection_failures: IntCounter,
 
     // Checkpoint lag metrics for the ingestion pipeline.
     pub latest_ingested_checkpoint: IntGauge,
+    pub latest_streamed_checkpoint: IntGauge,
     pub latest_ingested_checkpoint_timestamp_lag_ms: IntGauge,
     pub ingested_checkpoint_timestamp_lag: Histogram,
 
     pub ingested_checkpoint_latency: Histogram,
+}
 
+#[derive(Clone)]
+pub struct IndexerMetrics {
     // Statistics related to individual ingestion pipelines' handlers.
     pub total_handler_checkpoints_received: IntCounterVec,
     pub total_handler_checkpoints_processed: IntCounterVec,
@@ -144,7 +152,7 @@ pub(crate) struct CheckpointLagMetricReporter {
     latest_reported_checkpoint: AtomicU64,
 }
 
-impl IndexerMetrics {
+impl IngestionMetrics {
     pub fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
         let prefix = prefix.unwrap_or("indexer");
         let name = |n| format!("{prefix}_{n}");
@@ -167,15 +175,9 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            total_ingested_inputs: register_int_counter_with_registry!(
-                name("total_ingested_inputs"),
-                "Total number of input objects fetched from the remote store",
-                registry,
-            )
-            .unwrap(),
-            total_ingested_outputs: register_int_counter_with_registry!(
-                name("total_ingested_outputs"),
-                "Total number of output objects fetched from the remote store",
+            total_ingested_objects: register_int_counter_with_registry!(
+                name("total_ingested_objects"),
+                "Total number of objects in checkpoints fetched from the remote store",
                 registry,
             )
             .unwrap(),
@@ -201,9 +203,41 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            total_ingested_permanent_errors: register_int_counter_vec_with_registry!(
+                name("total_ingested_permanent_errors"),
+                "Total number of permanent errors encountered while fetching data from the \
+                 remote store, which cause the ingestion service to shutdown",
+                &["reason"],
+                registry,
+            )
+            .unwrap(),
+            total_streamed_checkpoints: register_int_counter_with_registry!(
+                name("total_streamed_checkpoints"),
+                "Total number of checkpoints received from gRPC streaming",
+                registry,
+            )
+            .unwrap(),
+            total_stream_disconnections: register_int_counter_with_registry!(
+                name("total_stream_disconnections"),
+                "Total number of times the gRPC stream was disconnected",
+                registry,
+            )
+            .unwrap(),
+            total_streaming_connection_failures: register_int_counter_with_registry!(
+                name("total_streaming_connection_failures"),
+                "Total number of failures due to streaming service connection or peek failures",
+                registry,
+            )
+            .unwrap(),
             latest_ingested_checkpoint: register_int_gauge_with_registry!(
                 name("latest_ingested_checkpoint"),
                 "Latest checkpoint sequence number fetched from the remote store",
+                registry,
+            )
+            .unwrap(),
+            latest_streamed_checkpoint: register_int_gauge_with_registry!(
+                name("latest_streamed_checkpoint"),
+                "Latest checkpoint sequence number received from gRPC streaming",
                 registry,
             )
             .unwrap(),
@@ -229,6 +263,32 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+        })
+    }
+
+    /// Register that we're retrying a checkpoint fetch due to a transient error, logging the
+    /// reason and error.
+    pub(crate) fn inc_retry(
+        &self,
+        checkpoint: u64,
+        reason: &str,
+        error: Error,
+    ) -> backoff::Error<Error> {
+        warn!(checkpoint, reason, "Retrying due to error: {error}");
+
+        self.total_ingested_transient_retries
+            .with_label_values(&[reason])
+            .inc();
+
+        backoff::Error::transient(error)
+    }
+}
+
+impl IndexerMetrics {
+    pub fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
+        let prefix = prefix.unwrap_or("indexer");
+        let name = |n| format!("{prefix}_{n}");
+        Arc::new(Self {
             total_handler_checkpoints_received: register_int_counter_vec_with_registry!(
                 name("total_handler_checkpoints_received"),
                 "Total number of checkpoints received by this handler",
@@ -589,23 +649,6 @@ impl IndexerMetrics {
             .unwrap(),
         })
     }
-
-    /// Register that we're retrying a checkpoint fetch due to a transient error, logging the
-    /// reason and error.
-    pub(crate) fn inc_retry(
-        &self,
-        checkpoint: u64,
-        reason: &str,
-        error: Error,
-    ) -> backoff::Error<Error> {
-        warn!(checkpoint, reason, "Retrying due to error: {error}");
-
-        self.total_ingested_transient_retries
-            .with_label_values(&[reason])
-            .inc();
-
-        backoff::Error::transient(error)
-    }
 }
 
 impl CheckpointLagMetricReporter {
@@ -656,10 +699,15 @@ pub(crate) mod tests {
 
     use prometheus::Registry;
 
-    use super::IndexerMetrics;
+    use super::{IndexerMetrics, IngestionMetrics};
 
-    /// Construct metrics for test purposes.
+    /// Construct IndexerMetrics for test purposes.
     pub fn test_metrics() -> Arc<IndexerMetrics> {
         IndexerMetrics::new(None, &Registry::new())
+    }
+
+    /// Construct IngestionMetrics for test purposes.
+    pub fn test_ingestion_metrics() -> Arc<IngestionMetrics> {
+        IngestionMetrics::new(None, &Registry::new())
     }
 }

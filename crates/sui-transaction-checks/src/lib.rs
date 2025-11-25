@@ -54,6 +54,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         transaction: &TransactionData,
+        gas_paid_from_address_balance: bool,
     ) -> SuiResult<SuiGasStatus> {
         check_gas(
             objects,
@@ -63,6 +64,7 @@ mod checked {
             transaction.gas_budget(),
             transaction.gas_price(),
             transaction.kind(),
+            gas_paid_from_address_balance,
         )
     }
 
@@ -211,6 +213,7 @@ mod checked {
             protocol_config,
             reference_gas_price,
             transaction,
+            transaction.is_gas_paid_from_address_balance(),
         )?;
         check_objects(transaction, input_objects)?;
 
@@ -347,6 +350,7 @@ mod checked {
         gas_budget: u64,
         gas_price: u64,
         tx_kind: &TransactionKind,
+        gas_paid_from_address_balance: bool,
     ) -> SuiResult<SuiGasStatus> {
         if tx_kind.is_system_tx() {
             Ok(SuiGasStatus::new_unmetered())
@@ -366,7 +370,11 @@ mod checked {
                 })?;
                 gas_objects.push(obj);
             }
-            gas_status.check_gas_balance(&gas_objects, gas_budget)?;
+            // Skip gas balance check for address balance payments
+            // We reserve gas budget in advance
+            if !gas_paid_from_address_balance {
+                gas_status.check_gas_balance(&gas_objects, gas_budget)?;
+            }
             Ok(gas_status)
         }
     }

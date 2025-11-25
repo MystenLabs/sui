@@ -1,19 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt::Write};
+use std::collections::BTreeMap;
+use std::fmt::Write;
 
-use anyhow::{Context, anyhow, bail};
-use move_core_types::{
-    annotated_extractor::Extractor,
-    annotated_value::{MoveTypeLayout, MoveValue},
-};
-use parser::{Parser, Strand};
+use anyhow::Context;
+use anyhow::anyhow;
+use anyhow::bail;
+use move_core_types::annotated_extractor::Extractor;
+use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::annotated_value::MoveValue;
 use sui_json_rpc_types::SuiMoveValue;
-use sui_types::{
-    collection_types::{Entry, VecMap},
-    object::bounded_visitor::BoundedVisitor,
-};
+use sui_types::collection_types::Entry;
+use sui_types::collection_types::VecMap;
+use sui_types::object::bounded_visitor::BoundedVisitor;
+
+use self::parser::Parser;
+use self::parser::Strand;
 
 pub(crate) mod lexer;
 pub(crate) mod parser;

@@ -36,6 +36,7 @@ p1 = "0x0"
 # alice = "0xB0B"
 External Command `cat P1/.gitignore`:
 build/*
+traces/*
 .trace
 .coverage*
 Pub.*.toml
@@ -77,6 +78,7 @@ p2 = "0x0"
 # alice = "0xB0B"
 External Command `cat other_dir/.gitignore`:
 build/*
+traces/*
 .trace
 .coverage*
 Pub.*.toml

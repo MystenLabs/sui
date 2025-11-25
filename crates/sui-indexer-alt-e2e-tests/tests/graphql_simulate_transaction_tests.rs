@@ -9,13 +9,17 @@ use serde_json::{Value, json};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
-use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs};
+use sui_indexer_alt_framework::{
+    IndexerArgs,
+    ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
+};
 use sui_indexer_alt_graphql::{
-    RpcArgs as GraphQlArgs, config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
+    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, config::RpcConfig as GraphQlConfig,
+    start_rpc as start_graphql,
 };
 use sui_indexer_alt_reader::{
-    bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
-    fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
+    consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs,
+    system_package_task::SystemPackageTaskArgs,
 };
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_pg_db::{
@@ -169,7 +173,12 @@ impl GraphQlTestCluster {
             fullnode_rpc_url: Some(validator_cluster.rpc_url().to_string()),
         };
         let client_args = ClientArgs {
-            rpc_api_url: Some(Url::parse(validator_cluster.rpc_url()).expect("Invalid RPC URL")),
+            ingestion: IngestionClientArgs {
+                rpc_api_url: Some(
+                    Url::parse(validator_cluster.rpc_url()).expect("Invalid RPC URL"),
+                ),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -191,10 +200,9 @@ impl GraphQlTestCluster {
 
         let graphql_handle = start_graphql(
             Some(database_url),
-            None,
             fullnode_args,
             DbArgs::default(),
-            BigtableArgs::default(),
+            GraphQlKvArgs::default(),
             ConsistentReaderArgs::default(),
             GraphQlArgs {
                 rpc_listen_address: graphql_listen_address,

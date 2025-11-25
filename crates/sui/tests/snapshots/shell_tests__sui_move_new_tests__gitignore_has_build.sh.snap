@@ -24,6 +24,7 @@ exit_code: 0
 ignore1
 build/*
 ignore2
+traces/*
 .trace
 .coverage*
 Pub.*.toml

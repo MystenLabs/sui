@@ -11,8 +11,8 @@ use std::fmt::{Debug, Display};
 /// expressions other than dot.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct Regex<Lbl> {
-    labels: Vec<Lbl>,
-    ends_in_dot_star: bool,
+    pub(crate) labels: Vec<Lbl>,
+    pub(crate) ends_in_dot_star: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]

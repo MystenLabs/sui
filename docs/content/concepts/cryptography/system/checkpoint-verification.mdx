@@ -3,13 +3,13 @@ title: Checkpoint Verification
 description: On the Sui network, checkpoints define the history of the blockchain. Checkpoint verification is how full nodes and other clients guarantee their state is exactly the same as the Sui network.
 ---
 
-On the Sui network, checkpoints define the blockchain's history. Unlike traditional blockchains that create blocks before execution, Sui creates checkpoints after transaction execution to provide a certified record of chain history.
+Unlike traditional blockchains that create blocks before execution, Sui creates checkpoints after transaction execution to provide a certified record of chain history.
 
 Checkpoints contain:
 
 - The cryptographic hash of the previous checkpoint.
 - A list of all the transaction digests (and the corresponding transaction effects digests) that are included in the checkpoint.
-- A set of signatures from a quorum (more than 2/3rds) of the validators that formed the committee at the time the checkpoint was created.
+- A set of signatures from a quorum (more than 2/3) of the validators that formed the committee at the time the checkpoint was created.
 
 Both validators and full nodes consume checkpoints to remain synchronized with the network.
 
@@ -27,7 +27,7 @@ This process creates an apparent circular dependency. The client needs to know t
 1. The client obtains the genesis checkpoint from some trusted source.
 1. The client loads the initial committee from the genesis checkpoint.
 1. The client uses the state sync network or Sui archive to obtain the next checkpoint.
-1. The client verifies the signatures on the checkpoint using the current committee's public keys, and verifies that the checkpoint's previous checkpoint hash is equal to the hash of the previous checkpoint that the client validated.
+1. The client verifies the signatures on the checkpoint using the current committee public keys, and verifies that the previous checkpoint hash is equal to the hash of the previous checkpoint that the client validated.
 1. If the checkpoint is invalid, the client raises an error.
 1. Otherwise, the client checks if the checkpoint is the last one of the current epoch.
     - If so, load the next committee from it, and use that committee as the current committee.
@@ -43,4 +43,4 @@ A checkpoint contains a list of transactions, so a full node can fetch and execu
 
 The checkpoint also includes the effects digests of each transaction. An effects digest is the cryptographic hash of the `TransactionEffects` structure, which lists all transaction inputs and outputs, including the digests of all objects written by the transaction. This allows a full node to confirm it has the same execution results as the validators who signed the checkpoint.  
 
-By executing checkpoints and verifying transaction outputs, a full node can build the entire state of the Sui network—the collection of objects in the network—and trust that every byte of every object is correct.
+By executing checkpoints and verifying transaction outputs, a full node can build the entire state of the Sui network (the collection of objects in the network) and trust that every byte of every object is correct.

@@ -40,6 +40,7 @@ module bridge::bridge_env {
     use bridge::usdt::{Self, USDT};
     use std::ascii::String;
     use std::type_name;
+    use std::unit_test::destroy;
     use sui::address;
     use sui::clock::Clock;
     use sui::coin::{Self, Coin, CoinMetadata, TreasuryCap};
@@ -47,7 +48,6 @@ module bridge::bridge_env {
     use sui::event;
     use sui::package::UpgradeCap;
     use sui::test_scenario::{Self, Scenario};
-    use sui::test_utils::destroy;
     use sui_system::governance_test_utils::{
         advance_epoch_with_reward_amounts,
         create_sui_system_state_for_testing,

@@ -23,7 +23,7 @@ use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use mysten_metrics::{add_server_timing, spawn_logged_monitored_task, spawn_monitored_task};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
-    HistogramVec, IntCounter, Registry, register_histogram_vec_with_registry,
+    HistogramVec, IntCounter, IntCounterVec, Registry, register_histogram_vec_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
@@ -79,6 +79,8 @@ pub struct TransactionOrchestrator<A: Clone> {
     transaction_driver: Option<Arc<TransactionDriver<A>>>,
     td_percentage: u8,
     td_allowed_submission_list: Vec<String>,
+    td_blocked_submission_list: Vec<String>,
+    enable_early_validation: bool,
 }
 
 impl TransactionOrchestrator<NetworkAuthorityClient> {
@@ -136,10 +138,10 @@ where
         let pending_tx_log = Arc::new(WritePathPendingTransactionLog::new(
             parent_path.join("fullnode_pending_transactions"),
         ));
-        let pending_tx_log_clone = pending_tx_log.clone();
         let _local_executor_handle = {
+            let pending_tx_log = pending_tx_log.clone();
             spawn_monitored_task!(async move {
-                Self::loop_pending_transaction_log(effects_receiver, pending_tx_log_clone).await;
+                Self::loop_pending_transaction_log(effects_receiver, pending_tx_log).await;
             })
         };
         Self::schedule_txes_in_log(pending_tx_log.clone(), quorum_driver_handler.clone());
@@ -173,6 +175,25 @@ where
             .map(|config| config.allowed_submission_validators.clone())
             .unwrap_or_default();
 
+        let td_blocked_submission_list = node_config
+            .transaction_driver_config
+            .as_ref()
+            .map(|config| config.blocked_submission_validators.clone())
+            .unwrap_or_default();
+
+        if !td_allowed_submission_list.is_empty() && !td_blocked_submission_list.is_empty() {
+            panic!(
+                "Both allowed and blocked submission lists are set, this is not allowed, {:?} {:?}",
+                td_allowed_submission_list, td_blocked_submission_list
+            );
+        }
+
+        let enable_early_validation = node_config
+            .transaction_driver_config
+            .as_ref()
+            .map(|config| config.enable_early_validation)
+            .unwrap_or(true);
+
         Self {
             quorum_driver_handler,
             validator_state,
@@ -183,6 +204,8 @@ where
             transaction_driver,
             td_percentage,
             td_allowed_submission_list,
+            td_blocked_submission_list,
+            enable_early_validation,
         }
     }
 }
@@ -316,20 +339,38 @@ where
             .map_err(QuorumDriverError::InvalidUserSignature)?;
         let tx_digest = *verified_transaction.digest();
 
-        // Add transaction to WAL log.
-        let is_new_transaction = self
-            .pending_tx_log
-            .write_pending_transaction_maybe(&verified_transaction)
-            .await
-            .map_err(|e| {
-                warn!("QuorumDriverInternalError: {e:?}");
-                QuorumDriverError::QuorumDriverInternalError(e)
-            })?;
-        if is_new_transaction {
-            debug!("Added transaction to WAL log for TransactionDriver");
-        } else {
-            debug!("Transaction already in pending_tx_log");
+        // Early validation check against local state before submission to catch non-retriable errors
+        // TODO: Consider moving this check to TransactionDriver for per-retry validation
+        if self.enable_early_validation
+            && let Err(e) = self
+                .validator_state
+                .check_transaction_validity(&epoch_store, &verified_transaction)
+        {
+            let error_category = e.categorize();
+            if !error_category.is_submission_retriable() {
+                // Skip early validation rejection if transaction has already been executed (allows retries to return cached results)
+                if !self.validator_state.is_tx_already_executed(&tx_digest) {
+                    self.metrics
+                        .early_validation_rejections
+                        .with_label_values(&[e.to_variant_name()])
+                        .inc();
+                    debug!(
+                        error = ?e,
+                        "Transaction rejected during early validation"
+                    );
+
+                    return Err(QuorumDriverError::TransactionFailed {
+                        category: error_category,
+                        details: e.to_string(),
+                    });
+                }
+            }
         }
+
+        // Add transaction to WAL log.
+        let guard =
+            TransactionSubmissionGuard::new(self.pending_tx_log.clone(), &verified_transaction);
+        let is_new_transaction = guard.is_new_transaction();
 
         let include_events = request.include_events;
         let include_input_objects = request.include_input_objects;
@@ -420,7 +461,7 @@ where
         // Wait for execution timeout.
         let mut timeout_future = tokio::time::sleep(finality_timeout).boxed();
 
-        let result = loop {
+        loop {
             tokio::select! {
                 biased;
 
@@ -523,28 +564,10 @@ where
                     debug!("Timeout waiting for transaction finality.");
                     self.metrics.wait_for_finality_timeout.inc();
 
-                    // Clean up transaction from WAL log only for TD submissions
-                    // For QD submissions, the cleanup happens in loop_pending_transaction_log
-                    if using_td.load(Ordering::Acquire) {
-                        debug!("Cleaning up TD transaction from WAL due to timeout");
-                        if let Err(err) = self.pending_tx_log.finish_transaction(&tx_digest) {
-                            warn!(
-                                "Failed to finish TD transaction in pending transaction log: {err}"
-                            );
-                        }
-                    }
-
                     break Err(QuorumDriverError::TimeoutBeforeFinality);
                 }
             }
-        };
-
-        // Clean up transaction from WAL log
-        if let Err(err) = self.pending_tx_log.finish_transaction(&tx_digest) {
-            warn!("Failed to finish transaction in pending transaction log: {err}");
         }
-
-        result
     }
 
     #[instrument(level = "error", skip_all)]
@@ -663,6 +686,7 @@ where
                 SubmitTransactionOptions {
                     forwarded_client_addr: client_addr,
                     allowed_validators: self.td_allowed_submission_list.clone(),
+                    blocked_validators: self.td_blocked_submission_list.clone(),
                 },
                 timeout_duration,
             )
@@ -964,6 +988,8 @@ pub struct TransactionOrchestratorMetrics {
 
     concurrent_execution: IntCounter,
 
+    early_validation_rejections: IntCounterVec,
+
     request_latency: HistogramVec,
     local_execution_latency: HistogramVec,
     settlement_finality_latency: HistogramVec,
@@ -1060,6 +1086,13 @@ impl TransactionOrchestratorMetrics {
                 registry,
             )
             .unwrap(),
+            early_validation_rejections: register_int_counter_vec_with_registry!(
+                "tx_orchestrator_early_validation_rejections",
+                "Total number of transactions rejected during early validation before submission, by reason",
+                &["reason"],
+                registry,
+            )
+            .unwrap(),
             request_latency: register_histogram_vec_with_registry!(
                 "tx_orchestrator_request_latency",
                 "Time spent in processing one Transaction Orchestrator request",
@@ -1113,5 +1146,50 @@ where
     ) -> Result<SimulateTransactionResult, SuiError> {
         self.validator_state
             .simulate_transaction(transaction, checks)
+    }
+}
+
+/// Keeps track of inflight transactions being submitted, and helps recover transactions
+/// on restart.
+struct TransactionSubmissionGuard {
+    pending_tx_log: Arc<WritePathPendingTransactionLog>,
+    tx_digest: TransactionDigest,
+    is_new_transaction: bool,
+}
+
+impl TransactionSubmissionGuard {
+    pub fn new(
+        pending_tx_log: Arc<WritePathPendingTransactionLog>,
+        tx: &VerifiedTransaction,
+    ) -> Self {
+        let is_new_transaction = pending_tx_log.write_pending_transaction_maybe(tx);
+        let tx_digest = *tx.digest();
+        if is_new_transaction {
+            debug!(?tx_digest, "Added transaction to inflight set");
+        } else {
+            debug!(
+                ?tx_digest,
+                "Transaction already being processed, no new submission will be made"
+            );
+        };
+        Self {
+            pending_tx_log,
+            tx_digest,
+            is_new_transaction,
+        }
+    }
+
+    fn is_new_transaction(&self) -> bool {
+        self.is_new_transaction
+    }
+}
+
+impl Drop for TransactionSubmissionGuard {
+    fn drop(&mut self) {
+        if let Err(err) = self.pending_tx_log.finish_transaction(&self.tx_digest) {
+            warn!(?self.tx_digest, "Failed to clean up transaction in pending log: {err}");
+        } else {
+            debug!(?self.tx_digest, "Cleaned up transaction in pending log");
+        }
     }
 }

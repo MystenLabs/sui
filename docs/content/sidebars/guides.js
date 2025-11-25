@@ -33,6 +33,7 @@ const guides = [
 			'guides/developer/getting-started/get-address',
 			'guides/developer/getting-started/get-coins',
 			'guides/developer/getting-started/hello-world',
+			'guides/developer/getting-started/app-frontends',
 			'guides/developer/getting-started/next-steps',
 		],
 	},
@@ -48,11 +49,9 @@ const guides = [
 			'guides/developer/sui-101/using-events',
 			'guides/developer/sui-101/local-network',
 			'guides/developer/sui-101/connect',
-			'guides/developer/sui-101/data-serving',
 			'guides/developer/sui-101/access-time',
 			'guides/developer/sui-101/sign-and-send-txn',
 			'guides/developer/sui-101/sponsor-txn',
-			'guides/developer/sui-101/avoid-equivocation',
 			'guides/developer/sui-101/common-errors',
 
 			{

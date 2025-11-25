@@ -47,27 +47,24 @@ impl WritePathPendingTransactionLog {
 
     // Returns whether the table currently has this transaction in record.
     // If not, write the transaction and return true; otherwise return false.
-    // Because the record will be cleaned up when the transaction finishes,
-    // even when it returns true, the callsite of this function should check
-    // the transaction status before doing anything, to avoid duplicates.
-    pub async fn write_pending_transaction_maybe(
-        &self,
-        tx: &VerifiedTransaction,
-    ) -> SuiResult<bool> {
+    pub fn write_pending_transaction_maybe(&self, tx: &VerifiedTransaction) -> bool {
         let tx_digest = tx.digest();
         let mut transactions_set = self.transactions_set.lock();
         if transactions_set.contains(tx_digest) {
-            return Ok(false);
+            return false;
         }
+        // Hold the lock while inserting into the logs to avoid race conditions.
         self.pending_transactions
             .logs
-            .insert(tx_digest, tx.serializable_ref())?;
+            .insert(tx_digest, tx.serializable_ref())
+            .unwrap();
         transactions_set.insert(*tx_digest);
-        Ok(true)
+        true
     }
 
     pub fn finish_transaction(&self, tx: &TransactionDigest) -> SuiResult {
         let mut transactions_set = self.transactions_set.lock();
+        // Hold the lock while removing from the logs to avoid race conditions.
         let mut write_batch = self.pending_transactions.logs.batch();
         write_batch.delete_batch(&self.pending_transactions.logs, std::iter::once(tx))?;
         write_batch.write().map_err(SuiError::from)?;
@@ -101,19 +98,9 @@ mod tests {
         let pending_txes = WritePathPendingTransactionLog::new(temp_dir.path().to_path_buf());
         let tx = VerifiedTransaction::new_unchecked(create_fake_transaction());
         let tx_digest = *tx.digest();
-        assert!(
-            pending_txes
-                .write_pending_transaction_maybe(&tx)
-                .await
-                .unwrap()
-        );
+        assert!(pending_txes.write_pending_transaction_maybe(&tx));
         // The second write will return false
-        assert!(
-            !pending_txes
-                .write_pending_transaction_maybe(&tx)
-                .await
-                .unwrap()
-        );
+        assert!(!pending_txes.write_pending_transaction_maybe(&tx));
 
         let loaded_txes = pending_txes.load_all_pending_transactions()?;
         assert_eq!(vec![tx], loaded_txes);
@@ -130,12 +117,7 @@ mod tests {
             .map(|_| VerifiedTransaction::new_unchecked(create_fake_transaction()))
             .collect();
         for tx in txes.iter().take(10) {
-            assert!(
-                pending_txes
-                    .write_pending_transaction_maybe(tx)
-                    .await
-                    .unwrap()
-            );
+            assert!(pending_txes.write_pending_transaction_maybe(tx));
         }
         let loaded_tx_digests: HashSet<_> = pending_txes
             .load_all_pending_transactions()?

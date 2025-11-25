@@ -12,7 +12,7 @@ use arc_swap::ArcSwapOption;
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use consensus_core::{
     Clock, CommitConsumerArgs, CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority,
-    TransactionClient, TransactionVerifier, to_socket_addr,
+    NetworkType, TransactionClient, TransactionVerifier, to_socket_addr,
 };
 use consensus_types::block::BlockTimestampMs;
 use mysten_metrics::monitored_mpsc::UnboundedReceiver;
@@ -267,7 +267,7 @@ pub(crate) async fn make_authority(
         db_dir,
         committee,
         keypairs,
-        network_type,
+        network_type: _,
         boot_counter,
         protocol_config,
         clock_drift,
@@ -293,7 +293,7 @@ pub(crate) async fn make_authority(
     let commit_consumer_monitor = commit_consumer.monitor();
 
     let authority = ConsensusAuthority::start(
-        network_type,
+        NetworkType::Tonic,
         0,
         authority_index,
         committee,

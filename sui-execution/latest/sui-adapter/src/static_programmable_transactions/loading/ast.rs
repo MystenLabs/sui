@@ -10,6 +10,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
+    u256::U256,
 };
 use std::rc::Rc;
 use sui_types::{
@@ -37,6 +38,7 @@ pub enum InputArg {
     Pure(Vec<u8>),
     Receiving(ObjectRef),
     Object(ObjectArg),
+    FundsWithdrawal(FundsWithdrawalArg),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,6 +65,16 @@ pub enum ObjectMutability {
     Mutable,
     Immutable,
     NonExclusiveWrite,
+}
+
+#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Clone))]
+pub struct FundsWithdrawalArg {
+    /// The full type `sui::funds_accumulator::Withdrawal<T>`
+    pub ty: Type,
+    pub owner: AccountAddress,
+    /// This amount is verified to be <= the max for the type described by the `T` in `ty`
+    pub amount: U256,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

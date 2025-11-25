@@ -1,0 +1,464 @@
+---
+title: BalanceManager SDK
+sidebar_label: BalanceManager
+description: Learn how to use the DeepBookV3 SDK to manage balance managers and their capabilities.
+keywords:
+  [
+    balance manager,
+    balancemanager,
+    deepbookv3,
+    sdk,
+    trade cap,
+    deposit cap,
+    withdraw cap,
+    proof,
+    referral,
+    capabilities,
+  ]
+---
+
+The `BalanceManager` is a core component of DeepBookV3 that holds all asset balances. The SDK provides comprehensive functions to create, manage, and interact with balance managers.
+
+## Balance manager functions
+
+The DeepBookV3 SDK provides the following functions for managing balance managers.
+
+### `createAndShareBalanceManager`
+
+Use `createAndShareBalanceManager` to create a new balance manager and automatically share it. The call returns a function that takes a `Transaction` object.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="createAndShareBalanceManager" signatureOnly/>
+
+### `createBalanceManagerWithOwner`
+
+Use `createBalanceManagerWithOwner` to create a new balance manager with a custom owner. Returns the manager object. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `ownerAddress`: String representing the address of the owner.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="createBalanceManagerWithOwner" signatureOnly/>
+
+### `createBalanceManagerWithOwnerAndCaps`
+
+Use `createBalanceManagerWithOwnerAndCaps` to create a new balance manager with a custom owner and all three capabilities (deposit, withdraw, trade) in one call. Returns an object with `manager`, `depositCap`, `withdrawCap`, and `tradeCap`. The call returns a function that takes a `Transaction` object.
+
+:::caution
+The DeepBookV3 SDK uses `depositCap`, `withdrawCap`, and `tradeCap`, while Move code using DeepBookV3  uses `DepositCap`, `WithdrawCap`, and `TradeCap`. 
+:::
+
+**Parameters**
+
+- `ownerAddress`: String representing the address of the owner.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="createBalanceManagerWithOwnerAndCaps" signatureOnly/>
+
+### `shareBalanceManager`
+
+Use `shareBalanceManager` to share a balance manager that was created but not yet shared. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `manager`: `TransactionArgument` representing the balance manager to share.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="shareBalanceManager" signatureOnly/>
+
+## Deposit and withdraw functions
+
+### `depositIntoManager`
+
+Use `depositIntoManager` to deposit funds into a balance manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+- `coinKey`: String that identifies the coin to deposit.
+- `amountToDeposit`: Number representing the amount to deposit.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="depositIntoManager" signatureOnly/>
+
+### `withdrawFromManager`
+
+Use `withdrawFromManager` to withdraw funds from a balance manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+- `coinKey`: String that identifies the coin to withdraw.
+- `amountToWithdraw`: Number representing the amount to withdraw.
+- `recipient`: String representing the recipient address.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="withdrawFromManager" signatureOnly/>
+
+### `withdrawAllFromManager`
+
+Use `withdrawAllFromManager` to withdraw all funds of a specific coin type from a balance manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+- `coinKey`: String that identifies the coin to withdraw.
+- `recipient`: String representing the recipient address.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="withdrawAllFromManager" signatureOnly/>
+
+### `checkManagerBalance`
+
+Use `checkManagerBalance` to check the balance of a specific coin in a balance manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+- `coinKey`: String that identifies the coin to check.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="checkManagerBalance" signatureOnly/>
+
+## Trade proof functions
+
+### `generateProof`
+
+Use `generateProof` to generate a trade proof for the balance manager. Automatically calls the appropriate function based on whether a `tradeCap` is set. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="generateProof" signatureOnly/>
+
+### `generateProofAsOwner`
+
+Use `generateProofAsOwner` to generate a trade proof as the owner of the balance manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerId`: String representing the ID of the balance manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="generateProofAsOwner" signatureOnly/>
+
+### `generateProofAsTrader`
+
+Use `generateProofAsTrader` to generate a trade proof using a `tradeCap`. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerId`: String representing the ID of the balance manager.
+- `tradeCapId`: String representing the ID of the trade cap.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="generateProofAsTrader" signatureOnly/>
+
+## Capability functions
+
+### `mintTradeCap`
+
+Use `mintTradeCap` to mint a `tradeCap` for the balance manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="mintTradeCap" signatureOnly/>
+
+### `mintDepositCap`
+
+Use `mintDepositCap` to mint a `depositCap` for the balance manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="mintDepositCap" signatureOnly/>
+
+### `mintWithdrawalCap`
+
+Use `mintWithdrawalCap` to mint a `withdrawCap` for the balance manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="mintWithdrawalCap" signatureOnly/>
+
+### `depositWithCap`
+
+Use `depositWithCap` to deposit funds into a balance manager using a `depositCap`. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+- `coinKey`: String that identifies the coin to deposit.
+- `amountToDeposit`: Number representing the amount to deposit.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="depositWithCap" signatureOnly/>
+
+### `withdrawWithCap`
+
+Use `withdrawWithCap` to withdraw funds from a balance manager using a `withdrawCap`. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+- `coinKey`: String that identifies the coin to withdraw.
+- `amountToWithdraw`: Number representing the amount to withdraw.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="withdrawWithCap" signatureOnly/>
+
+## Referral functions
+
+### `setReferral`
+
+Use `setReferral` to set a referral for the balance manager. Requires a `tradeCap` for permission checking. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+- `referral`: String representing the referral ID.
+- `tradeCap`: `TransactionArgument` representing the trade cap for permission.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="setReferral" signatureOnly/>
+
+### `unsetReferral`
+
+Use `unsetReferral` to remove a referral from the balance manager. Requires a `tradeCap` for permission checking. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+- `tradeCap`: `TransactionArgument` representing the trade cap for permission.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="unsetReferral" signatureOnly/>
+
+## Registry functions
+
+### `registerManager`
+
+Use `registerManager` to register a balance manager with the registry. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="registerManager" signatureOnly/>
+
+## Read-only functions
+
+### `owner`
+
+Use `owner` to get the owner address of a balance manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="owner" signatureOnly/>
+
+### `id`
+
+Use `id` to get the ID of a balance manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="id" signatureOnly/>
+
+### `referralOwner`
+
+Use `referralOwner` to get the owner address of a referral. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `referral_id`: String representing the ID of the referral.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="referralOwner" signatureOnly/>
+
+## Examples
+
+The following examples demonstrate common balance manager operations.
+
+### Create and share a balance manager
+
+```tsx
+// Example: Create and share a new balance manager
+createBalanceManager = (tx: Transaction) => {
+	tx.add(this.balanceManager.createAndShareBalanceManager());
+};
+```
+
+### Create a balance manager with custom owner and all capabilities
+
+```tsx
+// Example: Create a balance manager with custom owner and get all capabilities
+createManagerWithCaps = (tx: Transaction) => {
+	const ownerAddress = '0x123...';
+
+	const { manager, depositCap, withdrawCap, tradeCap } = tx.add(
+		this.balanceManager.createBalanceManagerWithOwnerAndCaps(ownerAddress),
+	);
+
+	// Share the manager
+	tx.add(this.balanceManager.shareBalanceManager(manager));
+
+	// Transfer capabilities to the owner
+	tx.transferObjects([depositCap, withdrawCap, tradeCap], ownerAddress);
+};
+```
+
+### Deposit and withdraw funds
+
+```tsx
+// Example: Deposit USDC into a balance manager
+depositFunds = (tx: Transaction) => {
+	const managerKey = 'MANAGER_1';
+	const coinKey = 'DBUSDC';
+	const amount = 1000; // 1000 USDC
+
+	tx.add(this.balanceManager.depositIntoManager(managerKey, coinKey, amount));
+};
+
+// Example: Withdraw SUI from a balance manager
+withdrawFunds = (tx: Transaction) => {
+	const managerKey = 'MANAGER_1';
+	const coinKey = 'SUI';
+	const amount = 100; // 100 SUI
+	const recipient = '0x456...';
+
+	tx.add(this.balanceManager.withdrawFromManager(managerKey, coinKey, amount, recipient));
+};
+
+// Example: Withdraw all DEEP from a balance manager
+withdrawAllDeep = (tx: Transaction) => {
+	const managerKey = 'MANAGER_1';
+	const coinKey = 'DEEP';
+	const recipient = '0x456...';
+
+	tx.add(this.balanceManager.withdrawAllFromManager(managerKey, coinKey, recipient));
+};
+```
+
+### Mint and use capabilities
+
+```tsx
+// Example: Mint a TradeCap and use it
+mintAndUseTradeCap = async (tx: Transaction) => {
+	const managerKey = 'MANAGER_1';
+
+	// Mint the TradeCap
+	const tradeCap = tx.add(this.balanceManager.mintTradeCap(managerKey));
+
+	// Transfer to a trader
+	const traderAddress = '0x789...';
+	tx.transferObjects([tradeCap], traderAddress);
+};
+
+// Example: Use DepositCap to deposit funds
+depositWithCapability = (tx: Transaction) => {
+	const managerKey = 'MANAGER_1';
+	const coinKey = 'DBUSDC';
+	const amount = 5000; // 5000 USDC
+
+	tx.add(this.balanceManager.depositWithCap(managerKey, coinKey, amount));
+};
+
+// Example: Use WithdrawCap to withdraw funds
+withdrawWithCapability = (tx: Transaction) => {
+	const managerKey = 'MANAGER_1';
+	const coinKey = 'SUI';
+	const amount = 50; // 50 SUI
+
+	const withdrawnCoin = tx.add(this.balanceManager.withdrawWithCap(managerKey, coinKey, amount));
+
+	// Transfer the withdrawn coin
+	tx.transferObjects([withdrawnCoin], '0xabc...');
+};
+```
+
+### Generate trade proofs
+
+```tsx
+// Example: Generate a trade proof and use it to place an order
+placeOrderWithProof = (tx: Transaction) => {
+	const managerKey = 'MANAGER_1';
+	const poolKey = 'SUI_DBUSDC';
+
+	// Generate proof automatically (uses owner or tradeCap method)
+	const proof = tx.add(this.balanceManager.generateProof(managerKey));
+
+	// Use the proof to place an order
+	tx.add(
+		this.deepBook.placeLimitOrder({
+			poolKey: poolKey,
+			balanceManagerKey: managerKey,
+			clientOrderId: '12345',
+			price: 2.5,
+			quantity: 100,
+			isBid: true,
+			payWithDeep: true,
+		}),
+	);
+};
+```
+
+### Set and manage referrals
+
+```tsx
+// Example: Set a referral for a balance manager
+setManagerReferral = (tx: Transaction) => {
+	const managerKey = 'MANAGER_1';
+	const referralId = '0xdef...';
+
+	// Get or create the TradeCap
+	const tradeCap = tx.object('0x...'); // Assuming tradeCap is already minted
+
+	tx.add(this.balanceManager.setReferral(managerKey, referralId, tradeCap));
+};
+
+// Example: Unset a referral
+unsetManagerReferral = (tx: Transaction) => {
+	const managerKey = 'MANAGER_1';
+	const tradeCap = tx.object('0x...');
+
+	tx.add(this.balanceManager.unsetReferral(managerKey, tradeCap));
+};
+```
+
+### Complete workflow
+
+```tsx
+// Example: Complete balance manager setup workflow
+completeSetup = async (tx: Transaction) => {
+	const ownerAddress = '0x123...';
+
+	// Step 1: Create manager with all capabilities
+	const { manager, depositCap, withdrawCap, tradeCap } = tx.add(
+		this.balanceManager.createBalanceManagerWithOwnerAndCaps(ownerAddress),
+	);
+
+	// Step 2: Share the manager
+	tx.add(this.balanceManager.shareBalanceManager(manager));
+
+	// Step 3: Register with registry
+	// Note: Need to wait for manager to be created and get its key
+	// This would typically be done in a subsequent transaction
+
+	// Step 4: Transfer capabilities to owner
+	tx.transferObjects([depositCap, withdrawCap, tradeCap], ownerAddress);
+};
+```
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3"
+	label="DeepBookV3 Indexer repository"
+	desc="The DeepBookV3 SDK repository on GitHub."
+/>
+<RelatedLink
+	href="https://www.npmjs.com/package/@mysten/deepbook-v3"
+	label="DeepBookV3 SDK node package"
+	desc="The DeepBookV3 SDK node package on NPM."
+/>
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3"
+	label="DeepBookV3 repository"
+	desc="The DeepBookV3 repository on GitHub."
+/>

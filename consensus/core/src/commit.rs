@@ -369,6 +369,8 @@ pub struct CommittedSubDag {
     /// For safety, a previously locally decided commit may be recovered after restarting as
     /// non-local, if its finalization state was not persisted.
     pub decided_with_local_blocks: bool,
+    /// Whether rejected transactions in this commit have been recovered from storage.
+    pub recovered_rejected_transactions: bool,
     /// Optional scores that are provided as part of the consensus output to Sui
     /// that can then be used by Sui for future submission to consensus.
     pub reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
@@ -393,6 +395,7 @@ impl CommittedSubDag {
             timestamp_ms,
             commit_ref,
             decided_with_local_blocks: true,
+            recovered_rejected_transactions: false,
             reputation_scores_desc: vec![],
             rejected_transactions_by_block: BTreeMap::new(),
         }
@@ -413,9 +416,9 @@ impl Display for CommittedSubDag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "CommittedSubDag(leader={}, ref={}, blocks=[{}])",
-            self.leader,
+            "{}@{} [{}])",
             self.commit_ref,
+            self.leader,
             self.blocks
                 .iter()
                 .map(|b| b.reference().to_string())
@@ -426,14 +429,30 @@ impl Display for CommittedSubDag {
 
 impl fmt::Debug for CommittedSubDag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{} ([", self.leader, self.commit_ref)?;
-        for block in &self.blocks {
-            write!(f, "{}, ", block.reference())?;
-        }
         write!(
             f,
-            "];{}ms;rs{:?})",
-            self.timestamp_ms, self.reputation_scores_desc
+            "{}@{} [{}])",
+            self.commit_ref,
+            self.leader,
+            self.blocks
+                .iter()
+                .map(|b| b.reference().to_string())
+                .join(", ")
+        )?;
+        write!(
+            f,
+            ";{}ms;rs{:?};{};{};[{}]",
+            self.timestamp_ms,
+            self.reputation_scores_desc,
+            self.decided_with_local_blocks,
+            self.recovered_rejected_transactions,
+            self.rejected_transactions_by_block
+                .iter()
+                .map(|(block_ref, transactions)| {
+                    format!("{}: {}, ", block_ref, transactions.len())
+                })
+                .collect::<Vec<_>>()
+                .join(", "),
         )
     }
 }
@@ -462,13 +481,28 @@ pub(crate) fn load_committed_subdag_from_store(
         .collect::<Vec<_>>();
     let leader_block_idx = leader_block_idx.expect("Leader block must be in the sub-dag");
     let leader_block_ref = blocks[leader_block_idx].reference();
+
     let mut subdag = CommittedSubDag::new(
         leader_block_ref,
         blocks,
         commit.timestamp_ms(),
         commit.reference(),
     );
+
     subdag.reputation_scores_desc = reputation_scores_desc;
+
+    let reject_votes = store
+        .read_rejected_transactions(commit.reference())
+        .unwrap();
+    if let Some(reject_votes) = reject_votes {
+        subdag.decided_with_local_blocks = true;
+        subdag.recovered_rejected_transactions = true;
+        subdag.rejected_transactions_by_block = reject_votes;
+    } else {
+        subdag.decided_with_local_blocks = false;
+        subdag.recovered_rejected_transactions = false;
+    }
+
     subdag
 }
 

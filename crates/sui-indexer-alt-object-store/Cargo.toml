@@ -1,0 +1,20 @@
+[package]
+name = "sui-indexer-alt-object-store"
+edition = "2024"
+version.workspace = true
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+object_store.workspace = true
+sui-indexer-alt-framework-store-traits.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

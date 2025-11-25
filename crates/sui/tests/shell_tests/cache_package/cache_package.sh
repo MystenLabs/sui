@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Run the `cache-package` command
-sui move cache-package testnet 4c78adac "{ local = \"$(pwd)/a\" }"
+sui move cache-package testnet 4c78adac "{ local="\"$(pwd -W 2>/dev/null || pwd)/a\"" }"

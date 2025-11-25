@@ -21,10 +21,12 @@ public fun assert_ref_eq<T>(t1: &T, t2: &T) {
     }
 }
 
+#[deprecated(note = b"Use `std::debug::print` instead")]
 public fun print(str: vector<u8>) {
     std::debug::print(&str.to_ascii_string())
 }
 
-public native fun destroy<T>(x: T);
+#[deprecated(note = b"Use `std::unit_test::destroy` instead")]
+public fun destroy<T>(x: T) { std::unit_test::destroy(x) }
 
 public native fun create_one_time_witness<T: drop>(): T;
