@@ -14,6 +14,7 @@ bin-version.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 indexmap.workspace = true
+move-compiler.workspace = true
 move-core-types.workspace = true
 move-package-alt.workspace = true
 move-package-alt-compilation.workspace = true

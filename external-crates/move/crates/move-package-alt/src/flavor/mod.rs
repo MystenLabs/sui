@@ -11,8 +11,8 @@ use std::{collections::BTreeMap, fmt::Debug};
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::schema::{
-    EnvironmentID, EnvironmentName, LockfileDependencyInfo, PackageName, ReplacementDependency,
-    SystemDepName,
+    EnvironmentID, EnvironmentName, LockfileDependencyInfo, PackageName, ParsedManifest,
+    ReplacementDependency, SystemDepName,
 };
 use indexmap::IndexMap;
 
@@ -48,4 +48,7 @@ pub trait MoveFlavor: Debug + Send + Sync {
     fn implicit_dependencies(
         environment: &EnvironmentID,
     ) -> BTreeMap<PackageName, ReplacementDependency>;
+
+    /// Fail if an edition is not allowed
+    fn validate_manifest(manifest: &ParsedManifest) -> Result<(), String>;
 }

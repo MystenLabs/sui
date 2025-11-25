@@ -19,6 +19,7 @@ use crate::errors::FileHandle;
 use crate::{
     compatibility::legacy::LegacyData,
     dependency::Pinned,
+    package::manifest::ManifestError,
     schema::{
         CachedPackageInfo, DefaultDependency, ManifestDependencyInfo, ParsedManifest, Publication,
     },
@@ -107,6 +108,9 @@ impl<F: MoveFlavor> Package<F> {
 
             (*manifest.file_handle(), manifest.into_parsed())
         };
+
+        F::validate_manifest(&manifest)
+            .map_err(|msg| ManifestError::flavor_rejected_manifest(file_handle, msg))?;
 
         // try to load the address from the modern lockfile
         //   - if it fails, look in the legacy data
@@ -445,6 +449,10 @@ mod tests {
             );
 
             result
+        }
+
+        fn validate_manifest(_: &ParsedManifest) -> Result<(), String> {
+            Ok(())
         }
     }
 
