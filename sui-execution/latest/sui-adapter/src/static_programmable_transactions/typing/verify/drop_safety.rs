@@ -14,14 +14,13 @@ pub fn refine_and_verify<Mode: ExecutionMode>(
     env: &Env,
     ast: &mut T::Transaction,
 ) -> Result<(), ExecutionError> {
-    refine::transaction(ast);
+    refine::transaction(env, ast)?;
     verify::transaction::<Mode>(env, ast)?;
     Ok(())
 }
 
 mod refine {
     use sui_types::{
-        SUI_FRAMEWORK_PACKAGE_ID,
         coin::{COIN_MODULE_NAME, SEND_FUNDS_FUNC_NAME},
         error::ExecutionError,
     };
@@ -57,11 +56,12 @@ mod refine {
 
     /// After memory safety, we can switch the last usage of a `Copy` to a `Move` if it is not
     /// borrowed at the time of the last usage.
-    pub fn transaction(ast: &mut T::Transaction) {
+    pub fn transaction(env: &Env, ast: &mut T::Transaction) -> Result<(), ExecutionError> {
         let mut context = Context::new();
         for c in ast.commands.iter_mut().rev() {
             command(&mut context, c);
         }
+        return_unused_withdrawal_conversions(env, ast, &context.moved)
     }
 
     fn command(context: &mut Context, sp!(_, c): &mut T::Command) {
@@ -126,11 +126,10 @@ mod refine {
         ast: &mut T::Transaction,
         moved_locations: &BTreeSet<T::Location>,
     ) -> Result<(), ExecutionError> {
-        for (unmoved_loc, conversion_info) in ast
-            .withdrawal_conversions
-            .iter()
-            .filter(|(l, _)| !moved_locations.contains(l))
-        {
+        for conversion_info in ast.withdrawal_conversions.values().filter(|conversion| {
+            let conversion_location = T::Location::Result(conversion.conversion_result, 0);
+            !moved_locations.contains(&conversion_location)
+        }) {
             let Some(cur_command) = ast.commands.len().checked_sub(1) else {
                 invariant_violation!("cannot be zero commands with a conversion")
             };
@@ -143,11 +142,11 @@ mod refine {
             // set owner result as used
             let owner_command = &mut ast.commands[owner_result as usize];
             assert_invariant!(
-                owner_command.value.drop_values.as_slice() == &[true],
+                owner_command.value.drop_values.as_slice() == [true],
                 "owner result should be unused thus far and should be dropped"
             );
             owner_command.value.drop_values[0] = false;
-            let owner_command = &*owner_command;
+            let owner_command = &ast.commands[owner_result as usize];
             let conversion_command = &ast.commands[conversion_result as usize];
             assert_invariant!(
                 conversion_command.value.result_type.len() == 1,

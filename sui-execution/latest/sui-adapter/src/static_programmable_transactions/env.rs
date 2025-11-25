@@ -38,7 +38,7 @@ use move_vm_types::{data_store::DataStore, loaded_data::runtime_types as vm_runt
 use std::{cell::OnceCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    Identifier, Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag, TypeTag,
+    Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectID, TxContext},
     coin::RESOLVED_COIN_STRUCT,

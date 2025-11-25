@@ -5,10 +5,8 @@ use super::{ast as T, env::Env};
 use crate::{
     execution_mode::ExecutionMode,
     programmable_transactions::context::EitherError,
-    sp,
     static_programmable_transactions::{
-        linkage::resolved_linkage::ResolvedLinkage,
-        loading::ast::{self as L, Datatype, Type},
+        loading::ast::{self as L, Type},
         spanned::sp,
         typing::ast::BytesConstraint,
     },
@@ -16,7 +14,6 @@ use crate::{
 use indexmap::{IndexMap, IndexSet};
 use std::{collections::BTreeMap, rc::Rc};
 use sui_types::{
-    SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectRef, TxContextKind},
     coin::{COIN_MODULE_NAME, REDEEM_FUNDS_FUNC_NAME, RESOLVED_COIN_STRUCT},
@@ -200,7 +197,7 @@ impl Context {
         let Some(cur_lift) = prev_lift.checked_add(1) else {
             invariant_violation!("Cannot increment lift value of {prev_lift}")
         };
-        self.result_index_lift.insert(cur, cur_lift + 1);
+        self.result_index_lift.insert(cur, cur_lift);
         self.commands.push(sp(self.current_command, command));
         Ok(cur)
     }
@@ -257,6 +254,12 @@ impl Context {
                 };
                 object_input.ty.clone()
             }
+            T::Location::WithdrawalInput(i) => {
+                let Some((_, withdrawal_input)) = self.withdrawals.get_index(i as usize) else {
+                    invariant_violation!("Unbound withdrawal input {}", i)
+                };
+                withdrawal_input.ty.clone()
+            }
             T::Location::PureInput(_) | T::Location::ReceivingInput(_) => return Ok(None),
         }))
     }
@@ -278,15 +281,10 @@ impl Context {
                     T::Location::ObjectInput(index as u16)
                 }
                 InputKind::Withdrawal => {
-                    let Some((withdrawal_index, _, withdrawal_input)) =
-                        self.withdrawals.get_full(&i)
-                    else {
+                    let Some(withdrawal_index) = self.withdrawals.get_index_of(&i) else {
                         invariant_violation!("Unbound withdrawal input {}", i.0)
                     };
-                    (
-                        T::Location::WithdrawalInput(withdrawal_index as u16),
-                        withdrawal_input.ty.clone(),
-                    )
+                    T::Location::WithdrawalInput(withdrawal_index as u16)
                 }
                 InputKind::Pure | InputKind::Receiving => return Ok(None),
             },
@@ -383,25 +381,21 @@ pub fn transaction<Mode: ExecutionMode>(
 ) -> Result<T::Transaction, ExecutionError> {
     let L::Transaction { inputs, commands } = lt;
     let mut context = Context::new(inputs)?;
-    commands
-        .into_iter()
-        .enumerate()
-        .map(|(i, c)| {
-            let idx = i as u16;
-            context.current_command = idx;
-            let (c_, tys) =
-                command::<Mode>(env, &mut context, c).map_err(|e| e.with_command_index(i))?;
-            let c = T::Command_ {
-                command: c_,
-                result_type: tys,
-                // computed later
-                drop_values: vec![],
-                // computed later
-                consumed_shared_objects: vec![],
-            };
-            context.push_result(c)
-        })
-        .collect::<Result<(), ExecutionError>>()?;
+    for (i, c) in commands.into_iter().enumerate() {
+        let idx = i as u16;
+        context.current_command = idx;
+        let (c_, tys) =
+            command::<Mode>(env, &mut context, c).map_err(|e| e.with_command_index(i))?;
+        let c = T::Command_ {
+            command: c_,
+            result_type: tys,
+            // computed later
+            drop_values: vec![],
+            // computed later
+            consumed_shared_objects: vec![],
+        };
+        context.push_result(c)?
+    }
     let mut ast = context.finish();
     // mark the last usage of references as Move instead of Copy
     scope_references::transaction(&mut ast);
