@@ -990,7 +990,9 @@ fn exp(context: &mut Context, e: &T::Exp) {
                 check_private_transfer(context, e.exp.loc, mcall)
             }
 
-            if module.value.is(&STD_ADDR_VALUE, INTERNAL_MODULE_NAME) && name.value() == INTERNAL_PERMIT_FUNCTION_NAME {
+            if module.value.is(&STD_ADDR_VALUE, INTERNAL_MODULE_NAME)
+                && name.value() == INTERNAL_PERMIT_FUNCTION_NAME
+            {
                 check_internal_permit(context, e.exp.loc, mcall)
             }
         }
