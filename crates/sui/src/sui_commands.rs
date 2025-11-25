@@ -1049,8 +1049,7 @@ async fn start(
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     info!("Cluster started");
 
-    let fullnode_rpc_ip = normalize_bind_addr(fullnode_rpc_address);
-    let fullnode_rpc_url = format!("http://{fullnode_rpc_ip}:{}", fullnode_rpc_address.port());
+    let fullnode_rpc_url = socket_addr_to_url(fullnode_rpc_address)?.to_string();
     info!("Fullnode RPC URL: {fullnode_rpc_url}");
 
     let prometheus_registry = Registry::new();
@@ -1542,12 +1541,7 @@ async fn genesis(
         client_config.active_address = active_address;
     }
 
-    let rpc = format!(
-        "http://{}:{}",
-        normalize_bind_addr(fullnode_config.json_rpc_address),
-        fullnode_config.json_rpc_address.port()
-    );
-
+    let rpc = socket_addr_to_url(fullnode_config.json_rpc_address)?.to_string();
     client_config.add_env(SuiEnv {
         alias: "localnet".to_string(),
         rpc,
