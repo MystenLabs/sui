@@ -52,6 +52,7 @@ url.workspace = true
 
 sui-config.workspace = true
 sui-bridge.workspace = true
+sui-data-store.workspace = true
 sui-execution.workspace = true
 sui-faucet.workspace = true
 sui-swarm-config.workspace = true

@@ -13457,6 +13457,7 @@ dependencies = [
  "signature 1.6.4",
  "sui-bridge",
  "sui-config",
+ "sui-data-store",
  "sui-execution",
  "sui-faucet",
  "sui-genesis-builder",
