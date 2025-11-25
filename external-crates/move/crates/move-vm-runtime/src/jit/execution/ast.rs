@@ -50,22 +50,6 @@ pub struct Package {
     pub vtable: PackageVirtualTable,
 }
 
-impl Drop for Package {
-    #![allow(unsafe_code)]
-    fn drop(&mut self) {
-        // Manually drop all NativeFunction Arc references to prevent memory leaks.
-        //
-        // ArenaVec uses ManuallyDrop and does NOT call drop on its elements.
-        // This means Function.native (which contains Arc<UnboxedNativeFunction>)
-        // would leak if we don't explicitly handle it.
-        for module in self.loaded_modules.values_mut() {
-            unsafe {
-                std::ptr::drop_in_place(module);
-            }
-        }
-    }
-}
-
 // A LoadedModule is very similar to a CompiledModule but data is "transformed" to a representation
 // more appropriate to execution.
 // When code executes indexes in instructions are resolved against those runtime structure
@@ -131,10 +115,17 @@ pub struct Module {
 }
 
 impl Drop for Module {
+    #![allow(unsafe_code)]
     fn drop(&mut self) {
+        // Manually drop all NativeFunction Arc references to prevent memory leaks.
+        //
+        // ArenaVec uses ManuallyDrop and does NOT call drop on its elements.
+        // This means Function.native (which contains Arc<UnboxedNativeFunction>)
+        // would leak if we don't explicitly handle it.
         for function in self.functions.iter_mut() {
-            // Take ownership of the Arc and drop it
-            drop(std::mem::take(&mut function.native));
+            unsafe {
+                std::ptr::drop_in_place(function);
+            }
         }
     }
 }
@@ -162,12 +153,21 @@ pub struct Function {
     pub(crate) locals: ArenaVec<ArenaType>,
     pub(crate) return_: ArenaVec<ArenaType>,
     pub(crate) type_parameters: ArenaVec<AbilitySet>,
-    // NOTE: This field is manually dropped in Package::drop() to prevent Arc leaks
+    // NOTE: This field is manually dropped in Module::drop() to prevent Arc leaks
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
     pub name: VirtualTableKey,
     pub locals_len: usize,
     pub jump_tables: ArenaVec<VariantJumpTable>,
+}
+
+impl Drop for Function {
+    fn drop(&mut self) {
+        // Take ownership of the Arc and drop it
+        if let Some(native_fn) = self.native.take() {
+            drop(native_fn);
+        }
+    }
 }
 
 // A variant jump table -- note that these are only full at the moment.
