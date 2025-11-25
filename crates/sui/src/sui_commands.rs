@@ -1542,8 +1542,6 @@ async fn genesis(
         client_config.active_address = active_address;
     }
 
-    // On windows, using 0.0.0.0 will usually yield in an networking error. This localnet ip
-    // address must bind to 127.0.0.1 if the default 0.0.0.0 is used.
     let rpc = format!(
         "http://{}:{}",
         normalize_bind_addr(fullnode_config.json_rpc_address),
