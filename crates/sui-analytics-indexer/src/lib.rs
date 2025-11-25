@@ -11,14 +11,12 @@ use num_enum::TryFromPrimitive;
 use object_store::path::Path;
 use package_store::PackageCache;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use strum_macros::EnumIter;
 use tracing::info;
 
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
-use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_object_store::ObjectStore;
 use sui_types::base_types::EpochId;
@@ -57,14 +55,6 @@ fn default_client_metric_port() -> u16 {
     8081
 }
 
-fn default_batch_size() -> usize {
-    10
-}
-
-fn default_data_limit() -> usize {
-    100
-}
-
 fn default_remote_store_url() -> String {
     "https://checkpoints.mainnet.sui.io".to_string()
 }
@@ -75,14 +65,6 @@ fn default_max_row_count() -> usize {
 
 fn default_file_format() -> FileFormat {
     FileFormat::Parquet
-}
-
-fn default_write_concurrency() -> usize {
-    10
-}
-
-fn default_watermark_interval_secs() -> u64 {
-    60
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -104,12 +86,6 @@ pub struct JobConfig {
     pub client_metric_port: u16,
     /// Remote object store where data gets written to
     pub remote_store_config: ObjectStoreConfig,
-    /// Object store download batch size.
-    #[serde(default = "default_batch_size")]
-    pub batch_size: usize,
-    /// Maximum number of checkpoints to queue in memory.
-    #[serde(default = "default_data_limit")]
-    pub data_limit: usize,
     /// Remote store URL.
     #[serde(default = "default_remote_store_url")]
     pub remote_store_url: String,
@@ -127,11 +103,15 @@ pub struct JobConfig {
     #[serde(rename = "tasks")]
     pipeline_configs: Vec<PipelineConfig>,
 
-    // Indexer framework configuration
-    #[serde(default = "default_write_concurrency")]
-    pub write_concurrency: usize,
-    #[serde(default = "default_watermark_interval_secs")]
-    pub watermark_interval_secs: u64,
+    // Framework configuration types (directly embedded)
+    /// Framework ingestion configuration
+    #[serde(default)]
+    pub ingestion: IngestionConfig,
+    /// Framework concurrent pipeline configuration
+    #[serde(default)]
+    pub concurrent: ConcurrentConfig,
+
+    // Checkpoint range (IndexerArgs fields - can't embed because no serde)
     pub first_checkpoint: Option<u64>,
     pub last_checkpoint: Option<u64>,
 }
@@ -561,23 +541,9 @@ pub async fn build_analytics_indexer(
         },
     };
 
-    let ingestion_config = IngestionConfig {
-        checkpoint_buffer_size: config.data_limit,
-        ingest_concurrency: config.batch_size,
-        retry_interval_ms: 5000,
-        streaming_backoff_initial_batch_size: 10,
-        streaming_backoff_max_batch_size: 10000,
-    };
-
-    let concurrent_config = ConcurrentConfig {
-        committer: CommitterConfig {
-            write_concurrency: config.write_concurrency,
-            watermark_interval_ms: Duration::from_secs(config.watermark_interval_secs).as_millis()
-                as u64,
-            ..Default::default()
-        },
-        pruner: None,
-    };
+    // Use framework config types directly from JobConfig
+    let ingestion_config = config.ingestion.clone();
+    let concurrent_config = config.concurrent.clone();
 
     let mut indexer = Indexer::new(
         store.clone(),
