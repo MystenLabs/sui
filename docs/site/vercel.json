@@ -159,6 +159,8 @@
       { "source": "/concepts/graphql-rpc", "destination": "/concepts/data-access/graphql-rpc"},
       { "source": "/concepts/custom-indexing-framework", "destination": "/concepts/data-access/custom-indexing-framework"},
       { "source": "/concepts/custom-indexer/pipeline-architecture", "destination": "/concepts/data-access/pipeline-architecture"},
-      { "source": "/concepts/archival-store", "destination": "/concepts/data-access/archival-store"}
+      { "source": "/concepts/archival-store", "destination": "/concepts/data-access/archival-store"},
+      { "source": "/concepts/tokenomics/vesting-strategies", "destination": "/guides/developer/coin/vesting-strategies"}
+
     ]
   }
