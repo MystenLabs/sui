@@ -68,7 +68,7 @@ pub struct VMDispatchTables {
     /// (e.g., type ugrades or similar).
     /// [SAFETY] Ordering of inner maps is not guaranteed
     pub(crate) type_depths: LruCache<VirtualTableKey, DepthFormula>,
-    /// Defining ID Set -- a set of all defining IDs on any types mentioned in the package.
+    /// Defining ID Set -- a set of all defining IDs on any types defined in the package.
     /// [SAFETY] Ordering is not guaranteed
     pub(crate) defining_id_origins: BTreeMap<DefiningTypeId, OriginalId>,
 }
