@@ -38,5 +38,5 @@ module std::internal;
 public struct Permit<phantom T>() has drop;
 
 /// Construct a new `Permit` for the type `T`.
-/// Can only be instantiated by the module that defines the `T`. Aborts otherwise.
+/// Can only be instantiated by the module that defines the `T`.
 public fun permit<T>(): Permit<T> { Permit() }

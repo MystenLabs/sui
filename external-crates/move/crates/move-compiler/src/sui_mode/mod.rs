@@ -31,6 +31,8 @@ pub const UTF_MODULE_NAME: Symbol = symbol!("string");
 pub const UTF_TYPE_NAME: Symbol = symbol!("String");
 pub const ASCII_MODULE_NAME: Symbol = symbol!("ascii");
 pub const ASCII_TYPE_NAME: Symbol = symbol!("String");
+pub const INTERNAL_MODULE_NAME: Symbol = symbol!("internal");
+pub const INTERNAL_PERMIT_FUNCTION_NAME: Symbol = symbol!("permit");
 
 pub const SUI_ADDR_NAME: Symbol = symbol!("sui");
 pub const OBJECT_MODULE_NAME: Symbol = symbol!("object");
@@ -168,6 +170,13 @@ pub const PRIVATE_TRANSFER_CALL_DIAG: DiagnosticInfo = custom(
     /* category */ TYPING,
     /* code */ 9,
     "invalid private transfer call",
+);
+pub const INTERNAL_PERMIT_CALL_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 11,
+    "invalid internal permit call",
 );
 pub const DYNAMIC_COIN_CREATION_CALL_DIAG: DiagnosticInfo = custom(
     SUI_DIAG_PREFIX,

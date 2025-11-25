@@ -70,7 +70,7 @@ the <code>T</code>, as well as by the <code>Owner&lt;T&gt;</code> instance.
 ## Function `permit`
 
 Construct a new <code><a href="../std/internal.md#std_internal_Permit">Permit</a></code> for the type <code>T</code>.
-Can only be instantiated by the module that defines the <code>T</code>. Aborts otherwise.
+Can only be instantiated by the module that defines the <code>T</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/internal.md#std_internal_permit">permit</a>&lt;T&gt;(): <a href="../std/internal.md#std_internal_Permit">std::internal::Permit</a>&lt;T&gt;
