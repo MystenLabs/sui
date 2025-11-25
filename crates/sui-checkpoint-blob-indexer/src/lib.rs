@@ -29,7 +29,7 @@ mod tests {
         let pipeline = CheckpointBlobPipeline {
             compression_level: None,
         };
-        let count = pipeline.commit(&Some(blob), &mut conn).await.unwrap();
+        let count = pipeline.commit(&Some(blob), &[], &mut conn).await.unwrap();
         assert_eq!(count, 1);
 
         let path = ObjectPath::from("100.binpb");
@@ -52,7 +52,7 @@ mod tests {
         let pipeline = CheckpointBlobPipeline {
             compression_level: Some(3),
         };
-        let count = pipeline.commit(&Some(blob), &mut conn).await.unwrap();
+        let count = pipeline.commit(&Some(blob), &[], &mut conn).await.unwrap();
         assert_eq!(count, 1);
 
         let path = ObjectPath::from("200.binpb.zst");
@@ -76,7 +76,7 @@ mod tests {
                 checkpoint_number: 100,
             };
             let pipeline = EpochsPipeline;
-            let count = pipeline.commit(&Some(epoch), &mut conn).await.unwrap();
+            let count = pipeline.commit(&Some(epoch), &[], &mut conn).await.unwrap();
             assert_eq!(count, 1);
 
             let result = conn.object_store().get(&path).await.unwrap();
@@ -92,7 +92,7 @@ mod tests {
                 checkpoint_number: 200,
             };
             let pipeline = EpochsPipeline;
-            pipeline.commit(&Some(epoch), &mut conn).await.unwrap();
+            pipeline.commit(&Some(epoch), &[], &mut conn).await.unwrap();
 
             let result = conn.object_store().get(&path).await.unwrap();
             let bytes = result.bytes().await.unwrap();
@@ -107,7 +107,7 @@ mod tests {
                 checkpoint_number: 150,
             };
             let pipeline = EpochsPipeline;
-            pipeline.commit(&Some(epoch), &mut conn).await.unwrap();
+            pipeline.commit(&Some(epoch), &[], &mut conn).await.unwrap();
 
             let result = conn.object_store().get(&path).await.unwrap();
             let bytes = result.bytes().await.unwrap();
@@ -122,7 +122,7 @@ mod tests {
                 checkpoint_number: 100,
             };
             let pipeline = EpochsPipeline;
-            let count = pipeline.commit(&Some(epoch), &mut conn).await.unwrap();
+            let count = pipeline.commit(&Some(epoch), &[], &mut conn).await.unwrap();
             assert_eq!(count, 0);
 
             let result = conn.object_store().get(&path).await.unwrap();

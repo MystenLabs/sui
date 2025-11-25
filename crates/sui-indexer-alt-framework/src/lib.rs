@@ -564,6 +564,7 @@ mod tests {
                 async fn commit<'a>(
                     &self,
                     batch: &Self::Batch,
+                    _watermarks: &[crate::pipeline::WatermarkPart],
                     conn: &mut <Self::Store as Store>::Connection<'a>,
                 ) -> anyhow::Result<usize> {
                     for value in batch {

@@ -564,7 +564,7 @@ pub mod indexer_alt {
         )
         .await?;
 
-        let store = ObjectStore::new(object_store, None);
+        let store = ObjectStore::new(object_store.clone());
 
         // Create package cache for handlers that need it
         let package_cache = Arc::new(PackageCache::new(
@@ -576,8 +576,8 @@ pub mod indexer_alt {
         let indexer_args = sui_indexer_alt_framework::IndexerArgs {
             first_checkpoint: config.first_checkpoint,
             last_checkpoint: config.last_checkpoint,
-            skip_watermark: false,
             pipeline: vec![],
+            task: Default::default(),
         };
 
         let client_args = sui_indexer_alt_framework::ingestion::ClientArgs {
