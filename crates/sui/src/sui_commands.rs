@@ -23,7 +23,7 @@ use prometheus::Registry;
 use rand::rngs::OsRng;
 use std::collections::BTreeMap;
 use std::io::{Write, stdout};
-use std::net::{AddrParseError, IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{AddrParseError, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -1049,16 +1049,8 @@ async fn start(
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     info!("Cluster started");
 
-    let fullnode_rpc_ip = match fullnode_rpc_address.ip() {
-        IpAddr::V4(v4) if v4.is_unspecified() => Ipv4Addr::LOCALHOST,
-        IpAddr::V6(v6) if v6.is_unspecified() => Ipv4Addr::LOCALHOST,
-        IpAddr::V4(v4) => v4,
-        IpAddr::V6(v6) => v6.to_ipv4().ok_or_else(|| {
-            anyhow!("Fullnode RPC address must be an IPv4 address or unspecified address")
-        })?,
-    };
-
-    let fullnode_rpc_url = format!("http://{fullnode_rpc_ip}:{}", fullnode_rpc_address.port(),);
+    let fullnode_rpc_ip = normalize_bind_addr(fullnode_rpc_address);
+    let fullnode_rpc_url = format!("http://{fullnode_rpc_ip}:{}", fullnode_rpc_address.port());
     info!("Fullnode RPC URL: {fullnode_rpc_url}");
 
     let prometheus_registry = Registry::new();
@@ -1160,7 +1152,7 @@ async fn start(
         rpc_services.push(handle);
 
         info!("Consistent Store started at {address}");
-        Some(format!("http://{address}"))
+        Some(address)
     } else {
         None
     };
@@ -1176,21 +1168,7 @@ async fn start(
             no_ide: false,
         };
 
-        let consistent_store_url = consistent_store_url
-            .as_ref()
-            .map(|url_str| -> Result<Url, anyhow::Error> {
-                let mut url =
-                    Url::parse(url_str).context("Failed to parse consistent store URL")?;
-                if let Some("0.0.0.0") = url.host_str() {
-                    url.set_host(Some("127.0.0.1"))
-                        .context("Failed to set host to 127.0.0.1")?;
-                }
-
-                Ok(url)
-            })
-            .transpose()
-            .context("Failed to parse consistent store URL")?;
-
+        let consistent_store_url = consistent_store_url.map(socket_addr_to_url).transpose()?;
         let consistent_reader_args = ConsistentReaderArgs {
             consistent_store_url,
             ..Default::default()
@@ -1566,19 +1544,15 @@ async fn genesis(
 
     // On windows, using 0.0.0.0 will usually yield in an networking error. This localnet ip
     // address must bind to 127.0.0.1 if the default 0.0.0.0 is used.
-    let localnet_ip =
-        if fullnode_config.json_rpc_address.ip() == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
-            "127.0.0.1".to_string()
-        } else {
-            fullnode_config.json_rpc_address.ip().to_string()
-        };
+    let rpc = format!(
+        "http://{}:{}",
+        normalize_bind_addr(fullnode_config.json_rpc_address),
+        fullnode_config.json_rpc_address.port()
+    );
+
     client_config.add_env(SuiEnv {
         alias: "localnet".to_string(),
-        rpc: format!(
-            "http://{}:{}",
-            localnet_ip,
-            fullnode_config.json_rpc_address.port()
-        ),
+        rpc,
         ws: None,
         basic_auth: None,
         chain_id: None,
@@ -1889,4 +1863,20 @@ pub async fn get_replay_node(context: &WalletContext) -> Result<SR2::Node, anyho
         Chain::Testnet => SR2::Node::Testnet,
         Chain::Unknown => bail!(err_msg),
     })
+}
+
+/// Converts a socket address to a Url by setting the scheme to HTTP.
+fn socket_addr_to_url(addr: SocketAddr) -> Result<Url, anyhow::Error> {
+    let ip = normalize_bind_addr(addr);
+    Url::parse(&format!("http://{ip}:{}", addr.port()))
+        .with_context(|| format!("Failed to parse {addr} into a Url"))
+}
+
+/// Resolves an unspecified ip address to a localhost IP address.
+fn normalize_bind_addr(addr: SocketAddr) -> IpAddr {
+    match addr.ip() {
+        IpAddr::V4(v4) if v4.is_unspecified() => IpAddr::V4(Ipv4Addr::LOCALHOST),
+        IpAddr::V6(v6) if v6.is_unspecified() => IpAddr::V6(Ipv6Addr::LOCALHOST),
+        ip => ip,
+    }
 }
