@@ -2006,7 +2006,7 @@ mod tests {
         .await
         .unwrap();
 
-        let (controllable_handler, process_below) = ControllableHandler::with_limit(100);
+        let (controllable_handler, process_below) = ControllableHandler::with_limit(10);
 
         let _ = tasked_indexer
             .concurrent_pipeline(
@@ -2032,7 +2032,7 @@ mod tests {
         store
             .wait_for_watermark(
                 &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap(),
-                100,
+                10,
                 std::time::Duration::from_secs(10),
             )
             .await;
@@ -2063,14 +2063,14 @@ mod tests {
         let data = store.data.get(ControllableHandler::NAME).unwrap();
         // All 500+1 checkpoints should have been ingested.
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 501);
-        // Checkpoints 101 to 249 should have been skipped.
+        // Checkpoints 11 to 249 should have been skipped.
         assert_eq!(
             metrics
                 .total_collector_skipped_checkpoints
                 .get_metric_with_label_values(&[ControllableHandler::NAME])
                 .unwrap()
                 .get(),
-            149
+            239
         );
 
         let ge_250 = data.iter().filter(|e| *e.key() >= 250).count();
