@@ -10,9 +10,10 @@ use bytes::Bytes;
 use serde::Serialize;
 use sui_types::base_types::EpochId;
 
-use crate::csv::CsvWriter;
-use crate::parquet::ParquetWriter;
-use crate::{FileFormat, ParquetSchema, Pipeline, PipelineConfig};
+use crate::config::{FileFormat, PipelineConfig};
+use crate::pipeline::Pipeline;
+use crate::schema::RowSchema;
+use crate::writers::{CsvWriter, ParquetWriter};
 
 /// Trait for entry types that provide analytics metadata
 pub trait AnalyticsMetadata {
@@ -29,7 +30,7 @@ enum WriterVariant {
 }
 
 impl WriterVariant {
-    fn write<S: Serialize + ParquetSchema>(
+    fn write<S: Serialize + RowSchema>(
         &mut self,
         rows: Box<dyn Iterator<Item = S> + Send + Sync>,
     ) -> Result<()> {
@@ -39,7 +40,7 @@ impl WriterVariant {
         }
     }
 
-    fn flush<S: Serialize + ParquetSchema>(&mut self) -> Result<Option<Vec<u8>>> {
+    fn flush<S: Serialize + RowSchema>(&mut self) -> Result<Option<Vec<u8>>> {
         match self {
             WriterVariant::Csv(w) => w.flush::<S>(),
             WriterVariant::Parquet(w) => w.flush::<S>(),
@@ -55,7 +56,7 @@ impl WriterVariant {
 }
 
 /// Generic batch struct that works for all entry types
-pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + ParquetSchema> {
+pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + RowSchema> {
     inner: Mutex<Option<WriterVariant>>,
     pub(crate) dir_prefix: String,
     current_file_bytes: Mutex<Option<Bytes>>,
@@ -69,7 +70,7 @@ pub struct AnalyticsHandler<P, B> {
     _batch: PhantomData<B>,
 }
 
-impl<T: AnalyticsMetadata + Serialize + ParquetSchema + 'static> Default for AnalyticsBatch<T> {
+impl<T: AnalyticsMetadata + Serialize + RowSchema + 'static> Default for AnalyticsBatch<T> {
     fn default() -> Self {
         Self {
             inner: Mutex::new(None),
@@ -80,7 +81,7 @@ impl<T: AnalyticsMetadata + Serialize + ParquetSchema + 'static> Default for Ana
     }
 }
 
-impl<T: AnalyticsMetadata + Serialize + ParquetSchema> AnalyticsBatch<T> {
+impl<T: AnalyticsMetadata + Serialize + RowSchema> AnalyticsBatch<T> {
     /// Write rows to the batch (initializes writer on first call)
     fn write_rows<I>(&self, rows: I, format: FileFormat) -> Result<()>
     where
@@ -167,7 +168,7 @@ impl<P> sui_indexer_alt_framework::pipeline::concurrent::Handler
     for AnalyticsHandler<P, AnalyticsBatch<P::Value>>
 where
     P: sui_indexer_alt_framework::pipeline::Processor + Send + Sync,
-    P::Value: AnalyticsMetadata + Serialize + ParquetSchema + Send + Sync,
+    P::Value: AnalyticsMetadata + Serialize + RowSchema + Send + Sync,
 {
     type Store = sui_indexer_alt_object_store::ObjectStore;
     type Batch = AnalyticsBatch<P::Value>;

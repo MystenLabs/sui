@@ -5,9 +5,9 @@ use anyhow::Result;
 use csv::WriterBuilder;
 use serde::Serialize;
 
-use crate::ParquetSchema;
+use crate::schema::RowSchema;
 
-// Save table entries to CSV format in memory
+/// Writes table entries to CSV format in memory.
 pub struct CsvWriter {
     buffer: Vec<u8>,
     row_count: usize,
@@ -21,8 +21,8 @@ impl CsvWriter {
         })
     }
 
-    /// Write rows to in-memory CSV buffer
-    pub fn write<S: Serialize + ParquetSchema>(
+    /// Writes rows to the in-memory CSV buffer.
+    pub fn write<S: Serialize + RowSchema>(
         &mut self,
         rows: Box<dyn Iterator<Item = S> + Send + Sync>,
     ) -> Result<()> {
@@ -42,20 +42,17 @@ impl CsvWriter {
         Ok(())
     }
 
-    /// Flush accumulated rows to a CSV byte buffer
-    pub fn flush<S: Serialize + ParquetSchema>(&mut self) -> Result<Option<Vec<u8>>> {
-        // Nothing to flush if buffer is empty
+    /// Flushes accumulated rows to a CSV byte buffer.
+    pub fn flush<S: Serialize + RowSchema>(&mut self) -> Result<Option<Vec<u8>>> {
         if self.buffer.is_empty() {
             return Ok(None);
         }
 
-        // Take ownership of the buffer and replace with a new one
         let bytes = std::mem::take(&mut self.buffer);
-
         Ok(Some(bytes))
     }
 
-    /// Number of rows accumulated since last flush
+    /// Returns the number of rows accumulated since the last flush.
     pub fn rows(&self) -> Result<usize> {
         Ok(self.row_count)
     }

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ParquetSchema, ParquetValue};
 use anyhow::{Result, anyhow};
 use arrow_array::{
     ArrayRef, RecordBatch,
@@ -13,6 +12,8 @@ use std::sync::Arc;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
+
+use crate::schema::{ColumnValue, RowSchema};
 
 type StrBuilder = GenericStringBuilder<i32>;
 
@@ -43,7 +44,7 @@ impl ColumnBuilder {
     }
 }
 
-// Save table entries to parquet files.
+/// Writes table entries to Parquet format in memory.
 pub struct ParquetWriter {
     builders: Vec<ColumnBuilder>,
     row_count: usize,
@@ -56,18 +57,14 @@ impl ParquetWriter {
             row_count: 0,
         })
     }
-}
 
-impl ParquetWriter {
-    /// Persist given rows into a file
-    pub fn write<S: Serialize + ParquetSchema>(
+    /// Writes the given rows to the Parquet buffer.
+    pub fn write<S: Serialize + RowSchema>(
         &mut self,
         rows: Box<dyn Iterator<Item = S> + Send + Sync>,
     ) -> Result<()> {
-        // Make the iterator peekable
         let mut row_iter = rows.peekable();
 
-        // Check if iterator is empty
         if row_iter.peek().is_none() {
             return Ok(());
         }
@@ -79,12 +76,12 @@ impl ParquetWriter {
             for col_idx in 0..S::schema().len() {
                 let value = first_row.get_column(col_idx);
                 self.builders.push(match value {
-                    ParquetValue::U64(_) | ParquetValue::OptionU64(_) => {
+                    ColumnValue::U64(_) | ColumnValue::OptionU64(_) => {
                         ColumnBuilder::U64(UInt64Builder::new())
                     }
-                    ParquetValue::I64(_) => ColumnBuilder::I64(Int64Builder::new()),
-                    ParquetValue::Bool(_) => ColumnBuilder::Bool(BooleanBuilder::new()),
-                    ParquetValue::Str(_) | ParquetValue::OptionStr(_) => {
+                    ColumnValue::I64(_) => ColumnBuilder::I64(Int64Builder::new()),
+                    ColumnValue::Bool(_) => ColumnBuilder::Bool(BooleanBuilder::new()),
+                    ColumnValue::Str(_) | ColumnValue::OptionStr(_) => {
                         ColumnBuilder::Str(StrBuilder::new())
                     }
                 });
@@ -96,16 +93,16 @@ impl ParquetWriter {
             count += 1;
             for (col_idx, value) in (0..S::schema().len()).map(|i| (i, row.get_column(i))) {
                 match (&mut self.builders[col_idx], value) {
-                    (ColumnBuilder::U64(b), ParquetValue::U64(v)) => b.append_value(v),
-                    (ColumnBuilder::I64(b), ParquetValue::I64(v)) => b.append_value(v),
-                    (ColumnBuilder::Bool(b), ParquetValue::Bool(v)) => b.append_value(v),
-                    (ColumnBuilder::Str(b), ParquetValue::Str(v)) => b.append_value(&v),
+                    (ColumnBuilder::U64(b), ColumnValue::U64(v)) => b.append_value(v),
+                    (ColumnBuilder::I64(b), ColumnValue::I64(v)) => b.append_value(v),
+                    (ColumnBuilder::Bool(b), ColumnValue::Bool(v)) => b.append_value(v),
+                    (ColumnBuilder::Str(b), ColumnValue::Str(v)) => b.append_value(&v),
 
-                    (ColumnBuilder::U64(b), ParquetValue::OptionU64(opt)) => match opt {
+                    (ColumnBuilder::U64(b), ColumnValue::OptionU64(opt)) => match opt {
                         Some(v) => b.append_value(v),
                         None => b.append_null(),
                     },
-                    (ColumnBuilder::Str(b), ParquetValue::OptionStr(opt)) => match opt {
+                    (ColumnBuilder::Str(b), ColumnValue::OptionStr(opt)) => match opt {
                         Some(v) => b.append_value(&v),
                         None => b.append_null(),
                     },
@@ -119,8 +116,8 @@ impl ParquetWriter {
         Ok(())
     }
 
-    /// Flush accumulated rows to an in-memory Parquet buffer
-    pub fn flush<S: Serialize + ParquetSchema>(&mut self) -> Result<Option<Vec<u8>>> {
+    /// Flushes accumulated rows to an in-memory Parquet buffer.
+    pub fn flush<S: Serialize + RowSchema>(&mut self) -> Result<Option<Vec<u8>>> {
         // Nothing to flush if builders aren't initialized or are empty
         if self.builders.is_empty()
             || self
@@ -152,7 +149,7 @@ impl ParquetWriter {
         Ok(Some(buffer))
     }
 
-    /// Number of rows accumulated since last flush
+    /// Returns the number of rows accumulated since the last flush.
     pub fn rows(&self) -> Result<usize> {
         Ok(self.row_count)
     }
