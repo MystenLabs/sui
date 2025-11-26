@@ -1325,6 +1325,7 @@
                 "consensus_order_end_of_epoch_last": true,
                 "consensus_round_prober": false,
                 "consensus_round_prober_probe_accepted_rounds": false,
+                "consensus_skip_gced_accept_votes": false,
                 "consensus_smart_ancestor_selection": false,
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
