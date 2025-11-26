@@ -22,9 +22,9 @@ The following steps align with those in the diagram:
 
 1. All certificates are forwarded to the Sui DAG-based consensus protocol, which also operated by the validators. Consensus outputs a complete order of certificates; the validators check and execute those that contain [shared objects].
 
-1. Clients can collect a supermajority of validator responses, assemble them into an effects certificate, and use it as proof of the transaction's settlement.
+1. Clients can collect a supermajority of validator responses, assemble them into an effects certificate, and use it as proof of the transaction settlement.
 
-1. Subsequently, Sui forms [checkpoints] for every consensus commit, which it uses to drive the [reconfiguration protocol].
+1. Subsequently, Sui forms [checkpoints](/concepts/cryptography/system/checkpoint-verification.mdx) for every consensus commit, which it uses to drive the [reconfiguration protocol](/concepts/sui-architecture/epochs.mdx).
 
 The [Sui Lutris](https://docs.sui.io/paper/sui-lutris.pdf) paper provides additional details on how the safety and liveness protocols operate, as well as proof of security for the standard distributed systems model with Byzantine participants in partial synchrony.
 
@@ -58,7 +58,7 @@ Full nodes collect signatures from validators in parallel to minimize latency.
 
 After the full node collects a supermajority of validator signatures, the transaction is considered certified as the full node has formed a transaction certificate.
 
-It is impossible to concurrently form certificates for two different transactions that attempt to use the same owned object. This is true even if there are some dishonest validators that illegally sign both transactions, because of a principle in distributed computing called [quorum intersection].
+It is impossible to concurrently form certificates for two different transactions that attempt to use the same owned object. This is true even if there are some dishonest validators that illegally sign both transactions, because of a principle in distributed computing called [quorum intersection](/concepts/sui-architecture/consensus.mdx).
 
 If fewer than 1/3 of the validators are dishonest, then the set of signers for any two certificates must have an overlap that includes at least one honest validator. Crucially, because that validator is honest, it never signs two transactions that attempt to access the same input object at the same version. After the transaction completes, the input object version changes and can be accessed again by subsequent transactions.
 
@@ -110,7 +110,7 @@ The network round trip of sending a transaction and receiving a validator signat
 
 After the supermajority of validators have executed the transaction and an effects certificate exists, the effects of the transaction (transfers, newly minted objects, and so on) have been implemented. At this point, the network can process transactions that depend on those effects.
 
-For transactions that involve owned objects only, this happens before consensus in under half a second. If a transaction includes shared objects, it happens shortly after consensus, which can take a few seconds. At this point, the transaction reached settlement finality because now you can process more transactions on the same input objects. See [Object Ownership](/concepts/object-ownership.mdx) for more information.
+For transactions that involve owned objects only, this happens before consensus in under 1/2 a second. If a transaction includes shared objects, it happens shortly after consensus, which can take a few seconds. At this point, the transaction reached settlement finality because now you can process more transactions on the same input objects. See [Object Ownership](/concepts/object-ownership.mdx) for more information.
 
 ## Epoch change
 

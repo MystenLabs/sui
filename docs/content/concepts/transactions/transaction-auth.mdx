@@ -16,15 +16,15 @@ For managing wallets that support the Ed25519 (EdDSA) signing scheme, Sui follow
 
 Sui follows BIP-32 for managing wallets that support the ECDSA Secp256k1 and ECDSA Secp256r1 signing schemes.
 
-BIP-32 defines the hierarchical deterministic wallet structure to logically associate a set of keys. Grouping keys in this manner reduces the overhead of keeping track of a large number of private keys for a user. This method also allows custodians to issue distinct managed addresses for each user account under one source of control. Using BIP-32 decouples the private key derivation from the public key derivation, enabling the watch-only wallet use case, where a chain of public keys and its addresses can be derived, while the private key can be kept offline for signing.
+BIP-32 defines the hierarchical deterministic wallet structure to logically associate a set of keys. Grouping keys in this manner reduces the overhead of keeping track of a large number of private keys. This method also allows custodians to issue distinct managed addresses for each user account under one source of control. Using BIP-32 decouples the private key derivation from the public key derivation, enabling the watch-only wallet use case, where a chain of public keys and its addresses can be derived, while the private key can be kept offline for signing.
 
 ### Key derivation paths
 
-BIP-44 further defines the five levels of the derivation path with their exact meanings:
+BIP-44 further defines the 5 levels of the derivation path with their exact meanings:
 
-```
+$$
 m / purpose' / coin_type' / account' / change / address_index
-```
+$$
 
 In this structure, the slashes indicate levels in the hierarchy.
 
@@ -42,13 +42,13 @@ The `coin_type` value is managed with a repository of all other cryptocurrencies
 
 The `account` level is used for logically separating user accounts and creating specific account categories.
 
-Account-based currencies define only the first three levels, while UTXO-based currencies add `change` and `address` level definitions. Because Sui's object-oriented data model is neither UTXO nor account-based (it in fact combines both), it employs all five levels for maximum compatibility.
+Account-based currencies define only the first 3 levels, while UTXO-based currencies add `change` and `address` level definitions. Because Sui's object-oriented data model is neither UTXO or account-based (it combines both), it employs all 5 levels for maximum compatibility.
 
 | Scheme          | Path                                         | Comments                                       |
 | --------------- | -------------------------------------------- | ---------------------------------------------- |
 | Ed25519         | `m/44'/784'/{account}'/{change}'/{address}'` | Each level of the derivation path is hardened. |
-| ECDSA Secp256k1 | `m/54'/784'/{account}'/{change}/{address}`   | The first three levels are hardened.           |
-| ECDSA Secp256r1 | `m/74'/784'/{account}'/{change}/{address}`   | The first three levels are hardened.           |
+| ECDSA Secp256k1 | `m/54'/784'/{account}'/{change}/{address}`   | The first 3 levels are hardened.           |
+| ECDSA Secp256r1 | `m/74'/784'/{account}'/{change}/{address}`   | The first 3 levels are hardened.           |
 
 ### Mnemonics support
 
@@ -83,7 +83,7 @@ The following table lists each signing scheme and its corresponding flag, signat
 | ECDSA Secp256r1 | 0x02 | Non-recoverable, compressed, 64 bytes | Compressed, 33 bytes |
 | multisig        | 0x03 | BCS serialized all signatures, size varies | BCS serialized all participating public keys, size varies |
 | zkLogin         | 0x05 | BCS serialized zkLogin inputs, max epoch and ephemeral signature, size varies | Concatenation of iss length, iss bytes, address seed padded to 32-bytes, size varies |
-| passkey         | 0x06 | BCS serialized passkey inputs (authenticatorData, clientDataJson, userSignature), size varies | Compressed, 33 bytes |
+| passkey         | 0x06 | BCS serialized passkey inputs (`authenticatorData`, `clientDataJson`, `userSignature`), size varies | Compressed, 33 bytes |
 
 ### Signature requirements {#signature-requirements}
 
@@ -127,13 +127,13 @@ For more information on advanced signature schemes:
 
 ## Authority signatures
 
-Sui's [collection of validators](/guides/operator/validator-index.mdx) holds three distinctive key pairs for different purposes.
+Sui's [collection of validators](/guides/operator/validator-index.mdx) holds 3 distinctive key pairs for different purposes.
 
 ### Protocol key pair {#protocol-pair}
 
-The protocol key pair provides authority signatures on user-signed transactions if they are verified. When a stake of the authorities that provide signatures on user transactions passes the required two-thirds threshold, Sui executes the transaction. Sui uses the BLS12381 scheme for its fast verification on aggregated signatures for a given number of authorities. In particular, Sui uses the minSig BLS mode, where each individual public key is 96 bytes, while the signature is 48 bytes. The latter is important as typically validators register their keys once at the beginning of each epoch and then they continuously sign transactions; thus, Sui optimizes on minimum signature size.
+The protocol key pair provides authority signatures on user-signed transactions if they are verified. When a stake of the authorities that provide signatures on user transactions passes the required 2/3 threshold, Sui executes the transaction. Sui uses the BLS12381 scheme for its fast verification on aggregated signatures for a given number of authorities. In particular, Sui uses the minSig BLS mode, where each individual public key is 96 bytes, while the signature is 48 bytes. The latter is important as typically validators register their keys once at the beginning of each epoch and then they continuously sign transactions; thus, Sui optimizes on minimum signature size.
 
-As with the BLS scheme, you can aggregate independent signatures resulting in a single BLS signature payload. Sui also accompanies the aggregated signature with a bitmap to denote which of the validators signed. This effectively reduces the authorities signature size from (2f + 1) × `BLS_sig` size to just one `BLS_sig` payload. This has significant network cost benefits resulting in compressed transaction certificates independently on the validators set size.
+As with the BLS scheme, you can aggregate independent signatures resulting in a single BLS signature payload. Sui also accompanies the aggregated signature with a bitmap to denote which of the validators signed. This effectively reduces the authorities signature size from (2f + 1) × `BLS_sig` size to just 1 `BLS_sig` payload. This has significant network cost benefits resulting in compressed transaction certificates independently on the validators set size.
 
 To counter potential rogue key attacks on BLS12381 aggregated signatures, proof of knowledge of the secret key (KOSK) is used during authority registration. When an authority requests to be added to the validator set, a proof of possession is submitted and verified. See [Intent Signing](/concepts/transactions/transaction-auth/intent-signing.mdx) on how to create a proof of possession. Unlike most standards, the Sui proof of knowledge scheme commits to the address as well, which offers an extra protection against adversarial reuse of a validator BLS key from another malicious validator.
 
