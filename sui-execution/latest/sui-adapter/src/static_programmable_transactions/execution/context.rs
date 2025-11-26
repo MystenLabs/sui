@@ -568,7 +568,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let before_height = self.gas_charger.move_gas_status().stack_height_current();
         let value = self.argument_value(arg)?;
         let after_height = self.gas_charger.move_gas_status().stack_height_current();
-        debug_assert_eq!(before_height + 1, after_height);
+        debug_assert_eq!(before_height.saturating_add(1), after_height);
         let value: V = value.cast()?;
         Ok(value)
     }

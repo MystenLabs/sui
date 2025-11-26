@@ -281,9 +281,9 @@ impl Command__ {
     pub fn arguments_len(&self) -> usize {
         let n = match self {
             Command__::MoveCall(mc) => mc.arguments.len(),
-            Command__::TransferObjects(objs, _) => objs.len() + 1,
-            Command__::SplitCoins(_, _, amounts) => 1 + amounts.len(),
-            Command__::MergeCoins(_, _, sources) => 1 + sources.len(),
+            Command__::TransferObjects(objs, _) => objs.len().saturating_add(1),
+            Command__::SplitCoins(_, _, amounts) => amounts.len().saturating_add(1),
+            Command__::MergeCoins(_, _, sources) => sources.len().saturating_add(1),
             Command__::MakeMoveVec(_, elems) => elems.len(),
             Command__::Publish(_, _, _) => 0,
             Command__::Upgrade(_, _, _, _, _) => 1,
