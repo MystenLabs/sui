@@ -61,9 +61,7 @@ impl FullnodeClient {
         let execution_client = if let Some(url) = &args.fullnode_rpc_url {
             let channel = Channel::from_shared(url.clone())
                 .context("Failed to create channel for gRPC endpoint")?
-                .connect()
-                .await
-                .context("Failed to connect to gRPC endpoint")?;
+                .connect_lazy();
 
             Some(TransactionExecutionServiceClient::new(channel))
         } else {

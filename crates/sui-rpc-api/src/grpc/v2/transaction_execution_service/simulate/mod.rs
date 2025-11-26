@@ -33,6 +33,8 @@ use sui_types::transaction_executor::TransactionChecks;
 
 mod resolve;
 
+const GAS_COIN_SIZE_BYTES: u64 = 40;
+
 pub fn simulate_transaction(
     service: &RpcService,
     request: SimulateTransactionRequest,
@@ -113,13 +115,29 @@ pub fn simulate_transaction(
         if request.transaction().gas_payment().budget.is_none()
             && request.transaction().bcs_opt().is_none()
         {
+            let mut estimation_transaction = transaction.clone();
+            estimation_transaction.gas_data_mut().payment = Vec::new();
+            estimation_transaction.gas_data_mut().budget = protocol_config.max_tx_gas();
+
             let simulation_result = executor
-                .simulate_transaction(transaction.clone(), TransactionChecks::Enabled)
+                .simulate_transaction(estimation_transaction, TransactionChecks::Enabled)
                 .map_err(anyhow::Error::from)?;
+
+            if !simulation_result.effects.status().is_ok() {
+                return Err(RpcError::new(
+                    tonic::Code::InvalidArgument,
+                    format!(
+                        "Budget estimation failed with status: {:?}.",
+                        simulation_result.effects.status()
+                    ),
+                ));
+            }
 
             let estimate = estimate_gas_budget_from_gas_cost(
                 simulation_result.effects.gas_cost_summary(),
                 reference_gas_price,
+                request.transaction().gas_payment().objects.len(),
+                &protocol_config,
             );
 
             // If the request specified gas payment, then transaction.gas_data().budget should have been
@@ -336,26 +354,76 @@ fn to_command_output(
     message
 }
 
-/// Estimate the gas budget using the gas_cost_summary from a previous DryRun
+/// Estimate the gas budget for a transaction based on simulation results.
 ///
-/// The estimated gas budget is computed as following:
-/// * the maximum between A and B, where:
-///   A = computation cost + GAS_SAFE_OVERHEAD * reference gas price
-///   B = computation cost + storage cost - storage rebate + GAS_SAFE_OVERHEAD * reference gas price
-///   overhead
-///
-/// This gas estimate is computed similarly as in the TypeScript SDK
+/// The estimation includes:
+/// 1. Base cost from gas_cost_summary (computation + storage costs)
+/// 2. Cost of loading gas payment objects (which weren't loaded during simulation)
+/// 3. Rounding up to the protocol gas rounding step (typically 1000 MIST)
+/// 4. Adding safe overhead buffer (1000 * reference_gas_price)
+/// 5. Clamping to max_tx_gas protocol limit
 fn estimate_gas_budget_from_gas_cost(
     gas_cost_summary: &sui_types::gas::GasCostSummary,
     reference_gas_price: u64,
+    num_payment_objects_on_request: usize,
+    protocol_config: &ProtocolConfig,
 ) -> u64 {
     const GAS_SAFE_OVERHEAD: u64 = 1000;
 
-    let safe_overhead = GAS_SAFE_OVERHEAD * reference_gas_price;
-    let computation_cost_with_overhead = gas_cost_summary.computation_cost + safe_overhead;
+    // Calculate base estimate from gas cost summary (in MIST)
+    let gas_usage = gas_cost_summary.net_gas_usage();
+    let base_estimate_mist =
+        gas_cost_summary
+            .computation_cost
+            .max(if gas_usage < 0 { 0 } else { gas_usage as u64 });
 
-    let gas_usage = gas_cost_summary.net_gas_usage() + safe_overhead as i64;
-    computation_cost_with_overhead.max(if gas_usage < 0 { 0 } else { gas_usage as u64 })
+    // Calculate cost of loading gas payment objects.
+    // Subtract 1 because the simulation already loaded one ephemeral gas coin.
+    let num_payment_objects_for_estimation = {
+        let total = if num_payment_objects_on_request == 0 {
+            protocol_config.max_gas_payment_objects() as u64
+        } else {
+            num_payment_objects_on_request as u64
+        };
+        total.saturating_sub(1)
+    };
+
+    // Calculate gas loading cost in gas units
+    let gas_loading_cost_units = num_payment_objects_for_estimation
+        .saturating_mul(GAS_COIN_SIZE_BYTES)
+        .saturating_mul(protocol_config.obj_access_cost_read_per_byte());
+
+    // Round up to the nearest gas rounding step (in gas units)
+    let rounded_gas_loading_cost_units =
+        if let Some(step) = protocol_config.gas_rounding_step_as_option() {
+            round_up_to_nearest(gas_loading_cost_units, step)
+        } else {
+            gas_loading_cost_units
+        };
+
+    // Convert gas loading cost to MIST
+    let gas_loading_cost_mist = rounded_gas_loading_cost_units.saturating_mul(reference_gas_price);
+
+    // Calculate safe overhead buffer in MIST
+    let safe_overhead_mist = GAS_SAFE_OVERHEAD.saturating_mul(reference_gas_price);
+
+    // Add all together: base (MIST) + loading (MIST) + overhead (MIST)
+    let estimate_mist = base_estimate_mist
+        .saturating_add(gas_loading_cost_mist)
+        .saturating_add(safe_overhead_mist);
+
+    // Clamp to max_tx_gas to ensure we don't exceed the protocol limit
+    estimate_mist.min(protocol_config.max_tx_gas())
+}
+
+/// Round up a value to the nearest multiple of `step` using saturating arithmetic.
+fn round_up_to_nearest(value: u64, step: u64) -> u64 {
+    let remainder = value % step;
+    if remainder == 0 {
+        value
+    } else {
+        value.saturating_add(step - remainder)
+    }
 }
 
 fn select_gas(

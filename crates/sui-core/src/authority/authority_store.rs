@@ -798,6 +798,11 @@ impl AuthorityStore {
             iter::once((transaction_digest, transaction.serializable_ref())),
         )?;
 
+        write_batch.insert_batch(
+            &self.perpetual_tables.executed_transaction_digests,
+            [((epoch_id, *transaction_digest), ())],
+        )?;
+
         // Add batched writes for objects and locks.
         write_batch.insert_batch(
             &self.perpetual_tables.object_per_epoch_marker_table_v2,

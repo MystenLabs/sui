@@ -1,0 +1,22 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-15:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4028000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 17-21:
+//# programmable --sender A --inputs object(0xc) @A 6u8
+//> 0: test::m1::name();
+//> 1: sui::coin_registry::new_currency<sui::kiosk::Kiosk>(Input(0), Input(2), Result(0), Result(0), Result(0), Result(0));
+//> 2: sui::coin_registry::finalize<sui::kiosk::Kiosk>(NestedResult(1,0));
+//> 3: TransferObjects([NestedResult(1,1), Result(2)], Input(1));
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Debug of error: NonEntryFunctionInvoked at command Some(1)

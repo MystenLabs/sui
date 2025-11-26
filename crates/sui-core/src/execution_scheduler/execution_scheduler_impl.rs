@@ -228,7 +228,14 @@ impl ExecutionScheduler {
             .zip(availability)
             .filter_map(|(key, available)| if !available { Some(key) } else { None })
             .collect();
-        if missing_input_keys.is_empty() {
+
+        let has_missing_barrier_dependencies = self
+            .transaction_cache_read
+            .multi_get_executed_effects_digests(&execution_env.barrier_dependencies)
+            .into_iter()
+            .any(|r| r.is_none());
+
+        if missing_input_keys.is_empty() && !has_missing_barrier_dependencies {
             self.metrics
                 .transaction_manager_num_enqueued_certificates
                 .with_label_values(&["ready"])

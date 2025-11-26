@@ -126,7 +126,7 @@ async fn main() -> anyhow::Result<()> {
         unreachable!("clap ensures exactly one storage backend is provided");
     };
 
-    let store = ObjectStore::new(object_store, args.watermark_task);
+    let store = ObjectStore::new(object_store);
 
     let cancel = tokio_util::sync::CancellationToken::new();
 

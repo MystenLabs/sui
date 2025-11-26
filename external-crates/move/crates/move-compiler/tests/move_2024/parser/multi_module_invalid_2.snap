@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02004]: invalid 'module' declaration
+  ┌─ tests/move_2024/parser/multi_module_invalid_2.move:4:11
+  │
+2 │ extend module a::m { }
+  │                  - Previous module defined here
+3 │ 
+4 │ module a::n;
+  │           ^ Cannot define an additional 'module' via label in a file with multiple modules
+  │
+  = Either move each 'module' into its own file or define each addiitional module as 'module <name> { contents }'
