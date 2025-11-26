@@ -8,7 +8,6 @@
 
 pub mod analytics_metrics;
 pub mod config;
-pub mod errors;
 mod handlers;
 pub mod indexer;
 pub mod package_store;
