@@ -42,10 +42,52 @@ jobs:
           set -euo pipefail
           TAG="${{ steps.release.outputs.tag }}"
           mkdir -p ".cache/sui/${TAG}"
-          URL="https://github.com/MystenLabs/sui/releases/download/${TAG}/sui-linux-x86_64"
-          echo "Downloading $URL"
-          curl -L -o ".cache/sui/${TAG}/sui" "$URL"
-          chmod +x ".cache/sui/${TAG}/sui"
+          
+          # Try different possible asset names
+          ASSETS=(
+            "sui-mainnet-v${TAG#testnet-v}-ubuntu-x86_64.tgz"
+            "sui-testnet-v${TAG#testnet-v}-ubuntu-x86_64.tgz"
+            "sui-${TAG}-ubuntu-x86_64.tgz"
+            "sui-linux-x86_64"
+          )
+          
+          DOWNLOADED=false
+          for ASSET in "${ASSETS[@]}"; do
+            URL="https://github.com/MystenLabs/sui/releases/download/${TAG}/${ASSET}"
+            echo "Trying: $URL"
+            
+            if curl -fsSL -o "/tmp/sui-download" "$URL" 2>/dev/null; then
+              echo "Successfully downloaded: $ASSET"
+              
+              # Check if it's a tarball
+              if [[ "$ASSET" == *.tgz ]]; then
+                tar -xzf /tmp/sui-download -C ".cache/sui/${TAG}/"
+                # Find the sui binary in extracted files
+                find ".cache/sui/${TAG}/" -name "sui" -type f -executable -exec mv {} ".cache/sui/${TAG}/sui" \;
+              else
+                mv /tmp/sui-download ".cache/sui/${TAG}/sui"
+              fi
+              
+              chmod +x ".cache/sui/${TAG}/sui"
+              DOWNLOADED=true
+              break
+            fi
+          done
+          
+          if [ "$DOWNLOADED" = false ]; then
+            echo "Failed to download sui binary from any known location"
+            echo "Available assets for ${TAG}:"
+            curl -s "https://api.github.com/repos/MystenLabs/sui/releases/tags/${TAG}" | jq -r '.assets[].name'
+            exit 1
+          fi
+          
+          # Verify it's actually a binary
+          if ! file ".cache/sui/${TAG}/sui" | grep -q "executable"; then
+            echo "Downloaded file is not an executable:"
+            file ".cache/sui/${TAG}/sui"
+            head -n 5 ".cache/sui/${TAG}/sui"
+            exit 1
+          fi
 
       - name: Generate MDX snippets (sh fenced)
         run: |
