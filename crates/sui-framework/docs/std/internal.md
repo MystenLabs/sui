@@ -9,8 +9,6 @@ parameter.
 ```move
 module example::use_permit;
 
-use std::internal;
-
 public struct MyType { /* ... */ }
 
 public fun test_permit() {
@@ -25,8 +23,6 @@ To write a function that is guarded by a <code><a href="../std/internal.md#std_i
 // Silly mockup of a type registry where a type can be registered only by
 // the module that defines the type.
 module example::type_registry;
-
-use std::internal;
 
 public fun register_type<T>(_: internal::Permit<T> /* ... */) {
 /* ... */
@@ -46,8 +42,8 @@ public fun register_type<T>(_: internal::Permit<T> /* ... */) {
 
 ## Struct `Permit`
 
-Witness of the <code>T</code> type. Can be instantiated only by the module that defines
-the <code>T</code>, as well as by the <code>Owner&lt;T&gt;</code> instance.
+A privileged witness of the <code>T</code> type.
+Instances can only be created by the module that defines the type <code>T</code>.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../std/internal.md#std_internal_Permit">Permit</a>&lt;<b>phantom</b> T&gt; <b>has</b> drop
@@ -70,7 +66,7 @@ the <code>T</code>, as well as by the <code>Owner&lt;T&gt;</code> instance.
 ## Function `permit`
 
 Construct a new <code><a href="../std/internal.md#std_internal_Permit">Permit</a></code> for the type <code>T</code>.
-Can only be instantiated by the module that defines the <code>T</code>.
+Can only be called by the module that defines the type <code>T</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/internal.md#std_internal_permit">permit</a>&lt;T&gt;(): <a href="../std/internal.md#std_internal_Permit">std::internal::Permit</a>&lt;T&gt;

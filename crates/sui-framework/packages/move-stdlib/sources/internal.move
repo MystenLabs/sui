@@ -8,8 +8,6 @@
 /// ```move
 /// module example::use_permit;
 ///
-/// use std::internal;
-///
 /// public struct MyType { /* ... */ }
 ///
 /// public fun test_permit() {
@@ -25,18 +23,16 @@
 /// // the module that defines the type.
 /// module example::type_registry;
 ///
-/// use std::internal;
-///
 /// public fun register_type<T>(_: internal::Permit<T> /* ... */) {
 ///   /* ... */
 /// }
 /// ```
 module std::internal;
 
-/// Witness of the `T` type. Can be instantiated only by the module that defines
-/// the `T`, as well as by the `Owner<T>` instance.
+/// A privileged witness of the `T` type.
+/// Instances can only be created by the module that defines the type `T`.
 public struct Permit<phantom T>() has drop;
 
 /// Construct a new `Permit` for the type `T`.
-/// Can only be instantiated by the module that defines the `T`.
+/// Can only be called by the module that defines the type `T`.
 public fun permit<T>(): Permit<T> { Permit() }
