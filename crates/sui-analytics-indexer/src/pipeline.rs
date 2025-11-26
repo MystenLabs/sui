@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::package_store::PackageCache;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
@@ -88,7 +88,7 @@ impl Pipeline {
         &self,
         indexer: &mut Indexer<ObjectStore>,
         pipeline_config: &PipelineConfig,
-        package_cache: Option<Arc<PackageCache>>,
+        package_cache: Arc<PackageCache>,
         metrics: AnalyticsMetrics,
         concurrent_config: ConcurrentConfig,
     ) -> Result<()> {
@@ -130,13 +130,10 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::Event => {
-                let cache = package_cache
-                    .clone()
-                    .ok_or_else(|| anyhow!("Package cache required for Event handler"))?;
                 indexer
                     .concurrent_pipeline(
                         EventHandler::new(
-                            EventProcessor::new(cache),
+                            EventProcessor::new(package_cache.clone()),
                             pipeline_config.clone(),
                             metrics,
                         ),
@@ -153,14 +150,11 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::Object => {
-                let cache = package_cache
-                    .clone()
-                    .ok_or_else(|| anyhow!("Package cache required for Object handler"))?;
                 indexer
                     .concurrent_pipeline(
                         ObjectHandler::new(
                             ObjectProcessor::new(
-                                cache,
+                                package_cache.clone(),
                                 &pipeline_config.package_id_filter,
                                 metrics.clone(),
                             ),
@@ -172,13 +166,10 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::DynamicField => {
-                let cache = package_cache
-                    .clone()
-                    .ok_or_else(|| anyhow!("Package cache required for DynamicField handler"))?;
                 indexer
                     .concurrent_pipeline(
                         DynamicFieldHandler::new(
-                            DynamicFieldProcessor::new(cache),
+                            DynamicFieldProcessor::new(package_cache.clone()),
                             pipeline_config.clone(),
                             metrics,
                         ),
@@ -219,13 +210,10 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::WrappedObject => {
-                let cache = package_cache
-                    .clone()
-                    .ok_or_else(|| anyhow!("Package cache required for WrappedObject handler"))?;
                 indexer
                     .concurrent_pipeline(
                         WrappedObjectHandler::new(
-                            WrappedObjectProcessor::new(cache),
+                            WrappedObjectProcessor::new(package_cache.clone()),
                             pipeline_config.clone(),
                             metrics,
                         ),
