@@ -13,11 +13,11 @@ Blockchains often have a native token which acts as the currency of the network.
 
 The native token of Sui is SUI. The Sui tokenomics structure is designed to support the long-term financial needs of Web3. The SUI token serves four purposes on the Sui network:
 
-1. You can stake SUI to participate in the proof-of-stake mechanism.
+1. Provides the opportunity to stake SUI to participate in the proof-of-stake mechanism.
 
 1. SUI is the asset denomination needed to pay the gas fees required to execute transactions or other operations on the network.
 
-1. You can use SUI as a versatile and liquid asset for various applications.
+1. SUI acts as a versatile and liquid asset for various applications.
 
 1. SUI tokens play an important role in governance by acting as a right to participate in on-chain voting on issues such as protocol upgrades.
 
@@ -61,7 +61,7 @@ At the end of each epoch, the protocol distributes stake rewards to participants
 
 1. The total amount of stake rewards is calculated as the sum of computation fees accrued throughout the epoch plus the epoch's stake reward subsidies. The latter component is temporary in that it only exists in the network's first years and disappears in the long run as the amount of SUI in circulation reaches its total supply.
 
-2. The total amount of stake rewards is distributed across various entities. The storage fund is taken into account in the calculation of the epoch total stake, which is not owned by any entities in the way that staked SUI is. Instead, the Sui economic model distributes the stake rewards accruing to the storage fund to validators for compensation of their storage costs.
+1. The total amount of stake rewards is distributed across various entities. The storage fund is taken into account in the calculation of the epoch total stake, which is not owned by any entities in the way that staked SUI is. Instead, the Sui economic model distributes the stake rewards accruing to the storage fund to validators for compensation of their storage costs.
 
 The distribution mechanisms built into Sui tokenomics encourages a healthy competition for fair prices where validators set low gas fees while operating with viable business models. Refer to the [whitepaper](https://docs.sui.io/paper/tokenomics.pdf) for in-depth review of the mathematical proofs that support this structure.
 
@@ -95,7 +95,7 @@ Total stake is calculated as the sum of user stake plus the SUI tokens deposited
 
 The storage fund includes three key features:
 
-1. The storage fund is funded by past transactions and functions as a tool for shifting gas fees across different epochs. This ensures that future validators are compensated for their storage costs by the past users who created those storage requirements in the first place.
+1. Past transactions contribute to the storage fund, which functions as a tool for shifting gas fees across different epochs. This ensures that future validators are compensated for their storage costs by the past users who created those storage requirements in the first place.
 
 1. The storage fund pays out only the returns on its capital and does not distribute its principal. In practice, this means validators borrow the storage fund's SUI as additional stake and keep the majority of stake rewards. Validators do not, however, receive funds directly from the storage fund. This guarantees the fund never loses its capitalization and can survive indefinitely. This feature is further strengthened by the stake rewards reinvested into the fund.
 
@@ -122,9 +122,9 @@ The staking pool is implemented in a system-level smart contract ([`staking_pool
 ### Validator pool exchange rate 
 
 The exchange rate for each validator pool is calculated at each epoch boundary as follows:
-```
+$$
 Exchange rate at E+1 = (1 + (third-party staker rewards at E / third-party stake at E)) × (exchange rate at E)
-```
+$$
 
 The distinction between third-party owned versus validator-owned rewards and stake is relevant in that validators earn commission on the staking pool's tokens but third-party stakers do not. This accounting enables Sui to keep track of the rewards accrued by both validators and third-party token holders using a single global exchange rate table.
 
@@ -132,7 +132,7 @@ The distinction between third-party owned versus validator-owned rewards and sta
 
 #### Understanding the voting power formula
 
-[SIP-39] uses the following formula to determine if a validator can join the set:
+[SIP-39](https://github.com/sui-foundation/sips/pull/39) uses the following formula to determine if a validator can join the set:
 
 ```
 S / (S + T) > V / 10000
