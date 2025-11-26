@@ -66,6 +66,7 @@ pub fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
 where
     'pc: 'state,
 {
+    debug_assert_eq!(gas_charger.move_gas_status().stack_height_current(), 0);
     let T::Transaction {
         bytes,
         objects,
@@ -147,6 +148,12 @@ fn execute_command<Mode: ExecutionMode>(
         drop_values,
         consumed_shared_objects: _,
     } = c;
+    assert_invariant!(
+        context.gas_charger.move_gas_status().stack_height_current() == 0,
+        "stack height did not start at 0"
+    );
+    let is_move_call = matches!(command, T::Command__::MoveCall(_));
+    let num_args = command.arguments_len();
     let mut args_to_update = vec![];
     let result = match command {
         T::Command__::MoveCall(move_call) => {
@@ -323,11 +330,16 @@ fn execute_command<Mode: ExecutionMode>(
         result.len() == drop_values.len(),
         "result values and drop values mismatch"
     );
+    context.charge_command(is_move_call, num_args, result.len())?;
     let result = result
         .into_iter()
         .zip(drop_values)
         .map(|(value, drop)| if !drop { Some(value) } else { None })
         .collect::<Vec<_>>();
     context.result(result)?;
+    assert_invariant!(
+        context.gas_charger.move_gas_status().stack_height_current() == 0,
+        "stack height did not end at 0"
+    );
     Ok(())
 }
