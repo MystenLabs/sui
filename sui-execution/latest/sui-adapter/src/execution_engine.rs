@@ -9,16 +9,17 @@ mod checked {
     use crate::execution_mode::{self, ExecutionMode};
     use crate::execution_value::SuiResolver;
     use csv::Writer;
-    use lz4_flex::frame::FrameEncoder;
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
     use mysten_common::debug_fatal;
     use once_cell::sync::Lazy;
     use similar::TextDiff;
-    use std::fs::File;
-    use std::io::BufWriter;
+    use std::fs::{File, OpenOptions};
+    use std::io::{BufWriter, Seek, Write};
+    use std::path::Path;
     use std::sync::Mutex;
+    use std::sync::atomic::AtomicUsize;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
     use sui_types::balance::{
@@ -91,11 +92,24 @@ mod checked {
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
 
-    static CSV_WRITER: Lazy<Mutex<csv::Writer<FrameEncoder<std::io::BufWriter<std::fs::File>>>>> =
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    static OLD_VAL: AtomicUsize = AtomicUsize::new(0);
+
+    static COUNTER_FILE: Lazy<Mutex<File>> = once_cell::sync::Lazy::new(|| {
+        let path = Path::new("/opt/sui/counter.txt");
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(path)
+            .unwrap();
+        Mutex::new(file)
+    });
+
+    static CSV_WRITER: Lazy<Mutex<csv::Writer<std::io::BufWriter<std::fs::File>>>> =
         once_cell::sync::Lazy::new(|| {
-            let file = File::create("/opt/sui/gas.csv.lz4").expect("failed to create file");
+            let file = File::create("/opt/sui/gas.csv").expect("failed to create file");
             let enc = BufWriter::new(file);
-            let enc = FrameEncoder::new(enc);
             let mut writer = Writer::from_writer(enc);
             writer
                 .write_record(&[
@@ -109,20 +123,63 @@ mod checked {
                     "old_storage_rebate",
                     "new_gas_used",
                     "old_gas_used",
+                    "new_non_refundable_storage_cost",
+                    "old_non_refundable_storage_cost",
+                    "new_stack_height",
+                    "old_stack_height",
+                    "new_memory_allocated",
+                    "old_memory_allocated",
+                    "new_instructions_executed",
+                    "old_instructions_executed",
                 ])
                 .expect("failed to write gas header");
             Mutex::new(writer)
         });
 
+    fn write_number(file: &mut File, n: usize) -> std::io::Result<()> {
+        // Convert to bytes (with newline optional but nice for humans)
+        let s = format!("{n}\n");
+        let bytes = s.as_bytes();
+
+        // Go to start of file
+        file.seek(std::io::SeekFrom::Start(0))?;
+
+        // Overwrite contents
+        file.write_all(bytes)?;
+
+        // If previous number had more digits, remove trailing old bytes
+        file.set_len(bytes.len() as u64)?;
+
+        // Push to OS buffers (optional)
+        file.flush()?;
+
+        Ok(())
+    }
+
     fn write_gas_row(
         transaction_digest: String,
-        new_gas: &GasUsageReport,
-        old_gas: &GasUsageReport,
+        new_gas_status: &SuiGasStatus,
+        old_gas_status: &SuiGasStatus,
     ) {
+        let new_gas = new_gas_status.gas_usage_report();
+        let old_gas = old_gas_status.gas_usage_report();
+
+        let count = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if count - OLD_VAL.load(std::sync::atomic::Ordering::Relaxed) > 5_000 {
+            OLD_VAL.store(count, std::sync::atomic::Ordering::Relaxed);
+            let mut file = COUNTER_FILE.lock().unwrap();
+            write_number(&mut *file, count).expect("failed to write counter");
+            return;
+        }
+
         if new_gas.cost_summary == old_gas.cost_summary {
             return;
         }
+
         let mut writer = CSV_WRITER.lock().unwrap();
+        let new_inner = new_gas_status.inner();
+        let old_inner = old_gas_status.inner();
+
         writer
             .write_record(&[
                 &transaction_digest,
@@ -135,6 +192,14 @@ mod checked {
                 &old_gas.cost_summary.storage_rebate.to_string(),
                 &new_gas.gas_used.to_string(),
                 &old_gas.gas_used.to_string(),
+                &new_gas.cost_summary.non_refundable_storage_fee.to_string(),
+                &old_gas.cost_summary.non_refundable_storage_fee.to_string(),
+                &new_inner.stack_height_high_water_mark.to_string(),
+                &old_inner.stack_height_high_water_mark.to_string(),
+                &new_inner.stack_size_high_water_mark.to_string(),
+                &old_inner.stack_size_high_water_mark.to_string(),
+                &new_inner.instructions_executed.to_string(),
+                &old_inner.instructions_executed.to_string(),
             ])
             .expect("failed to write gas row");
         writer.flush().expect("failed to flush gas writer");
@@ -164,12 +229,14 @@ mod checked {
         Vec<ExecutionTiming>,
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
+        let mut new_gas_status = gas_status.clone();
+
         let input_objects = input_objects.into_inner();
         let normal_effects = execute_transaction_to_effects_::<Mode>(
             store,
             input_objects.clone(),
             gas_data.clone(),
-            gas_status.clone(),
+            gas_status,
             transaction_kind.clone(),
             transaction_signer,
             transaction_digest,
@@ -180,17 +247,18 @@ mod checked {
             metrics.clone(),
             enable_expensive_checks,
             execution_params.clone(),
-            trace_builder_opt,
+            &mut None,
         );
 
         let mut new_protocol_config = protocol_config.clone();
         new_protocol_config.set_enable_ptb_execution_v2_for_testing(true);
+        new_gas_status.set_inner_gas_model_version(new_protocol_config.gas_model_version());
 
         let new_effects = execute_transaction_to_effects_::<Mode>(
             store,
             input_objects,
             gas_data,
-            gas_status,
+            new_gas_status,
             transaction_kind.clone(),
             transaction_signer,
             transaction_digest,
@@ -449,8 +517,8 @@ mod checked {
 
         write_gas_row(
             normal_effects.2.transaction_digest().to_string(),
-            &new_effects.1.gas_usage_report(),
-            &normal_effects.1.gas_usage_report(),
+            &new_effects.1,
+            &normal_effects.1,
         );
 
         if !ok {
