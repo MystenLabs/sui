@@ -511,7 +511,6 @@ mod tests {
     };
 
     use sui_types::object::Object;
-    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::transaction::{ObjectArg, SenderSignedData, VerifiedTransaction};
 
     use sui_types::gas_coin::GAS;
@@ -970,22 +969,7 @@ mod tests {
         shared_objects: &[(ObjectID, SequenceNumber, bool)],
         gas_object_version: u64,
     ) -> VerifiedExecutableTransaction {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        for (shared_object_id, shared_object_init_version, shared_object_mutable) in shared_objects
-        {
-            builder
-                .obj(ObjectArg::SharedObject {
-                    id: *shared_object_id,
-                    initial_shared_version: *shared_object_init_version,
-                    mutability: if *shared_object_mutable {
-                        SharedObjectMutability::Mutable
-                    } else {
-                        SharedObjectMutability::Immutable
-                    },
-                })
-                .unwrap();
-        }
-        let tx_data = TestTransactionBuilder::new(
+        let mut tx_builder = TestTransactionBuilder::new(
             SuiAddress::ZERO,
             (
                 ObjectID::random(),
@@ -993,9 +977,26 @@ mod tests {
                 ObjectDigest::random(),
             ),
             0,
-        )
-        .programmable(builder.finish())
-        .build();
+        );
+        let tx_data = {
+            let builder = tx_builder.ptb_builder_mut();
+            for (shared_object_id, shared_object_init_version, shared_object_mutable) in
+                shared_objects
+            {
+                builder
+                    .obj(ObjectArg::SharedObject {
+                        id: *shared_object_id,
+                        initial_shared_version: *shared_object_init_version,
+                        mutability: if *shared_object_mutable {
+                            SharedObjectMutability::Mutable
+                        } else {
+                            SharedObjectMutability::Immutable
+                        },
+                    })
+                    .unwrap();
+            }
+            tx_builder.build()
+        };
         let tx = SenderSignedData::new(tx_data, vec![]);
         VerifiedExecutableTransaction::new_unchecked(ExecutableTransaction::new_from_data_and_sig(
             tx,
@@ -1028,22 +1029,23 @@ mod tests {
         }
 
         pub fn add_withdraw_transaction(&mut self) -> TransactionKey {
-            let mut ptb_builder = ProgrammableTransactionBuilder::new();
-            ptb_builder
-                .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
-                    200,
-                    TypeInput::from(GAS::type_tag()),
-                ))
-                .unwrap();
             // Generate random sender and gas object for each transaction
             let (sender, keypair) = get_account_key_pair();
             let gas_object = Object::with_owner_for_testing(sender);
             let gas_object_ref = gas_object.compute_object_reference();
             // Generate a unique gas price to make the transaction unique.
             let gas_price = (self.assignables.len() + 1) as u64;
-            let tx_data = TestTransactionBuilder::new(sender, gas_object_ref, gas_price)
-                .programmable(ptb_builder.finish())
-                .build();
+            let mut tx_builder = TestTransactionBuilder::new(sender, gas_object_ref, gas_price);
+            let tx_data = {
+                let ptb_builder = tx_builder.ptb_builder_mut();
+                ptb_builder
+                    .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
+                        200,
+                        TypeInput::from(GAS::type_tag()),
+                    ))
+                    .unwrap();
+                tx_builder.build()
+            };
             let cert = VerifiedExecutableTransaction::new_for_testing(tx_data, &keypair);
             let key = cert.key();
             self.assignables.push(Schedulable::Transaction(cert));
@@ -1059,35 +1061,36 @@ mod tests {
         }
 
         pub fn add_withdraw_with_shared_object_transaction(&mut self) -> TransactionKey {
-            let mut ptb_builder = ProgrammableTransactionBuilder::new();
-            // Add shared object to the transaction
-            if let Some(shared_obj) = self.shared_objects.first() {
-                let id = shared_obj.id();
-                let init_version = shared_obj.owner.start_version().unwrap();
-                ptb_builder
-                    .obj(ObjectArg::SharedObject {
-                        id,
-                        initial_shared_version: init_version,
-                        mutability: SharedObjectMutability::Mutable,
-                    })
-                    .unwrap();
-            }
-            // Add balance withdraw
-            ptb_builder
-                .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
-                    200,
-                    TypeInput::from(GAS::type_tag()),
-                ))
-                .unwrap();
             // Generate random sender and gas object for each transaction
             let (sender, keypair) = get_account_key_pair();
             let gas_object = Object::with_owner_for_testing(sender);
             let gas_object_ref = gas_object.compute_object_reference();
             // Generate a unique gas price to make the transaction unique.
             let gas_price = (self.assignables.len() + 1) as u64;
-            let tx_data = TestTransactionBuilder::new(sender, gas_object_ref, gas_price)
-                .programmable(ptb_builder.finish())
-                .build();
+            let mut tx_builder = TestTransactionBuilder::new(sender, gas_object_ref, gas_price);
+            let tx_data = {
+                let ptb_builder = tx_builder.ptb_builder_mut();
+                // Add shared object to the transaction
+                if let Some(shared_obj) = self.shared_objects.first() {
+                    let id = shared_obj.id();
+                    let init_version = shared_obj.owner.start_version().unwrap();
+                    ptb_builder
+                        .obj(ObjectArg::SharedObject {
+                            id,
+                            initial_shared_version: init_version,
+                            mutability: SharedObjectMutability::Mutable,
+                        })
+                        .unwrap();
+                }
+                // Add balance withdraw
+                ptb_builder
+                    .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
+                        200,
+                        TypeInput::from(GAS::type_tag()),
+                    ))
+                    .unwrap();
+                tx_builder.build()
+            };
             let cert = VerifiedExecutableTransaction::new_for_testing(tx_data, &keypair);
             let key = cert.key();
             self.assignables.push(Schedulable::Transaction(cert));

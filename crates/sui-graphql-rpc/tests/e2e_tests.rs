@@ -684,16 +684,16 @@ async fn test_dry_run_failed_execution() {
         .test_transaction_builder()
         .await
         // A split coin that goes nowhere -> execution failure
-        .move_call(
+        .move_call_with_type_args(
             SUI_FRAMEWORK_PACKAGE_ID,
             "coin",
             "split",
+            vec![GAS::type_tag()],
             vec![
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(coin)),
                 CallArg::Pure(bcs::to_bytes(&1000u64).unwrap()),
             ],
         )
-        .with_type_args(vec![GAS::type_tag()])
         .build();
     let tx_bytes = Base64::encode(bcs::to_bytes(&tx).unwrap());
 
