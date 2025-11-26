@@ -6,19 +6,19 @@ info:
   lint: false
 ---
 error[Sui E02011]: invalid internal permit call
-   ┌─ tests/sui_mode/private_generics/internal_permit.move:18:5
+   ┌─ tests/sui_mode/private_generics/internal_permit.move:18:9
    │
-18 │     internal::permit<NonInternalType>();
-   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │     │                │
-   │     │                The type 'a::other::NonInternalType' is not declared in the current module
-   │     Invalid call to an internal function. The function 'std::internal::permit' is restricted to being called in the module that defines the type, 'a::other'
+18 │         internal::permit<NonInternalType>();
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                │
+   │         │                The type 'a::other::NonInternalType' is not declared in the current module
+   │         Invalid call to an internal function. The function 'std::internal::permit' is restricted to being called in the module that defines the type, 'a::other'
 
 error[Sui E02011]: invalid internal permit call
-   ┌─ tests/sui_mode/private_generics/internal_permit.move:28:5
+   ┌─ tests/sui_mode/private_generics/internal_permit.move:28:9
    │
-28 │     internal::permit<Permit<Internal>>();
-   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │     │                │
-   │     │                The type 'std::internal::Permit<a::m::Internal>' is not declared in the current module
-   │     Invalid call to an internal function. The function 'std::internal::permit' is restricted to being called in the module that defines the type, 'std::internal'
+28 │         internal::permit<Permit<Internal>>();
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                │
+   │         │                The type 'std::internal::Permit<a::m::Internal>' is not declared in the current module
+   │         Invalid call to an internal function. The function 'std::internal::permit' is restricted to being called in the module that defines the type, 'std::internal'
