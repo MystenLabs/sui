@@ -89,6 +89,14 @@ pub struct JobConfig {
     /// Remote store URL.
     #[serde(default = "default_remote_store_url")]
     pub remote_store_url: String,
+    /// Optional streaming URL for real-time indexing
+    pub streaming_url: Option<String>,
+    /// Optional RPC API URL for request/reply from full node
+    pub rpc_api_url: Option<String>,
+    /// Optional RPC username
+    pub rpc_username: Option<String>,
+    /// Optional RPC password
+    pub rpc_password: Option<String>,
     /// Optional working directory for temporary files (defaults to system temp dir)
     pub work_dir: Option<PathBuf>,
     pub sf_account_identifier: Option<String>,
@@ -99,18 +107,16 @@ pub struct JobConfig {
     pub sf_role: Option<String>,
     pub sf_password_file: Option<String>,
 
+    // This is private to enforce using the PipelineConfig struct
     #[serde(rename = "pipelines")]
     pipeline_configs: Vec<PipelineConfig>,
 
-    // Framework configuration types (directly embedded)
-    /// Framework ingestion configuration
     #[serde(default)]
     pub ingestion: IngestionConfig,
-    /// Framework concurrent pipeline configuration
+
     #[serde(default)]
     pub concurrent: ConcurrentConfig,
 
-    // Checkpoint range (IndexerArgs fields - can't embed because no serde)
     pub first_checkpoint: Option<u64>,
     pub last_checkpoint: Option<u64>,
 }
@@ -531,12 +537,20 @@ pub async fn build_analytics_indexer(
         ingestion: sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs {
             remote_store_url: Some(url::Url::parse(&config.remote_store_url)?),
             local_ingestion_path: None,
-            rpc_api_url: None,
-            rpc_username: None,
-            rpc_password: None,
+            rpc_api_url: config
+                .rpc_api_url
+                .as_ref()
+                .map(|url| url.parse())
+                .transpose()?,
+            rpc_username: config.rpc_username.clone(),
+            rpc_password: config.rpc_password.clone(),
         },
         streaming: sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs {
-            streaming_url: None,
+            streaming_url: config
+                .streaming_url
+                .as_ref()
+                .map(|url| url.parse())
+                .transpose()?,
         },
     };
 
