@@ -4,3 +4,4 @@
 pub mod future;
 pub mod service;
 pub mod stream;
+pub mod task;
