@@ -7,11 +7,14 @@ use crate::{
     diagnostics::Diagnostic,
     editions::{Edition, FeatureGate, create_feature_error},
     expansion::{
-        alias_map_builder::{AliasEntry, AliasMapBuilder, NameSpace, UnnecessaryAlias},
+        alias_map_builder::{
+            AliasEntry, AliasMapBuilder, LeadingAccessEntry, MemberEntry, NameSpace,
+            UnnecessaryAlias,
+        },
         aliases::{AliasMap, AliasSet},
         ast::{self as E, Address, ModuleIdent, ModuleIdent_},
         legacy_aliases,
-        name_validation::is_valid_datatype_or_constant_name,
+        name_validation::{ModuleMemberKind, is_valid_datatype_or_constant_name},
         translate::{
             DefnContext, ValueError, make_address, module_ident, top_level_address,
             top_level_address_opt, value_result,
@@ -168,6 +171,13 @@ pub trait PathExpander {
     // never resolved, but are tracked to apply appropriate shadowing.
     fn push_type_parameters(&mut self, tparams: Vec<&Name>);
 
+    // Push a number of type parameters onto the alias information in the path expander. They are
+    // never resolved, but are tracked to apply appropriate shadowing and suggestions.
+    // NB: The namespace here should _not_ overlap with the existing callable namespace, but that
+    // is only because we require `$` prefixes for lambda parameters. This could also be useful in
+    // those cases.
+    fn push_lambda_parameters(&mut self, lparams: Vec<&Name>);
+
     // Pop the innermost alias scope
     fn pop_alias_scope(&mut self) -> AliasSet;
 
@@ -248,6 +258,7 @@ macro_rules! access {
 }
 
 pub(crate) use access;
+use move_symbol_pool::Symbol;
 
 // -----------------------------------------------
 // Error Impls
@@ -315,8 +326,20 @@ impl AccessChainResolutionError {
                 AccessChainFailure::UnresolvedAlias(name) => {
                     format!("Could not resolve the name '{}'", name)
                 }
+                AccessChainFailure::Suggestion(name, _) => {
+                    format!("Could not resolve the name '{}'", name)
+                }
             };
-            crate::diag!(NameResolution::NamePositionMismatch, (loc, msg))
+            let mut diag = crate::diag!(NameResolution::NamePositionMismatch, (loc, msg));
+            if let AccessChainFailure::Suggestion(_, suggestion) = reason {
+                let suggestion_loc = if suggestion.loc.is_valid() {
+                    Some(suggestion.loc)
+                } else {
+                    None
+                };
+                add_suggestion(&mut diag, loc, suggestion, suggestion_loc);
+            }
+            diag
         } else {
             ice!((
                 result.loc(),
@@ -575,6 +598,7 @@ struct AccessChainResult {
 #[derive(Debug, PartialEq, Eq)]
 enum AccessChainFailure {
     UnresolvedAlias(Name),
+    Suggestion(/* original */ Name, /* suggestion */ Name),
     InvalidKind(&'static str),
 }
 
@@ -594,6 +618,91 @@ const LEADING_ACCESS: &str = "an address or module";
 const ADDRESS_ACCESS: &str = "an address";
 const ALL_ACCESS: &str = "a module, module member, or address";
 
+fn make_leading_access_filter_fn(
+    chain_length: usize,
+    access: &Access,
+) -> impl Fn(&Symbol, &LeadingAccessEntry) -> bool + '_ {
+    fn filter_leading_access(
+        chain_length: usize,
+        access: &Access,
+        entry: &LeadingAccessEntry,
+    ) -> bool {
+        use LeadingAccessEntry as LA;
+        if chain_length == 0 {
+            // This should be unreachable.
+            return false;
+        }
+        // Depending on the chain length and access type, we filter suggestions based on the
+        // entry we found.
+        match (chain_length, access, entry) {
+            // TYPE PARAMETERS
+            // - Never suggest type params
+            (_, _, LA::TypeParam) => false,
+            // MODULE ACCESSES
+            // - If there is a valid module that would fit for a module, suggest that.
+            // - If the moodule has a leading address, suggest that.
+            // - Never suggest a member for a module access.
+            (_, Access::Module, LA::Module(_)) => true,
+            (n, Access::Module, LA::Address(_)) if n > 1 => true,
+            (_, Access::Module, LA::Member(_, _)) => false,
+            // OTHER ACCESSES
+            // For any other accesses:
+            // - Only suggest members on chain length 2, in case it was meant to be an enum.
+            // - Only suggest addresses or modules on chain length 2 or longer.
+            (2, _, LA::Member(_, _)) => true,
+            (_, _, LA::Member(_, _)) => false,
+            (0 | 1, _, LA::Address(_) | LA::Module(_)) => false,
+            (_, _, LA::Module(_)) => true,
+            (2, _, LA::Address(_)) => false,
+            (_, _, LA::Address(_)) => true,
+        }
+    }
+
+    move |name: &Symbol, kind: &LeadingAccessEntry| {
+        name != &ModuleName::SELF_NAME.into() && filter_leading_access(chain_length, access, kind)
+    }
+}
+
+fn make_module_member_filter_fn<'access>(
+    name: &Symbol,
+    access: &'access Access,
+) -> impl Fn(&Symbol, &MemberEntry) -> bool + 'access {
+    fn filter_module_member(access: &Access, entry: &MemberEntry) -> bool {
+        use ModuleMemberKind as K;
+        let kind = match entry {
+            // Bail on bound parameters
+            MemberEntry::TypeParam => return false,
+            // Suggest lambda params only for call positions
+            MemberEntry::LambdaParam => return matches!(access, Access::ApplyPositional),
+            MemberEntry::Member(_, _, kind) => kind,
+        };
+        match (access, kind) {
+            // Never suggest for a term, as it may be a local.
+            (Access::Term, _) => false,
+            (Access::Type, K::Constant | K::Function) => false,
+            (Access::Type, K::Struct | K::Enum) => true,
+            (Access::ApplyNamed, K::Constant | K::Function | K::Enum) => false,
+            (Access::ApplyNamed, K::Struct) => true,
+            (Access::ApplyPositional, K::Function | K::Struct) => true,
+            (Access::ApplyPositional, K::Constant | K::Enum) => false,
+            (Access::Pattern, K::Constant | K::Struct) => true,
+            (Access::Pattern, K::Function | K::Enum) => false,
+            // Never suggest a member for a module, though this case should be unreachable.
+            (Access::Module, _) => false,
+        }
+    }
+
+    let name_is_uppercase = name.as_str().starts_with(UPPERCASE_LETTERS);
+
+    move |member_name: &Symbol, kind: &MemberEntry| {
+        let is_uppercase = member_name.as_str().starts_with(UPPERCASE_LETTERS);
+        if is_uppercase != name_is_uppercase {
+            return false;
+        }
+        filter_module_member(access, kind)
+    }
+}
+
 impl Move2024PathExpander {
     pub(super) fn new() -> Move2024PathExpander {
         Move2024PathExpander {
@@ -604,11 +713,14 @@ impl Move2024PathExpander {
     fn resolve_root(
         &mut self,
         context: &mut DefnContext,
+        chain_length: usize,
+        access: &Access,
         sp!(loc, name): P::LeadingNameAccess,
     ) -> AccessChainNameResult {
         use AccessChainFailure as NF;
         use AccessChainNameResult as NR;
         use P::LeadingNameAccess_ as LN;
+
         match name {
             LN::AnonymousAddress(address) => NR::Address(loc, E::Address::anonymous(loc, address)),
             LN::GlobalAddress(name) => {
@@ -626,13 +738,69 @@ impl Move2024PathExpander {
                     )
                 }
             }
-            LN::Name(name) => match self.resolve_name(context, NameSpace::LeadingAccess, name) {
-                result @ NR::UnresolvedName(_, _) => {
-                    NR::ResolutionFailure(Box::new(result), NF::UnresolvedAlias(name))
-                }
-                other => other,
-            },
+            LN::Name(name) => {
+                let result = self.resolve_name(context, NameSpace::LeadingAccess, name);
+                let NR::UnresolvedName(_, _) = result else {
+                    return result;
+                };
+                let Some(suggestion) = self.aliases.suggest_leading_access(
+                    make_leading_access_filter_fn(chain_length, access),
+                    &name,
+                ) else {
+                    return NR::ResolutionFailure(Box::new(result), NF::UnresolvedAlias(name));
+                };
+                NR::ResolutionFailure(Box::new(result), NF::Suggestion(name, suggestion))
+            }
         }
+    }
+
+    fn resolve_single(
+        &mut self,
+        context: &mut DefnContext,
+        namespace: NameSpace,
+        access: &Access,
+        name: Name,
+    ) -> AccessChainNameResult {
+        use AccessChainNameResult as NR;
+
+        let result = self.resolve_name(context, namespace, name);
+        let NR::UnresolvedName(_, _) = result else {
+            return result;
+        };
+
+        // Return early in two cases:
+        // (A) If it looks like a variable usage, name resolution will handle suggestions, so we do
+        //     not suggest anything.
+        // (B) If this looks like a function call and it is lambda-bound, name resolution will
+        //     handle suggestions, so we do not suggest anything.
+        if matches!(access, Access::Term)
+            || (matches!(access, Access::ApplyPositional)
+                && self.aliases.is_lambda_parameter(&name))
+        {
+            return result;
+        }
+
+        // We ignore macro arguments, since they produce really unusual and useless suggestions.
+        // We also ignore `_` as a name, since it is a special case and takes different error paths.
+        let name_str = name.value.as_str();
+        if name_str == "_" || name_str.starts_with("$") {
+            return result;
+        }
+        let suggestion_opt = match namespace {
+            NameSpace::ModuleMembers => self
+                .aliases
+                .suggest_module_member(make_module_member_filter_fn(&name.value, access), &name),
+            NameSpace::LeadingAccess => self
+                .aliases
+                .suggest_leading_access(make_leading_access_filter_fn(1, access), &name),
+        };
+        let Some(suggestion) = suggestion_opt else {
+            return result;
+        };
+        NR::ResolutionFailure(
+            Box::new(result),
+            AccessChainFailure::Suggestion(name, suggestion),
+        )
     }
 
     fn resolve_name(
@@ -670,10 +838,10 @@ impl Move2024PathExpander {
             Some(AliasEntry::Address(_, address)) => {
                 NR::Address(name.loc, make_address(context, name, name.loc, address))
             }
-            Some(AliasEntry::TypeParam(_)) => {
+            Some(entry @ AliasEntry::TypeParam(_)) | Some(entry @ AliasEntry::LambdaParam(_)) => {
                 context.add_diag(ice!((
                     name.loc,
-                    "ICE alias map misresolved name as type param"
+                    format!("ICE alias map misresolved name as {:?}", entry),
                 )));
                 NR::UnresolvedName(name.loc, name)
             }
@@ -693,10 +861,10 @@ impl Move2024PathExpander {
                         AliasEntry::Member(_, mident, mem) => {
                             NR::ModuleAccess(name.loc, mident, mem)
                         }
-                        AliasEntry::TypeParam(_) => {
+                        entry @ (AliasEntry::TypeParam(_) | AliasEntry::LambdaParam(_)) => {
                             context.add_diag(ice!((
                                 name.loc,
-                                "ICE alias map misresolved name as type param"
+                                format!("ICE alias map misresolved name as {:?}", entry),
                             )));
                             NR::UnresolvedName(name.loc, name)
                         }
@@ -780,7 +948,7 @@ impl Move2024PathExpander {
                 {
                     NR::UnresolvedName(name.loc, name)
                 } else {
-                    self.resolve_name(context, namespace, name)
+                    self.resolve_single(context, namespace, &access, name)
                 };
                 AccessChainResult {
                     result,
@@ -795,7 +963,9 @@ impl Move2024PathExpander {
                     entries,
                     is_incomplete: incomplete,
                 } = path;
-                let mut result = match self.resolve_root(context, root.name) {
+                let chain_length = entries.len() + 1;
+                let mut result = match self.resolve_root(context, chain_length, &access, root.name)
+                {
                     // In Move Legacy, we always treated three-place names as fully-qualified.
                     // For migration mode, if we could have gotten the correct result doing so,
                     // we emit a migration change to globally-qualify that path and remediate
@@ -919,6 +1089,10 @@ impl PathExpander for Move2024PathExpander {
 
     fn push_type_parameters(&mut self, tparams: Vec<&Name>) {
         self.aliases.push_type_parameters(tparams)
+    }
+
+    fn push_lambda_parameters(&mut self, lparams: Vec<&Name>) {
+        self.aliases.push_lambda_parameters(lparams)
     }
 
     fn pop_alias_scope(&mut self) -> AliasSet {
@@ -1268,6 +1442,13 @@ impl PathExpander for LegacyPathExpander {
     fn push_type_parameters(&mut self, tparams: Vec<&Name>) {
         self.old_alias_maps
             .push(self.aliases.shadow_for_type_parameters(tparams));
+    }
+
+    // Do nothing here -- lambdas are not supported legacy Move
+    fn push_lambda_parameters(&mut self, _lparams: Vec<&Name>) {
+        // We have to push _something_ here to keep the stack balanced
+        self.old_alias_maps
+            .push(self.aliases.shadow_for_type_parameters(vec![]));
     }
 
     fn pop_alias_scope(&mut self) -> AliasSet {

@@ -5,10 +5,14 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02010]: invalid name
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/matching/invalid_const_name_match.move:9:20
   │
+3 │     const Z8: u8 = 0;
+  │           -- Similarly named defintion found here
+  ·
 9 │             S { n: Z } => 0,
-  │                    ^ Invalid pattern variable name 'Z'. Pattern variable names must start with 'a'..'z' or '_'
-  │
-  = The compiler may have failed to resolve this constant's name
+  │                    ^
+  │                    │
+  │                    Could not resolve the name 'Z'
+  │                    Did you mean: 'Z8'

@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/suggestions/suggestion_6.move:4:28
+  │
+4 │     public fun call<T>(x: &Q::r::S, y: &T): (&Q::r::S, &T) { (x, y) }
+  │                            ^
+  │                            │
+  │                            Could not resolve the name 'Q'
+  │                            Did you mean: 'A'
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/suggestions/suggestion_6.move:4:47
+  │
+4 │     public fun call<T>(x: &Q::r::S, y: &T): (&Q::r::S, &T) { (x, y) }
+  │                                               ^
+  │                                               │
+  │                                               Could not resolve the name 'Q'
+  │                                               Did you mean: 'A'

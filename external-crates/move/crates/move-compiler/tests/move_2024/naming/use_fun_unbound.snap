@@ -5,17 +5,28 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03005]: unbound unscoped name
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/use_fun_unbound.move:2:13
   │
 2 │     use fun id as u64.id;
-  │             ^^ Unbound function 'id' in current scope
+  │             ^^
+  │             │
+  │             Could not resolve the name 'id'
+  │             Did you mean: 't'
+3 │ 
+4 │     fun t(x: u64): u64 {
+  │         - Similarly named defintion found here
 
-error[E03005]: unbound unscoped name
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/use_fun_unbound.move:5:17
   │
+4 │     fun t(x: u64): u64 {
+  │         - Similarly named defintion found here
 5 │         use fun x as u64.x;
-  │                 ^ Unbound function 'x' in current scope
+  │                 ^
+  │                 │
+  │                 Could not resolve the name 'x'
+  │                 Did you mean: 't'
 
 error[E03005]: unbound unscoped name
    ┌─ tests/move_2024/naming/use_fun_unbound.move:10:17

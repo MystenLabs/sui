@@ -274,6 +274,8 @@ pub struct ModuleDefinition {
     pub loc: Loc,
     pub address: Option<LeadingNameAccess>,
     pub name: ModuleName,
+    /// Location of the module name, including any address qualifier
+    pub name_loc: Loc,
     pub is_spec_module: bool,
     pub is_extension: bool,
     pub definition_mode: ModuleDefinitionMode,
@@ -1793,9 +1795,10 @@ impl AstDebug for ModuleDefinition {
         let ModuleDefinition {
             doc,
             attributes,
-            loc: _loc,
+            loc: _,
             address,
             name,
+            name_loc: _,
             is_spec_module,
             is_extension,
             members,
