@@ -8,8 +8,10 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::Serialize;
-use sui_indexer_alt_framework::pipeline::concurrent::BatchStatus;
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::pipeline::concurrent::{self, BatchStatus};
 use sui_types::base_types::EpochId;
+use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::analytics_metrics::AnalyticsMetrics;
 use crate::config::{FileFormat, PipelineConfig};
@@ -60,30 +62,25 @@ impl<P> AnalyticsHandler<P> {
     }
 }
 
-// Implement Processor by delegating to inner processor
 #[async_trait]
-impl<P> sui_indexer_alt_framework::pipeline::Processor for AnalyticsHandler<P>
+impl<P> Processor for AnalyticsHandler<P>
 where
-    P: sui_indexer_alt_framework::pipeline::Processor + Send + Sync,
+    P: Processor + Send + Sync,
     P::Value: Send + Sync,
 {
     const NAME: &'static str = P::NAME;
     const FANOUT: usize = P::FANOUT;
     type Value = P::Value;
 
-    async fn process(
-        &self,
-        checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
-    ) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
         self.processor.process(checkpoint).await
     }
 }
 
-// Implement Handler with shared batching logic
 #[async_trait]
-impl<P> sui_indexer_alt_framework::pipeline::concurrent::Handler for AnalyticsHandler<P>
+impl<P> concurrent::Handler for AnalyticsHandler<P>
 where
-    P: sui_indexer_alt_framework::pipeline::Processor + Send + Sync,
+    P: Processor + Send + Sync,
     P::Value: AnalyticsMetadata + Serialize + RowSchema + Send + Sync,
 {
     type Store = sui_indexer_alt_object_store::ObjectStore;
