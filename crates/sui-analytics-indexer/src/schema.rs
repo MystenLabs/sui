@@ -7,98 +7,112 @@
 //! formats like CSV and Parquet. The `RowSchema` trait and `ColumnValue` enum work
 //! together to enable format-agnostic row serialization.
 
+use std::borrow::Cow;
+
 use sui_types::dynamic_field::DynamicFieldType;
+use thiserror::Error;
 
 use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
+
+/// Error type for column access operations.
+#[derive(Debug, Error)]
+pub enum ColumnError {
+    #[error("invalid column index {0}")]
+    InvalidIndex(usize),
+}
 
 /// Represents a single column value in a row.
 ///
 /// This enum provides a type-safe way to represent different column value types
-/// that can be serialized to columnar formats.
-pub enum ColumnValue {
+/// that can be serialized to columnar formats. Uses `Cow<str>` to enable zero-copy
+/// borrowing for string fields.
+pub enum ColumnValue<'a> {
     U64(u64),
-    Str(String),
+    Str(Cow<'a, str>),
     Bool(bool),
     I64(i64),
     OptionU64(Option<u64>),
-    OptionStr(Option<String>),
+    OptionStr(Option<Cow<'a, str>>),
 }
 
-impl From<u64> for ColumnValue {
-    fn from(value: u64) -> Self {
-        Self::U64(value)
+// Copy types - dereference from reference
+impl<'a> From<&'a u64> for ColumnValue<'a> {
+    fn from(value: &'a u64) -> Self {
+        Self::U64(*value)
     }
 }
 
-impl From<i64> for ColumnValue {
-    fn from(value: i64) -> Self {
-        Self::I64(value)
+impl<'a> From<&'a i64> for ColumnValue<'a> {
+    fn from(value: &'a i64) -> Self {
+        Self::I64(*value)
     }
 }
 
-impl From<String> for ColumnValue {
-    fn from(value: String) -> Self {
-        Self::Str(value)
+impl<'a> From<&'a bool> for ColumnValue<'a> {
+    fn from(value: &'a bool) -> Self {
+        Self::Bool(*value)
     }
 }
 
-impl From<Option<u64>> for ColumnValue {
-    fn from(value: Option<u64>) -> Self {
-        Self::OptionU64(value)
+impl<'a> From<&'a Option<u64>> for ColumnValue<'a> {
+    fn from(value: &'a Option<u64>) -> Self {
+        Self::OptionU64(*value)
     }
 }
 
-impl From<Option<String>> for ColumnValue {
-    fn from(value: Option<String>) -> Self {
-        Self::OptionStr(value)
+// String types - zero-copy borrow
+impl<'a> From<&'a String> for ColumnValue<'a> {
+    fn from(value: &'a String) -> Self {
+        Self::Str(Cow::Borrowed(value.as_str()))
     }
 }
 
-impl From<bool> for ColumnValue {
-    fn from(value: bool) -> Self {
-        Self::Bool(value)
+impl<'a> From<&'a Option<String>> for ColumnValue<'a> {
+    fn from(value: &'a Option<String>) -> Self {
+        Self::OptionStr(value.as_ref().map(|s| Cow::Borrowed(s.as_str())))
     }
 }
 
-impl From<OwnerType> for ColumnValue {
-    fn from(value: OwnerType) -> Self {
-        Self::Str(value.to_string())
+// Enum types - must allocate since they use Display::to_string()
+impl<'a> From<&'a OwnerType> for ColumnValue<'a> {
+    fn from(value: &'a OwnerType) -> Self {
+        Self::Str(Cow::Owned(value.to_string()))
     }
 }
 
-impl From<Option<OwnerType>> for ColumnValue {
-    fn from(value: Option<OwnerType>) -> Self {
-        value.map(|v| v.to_string()).into()
+impl<'a> From<&'a Option<OwnerType>> for ColumnValue<'a> {
+    fn from(value: &'a Option<OwnerType>) -> Self {
+        Self::OptionStr(value.as_ref().map(|v| Cow::Owned(v.to_string())))
     }
 }
 
-impl From<ObjectStatus> for ColumnValue {
-    fn from(value: ObjectStatus) -> Self {
-        Self::Str(value.to_string())
+impl<'a> From<&'a ObjectStatus> for ColumnValue<'a> {
+    fn from(value: &'a ObjectStatus) -> Self {
+        Self::Str(Cow::Owned(value.to_string()))
     }
 }
 
-impl From<Option<ObjectStatus>> for ColumnValue {
-    fn from(value: Option<ObjectStatus>) -> Self {
-        Self::OptionStr(value.map(|v| v.to_string()))
+impl<'a> From<&'a Option<ObjectStatus>> for ColumnValue<'a> {
+    fn from(value: &'a Option<ObjectStatus>) -> Self {
+        Self::OptionStr(value.as_ref().map(|v| Cow::Owned(v.to_string())))
     }
 }
 
-impl From<Option<InputObjectKind>> for ColumnValue {
-    fn from(value: Option<InputObjectKind>) -> Self {
-        Self::OptionStr(value.map(|v| v.to_string()))
+impl<'a> From<&'a Option<InputObjectKind>> for ColumnValue<'a> {
+    fn from(value: &'a Option<InputObjectKind>) -> Self {
+        Self::OptionStr(value.as_ref().map(|v| Cow::Owned(v.to_string())))
     }
 }
 
-impl From<DynamicFieldType> for ColumnValue {
-    fn from(value: DynamicFieldType) -> Self {
-        Self::Str(value.to_string())
+impl<'a> From<&'a DynamicFieldType> for ColumnValue<'a> {
+    fn from(value: &'a DynamicFieldType) -> Self {
+        Self::Str(Cow::Owned(value.to_string()))
     }
 }
 
-impl From<Option<DynamicFieldType>> for ColumnValue {
-    fn from(value: Option<DynamicFieldType>) -> Self {
-        Self::OptionStr(value.map(|v| v.to_string()))
+impl<'a> From<&'a Option<DynamicFieldType>> for ColumnValue<'a> {
+    fn from(value: &'a Option<DynamicFieldType>) -> Self {
+        Self::OptionStr(value.as_ref().map(|v| Cow::Owned(v.to_string())))
     }
 }
 
@@ -111,5 +125,7 @@ pub trait RowSchema {
     fn schema() -> Vec<String>;
 
     /// Returns the value at the given column index.
-    fn get_column(&self, idx: usize) -> ColumnValue;
+    ///
+    /// Returns an error if the index is out of bounds.
+    fn get_column(&self, idx: usize) -> Result<ColumnValue<'_>, ColumnError>;
 }

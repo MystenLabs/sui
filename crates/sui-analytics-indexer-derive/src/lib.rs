@@ -21,7 +21,7 @@ pub fn schema_derive(input: TokenStream) -> TokenStream {
                         (
                             format!("\"{}\".to_string()", field_name),
                             format!(
-                                "if idx == {} {{ return self.{}.clone().into(); }}",
+                                "if idx == {} {{ return Ok((&self.{}).into()); }}",
                                 idx, field_name
                             ),
                         )
@@ -38,14 +38,14 @@ pub fn schema_derive(input: TokenStream) -> TokenStream {
         getter_implementation.parse().unwrap();
 
     quote! {
-        impl RowSchema for #struct_name {
+        impl crate::schema::RowSchema for #struct_name {
             fn schema() -> Vec<String> {
                 vec![#schema_tokens]
             }
 
-            fn get_column(&self, idx: usize) -> ColumnValue {
+            fn get_column(&self, idx: usize) -> Result<crate::schema::ColumnValue<'_>, crate::schema::ColumnError> {
                 #getter_implementation_tokens
-                panic!("not supported column {:?}", idx);
+                Err(crate::schema::ColumnError::InvalidIndex(idx))
             }
         }
     }

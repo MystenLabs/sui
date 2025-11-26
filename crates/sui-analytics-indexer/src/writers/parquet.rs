@@ -74,7 +74,7 @@ impl ParquetWriter {
             && let Some(first_row) = row_iter.peek()
         {
             for col_idx in 0..S::schema().len() {
-                let value = first_row.get_column(col_idx);
+                let value = first_row.get_column(col_idx)?;
                 self.builders.push(match value {
                     ColumnValue::U64(_) | ColumnValue::OptionU64(_) => {
                         ColumnBuilder::U64(UInt64Builder::new())
@@ -91,19 +91,20 @@ impl ParquetWriter {
         let mut count = 0;
         for row in row_iter {
             count += 1;
-            for (col_idx, value) in (0..S::schema().len()).map(|i| (i, row.get_column(i))) {
+            for col_idx in 0..S::schema().len() {
+                let value = row.get_column(col_idx)?;
                 match (&mut self.builders[col_idx], value) {
                     (ColumnBuilder::U64(b), ColumnValue::U64(v)) => b.append_value(v),
                     (ColumnBuilder::I64(b), ColumnValue::I64(v)) => b.append_value(v),
                     (ColumnBuilder::Bool(b), ColumnValue::Bool(v)) => b.append_value(v),
-                    (ColumnBuilder::Str(b), ColumnValue::Str(v)) => b.append_value(&v),
+                    (ColumnBuilder::Str(b), ColumnValue::Str(v)) => b.append_value(v.as_ref()),
 
                     (ColumnBuilder::U64(b), ColumnValue::OptionU64(opt)) => match opt {
                         Some(v) => b.append_value(v),
                         None => b.append_null(),
                     },
                     (ColumnBuilder::Str(b), ColumnValue::OptionStr(opt)) => match opt {
-                        Some(v) => b.append_value(&v),
+                        Some(v) => b.append_value(v.as_ref()),
                         None => b.append_null(),
                     },
 
