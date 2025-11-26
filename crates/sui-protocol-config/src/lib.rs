@@ -4263,6 +4263,8 @@ impl ProtocolConfig {
                     cfg.dynamic_field_borrow_child_object_child_ref_cost_per_byte = Some(1);
                     cfg.dynamic_field_remove_child_object_child_cost_per_byte = Some(1);
                     cfg.feature_flags.enable_ptb_execution_v2 = true;
+
+                    cfg.poseidon_bn254_cost_base = Some(260);
                 }
                 // Use this template when making changes:
                 //
