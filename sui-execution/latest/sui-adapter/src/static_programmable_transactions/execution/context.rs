@@ -11,7 +11,10 @@ use crate::{
     sp,
     static_programmable_transactions::{
         env::Env,
-        execution::values::{Local, Locals, Value},
+        execution::{
+            trace_utils,
+            values::{Local, Locals, Value},
+        },
         linkage::resolved_linkage::{ResolvedLinkage, RootedLinkage},
         loading::ast::{Datatype, ObjectMutability},
         typing::ast::{self as T, Type},
@@ -663,7 +666,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         &mut self,
         function: T::LoadedFunction,
         args: Vec<CtxValue>,
-        trace_builder_opt: Option<&mut MoveTraceBuilder>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, ExecutionError> {
         let result = self.execute_function_bypass_visibility(
             &function.runtime_id,
@@ -689,7 +692,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         ty_args: &[Type],
         args: Vec<CtxValue>,
         linkage: &RootedLinkage,
-        tracer: Option<&mut MoveTraceBuilder>,
+        tracer: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, ExecutionError> {
         let ty_args = ty_args
             .iter()
@@ -710,7 +713,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 &mut data_store,
                 &mut SuiGasMeter(gas_status),
                 &mut self.native_extensions,
-                tracer,
+                tracer.as_mut(),
             )
             .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
         Ok(values.into_iter().map(|v| CtxValue(v.into())).collect())
@@ -867,7 +870,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         package_id: ObjectID,
         modules: &[CompiledModule],
         linkage: &RootedLinkage,
-        mut trace_builder_opt: Option<&mut MoveTraceBuilder>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         for module in modules {
             let Some((fdef_idx, fdef)) = module.find_function_def_by_name(INIT_FN_NAME.as_str())
@@ -895,14 +898,16 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 vec![CtxValue(tx_context)]
             };
             debug_assert_eq!(self.gas_charger.move_gas_status().stack_height_current(), 0);
+            trace_utils::trace_move_call_start(trace_builder_opt);
             let return_values = self.execute_function_bypass_visibility(
                 &module.self_id(),
                 INIT_FN_NAME,
                 &[],
                 args,
                 linkage,
-                trace_builder_opt.as_deref_mut(),
+                trace_builder_opt,
             )?;
+            trace_utils::trace_move_call_end(trace_builder_opt);
 
             let storage_id = ModuleId::new(package_id.into(), module.self_id().name().to_owned());
             self.take_user_events(
@@ -926,7 +931,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         mut modules: Vec<CompiledModule>,
         dep_ids: &[ObjectID],
         linkage: ResolvedLinkage,
-        trace_builder_opt: Option<&mut MoveTraceBuilder>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<ObjectID, ExecutionError> {
         let runtime_id = if <Mode>::packages_are_predefined() {
             // do not calculate or substitute id for predefined packages
@@ -1241,6 +1246,11 @@ impl CtxValue {
 
     pub fn into_upgrade_ticket(self) -> Result<UpgradeTicket, ExecutionError> {
         self.0.into_upgrade_ticket()
+    }
+
+    /// Used to get access the inner Value for tracing.
+    pub(super) fn inner_for_tracing(&self) -> &Value {
+        &self.0
     }
 }
 
