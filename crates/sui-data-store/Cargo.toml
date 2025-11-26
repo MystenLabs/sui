@@ -1,0 +1,25 @@
+[package]
+name = "sui-data-store"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+bcs.workspace = true
+chrono.workspace = true
+csv.workspace = true
+cynic.workspace = true
+fastcrypto.workspace = true
+lru.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+serde.workspace = true
+sui-config.workspace = true
+sui-types.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+
+[build-dependencies]
+cynic-codegen.workspace = true

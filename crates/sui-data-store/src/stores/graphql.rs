@@ -1,18 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! An implementation of the replay interfaces: `TransactionStore`, `EpochStore` and `ObjectStore`
+//! An implementation of the data store interfaces: `TransactionStore`, `EpochStore` and `ObjectStore`
 //! backed by the RPC GQL endpoint. Schema in `crates/sui-indexer-alt-graphql/schema.graphql`.
 //! The RPC calls are implemented in `gql_queries.rs`.
 
 use crate::{
-    Node,
-    data_stores::gql_queries,
-    replay_interface::{
-        EpochData, EpochStore, ObjectKey, ObjectStore, SetupStore, StoreSummary, TransactionInfo,
-        TransactionStore, VersionQuery,
-    },
-    summary_metrics::*,
+    EpochData, EpochStore, ObjectKey, ObjectStore, SetupStore, StoreSummary, TransactionInfo,
+    TransactionStore, VersionQuery, gql_queries, node::Node,
 };
 use anyhow::{Context, Error, Result};
 use cynic::{GraphQlResponse, Operation};
@@ -36,7 +31,7 @@ use tracing::{debug, debug_span};
 
 type EpochId = u64;
 
-/// Provide an implementation of the replay_interface traits backed by GQL RPC endpoint.
+/// GraphQL-backed implementation of the data store traits.
 pub struct DataStore {
     client: reqwest::Client,
     rpc: reqwest::Url,
@@ -300,7 +295,7 @@ impl DataStore {
     {
         client
             .post(rpc.clone())
-            .header(USER_AGENT, format!("sui-replay-v{}", version))
+            .header(USER_AGENT, format!("sui-data-store-v{}", version))
             .json(&operation)
             .send()
             .await
@@ -319,7 +314,6 @@ impl DataStore {
         let t0 = Instant::now();
         let data = gql_queries::txn_query::query(digest.to_string(), self).await;
         let elapsed = t0.elapsed().as_millis();
-        tx_metrics_add_txn(elapsed);
         debug!(
             op = "txn_query",
             phase = "end",
@@ -335,7 +329,6 @@ impl DataStore {
         let t0 = Instant::now();
         let data = gql_queries::epoch_query::query(epoch_id, self).await;
         let elapsed = t0.elapsed().as_millis();
-        tx_metrics_add_epoch(elapsed);
         debug!(
             op = "epoch_query",
             phase = "end",
@@ -351,7 +344,6 @@ impl DataStore {
         let t0 = Instant::now();
         let data = gql_queries::object_query::query(keys, self).await?;
         let elapsed = t0.elapsed().as_millis();
-        tx_metrics_add_objs(elapsed);
         debug!(
             op = "objects_query",
             phase = "end",

@@ -110,6 +110,7 @@ members = [
   "crates/sui-cost",
   "crates/sui-data-ingestion",
   "crates/sui-data-ingestion-core",
+  "crates/sui-data-store",
   "crates/sui-deepbook-indexer",
   "crates/sui-default-config",
   "crates/sui-display",
@@ -693,6 +694,7 @@ sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion = { path = "crates/sui-data-ingestion" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
+sui-data-store = { path = "crates/sui-data-store" }
 sui-default-config = { path = "crates/sui-default-config" }
 sui-display = { path = "crates/sui-display" }
 sui-e2e-tests = { path = "crates/sui-e2e-tests" }
