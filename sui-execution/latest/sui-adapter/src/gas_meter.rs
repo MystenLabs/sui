@@ -259,7 +259,7 @@ impl GasMeter for SuiGasMeter<'_> {
         // TODO(tzakian): We should account for this elsewhere as the owner of data the
         // reference points to won't be on the stack. For now though, we treat it as adding to the
         // stack size.
-        let (pushes, pops) = if reweight_read_ref(self.0.gas_model_version) {
+        let (pushes, pops) = if reduce_stack_size(self.0.gas_model_version) {
             (0, 2)
         } else {
             (1, 2)
@@ -360,7 +360,7 @@ impl GasMeter for SuiGasMeter<'_> {
 
     fn charge_vec_swap(&mut self, _ty: impl TypeView) -> PartialVMResult<()> {
         let size_decrease = REFERENCE_SIZE + Type::U64.size() + Type::U64.size();
-        let (pushes, pops) = if reweight_move_loc(self.0.gas_model_version) {
+        let (pushes, pops) = if reduce_stack_size(self.0.gas_model_version) {
             (0, 3)
         } else {
             (1, 1)
@@ -407,6 +407,11 @@ fn reweight_read_ref(gas_model_version: u64) -> bool {
 
 fn reweight_move_loc(gas_model_version: u64) -> bool {
     // Reweighting `MoveLoc` is only done in gas model versions 10 and above.
+    gas_model_version > 10
+}
+
+fn reduce_stack_size(gas_model_version: u64) -> bool {
+    // Reducing stack size is only done in gas model versions 10 and above.
     gas_model_version > 10
 }
 
