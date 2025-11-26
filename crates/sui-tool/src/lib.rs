@@ -770,6 +770,7 @@ pub async fn download_formal_snapshot(
     network: Chain,
     verify: SnapshotVerifyMode,
     max_retries: usize,
+    backfill_txn_digests: bool,
 ) -> Result<(), anyhow::Error> {
     let m = MultiProgress::new();
     m.println(format!(
@@ -824,13 +825,12 @@ pub async fn download_formal_snapshot(
         end_of_epoch_checkpoint_seq_nums.clone(),
     );
 
-    // Start transaction backfill in parallel with summary sync
-    let backfill_handle = {
+    let backfill_handle = if backfill_txn_digests {
         let perpetual_db = perpetual_db.clone();
         let ingestion_url = ingestion_url.to_string();
         let m = m.clone();
         let end_of_epoch_checkpoint_seq_nums = end_of_epoch_checkpoint_seq_nums.clone();
-        tokio::spawn(async move {
+        Some(tokio::spawn(async move {
             backfill_epoch_transaction_digests(
                 perpetual_db,
                 epoch,
@@ -840,7 +840,9 @@ pub async fn download_formal_snapshot(
                 end_of_epoch_checkpoint_seq_nums,
             )
             .await
-        })
+        }))
+    } else {
+        None
     };
 
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
@@ -968,8 +970,9 @@ pub async fn download_formal_snapshot(
     )
     .await?;
 
-    // Wait for backfill to complete
-    backfill_handle.await.expect("Task join failed")?;
+    if let Some(handle) = backfill_handle {
+        handle.await.expect("Task join failed")?;
+    }
 
     let new_path = path.parent().unwrap().join("live");
     if new_path.exists() {
