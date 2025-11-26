@@ -130,8 +130,6 @@ impl JobConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PipelineConfig {
-    /// Name of the pipeline. Must be unique per process. Used to identify pipelines in the Progress Store.
-    pub pipeline_name: String,
     /// Type of data to write i.e. checkpoint, object, transaction, etc
     pub pipeline: Pipeline,
     /// File format to use (csv or parquet)
@@ -571,10 +569,7 @@ pub async fn build_analytics_indexer(
 
     // Register pipelines for each enabled file type
     for pipeline_config in config.pipeline_configs() {
-        info!(
-            "Registering pipeline: {} with file type: {:?}",
-            pipeline_config.pipeline_name, pipeline_config.pipeline
-        );
+        info!("Registering pipeline: {}", pipeline_config.pipeline);
 
         register_pipeline(
             &mut indexer,
@@ -634,7 +629,7 @@ pub fn spawn_snowflake_monitors(
             .ok_or_else(|| {
                 anyhow!(
                     "Missing sf_table_id for pipeline {}",
-                    pipeline_config.pipeline_name
+                    pipeline_config.pipeline
                 )
             })?
             .clone();
@@ -645,7 +640,7 @@ pub fn spawn_snowflake_monitors(
             .ok_or_else(|| {
                 anyhow!(
                     "Missing sf_checkpoint_col_id for pipeline {}",
-                    pipeline_config.pipeline_name
+                    pipeline_config.pipeline
                 )
             })?
             .clone();
@@ -693,7 +688,7 @@ pub fn spawn_snowflake_monitors(
                 .ok_or_else(|| anyhow!("Missing sf_password_file"))?,
         )?;
 
-        let pipeline_name = pipeline_config.pipeline_name.clone();
+        let pipeline_name = pipeline_config.pipeline.to_string();
         let metrics = metrics.clone();
         let cancel = cancel.clone();
 
