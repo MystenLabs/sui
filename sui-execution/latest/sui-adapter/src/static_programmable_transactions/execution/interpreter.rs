@@ -8,6 +8,7 @@ use crate::{
     static_programmable_transactions::{
         env::Env,
         execution::context::{Context, CtxValue},
+        execution::trace_utils,
         typing::ast as T,
     },
 };
@@ -50,7 +51,10 @@ where
 
     match result {
         Ok(result) => Ok((result, timings)),
-        Err(e) => Err((e, timings)),
+        Err(e) => {
+            trace_utils::trace_execution_error(trace_builder_opt, e.to_string());
+            Err((e, timings))
+        }
     }
 }
 
@@ -86,15 +90,15 @@ where
         pure,
         receiving,
     )?;
+
+    trace_utils::trace_ptb_summary(&mut context, trace_builder_opt, &commands)?;
+
     let mut mode_results = Mode::empty_results();
     for sp!(idx, c) in commands {
         let start = Instant::now();
-        if let Err(err) = execute_command::<Mode>(
-            &mut context,
-            &mut mode_results,
-            c,
-            trace_builder_opt.as_mut(),
-        ) {
+        if let Err(err) =
+            execute_command::<Mode>(&mut context, &mut mode_results, c, trace_builder_opt)
+        {
             let object_runtime = context.object_runtime()?;
             // We still need to record the loaded child objects for replay
             let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
@@ -140,7 +144,7 @@ fn execute_command<Mode: ExecutionMode>(
     context: &mut Context,
     mode_results: &mut Mode::ExecutionResults,
     c: T::Command_,
-    trace_builder_opt: Option<&mut MoveTraceBuilder>,
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> Result<(), ExecutionError> {
     let T::Command_ {
         command,
@@ -157,6 +161,7 @@ fn execute_command<Mode: ExecutionMode>(
     let mut args_to_update = vec![];
     let result = match command {
         T::Command__::MoveCall(move_call) => {
+            trace_utils::trace_move_call_start(trace_builder_opt);
             let T::MoveCall {
                 function,
                 arguments,
@@ -170,7 +175,9 @@ fn execute_command<Mode: ExecutionMode>(
                 )
             }
             let arguments = context.arguments(arguments)?;
-            context.vm_move_call(function, arguments, trace_builder_opt)?
+            let res = context.vm_move_call(function, arguments, trace_builder_opt);
+            trace_utils::trace_move_call_end(trace_builder_opt);
+            res?
         }
         T::Command__::TransferObjects(objects, recipient) => {
             let object_tys = objects
@@ -183,6 +190,7 @@ fn execute_command<Mode: ExecutionMode>(
                 object_values.len() == object_tys.len(),
                 "object values and types mismatch"
             );
+            trace_utils::trace_transfer(context, trace_builder_opt, &object_values, &object_tys)?;
             for (object_value, ty) in object_values.into_iter().zip(object_tys) {
                 // TODO should we just call a Move function?
                 let recipient = Owner::AddressOwner(recipient.into());
@@ -190,7 +198,8 @@ fn execute_command<Mode: ExecutionMode>(
             }
             vec![]
         }
-        T::Command__::SplitCoins(_, coin, amounts) => {
+        T::Command__::SplitCoins(ty, coin, amounts) => {
+            let mut trace_values = vec![];
             // TODO should we just call a Move function?
             if Mode::TRACK_EXECUTION {
                 args_to_update.push(coin.clone());
@@ -206,6 +215,13 @@ fn execute_command<Mode: ExecutionMode>(
                 };
                 total = new_total;
             }
+            trace_utils::add_move_value_info_from_ctx_value(
+                context,
+                trace_builder_opt,
+                &mut trace_values,
+                &ty,
+                &coin_ref,
+            )?;
             let coin_value = context.copy_value(&coin_ref)?.coin_ref_value()?;
             fp_ensure!(
                 coin_value >= total,
@@ -215,21 +231,48 @@ fn execute_command<Mode: ExecutionMode>(
                 )
             );
             coin_ref.coin_ref_subtract_balance(total)?;
-            amount_values
+            let amounts = amount_values
                 .into_iter()
                 .map(|a| context.new_coin(a))
-                .collect::<Result<_, _>>()?
+                .collect::<Result<Vec<_>, _>>()?;
+            trace_utils::trace_split_coins(
+                context,
+                trace_builder_opt,
+                &ty,
+                trace_values,
+                &amounts,
+                total,
+            )?;
+
+            amounts
         }
-        T::Command__::MergeCoins(_, target, coins) => {
+        T::Command__::MergeCoins(ty, target, coins) => {
+            let mut trace_values = vec![];
             // TODO should we just call a Move function?
             if Mode::TRACK_EXECUTION {
                 args_to_update.push(target.clone());
             }
             let target_ref: CtxValue = context.argument(target)?;
+            trace_utils::add_move_value_info_from_ctx_value(
+                context,
+                trace_builder_opt,
+                &mut trace_values,
+                &ty,
+                &target_ref,
+            )?;
             let coins = context.arguments(coins)?;
             let amounts = coins
                 .into_iter()
-                .map(|coin| context.destroy_coin(coin))
+                .map(|coin| {
+                    trace_utils::add_move_value_info_from_ctx_value(
+                        context,
+                        trace_builder_opt,
+                        &mut trace_values,
+                        &ty,
+                        &coin,
+                    )?;
+                    context.destroy_coin(coin)
+                })
                 .collect::<Result<Vec<_>, _>>()?;
             let mut additional: u64 = 0;
             for amount in amounts {
@@ -246,13 +289,22 @@ fn execute_command<Mode: ExecutionMode>(
                 ExecutionError::from_kind(ExecutionErrorKind::CoinBalanceOverflow,)
             );
             target_ref.coin_ref_add_balance(additional)?;
+            trace_utils::trace_merge_coins(
+                context,
+                trace_builder_opt,
+                &ty,
+                trace_values,
+                additional,
+            )?;
             vec![]
         }
         T::Command__::MakeMoveVec(ty, items) => {
             let items: Vec<CtxValue> = context.arguments(items)?;
+            trace_utils::trace_make_move_vec(context, trace_builder_opt, &items, &ty)?;
             vec![CtxValue::vec_pack(ty, items)?]
         }
         T::Command__::Publish(module_bytes, dep_ids, linkage) => {
+            trace_utils::trace_publish_event(trace_builder_opt)?;
             let modules =
                 context.deserialize_modules(&module_bytes, /* is upgrade */ false)?;
 
@@ -277,6 +329,7 @@ fn execute_command<Mode: ExecutionMode>(
             upgrade_ticket,
             linkage,
         ) => {
+            trace_utils::trace_upgrade_event(trace_builder_opt)?;
             let upgrade_ticket = context
                 .argument::<CtxValue>(upgrade_ticket)?
                 .into_upgrade_ticket()?;
