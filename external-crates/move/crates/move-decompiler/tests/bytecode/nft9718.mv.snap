@@ -9,11 +9,7 @@ module e129073871721e3ea95ad813463e76df0484590cd327f9d3622adaf5257ba424::nft9718
 
 public struct NFT9718 has drop { dummy_field: bool }
 
-public struct NFT
-has key, store {
-    id: 0x0000000000000000000000000000000000000000000000000000000000000002::object::UID,
-    name: 0x0000000000000000000000000000000000000000000000000000000000000001::string::String,
-}
+public struct NFT has key, store { id: 0x2::object::UID, name: 0x1::string::String }
 
 // -- constants -- 
 
@@ -27,21 +23,21 @@ const C3: vector<u8> = vec![104u8, 116u8, 116u8, 112u8, 115u8, 58u8, 47u8, 47u8,
 
 // -- functions -- 
 
-public fun claim(l0: &mut vector<address>, l1: &mut 0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext) {
+public fun claim(l0: &mut vector<address>, l1: &mut 0x2::tx_context::TxContext) {
     loop {
         
     }
 }
 
-fun init(l0: 0xe129073871721e3ea95ad813463e76df0484590cd327f9d3622adaf5257ba424::nft9718::NFT9718, l1: &mut 0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext) {
+fun init(l0: 0xe129073871721e3ea95ad813463e76df0484590cd327f9d3622adaf5257ba424::nft9718::NFT9718, l1: &mut 0x2::tx_context::TxContext) {
     {
-        let l2 = vec![0x1::string::utf8(C1), 0x1::string::utf8(C0)];
-        let l3 = vec![0x1::string::utf8(C3), 0x1::string::utf8(C2)];
-        let l4 = 0x2::package::claim(l1, l0);
-        let l5 = 0x2::display::new_with_fields(l1, l3, l2, &l4);
+        let l2 = vec![0x1::string::utf8(C0), 0x1::string::utf8(C1)];
+        let l3 = vec![0x1::string::utf8(C2), 0x1::string::utf8(C3)];
+        let l4 = 0x2::package::claim(l0, l1);
+        let l5 = 0x2::display::new_with_fields(&l4, l2, l3, l1);
         0x2::display::update_version(&mut l5);
-        0x2::transfer::public_transfer(0x2::tx_context::sender(freeze(l1)), l4);
-        0x2::transfer::public_transfer(0x2::tx_context::sender(freeze(l1)), l5);
+        0x2::transfer::public_transfer(l4, 0x2::tx_context::sender(freeze(l1)));
+        0x2::transfer::public_transfer(l5, 0x2::tx_context::sender(freeze(l1)));
         return
     }
 }

@@ -23,7 +23,7 @@ const C4: vector<u8> = vec![104u8, 116u8, 116u8, 112u8, 115u8, 58u8, 47u8, 47u8,
 
 // -- functions -- 
 
-fun init(l0: 0xe18072e6b2f1b75fd746ad4837ecbecd4bc7b08869404b5dcd928b13a428254b::gama::GAMA, l1: &mut 0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext) {
+fun init(l0: 0xe18072e6b2f1b75fd746ad4837ecbecd4bc7b08869404b5dcd928b13a428254b::gama::GAMA, l1: &mut 0x2::tx_context::TxContext) {
     {
         let l2 = 0xe18072e6b2f1b75fd746ad4837ecbecd4bc7b08869404b5dcd928b13a428254b::gama::trim_right(C0);
         let l5 = &l2.len();
@@ -37,20 +37,20 @@ fun init(l0: 0xe18072e6b2f1b75fd746ad4837ecbecd4bc7b08869404b5dcd928b13a428254b:
             l3 = 0x1::option::some(0x2::url::new_unsafe_from_bytes(l7));
         };
         let l8 = l3;
-        let (reg_32, reg_33) = 0x2::coin::create_currency(l1, l8, l6, l10, l11, l5 as u8, l0);
+        let (reg_32, reg_33) = 0x2::coin::create_currency(l0, l5 as u8, l11, l10, l6, l8, l1);
         let l9 = reg_33;
         let l12 = reg_32;
-        let l4 = 0x2::coin::mint(l1, 1000000000000000000u64, &mut l12);
+        let l4 = 0x2::coin::mint(&mut l12, 1000000000000000000u64, l1);
         0x2::transfer::public_freeze_object(l9);
         0x2::transfer::public_freeze_object(l12);
-        0x2::transfer::public_transfer(0x2::tx_context::sender(freeze(l1)), l4);
+        0x2::transfer::public_transfer(l4, 0x2::tx_context::sender(freeze(l1)));
         return
     }
 }
 
-public fun mint(l0: &mut 0x0000000000000000000000000000000000000000000000000000000000000002::coin::TreasuryCap0xe18072e6b2f1b75fd746ad4837ecbecd4bc7b08869404b5dcd928b13a428254b::gama::GAMA, l1: u64, l2: address, l3: &mut 0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext) {
+public fun mint(l0: &mut 0x2::coin::TreasuryCap0xe18072e6b2f1b75fd746ad4837ecbecd4bc7b08869404b5dcd928b13a428254b::gama::GAMA, l1: u64, l2: address, l3: &mut 0x2::tx_context::TxContext) {
     {
-        0x2::transfer::public_transfer(l2, 0x2::coin::mint(l3, l1, l0));
+        0x2::transfer::public_transfer(0x2::coin::mint(l0, l1, l3), l2);
         return
     }
 }

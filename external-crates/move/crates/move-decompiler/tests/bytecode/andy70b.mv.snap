@@ -23,7 +23,7 @@ const C4: vector<u8> = vec![104u8, 116u8, 116u8, 112u8, 115u8, 58u8, 47u8, 47u8,
 
 // -- functions -- 
 
-fun init(l0: 0xe14edd90e55069be679479d7067ca9e3caf1542cf4ca5b3a827979856888dd07::andy70b::ANDY70B, l1: &mut 0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext) {
+fun init(l0: 0xe14edd90e55069be679479d7067ca9e3caf1542cf4ca5b3a827979856888dd07::andy70b::ANDY70B, l1: &mut 0x2::tx_context::TxContext) {
     {
         let l2 = 0xe14edd90e55069be679479d7067ca9e3caf1542cf4ca5b3a827979856888dd07::andy70b::trim_right(C0);
         let l4 = &l2.len();
@@ -37,9 +37,9 @@ fun init(l0: 0xe14edd90e55069be679479d7067ca9e3caf1542cf4ca5b3a827979856888dd07:
             l3 = 0x1::option::some(0x2::url::new_unsafe_from_bytes(l6));
         };
         let l7 = l3;
-        let (reg_32, reg_33) = 0x2::coin::create_currency(l1, l7, l5, l9, l10, l4 as u8, l0);
+        let (reg_32, reg_33) = 0x2::coin::create_currency(l0, l4 as u8, l10, l9, l5, l7, l1);
         let l8 = reg_33;
-        0x2::transfer::public_transfer(0x2::tx_context::sender(freeze(l1)), reg_32);
+        0x2::transfer::public_transfer(reg_32, 0x2::tx_context::sender(freeze(l1)));
         0x2::transfer::public_share_object(l8);
         return
     }
