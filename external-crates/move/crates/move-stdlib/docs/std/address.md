@@ -1,7 +1,6 @@
-
-<a name="std_address"></a>
-
-# Module `std::address`
+---
+title: Module `std::address`
+---
 
 Provides a way to get address length since it's a
 platform-specific parameter.
@@ -39,6 +38,3 @@ Current implementation only works for Sui.
 
 
 </details>
-
-
-[//]: # ("File containing references which can be used from documentation")

@@ -40,8 +40,7 @@ public fun to_ascii(s: String): ascii::String {
 
 /// Tries to create a new string from a sequence of bytes.
 public fun try_utf8(bytes: vector<u8>): Option<String> {
-    if (internal_check_utf8(&bytes)) option::some(String { bytes })
-    else option::none()
+    if (internal_check_utf8(&bytes)) option::some(String { bytes }) else option::none()
 }
 
 /// Returns a reference to the underlying byte vector.
@@ -117,11 +116,6 @@ native fun internal_check_utf8(v: &vector<u8>): bool;
 native fun internal_is_char_boundary(v: &vector<u8>, i: u64): bool;
 native fun internal_sub_string(v: &vector<u8>, i: u64, j: u64): vector<u8>;
 native fun internal_index_of(v: &vector<u8>, r: &vector<u8>): u64;
-
-#[test_only]
-public fun internal_sub_string_for_testing(v: &vector<u8>, i: u64, j: u64): vector<u8> {
-    internal_sub_string(v, i, j)
-}
 
 // === Deprecated ===
 

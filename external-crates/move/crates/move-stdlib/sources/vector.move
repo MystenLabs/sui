@@ -72,7 +72,7 @@ public fun singleton<Element>(e: Element): vector<Element> {
 /// Reverses the order of the elements in the vector `v` in place.
 public fun reverse<Element>(v: &mut vector<Element>) {
     let len = v.length();
-    if (len == 0) return ();
+    if (len == 0) return;
 
     let mut front_index = 0;
     let mut back_index = len - 1;
@@ -157,6 +157,25 @@ public fun swap_remove<Element>(v: &mut vector<Element>, i: u64): Element {
     let last_idx = v.length() - 1;
     v.swap(i, last_idx);
     v.pop_back()
+}
+
+/// Return a new vector containing the elements of `v` except the first `n` elements.
+/// If `n > length`, returns an empty vector.
+public fun skip<T: drop>(mut v: vector<T>, n: u64): vector<T> {
+    let len = v.length();
+    if (n >= len) return vector[];
+    let mut r = tabulate!(len - n, |_| v.pop_back());
+    r.reverse();
+    r
+}
+
+/// Take the first `n` elements of the vector `v` and drop the rest.
+/// Aborts if `n` is greater than the length of `v`.
+public fun take<T: drop>(mut v: vector<T>, n: u64): vector<T> {
+    assert!(n <= v.length());
+    if (n == v.length()) return v;
+    v.reverse();
+    tabulate!(n, |_| v.pop_back())
 }
 
 // === Macros ===
@@ -245,6 +264,15 @@ public macro fun find_index<$T>($v: &vector<$T>, $f: |&$T| -> bool): Option<u64>
         v.length().do!(|i| if ($f(&v[i])) return 'find_index option::some(i));
         option::none()
     }
+}
+
+/// Finds all indices of elements in the vector `v` that satisfy the predicate `f`.
+/// Returns a vector of indices of all found elements.
+public macro fun find_indices<$T>($v: &vector<$T>, $f: |&$T| -> bool): vector<u64> {
+    let v = $v;
+    let mut indices = vector[];
+    v.length().do!(|i| if ($f(&v[i])) indices.push_back(i));
+    indices
 }
 
 /// Count how many elements in the vector `v` satisfy the predicate `f`.
@@ -381,4 +409,137 @@ public macro fun zip_map_ref<$T1, $T2, $U>(
     let mut r = vector[];
     zip_do_ref!($v1, $v2, |el1, el2| r.push_back($f(el1, el2)));
     r
+}
+
+/// Performs an in-place insertion sort on the vector `v` using the comparison function `le`.
+/// The sort is stable, meaning that equal elements will maintain their relative order.
+///
+/// Please, note that the comparison function `le` expects less or equal, not less.
+///
+/// Example:
+/// ```
+/// let mut v = vector[2, 1, 3];
+/// v.insertion_sort_by(|a, b| a <= b);
+/// assert!(v == vector[1, 2, 3]);
+/// ```
+///
+/// Insertion sort is efficient for small vectors (~30 or less elements), and can
+/// be faster than merge sort for almost sorted vectors (e.g. when the vector is
+/// already sorted or nearly sorted).
+public macro fun insertion_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> bool) {
+    let v = $v;
+    let n = v.length();
+    if (n < 2) return;
+    // do insertion sort
+    let mut i = 1;
+    while (i < n) {
+        let mut j = i;
+        while (j > 0 && !$le(&v[j - 1], &v[j])) {
+            v.swap(j, j - 1);
+            j = j - 1;
+        };
+        i = i + 1;
+    }
+}
+
+/// Performs an in-place merge sort on the vector `v` using the comparison function `le`.
+/// Merge sort is efficient for large vectors, and is a stable sort.
+///
+/// Please, note that the comparison function `le` expects less or equal, not less.
+///
+/// Example:
+/// ```
+/// let mut v = vector[2, 1, 3];
+/// v.merge_sort_by(|a, b| a <= b);
+/// assert!(v == vector[1, 2, 3]);
+/// ```
+///
+/// Merge sort performs better than insertion sort for large vectors (~30 elements or more).
+public macro fun merge_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> bool) {
+    let v = $v;
+    let n = v.length();
+    if (n < 2) return;
+
+    let mut flags = vector[false];
+    let mut starts = vector[0];
+    let mut ends = vector[n];
+    while (!flags.is_empty()) {
+        let (halves_sorted, start, end) = (flags.pop_back(), starts.pop_back(), ends.pop_back());
+        let mid = (start + end) / 2;
+        if (halves_sorted) {
+            let mut mid = mid;
+            let mut l = start;
+            let mut r = mid;
+            while (l < mid && r < end) {
+                if ($le(&v[l], &v[r])) {
+                    l = l + 1;
+                } else {
+                    let mut i = r;
+                    while (i > l) {
+                        v.swap(i, i - 1);
+                        i = i - 1;
+                    };
+
+                    l = l + 1;
+                    mid = mid + 1;
+                    r = r + 1;
+                }
+            }
+        } else {
+            // set up the "merge"
+            flags.push_back(true);
+            starts.push_back(start);
+            ends.push_back(end);
+            // set up the recursive calls
+            // v[start..mid]
+            if (mid - start > 1) {
+                flags.push_back(false);
+                starts.push_back(start);
+                ends.push_back(mid);
+            };
+            // v[mid..end]
+            if (end - mid > 1) {
+                flags.push_back(false);
+                starts.push_back(mid);
+                ends.push_back(end);
+            }
+        }
+    }
+}
+
+/// Check if the vector `v` is sorted in non-decreasing order according to the comparison
+/// function `le` (les). Returns `true` if the vector is sorted, `false` otherwise.
+public macro fun is_sorted_by<$T>($v: &vector<$T>, $le: |&$T, &$T| -> bool): bool {
+    let v = $v;
+    let n_minus_1 = v.length().max(1) - 1;
+    'is_sorted_by: {
+        n_minus_1.do!(|i| if (!$le(&v[i], &v[i + 1])) return 'is_sorted_by false);
+        true
+    }
+}
+
+/// Return a new vector containing the elements of `v` except the first `n` elements
+/// that satisfy the predicate `p`. If all elements satisfy the predicate, returns an
+/// empty vector.
+public macro fun take_while<$T: drop>($v: vector<$T>, $p: |&$T| -> bool): vector<$T> {
+    let v = $v;
+    'take: {
+        let mut r = vector[];
+        v.do!(|e| if ($p(&e)) r.push_back(e) else return 'take r);
+        r
+    }
+}
+
+/// Take all elements of the vector `v` except the first `n` elements that satisfy
+/// the predicate `p` and drop the rest, where `n <= v.length()`.
+public macro fun skip_while<$T: drop>($v: vector<$T>, $p: |&$T| -> bool): vector<$T> {
+    let mut v = $v;
+    v.reverse();
+    let mut i = v.length();
+    while (i > 0) {
+        i = i - 1;
+        if ($p(&v[i])) v.pop_back() else break;
+    };
+    v.reverse();
+    v
 }

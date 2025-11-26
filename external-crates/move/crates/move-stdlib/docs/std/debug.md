@@ -1,7 +1,6 @@
-
-<a name="std_debug"></a>
-
-# Module `std::debug`
+---
+title: Module `std::debug`
+---
 
 Module providing debug functionality.
 
@@ -57,6 +56,3 @@ Module providing debug functionality.
 
 
 </details>
-
-
-[//]: # ("File containing references which can be used from documentation")

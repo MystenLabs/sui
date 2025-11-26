@@ -1,7 +1,6 @@
-
-<a name="std_bcs"></a>
-
-# Module `std::bcs`
+---
+title: Module `std::bcs`
+---
 
 Utility for converting a Move value to its binary representation in BCS (Binary Canonical
 Serialization). BCS is the binary encoding for Move resources and other non-module values
@@ -38,6 +37,3 @@ Return the binary representation of <code>v</code> in BCS (Binary Canonical Seri
 
 
 </details>
-
-
-[//]: # ("File containing references which can be used from documentation")

@@ -1,7 +1,6 @@
-
-<a name="std_hash"></a>
-
-# Module `std::hash`
+---
+title: Module `std::hash`
+---
 
 Module which defines SHA hashes for byte vectors.
 
@@ -60,6 +59,3 @@ as in the Move prover's prelude.
 
 
 </details>
-
-
-[//]: # ("File containing references which can be used from documentation")
