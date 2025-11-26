@@ -11,15 +11,13 @@ use tracing::info;
 
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_indexer_alt_framework::Indexer;
-use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_object_store::ObjectStore;
 
 use crate::analytics_metrics::AnalyticsMetrics;
-use crate::config::{JobConfig, PipelineConfig};
+use crate::config::IndexerConfig;
 
-/// Builds and configures an analytics indexer from the given configuration.
 pub async fn build_analytics_indexer(
-    config: JobConfig,
+    config: IndexerConfig,
     metrics: AnalyticsMetrics,
     registry: prometheus::Registry,
     cancel: tokio_util::sync::CancellationToken,
@@ -40,16 +38,23 @@ pub async fn build_analytics_indexer(
             .keep()
     };
 
-    // Create package cache for handlers that need it
     let package_cache_path = work_dir.join("package_cache");
     let package_cache = Arc::new(PackageCache::new(&package_cache_path, &config.rest_url));
 
-    // Create the indexer args from config
     let indexer_args = sui_indexer_alt_framework::IndexerArgs {
         first_checkpoint: config.first_checkpoint,
         last_checkpoint: config.last_checkpoint,
         pipeline: vec![],
-        task: Default::default(),
+        task: config
+            .task_name
+            .as_ref()
+            .map(|task_name| {
+                sui_indexer_alt_framework::TaskArgs::tasked(
+                    task_name.clone(),
+                    config.reader_interval_ms,
+                )
+            })
+            .unwrap_or_default(),
     };
 
     let client_args = sui_indexer_alt_framework::ingestion::ClientArgs {
@@ -73,7 +78,6 @@ pub async fn build_analytics_indexer(
         },
     };
 
-    // Use framework config types directly from JobConfig
     let ingestion_config = config.ingestion.clone();
     let concurrent_config = config.concurrent.clone();
 
@@ -88,34 +92,20 @@ pub async fn build_analytics_indexer(
     )
     .await?;
 
-    // Register pipelines for each enabled file type
     for pipeline_config in config.pipeline_configs() {
         info!("Registering pipeline: {}", pipeline_config.pipeline);
-
-        register_pipeline(
-            &mut indexer,
-            pipeline_config,
-            Some(package_cache.clone()),
-            metrics.clone(),
-            concurrent_config.clone(),
-        )
-        .await?;
+        pipeline_config
+            .pipeline
+            .register_handler(
+                &mut indexer,
+                pipeline_config,
+                Some(package_cache.clone()),
+                metrics.clone(),
+                concurrent_config.clone(),
+            )
+            .await?;
     }
-
     Ok(indexer)
-}
-
-async fn register_pipeline(
-    indexer: &mut Indexer<ObjectStore>,
-    pipeline_config: &PipelineConfig,
-    package_cache: Option<Arc<PackageCache>>,
-    metrics: AnalyticsMetrics,
-    config: ConcurrentConfig,
-) -> Result<()> {
-    pipeline_config
-        .pipeline
-        .register_handler(indexer, pipeline_config, package_cache, metrics, config)
-        .await
 }
 
 async fn create_object_store_from_config(

@@ -19,7 +19,7 @@ pub mod tables;
 pub mod writers;
 
 // Re-exports for public API
-pub use config::{FileFormat, JobConfig, PipelineConfig};
+pub use config::{FileFormat, IndexerConfig, PipelineConfig};
 pub use handlers::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata};
 pub use indexer::build_analytics_indexer;
 pub use pipeline::{Pipeline, construct_file_path};

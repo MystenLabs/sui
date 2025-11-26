@@ -5,7 +5,7 @@ use anyhow::Result;
 use prometheus::Registry;
 use std::env;
 use sui_analytics_indexer::analytics_metrics::AnalyticsMetrics;
-use sui_analytics_indexer::{JobConfig, build_analytics_indexer, spawn_snowflake_monitors};
+use sui_analytics_indexer::{IndexerConfig, build_analytics_indexer, spawn_snowflake_monitors};
 use tracing::info;
 
 #[tokio::main]
@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     assert_eq!(args.len(), 2, "configuration yaml file is required");
 
-    let config: JobConfig = serde_yaml::from_str(&std::fs::read_to_string(&args[1])?)?;
+    let config: IndexerConfig = serde_yaml::from_str(&std::fs::read_to_string(&args[1])?)?;
     info!("Parsed config: {:#?}", config);
 
     let registry_service = mysten_metrics::start_prometheus_server(

@@ -15,7 +15,7 @@ use anyhow::{Result, anyhow};
 use tracing::info;
 
 use crate::analytics_metrics::AnalyticsMetrics;
-use crate::config::JobConfig;
+use crate::config::IndexerConfig;
 
 pub use snowflake::SnowflakeMaxCheckpointReader;
 
@@ -32,7 +32,7 @@ fn load_password(path: &str) -> Result<String> {
 
 /// Spawns background tasks to monitor Snowflake table checkpoints.
 pub fn spawn_snowflake_monitors(
-    config: &JobConfig,
+    config: &IndexerConfig,
     metrics: AnalyticsMetrics,
     cancel: tokio_util::sync::CancellationToken,
 ) -> Result<Vec<tokio::task::JoinHandle<()>>> {

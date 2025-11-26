@@ -34,6 +34,10 @@ fn default_max_row_count() -> usize {
     100000
 }
 
+fn default_reader_interval_ms() -> u64 {
+    1000
+}
+
 fn default_file_format() -> FileFormat {
     FileFormat::Parquet
 }
@@ -69,7 +73,7 @@ impl FileFormat {
 
 /// Main configuration for an analytics indexer job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JobConfig {
+pub struct IndexerConfig {
     /// The url of the checkpoint client to connect to.
     pub rest_url: String,
     /// The url of the metrics client to connect to.
@@ -101,7 +105,12 @@ pub struct JobConfig {
     pub sf_role: Option<String>,
     pub sf_password_file: Option<String>,
 
-    // This is private to enforce using the PipelineConfig struct
+    pub task_name: Option<String>,
+
+    /// Reader interval in milliseconds for tasked indexer.
+    #[serde(default = "default_reader_interval_ms")]
+    pub reader_interval_ms: u64,
+
     #[serde(rename = "pipelines")]
     pipeline_configs: Vec<PipelineConfig>,
 
@@ -115,14 +124,13 @@ pub struct JobConfig {
     pub last_checkpoint: Option<u64>,
 }
 
-impl JobConfig {
-    /// Returns the pipeline configurations.
+impl IndexerConfig {
     pub fn pipeline_configs(&self) -> &[PipelineConfig] {
         &self.pipeline_configs
     }
 }
 
-/// Configuration for a single analytics pipeline.
+/// Configuration for a single analytics task/pipeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PipelineConfig {
     /// Type of data to write i.e. checkpoint, object, transaction, etc
