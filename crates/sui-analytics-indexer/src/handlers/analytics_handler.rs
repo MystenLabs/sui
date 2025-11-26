@@ -6,48 +6,14 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use bytes::Bytes;
 use serde::Serialize;
 use sui_indexer_alt_framework::pipeline::concurrent::BatchStatus;
 use sui_types::base_types::EpochId;
 
 use crate::analytics_metrics::AnalyticsMetrics;
-use crate::config::{FileFormat, PipelineConfig};
+use crate::config::PipelineConfig;
 use crate::pipeline::Pipeline;
 use crate::schema::RowSchema;
-use crate::writers::{CsvWriter, ParquetWriter};
-
-/// Enum to hold either CSV or Parquet writer
-enum WriterVariant {
-    Csv(CsvWriter),
-    Parquet(ParquetWriter),
-}
-
-impl WriterVariant {
-    fn new(format: FileFormat) -> Result<Self> {
-        match format {
-            FileFormat::Csv => Ok(WriterVariant::Csv(CsvWriter::new()?)),
-            FileFormat::Parquet => Ok(WriterVariant::Parquet(ParquetWriter::new()?)),
-        }
-    }
-
-    fn write<S: Serialize + RowSchema + Send + Sync + 'static>(
-        &mut self,
-        rows: Vec<S>,
-    ) -> Result<()> {
-        match self {
-            WriterVariant::Csv(w) => w.write(Box::new(rows.into_iter())),
-            WriterVariant::Parquet(w) => w.write(Box::new(rows.into_iter())),
-        }
-    }
-
-    fn flush<S: Serialize + RowSchema>(&mut self) -> Result<Option<Bytes>> {
-        match self {
-            WriterVariant::Csv(w) => Ok(w.flush::<S>()?.map(Bytes::from)),
-            WriterVariant::Parquet(w) => Ok(w.flush::<S>()?.map(Bytes::from)),
-        }
-    }
-}
 
 /// Trait for entry types that provide analytics metadata
 pub trait AnalyticsMetadata {
@@ -187,10 +153,10 @@ where
         let row_count = rows.len();
 
         // Serialize the rows.
-        let mut writer = WriterVariant::new(self.config.file_format)?;
-        writer.write(rows)?;
-        let file_bytes = writer
-            .flush::<P::Value>()?
+        let file_bytes = self
+            .config
+            .file_format
+            .serialize_rows::<P::Value>(rows)?
             .ok_or_else(|| anyhow::anyhow!("No data after serialization"))?;
 
         // Extract checkpoint range from watermarks (guaranteed to be contiguous)

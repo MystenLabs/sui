@@ -5,9 +5,14 @@
 
 use std::path::PathBuf;
 
+use anyhow::Result;
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
 use sui_config::object_storage_config::ObjectStoreConfig;
+
+use crate::schema::RowSchema;
+use crate::writers::{CsvWriter, ParquetWriter};
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 
@@ -39,6 +44,27 @@ fn default_file_format() -> FileFormat {
 pub enum FileFormat {
     Csv,
     Parquet,
+}
+
+impl FileFormat {
+    /// Serializes rows to the appropriate format and returns the bytes.
+    pub fn serialize_rows<S: Serialize + RowSchema + Send + Sync + 'static>(
+        &self,
+        rows: Vec<S>,
+    ) -> Result<Option<Bytes>> {
+        match self {
+            FileFormat::Csv => {
+                let mut w = CsvWriter::new()?;
+                w.write(Box::new(rows.into_iter()))?;
+                Ok(w.flush::<S>()?.map(Bytes::from))
+            }
+            FileFormat::Parquet => {
+                let mut w = ParquetWriter::new()?;
+                w.write(Box::new(rows.into_iter()))?;
+                Ok(w.flush::<S>()?.map(Bytes::from))
+            }
+        }
+    }
 }
 
 /// Main configuration for an analytics indexer job.
