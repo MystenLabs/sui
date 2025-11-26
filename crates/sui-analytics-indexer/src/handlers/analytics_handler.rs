@@ -8,6 +8,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde::Serialize;
+use sui_indexer_alt_framework::pipeline::concurrent::BatchStatus;
 use sui_types::base_types::EpochId;
 
 use crate::analytics_metrics::AnalyticsMetrics;
@@ -61,6 +62,8 @@ pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + RowSchema> {
     inner: Mutex<Option<WriterVariant>>,
     pub(crate) dir_prefix: String,
     current_file_bytes: Mutex<Option<Bytes>>,
+    /// Track the epoch for this batch - used to detect epoch boundaries
+    current_epoch: Mutex<Option<EpochId>>,
     _phantom: PhantomData<T>,
 }
 
@@ -78,6 +81,7 @@ impl<T: AnalyticsMetadata + Serialize + RowSchema + 'static> Default for Analyti
             inner: Mutex::new(None),
             dir_prefix: T::PIPELINE.dir_prefix().as_ref().to_string(),
             current_file_bytes: Mutex::new(None),
+            current_epoch: Mutex::new(None),
             _phantom: PhantomData,
         }
     }
@@ -188,21 +192,41 @@ where
         &self,
         batch: &mut Self::Batch,
         values: &mut std::vec::IntoIter<Self::Value>,
-    ) -> sui_indexer_alt_framework::pipeline::concurrent::BatchStatus {
-        let Some(first) = values.next() else {
-            return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending;
-        };
-
-        // Write all rows to batch (no more side-effect checkpoint tracking!)
-        if let Err(e) = batch.write_rows(
-            std::iter::once(first).chain(values.by_ref()),
-            self.config.file_format,
-        ) {
-            tracing::error!("Failed to write rows to batch: {}", e);
-            return sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending;
+    ) -> BatchStatus {
+        // Peek at first value to determine incoming epoch
+        let values_slice = values.as_slice();
+        if values_slice.is_empty() {
+            return BatchStatus::Pending;
         }
 
-        sui_indexer_alt_framework::pipeline::concurrent::BatchStatus::Pending
+        let incoming_epoch = values_slice[0].get_epoch();
+
+        // Check if batch already has data from a different epoch
+        {
+            let current_epoch_guard = batch.current_epoch.lock().unwrap();
+            if let Some(current_batch_epoch) = *current_epoch_guard
+                && current_batch_epoch != incoming_epoch
+            {
+                // Epoch boundary detected - commit current batch before accepting new data
+                return BatchStatus::Ready;
+            }
+        }
+
+        // Set epoch if this is the first data in the batch
+        {
+            let mut guard = batch.current_epoch.lock().unwrap();
+            if guard.is_none() {
+                *guard = Some(incoming_epoch);
+            }
+        }
+
+        // Consume all values (they're all from the same checkpoint/epoch)
+        batch
+            .write_rows(values.by_ref(), self.config.file_format)
+            //TODO how to handle errors here? Should we serialize in commit?
+            .unwrap_or_else(|e| panic!("Failed to write rows to batch: {e}"));
+
+        BatchStatus::Pending
     }
 
     async fn commit<'a>(
@@ -225,11 +249,12 @@ where
             sui_indexer_alt_framework::pipeline::WatermarkPart::checkpoint_range(watermarks)
                 .ok_or_else(|| anyhow::anyhow!("No watermarks provided"))?;
 
-        let epoch = watermarks
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("No watermarks provided"))?
-            .watermark
-            .epoch_hi_inclusive;
+        // Use the tracked epoch from batch (guaranteed to be single epoch due to epoch boundary detection)
+        let epoch = batch
+            .current_epoch
+            .lock()
+            .unwrap()
+            .ok_or_else(|| anyhow::anyhow!("No epoch set for batch"))?;
 
         let object_path = crate::construct_file_path(
             &batch.dir_prefix,
