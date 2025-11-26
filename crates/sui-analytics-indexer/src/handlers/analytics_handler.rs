@@ -15,8 +15,6 @@ use crate::analytics_metrics::AnalyticsMetrics;
 use crate::config::{FileFormat, PipelineConfig};
 use crate::schema::RowSchema;
 
-/// Trait for entry types that provide analytics metadata.
-///
 /// Entry types implement this to provide epoch information for batching.
 /// Batches are committed at epoch boundaries to ensure files don't span epochs.
 pub trait AnalyticsMetadata {
@@ -29,7 +27,7 @@ pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + RowSchema> {
     /// Buffered rows to be serialized during commit
     rows: Mutex<Vec<T>>,
     /// Track the epoch for this batch - used to detect epoch boundaries
-    current_epoch: Mutex<Option<EpochId>>,
+    epoch: Mutex<Option<EpochId>>,
 }
 
 /// Generic wrapper that implements Handler for any Processor with analytics batching.
@@ -47,7 +45,7 @@ impl<T: AnalyticsMetadata + Serialize + RowSchema + 'static> Default for Analyti
     fn default() -> Self {
         Self {
             rows: Mutex::new(Vec::new()),
-            current_epoch: Mutex::new(None),
+            epoch: Mutex::new(None),
         }
     }
 }
@@ -114,7 +112,7 @@ where
 
         // Check if batch already has data from a different epoch
         {
-            let current_epoch_guard = batch.current_epoch.lock().unwrap();
+            let current_epoch_guard = batch.epoch.lock().unwrap();
             if let Some(current_batch_epoch) = *current_epoch_guard
                 && current_batch_epoch != incoming_epoch
             {
@@ -125,7 +123,7 @@ where
 
         // Set epoch if this is the first data in the batch
         {
-            let mut guard = batch.current_epoch.lock().unwrap();
+            let mut guard = batch.epoch.lock().unwrap();
             if guard.is_none() {
                 *guard = Some(incoming_epoch);
             }
@@ -164,7 +162,7 @@ where
 
         // Use the tracked epoch from batch (guaranteed to be single epoch due to epoch boundary detection)
         let epoch = batch
-            .current_epoch
+            .epoch
             .lock()
             .unwrap()
             .ok_or_else(|| anyhow::anyhow!("No epoch set for batch"))?;
