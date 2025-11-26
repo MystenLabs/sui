@@ -4264,9 +4264,15 @@ impl ProtocolConfig {
                     cfg.gas_model_version = Some(11);
                     cfg.feature_flags.abstract_size_in_object_runtime = true;
                     cfg.feature_flags.object_runtime_charge_cache_load_gas = true;
+                    cfg.dynamic_field_hash_type_and_key_cost_base = Some(52);
+                    cfg.dynamic_field_add_child_object_cost_base = Some(52);
                     cfg.dynamic_field_add_child_object_value_cost_per_byte = Some(1);
+                    cfg.dynamic_field_borrow_child_object_cost_base = Some(52);
                     cfg.dynamic_field_borrow_child_object_child_ref_cost_per_byte = Some(1);
+                    cfg.dynamic_field_remove_child_object_cost_base = Some(52);
                     cfg.dynamic_field_remove_child_object_child_cost_per_byte = Some(1);
+                    cfg.dynamic_field_has_child_object_cost_base = Some(52);
+                    cfg.dynamic_field_has_child_object_with_ty_cost_base = Some(52);
                     cfg.feature_flags.enable_ptb_execution_v2 = true;
 
                     cfg.poseidon_bn254_cost_base = Some(260);
