@@ -90,7 +90,7 @@ impl Pipeline {
         pipeline_config: &PipelineConfig,
         package_cache: Option<Arc<PackageCache>>,
         metrics: AnalyticsMetrics,
-        config: ConcurrentConfig,
+        concurrent_config: ConcurrentConfig,
     ) -> Result<()> {
         match self {
             Pipeline::Checkpoint => {
@@ -101,7 +101,7 @@ impl Pipeline {
                             pipeline_config.clone(),
                             metrics,
                         ),
-                        config,
+                        concurrent_config,
                     )
                     .await?;
             }
@@ -113,7 +113,7 @@ impl Pipeline {
                             pipeline_config.clone(),
                             metrics,
                         ),
-                        config,
+                        concurrent_config,
                     )
                     .await?;
             }
@@ -125,7 +125,7 @@ impl Pipeline {
                             pipeline_config.clone(),
                             metrics,
                         ),
-                        config,
+                        concurrent_config,
                     )
                     .await?;
             }
@@ -140,7 +140,7 @@ impl Pipeline {
                             pipeline_config.clone(),
                             metrics,
                         ),
-                        config,
+                        concurrent_config,
                     )
                     .await?;
             }
@@ -148,7 +148,7 @@ impl Pipeline {
                 indexer
                     .concurrent_pipeline(
                         MoveCallHandler::new(MoveCallProcessor, pipeline_config.clone(), metrics),
-                        config,
+                        concurrent_config,
                     )
                     .await?;
             }
@@ -167,7 +167,7 @@ impl Pipeline {
                             pipeline_config.clone(),
                             metrics,
                         ),
-                        config,
+                        concurrent_config,
                     )
                     .await?;
             }
@@ -182,7 +182,7 @@ impl Pipeline {
                             pipeline_config.clone(),
                             metrics,
                         ),
-                        config,
+                        concurrent_config,
                     )
                     .await?;
             }
@@ -194,7 +194,7 @@ impl Pipeline {
                             pipeline_config.clone(),
                             metrics,
                         ),
-                        config,
+                        concurrent_config,
                     )
                     .await?;
             }
@@ -202,7 +202,7 @@ impl Pipeline {
                 indexer
                     .concurrent_pipeline(
                         PackageHandler::new(PackageProcessor, pipeline_config.clone(), metrics),
-                        config,
+                        concurrent_config,
                     )
                     .await?;
             }
@@ -214,7 +214,7 @@ impl Pipeline {
                             pipeline_config.clone(),
                             metrics,
                         ),
-                        config,
+                        concurrent_config,
                     )
                     .await?;
             }
@@ -229,7 +229,7 @@ impl Pipeline {
                             pipeline_config.clone(),
                             metrics,
                         ),
-                        config,
+                        concurrent_config,
                     )
                     .await?;
             }
