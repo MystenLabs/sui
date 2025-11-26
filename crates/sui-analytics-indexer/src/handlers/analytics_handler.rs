@@ -69,7 +69,7 @@ pub struct AnalyticsHandler<P, B> {
     processor: P,
     config: PipelineConfig,
     metrics: AnalyticsMetrics,
-    _batch: PhantomData<B>,
+    _marker: PhantomData<B>,
 }
 
 impl<T: AnalyticsMetadata + Serialize + RowSchema + 'static> Default for AnalyticsBatch<T> {
@@ -140,7 +140,7 @@ impl<P, B> AnalyticsHandler<P, B> {
             processor,
             config,
             metrics,
-            _batch: PhantomData,
+            _marker: PhantomData,
         }
     }
 }
