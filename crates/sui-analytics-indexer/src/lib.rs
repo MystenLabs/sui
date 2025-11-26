@@ -99,8 +99,7 @@ pub struct JobConfig {
     pub sf_role: Option<String>,
     pub sf_password_file: Option<String>,
 
-    // This is private to enforce using the PipelineConfig struct
-    #[serde(rename = "tasks")]
+    #[serde(rename = "pipelines")]
     pipeline_configs: Vec<PipelineConfig>,
 
     // Framework configuration types (directly embedded)
