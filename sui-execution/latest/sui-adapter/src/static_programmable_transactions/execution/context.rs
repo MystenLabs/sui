@@ -32,7 +32,7 @@ use move_core_types::{
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use move_vm_types::{
-    gas::GasMeter,
+    gas::{GasMeter, SimpleInstruction},
     values::{VMValueCast, Value as VMValue},
 };
 use std::{
@@ -78,11 +78,14 @@ macro_rules! object_runtime_mut {
 }
 
 macro_rules! charge_gas_ {
-    ($gas_charger:expr, $env:expr, $case:ident, $value_view:expr) => {{
+    ($gas_charger:expr, $env:expr, $call:ident($($args:expr),*)) => {{
         SuiGasMeter($gas_charger.move_gas_status_mut())
-            .$case($value_view)
+            .$call($($args),*)
             .map_err(|e| $env.convert_vm_error(e.finish(Location::Undefined)))
     }};
+    ($gas_charger:expr, $env:expr, $case:ident, $value_view:expr) => {
+        charge_gas_!($gas_charger, $env, $case($value_view))
+    };
 }
 
 macro_rules! charge_gas {
@@ -269,6 +272,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             tx_context.clone(),
         );
 
+        debug_assert_eq!(gas_charger.move_gas_status().stack_height_current(), 0);
         let tx_context_value = Locals::new(vec![Some(Value::new_tx_context(
             tx_context.borrow().digest(),
         )?)])?;
@@ -515,13 +519,24 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             }
         };
         Ok(match usage {
-            UsageKind::Move => local.move_()?,
+            UsageKind::Move => {
+                let value = local.move_()?;
+                charge_gas_!(self.gas_charger, self.env, charge_move_loc, &value)?;
+                value
+            }
             UsageKind::Copy => {
                 let value = local.copy()?;
                 charge_gas_!(self.gas_charger, self.env, charge_copy_loc, &value)?;
                 value
             }
-            UsageKind::Borrow => local.borrow()?,
+            UsageKind::Borrow => {
+                charge_gas_!(
+                    self.gas_charger,
+                    self.env,
+                    charge_simple_instr(SimpleInstruction::MutBorrowLoc)
+                )?;
+                local.borrow()?
+            }
         })
     }
 
@@ -550,7 +565,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     where
         VMValue: VMValueCast<V>,
     {
+        let before_height = self.gas_charger.move_gas_status().stack_height_current();
         let value = self.argument_value(arg)?;
+        let after_height = self.gas_charger.move_gas_status().stack_height_current();
+        debug_assert_eq!(before_height.saturating_add(1), after_height);
         let value: V = value.cast()?;
         Ok(value)
     }
@@ -566,6 +584,36 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         self.locations
             .results
             .push(Locals::new(result.into_iter().map(|v| v.map(|v| v.0)))?);
+        Ok(())
+    }
+
+    pub fn charge_command(
+        &mut self,
+        is_move_call: bool,
+        num_args: usize,
+        num_return: usize,
+    ) -> Result<(), ExecutionError> {
+        let move_gas_status = self.gas_charger.move_gas_status_mut();
+        let before_size = move_gas_status.stack_size_current();
+        // Pop all of the arguments
+        // If the return values came from the Move VM directly (via a Move call), pop those
+        // as well
+        let num_popped = if is_move_call {
+            num_args.checked_add(num_return).ok_or_else(|| {
+                make_invariant_violation!("usize overflow when charging gas for command",)
+            })?
+        } else {
+            num_args
+        };
+        move_gas_status
+            .charge(1, 0, num_popped as u64, 0, /* unused */ 1)
+            .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
+        let after_size = move_gas_status.stack_size_current();
+        assert_invariant!(
+            before_size == after_size,
+            "We assume currently that the stack size is not decremented. \
+            If this changes, we need to actually account for it here"
+        );
         Ok(())
     }
 
@@ -838,11 +886,15 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 .map_err(|e| {
                     make_invariant_violation!("Failed to get tx context for init function: {}", e)
                 })?;
+            // balance the stack after borrowing the tx context
+            charge_gas!(self, charge_store_loc, &tx_context)?;
+
             let args = if has_otw {
                 vec![CtxValue(Value::one_time_witness()?), CtxValue(tx_context)]
             } else {
                 vec![CtxValue(tx_context)]
             };
+            debug_assert_eq!(self.gas_charger.move_gas_status().stack_height_current(), 0);
             let return_values = self.execute_function_bypass_visibility(
                 &module.self_id(),
                 INIT_FN_NAME,
@@ -862,7 +914,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             assert_invariant!(
                 return_values.is_empty(),
                 "init should not have return values"
-            )
+            );
+            debug_assert_eq!(self.gas_charger.move_gas_status().stack_height_current(), 0);
         }
 
         Ok(())
@@ -1247,6 +1300,7 @@ fn load_object_arg_impl(
 
     let v = Value::deserialize(env, move_obj.contents(), ty)?;
     charge_gas_!(meter, env, charge_copy_loc, &v)?;
+    charge_gas_!(meter, env, charge_store_loc, &v)?;
     Ok((object_metadata, v))
 }
 
@@ -1263,6 +1317,7 @@ fn load_withdrawal_arg(
     } = withdrawal;
     let loaded = Value::funds_accumulator_withdrawal(*owner, *amount);
     charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
+    charge_gas_!(meter, env, charge_store_loc, &loaded)?;
     Ok(loaded)
 }
 
@@ -1275,6 +1330,7 @@ fn load_pure_value(
     let loaded = Value::deserialize(env, bytes, metadata.ty.clone())?;
     // ByteValue::Receiving { id, version } => Value::receiving(*id, *version),
     charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
+    charge_gas_!(meter, env, charge_store_loc, &loaded)?;
     Ok(loaded)
 }
 
@@ -1286,11 +1342,13 @@ fn load_receiving_value(
     let (id, version, _) = metadata.object_ref;
     let loaded = Value::receiving(id, version);
     charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
+    charge_gas_!(meter, env, charge_store_loc, &loaded)?;
     Ok(loaded)
 }
 
 fn copy_value(meter: &mut GasCharger, env: &Env, value: &Value) -> Result<Value, ExecutionError> {
     charge_gas_!(meter, env, charge_copy_loc, value)?;
+    charge_gas_!(meter, env, charge_pop, value)?;
     value.copy()
 }
 
