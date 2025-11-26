@@ -23,14 +23,13 @@ use tracing::warn;
 
 use crate::package_store::PackageCache;
 use crate::tables::DynamicFieldEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
+use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct DynamicFieldProcessor {
     package_cache: Arc<PackageCache>,
 }
 
-pub type DynamicFieldHandler =
-    AnalyticsHandler<DynamicFieldProcessor, AnalyticsBatch<DynamicFieldEntry>>;
+pub type DynamicFieldHandler = AnalyticsHandler<DynamicFieldProcessor>;
 
 impl DynamicFieldProcessor {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
@@ -171,13 +170,7 @@ impl Processor for DynamicFieldProcessor {
 }
 
 impl AnalyticsMetadata for DynamicFieldEntry {
-    const PIPELINE: Pipeline = Pipeline::DynamicField;
-
     fn get_epoch(&self) -> EpochId {
         self.epoch
-    }
-
-    fn get_checkpoint_sequence_number(&self) -> u64 {
-        self.checkpoint
     }
 }

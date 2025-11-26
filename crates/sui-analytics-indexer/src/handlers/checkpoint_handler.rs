@@ -13,21 +13,15 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::tables::CheckpointEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
+use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct CheckpointProcessor;
 
-pub type CheckpointHandler = AnalyticsHandler<CheckpointProcessor, AnalyticsBatch<CheckpointEntry>>;
+pub type CheckpointHandler = AnalyticsHandler<CheckpointProcessor>;
 
 impl AnalyticsMetadata for CheckpointEntry {
-    const PIPELINE: Pipeline = Pipeline::Checkpoint;
-
     fn get_epoch(&self) -> EpochId {
         self.epoch
-    }
-
-    fn get_checkpoint_sequence_number(&self) -> u64 {
-        self.sequence_number
     }
 }
 

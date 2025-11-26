@@ -9,7 +9,6 @@ use crate::package_store::PackageCache;
 use anyhow::Result;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
-use object_store::path::Path;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
@@ -63,19 +62,19 @@ pub enum Pipeline {
 
 impl Pipeline {
     /// Returns the directory prefix for this pipeline's output files.
-    pub fn dir_prefix(&self) -> Path {
+    pub fn dir_prefix(&self) -> &'static str {
         match self {
-            Pipeline::Checkpoint => Path::from("checkpoints"),
-            Pipeline::Transaction => Path::from("transactions"),
-            Pipeline::TransactionBCS => Path::from("transaction_bcs"),
-            Pipeline::TransactionObjects => Path::from("transaction_objects"),
-            Pipeline::Object => Path::from("objects"),
-            Pipeline::Event => Path::from("events"),
-            Pipeline::MoveCall => Path::from("move_call"),
-            Pipeline::MovePackage => Path::from("move_package"),
-            Pipeline::MovePackageBCS => Path::from("move_package_bcs"),
-            Pipeline::DynamicField => Path::from("dynamic_field"),
-            Pipeline::WrappedObject => Path::from("wrapped_object"),
+            Pipeline::Checkpoint => "checkpoints",
+            Pipeline::Transaction => "transactions",
+            Pipeline::TransactionBCS => "transaction_bcs",
+            Pipeline::TransactionObjects => "transaction_objects",
+            Pipeline::Object => "objects",
+            Pipeline::Event => "events",
+            Pipeline::MoveCall => "move_call",
+            Pipeline::MovePackage => "move_package",
+            Pipeline::MovePackageBCS => "move_package_bcs",
+            Pipeline::DynamicField => "dynamic_field",
+            Pipeline::WrappedObject => "wrapped_object",
         }
     }
 

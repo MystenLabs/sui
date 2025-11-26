@@ -13,14 +13,13 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use crate::handlers::{get_move_struct, parse_struct};
 use crate::package_store::PackageCache;
 use crate::tables::WrappedObjectEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
+use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct WrappedObjectProcessor {
     package_cache: Arc<PackageCache>,
 }
 
-pub type WrappedObjectHandler =
-    AnalyticsHandler<WrappedObjectProcessor, AnalyticsBatch<WrappedObjectEntry>>;
+pub type WrappedObjectHandler = AnalyticsHandler<WrappedObjectProcessor>;
 
 impl WrappedObjectProcessor {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
@@ -29,14 +28,8 @@ impl WrappedObjectProcessor {
 }
 
 impl AnalyticsMetadata for WrappedObjectEntry {
-    const PIPELINE: Pipeline = Pipeline::WrappedObject;
-
     fn get_epoch(&self) -> EpochId {
         self.epoch
-    }
-
-    fn get_checkpoint_sequence_number(&self) -> u64 {
-        self.checkpoint
     }
 }
 

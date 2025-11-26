@@ -172,6 +172,9 @@ pub struct PipelineConfig {
     /// Maximum number of rows before uploading to the datastore.
     #[serde(default = "default_max_row_count")]
     pub max_row_count: usize,
+    /// Override the default directory prefix for output files.
+    /// If not set, uses the pipeline's default prefix.
+    pub dir_prefix: Option<String>,
     pub package_id_filter: Option<String>,
     /// Snowflake table to monitor
     pub sf_table_id: Option<String>,
@@ -180,4 +183,14 @@ pub struct PipelineConfig {
     /// Whether to report max checkpoint from Snowflake table
     #[serde(default)]
     pub report_sf_max_table_checkpoint: bool,
+}
+
+impl PipelineConfig {
+    /// Returns the directory prefix for output files, using the configured
+    /// override if set, otherwise the pipeline's default.
+    pub fn dir_prefix(&self) -> &str {
+        self.dir_prefix
+            .as_deref()
+            .unwrap_or_else(|| self.pipeline.dir_prefix())
+    }
 }

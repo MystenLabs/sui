@@ -15,13 +15,13 @@ use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::package_store::PackageCache;
 use crate::tables::EventEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
+use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct EventProcessor {
     package_cache: Arc<PackageCache>,
 }
 
-pub type EventHandler = AnalyticsHandler<EventProcessor, AnalyticsBatch<EventEntry>>;
+pub type EventHandler = AnalyticsHandler<EventProcessor>;
 
 impl EventProcessor {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
@@ -30,14 +30,8 @@ impl EventProcessor {
 }
 
 impl AnalyticsMetadata for EventEntry {
-    const PIPELINE: Pipeline = Pipeline::Event;
-
     fn get_epoch(&self) -> EpochId {
         self.epoch
-    }
-
-    fn get_checkpoint_sequence_number(&self) -> u64 {
-        self.checkpoint
     }
 }
 

@@ -20,7 +20,7 @@ pub mod writers;
 
 // Re-exports for public API
 pub use config::{FileFormat, IndexerConfig, OutputStoreConfig, PipelineConfig};
-pub use handlers::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata};
+pub use handlers::{AnalyticsHandler, AnalyticsMetadata};
 pub use indexer::build_analytics_indexer;
 pub use pipeline::Pipeline;
 pub use progress::{MaxCheckpointReader, spawn_snowflake_monitors};

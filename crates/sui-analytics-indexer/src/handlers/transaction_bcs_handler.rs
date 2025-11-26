@@ -12,22 +12,15 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::tables::TransactionBCSEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
+use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct TransactionBCSProcessor;
 
-pub type TransactionBCSHandler =
-    AnalyticsHandler<TransactionBCSProcessor, AnalyticsBatch<TransactionBCSEntry>>;
+pub type TransactionBCSHandler = AnalyticsHandler<TransactionBCSProcessor>;
 
 impl AnalyticsMetadata for TransactionBCSEntry {
-    const PIPELINE: Pipeline = Pipeline::TransactionBCS;
-
     fn get_epoch(&self) -> EpochId {
         self.epoch
-    }
-
-    fn get_checkpoint_sequence_number(&self) -> u64 {
-        self.checkpoint
     }
 }
 

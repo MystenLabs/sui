@@ -19,7 +19,7 @@ use crate::handlers::{
 };
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
+use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct ObjectProcessor {
     package_cache: Arc<PackageCache>,
@@ -27,7 +27,7 @@ pub struct ObjectProcessor {
     metrics: AnalyticsMetrics,
 }
 
-pub type ObjectHandler = AnalyticsHandler<ObjectProcessor, AnalyticsBatch<ObjectEntry>>;
+pub type ObjectHandler = AnalyticsHandler<ObjectProcessor>;
 
 impl ObjectProcessor {
     pub fn new(
@@ -201,14 +201,8 @@ impl ObjectProcessor {
 }
 
 impl AnalyticsMetadata for ObjectEntry {
-    const PIPELINE: Pipeline = Pipeline::Object;
-
     fn get_epoch(&self) -> EpochId {
         self.epoch
-    }
-
-    fn get_checkpoint_sequence_number(&self) -> u64 {
-        self.checkpoint
     }
 }
 

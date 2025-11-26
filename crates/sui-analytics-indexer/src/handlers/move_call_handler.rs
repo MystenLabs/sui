@@ -12,21 +12,15 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::tables::MoveCallEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
+use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct MoveCallProcessor;
 
-pub type MoveCallHandler = AnalyticsHandler<MoveCallProcessor, AnalyticsBatch<MoveCallEntry>>;
+pub type MoveCallHandler = AnalyticsHandler<MoveCallProcessor>;
 
 impl AnalyticsMetadata for MoveCallEntry {
-    const PIPELINE: Pipeline = Pipeline::MoveCall;
-
     fn get_epoch(&self) -> EpochId {
         self.epoch
-    }
-
-    fn get_checkpoint_sequence_number(&self) -> u64 {
-        self.checkpoint
     }
 }
 

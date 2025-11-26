@@ -11,21 +11,15 @@ use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::tables::PackageBCSEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
+use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct PackageBCSProcessor;
 
-pub type PackageBCSHandler = AnalyticsHandler<PackageBCSProcessor, AnalyticsBatch<PackageBCSEntry>>;
+pub type PackageBCSHandler = AnalyticsHandler<PackageBCSProcessor>;
 
 impl AnalyticsMetadata for PackageBCSEntry {
-    const PIPELINE: Pipeline = Pipeline::MovePackageBCS;
-
     fn get_epoch(&self) -> EpochId {
         self.epoch
-    }
-
-    fn get_checkpoint_sequence_number(&self) -> u64 {
-        self.checkpoint
     }
 }
 

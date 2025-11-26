@@ -28,7 +28,7 @@ pub mod transaction_handler;
 pub mod transaction_objects_handler;
 pub mod wrapped_object_handler;
 
-pub use analytics_handler::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata};
+pub use analytics_handler::{AnalyticsHandler, AnalyticsMetadata};
 
 const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
     "0x1::string::String",

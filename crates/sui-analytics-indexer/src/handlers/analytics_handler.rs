@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::marker::PhantomData;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -14,15 +13,14 @@ use sui_types::base_types::EpochId;
 
 use crate::analytics_metrics::AnalyticsMetrics;
 use crate::config::{FileFormat, PipelineConfig};
-use crate::pipeline::Pipeline;
 use crate::schema::RowSchema;
 
-/// Trait for entry types that provide analytics metadata
+/// Trait for entry types that provide analytics metadata.
+///
+/// Entry types implement this to provide epoch information for batching.
+/// Batches are committed at epoch boundaries to ensure files don't span epochs.
 pub trait AnalyticsMetadata {
-    const PIPELINE: Pipeline;
-
     fn get_epoch(&self) -> EpochId;
-    fn get_checkpoint_sequence_number(&self) -> u64;
 }
 
 /// Generic batch struct that buffers raw entry rows for later serialization.
@@ -30,47 +28,46 @@ pub trait AnalyticsMetadata {
 pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + RowSchema> {
     /// Buffered rows to be serialized during commit
     rows: Mutex<Vec<T>>,
-    pub(crate) dir_prefix: String,
     /// Track the epoch for this batch - used to detect epoch boundaries
     current_epoch: Mutex<Option<EpochId>>,
 }
 
-/// Generic wrapper that implements Handler for any Processor with analytics batching
-pub struct AnalyticsHandler<P, B> {
+/// Generic wrapper that implements Handler for any Processor with analytics batching.
+///
+/// This adapter wraps a `Processor` and provides the common batching and commit
+/// logic for writing analytics data to object stores. The batch type is automatically
+/// derived as `AnalyticsBatch<P::Value>`.
+pub struct AnalyticsHandler<P> {
     processor: P,
     config: PipelineConfig,
     metrics: AnalyticsMetrics,
-    _marker: PhantomData<B>,
 }
 
 impl<T: AnalyticsMetadata + Serialize + RowSchema + 'static> Default for AnalyticsBatch<T> {
     fn default() -> Self {
         Self {
             rows: Mutex::new(Vec::new()),
-            dir_prefix: T::PIPELINE.dir_prefix().as_ref().to_string(),
             current_epoch: Mutex::new(None),
         }
     }
 }
 
-impl<P, B> AnalyticsHandler<P, B> {
+impl<P> AnalyticsHandler<P> {
     pub fn new(processor: P, config: PipelineConfig, metrics: AnalyticsMetrics) -> Self {
         Self {
             processor,
             config,
             metrics,
-            _marker: PhantomData,
         }
     }
 }
 
 // Implement Processor by delegating to inner processor
 #[async_trait]
-impl<P, B> sui_indexer_alt_framework::pipeline::Processor for AnalyticsHandler<P, B>
+impl<P> sui_indexer_alt_framework::pipeline::Processor for AnalyticsHandler<P>
 where
     P: sui_indexer_alt_framework::pipeline::Processor + Send + Sync,
     P::Value: Send + Sync,
-    B: Send + Sync + 'static,
 {
     const NAME: &'static str = P::NAME;
     const FANOUT: usize = P::FANOUT;
@@ -86,8 +83,7 @@ where
 
 // Implement Handler with shared batching logic
 #[async_trait]
-impl<P> sui_indexer_alt_framework::pipeline::concurrent::Handler
-    for AnalyticsHandler<P, AnalyticsBatch<P::Value>>
+impl<P> sui_indexer_alt_framework::pipeline::concurrent::Handler for AnalyticsHandler<P>
 where
     P: sui_indexer_alt_framework::pipeline::Processor + Send + Sync,
     P::Value: AnalyticsMetadata + Serialize + RowSchema + Send + Sync,
@@ -174,7 +170,7 @@ where
             .ok_or_else(|| anyhow::anyhow!("No epoch set for batch"))?;
 
         let object_path = construct_file_path(
-            &batch.dir_prefix,
+            self.config.dir_prefix(),
             epoch,
             checkpoint_range,
             self.config.file_format,

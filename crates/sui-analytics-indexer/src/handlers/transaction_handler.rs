@@ -16,22 +16,15 @@ use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
 use tracing::error;
 
 use crate::tables::TransactionEntry;
-use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
+use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct TransactionProcessor;
 
-pub type TransactionHandler =
-    AnalyticsHandler<TransactionProcessor, AnalyticsBatch<TransactionEntry>>;
+pub type TransactionHandler = AnalyticsHandler<TransactionProcessor>;
 
 impl AnalyticsMetadata for TransactionEntry {
-    const PIPELINE: Pipeline = Pipeline::Transaction;
-
     fn get_epoch(&self) -> EpochId {
         self.epoch
-    }
-
-    fn get_checkpoint_sequence_number(&self) -> u64 {
-        self.checkpoint
     }
 }
 
