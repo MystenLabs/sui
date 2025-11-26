@@ -22,6 +22,6 @@ pub mod writers;
 pub use config::{FileFormat, IndexerConfig, OutputStoreConfig, PipelineConfig};
 pub use handlers::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata};
 pub use indexer::build_analytics_indexer;
-pub use pipeline::{Pipeline, construct_file_path};
+pub use pipeline::Pipeline;
 pub use progress::{MaxCheckpointReader, spawn_snowflake_monitors};
 pub use schema::{ColumnValue, RowSchema};

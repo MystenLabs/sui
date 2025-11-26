@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::marker::PhantomData;
+use std::ops::Range;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
@@ -11,7 +13,7 @@ use sui_indexer_alt_framework::pipeline::concurrent::BatchStatus;
 use sui_types::base_types::EpochId;
 
 use crate::analytics_metrics::AnalyticsMetrics;
-use crate::config::PipelineConfig;
+use crate::config::{FileFormat, PipelineConfig};
 use crate::pipeline::Pipeline;
 use crate::schema::RowSchema;
 
@@ -171,7 +173,7 @@ where
             .unwrap()
             .ok_or_else(|| anyhow::anyhow!("No epoch set for batch"))?;
 
-        let object_path = crate::construct_file_path(
+        let object_path = construct_file_path(
             &batch.dir_prefix,
             epoch,
             checkpoint_range,
@@ -194,4 +196,22 @@ where
 
         Ok(row_count)
     }
+}
+
+fn construct_file_path(
+    dir_prefix: &str,
+    epoch_num: EpochId,
+    checkpoint_range: Range<u64>,
+    file_format: FileFormat,
+) -> PathBuf {
+    let extension = match file_format {
+        FileFormat::Csv => "csv",
+        FileFormat::Parquet => "parquet",
+    };
+    PathBuf::from(dir_prefix)
+        .join(format!("epoch_{}", epoch_num))
+        .join(format!(
+            "{}_{}.{}",
+            checkpoint_range.start, checkpoint_range.end, extension
+        ))
 }

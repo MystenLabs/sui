@@ -3,8 +3,6 @@
 
 //! Pipeline definitions for the analytics indexer.
 
-use std::ops::Range;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::package_store::PackageCache;
@@ -15,13 +13,8 @@ use object_store::path::Path;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
-use sui_indexer_alt_framework::Indexer;
-use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
-use sui_indexer_alt_object_store::ObjectStore;
-use sui_types::base_types::EpochId;
-
 use crate::analytics_metrics::AnalyticsMetrics;
-use crate::config::{FileFormat, PipelineConfig};
+use crate::config::PipelineConfig;
 use crate::handlers::checkpoint_handler::{CheckpointHandler, CheckpointProcessor};
 use crate::handlers::df_handler::{DynamicFieldHandler, DynamicFieldProcessor};
 use crate::handlers::event_handler::{EventHandler, EventProcessor};
@@ -35,6 +28,9 @@ use crate::handlers::transaction_objects_handler::{
     TransactionObjectsHandler, TransactionObjectsProcessor,
 };
 use crate::handlers::wrapped_object_handler::{WrappedObjectHandler, WrappedObjectProcessor};
+use sui_indexer_alt_framework::Indexer;
+use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_indexer_alt_object_store::ObjectStore;
 
 /// Available analytics pipelines.
 #[derive(
@@ -224,23 +220,4 @@ impl Pipeline {
         }
         Ok(())
     }
-}
-
-/// Constructs a relative file path from directory prefix and metadata.
-pub fn construct_file_path(
-    dir_prefix: &str,
-    epoch_num: EpochId,
-    checkpoint_range: Range<u64>,
-    file_format: FileFormat,
-) -> PathBuf {
-    let extension = match file_format {
-        FileFormat::Csv => "csv",
-        FileFormat::Parquet => "parquet",
-    };
-    PathBuf::from(dir_prefix)
-        .join(format!("epoch_{}", epoch_num))
-        .join(format!(
-            "{}_{}.{}",
-            checkpoint_range.start, checkpoint_range.end, extension
-        ))
 }
