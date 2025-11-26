@@ -17,7 +17,7 @@ use move_trace_format::{
 };
 use move_vm_types::values::Value as VMValue;
 use sui_types::{
-    error::{ExecutionError, ExecutionErrorKind},
+    error::ExecutionError,
     ptb_trace::{
         ExtMoveValue, ExtMoveValueInfo, ExternalEvent, PTBCommandInfo, PTBEvent, SummaryEvent,
     },
@@ -158,7 +158,7 @@ pub fn trace_split_coins(
     context: &mut Context,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     coin_type: &Type,
-    mut input_coin: Vec<ExtMoveValueInfo>,
+    input_coin: Vec<ExtMoveValueInfo>,
     split_coin_values: &[CtxValue],
     total_split_value: u64,
 ) -> Result<(), ExecutionError> {
@@ -171,12 +171,9 @@ pub fn trace_split_coins(
             split_coin_move_values.push(coin_val);
         }
 
-        if input_coin.len() != 1 {
-            return Err(ExecutionError::from_kind(
-                ExecutionErrorKind::InvariantViolation,
-            ));
-        }
-        let mut input = input_coin.pop().unwrap();
+        let Some([mut input]): Option<[ExtMoveValueInfo; 1]> = input_coin.try_into().ok() else {
+            invariant_violation!("Expected exactly one input coin for tracing `SplitCoins`");
+        };
 
         update_coin_balance(&mut input, |current_balance| {
             current_balance.saturating_sub(total_split_value)
@@ -213,10 +210,8 @@ pub fn trace_merge_coins(
     total_merged_value: u64,
 ) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
-        if trace_values.len() < 2 {
-            return Err(ExecutionError::from_kind(
-                ExecutionErrorKind::InvariantViolation,
-            ));
+        if trace_values.is_empty() {
+            invariant_violation!("Missing destination coin for tracing `MergeCoins`");
         }
 
         let target_coin_starting_state = trace_values.remove(0);
@@ -364,16 +359,30 @@ fn annotated_type_layout_for_adapter_ty(
         .vm
         .get_runtime()
         .type_to_fully_annotated_layout(&ty)
-        .map_err(|e| ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e))
+        .map_err(|e| {
+            make_invariant_violation!(
+                "Failed to get annotated type layout for adapter type: {}",
+                e
+            )
+        })
 }
 
+/// Creates a `SerializableMoveValue` (a Move value for the trace format) from a `CtxValue` and a
+/// provided annotated layout for that value.
 fn serializable_move_value_from_ctx_value(
     value: &CtxValue,
     annotated_layout: &A::MoveTypeLayout,
 ) -> Result<SerializableMoveValue, ExecutionError> {
-    VMValue::as_annotated_move_value_for_tracing_only(value.inner().inner(), annotated_layout)
-        .ok_or_else(|| ExecutionError::from_kind(ExecutionErrorKind::InvariantViolation))
-        .map(SerializableMoveValue::from)
+    VMValue::as_annotated_move_value_for_tracing_only(
+        value.inner_for_tracing().inner_for_tracing(),
+        annotated_layout,
+    )
+    .ok_or_else(|| {
+        make_invariant_violation!(
+            "Failed to convert Move value to `SerializableMoveValue` for tracing"
+        )
+    })
+    .map(SerializableMoveValue::from)
 }
 
 fn update_coin_balance(
@@ -381,35 +390,24 @@ fn update_coin_balance(
     balance_update: impl Fn(u64) -> u64,
 ) -> Result<(), ExecutionError> {
     use SerializableMoveValue as SMV;
-    match &mut coin.value {
-        SMV::Struct(SimplifiedMoveStruct { fields, .. }) => {
-            let [_, (_, balance_value)] = fields.as_mut_slice() else {
-                return Err(ExecutionError::from_kind(
-                    ExecutionErrorKind::InvariantViolation,
-                ));
-            };
-            match balance_value {
-                SMV::Struct(SimplifiedMoveStruct { fields, .. }) => {
-                    let [(_, SMV::U64(current_balance))] = fields.as_mut_slice() else {
-                        return Err(ExecutionError::from_kind(
-                            ExecutionErrorKind::InvariantViolation,
-                        ));
-                    };
-                    *current_balance = balance_update(*current_balance);
-                }
-                _ => {
-                    return Err(ExecutionError::from_kind(
-                        ExecutionErrorKind::InvariantViolation,
-                    ));
-                }
-            }
-        }
-        _ => {
-            return Err(ExecutionError::from_kind(
-                ExecutionErrorKind::InvariantViolation,
-            ));
-        }
-    }
+    let SMV::Struct(SimplifiedMoveStruct { fields, .. }) = &mut coin.value else {
+        invariant_violation!("Expected coin to be a struct");
+    };
+
+    let [_, (_, balance_value)] = fields.as_mut_slice() else {
+        invariant_violation!("Expected coin struct to have two fields");
+    };
+
+    let SMV::Struct(SimplifiedMoveStruct { fields, .. }) = balance_value else {
+        invariant_violation!("Expected balance field to be a struct");
+    };
+
+    let [(_, SMV::U64(current_balance))] = fields.as_mut_slice() else {
+        invariant_violation!("Expected balance struct to have a single u64 field");
+    };
+
+    *current_balance = balance_update(*current_balance);
+
     Ok(())
 }
 
@@ -419,7 +417,10 @@ fn adapter_type_to_type_tag_with_refs(type_: &Type) -> Result<TypeTagWithRefs, E
         Type::Reference(mutable, inner_ty) => {
             let ref_type = if *mutable { RefType::Mut } else { RefType::Imm };
             let inner_type: TypeTag = Type::try_into((**inner_ty).clone()).map_err(|e| {
-                ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e)
+                make_invariant_violation!(
+                    "Failed to convert adapter type to type tag for tracing: {}",
+                    e
+                )
             })?;
             TypeTagWithRefs {
                 type_: inner_type,
@@ -428,7 +429,10 @@ fn adapter_type_to_type_tag_with_refs(type_: &Type) -> Result<TypeTagWithRefs, E
         }
         ty => {
             let type_: TypeTag = Type::try_into(ty.clone()).map_err(|e| {
-                ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e)
+                make_invariant_violation!(
+                    "Failed to convert adapter type to type tag for tracing: {}",
+                    e
+                )
             })?;
 
             TypeTagWithRefs {

@@ -1249,7 +1249,7 @@ impl CtxValue {
     }
 
     /// Used to get access the inner Value for tracing.
-    pub(super) fn inner(&self) -> &Value {
+    pub(super) fn inner_for_tracing(&self) -> &Value {
         &self.0
     }
 }

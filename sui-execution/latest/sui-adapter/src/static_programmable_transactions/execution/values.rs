@@ -159,7 +159,7 @@ impl Value {
     }
 
     /// Used for getting access to the inner VMValue for tracing purposes.
-    pub(super) fn inner(&self) -> &VMValue {
+    pub(super) fn inner_for_tracing(&self) -> &VMValue {
         &self.0
     }
 }
