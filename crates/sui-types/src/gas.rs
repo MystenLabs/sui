@@ -121,6 +121,12 @@ pub mod checked {
                 Self::V2(status) => status.gas_price(),
             }
         }
+
+        pub fn set_inner_gas_model_version(&mut self, version: u64) {
+            match self {
+                Self::V2(status) => status.gas_status.gas_model_version = version,
+            }
+        }
     }
 
     /// Summary of the charges in a transaction.

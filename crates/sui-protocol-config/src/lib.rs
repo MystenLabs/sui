@@ -4573,16 +4573,20 @@ impl ProtocolConfig {
             self.translation_pure_input_per_byte_charge = Some(1);
             self.translation_per_type_node_charge = Some(1);
             self.translation_per_reference_node_charge = Some(1);
-            self.translation_metering_step_resolution = Some(1000);
             self.translation_per_linkage_entry_charge = Some(10);
-            if self.gas_model_version.is_some_and(|version| version <= 10) {
-                self.gas_model_version = Some(11);
-            }
+            self.gas_model_version = Some(11);
             self.feature_flags.abstract_size_in_object_runtime = true;
             self.feature_flags.object_runtime_charge_cache_load_gas = true;
+            self.dynamic_field_hash_type_and_key_cost_base = Some(52);
+            self.dynamic_field_add_child_object_cost_base = Some(52);
             self.dynamic_field_add_child_object_value_cost_per_byte = Some(1);
+            self.dynamic_field_borrow_child_object_cost_base = Some(52);
             self.dynamic_field_borrow_child_object_child_ref_cost_per_byte = Some(1);
+            self.dynamic_field_remove_child_object_cost_base = Some(52);
             self.dynamic_field_remove_child_object_child_cost_per_byte = Some(1);
+            self.dynamic_field_has_child_object_cost_base = Some(52);
+            self.dynamic_field_has_child_object_with_ty_cost_base = Some(52);
+            self.feature_flags.enable_ptb_execution_v2 = true;
         }
     }
 

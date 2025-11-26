@@ -9,7 +9,6 @@ mod checked {
     use crate::execution_mode::{self, ExecutionMode};
     use crate::execution_value::SuiResolver;
     use csv::Writer;
-    use lz4_flex::frame::FrameEncoder;
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
@@ -91,11 +90,10 @@ mod checked {
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
 
-    static CSV_WRITER: Lazy<Mutex<csv::Writer<FrameEncoder<std::io::BufWriter<std::fs::File>>>>> =
+    static CSV_WRITER: Lazy<Mutex<csv::Writer<std::io::BufWriter<std::fs::File>>>> =
         once_cell::sync::Lazy::new(|| {
-            let file = File::create("/opt/sui/gas.csv.lz4").expect("failed to create file");
+            let file = File::create("/opt/sui/gas.csv").expect("failed to create file");
             let enc = BufWriter::new(file);
-            let enc = FrameEncoder::new(enc);
             let mut writer = Writer::from_writer(enc);
             writer
                 .write_record(&[
@@ -164,12 +162,14 @@ mod checked {
         Vec<ExecutionTiming>,
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
+        let mut new_gas_status = gas_status.clone();
+
         let input_objects = input_objects.into_inner();
         let normal_effects = execute_transaction_to_effects_::<Mode>(
             store,
             input_objects.clone(),
             gas_data.clone(),
-            gas_status.clone(),
+            gas_status,
             transaction_kind.clone(),
             transaction_signer,
             transaction_digest,
@@ -180,17 +180,18 @@ mod checked {
             metrics.clone(),
             enable_expensive_checks,
             execution_params.clone(),
-            trace_builder_opt,
+            &mut None,
         );
 
         let mut new_protocol_config = protocol_config.clone();
         new_protocol_config.set_enable_ptb_execution_v2_for_testing(true);
+        new_gas_status.set_inner_gas_model_version(new_protocol_config.gas_model_version());
 
         let new_effects = execute_transaction_to_effects_::<Mode>(
             store,
             input_objects,
             gas_data,
-            gas_status,
+            new_gas_status,
             transaction_kind.clone(),
             transaction_signer,
             transaction_digest,
