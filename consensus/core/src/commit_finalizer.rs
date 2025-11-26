@@ -628,11 +628,12 @@ impl CommitFinalizer {
                 //
                 // See append_origin_descendants_from_last_commit() for more details.
                 ignored.extend(curr_block_state.origin_descendants.iter());
-                // Skip counting votes from current block if the votes on pending block could have been casted by an earlier block
-                // from the same origin as the current block.
-                // Note: if the current block casts reject votes for the pending block, it can be assumed that accept votes
-                // are also casted by the current block. But we choose to skip counting accept votes in this edge case for simplicity.
-                if skip_votes {
+                // Skip counting votes from current block if the votes on pending block could have been
+                // casted by an earlier block from the same origin.
+                // Note: if the current block casts reject votes on transactions in the pending block,
+                // it can be assumed that accept votes are also casted to other transactions in the pending block.
+                // But we choose to skip counting the accept votes in this edge case for simplicity.
+                if context.protocol_config.consensus_skip_gced_accept_votes() && skip_votes {
                     let hostname = &context.committee.authority(curr_block_ref.author).hostname;
                     context
                         .metrics
@@ -854,6 +855,9 @@ mod tests {
         context
             .protocol_config
             .set_consensus_gc_depth_for_testing(5);
+        context
+            .protocol_config
+            .set_consensus_skip_gced_accept_votes_for_testing(true);
         let context = Arc::new(context);
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
