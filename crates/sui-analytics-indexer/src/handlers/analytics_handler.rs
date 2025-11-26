@@ -17,6 +17,38 @@ use crate::pipeline::Pipeline;
 use crate::schema::RowSchema;
 use crate::writers::{CsvWriter, ParquetWriter};
 
+/// Enum to hold either CSV or Parquet writer
+enum WriterVariant {
+    Csv(CsvWriter),
+    Parquet(ParquetWriter),
+}
+
+impl WriterVariant {
+    fn new(format: FileFormat) -> Result<Self> {
+        match format {
+            FileFormat::Csv => Ok(WriterVariant::Csv(CsvWriter::new()?)),
+            FileFormat::Parquet => Ok(WriterVariant::Parquet(ParquetWriter::new()?)),
+        }
+    }
+
+    fn write<S: Serialize + RowSchema + Send + Sync + 'static>(
+        &mut self,
+        rows: Vec<S>,
+    ) -> Result<()> {
+        match self {
+            WriterVariant::Csv(w) => w.write(Box::new(rows.into_iter())),
+            WriterVariant::Parquet(w) => w.write(Box::new(rows.into_iter())),
+        }
+    }
+
+    fn flush<S: Serialize + RowSchema>(&mut self) -> Result<Option<Bytes>> {
+        match self {
+            WriterVariant::Csv(w) => Ok(w.flush::<S>()?.map(Bytes::from)),
+            WriterVariant::Parquet(w) => Ok(w.flush::<S>()?.map(Bytes::from)),
+        }
+    }
+}
+
 /// Trait for entry types that provide analytics metadata
 pub trait AnalyticsMetadata {
     const PIPELINE: Pipeline;
@@ -25,46 +57,14 @@ pub trait AnalyticsMetadata {
     fn get_checkpoint_sequence_number(&self) -> u64;
 }
 
-/// Enum to hold either CSV or Parquet writer
-enum WriterVariant {
-    Csv(CsvWriter),
-    Parquet(ParquetWriter),
-}
-
-impl WriterVariant {
-    fn write<S: Serialize + RowSchema>(
-        &mut self,
-        rows: Box<dyn Iterator<Item = S> + Send + Sync>,
-    ) -> Result<()> {
-        match self {
-            WriterVariant::Csv(w) => w.write(rows),
-            WriterVariant::Parquet(w) => w.write(rows),
-        }
-    }
-
-    fn flush<S: Serialize + RowSchema>(&mut self) -> Result<Option<Vec<u8>>> {
-        match self {
-            WriterVariant::Csv(w) => w.flush::<S>(),
-            WriterVariant::Parquet(w) => w.flush::<S>(),
-        }
-    }
-
-    fn rows(&self) -> Result<usize> {
-        match self {
-            WriterVariant::Csv(w) => w.rows(),
-            WriterVariant::Parquet(w) => w.rows(),
-        }
-    }
-}
-
-/// Generic batch struct that works for all entry types
+/// Generic batch struct that buffers raw entry rows for later serialization.
+/// Serialization is deferred to commit() where errors can be properly handled.
 pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + RowSchema> {
-    inner: Mutex<Option<WriterVariant>>,
+    /// Buffered rows to be serialized during commit
+    rows: Mutex<Vec<T>>,
     pub(crate) dir_prefix: String,
-    current_file_bytes: Mutex<Option<Bytes>>,
     /// Track the epoch for this batch - used to detect epoch boundaries
     current_epoch: Mutex<Option<EpochId>>,
-    _phantom: PhantomData<T>,
 }
 
 /// Generic wrapper that implements Handler for any Processor with analytics batching
@@ -78,63 +78,10 @@ pub struct AnalyticsHandler<P, B> {
 impl<T: AnalyticsMetadata + Serialize + RowSchema + 'static> Default for AnalyticsBatch<T> {
     fn default() -> Self {
         Self {
-            inner: Mutex::new(None),
+            rows: Mutex::new(Vec::new()),
             dir_prefix: T::PIPELINE.dir_prefix().as_ref().to_string(),
-            current_file_bytes: Mutex::new(None),
             current_epoch: Mutex::new(None),
-            _phantom: PhantomData,
         }
-    }
-}
-
-impl<T: AnalyticsMetadata + Serialize + RowSchema> AnalyticsBatch<T> {
-    /// Write rows to the batch (initializes writer on first call)
-    fn write_rows<I>(&self, rows: I, format: FileFormat) -> Result<()>
-    where
-        I: Iterator<Item = T>,
-        T: Send + Sync + 'static,
-    {
-        let mut inner = self.inner.lock().unwrap();
-
-        let writer = match inner.as_mut() {
-            Some(w) => w,
-            None => {
-                let w = match format {
-                    FileFormat::Csv => WriterVariant::Csv(CsvWriter::new()?),
-                    FileFormat::Parquet => WriterVariant::Parquet(ParquetWriter::new()?),
-                };
-                inner.insert(w)
-            }
-        };
-
-        let collected: Vec<T> = rows.collect();
-        writer.write(Box::new(collected.into_iter()))?;
-        Ok(())
-    }
-
-    /// Get the current file bytes if available (cloned to avoid holding the lock)
-    fn current_file_bytes(&self) -> Option<Bytes> {
-        self.current_file_bytes.lock().unwrap().clone()
-    }
-
-    /// Get the row count
-    fn row_count(&self) -> Result<usize> {
-        let inner = self.inner.lock().unwrap();
-        match &*inner {
-            Some(writer) => writer.rows(),
-            None => Ok(0),
-        }
-    }
-
-    /// Flush the current batch and store the bytes
-    fn flush(&self) -> Result<()> {
-        let mut inner = self.inner.lock().unwrap();
-        if let Some(ref mut writer) = *inner
-            && let Some(bytes) = writer.flush::<T>()?
-        {
-            *self.current_file_bytes.lock().unwrap() = Some(Bytes::from(bytes));
-        }
-        Ok(())
     }
 }
 
@@ -220,11 +167,7 @@ where
             }
         }
 
-        // Consume all values (they're all from the same checkpoint/epoch)
-        batch
-            .write_rows(values.by_ref(), self.config.file_format)
-            //TODO how to handle errors here? Should we serialize in commit?
-            .unwrap_or_else(|e| panic!("Failed to write rows to batch: {e}"));
+        batch.rows.lock().unwrap().extend(values.by_ref());
 
         BatchStatus::Pending
     }
@@ -235,14 +178,20 @@ where
         watermarks: &[sui_indexer_alt_framework::pipeline::WatermarkPart],
         conn: &mut <Self::Store as sui_indexer_alt_framework::store::Store>::Connection<'a>,
     ) -> Result<usize> {
-        // Ensure the batch is flushed before committing
-        batch.flush()?;
-
-        let Some(file_bytes) = batch.current_file_bytes() else {
+        // Take the buffered rows for serialization
+        let rows = std::mem::take(&mut *batch.rows.lock().unwrap());
+        if rows.is_empty() {
             return Ok(0);
-        };
+        }
 
-        let row_count = batch.row_count()?;
+        let row_count = rows.len();
+
+        // Serialize the rows.
+        let mut writer = WriterVariant::new(self.config.file_format)?;
+        writer.write(rows)?;
+        let file_bytes = writer
+            .flush::<P::Value>()?
+            .ok_or_else(|| anyhow::anyhow!("No data after serialization"))?;
 
         // Extract checkpoint range from watermarks (guaranteed to be contiguous)
         let checkpoint_range =
