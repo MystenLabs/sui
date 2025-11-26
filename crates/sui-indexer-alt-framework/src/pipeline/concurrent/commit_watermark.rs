@@ -7,12 +7,11 @@ use std::{
     sync::Arc,
 };
 
+use sui_futures::service::Service;
 use tokio::{
-    sync::mpsc,
-    task::JoinHandle,
+    sync::{mpsc, oneshot},
     time::{MissedTickBehavior, interval},
 };
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
@@ -40,8 +39,7 @@ use super::Handler;
 /// The task regularly traces its progress, outputting at a higher log level every
 /// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
 ///
-/// The task will shutdown if the `cancel` token is signalled, or if the `rx` channel closes and the
-/// watermark cannot be progressed.
+/// The task will shutdown if the `rx` channel closes and the watermark cannot be progressed.
 pub(super) fn commit_watermark<H: Handler + 'static>(
     mut next_checkpoint: u64,
     config: CommitterConfig,
@@ -49,214 +47,220 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     store: H::Store,
     task: Option<String>,
     metrics: Arc<IndexerMetrics>,
-    cancel: CancellationToken,
-) -> JoinHandle<()> {
+) -> Service {
     // SAFETY: on indexer instantiation, we've checked that the pipeline name is valid.
     let pipeline_task = pipeline_task::<H::Store>(H::NAME, task.as_deref()).unwrap();
-    tokio::spawn(async move {
-        let mut poll = interval(config.watermark_interval());
-        poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
 
-        // To correctly update the watermark, the task tracks the watermark it last tried to write
-        // and the watermark parts for any checkpoints that have been written since then
-        // ("pre-committed"). After each batch is written, the task will try to progress the
-        // watermark as much as possible without going over any holes in the sequence of
-        // checkpoints (entirely missing watermarks, or incomplete watermarks).
-        let mut precommitted: BTreeMap<u64, WatermarkPart> = BTreeMap::new();
+    Service::new()
+        .with_shutdown_signal(async move {
+            let _ = shutdown_tx.send(());
+        })
+        .spawn(async move {
+            let mut poll = interval(config.watermark_interval());
+            poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        // The watermark task will periodically output a log message at a higher log level to
-        // demonstrate that the pipeline is making progress.
-        let mut logger = WatermarkLogger::new("concurrent_committer");
+            // To correctly update the watermark, the task tracks the watermark it last tried to write
+            // and the watermark parts for any checkpoints that have been written since then
+            // ("pre-committed"). After each batch is written, the task will try to progress the
+            // watermark as much as possible without going over any holes in the sequence of
+            // checkpoints (entirely missing watermarks, or incomplete watermarks).
+            let mut precommitted: BTreeMap<u64, WatermarkPart> = BTreeMap::new();
 
-        let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
-            &metrics.watermarked_checkpoint_timestamp_lag,
-            &metrics.latest_watermarked_checkpoint_timestamp_lag_ms,
-            &metrics.watermark_checkpoint_in_db,
-        );
+            // The watermark task will periodically output a log message at a higher log level to
+            // demonstrate that the pipeline is making progress.
+            let mut logger = WatermarkLogger::new("concurrent_committer");
 
-        info!(
-            pipeline = H::NAME,
-            next_checkpoint, "Starting commit watermark task"
-        );
+            let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
+                &metrics.watermarked_checkpoint_timestamp_lag,
+                &metrics.latest_watermarked_checkpoint_timestamp_lag_ms,
+                &metrics.watermark_checkpoint_in_db,
+            );
 
-        loop {
-            tokio::select! {
-                _ = cancel.cancelled() => {}
-                _ = poll.tick() => {}
-                Some(parts) = rx.recv() => {
-                    for part in parts {
-                        match precommitted.entry(part.checkpoint()) {
-                            Entry::Vacant(entry) => {
-                                entry.insert(part);
-                            }
+            info!(
+                pipeline = H::NAME,
+                next_checkpoint, "Starting commit watermark task"
+            );
 
-                            Entry::Occupied(mut entry) => {
-                                entry.get_mut().add(part);
+            loop {
+                tokio::select! {
+                    _ = &mut shutdown_rx => {}
+                    _ = poll.tick() => {}
+                    Some(parts) = rx.recv() => {
+                        for part in parts {
+                            match precommitted.entry(part.checkpoint()) {
+                                Entry::Vacant(entry) => {
+                                    entry.insert(part);
+                                }
+
+                                Entry::Occupied(mut entry) => {
+                                    entry.get_mut().add(part);
+                                }
                             }
                         }
-                    }
 
+                        continue;
+                    }
+                }
+
+                // The presence of a watermark means that we can update the watermark in db.
+                // However, concurrent pipelines do not need every watermark update to succeed.
+                let mut watermark = None;
+
+                if precommitted.len() > WARN_PENDING_WATERMARKS {
+                    warn!(
+                        pipeline = H::NAME,
+                        pending = precommitted.len(),
+                        "Pipeline has a large number of pending commit watermarks",
+                    );
+                }
+
+                let Ok(mut conn) = store.connect().await else {
+                    warn!(
+                        pipeline = H::NAME,
+                        "Commit watermark task failed to get connection for DB"
+                    );
                     continue;
-                }
-            }
+                };
 
-            // The presence of a watermark means that we can update the watermark in db.
-            // However, concurrent pipelines do not need every watermark update to succeed.
-            let mut watermark = None;
-
-            if precommitted.len() > WARN_PENDING_WATERMARKS {
-                warn!(
-                    pipeline = H::NAME,
-                    pending = precommitted.len(),
-                    "Pipeline has a large number of pending commit watermarks",
-                );
-            }
-
-            let Ok(mut conn) = store.connect().await else {
-                warn!(
-                    pipeline = H::NAME,
-                    "Commit watermark task failed to get connection for DB"
-                );
-                continue;
-            };
-
-            // Check if the pipeline's watermark needs to be updated
-            let guard = metrics
-                .watermark_gather_latency
-                .with_label_values(&[H::NAME])
-                .start_timer();
-
-            while let Some(pending) = precommitted.first_entry() {
-                let part = pending.get();
-
-                // Some rows from the next watermark have not landed yet.
-                if !part.is_complete() {
-                    break;
-                }
-
-                match next_checkpoint.cmp(&part.watermark.checkpoint_hi_inclusive) {
-                    // Next pending checkpoint is from the future.
-                    Ordering::Less => break,
-
-                    // This is the next checkpoint -- include it.
-                    Ordering::Equal => {
-                        watermark = Some(pending.remove().watermark);
-                        next_checkpoint += 1;
-                    }
-
-                    // Next pending checkpoint is in the past. Out of order watermarks can
-                    // be encountered when a pipeline is starting up, because ingestion
-                    // must start at the lowest checkpoint across all pipelines, or because
-                    // of a backfill, where the initial checkpoint has been overridden.
-                    Ordering::Greater => {
-                        // Track how many we see to make sure it doesn't grow without bound.
-                        metrics
-                            .total_watermarks_out_of_order
-                            .with_label_values(&[H::NAME])
-                            .inc();
-
-                        pending.remove();
-                    }
-                }
-            }
-
-            let elapsed = guard.stop_and_record();
-
-            if let Some(watermark) = watermark {
-                metrics
-                    .watermark_epoch
-                    .with_label_values(&[H::NAME])
-                    .set(watermark.epoch_hi_inclusive as i64);
-
-                metrics
-                    .watermark_checkpoint
-                    .with_label_values(&[H::NAME])
-                    .set(watermark.checkpoint_hi_inclusive as i64);
-
-                metrics
-                    .watermark_transaction
-                    .with_label_values(&[H::NAME])
-                    .set(watermark.tx_hi as i64);
-
-                metrics
-                    .watermark_timestamp_ms
-                    .with_label_values(&[H::NAME])
-                    .set(watermark.timestamp_ms_hi_inclusive as i64);
-
-                debug!(
-                    pipeline = H::NAME,
-                    elapsed_ms = elapsed * 1000.0,
-                    watermark = watermark.checkpoint_hi_inclusive,
-                    timestamp = %watermark.timestamp(),
-                    pending = precommitted.len(),
-                    "Gathered watermarks",
-                );
-
+                // Check if the pipeline's watermark needs to be updated
                 let guard = metrics
-                    .watermark_commit_latency
+                    .watermark_gather_latency
                     .with_label_values(&[H::NAME])
                     .start_timer();
 
-                // TODO: If initial_watermark is empty, when we update watermark
-                // for the first time, we should also update the low watermark.
-                match conn
-                    .set_committer_watermark(&pipeline_task, watermark)
-                    .await
-                {
-                    // If there's an issue updating the watermark, log it but keep going,
-                    // it's OK for the watermark to lag from a correctness perspective.
-                    Err(e) => {
-                        let elapsed = guard.stop_and_record();
-                        error!(
-                            pipeline = H::NAME,
-                            elapsed_ms = elapsed * 1000.0,
-                            ?watermark,
-                            "Error updating commit watermark: {e}",
-                        );
+                while let Some(pending) = precommitted.first_entry() {
+                    let part = pending.get();
+
+                    // Some rows from the next watermark have not landed yet.
+                    if !part.is_complete() {
+                        break;
                     }
 
-                    Ok(true) => {
-                        let elapsed = guard.stop_and_record();
+                    match next_checkpoint.cmp(&part.watermark.checkpoint_hi_inclusive) {
+                        // Next pending checkpoint is from the future.
+                        Ordering::Less => break,
 
-                        logger.log::<H>(&watermark, elapsed);
+                        // This is the next checkpoint -- include it.
+                        Ordering::Equal => {
+                            watermark = Some(pending.remove().watermark);
+                            next_checkpoint += 1;
+                        }
 
-                        checkpoint_lag_reporter.report_lag(
-                            watermark.checkpoint_hi_inclusive,
-                            watermark.timestamp_ms_hi_inclusive,
-                        );
+                        // Next pending checkpoint is in the past. Out of order watermarks can
+                        // be encountered when a pipeline is starting up, because ingestion
+                        // must start at the lowest checkpoint across all pipelines, or because
+                        // of a backfill, where the initial checkpoint has been overridden.
+                        Ordering::Greater => {
+                            // Track how many we see to make sure it doesn't grow without bound.
+                            metrics
+                                .total_watermarks_out_of_order
+                                .with_label_values(&[H::NAME])
+                                .inc();
 
-                        metrics
-                            .watermark_epoch_in_db
-                            .with_label_values(&[H::NAME])
-                            .set(watermark.epoch_hi_inclusive as i64);
-
-                        metrics
-                            .watermark_transaction_in_db
-                            .with_label_values(&[H::NAME])
-                            .set(watermark.tx_hi as i64);
-
-                        metrics
-                            .watermark_timestamp_in_db_ms
-                            .with_label_values(&[H::NAME])
-                            .set(watermark.timestamp_ms_hi_inclusive as i64);
+                            pending.remove();
+                        }
                     }
-                    Ok(false) => {}
+                }
+
+                let elapsed = guard.stop_and_record();
+
+                if let Some(watermark) = watermark {
+                    metrics
+                        .watermark_epoch
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.epoch_hi_inclusive as i64);
+
+                    metrics
+                        .watermark_checkpoint
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.checkpoint_hi_inclusive as i64);
+
+                    metrics
+                        .watermark_transaction
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.tx_hi as i64);
+
+                    metrics
+                        .watermark_timestamp_ms
+                        .with_label_values(&[H::NAME])
+                        .set(watermark.timestamp_ms_hi_inclusive as i64);
+
+                    debug!(
+                        pipeline = H::NAME,
+                        elapsed_ms = elapsed * 1000.0,
+                        watermark = watermark.checkpoint_hi_inclusive,
+                        timestamp = %watermark.timestamp(),
+                        pending = precommitted.len(),
+                        "Gathered watermarks",
+                    );
+
+                    let guard = metrics
+                        .watermark_commit_latency
+                        .with_label_values(&[H::NAME])
+                        .start_timer();
+
+                    // TODO: If initial_watermark is empty, when we update watermark
+                    // for the first time, we should also update the low watermark.
+                    match conn
+                        .set_committer_watermark(&pipeline_task, watermark)
+                        .await
+                    {
+                        // If there's an issue updating the watermark, log it but keep going,
+                        // it's OK for the watermark to lag from a correctness perspective.
+                        Err(e) => {
+                            let elapsed = guard.stop_and_record();
+                            error!(
+                                pipeline = H::NAME,
+                                elapsed_ms = elapsed * 1000.0,
+                                ?watermark,
+                                "Error updating commit watermark: {e}",
+                            );
+                        }
+
+                        Ok(true) => {
+                            let elapsed = guard.stop_and_record();
+
+                            logger.log::<H>(&watermark, elapsed);
+
+                            checkpoint_lag_reporter.report_lag(
+                                watermark.checkpoint_hi_inclusive,
+                                watermark.timestamp_ms_hi_inclusive,
+                            );
+
+                            metrics
+                                .watermark_epoch_in_db
+                                .with_label_values(&[H::NAME])
+                                .set(watermark.epoch_hi_inclusive as i64);
+
+                            metrics
+                                .watermark_transaction_in_db
+                                .with_label_values(&[H::NAME])
+                                .set(watermark.tx_hi as i64);
+
+                            metrics
+                                .watermark_timestamp_in_db_ms
+                                .with_label_values(&[H::NAME])
+                                .set(watermark.timestamp_ms_hi_inclusive as i64);
+                        }
+                        Ok(false) => {}
+                    }
+                }
+
+                if shutdown_rx.is_terminated() {
+                    info!(pipeline = H::NAME, "Committer completed shutdown run");
+                    break;
+                }
+
+                if rx.is_closed() && rx.is_empty() {
+                    info!(pipeline = H::NAME, "Committer closed channel");
+                    break;
                 }
             }
 
-            if cancel.is_cancelled() {
-                info!(pipeline = H::NAME, "Shutdown received");
-                break;
-            }
-
-            if rx.is_closed() && rx.is_empty() {
-                info!(pipeline = H::NAME, "Committer closed channel");
-                break;
-            }
-        }
-
-        info!(pipeline = H::NAME, "Stopping committer watermark task");
-    })
+            info!(pipeline = H::NAME, "Stopping committer watermark task");
+            Ok(())
+        })
 }
 
 #[cfg(test)]
@@ -266,7 +270,6 @@ mod tests {
     use async_trait::async_trait;
     use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::sync::mpsc;
-    use tokio_util::sync::CancellationToken;
 
     use crate::{
         FieldCount,
@@ -319,8 +322,7 @@ mod tests {
     struct TestSetup {
         store: MockStore,
         watermark_tx: mpsc::Sender<Vec<WatermarkPart>>,
-        commit_watermark_handle: JoinHandle<()>,
-        cancel: CancellationToken,
+        commit_watermark: Service,
     }
 
     fn setup_test<H: Handler<Store = MockStore> + 'static>(
@@ -330,26 +332,22 @@ mod tests {
     ) -> TestSetup {
         let (watermark_tx, watermark_rx) = mpsc::channel(100);
         let metrics = IndexerMetrics::new(None, &Default::default());
-        let cancel = CancellationToken::new();
 
         let store_clone = store.clone();
-        let cancel_clone = cancel.clone();
 
-        let commit_watermark_handle = commit_watermark::<H>(
+        let commit_watermark = commit_watermark::<H>(
             next_checkpoint,
             config,
             watermark_rx,
             store_clone,
             None,
             metrics,
-            cancel_clone,
         );
 
         TestSetup {
             store,
             watermark_tx,
-            commit_watermark_handle,
-            cancel,
+            commit_watermark,
         }
     }
 
@@ -381,10 +379,6 @@ mod tests {
         // Verify watermark progression
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 3);
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
     }
 
     #[tokio::test]
@@ -420,10 +414,6 @@ mod tests {
         // Verify watermark has progressed to 4
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 4);
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
     }
 
     #[tokio::test]
@@ -452,10 +442,6 @@ mod tests {
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
     }
 
     #[tokio::test]
@@ -489,10 +475,6 @@ mod tests {
         // Verify watermark is still none
         let watermark = setup.store.watermark(DataPipeline::NAME);
         assert!(watermark.is_none());
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
     }
 
     #[tokio::test]
@@ -534,10 +516,6 @@ mod tests {
 
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 11);
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
     }
 
     #[tokio::test]
@@ -579,10 +557,6 @@ mod tests {
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
     }
 
     #[tokio::test]
@@ -617,10 +591,6 @@ mod tests {
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
     }
 
     #[tokio::test]
@@ -653,9 +623,7 @@ mod tests {
         .await
         .unwrap();
 
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
-
+        setup.commit_watermark.shutdown().await.unwrap();
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 11);
     }

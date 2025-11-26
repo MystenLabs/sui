@@ -4,29 +4,28 @@
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use anyhow::{Context, bail, ensure};
-use futures::future;
 use ingestion::{ClientArgs, IngestionConfig, IngestionService, ingestion_client::IngestionClient};
 use metrics::IndexerMetrics;
-use pipeline::{
-    Processor,
-    concurrent::{self, ConcurrentConfig},
-    sequential::{self, Handler, SequentialConfig},
-};
 use prometheus::Registry;
 use sui_indexer_alt_framework_store_traits::{
     Connection, Store, TransactionalStore, pipeline_task,
 };
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 pub use anyhow::Result;
 pub use sui_field_count::FieldCount;
+pub use sui_futures::service;
 /// External users access the store trait through framework::store
 pub use sui_indexer_alt_framework_store_traits as store;
 pub use sui_types as types;
 
 use crate::metrics::IngestionMetrics;
+use crate::pipeline::{
+    Processor,
+    concurrent::{self, ConcurrentConfig},
+    sequential::{self, Handler, SequentialConfig},
+};
+use crate::service::Service;
 
 #[cfg(feature = "cluster")]
 pub mod cluster;
@@ -135,9 +134,6 @@ pub struct Indexer<S: Store> {
     /// with the same name isn't added twice.
     added_pipelines: BTreeSet<&'static str>,
 
-    /// Cancellation token shared among all continuous tasks in the service.
-    cancel: CancellationToken,
-
     /// The checkpoint for the indexer to start ingesting from. This is derived from the committer
     /// watermarks of pipelines added to the indexer. Pipelines without watermarks default to 0,
     /// unless overridden by [Self::default_next_checkpoint].
@@ -147,8 +143,8 @@ pub struct Indexer<S: Store> {
     /// the regulator to prevent ingestion from running too far ahead of sequential pipelines.
     next_sequential_checkpoint: Option<u64>,
 
-    /// The handles for every task spawned by this indexer, used to manage graceful shutdown.
-    handles: Vec<JoinHandle<()>>,
+    /// The service handles for every pipeline, used to manage lifetimes and graceful shutdown.
+    pipelines: Vec<Service>,
 }
 
 /// Configuration for a tasked indexer.
@@ -197,7 +193,6 @@ impl<S: Store> Indexer<S> {
         ingestion_config: IngestionConfig,
         metrics_prefix: Option<&str>,
         registry: &Registry,
-        cancel: CancellationToken,
     ) -> Result<Self> {
         let IndexerArgs {
             first_checkpoint,
@@ -208,13 +203,8 @@ impl<S: Store> Indexer<S> {
 
         let metrics = IndexerMetrics::new(metrics_prefix, registry);
 
-        let ingestion_service = IngestionService::new(
-            client_args,
-            ingestion_config,
-            metrics_prefix,
-            registry,
-            cancel.clone(),
-        )?;
+        let ingestion_service =
+            IngestionService::new(client_args, ingestion_config, metrics_prefix, registry)?;
 
         Ok(Self {
             store,
@@ -222,17 +212,16 @@ impl<S: Store> Indexer<S> {
             ingestion_service,
             default_next_checkpoint: first_checkpoint.unwrap_or_default(),
             last_checkpoint,
+            task: task.into_task(),
             enabled_pipelines: if pipeline.is_empty() {
                 None
             } else {
                 Some(pipeline.into_iter().collect())
             },
             added_pipelines: BTreeSet::new(),
-            cancel,
             first_ingestion_checkpoint: u64::MAX,
             next_sequential_checkpoint: None,
-            handles: vec![],
-            task: task.into_task(),
+            pipelines: vec![],
         })
     }
 
@@ -290,7 +279,7 @@ impl<S: Store> Indexer<S> {
             return Ok(());
         };
 
-        self.handles.push(concurrent::pipeline::<H>(
+        self.pipelines.push(concurrent::pipeline::<H>(
             handler,
             next_checkpoint,
             config,
@@ -298,7 +287,6 @@ impl<S: Store> Indexer<S> {
             self.task.clone(),
             self.ingestion_service.subscribe().0,
             self.metrics.clone(),
-            self.cancel.clone(),
         ));
 
         Ok(())
@@ -309,7 +297,7 @@ impl<S: Store> Indexer<S> {
     /// respective watermarks.
     ///
     /// Ingestion will stop after consuming the configured `last_checkpoint` if one is provided.
-    pub async fn run(mut self) -> Result<JoinHandle<()>> {
+    pub async fn run(self) -> Result<Service> {
         if let Some(enabled_pipelines) = self.enabled_pipelines {
             ensure!(
                 enabled_pipelines.is_empty(),
@@ -322,7 +310,7 @@ impl<S: Store> Indexer<S> {
 
         info!(self.first_ingestion_checkpoint, last_checkpoint = ?self.last_checkpoint, "Ingestion range");
 
-        let broadcaster_handle = self
+        let mut service = self
             .ingestion_service
             .run(
                 self.first_ingestion_checkpoint..=last_checkpoint,
@@ -331,16 +319,11 @@ impl<S: Store> Indexer<S> {
             .await
             .context("Failed to start ingestion service")?;
 
-        self.handles.push(broadcaster_handle);
+        for pipeline in self.pipelines {
+            service = service.merge(pipeline);
+        }
 
-        Ok(tokio::spawn(async move {
-            // Wait for the ingestion service and all its related tasks to wind down gracefully:
-            // If ingestion has been configured to only handle a specific range of checkpoints, we
-            // want to make sure that tasks are allowed to run to completion before shutting them
-            // down.
-            future::join_all(self.handles).await;
-            info!("Indexing pipeline gracefully shut down");
-        }))
+        Ok(service)
     }
 
     /// Determine the checkpoint for the pipeline to resume processing from. This is either the
@@ -429,7 +412,7 @@ impl<T: TransactionalStore> Indexer<T> {
 
         let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
 
-        self.handles.push(sequential::pipeline::<H>(
+        self.pipelines.push(sequential::pipeline::<H>(
             handler,
             next_checkpoint,
             config,
@@ -437,7 +420,6 @@ impl<T: TransactionalStore> Indexer<T> {
             checkpoint_rx,
             watermark_tx,
             self.metrics.clone(),
-            self.cancel.clone(),
         ));
 
         Ok(())
@@ -451,7 +433,6 @@ mod tests {
     use async_trait::async_trait;
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tokio::sync::watch;
-    use tokio_util::sync::CancellationToken;
 
     use crate::FieldCount;
     use crate::ingestion::ingestion_client::IngestionClientArgs;
@@ -600,7 +581,6 @@ mod tests {
     /// first_ingestion_checkpoint is smallest among existing watermarks + 1.
     #[tokio::test]
     async fn test_first_ingestion_checkpoint_all_pipelines_have_watermarks() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -665,7 +645,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel,
         )
         .await
         .unwrap();
@@ -693,7 +672,6 @@ mod tests {
     /// first_ingestion_checkpoint is 0 when at least one pipeline has no watermark.
     #[tokio::test]
     async fn test_first_ingestion_checkpoint_not_all_pipelines_have_watermarks() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -740,7 +718,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel,
         )
         .await
         .unwrap();
@@ -768,7 +745,6 @@ mod tests {
     /// first_ingestion_checkpoint is 1 when smallest committer watermark is 0.
     #[tokio::test]
     async fn test_first_ingestion_checkpoint_smallest_is_0() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -827,7 +803,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel,
         )
         .await
         .unwrap();
@@ -856,7 +831,6 @@ mod tests {
     /// watermark, and first_checkpoint is smallest.
     #[tokio::test]
     async fn test_first_ingestion_checkpoint_first_checkpoint_and_no_watermark() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -906,7 +880,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel,
         )
         .await
         .unwrap();
@@ -935,7 +908,6 @@ mod tests {
     /// first_checkpoint but all pipelines have watermarks (ignores first_checkpoint).
     #[tokio::test]
     async fn test_first_ingestion_checkpoint_ignore_first_checkpoint() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -983,7 +955,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel,
         )
         .await
         .unwrap();
@@ -1005,7 +976,6 @@ mod tests {
     /// to resume ingesting from.
     #[tokio::test]
     async fn test_first_ingestion_checkpoint_large_first_checkpoint() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -1054,7 +1024,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel,
         )
         .await
         .unwrap();
@@ -1080,7 +1049,6 @@ mod tests {
     // test ingestion, all pipelines have watermarks, no first_checkpoint provided
     #[tokio::test]
     async fn test_indexer_ingestion_existing_watermarks_no_first_checkpoint() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -1159,7 +1127,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel.clone(),
         )
         .await
         .unwrap();
@@ -1184,7 +1151,7 @@ mod tests {
         let ingestion_metrics = indexer.ingestion_metrics().clone();
         let indexer_metrics = indexer.indexer_metrics().clone();
 
-        indexer.run().await.unwrap().await.unwrap();
+        indexer.run().await.unwrap().join().await.unwrap();
 
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 24);
         assert_eq!(
@@ -1224,7 +1191,6 @@ mod tests {
     // test ingestion, no pipelines missing watermarks, first_checkpoint provided
     #[tokio::test]
     async fn test_indexer_ingestion_existing_watermarks_ignore_first_checkpoint() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -1304,7 +1270,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel.clone(),
         )
         .await
         .unwrap();
@@ -1328,7 +1293,7 @@ mod tests {
 
         let ingestion_metrics = indexer.ingestion_metrics().clone();
         let metrics = indexer.indexer_metrics().clone();
-        indexer.run().await.unwrap().await.unwrap();
+        indexer.run().await.unwrap().join().await.unwrap();
 
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 24);
         assert_eq!(
@@ -1368,7 +1333,6 @@ mod tests {
     // test ingestion, some pipelines missing watermarks, no first_checkpoint provided
     #[tokio::test]
     async fn test_indexer_ingestion_missing_watermarks_no_first_checkpoint() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -1438,7 +1402,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel.clone(),
         )
         .await
         .unwrap();
@@ -1462,7 +1425,7 @@ mod tests {
 
         let ingestion_metrics = indexer.ingestion_metrics().clone();
         let metrics = indexer.indexer_metrics().clone();
-        indexer.run().await.unwrap().await.unwrap();
+        indexer.run().await.unwrap().join().await.unwrap();
 
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 30);
         assert_eq!(
@@ -1502,7 +1465,6 @@ mod tests {
     // test ingestion, some pipelines missing watermarks, use first_checkpoint
     #[tokio::test]
     async fn test_indexer_ingestion_use_first_checkpoint() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -1573,7 +1535,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel.clone(),
         )
         .await
         .unwrap();
@@ -1597,7 +1558,7 @@ mod tests {
 
         let ingestion_metrics = indexer.ingestion_metrics().clone();
         let metrics = indexer.indexer_metrics().clone();
-        indexer.run().await.unwrap().await.unwrap();
+        indexer.run().await.unwrap().join().await.unwrap();
 
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 20);
         assert_eq!(
@@ -1636,7 +1597,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_sequential_pipelines_next_checkpoint() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -1703,7 +1663,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel.clone(),
         )
         .await
         .unwrap();
@@ -1741,7 +1700,7 @@ mod tests {
         );
 
         // Run indexer to verify it can make progress past the initial hi and finish ingesting.
-        indexer.run().await.unwrap().await.unwrap();
+        indexer.run().await.unwrap().join().await.unwrap();
 
         // Verify each pipeline made some progress independently
         let watermark1 = conn.committer_watermark(MockHandler::NAME).await.unwrap();
@@ -1759,7 +1718,6 @@ mod tests {
     /// committing checkpoints less than the main pipeline's reader watermark.
     #[tokio::test]
     async fn test_tasked_pipelines_ignore_below_main_reader_lo() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -1813,7 +1771,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel,
         )
         .await
         .unwrap();
@@ -1828,7 +1785,7 @@ mod tests {
         let ingestion_metrics = tasked_indexer.ingestion_metrics().clone();
         let metrics = tasked_indexer.indexer_metrics().clone();
 
-        tasked_indexer.run().await.unwrap().await.unwrap();
+        tasked_indexer.run().await.unwrap().join().await.unwrap();
 
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 16);
         assert_eq!(
@@ -1855,7 +1812,6 @@ mod tests {
     /// Tasked pipelines can run ahead of the main pipeline's committer watermark.
     #[tokio::test]
     async fn test_tasked_pipelines_surpass_main_pipeline_committer_hi() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -1905,7 +1861,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel,
         )
         .await
         .unwrap();
@@ -1920,7 +1875,7 @@ mod tests {
         let ingestion_metrics = tasked_indexer.ingestion_metrics().clone();
         let metrics = tasked_indexer.indexer_metrics().clone();
 
-        tasked_indexer.run().await.unwrap().await.unwrap();
+        tasked_indexer.run().await.unwrap().join().await.unwrap();
 
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 17);
         assert_eq!(
@@ -1961,7 +1916,6 @@ mod tests {
     /// reader watermark to the committer. Committer watermark should still advance.
     #[tokio::test]
     async fn test_tasked_pipelines_skip_checkpoints_trailing_main_reader_lo() {
-        let cancel = CancellationToken::new();
         let registry = Registry::new();
         let store = MockStore::default();
 
@@ -2000,7 +1954,6 @@ mod tests {
             ingestion_config,
             None,
             &registry,
-            cancel,
         )
         .await
         .unwrap();
@@ -2025,7 +1978,7 @@ mod tests {
         let metrics = tasked_indexer.indexer_metrics().clone();
 
         let indexer_handle = tokio::spawn(async move {
-            tasked_indexer.run().await.unwrap().await.unwrap();
+            tasked_indexer.run().await.unwrap().join().await.unwrap();
         });
 
         store

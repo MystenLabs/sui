@@ -9,12 +9,11 @@ use std::{
     time::Duration,
 };
 
+use sui_futures::service::Service;
 use tokio::{
     sync::SetOnce,
-    task::JoinHandle,
     time::{MissedTickBehavior, interval},
 };
-use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 use crate::store::{Connection, Store};
@@ -26,60 +25,48 @@ use super::Handler;
 pub(super) fn track_main_reader_lo<H: Handler + 'static>(
     reader_lo: Arc<SetOnce<AtomicU64>>,
     reader_interval: Option<Duration>,
-    cancel: CancellationToken,
     store: H::Store,
-) -> JoinHandle<()> {
-    tokio::spawn(async move {
+) -> Service {
+    Service::new().spawn_aborting(async move {
         let Some(reader_interval) = reader_interval else {
             info!(
                 pipeline = H::NAME,
                 "Not a tasked indexer, skipping main reader lo task"
             );
             reader_lo.set(AtomicU64::new(0)).ok();
-            return;
+            return Ok(());
         };
 
-        let mut reader_interval = interval(reader_interval);
-
         // If we miss ticks, skip them to ensure we have the latest watermark.
+        let mut reader_interval = interval(reader_interval);
         reader_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
         loop {
-            tokio::select! {
-                _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, "Shutdown received");
-                    break;
+            reader_interval.tick().await;
+
+            let mut conn = match store.connect().await {
+                Ok(conn) => conn,
+                Err(e) => {
+                    warn!(pipeline = H::NAME, "Failed to connect to store: {e}");
+                    continue;
                 }
+            };
 
-                _ = reader_interval.tick() => {
-                    match store.connect().await {
-                        Ok(mut conn) => {
-                            match conn.reader_watermark(H::NAME).await {
-                                Ok(watermark_opt) => {
-                                    // If the reader watermark is not present (either because the
-                                    // watermark entry does not exist, or the reader watermark is
-                                    // not set), we assume that pruning is not enabled, and
-                                    // checkpoints >= 0 are valid.
-                                    let update = watermark_opt.map_or(0, |wm| wm.reader_lo);
-
-                                    let current = reader_lo.get();
-
-                                    if let Some(can_update) = current {
-                                        can_update.store(update, Ordering::Relaxed);
-                                    } else {
-                                        reader_lo.set(AtomicU64::new(update)).ok();
-                                    }
-                                }
-                                Err(e) => {
-                                    warn!(pipeline = H::NAME, "Failed to get reader watermark: {e}");
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            warn!(pipeline = H::NAME, "Failed to connect to store: {e}");
-                        }
-                    }
+            let watermark = match conn.reader_watermark(H::NAME).await {
+                // If the reader watermark is not present (either because the watermark entry does
+                // not exist, or the reaer watermark is not set), we assume that pruning is not
+                // enabled and checkpoints >= 0 are valid.
+                Ok(watermark) => watermark.map_or(0, |wm| wm.reader_lo),
+                Err(e) => {
+                    warn!(pipeline = H::NAME, "Failed to get reader watermark: {e}");
+                    continue;
                 }
+            };
+
+            if let Some(lo) = reader_lo.get() {
+                lo.store(watermark, Ordering::Relaxed);
+            } else {
+                reader_lo.set(AtomicU64::new(watermark)).ok();
             }
         }
     })

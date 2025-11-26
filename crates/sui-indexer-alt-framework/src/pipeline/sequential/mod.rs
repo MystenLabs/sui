@@ -4,8 +4,9 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tokio::{sync::mpsc, task::JoinHandle};
-use tokio_util::sync::CancellationToken;
+use sui_futures::service::Service;
+use tokio::sync::mpsc;
+use tracing::info;
 
 use super::{CommitterConfig, PIPELINE_BUFFER, Processor, processor::processor};
 
@@ -75,7 +76,7 @@ pub trait Handler: Processor {
 }
 
 /// Configuration for a sequential pipeline
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct SequentialConfig {
     /// Configuration for the writer, that makes forward progress.
     pub committer: CommitterConfig,
@@ -106,9 +107,9 @@ pub struct SequentialConfig {
 ///
 /// Checkpoint data is fed into the pipeline through the `checkpoint_rx` channel, watermark updates
 /// are communicated to the ingestion service through the `watermark_tx` channel and internal
-/// channels are created to communicate between its various components. The pipeline can be
-/// shutdown using its `cancel` token, and will also shutdown if any of its input or output
-/// channels close, or any of its independent tasks fail.
+/// channels are created to communicate between its various components. The pipeline will shutdown
+/// if any of its input or output channels close, any of its independent tasks fail, or if it is
+/// signalled to shutdown through the returned service handle.
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
     next_checkpoint: u64,
@@ -117,21 +118,24 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     watermark_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
-    cancel: CancellationToken,
-) -> JoinHandle<()> {
+) -> Service {
+    info!(
+        pipeline = H::NAME,
+        "Starting pipeline with config: {config:#?}",
+    );
+
     let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
 
     let handler = Arc::new(handler);
 
-    let processor = processor(
+    let s_processor = processor(
         handler.clone(),
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
-        cancel.clone(),
     );
 
-    let committer = committer::<H>(
+    let s_committer = committer::<H>(
         handler,
         config,
         next_checkpoint,
@@ -139,10 +143,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         watermark_tx,
         db,
         metrics.clone(),
-        cancel.clone(),
     );
 
-    tokio::spawn(async move {
-        let (_, _) = futures::join!(processor, committer);
-    })
+    s_processor.merge(s_committer)
 }

@@ -7,7 +7,6 @@ use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::temp::TempDb;
 use tempfile::tempdir;
-use tokio_util::sync::CancellationToken;
 use url::Url;
 
 use crate::{
@@ -46,7 +45,6 @@ impl Indexer<Db> {
         migrations: Option<&'static EmbeddedMigrations>,
         metrics_prefix: Option<&str>,
         registry: &Registry,
-        cancel: CancellationToken,
     ) -> Result<Self> {
         let store = Db::for_write(database_url, db_args) // I guess our store needs a constructor fn
             .await
@@ -70,7 +68,6 @@ impl Indexer<Db> {
             ingestion_config,
             metrics_prefix,
             registry,
-            cancel,
         )
         .await
     }
@@ -98,7 +95,6 @@ impl Indexer<Db> {
             IngestionConfig::default(),
             None,
             &Registry::new(),
-            CancellationToken::new(),
         )
         .await
         .unwrap();
