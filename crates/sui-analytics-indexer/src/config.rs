@@ -9,8 +9,6 @@ use anyhow::Result;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
-use sui_config::object_storage_config::ObjectStoreConfig;
-
 use crate::schema::RowSchema;
 use crate::writers::{CsvWriter, ParquetWriter};
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
@@ -42,6 +40,10 @@ fn default_file_format() -> FileFormat {
     FileFormat::Parquet
 }
 
+fn default_request_timeout_secs() -> u64 {
+    30
+}
+
 /// Output file format for analytics data.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -71,6 +73,32 @@ impl FileFormat {
     }
 }
 
+/// Object store configuration for analytics output.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase", tag = "type")]
+pub enum OutputStoreConfig {
+    Gcs {
+        bucket: String,
+        /// Path to service account JSON file
+        service_account_path: PathBuf,
+    },
+    S3 {
+        bucket: String,
+        region: String,
+        access_key_id: Option<String>,
+        secret_access_key: Option<String>,
+        endpoint: Option<String>,
+    },
+    Azure {
+        container: String,
+        account: String,
+        access_key: String,
+    },
+    File {
+        path: PathBuf,
+    },
+}
+
 /// Main configuration for an analytics indexer job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexerConfig {
@@ -82,8 +110,11 @@ pub struct IndexerConfig {
     /// The port of the metrics client to connect to.
     #[serde(default = "default_client_metric_port")]
     pub client_metric_port: u16,
-    /// Remote object store where data gets written to
-    pub remote_store_config: ObjectStoreConfig,
+    /// Output object store configuration
+    pub output_store: OutputStoreConfig,
+    /// Request timeout for object store operations
+    #[serde(default = "default_request_timeout_secs")]
+    pub request_timeout_secs: u64,
     /// Remote store URL.
     #[serde(default = "default_remote_store_url")]
     pub remote_store_url: String,

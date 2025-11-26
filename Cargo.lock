@@ -13656,7 +13656,6 @@ dependencies = [
  "strum 0.27.1",
  "strum_macros 0.27.1",
  "sui-analytics-indexer-derive",
- "sui-config",
  "sui-indexer",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-metrics",

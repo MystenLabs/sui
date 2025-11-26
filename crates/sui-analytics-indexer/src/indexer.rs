@@ -4,17 +4,21 @@
 //! Analytics indexer builder.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::package_store::PackageCache;
 use anyhow::{Context, Result};
+use object_store::{
+    ClientOptions, aws::AmazonS3Builder, azure::MicrosoftAzureBuilder,
+    gcp::GoogleCloudStorageBuilder, local::LocalFileSystem,
+};
 use tracing::info;
 
-use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_object_store::ObjectStore;
 
 use crate::analytics_metrics::AnalyticsMetrics;
-use crate::config::IndexerConfig;
+use crate::config::{IndexerConfig, OutputStoreConfig};
 
 pub async fn build_analytics_indexer(
     config: IndexerConfig,
@@ -22,7 +26,7 @@ pub async fn build_analytics_indexer(
     registry: prometheus::Registry,
     cancel: tokio_util::sync::CancellationToken,
 ) -> Result<Indexer<ObjectStore>> {
-    let object_store = create_object_store_from_config(&config.remote_store_config).await?;
+    let object_store = create_object_store(&config.output_store, config.request_timeout_secs)?;
 
     let store = ObjectStore::new(object_store.clone());
 
@@ -108,11 +112,62 @@ pub async fn build_analytics_indexer(
     Ok(indexer)
 }
 
-async fn create_object_store_from_config(
-    config: &ObjectStoreConfig,
+fn create_object_store(
+    config: &OutputStoreConfig,
+    timeout_secs: u64,
 ) -> Result<Arc<dyn object_store::ObjectStore>> {
-    let store = config
-        .make()
-        .context("Failed to create object store from configuration")?;
-    Ok(store)
+    let client_options = ClientOptions::default().with_timeout(Duration::from_secs(timeout_secs));
+
+    match config {
+        OutputStoreConfig::Gcs {
+            bucket,
+            service_account_path,
+        } => GoogleCloudStorageBuilder::new()
+            .with_client_options(client_options)
+            .with_bucket_name(bucket)
+            .with_service_account_path(service_account_path.to_string_lossy())
+            .build()
+            .map(|s| Arc::new(s) as Arc<dyn object_store::ObjectStore>)
+            .context("Failed to create GCS store"),
+        OutputStoreConfig::S3 {
+            bucket,
+            region,
+            access_key_id,
+            secret_access_key,
+            endpoint,
+        } => {
+            let mut builder = AmazonS3Builder::new()
+                .with_client_options(client_options)
+                .with_bucket_name(bucket)
+                .with_region(region);
+            if let Some(key) = access_key_id {
+                builder = builder.with_access_key_id(key);
+            }
+            if let Some(secret) = secret_access_key {
+                builder = builder.with_secret_access_key(secret);
+            }
+            if let Some(ep) = endpoint {
+                builder = builder.with_endpoint(ep);
+            }
+            builder
+                .build()
+                .map(|s| Arc::new(s) as Arc<dyn object_store::ObjectStore>)
+                .context("Failed to create S3 store")
+        }
+        OutputStoreConfig::Azure {
+            container,
+            account,
+            access_key,
+        } => MicrosoftAzureBuilder::new()
+            .with_client_options(client_options)
+            .with_container_name(container)
+            .with_account(account)
+            .with_access_key(access_key)
+            .build()
+            .map(|s| Arc::new(s) as Arc<dyn object_store::ObjectStore>)
+            .context("Failed to create Azure store"),
+        OutputStoreConfig::File { path } => LocalFileSystem::new_with_prefix(path)
+            .map(|s| Arc::new(s) as Arc<dyn object_store::ObjectStore>)
+            .context("Failed to create file store"),
+    }
 }
