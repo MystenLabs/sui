@@ -12,6 +12,7 @@ use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::object::Object;
 
+use crate::analytics_metrics::AnalyticsMetrics;
 use crate::handlers::{
     ObjectStatusTracker, get_is_consensus, get_move_struct, get_owner_address, get_owner_type,
     initial_shared_version,
@@ -23,17 +24,23 @@ use crate::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, Pipeline};
 pub struct ObjectProcessor {
     package_cache: Arc<PackageCache>,
     package_filter: Option<ObjectID>,
+    metrics: AnalyticsMetrics,
 }
 
 pub type ObjectHandler = AnalyticsHandler<ObjectProcessor, AnalyticsBatch<ObjectEntry>>;
 
 impl ObjectProcessor {
-    pub fn new(package_cache: Arc<PackageCache>, package_filter: &Option<String>) -> Self {
+    pub fn new(
+        package_cache: Arc<PackageCache>,
+        package_filter: &Option<String>,
+        metrics: AnalyticsMetrics,
+    ) -> Self {
         Self {
             package_cache,
             package_filter: package_filter
                 .clone()
                 .map(|x| ObjectID::from_hex_literal(&x).unwrap()),
+            metrics,
         }
     }
 
@@ -110,6 +117,10 @@ impl ObjectProcessor {
                         })
                         .is_some() =>
                 {
+                    self.metrics
+                        .total_too_large_to_deserialize
+                        .with_label_values(&["object"])
+                        .inc();
                     tracing::warn!(
                         "Skipping struct with type {} because it was too large.",
                         tag

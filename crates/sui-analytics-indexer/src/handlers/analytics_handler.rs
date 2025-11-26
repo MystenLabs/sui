@@ -10,6 +10,7 @@ use bytes::Bytes;
 use serde::Serialize;
 use sui_types::base_types::EpochId;
 
+use crate::analytics_metrics::AnalyticsMetrics;
 use crate::config::{FileFormat, PipelineConfig};
 use crate::pipeline::Pipeline;
 use crate::schema::RowSchema;
@@ -67,6 +68,7 @@ pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + RowSchema> {
 pub struct AnalyticsHandler<P, B> {
     processor: P,
     config: PipelineConfig,
+    metrics: AnalyticsMetrics,
     _batch: PhantomData<B>,
 }
 
@@ -133,10 +135,11 @@ impl<T: AnalyticsMetadata + Serialize + RowSchema> AnalyticsBatch<T> {
 }
 
 impl<P, B> AnalyticsHandler<P, B> {
-    pub fn new(processor: P, config: PipelineConfig) -> Self {
+    pub fn new(processor: P, config: PipelineConfig, metrics: AnalyticsMetrics) -> Self {
         Self {
             processor,
             config,
+            metrics,
             _batch: PhantomData,
         }
     }
@@ -237,6 +240,13 @@ where
 
         let object_store_path =
             object_store::path::Path::from(object_path.to_string_lossy().as_ref());
+
+        // Record file size metric before uploading
+        let file_size = file_bytes.len() as f64;
+        self.metrics
+            .file_size_bytes
+            .with_label_values(&[P::NAME])
+            .observe(file_size);
 
         conn.object_store()
             .put(&object_store_path, file_bytes.into())

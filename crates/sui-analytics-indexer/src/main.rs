@@ -38,9 +38,9 @@ async fn main() -> Result<()> {
     let metrics = AnalyticsMetrics::new(&registry);
 
     // Spawn Snowflake monitor tasks (if configured)
-    let sf_handles = spawn_snowflake_monitors(&config, metrics, cancel.clone())?;
+    let sf_handles = spawn_snowflake_monitors(&config, metrics.clone(), cancel.clone())?;
 
-    let indexer = build_analytics_indexer(config, registry, cancel.clone()).await?;
+    let indexer = build_analytics_indexer(config, metrics, registry, cancel.clone()).await?;
     let mut h_indexer = indexer.run().await?;
 
     enum ExitReason {

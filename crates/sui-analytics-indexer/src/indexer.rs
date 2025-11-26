@@ -14,11 +14,13 @@ use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_object_store::ObjectStore;
 
+use crate::analytics_metrics::AnalyticsMetrics;
 use crate::config::{JobConfig, PipelineConfig};
 
 /// Builds and configures an analytics indexer from the given configuration.
 pub async fn build_analytics_indexer(
     config: JobConfig,
+    metrics: AnalyticsMetrics,
     registry: prometheus::Registry,
     cancel: tokio_util::sync::CancellationToken,
 ) -> Result<Indexer<ObjectStore>> {
@@ -94,6 +96,7 @@ pub async fn build_analytics_indexer(
             &mut indexer,
             pipeline_config,
             Some(package_cache.clone()),
+            metrics.clone(),
             concurrent_config.clone(),
         )
         .await?;
@@ -106,11 +109,12 @@ async fn register_pipeline(
     indexer: &mut Indexer<ObjectStore>,
     pipeline_config: &PipelineConfig,
     package_cache: Option<Arc<PackageCache>>,
+    metrics: AnalyticsMetrics,
     config: ConcurrentConfig,
 ) -> Result<()> {
     pipeline_config
         .pipeline
-        .register_handler(indexer, pipeline_config, package_cache, config)
+        .register_handler(indexer, pipeline_config, package_cache, metrics, config)
         .await
 }
 

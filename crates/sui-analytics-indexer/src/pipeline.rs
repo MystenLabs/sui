@@ -20,6 +20,7 @@ use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_object_store::ObjectStore;
 use sui_types::base_types::EpochId;
 
+use crate::analytics_metrics::AnalyticsMetrics;
 use crate::config::{FileFormat, PipelineConfig};
 use crate::handlers::checkpoint_handler::{CheckpointHandler, CheckpointProcessor};
 use crate::handlers::df_handler::{DynamicFieldHandler, DynamicFieldProcessor};
@@ -88,13 +89,18 @@ impl Pipeline {
         indexer: &mut Indexer<ObjectStore>,
         pipeline_config: &PipelineConfig,
         package_cache: Option<Arc<PackageCache>>,
+        metrics: AnalyticsMetrics,
         config: ConcurrentConfig,
     ) -> Result<()> {
         match self {
             Pipeline::Checkpoint => {
                 indexer
                     .concurrent_pipeline(
-                        CheckpointHandler::new(CheckpointProcessor, pipeline_config.clone()),
+                        CheckpointHandler::new(
+                            CheckpointProcessor,
+                            pipeline_config.clone(),
+                            metrics,
+                        ),
                         config,
                     )
                     .await?;
@@ -102,7 +108,11 @@ impl Pipeline {
             Pipeline::Transaction => {
                 indexer
                     .concurrent_pipeline(
-                        TransactionHandler::new(TransactionProcessor, pipeline_config.clone()),
+                        TransactionHandler::new(
+                            TransactionProcessor,
+                            pipeline_config.clone(),
+                            metrics,
+                        ),
                         config,
                     )
                     .await?;
@@ -113,6 +123,7 @@ impl Pipeline {
                         TransactionBCSHandler::new(
                             TransactionBCSProcessor,
                             pipeline_config.clone(),
+                            metrics,
                         ),
                         config,
                     )
@@ -124,7 +135,11 @@ impl Pipeline {
                     .ok_or_else(|| anyhow!("Package cache required for Event handler"))?;
                 indexer
                     .concurrent_pipeline(
-                        EventHandler::new(EventProcessor::new(cache), pipeline_config.clone()),
+                        EventHandler::new(
+                            EventProcessor::new(cache),
+                            pipeline_config.clone(),
+                            metrics,
+                        ),
                         config,
                     )
                     .await?;
@@ -132,7 +147,7 @@ impl Pipeline {
             Pipeline::MoveCall => {
                 indexer
                     .concurrent_pipeline(
-                        MoveCallHandler::new(MoveCallProcessor, pipeline_config.clone()),
+                        MoveCallHandler::new(MoveCallProcessor, pipeline_config.clone(), metrics),
                         config,
                     )
                     .await?;
@@ -144,8 +159,13 @@ impl Pipeline {
                 indexer
                     .concurrent_pipeline(
                         ObjectHandler::new(
-                            ObjectProcessor::new(cache, &pipeline_config.package_id_filter),
+                            ObjectProcessor::new(
+                                cache,
+                                &pipeline_config.package_id_filter,
+                                metrics.clone(),
+                            ),
                             pipeline_config.clone(),
+                            metrics,
                         ),
                         config,
                     )
@@ -160,6 +180,7 @@ impl Pipeline {
                         DynamicFieldHandler::new(
                             DynamicFieldProcessor::new(cache),
                             pipeline_config.clone(),
+                            metrics,
                         ),
                         config,
                     )
@@ -171,6 +192,7 @@ impl Pipeline {
                         TransactionObjectsHandler::new(
                             TransactionObjectsProcessor,
                             pipeline_config.clone(),
+                            metrics,
                         ),
                         config,
                     )
@@ -179,7 +201,7 @@ impl Pipeline {
             Pipeline::MovePackage => {
                 indexer
                     .concurrent_pipeline(
-                        PackageHandler::new(PackageProcessor, pipeline_config.clone()),
+                        PackageHandler::new(PackageProcessor, pipeline_config.clone(), metrics),
                         config,
                     )
                     .await?;
@@ -187,7 +209,11 @@ impl Pipeline {
             Pipeline::MovePackageBCS => {
                 indexer
                     .concurrent_pipeline(
-                        PackageBCSHandler::new(PackageBCSProcessor, pipeline_config.clone()),
+                        PackageBCSHandler::new(
+                            PackageBCSProcessor,
+                            pipeline_config.clone(),
+                            metrics,
+                        ),
                         config,
                     )
                     .await?;
@@ -201,6 +227,7 @@ impl Pipeline {
                         WrappedObjectHandler::new(
                             WrappedObjectProcessor::new(cache),
                             pipeline_config.clone(),
+                            metrics,
                         ),
                         config,
                     )
