@@ -25,7 +25,7 @@ static CONFIG: OnceCell<String> = OnceCell::new();
 pub(crate) fn get_cache_path() -> &'static str {
     CONFIG.get_or_init(|| {
         PathBuf::from(move_command_line_common::env::MOVE_HOME.clone())
-            .join("alt")
+            .join("git")
             .to_string_lossy()
             .to_string()
     })
