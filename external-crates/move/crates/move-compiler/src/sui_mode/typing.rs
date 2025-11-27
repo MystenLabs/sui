@@ -989,6 +989,12 @@ fn exp(context: &mut Context, e: &T::Exp) {
             if is_transfer_module && PRIVATE_TRANSFER_FUNCTIONS.contains(&name.value()) {
                 check_private_transfer(context, e.exp.loc, mcall)
             }
+
+            if module.value.is(&STD_ADDR_VALUE, INTERNAL_MODULE_NAME)
+                && name.value() == INTERNAL_PERMIT_FUNCTION_NAME
+            {
+                check_internal_permit(context, e.exp.loc, mcall)
+            }
         }
         T::UnannotatedExp_::Pack(m, s, _, _) => {
             if !context.in_test
@@ -1151,6 +1157,47 @@ fn check_private_transfer(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
             );
             diag.add_secondary_label((store_loc, store_msg))
         }
+        context.add_diag(diag)
+    }
+}
+
+fn check_internal_permit(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
+    let ModuleCall {
+        module,
+        name,
+        type_arguments,
+        ..
+    } = mcall;
+    let current_module = context.current_module();
+    let Some(first_ty) = type_arguments.first() else {
+        // invalid arity
+        debug_assert!(false, "ICE arity should have been expanded for errors");
+        return;
+    };
+    let (in_current_module, first_ty_tn) = match first_ty.value.type_name() {
+        Some(sp!(_, TypeName_::Multiple(_))) | Some(sp!(_, TypeName_::Builtin(_))) | None => {
+            (false, None)
+        }
+        Some(sp!(_, TypeName_::ModuleType(m, n))) => (m == current_module, Some((m, n))),
+    };
+    if !in_current_module {
+        let mut msg = format!(
+            "Invalid call to an internal function. \
+            The function '{}::{}' is restricted to being called in the module that defines the type",
+            module, name,
+        );
+        if let Some((first_ty_module, _)) = &first_ty_tn {
+            msg = format!("{}, '{}'", msg, first_ty_module);
+        };
+        let ty_msg = format!(
+            "The type {} is not declared in the current module",
+            error_format(first_ty, &Subst::empty()),
+        );
+        let diag = diag!(
+            INTERNAL_PERMIT_CALL_DIAG,
+            (loc, msg),
+            (first_ty.loc, ty_msg)
+        );
         context.add_diag(diag)
     }
 }

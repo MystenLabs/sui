@@ -16,9 +16,14 @@ use sui_types::{
 
 use crate::{FunctionIdent, TEST_SCENARIO_MODULE_NAME, verification_failure};
 
+pub const INTERNAL_MODULE: &IdentStr = ident_str!("internal");
 pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
 pub const EVENT_MODULE: &IdentStr = ident_str!("event");
 pub const COIN_REGISTRY_MODULE: &IdentStr = ident_str!("coin_registry");
+
+// Stdlib functions
+pub const MOVE_STDLIB_INTERNAL_PERMIT: FunctionIdent =
+    (MOVE_STDLIB_ADDRESS, INTERNAL_MODULE, ident_str!("permit"));
 
 // Event function
 pub const SUI_EVENT_EMIT_EVENT: FunctionIdent =
@@ -114,6 +119,8 @@ pub const EXHAUSTIVE_MODULES: &[(AccountAddress, &IdentStr)] = &[
 // A list of all functions to check for internal rules. A boolean for each type parameter indicates
 // if the type parameter is `internal`
 pub const FUNCTIONS_TO_CHECK: &[(FunctionIdent, &[/* is internal */ bool])] = &[
+    // stdlib functions
+    (MOVE_STDLIB_INTERNAL_PERMIT, &[true]),
     // event functions
     (SUI_EVENT_EMIT_EVENT, &[true]),
     (SUI_EVENT_EMIT_AUTHENTICATED, &[true]),

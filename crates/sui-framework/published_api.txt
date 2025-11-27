@@ -4801,6 +4801,12 @@ sha2_256
 sha3_256
 	public fun
 	0x1::hash
+Permit
+	public struct
+	0x1::internal
+permit
+	public fun
+	0x1::internal
 UQ32_32
 	public struct
 	0x1::uq32_32
