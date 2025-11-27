@@ -2,11 +2,12 @@
 name = "mysten-network"
 version = "0.2.0"
 license = "Apache-2.0"
-edition = "2024"
+edition = "2021" # Use stable Rust 2021 edition for better compatibility
 authors = ["Brandon Williams <brandon@mystenlabs.com>"]
 description = "Mysten's network tooling"
 publish = false
 
+# MARK: - Dependencies (Alphabetically Sorted)
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true
@@ -20,27 +21,28 @@ fastcrypto.workspace = true
 futures.workspace = true
 http.workspace = true
 http-body.workspace = true
-mysten-metrics.workspace = true
+hyper-rustls.workspace = true
+hyper-util.workspace = true
 multiaddr.workspace = true
+mysten-metrics.workspace = true
+once_cell.workspace = true
+pin-project-lite = { workspace = true, version = "0.2.13" } # Use workspace for consistency
 prometheus.workspace = true
 quinn-proto.workspace = true
 rand.workspace = true
-serde.workspace = true
-once_cell.workspace = true
-snap.workspace = true
-hyper-rustls.workspace = true
-hyper-util.workspace = true
 rustls.workspace = true
-tokio = { workspace = true, features = ["sync", "rt", "macros"] }
+serde.workspace = true
+snap.workspace = true
+sui-http.workspace = true
+tokio = { workspace = true, features = ["sync", "rt-multi-thread", "macros"] } # Explicitly specify multi-thread runtime for network
 tokio-rustls.workspace = true
 tokio-stream.workspace = true
 tonic.workspace = true
 tonic-health.workspace = true
 tower.workspace = true
 tower-http.workspace = true
-pin-project-lite = "0.2.13"
 tracing.workspace = true
-sui-http.workspace = true
 
+# MARK: - Development Dependencies
 [dev-dependencies]
 sui-tls.workspace = true
