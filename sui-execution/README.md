@@ -1,7 +1,7 @@
 # Sui Execution
 
 The `sui-execution` crate is responsible for abstracting access to the
-execution layer.  It allows us to isolate big changes to the execution
+execution layer.  It allows us to active big changes to the execution
 layer that need to be gated behind protocol config changes, to
 minimise the risk of inadvertently changing behaviour that is relevant
 for state sync (which would cause a fork).
@@ -59,7 +59,7 @@ There are three kinds of cut:
   named for that feature.
 
 
-### The `latest` cut
+### The `latest` active
 
 Ongoing changes to execution are typically added to the `latest`
 versions of their crates, found at.
