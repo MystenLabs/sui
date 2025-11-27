@@ -87,16 +87,16 @@ impl Pipeline {
         package_cache: Arc<PackageCache>,
         metrics: AnalyticsMetrics,
         concurrent_config: ConcurrentConfig,
-        backfill_targets: Option<Arc<BackfillBoundaries>>,
+        backfill_cache: Option<Arc<BackfillBoundaries>>,
     ) -> Result<()> {
         match self {
             Pipeline::Checkpoint => {
-                let handler = if let Some(targets) = backfill_targets {
-                    CheckpointHandler::with_backfill_targets(
+                let handler = if let Some(cache) = backfill_cache {
+                    CheckpointHandler::with_backfill_cache(
                         CheckpointProcessor,
                         pipeline_config.clone(),
                         metrics,
-                        targets,
+                        cache,
                     )
                 } else {
                     CheckpointHandler::new(CheckpointProcessor, pipeline_config.clone(), metrics)
@@ -106,12 +106,12 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::Transaction => {
-                let handler = if let Some(targets) = backfill_targets {
-                    TransactionHandler::with_backfill_targets(
+                let handler = if let Some(cache) = backfill_cache {
+                    TransactionHandler::with_backfill_cache(
                         TransactionProcessor,
                         pipeline_config.clone(),
                         metrics,
-                        targets,
+                        cache,
                     )
                 } else {
                     TransactionHandler::new(TransactionProcessor, pipeline_config.clone(), metrics)
@@ -121,12 +121,12 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::TransactionBCS => {
-                let handler = if let Some(targets) = backfill_targets {
-                    TransactionBCSHandler::with_backfill_targets(
+                let handler = if let Some(cache) = backfill_cache {
+                    TransactionBCSHandler::with_backfill_cache(
                         TransactionBCSProcessor,
                         pipeline_config.clone(),
                         metrics,
-                        targets,
+                        cache,
                     )
                 } else {
                     TransactionBCSHandler::new(
@@ -140,12 +140,12 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::Event => {
-                let handler = if let Some(targets) = backfill_targets {
-                    EventHandler::with_backfill_targets(
+                let handler = if let Some(cache) = backfill_cache {
+                    EventHandler::with_backfill_cache(
                         EventProcessor::new(package_cache.clone()),
                         pipeline_config.clone(),
                         metrics,
-                        targets,
+                        cache,
                     )
                 } else {
                     EventHandler::new(
@@ -159,12 +159,12 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::MoveCall => {
-                let handler = if let Some(targets) = backfill_targets {
-                    MoveCallHandler::with_backfill_targets(
+                let handler = if let Some(cache) = backfill_cache {
+                    MoveCallHandler::with_backfill_cache(
                         MoveCallProcessor,
                         pipeline_config.clone(),
                         metrics,
-                        targets,
+                        cache,
                     )
                 } else {
                     MoveCallHandler::new(MoveCallProcessor, pipeline_config.clone(), metrics)
@@ -174,8 +174,8 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::Object => {
-                let handler = if let Some(targets) = backfill_targets {
-                    ObjectHandler::with_backfill_targets(
+                let handler = if let Some(cache) = backfill_cache {
+                    ObjectHandler::with_backfill_cache(
                         ObjectProcessor::new(
                             package_cache.clone(),
                             &pipeline_config.package_id_filter,
@@ -183,7 +183,7 @@ impl Pipeline {
                         ),
                         pipeline_config.clone(),
                         metrics,
-                        targets,
+                        cache,
                     )
                 } else {
                     ObjectHandler::new(
@@ -201,12 +201,12 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::DynamicField => {
-                let handler = if let Some(targets) = backfill_targets {
-                    DynamicFieldHandler::with_backfill_targets(
+                let handler = if let Some(cache) = backfill_cache {
+                    DynamicFieldHandler::with_backfill_cache(
                         DynamicFieldProcessor::new(package_cache.clone()),
                         pipeline_config.clone(),
                         metrics,
-                        targets,
+                        cache,
                     )
                 } else {
                     DynamicFieldHandler::new(
@@ -220,12 +220,12 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::TransactionObjects => {
-                let handler = if let Some(targets) = backfill_targets {
-                    TransactionObjectsHandler::with_backfill_targets(
+                let handler = if let Some(cache) = backfill_cache {
+                    TransactionObjectsHandler::with_backfill_cache(
                         TransactionObjectsProcessor,
                         pipeline_config.clone(),
                         metrics,
-                        targets,
+                        cache,
                     )
                 } else {
                     TransactionObjectsHandler::new(
@@ -239,12 +239,12 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::MovePackage => {
-                let handler = if let Some(targets) = backfill_targets {
-                    PackageHandler::with_backfill_targets(
+                let handler = if let Some(cache) = backfill_cache {
+                    PackageHandler::with_backfill_cache(
                         PackageProcessor,
                         pipeline_config.clone(),
                         metrics,
-                        targets,
+                        cache,
                     )
                 } else {
                     PackageHandler::new(PackageProcessor, pipeline_config.clone(), metrics)
@@ -254,12 +254,12 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::MovePackageBCS => {
-                let handler = if let Some(targets) = backfill_targets {
-                    PackageBCSHandler::with_backfill_targets(
+                let handler = if let Some(cache) = backfill_cache {
+                    PackageBCSHandler::with_backfill_cache(
                         PackageBCSProcessor,
                         pipeline_config.clone(),
                         metrics,
-                        targets,
+                        cache,
                     )
                 } else {
                     PackageBCSHandler::new(PackageBCSProcessor, pipeline_config.clone(), metrics)
@@ -269,12 +269,12 @@ impl Pipeline {
                     .await?;
             }
             Pipeline::WrappedObject => {
-                let handler = if let Some(targets) = backfill_targets {
-                    WrappedObjectHandler::with_backfill_targets(
+                let handler = if let Some(cache) = backfill_cache {
+                    WrappedObjectHandler::with_backfill_cache(
                         WrappedObjectProcessor::new(package_cache.clone()),
                         pipeline_config.clone(),
                         metrics,
-                        targets,
+                        cache,
                     )
                 } else {
                     WrappedObjectHandler::new(

@@ -107,32 +107,23 @@ pub async fn build_analytics_indexer(
     for pipeline_config in config.pipeline_configs() {
         info!("Registering pipeline: {}", pipeline_config.pipeline);
 
-        // Discover backfill targets if in backfill mode
-        let backfill_targets = if config.backfill_mode {
-            let targets = BackfillBoundaries::discover(
-                object_store.as_ref(),
-                pipeline_config.dir_prefix(),
+        // Create lazy-loading backfill cache if in backfill mode
+        let backfill_cache = if config.backfill_mode {
+            // BackfillBoundaries::new() validates that files exist but doesn't list them all.
+            // Epoch boundaries are loaded lazily on first access.
+            let cache = BackfillBoundaries::new(
+                object_store.clone(),
+                pipeline_config.dir_prefix().to_string(),
                 pipeline_config.file_format,
             )
             .await?;
 
             info!(
-                "Discovered {} backfill targets for {} in range {:?}",
-                targets.len(),
-                pipeline_config.pipeline,
-                targets.total_range()
+                "Initialized lazy backfill cache for {}",
+                pipeline_config.pipeline
             );
 
-            if targets.is_empty() {
-                return Err(anyhow!(
-                    "No existing files found for pipeline {} at prefix '{}'. \
-                     Backfill mode requires existing files to update.",
-                    pipeline_config.pipeline,
-                    pipeline_config.dir_prefix()
-                ));
-            }
-
-            Some(Arc::new(targets))
+            Some(Arc::new(cache))
         } else {
             None
         };
@@ -145,7 +136,7 @@ pub async fn build_analytics_indexer(
                 package_cache.clone(),
                 metrics.clone(),
                 concurrent_config.clone(),
-                backfill_targets,
+                backfill_cache,
             )
             .await?;
     }

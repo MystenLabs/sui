@@ -19,7 +19,7 @@ pub mod tables;
 pub mod writers;
 
 // Re-exports for public API
-pub use backfill::BackfillBoundaries;
+pub use backfill::{BackfillBoundaries, EpochBoundaries};
 pub use config::{FileFormat, IndexerConfig, OutputStoreConfig, PipelineConfig};
 pub use handlers::{AnalyticsHandler, AnalyticsMetadata};
 pub use indexer::build_analytics_indexer;

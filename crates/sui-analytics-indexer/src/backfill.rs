@@ -4,15 +4,17 @@
 //! Backfill support for re-processing checkpoints with matching file boundaries.
 //!
 //! When `backfill_mode` is enabled, the indexer:
-//! 1. Lists existing files to discover their checkpoint ranges
+//! 1. Lazily loads file boundaries per-epoch on first access
 //! 2. Forces batch boundaries to align with existing file ranges
 //! 3. Uses conditional PUT operations to detect concurrent modifications
+//! 4. Prunes old epochs from memory after processing moves forward
 
 use std::collections::HashMap;
 use std::ops::Range;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use anyhow::{Context, Result, anyhow};
+use dashmap::DashMap;
 use futures::StreamExt;
 use object_store::ObjectStore;
 use object_store::path::Path as ObjectPath;
@@ -35,39 +37,152 @@ struct ETagInfo {
     version: Option<String>,
 }
 
-/// Index of existing files discovered from object store.
+/// Boundaries for a single epoch, loaded on-demand.
 ///
-/// Used in backfill mode to:
-/// - Force batch boundaries to match existing file ranges
-/// - Enable conditional PUT operations for conflict detection
-pub struct BackfillBoundaries {
-    /// Targets indexed by (epoch, start_checkpoint) for efficient lookup
-    boundaries: HashMap<(u64, u64), TargetRange>,
+/// Each batch holds an `Arc<EpochBoundaries>` to keep the data alive
+/// while the batch is in-flight, even after the epoch is pruned from cache.
+pub struct EpochBoundaries {
+    epoch: u64,
+    /// Targets indexed by start_checkpoint for this epoch
+    targets: HashMap<u64, TargetRange>,
     /// E-tags can be refreshed on conflict (interior mutability for retry)
-    e_tag_cache: RwLock<HashMap<(u64, u64), ETagInfo>>,
+    e_tags: RwLock<HashMap<u64, ETagInfo>>,
+}
+
+impl EpochBoundaries {
+    /// Find the target that contains a given checkpoint in this epoch.
+    pub fn find_target(&self, checkpoint: u64) -> Option<&TargetRange> {
+        self.targets
+            .values()
+            .find(|t| t.checkpoint_range.start <= checkpoint && checkpoint < t.checkpoint_range.end)
+    }
+
+    /// Get a target by exact start_checkpoint key.
+    pub fn get(&self, start: u64) -> Option<&TargetRange> {
+        self.targets.get(&start)
+    }
+
+    /// Get the current e_tag and version for a target.
+    pub fn get_etag(&self, start: u64) -> (Option<String>, Option<String>) {
+        let cache = self.e_tags.read().unwrap();
+        if let Some(info) = cache.get(&start) {
+            (info.e_tag.clone(), info.version.clone())
+        } else {
+            (None, None)
+        }
+    }
+
+    /// Refresh e_tag for a target by re-fetching from object store.
+    pub async fn refresh_etag(&self, object_store: &dyn ObjectStore, start: u64) -> Result<()> {
+        let target = self
+            .get(start)
+            .ok_or_else(|| anyhow!("No target for epoch {} start {}", self.epoch, start))?;
+
+        let meta = object_store
+            .head(&target.path)
+            .await
+            .context("Failed to refresh e_tag")?;
+
+        let mut cache = self.e_tags.write().unwrap();
+        cache.insert(
+            start,
+            ETagInfo {
+                e_tag: meta.e_tag,
+                version: meta.version,
+            },
+        );
+
+        info!(
+            epoch = self.epoch,
+            start,
+            path = %target.path,
+            "Refreshed e_tag for backfill target"
+        );
+
+        Ok(())
+    }
+
+    /// Returns the number of targets in this epoch.
+    pub fn len(&self) -> usize {
+        self.targets.len()
+    }
+
+    /// Returns true if there are no targets.
+    pub fn is_empty(&self) -> bool {
+        self.targets.is_empty()
+    }
+}
+
+/// Lazy-loading cache for backfill boundaries.
+///
+/// Loads epoch data on-demand and caches it in a DashMap.
+/// Each batch clones an `Arc<EpochBoundaries>` to keep data alive.
+/// Old epochs can be pruned when processing moves forward.
+pub struct BackfillBoundaries {
+    /// Object store for loading boundaries
+    object_store: Arc<dyn ObjectStore>,
+    /// Base prefix for this pipeline
+    dir_prefix: String,
+    /// File format for parsing
+    file_format: FileFormat,
+    /// Per-epoch cache (loaded on demand)
+    epochs: DashMap<u64, Arc<EpochBoundaries>>,
 }
 
 impl BackfillBoundaries {
-    /// Discover all existing files for a pipeline's output prefix.
+    /// Create a new lazy-loading BackfillBoundaries.
     ///
-    /// Lists the object store and parses filenames to build an index of
-    /// existing checkpoint ranges that backfill must match.
-    pub async fn discover(
-        object_store: &dyn ObjectStore,
-        dir_prefix: &str,
+    /// Validates that the prefix exists but does not list all files upfront.
+    pub async fn new(
+        object_store: Arc<dyn ObjectStore>,
+        dir_prefix: String,
         file_format: FileFormat,
     ) -> Result<Self> {
-        let prefix = ObjectPath::from(dir_prefix);
-        let mut list_stream = object_store.list(Some(&prefix));
+        // Validate prefix exists with a lightweight check
+        {
+            let prefix = ObjectPath::from(dir_prefix.as_str());
+            let mut list_stream = object_store.list(Some(&prefix));
 
-        let mut boundaries = HashMap::new();
-        let mut e_tag_cache = HashMap::new();
+            // Check if at least one file exists
+            let first = list_stream.next().await;
+            if first.is_none() {
+                return Err(anyhow!(
+                    "No existing files found at prefix '{}'. \
+                     Backfill mode requires existing files to update.",
+                    dir_prefix
+                ));
+            }
+        }
+
+        info!(
+            prefix = %dir_prefix,
+            "Initialized lazy backfill boundaries"
+        );
+
+        Ok(Self {
+            object_store,
+            dir_prefix,
+            file_format,
+            epochs: DashMap::new(),
+        })
+    }
+
+    /// Load boundaries for a specific epoch from object store.
+    async fn load_epoch(&self, epoch: u64) -> Result<Arc<EpochBoundaries>> {
+        let epoch_prefix = ObjectPath::from(format!("{}/epoch_{}/", self.dir_prefix, epoch));
+        let mut list_stream = self.object_store.list(Some(&epoch_prefix));
+
+        let mut targets = HashMap::new();
+        let mut e_tags = HashMap::new();
 
         while let Some(meta_result) = list_stream.next().await {
-            let meta = meta_result.context("Failed to list object store")?;
+            let meta = meta_result.context("Failed to list epoch files")?;
 
-            if let Some((epoch, range)) = parse_file_path(&meta.location, file_format) {
-                let key = (epoch, range.start);
+            if let Some((parsed_epoch, range)) = parse_file_path(&meta.location, self.file_format) {
+                // Sanity check: epoch should match
+                if parsed_epoch != epoch {
+                    continue;
+                }
 
                 debug!(
                     path = %meta.location,
@@ -77,17 +192,17 @@ impl BackfillBoundaries {
                     "Discovered backfill target"
                 );
 
-                boundaries.insert(
-                    key,
+                let start = range.start;
+                targets.insert(
+                    start,
                     TargetRange {
                         epoch,
                         checkpoint_range: range,
                         path: meta.location,
                     },
                 );
-
-                e_tag_cache.insert(
-                    key,
+                e_tags.insert(
+                    start,
                     ETagInfo {
                         e_tag: meta.e_tag,
                         version: meta.version,
@@ -97,115 +212,67 @@ impl BackfillBoundaries {
         }
 
         info!(
-            prefix = dir_prefix,
-            count = boundaries.len(),
-            "Discovered backfill boundaries"
+            epoch,
+            count = targets.len(),
+            "Loaded backfill boundaries for epoch"
         );
 
-        Ok(Self {
-            boundaries,
-            e_tag_cache: RwLock::new(e_tag_cache),
-        })
+        Ok(Arc::new(EpochBoundaries {
+            epoch,
+            targets,
+            e_tags: RwLock::new(e_tags),
+        }))
     }
 
-    /// Returns the number of target files.
-    pub fn len(&self) -> usize {
-        self.boundaries.len()
-    }
-
-    /// Returns true if there are no boundaries.
-    pub fn is_empty(&self) -> bool {
-        self.boundaries.is_empty()
-    }
-
-    /// Returns the total checkpoint range covered by all boundaries.
-    pub fn total_range(&self) -> Option<Range<u64>> {
-        let min = self
-            .boundaries
-            .values()
-            .map(|t| t.checkpoint_range.start)
-            .min()?;
-        let max = self
-            .boundaries
-            .values()
-            .map(|t| t.checkpoint_range.end)
-            .max()?;
-        Some(min..max)
-    }
-
-    /// Find the target that contains a given checkpoint in a specific epoch.
+    /// Ensure an epoch is loaded and return an Arc to its boundaries.
     ///
-    /// Used during batching to determine when to trigger a commit.
-    pub fn find_target(&self, epoch: u64, checkpoint: u64) -> Option<&TargetRange> {
-        // Find the target whose range contains this checkpoint
-        // Since boundaries are keyed by (epoch, start), we need to search
-        self.boundaries.values().find(|t| {
-            t.epoch == epoch
-                && t.checkpoint_range.start <= checkpoint
-                && checkpoint < t.checkpoint_range.end
-        })
+    /// This is idempotent - if the epoch is already loaded, returns the cached Arc.
+    /// The returned Arc keeps the epoch data alive even if pruned from cache.
+    pub async fn ensure_epoch_loaded(&self, epoch: u64) -> Result<Arc<EpochBoundaries>> {
+        // Check cache first
+        if let Some(entry) = self.epochs.get(&epoch) {
+            return Ok(entry.clone());
+        }
+
+        // Not in cache - load from object store
+        let epoch_data = self.load_epoch(epoch).await?;
+
+        // Insert into cache (handles race condition - another thread may have loaded it)
+        self.epochs.entry(epoch).or_insert(epoch_data.clone());
+
+        // Return the version in the cache (might be from another thread)
+        Ok(self.epochs.get(&epoch).unwrap().clone())
     }
 
-    /// Get a target by exact (epoch, start_checkpoint) key.
+    /// Get an Arc to an epoch's boundaries.
     ///
-    /// Used during commit to validate range alignment.
-    pub fn get(&self, epoch: u64, start: u64) -> Option<&TargetRange> {
-        self.boundaries.get(&(epoch, start))
+    /// Panics if the epoch is not loaded. Always call `ensure_epoch_loaded()` first.
+    pub fn get_epoch(&self, epoch: u64) -> Option<Arc<EpochBoundaries>> {
+        self.epochs.get(&epoch).map(|entry| entry.clone())
     }
 
-    /// Get the current e_tag and version for a target.
+    /// Prune epochs older than the given epoch from cache.
     ///
-    /// Returns values that may have been refreshed by a previous retry.
-    pub fn get_etag(&self, epoch: u64, start: u64) -> (Option<String>, Option<String>) {
-        let cache = self.e_tag_cache.read().unwrap();
-        if let Some(info) = cache.get(&(epoch, start)) {
-            (info.e_tag.clone(), info.version.clone())
-        } else {
-            (None, None)
+    /// In-flight batches that hold Arcs to pruned epochs will keep the data alive.
+    /// Once all batches for an epoch are complete, the memory is freed.
+    pub fn prune_epochs_before(&self, epoch: u64) {
+        let before_count = self.epochs.len();
+        self.epochs.retain(|&e, _| e >= epoch);
+        let after_count = self.epochs.len();
+
+        if before_count != after_count {
+            info!(
+                pruned = before_count - after_count,
+                remaining = after_count,
+                current_epoch = epoch,
+                "Pruned old epochs from backfill cache"
+            );
         }
     }
 
-    /// Refresh e_tag for a target by re-fetching from object store.
-    ///
-    /// Called when a conditional PUT fails due to e_tag mismatch.
-    /// The next retry will use the updated e_tag.
-    pub async fn refresh_etag(
-        &self,
-        object_store: &dyn ObjectStore,
-        epoch: u64,
-        start: u64,
-    ) -> Result<()> {
-        let target = self
-            .get(epoch, start)
-            .ok_or_else(|| anyhow!("No target for epoch {} start {}", epoch, start))?;
-
-        let meta = object_store
-            .head(&target.path)
-            .await
-            .context("Failed to refresh e_tag")?;
-
-        let mut cache = self.e_tag_cache.write().unwrap();
-        cache.insert(
-            (epoch, start),
-            ETagInfo {
-                e_tag: meta.e_tag,
-                version: meta.version,
-            },
-        );
-
-        info!(
-            epoch,
-            start,
-            path = %target.path,
-            "Refreshed e_tag for backfill target"
-        );
-
-        Ok(())
-    }
-
-    /// Returns an iterator over all boundaries.
-    pub fn iter(&self) -> impl Iterator<Item = &TargetRange> {
-        self.boundaries.values()
+    /// Returns a reference to the object store.
+    pub fn object_store(&self) -> &dyn ObjectStore {
+        self.object_store.as_ref()
     }
 }
 

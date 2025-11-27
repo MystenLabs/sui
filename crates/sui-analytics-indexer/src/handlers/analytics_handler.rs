@@ -16,7 +16,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use tracing::warn;
 
 use crate::analytics_metrics::AnalyticsMetrics;
-use crate::backfill::BackfillBoundaries;
+use crate::backfill::{BackfillBoundaries, EpochBoundaries};
 use crate::config::{FileFormat, PipelineConfig};
 use crate::schema::RowSchema;
 
@@ -37,6 +37,9 @@ pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + RowSchema> {
     epoch: Mutex<Option<EpochId>>,
     /// In backfill mode, the target checkpoint boundary (exclusive end)
     target_checkpoint_end: Mutex<Option<u64>>,
+    /// In backfill mode, holds the loaded epoch boundaries.
+    /// This Arc keeps the epoch data alive while batch is in-flight.
+    epoch_boundaries: Mutex<Option<Arc<EpochBoundaries>>>,
 }
 
 /// Generic wrapper that implements Handler for any Processor with analytics batching.
@@ -48,8 +51,8 @@ pub struct AnalyticsHandler<P> {
     processor: P,
     config: PipelineConfig,
     metrics: AnalyticsMetrics,
-    /// In backfill mode, targets to match for file boundaries
-    backfill_targets: Option<Arc<BackfillBoundaries>>,
+    /// In backfill mode, lazy-loading cache for file boundaries
+    backfill_cache: Option<Arc<BackfillBoundaries>>,
 }
 
 impl<T: AnalyticsMetadata + Serialize + RowSchema + 'static> Default for AnalyticsBatch<T> {
@@ -58,6 +61,7 @@ impl<T: AnalyticsMetadata + Serialize + RowSchema + 'static> Default for Analyti
             rows: Mutex::new(Vec::new()),
             epoch: Mutex::new(None),
             target_checkpoint_end: Mutex::new(None),
+            epoch_boundaries: Mutex::new(None),
         }
     }
 }
@@ -68,22 +72,22 @@ impl<P> AnalyticsHandler<P> {
             processor,
             config,
             metrics,
-            backfill_targets: None,
+            backfill_cache: None,
         }
     }
 
-    /// Create a new handler with backfill targets for matching existing file boundaries.
-    pub fn with_backfill_targets(
+    /// Create a new handler with backfill cache for lazy-loading file boundaries.
+    pub fn with_backfill_cache(
         processor: P,
         config: PipelineConfig,
         metrics: AnalyticsMetrics,
-        backfill_targets: Arc<BackfillBoundaries>,
+        backfill_cache: Arc<BackfillBoundaries>,
     ) -> Self {
         Self {
             processor,
             config,
             metrics,
-            backfill_targets: Some(backfill_targets),
+            backfill_cache: Some(backfill_cache),
         }
     }
 }
@@ -99,6 +103,12 @@ where
     type Value = P::Value;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        // In backfill mode, pre-load epoch boundaries before processing.
+        // This ensures the epoch is in cache before batch() is called (which is sync).
+        if let Some(ref cache) = self.backfill_cache {
+            cache.ensure_epoch_loaded(checkpoint.summary.epoch).await?;
+        }
+
         self.processor.process(checkpoint).await
     }
 }
@@ -141,6 +151,10 @@ where
                 && current_batch_epoch != incoming_epoch
             {
                 // Epoch boundary detected - commit current batch before accepting new data
+                // Also prune old epochs from cache
+                if let Some(ref cache) = self.backfill_cache {
+                    cache.prune_epochs_before(incoming_epoch);
+                }
                 return BatchStatus::Ready;
             }
         }
@@ -148,10 +162,10 @@ where
         // In backfill mode, check if we've reached a target boundary before accepting new data
         {
             let target_end = batch.target_checkpoint_end.lock().unwrap();
-            if let Some(end) = *target_end {
-                if incoming_checkpoint >= end {
-                    return BatchStatus::Ready;
-                }
+            if let Some(end) = *target_end
+                && incoming_checkpoint >= end
+            {
+                return BatchStatus::Ready;
             }
         }
 
@@ -163,12 +177,19 @@ where
             }
         }
 
-        // In backfill mode, set target boundary from the first checkpoint we see
-        if let Some(ref targets) = self.backfill_targets {
-            let mut target_end = batch.target_checkpoint_end.lock().unwrap();
-            if target_end.is_none() {
-                if let Some(target) = targets.find_target(incoming_epoch, incoming_checkpoint) {
-                    *target_end = Some(target.checkpoint_range.end);
+        // In backfill mode, clone epoch boundaries Arc into batch and set target boundary
+        if let Some(ref cache) = self.backfill_cache {
+            let mut epoch_bounds_guard = batch.epoch_boundaries.lock().unwrap();
+            if epoch_bounds_guard.is_none() {
+                // Get the pre-loaded epoch boundaries from cache
+                // (guaranteed to be loaded by process())
+                if let Some(epoch_bounds) = cache.get_epoch(incoming_epoch) {
+                    // Set target checkpoint end from boundaries
+                    if let Some(target) = epoch_bounds.find_target(incoming_checkpoint) {
+                        *batch.target_checkpoint_end.lock().unwrap() =
+                            Some(target.checkpoint_range.end);
+                    }
+                    *epoch_bounds_guard = Some(epoch_bounds);
                 }
             }
         }
@@ -230,9 +251,10 @@ where
             .observe(file_size);
 
         // In backfill mode, validate target and use conditional PUT
-        if let Some(ref targets) = self.backfill_targets {
+        let epoch_bounds = batch.epoch_boundaries.lock().unwrap().clone();
+        if let Some(ref bounds) = epoch_bounds {
             // Verify target exists for this range
-            let target = targets.get(epoch, checkpoint_range.start).ok_or_else(|| {
+            let target = bounds.get(checkpoint_range.start).ok_or_else(|| {
                 anyhow::anyhow!(
                     "No target file for epoch {} range {:?}. \
                      Backfill can only update existing files.",
@@ -252,7 +274,7 @@ where
             }
 
             // Get current e_tag (may have been refreshed on previous retry)
-            let (e_tag, version) = targets.get_etag(epoch, checkpoint_range.start);
+            let (e_tag, version) = bounds.get_etag(checkpoint_range.start);
 
             // Use conditional update
             let result = conn
@@ -268,8 +290,8 @@ where
                 Ok(_) => Ok(row_count),
                 Err(e) => {
                     // On conflict, refresh e_tag for next retry
-                    if let Err(refresh_err) = targets
-                        .refresh_etag(conn.object_store().as_ref(), epoch, checkpoint_range.start)
+                    if let Err(refresh_err) = bounds
+                        .refresh_etag(conn.object_store().as_ref(), checkpoint_range.start)
                         .await
                     {
                         warn!(
