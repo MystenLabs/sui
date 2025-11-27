@@ -649,7 +649,7 @@ pkg_b = { local = "../pkg_b" }"#,
             Environment::new(DEFAULT_ENV_NAME.to_string(), DEFAULT_ENV_ID.to_string());
 
         let root = RootPackage::<Vanilla>::load(&project.root(), environment, vec![]).await;
-        assert!(!root.is_err());
+        assert!(root.is_ok());
     }
 
     #[test(tokio::test)]
