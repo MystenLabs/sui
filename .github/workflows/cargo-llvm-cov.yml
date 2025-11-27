@@ -1,7 +1,11 @@
+# Workflow to generate code coverage reports for the Rust project and upload them to Codecov.
 name: Code Coverage
+
 on:
+  # Scheduled run: every day at 09:00 UTC (which is 1:00 AM PST).
   schedule:
-    - cron: '0 9 * * *' # UTC timing is every day at 1am PST
+    - cron: '0 9 * * *' 
+  # Manual trigger with an optional branch/commit reference input.
   workflow_dispatch:
     inputs:
       sui_repo_ref:
@@ -10,164 +14,168 @@ on:
         required: false
         default: ''
 
+# Global environment variables applied to all jobs.
 env:
   CARGO_TERM_COLOR: always
-  # Disable incremental compilation.
-  #
-  # Incremental compilation is useful as part of an edit-build-test-edit cycle,
-  # as it lets the compiler avoid recompiling code that hasn't changed. However,
-  # on CI, we're not making small edits; we're almost always building the entire
-  # project from scratch. Thus, incremental compilation on CI actually
-  # introduces *additional* overhead to support making future builds
-  # faster...but no future builds will ever occur in any given CI environment.
-  #
-  # See https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
-  # for details.
+  # Disable incremental compilation on CI to improve build time for fresh checkouts.
+  # See: https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
   CARGO_INCREMENTAL: 0
-  # Allow more retries for network requests in cargo (downloading crates) and
-  # rustup (installing toolchains). This should help to reduce flaky CI failures
-  # from transient network timeouts or other issues.
+  # Increase network request retries for stability during crate downloads/toolchain installs.
   CARGO_NET_RETRY: 10
   RUSTUP_MAX_RETRIES: 10
-  # Don't emit giant backtraces in the CI logs.
+  # Keep backtraces short to prevent cluttering CI logs.
   RUST_BACKTRACE: short
-  # RUSTFLAGS: -D warnings
+  # Enforce warnings as errors for documentation builds.
   RUSTDOCFLAGS: -D warnings
 
 jobs:
+  # Job to build the project and generate coverage data using cargo-llvm-cov.
   cargo-llvm-cov:
     name: Generate code coverage
     runs-on: [ubuntu-ghcloud]
     timeout-minutes: 240
-    env:
-      CARGO_TERM_COLOR: always
+    # CARGO_TERM_COLOR is already set globally, no need to repeat here.
     steps:
-      - name: Install Rust
+      - name: Install latest stable Rust toolchain
         run: rustup update stable
         
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      # Using a specific SHA for security and reliability (Pin v4.1.1).
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 
         with:
-            ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+          # Use the provided input reference or default to the current branch/commit.
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
 
+      # Install necessary tools using taiki-e/install-action.
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Install nextest
         uses: taiki-e/install-action@nextest
 
-      - uses: taiki-e/install-action@protoc
+      - name: Install protoc
+        uses: taiki-e/install-action@protoc
+
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
 
-      - name: Install Rust toolchain
+      - name: Ensure Rust toolchain is installed
+        # Check if active toolchain exists, otherwise install default.
         run: rustup show active-toolchain || rustup toolchain install
 
-      - name: Set Swap Space
+      # Setting a large, but more reasonable, swap space to handle high-memory builds. 
+      # Note: 256GB was excessively large; this is a more plausible value for memory-intensive CI.
+      - name: Set Swap Space (32GB)
         uses: pierotofy/set-swap-space@master
         with:
-          swap-size-gb: 256
+          swap-size-gb: 32
         
-      - name: Run code coverage for nextest
-        run: RUSTFLAGS="-C debuginfo=0" SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest -vv -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
+      - name: Run code coverage for 'nextest' and 'simtest'
+        # Grouped into one run block for cleaner CI logs.
+        run: |
+          echo "Running nextest coverage..."
+          # Run Nextest excluding specific packages, outputting lcov format.
+          RUSTFLAGS="-C debuginfo=0" SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest -vv -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
 
-      - name: Upload report to Codecov for nextest
+          echo "Running simtest coverage..."
+          # Clean up for simtest run.
+          git clean -fd
+          # Execute a custom script for simtest coverage.
+          ./scripts/simtest/codecov.sh
+      
+      # Upload the main nextest coverage report.
+      - name: Upload nextest report to Codecov
         uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # pin v4.0.1
         with:
           files: lcov.info
 
-      - name: Run code coverage for simtest
-        run: |
-          git clean -fd
-          ./scripts/simtest/codecov.sh
-
-      - name: Upload report to Codecov for simtest
-        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # pin v4.0.1
+      # Upload the simtest specific coverage report.
+      - name: Upload simtest report to Codecov
+        uses: codecov/codecov-action@e0b68c6749509c5f204ab8d3baff4262dd30f0 # pin v4.0.1
         with:
           files: lcov-simtest.info
 
+  # Job to handle notifications, runs regardless of the coverage job's outcome.
   notify:
     name: Notify
     needs: [cargo-llvm-cov]
     runs-on: ubuntu-latest
-    if: always() # always notify
+    if: always() # Always notify the result of the previous job.
 
     steps:
-    - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
+      # Get the conclusion status of the preceding job.
+      - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
+      
+      # Use the correct, updated SHA for actions/checkout (Pin v4.1.1)
+      - name: Checkout sui repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      
+      # All subsequent steps handle fetching metadata (commit, branch, oncall, logs) 
+      # and sending a detailed Slack notification.
+      - name: Get sui commit SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sui_sha=$(git rev-parse HEAD)
+          echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
 
-    - name: Checkout sui repo
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v3.0.3
-      with:
-        ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-    
-    - name: Get sui commit
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        export sui_sha=$(git rev-parse HEAD)
-        echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
+      - name: Get branch name for the sui commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Use GitHub API to find the branch name.
+          sui_branch_name=$(gh api -H 'Accept: application/vnd.github+json' /repos/MystenLabs/sui/commits/${{ env.sui_sha }}/branches-where-head --jq '.[].name' | head -n 1)
+          # If not a branch head, try to find the base branch of an associated PR.
+          [[ -z $sui_branch_name ]] && sui_branch_name=$(gh api -H 'Accept: application/vnd.github+json' /repos/MystenLabs/sui/commits/${{ env.sui_sha }}/pulls --jq '.[].base.ref' | head -n 1)
+          echo "sui_branch_name=${sui_branch_name}" >> $GITHUB_ENV
+          # URL-encode the branch name for the Codecov link.
+          echo "sui_branch_name_url=$(echo ${sui_branch_name} | sed 's\/\%2F\g')" >> $GITHUB_ENV
 
-    - name: Get a branch name for a sui commit
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        export sui_branch_name=$(gh api -H 'Accept: application/vnd.github+json' /repos/MystenLabs/sui/commits/${{ env.sui_sha }}/branches-where-head --jq '.[].name' | head -n 1)
-        # if the commit is not the head of the branch, get it's base branch 
-        [[ -z $sui_branch_name ]] && export sui_branch_name=$(gh api -H 'Accept: application/vnd.github+json' /repos/MystenLabs/sui/commits/${{ env.sui_sha }}/pulls --jq '.[].base.ref' | head -n 1)
-        echo "sui_branch_name=${sui_branch_name}" >> $GITHUB_ENV
-        echo "sui_branch_name_url=$(echo ${sui_branch_name} | sed 's\/\%2F\g')" >> $GITHUB_ENV
+      - name: Get link to CI job logs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
+          echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
 
-    - name: Get link to logs
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
-        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
+      - name: Get current oncall user and policy name
+        run: |
+          # Fetch oncall user (summary) from PagerDuty API
+          oncall_data=$(curl -s --request GET \
+            --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS' \
+            --header 'Accept: application/json' \
+            --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
+            --header 'Content-Type: application/json')
+            
+          current_oncall=$(echo $oncall_data | jq '.oncalls[].user.summary' | tr -d '"' | head -n 1)
+          oncall_name=$(echo $oncall_data | jq '.oncalls[].escalation_policy.summary' | tr -d '"' | head -n 1)
 
-    - name: Get current oncall
-      run: |
-        export current_oncall=$(curl -s --request GET \
-          --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS' \
-          --header 'Accept: application/json' \
-          --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
-          --header 'Content-Type: application/json' \
-          | jq '.oncalls[].user.summary' | tr -d '"')
-        echo "current_oncall=$(echo ${current_oncall})" >> $GITHUB_ENV
+          echo "current_oncall=${current_oncall}" >> $GITHUB_ENV
+          echo "oncall_name=${oncall_name}" >> $GITHUB_ENV        
 
-        export oncall_name=$(curl -s --request GET \
-          --url 'https://api.pagerduty.com/oncalls?schedule_ids[]=PGCQ3YS' \
-          --header 'Accept: application/json' \
-          --header 'Authorization: Token token=${{ secrets.PAGERDUTY_ACCESS_KEY }}' \
-          --header 'Content-Type: application/json' \
-          | jq '.oncalls[].escalation_policy.summary' | tr -d '"')
-        echo "oncall_name=$(echo ${oncall_name})" >> $GITHUB_ENV                  
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-west-2
+      - name: Get Slack ID for the oncall user
+        run: |
+          # Download employees directory from S3 and use jq to find the matching Slack ID.
+          slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg ONCALL "${{ env.current_oncall }}" '.[] | if .name == $ONCALL then .slack_id else empty end')
+          echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV
 
-    - name: Get slack id for the oncall
-      run: |
-        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg ONCALL "${{ env.current_oncall }}" '.[] | if .name == $ONCALL then .slack_id else empty end')
-        echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV
-
-    - name: Post to slack
-      uses: slackapi/slack-github-action@37ebaef184d7626c5f204ab8d3baff4262dd30f0 # pin@v1.27.0
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-        SUI_SHA: ${{ env.sui_sha }}
-        SUI_BRANCH_NAME: ${{ env.sui_branch_name }}
-        SUI_BRANCH_NAME_URL: ${{ env.sui_branch_name_url }}
-        GH_JOB_LINK: ${{ env.gh_job_link }}
-        SLACK_ID: ${{ env.slack_id }}
-        ONCALL_NAME: ${{ env.oncall_name }}
-      with:
-        channel-id: 'code-coverage'
-        slack-message: |
-          *${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`
-          Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
-          Sui branch: `${{ env.SUI_BRANCH_NAME }}`
-          Run: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>
-          <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo, to manually check if there are coverage regressions.
+      - name: Post status to Slack
+        uses: slackapi/slack-github-action@37ebaef184d7626c5f204ab8d3baff4262dd30f0 # pin@v1.27.0
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        with:
+          channel-id: 'code-coverage'
+          slack-message: |
+            *${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`
+            Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.sui_sha }}|${{ env.sui_sha }}>
+            Sui branch: `${{ env.sui_branch_name }}`
+            Run: <${{ env.gh_job_link }}|${{ github.run_id }}>
+            <@${{ env.slack_id }}>, current `${{ env.oncall_name }}` oncall, please look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.sui_branch_name_url }}|report> for the `${{ env.sui_branch_name }}` branch in Sui repo, to manually check if there are coverage regressions.
