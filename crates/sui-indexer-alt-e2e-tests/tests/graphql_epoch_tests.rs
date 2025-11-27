@@ -27,7 +27,6 @@ use sui_types::{
     },
     test_checkpoint_data_builder::{AdvanceEpochConfig, TestCheckpointBuilder},
 };
-use tokio_util::sync::CancellationToken;
 
 const SAFE_MODE_QUERY: &str = r#"
 query {
@@ -226,7 +225,6 @@ async fn test_graphql<T: DeserializeOwned>(
             ..Default::default()
         },
         &prometheus::Registry::new(),
-        CancellationToken::new(),
     )
     .await?;
 
@@ -242,8 +240,6 @@ async fn test_graphql<T: DeserializeOwned>(
 
     let request = client.post(offchain.graphql_url()).json(&query);
     let response = request.send().await?;
-
-    offchain.stopped().await;
 
     let value: Value = response.json().await?;
     let Some(epoch) = value.pointer("/data/epoch") else {

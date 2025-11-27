@@ -8,6 +8,7 @@ use anyhow::Context;
 use prometheus::Registry;
 use reqwest::Client;
 use serde_json::{Value, json};
+use sui_futures::service::Service;
 use sui_indexer_alt_jsonrpc::{
     NodeArgs, RpcArgs, args::SystemPackageTaskArgs, config::RpcConfig, start_rpc,
 };
@@ -18,16 +19,16 @@ use sui_swarm_config::genesis_config::AccountConfig;
 use sui_test_transaction_builder::{make_publish_transaction, make_staking_transaction};
 use sui_types::{base_types::SuiAddress, transaction::TransactionDataAPI};
 use test_cluster::{TestCluster, TestClusterBuilder};
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
 use url::Url;
 
 struct FnDelegationTestCluster {
     onchain_cluster: TestCluster,
     rpc_url: Url,
-    rpc_handle: JoinHandle<()>,
+    /// Hold on to the service so it doesn't get dropped (and therefore aborted) until the cluster
+    /// goes out of scope.
+    #[allow(unused)]
+    service: Service,
     client: Client,
-    cancel: CancellationToken,
 }
 
 impl FnDelegationTestCluster {
@@ -49,8 +50,6 @@ impl FnDelegationTestCluster {
         // Unwrap since we know the URL should be valid.
         let fullnode_rpc_url = Url::parse(onchain_cluster.rpc_url())?;
 
-        let cancel = CancellationToken::new();
-
         let rpc_listen_address =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), get_available_port());
         let rpc_url = Url::parse(&format!("http://{}/", rpc_listen_address))
@@ -64,7 +63,7 @@ impl FnDelegationTestCluster {
             ..Default::default()
         };
 
-        let rpc_handle = start_rpc(
+        let service = start_rpc(
             None,
             None,
             DbArgs::default(),
@@ -76,7 +75,6 @@ impl FnDelegationTestCluster {
             SystemPackageTaskArgs::default(),
             RpcConfig::default(),
             &registry,
-            cancel.child_token(),
         )
         .await
         .expect("Failed to start JSON-RPC server");
@@ -84,9 +82,8 @@ impl FnDelegationTestCluster {
         Ok(Self {
             onchain_cluster,
             rpc_url,
-            rpc_handle,
+            service,
             client: Client::new(),
-            cancel,
         })
     }
 
@@ -163,11 +160,6 @@ impl FnDelegationTestCluster {
 
         Ok(body)
     }
-
-    async fn stopped(self) {
-        self.cancel.cancel();
-        let _ = self.rpc_handle.await;
-    }
 }
 
 #[sim_test]
@@ -211,8 +203,6 @@ async fn test_execution() {
     assert!(response["result"]["events"].is_array());
     assert!(response["result"]["objectChanges"].is_array());
     assert!(response["result"]["balanceChanges"].is_array());
-
-    test_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -245,8 +235,6 @@ async fn test_execution_with_deprecated_mode() {
         response["error"]["message"],
         "Invalid Params: WaitForLocalExecution mode is deprecated"
     );
-
-    test_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -280,8 +268,6 @@ async fn test_execution_with_no_sigs() {
             .unwrap()
             .starts_with("missing field `signatures`")
     );
-
-    test_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -313,8 +299,6 @@ async fn test_execution_with_empty_sigs() {
         response["error"]["message"],
         "Invalid user signature: Expect 1 signer signatures but got 0"
     );
-
-    test_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -345,8 +329,6 @@ async fn test_execution_with_aborted_tx() {
     tracing::info!("execution rpc response is {:?}", response);
 
     assert_eq!(response["result"]["effects"]["status"]["status"], "failure");
-
-    test_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -368,8 +350,6 @@ async fn test_dry_run() {
         .unwrap();
 
     assert_eq!(response["result"]["effects"]["status"]["status"], "success");
-
-    test_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -396,7 +376,6 @@ async fn test_dry_run_with_invalid_tx() {
             .unwrap()
             .starts_with("Invalid value was given to the function")
     );
-    test_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -416,7 +395,6 @@ async fn test_get_all_balances() {
     // Only check that FN can return a valid response and not check the contents;
     // the contents is FN logic and thus should be tested on the FN side.
     assert_eq!(response["result"][0]["coinType"], "0x2::sui::SUI");
-    test_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -442,8 +420,6 @@ async fn test_get_all_balances_with_invalid_address() {
             .unwrap()
             .contains("Deserialization failed")
     );
-
-    test_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -492,7 +468,6 @@ async fn test_get_stakes_and_by_ids() {
 
     // Two responses should match.
     assert_eq!(get_stakes_response, get_stakes_by_ids_response);
-    test_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -535,8 +510,6 @@ async fn test_get_stakes_invalid_params() {
             .unwrap()
             .contains("AccountAddressParseError")
     );
-
-    test_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -556,7 +529,6 @@ async fn test_get_validators_apy() {
         response["result"]["apys"][0]["address"],
         validator_address.to_string()
     );
-    test_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -636,5 +608,4 @@ async fn test_get_balance() {
             .unwrap()
             .contains("Invalid params")
     );
-    test_cluster.stopped().await;
 }

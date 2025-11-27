@@ -37,8 +37,6 @@ async fn request_id(query: &str) -> Result<TestResult, anyhow::Error> {
     let request = client.post(cluster.graphql_url()).json(&query);
     let response = request.send().await?;
 
-    cluster.stopped().await;
-
     let request_id = response
         .headers()
         .get(REQUEST_ID_HEADER)

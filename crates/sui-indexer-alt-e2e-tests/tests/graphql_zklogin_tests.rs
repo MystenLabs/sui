@@ -22,7 +22,6 @@ use sui_types::{
 use tempfile::TempDir;
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::time::interval;
-use tokio_util::sync::CancellationToken;
 
 const QUERY: &str = r#"
 query ($bytes: Base64!, $signature: Base64!, $scope: ZkLoginIntentScope!, $author: SuiAddress!) {
@@ -88,7 +87,6 @@ impl FullCluster {
                 ..Default::default()
             },
             &Registry::new(),
-            CancellationToken::new(),
         )
         .await?;
 

@@ -19,7 +19,6 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{Transaction, TransactionData},
 };
-use tokio_util::sync::CancellationToken;
 
 /// 5 SUI gas budget
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
@@ -329,7 +328,6 @@ async fn setup_cluster(config: ObjectsConfig) -> FullCluster {
             ..Default::default()
         },
         &prometheus::Registry::new(),
-        CancellationToken::new(),
     )
     .await
     .expect("Failed to set-up cluster")
