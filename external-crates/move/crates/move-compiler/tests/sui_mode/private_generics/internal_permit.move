@@ -27,6 +27,16 @@ module a::m {
     public fun t4() {
         internal::permit<Permit<Internal>>();
     }
+
+    // fail: the base type is not internal (primitive)
+    public fun t5() {
+        internal::permit<u64>();
+    }
+
+    // fail: the base type is not internal (vector)
+    public fun t6() {
+        internal::permit<vector<Internal>>();
+    }
 }
 
 module a::other {

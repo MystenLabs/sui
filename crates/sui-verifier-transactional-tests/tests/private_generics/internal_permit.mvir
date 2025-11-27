@@ -33,7 +33,6 @@ module 0x0.t {
 //# publish
 module 0x0.t {
     import 0x1.internal;
-    import 0x1.string;
 
     struct Internal { dummy_field: bool }
 
@@ -41,6 +40,20 @@ module 0x0.t {
         let permit: internal.Permit<internal.Permit<Self.Internal>>;
         label l0:
         permit = internal.permit<internal.Permit<Self.Internal>>();
+        abort 0;
+    }
+}
+
+//# publish
+module 0x0.t {
+    import 0x1.internal;
+
+    struct Internal { dummy_field: bool }
+
+    test_fail_permit_type() {
+        let permit: internal.Permit<vector<Self.Internal>>;
+        label l0:
+        permit = internal.permit<vector<Self.Internal>>();
         abort 0;
     }
 }
