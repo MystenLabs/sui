@@ -140,8 +140,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let mut environments = F::default_environments();
 
         if let Ok(modern_manifest) = Manifest::read_from_file(&package_path, &mtx) {
-            // TODO(manos): Decide on validation (e.g. if modern manifest declares environments differently,
-            // we should error?!)
             environments.extend(modern_manifest.environments());
         }
 
@@ -527,7 +525,7 @@ mod tests {
     use crate::{
         flavor::{
             Vanilla,
-            vanilla::{self, DEFAULT_ENV_NAME, default_environment},
+            vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME, default_environment},
         },
         graph::NamedAddress,
         schema::{
@@ -636,6 +634,48 @@ pkg_b = { local = "../pkg_b" }"#,
             .unwrap();
 
         assert_eq!(root.name(), &PackageID::from("graph"));
+    }
+
+    #[test(tokio::test)]
+    async fn test_overriding_with_same_chain_id_is_ok() {
+        let project = test_utils::project()
+            .file(
+                "Move.toml",
+                &basic_manifest_with_env("graph", "0.0.1", DEFAULT_ENV_NAME, DEFAULT_ENV_ID),
+            )
+            .build();
+
+        let environment =
+            Environment::new(DEFAULT_ENV_NAME.to_string(), DEFAULT_ENV_ID.to_string());
+
+        let root = RootPackage::<Vanilla>::load(&project.root(), environment, vec![]).await;
+        assert!(!root.is_err());
+    }
+
+    #[test(tokio::test)]
+    async fn test_cannot_override_default_environments() {
+        let project = test_utils::project()
+            .file(
+                "Move.toml",
+                &basic_manifest_with_env(
+                    "graph",
+                    "0.0.1",
+                    DEFAULT_ENV_NAME,
+                    "DIFFERENT_FROM_DEFAULT",
+                ),
+            )
+            .build();
+
+        let environment =
+            Environment::new(DEFAULT_ENV_NAME.to_string(), DEFAULT_ENV_ID.to_string());
+
+        let load_err = RootPackage::<Vanilla>::load(&project.root(), environment, vec![])
+            .await
+            .unwrap_err();
+        assert_eq!(
+            load_err.to_string(),
+            "Cannot override default environments. Environment `_test_env` is a system environment and cannot be overridden."
+        );
     }
 
     #[test(tokio::test)]
