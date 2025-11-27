@@ -23,6 +23,10 @@ impl AnalyticsMetadata for CheckpointEntry {
     fn get_epoch(&self) -> EpochId {
         self.epoch
     }
+
+    fn get_checkpoint(&self) -> u64 {
+        self.sequence_number
+    }
 }
 
 #[async_trait]

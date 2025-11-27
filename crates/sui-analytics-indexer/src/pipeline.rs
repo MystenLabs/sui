@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
 use crate::analytics_metrics::AnalyticsMetrics;
+use crate::backfill::BackfillBoundaries;
 use crate::config::PipelineConfig;
 use crate::handlers::checkpoint_handler::{CheckpointHandler, CheckpointProcessor};
 use crate::handlers::df_handler::{DynamicFieldHandler, DynamicFieldProcessor};
@@ -86,134 +87,204 @@ impl Pipeline {
         package_cache: Arc<PackageCache>,
         metrics: AnalyticsMetrics,
         concurrent_config: ConcurrentConfig,
+        backfill_targets: Option<Arc<BackfillBoundaries>>,
     ) -> Result<()> {
         match self {
             Pipeline::Checkpoint => {
-                indexer
-                    .concurrent_pipeline(
-                        CheckpointHandler::new(
-                            CheckpointProcessor,
-                            pipeline_config.clone(),
-                            metrics,
-                        ),
-                        concurrent_config,
+                let handler = if let Some(targets) = backfill_targets {
+                    CheckpointHandler::with_backfill_targets(
+                        CheckpointProcessor,
+                        pipeline_config.clone(),
+                        metrics,
+                        targets,
                     )
+                } else {
+                    CheckpointHandler::new(CheckpointProcessor, pipeline_config.clone(), metrics)
+                };
+                indexer
+                    .concurrent_pipeline(handler, concurrent_config)
                     .await?;
             }
             Pipeline::Transaction => {
-                indexer
-                    .concurrent_pipeline(
-                        TransactionHandler::new(
-                            TransactionProcessor,
-                            pipeline_config.clone(),
-                            metrics,
-                        ),
-                        concurrent_config,
+                let handler = if let Some(targets) = backfill_targets {
+                    TransactionHandler::with_backfill_targets(
+                        TransactionProcessor,
+                        pipeline_config.clone(),
+                        metrics,
+                        targets,
                     )
+                } else {
+                    TransactionHandler::new(TransactionProcessor, pipeline_config.clone(), metrics)
+                };
+                indexer
+                    .concurrent_pipeline(handler, concurrent_config)
                     .await?;
             }
             Pipeline::TransactionBCS => {
-                indexer
-                    .concurrent_pipeline(
-                        TransactionBCSHandler::new(
-                            TransactionBCSProcessor,
-                            pipeline_config.clone(),
-                            metrics,
-                        ),
-                        concurrent_config,
+                let handler = if let Some(targets) = backfill_targets {
+                    TransactionBCSHandler::with_backfill_targets(
+                        TransactionBCSProcessor,
+                        pipeline_config.clone(),
+                        metrics,
+                        targets,
                     )
+                } else {
+                    TransactionBCSHandler::new(
+                        TransactionBCSProcessor,
+                        pipeline_config.clone(),
+                        metrics,
+                    )
+                };
+                indexer
+                    .concurrent_pipeline(handler, concurrent_config)
                     .await?;
             }
             Pipeline::Event => {
-                indexer
-                    .concurrent_pipeline(
-                        EventHandler::new(
-                            EventProcessor::new(package_cache.clone()),
-                            pipeline_config.clone(),
-                            metrics,
-                        ),
-                        concurrent_config,
+                let handler = if let Some(targets) = backfill_targets {
+                    EventHandler::with_backfill_targets(
+                        EventProcessor::new(package_cache.clone()),
+                        pipeline_config.clone(),
+                        metrics,
+                        targets,
                     )
+                } else {
+                    EventHandler::new(
+                        EventProcessor::new(package_cache.clone()),
+                        pipeline_config.clone(),
+                        metrics,
+                    )
+                };
+                indexer
+                    .concurrent_pipeline(handler, concurrent_config)
                     .await?;
             }
             Pipeline::MoveCall => {
-                indexer
-                    .concurrent_pipeline(
-                        MoveCallHandler::new(MoveCallProcessor, pipeline_config.clone(), metrics),
-                        concurrent_config,
+                let handler = if let Some(targets) = backfill_targets {
+                    MoveCallHandler::with_backfill_targets(
+                        MoveCallProcessor,
+                        pipeline_config.clone(),
+                        metrics,
+                        targets,
                     )
+                } else {
+                    MoveCallHandler::new(MoveCallProcessor, pipeline_config.clone(), metrics)
+                };
+                indexer
+                    .concurrent_pipeline(handler, concurrent_config)
                     .await?;
             }
             Pipeline::Object => {
-                indexer
-                    .concurrent_pipeline(
-                        ObjectHandler::new(
-                            ObjectProcessor::new(
-                                package_cache.clone(),
-                                &pipeline_config.package_id_filter,
-                                metrics.clone(),
-                            ),
-                            pipeline_config.clone(),
-                            metrics,
+                let handler = if let Some(targets) = backfill_targets {
+                    ObjectHandler::with_backfill_targets(
+                        ObjectProcessor::new(
+                            package_cache.clone(),
+                            &pipeline_config.package_id_filter,
+                            metrics.clone(),
                         ),
-                        concurrent_config,
+                        pipeline_config.clone(),
+                        metrics,
+                        targets,
                     )
+                } else {
+                    ObjectHandler::new(
+                        ObjectProcessor::new(
+                            package_cache.clone(),
+                            &pipeline_config.package_id_filter,
+                            metrics.clone(),
+                        ),
+                        pipeline_config.clone(),
+                        metrics,
+                    )
+                };
+                indexer
+                    .concurrent_pipeline(handler, concurrent_config)
                     .await?;
             }
             Pipeline::DynamicField => {
-                indexer
-                    .concurrent_pipeline(
-                        DynamicFieldHandler::new(
-                            DynamicFieldProcessor::new(package_cache.clone()),
-                            pipeline_config.clone(),
-                            metrics,
-                        ),
-                        concurrent_config,
+                let handler = if let Some(targets) = backfill_targets {
+                    DynamicFieldHandler::with_backfill_targets(
+                        DynamicFieldProcessor::new(package_cache.clone()),
+                        pipeline_config.clone(),
+                        metrics,
+                        targets,
                     )
+                } else {
+                    DynamicFieldHandler::new(
+                        DynamicFieldProcessor::new(package_cache.clone()),
+                        pipeline_config.clone(),
+                        metrics,
+                    )
+                };
+                indexer
+                    .concurrent_pipeline(handler, concurrent_config)
                     .await?;
             }
             Pipeline::TransactionObjects => {
-                indexer
-                    .concurrent_pipeline(
-                        TransactionObjectsHandler::new(
-                            TransactionObjectsProcessor,
-                            pipeline_config.clone(),
-                            metrics,
-                        ),
-                        concurrent_config,
+                let handler = if let Some(targets) = backfill_targets {
+                    TransactionObjectsHandler::with_backfill_targets(
+                        TransactionObjectsProcessor,
+                        pipeline_config.clone(),
+                        metrics,
+                        targets,
                     )
+                } else {
+                    TransactionObjectsHandler::new(
+                        TransactionObjectsProcessor,
+                        pipeline_config.clone(),
+                        metrics,
+                    )
+                };
+                indexer
+                    .concurrent_pipeline(handler, concurrent_config)
                     .await?;
             }
             Pipeline::MovePackage => {
-                indexer
-                    .concurrent_pipeline(
-                        PackageHandler::new(PackageProcessor, pipeline_config.clone(), metrics),
-                        concurrent_config,
+                let handler = if let Some(targets) = backfill_targets {
+                    PackageHandler::with_backfill_targets(
+                        PackageProcessor,
+                        pipeline_config.clone(),
+                        metrics,
+                        targets,
                     )
+                } else {
+                    PackageHandler::new(PackageProcessor, pipeline_config.clone(), metrics)
+                };
+                indexer
+                    .concurrent_pipeline(handler, concurrent_config)
                     .await?;
             }
             Pipeline::MovePackageBCS => {
-                indexer
-                    .concurrent_pipeline(
-                        PackageBCSHandler::new(
-                            PackageBCSProcessor,
-                            pipeline_config.clone(),
-                            metrics,
-                        ),
-                        concurrent_config,
+                let handler = if let Some(targets) = backfill_targets {
+                    PackageBCSHandler::with_backfill_targets(
+                        PackageBCSProcessor,
+                        pipeline_config.clone(),
+                        metrics,
+                        targets,
                     )
+                } else {
+                    PackageBCSHandler::new(PackageBCSProcessor, pipeline_config.clone(), metrics)
+                };
+                indexer
+                    .concurrent_pipeline(handler, concurrent_config)
                     .await?;
             }
             Pipeline::WrappedObject => {
-                indexer
-                    .concurrent_pipeline(
-                        WrappedObjectHandler::new(
-                            WrappedObjectProcessor::new(package_cache.clone()),
-                            pipeline_config.clone(),
-                            metrics,
-                        ),
-                        concurrent_config,
+                let handler = if let Some(targets) = backfill_targets {
+                    WrappedObjectHandler::with_backfill_targets(
+                        WrappedObjectProcessor::new(package_cache.clone()),
+                        pipeline_config.clone(),
+                        metrics,
+                        targets,
                     )
+                } else {
+                    WrappedObjectHandler::new(
+                        WrappedObjectProcessor::new(package_cache.clone()),
+                        pipeline_config.clone(),
+                        metrics,
+                    )
+                };
+                indexer
+                    .concurrent_pipeline(handler, concurrent_config)
                     .await?;
             }
         }

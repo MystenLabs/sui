@@ -7,20 +7,25 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use async_trait::async_trait;
+use object_store::PutMode;
 use serde::Serialize;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::concurrent::{self, BatchStatus};
 use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
+use tracing::warn;
 
 use crate::analytics_metrics::AnalyticsMetrics;
+use crate::backfill::BackfillBoundaries;
 use crate::config::{FileFormat, PipelineConfig};
 use crate::schema::RowSchema;
 
-/// Entry types implement this to provide epoch information for batching.
+/// Entry types implement this to provide epoch and checkpoint information for batching.
 /// Batches are committed at epoch boundaries to ensure files don't span epochs.
+/// In backfill mode, checkpoint info is used to align with existing file boundaries.
 pub trait AnalyticsMetadata {
     fn get_epoch(&self) -> EpochId;
+    fn get_checkpoint(&self) -> u64;
 }
 
 /// Generic batch struct that buffers raw entry rows for later serialization.
@@ -30,6 +35,8 @@ pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + RowSchema> {
     rows: Mutex<Vec<T>>,
     /// Track the epoch for this batch - used to detect epoch boundaries
     epoch: Mutex<Option<EpochId>>,
+    /// In backfill mode, the target checkpoint boundary (exclusive end)
+    target_checkpoint_end: Mutex<Option<u64>>,
 }
 
 /// Generic wrapper that implements Handler for any Processor with analytics batching.
@@ -41,6 +48,8 @@ pub struct AnalyticsHandler<P> {
     processor: P,
     config: PipelineConfig,
     metrics: AnalyticsMetrics,
+    /// In backfill mode, targets to match for file boundaries
+    backfill_targets: Option<Arc<BackfillBoundaries>>,
 }
 
 impl<T: AnalyticsMetadata + Serialize + RowSchema + 'static> Default for AnalyticsBatch<T> {
@@ -48,6 +57,7 @@ impl<T: AnalyticsMetadata + Serialize + RowSchema + 'static> Default for Analyti
         Self {
             rows: Mutex::new(Vec::new()),
             epoch: Mutex::new(None),
+            target_checkpoint_end: Mutex::new(None),
         }
     }
 }
@@ -58,6 +68,22 @@ impl<P> AnalyticsHandler<P> {
             processor,
             config,
             metrics,
+            backfill_targets: None,
+        }
+    }
+
+    /// Create a new handler with backfill targets for matching existing file boundaries.
+    pub fn with_backfill_targets(
+        processor: P,
+        config: PipelineConfig,
+        metrics: AnalyticsMetrics,
+        backfill_targets: Arc<BackfillBoundaries>,
+    ) -> Self {
+        Self {
+            processor,
+            config,
+            metrics,
+            backfill_targets: Some(backfill_targets),
         }
     }
 }
@@ -99,13 +125,14 @@ where
         batch: &mut Self::Batch,
         values: &mut std::vec::IntoIter<Self::Value>,
     ) -> BatchStatus {
-        // Peek at first value to determine incoming epoch
+        // Peek at first value to determine incoming epoch and checkpoint
         let values_slice = values.as_slice();
         if values_slice.is_empty() {
             return BatchStatus::Pending;
         }
 
         let incoming_epoch = values_slice[0].get_epoch();
+        let incoming_checkpoint = values_slice[0].get_checkpoint();
 
         // Check if batch already has data from a different epoch
         {
@@ -118,11 +145,31 @@ where
             }
         }
 
+        // In backfill mode, check if we've reached a target boundary before accepting new data
+        {
+            let target_end = batch.target_checkpoint_end.lock().unwrap();
+            if let Some(end) = *target_end {
+                if incoming_checkpoint >= end {
+                    return BatchStatus::Ready;
+                }
+            }
+        }
+
         // Set epoch if this is the first data in the batch
         {
             let mut guard = batch.epoch.lock().unwrap();
             if guard.is_none() {
                 *guard = Some(incoming_epoch);
+            }
+        }
+
+        // In backfill mode, set target boundary from the first checkpoint we see
+        if let Some(ref targets) = self.backfill_targets {
+            let mut target_end = batch.target_checkpoint_end.lock().unwrap();
+            if target_end.is_none() {
+                if let Some(target) = targets.find_target(incoming_epoch, incoming_checkpoint) {
+                    *target_end = Some(target.checkpoint_range.end);
+                }
             }
         }
 
@@ -139,6 +186,7 @@ where
     ) -> Result<usize> {
         // Take the buffered rows for serialization
         let rows = std::mem::take(&mut *batch.rows.lock().unwrap());
+
         if rows.is_empty() {
             return Ok(0);
         }
@@ -167,7 +215,7 @@ where
         let object_path = construct_file_path(
             self.config.dir_prefix(),
             epoch,
-            checkpoint_range,
+            checkpoint_range.clone(),
             self.config.file_format,
         );
 
@@ -181,11 +229,71 @@ where
             .with_label_values(&[P::NAME])
             .observe(file_size);
 
-        conn.object_store()
-            .put(&object_store_path, file_bytes.into())
-            .await?;
+        // In backfill mode, validate target and use conditional PUT
+        if let Some(ref targets) = self.backfill_targets {
+            // Verify target exists for this range
+            let target = targets.get(epoch, checkpoint_range.start).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "No target file for epoch {} range {:?}. \
+                     Backfill can only update existing files.",
+                    epoch,
+                    checkpoint_range
+                )
+            })?;
 
-        Ok(row_count)
+            // Verify range matches exactly
+            if target.checkpoint_range != checkpoint_range {
+                return Err(anyhow::anyhow!(
+                    "Range mismatch: target {:?}, got {:?}. \
+                     Batch boundaries must align with existing files.",
+                    target.checkpoint_range,
+                    checkpoint_range
+                ));
+            }
+
+            // Get current e_tag (may have been refreshed on previous retry)
+            let (e_tag, version) = targets.get_etag(epoch, checkpoint_range.start);
+
+            // Use conditional update
+            let result = conn
+                .object_store()
+                .put_opts(
+                    &object_store_path,
+                    file_bytes.into(),
+                    PutMode::Update(object_store::UpdateVersion { e_tag, version }).into(),
+                )
+                .await;
+
+            match result {
+                Ok(_) => Ok(row_count),
+                Err(e) => {
+                    // On conflict, refresh e_tag for next retry
+                    if let Err(refresh_err) = targets
+                        .refresh_etag(conn.object_store().as_ref(), epoch, checkpoint_range.start)
+                        .await
+                    {
+                        warn!(
+                            pipeline = P::NAME,
+                            epoch,
+                            start = checkpoint_range.start,
+                            "Failed to refresh e_tag: {}",
+                            refresh_err
+                        );
+                    }
+                    Err(anyhow::anyhow!(
+                        "Conditional update failed for {:?}: {}. Will retry.",
+                        object_store_path,
+                        e
+                    ))
+                }
+            }
+        } else {
+            // Normal mode: unconditional put
+            conn.object_store()
+                .put(&object_store_path, file_bytes.into())
+                .await?;
+            Ok(row_count)
+        }
     }
 }
 

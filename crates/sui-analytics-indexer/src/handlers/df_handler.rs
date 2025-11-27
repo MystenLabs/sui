@@ -173,4 +173,8 @@ impl AnalyticsMetadata for DynamicFieldEntry {
     fn get_epoch(&self) -> EpochId {
         self.epoch
     }
+
+    fn get_checkpoint(&self) -> u64 {
+        self.checkpoint
+    }
 }

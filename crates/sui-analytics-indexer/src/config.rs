@@ -138,6 +138,11 @@ pub struct IndexerConfig {
 
     pub task_name: Option<String>,
 
+    /// Enable backfill mode: lists existing files and writes with matching checkpoint ranges.
+    /// Requires task_name to be set for watermark isolation.
+    #[serde(default)]
+    pub backfill_mode: bool,
+
     /// Reader interval in milliseconds for tasked indexer.
     #[serde(default = "default_reader_interval_ms")]
     pub reader_interval_ms: u64,

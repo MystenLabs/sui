@@ -22,6 +22,10 @@ impl AnalyticsMetadata for TransactionBCSEntry {
     fn get_epoch(&self) -> EpochId {
         self.epoch
     }
+
+    fn get_checkpoint(&self) -> u64 {
+        self.checkpoint
+    }
 }
 
 #[async_trait]

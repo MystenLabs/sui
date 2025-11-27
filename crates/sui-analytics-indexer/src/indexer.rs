@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::package_store::PackageCache;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use object_store::{
     ClientOptions, aws::AmazonS3Builder, azure::MicrosoftAzureBuilder,
     gcp::GoogleCloudStorageBuilder, local::LocalFileSystem,
@@ -18,6 +18,7 @@ use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_object_store::ObjectStore;
 
 use crate::analytics_metrics::AnalyticsMetrics;
+use crate::backfill::BackfillBoundaries;
 use crate::config::{IndexerConfig, OutputStoreConfig};
 
 pub async fn build_analytics_indexer(
@@ -96,8 +97,46 @@ pub async fn build_analytics_indexer(
     )
     .await?;
 
+    // Validate backfill mode configuration
+    if config.backfill_mode && config.task_name.is_none() {
+        return Err(anyhow!(
+            "backfill_mode requires task_name to be set for watermark isolation"
+        ));
+    }
+
     for pipeline_config in config.pipeline_configs() {
         info!("Registering pipeline: {}", pipeline_config.pipeline);
+
+        // Discover backfill targets if in backfill mode
+        let backfill_targets = if config.backfill_mode {
+            let targets = BackfillBoundaries::discover(
+                object_store.as_ref(),
+                pipeline_config.dir_prefix(),
+                pipeline_config.file_format,
+            )
+            .await?;
+
+            info!(
+                "Discovered {} backfill targets for {} in range {:?}",
+                targets.len(),
+                pipeline_config.pipeline,
+                targets.total_range()
+            );
+
+            if targets.is_empty() {
+                return Err(anyhow!(
+                    "No existing files found for pipeline {} at prefix '{}'. \
+                     Backfill mode requires existing files to update.",
+                    pipeline_config.pipeline,
+                    pipeline_config.dir_prefix()
+                ));
+            }
+
+            Some(Arc::new(targets))
+        } else {
+            None
+        };
+
         pipeline_config
             .pipeline
             .register_handler(
@@ -106,6 +145,7 @@ pub async fn build_analytics_indexer(
                 package_cache.clone(),
                 metrics.clone(),
                 concurrent_config.clone(),
+                backfill_targets,
             )
             .await?;
     }
