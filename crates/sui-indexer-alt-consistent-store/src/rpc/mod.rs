@@ -11,20 +11,17 @@ use axum::extract::Request;
 use axum::response::IntoResponse;
 use axum_server::Handle;
 use axum_server::tls_rustls::RustlsConfig;
-use futures::future::OptionFuture;
 use metrics::RpcMetrics;
 use middleware::metrics::MakeMetricsHandler;
 use middleware::version::Version;
 use mysten_network::callback::CallbackLayer;
 use prometheus::Registry;
-use tokio::join;
+use sui_futures::service::Service;
 use tokio::net::TcpListener;
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
+use tokio::sync::oneshot;
 use tonic::server::NamedService;
 use tonic_health::ServingStatus;
-use tower::Service;
-use tracing::{error, info};
+use tracing::info;
 
 pub(crate) mod consistent_service;
 mod error;
@@ -88,9 +85,6 @@ pub(crate) struct RpcService<'d> {
 
     /// Metrics for the RPC service.
     metrics: Arc<RpcMetrics>,
-
-    /// Cancellation token controls lifecycle for all RPC-related services.
-    cancel: CancellationToken,
 }
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
@@ -100,7 +94,6 @@ impl<'d> RpcService<'d> {
         args: RpcArgs,
         version: &'static str,
         registry: &Registry,
-        cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
         let RpcArgs {
             rpc_listen_address,
@@ -133,7 +126,6 @@ impl<'d> RpcService<'d> {
             service_names: vec![],
             router: Router::new(),
             metrics: Arc::new(RpcMetrics::new(registry)),
-            cancel,
         })
     }
 
@@ -151,7 +143,7 @@ impl<'d> RpcService<'d> {
     where
         S: Clone + Send + Sync + 'static,
         S: NamedService,
-        S: Service<Request, Response: IntoResponse, Error = Infallible>,
+        S: tower::Service<Request, Response: IntoResponse, Error = Infallible>,
         S::Future: Send + 'static,
         S::Error: Send + Into<BoxError>,
     {
@@ -161,7 +153,7 @@ impl<'d> RpcService<'d> {
     }
 
     /// Run the RPC service. This binds the listener and exposes handlers for the RPC service.
-    pub(crate) async fn run(self) -> anyhow::Result<JoinHandle<()>> {
+    pub(crate) async fn run(self) -> anyhow::Result<Service> {
         let Self {
             rpc_listen_address,
             rpc_tls_listen_address,
@@ -172,7 +164,6 @@ impl<'d> RpcService<'d> {
             mut service_names,
             mut router,
             metrics,
-            cancel,
         } = self;
 
         let reflection_v1 = reflection_v1
@@ -209,31 +200,30 @@ impl<'d> RpcService<'d> {
                 .await;
         }
 
-        // Start HTTPS server if TLS is configured
-        let https_service: OptionFuture<_> =
-            if let (Some(listen_address), Some(config)) = (rpc_tls_listen_address, tls_config) {
-                info!("Starting Consistent RPC TLS service on {listen_address}");
+        let mut service = Service::new();
 
-                // Handle graceful shutdown for TLS service
-                let handle = Handle::new();
-                tokio::spawn({
+        // Start HTTPS server if TLS is configured
+        if let (Some(listen_address), Some(config)) = (rpc_tls_listen_address, tls_config) {
+            info!("Starting Consistent RPC TLS service on {listen_address}");
+            let handle = Handle::new();
+            let tls_router = router.clone();
+
+            service = service
+                .with_shutdown_signal({
                     let handle = handle.clone();
-                    let cancel = cancel.clone();
                     async move {
-                        cancel.cancelled().await;
                         handle.graceful_shutdown(None);
                     }
-                });
-
-                Some(
+                })
+                .spawn(async move {
                     axum_server::bind_rustls(listen_address, config)
                         .handle(handle)
-                        .serve(router.clone().into_make_service()),
-                )
-            } else {
-                None
-            }
-            .into();
+                        .serve(tls_router.into_make_service())
+                        .await
+                        .context("Consistent RPC TLS service failed")?;
+                    Ok(())
+                });
+        }
 
         // Start HTTP server
         info!("Starting Consistent RPC service on {rpc_listen_address}");
@@ -241,28 +231,21 @@ impl<'d> RpcService<'d> {
             .await
             .context("Failed to bind Consistent RPC to listen address")?;
 
-        let http_service = axum::serve(listener, router.clone()).with_graceful_shutdown({
-            let cancel = cancel.clone();
-            async move {
-                cancel.cancelled().await;
-                info!("Shutting down Consistent RPC HTTP service");
-            }
-        });
+        let (stx, srx) = oneshot::channel::<()>();
+        service = service
+            .with_shutdown_signal(async move {
+                let _ = stx.send(());
+            })
+            .spawn(async move {
+                axum::serve(listener, router)
+                    .with_graceful_shutdown(async move {
+                        let _ = srx.await;
+                    })
+                    .await
+                    .context("Consistent RPC HTTP service failed")
+            });
 
-        // Return a single task that waits for all servers
-        Ok(tokio::spawn(async move {
-            let (https, http) = join!(https_service, http_service);
-
-            if let Err(e) = https.transpose() {
-                error!("Failed to start Consistent RPC TLS service: {e:?}");
-                cancel.cancel();
-            }
-
-            if let Err(e) = http {
-                error!("Failed to start Consistent RPC service: {e:?}");
-                cancel.cancel();
-            }
-        }))
+        Ok(service)
     }
 }
 
@@ -283,7 +266,7 @@ fn add_service<S>(router: Router, s: S) -> Router
 where
     S: Clone + Send + Sync + 'static,
     S: NamedService,
-    S: Service<Request, Response: IntoResponse, Error = Infallible>,
+    S: tower::Service<Request, Response: IntoResponse, Error = Infallible>,
     S::Future: Send + 'static,
     S::Error: Send + Into<BoxError>,
 {

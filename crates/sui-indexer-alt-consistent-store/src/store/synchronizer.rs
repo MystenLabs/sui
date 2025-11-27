@@ -3,15 +3,10 @@
 
 use std::{cmp::Ordering, collections::HashMap, sync::Arc, time::Duration};
 
-use anyhow::{Context, bail};
-use futures::future;
-use sui_futures::future::with_slow_future_monitor;
-use tokio::{
-    sync::{Barrier, mpsc},
-    task::JoinHandle,
-};
-use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use anyhow::{Context, bail, ensure};
+use sui_futures::{future::with_slow_future_monitor, service::Service};
+use tokio::sync::{Barrier, mpsc};
+use tracing::{debug, info, warn};
 
 use crate::db::{Db, Watermark};
 
@@ -38,9 +33,6 @@ pub(crate) struct Synchronizer {
 
     /// The size of queues that feed each synchronizer task.
     buffer_size: usize,
-
-    // Cancellation token shared among all synchronizer tasks.
-    cancel: CancellationToken,
 }
 
 /// Write access to each pipeline's synchronizer task.
@@ -55,14 +47,13 @@ impl Synchronizer {
     /// `first_checkpoint` is the first checkpoint the service expects to see written to for
     /// completely new pipelines. If `None`, the first checkpoint is assumed to be `0`.
     ///
-    /// The service must be started by calling [Self::run], and it will stop if signalled on
-    /// `cancel`, if it has been instructed to write data out-of-order, or if a write fails.
+    /// The service must be started by calling [Self::run], and it will stop if it has been
+    /// instructed to write data out-of-order, or if a write fails.
     pub(crate) fn new(
         db: Arc<Db>,
         stride: u64,
         buffer_size: usize,
         first_checkpoint: Option<u64>,
-        cancel: CancellationToken,
     ) -> Self {
         Self {
             db,
@@ -70,7 +61,6 @@ impl Synchronizer {
             first_checkpoint: first_checkpoint.unwrap_or(0),
             stride,
             buffer_size,
-            cancel,
         }
     }
 
@@ -91,12 +81,10 @@ impl Synchronizer {
     }
 
     /// Start the service, accepting writes for registered pipelines. This consumes the service and
-    /// returns a `JoinHandle<()>` that will complete when all its tasks have completed, and the
-    /// `queue` data structure which gives access to the write side of the channels feeding each
-    /// task.
-    pub(super) fn run(self) -> anyhow::Result<(JoinHandle<()>, Queue)> {
+    /// returns a `Service` that will complete when all its tasks have completed, and the `queue`
+    /// data structure which gives access to the write side of the channels feeding each task.
+    pub(super) fn run(self) -> anyhow::Result<(Service, Queue)> {
         let mut queue = Queue::new();
-        let mut tasks = Vec::new();
 
         let pre_snap = Arc::new(Barrier::new(self.last_watermarks.len()));
         let post_snap = Arc::new(Barrier::new(self.last_watermarks.len()));
@@ -115,11 +103,12 @@ impl Synchronizer {
         // checkpoint.
         let next_snapshot_checkpoint = ((init_checkpoint / self.stride) + 1) * self.stride;
 
+        let mut service = Service::new();
         for (pipeline, last_watermark) in self.last_watermarks {
             let (tx, rx) = mpsc::channel(self.buffer_size);
 
             queue.insert(pipeline, tx);
-            tasks.push(synchronizer(
+            service = service.spawn_aborting(synchronizer(
                 self.db.clone(),
                 rx,
                 pipeline,
@@ -129,16 +118,10 @@ impl Synchronizer {
                 last_watermark,
                 pre_snap.clone(),
                 post_snap.clone(),
-                self.cancel.child_token(),
             ));
         }
 
-        let handle = tokio::spawn(async move {
-            future::join_all(tasks).await;
-            info!("Synchronizer gracefully shut down");
-        });
-
-        Ok((handle, queue))
+        Ok((service, queue))
     }
 }
 
@@ -153,9 +136,9 @@ impl Synchronizer {
 /// `pre_snap` before a snapshot is to be taken, and on `post_snap` after the snapshot is taken
 /// (and data from future checkpoints can be written).
 ///
-/// The task will stop when it receives a shutdown signal on `cancel`, or if it detects an issue
-/// during writes (an out-of-order batch, or an error during writes).
-fn synchronizer(
+/// The task will stop if it detects an issue during writes (an out-of-order batch, or an error
+/// during writes).
+async fn synchronizer(
     db: Arc<Db>,
     mut rx: mpsc::Receiver<(Watermark, rocksdb::WriteBatch)>,
     pipeline: &'static str,
@@ -165,93 +148,78 @@ fn synchronizer(
     mut current_watermark: Option<Watermark>,
     pre_snap: Arc<Barrier>,
     post_snap: Arc<Barrier>,
-    cancel: CancellationToken,
-) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        loop {
-            let next_checkpoint = current_watermark
-                .as_ref()
-                .map(|w| w.checkpoint_hi_inclusive + 1)
-                .unwrap_or(first_checkpoint);
+) -> anyhow::Result<()> {
+    loop {
+        let next_checkpoint = current_watermark
+            .as_ref()
+            .map(|w| w.checkpoint_hi_inclusive + 1)
+            .unwrap_or(first_checkpoint);
 
-            match next_snapshot_checkpoint.cmp(&next_checkpoint) {
-                // The next checkpoint should be included in the next snapshot, so allow it to be
-                // written.
-                Ordering::Greater => {}
+        match next_snapshot_checkpoint.cmp(&next_checkpoint) {
+            // The next checkpoint should be included in the next snapshot, so allow it to be
+            // written.
+            Ordering::Greater => {}
 
-                // If the next checkpoint is more than one checkpoint ahead of the next snapshot,
-                // something has gone wrong.
-                Ordering::Less => {
-                    error!(
-                        pipeline,
-                        next_snapshot_checkpoint, next_checkpoint, "Missed snapshot"
-                    );
-                    break;
-                }
-
-                // The next checkpoint does not belong in the next snapshot, so wait for other
-                // synchronizers to reach this point, and take the snapshot before proceeding.
-                //
-                // One arbitrary task (the "leader") is responsible for taking the snapshot, the others
-                // just bump their own synchronization point and wait.
-                Ordering::Equal => {
-                    tokio::select! {
-                        w = with_slow_future_monitor(pre_snap.wait(), SLOW_SYNC_WARNING_THRESHOLD, || {
-                            warn!(pipeline, "Synchronizer stuck, pre-snapshot")
-                        }) => if w.is_leader() {
-                            if let Some(watermark) = current_watermark {
-                                db.take_snapshot(watermark);
-                            } else {
-                                error!(pipeline, next_snapshot_checkpoint, "No watermark available for snapshot");
-                                break;
-                            }
-                        },
-
-                        _ = cancel.cancelled() => {
-                            info!(pipeline, "Shutdown received before pre-snapshot barrier");
-                            break;
-                        }
-                    }
-
-                    next_snapshot_checkpoint += stride;
-                    tokio::select! {
-                        _ = with_slow_future_monitor(post_snap.wait(), SLOW_SYNC_WARNING_THRESHOLD, || {
-                            warn!(pipeline, "Synchronizer stuck, post-snapshot")
-                        }) => {}
-                        _ = cancel.cancelled() => {
-                            info!(pipeline, "Shutdown received before post-snapshot barrier");
-                            break;
-                        }
-                    }
-                }
+            // If the next checkpoint is more than one checkpoint ahead of the next snapshot,
+            // something has gone wrong.
+            Ordering::Less => {
+                bail!(
+                    "Missed snapshot {next_snapshot_checkpoint} for {pipeline}, got {next_checkpoint}"
+                );
             }
 
-            tokio::select! {
-                _ = cancel.cancelled() => {
-                    info!(pipeline, "Shutdown received waiting for batch");
-                    break;
+            // The next checkpoint does not belong in the next snapshot, so wait for other
+            // synchronizers to reach this point, and take the snapshot before proceeding.
+            //
+            // One arbitrary task (the "leader") is responsible for taking the snapshot, the others
+            // just bump their own synchronization point and wait.
+            Ordering::Equal => {
+                let take_snapshot =
+                    with_slow_future_monitor(pre_snap.wait(), SLOW_SYNC_WARNING_THRESHOLD, || {
+                        warn!(pipeline, "Synchronizer stuck, pre-snapshot")
+                    })
+                    .await
+                    .is_leader();
+
+                if take_snapshot {
+                    if let Some(watermark) = current_watermark {
+                        db.take_snapshot(watermark);
+                    } else {
+                        bail!(
+                            "{pipeline} has no watermark available for snapshot at {next_snapshot_checkpoint}"
+                        );
+                    }
                 }
 
-                Some((watermark, batch)) = rx.recv() => {
-                    debug!(pipeline, ?watermark, "Received batch");
-                    if watermark.checkpoint_hi_inclusive != next_checkpoint {
-                        error!(pipeline, ?watermark, next_checkpoint, "Out-of-order batch");
-                        break;
-                    }
-
-                    if let Err(e) = db.write(pipeline, watermark, batch) {
-                        error!(pipeline, ?e, "Failed to write batch");
-                        break;
-                    }
-
-                    current_watermark = Some(watermark);
-                }
+                next_snapshot_checkpoint += stride;
+                with_slow_future_monitor(post_snap.wait(), SLOW_SYNC_WARNING_THRESHOLD, || {
+                    warn!(pipeline, "Synchronizer stuck, post-snapshot")
+                })
+                .await;
             }
         }
 
-        info!(
-            pipeline,
-            next_snapshot_checkpoint, watermark = ?current_watermark, "Stopping sync"
+        let Some((watermark, batch)) = rx.recv().await else {
+            info!(pipeline, "Synchronizer channel closed");
+            break;
+        };
+
+        debug!(pipeline, ?watermark, "Received batch");
+        ensure!(
+            watermark.checkpoint_hi_inclusive == next_checkpoint,
+            "Out-of-order batch for {pipeline}: expected {next_checkpoint}, got {watermark:?}",
         );
-    })
+
+        db.write(pipeline, watermark, batch)
+            .with_context(|| format!("Failed to write batch for {pipeline} at {watermark:?}"))?;
+
+        current_watermark = Some(watermark);
+    }
+
+    info!(
+        pipeline,
+        next_snapshot_checkpoint, watermark = ?current_watermark, "Stopping sync"
+    );
+
+    Ok(())
 }

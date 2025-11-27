@@ -43,10 +43,8 @@ use sui_indexer_alt_consistent_api::proto::{
 };
 use sui_indexer_alt_framework::{
     IndexerArgs, ingestion::ClientArgs, pipeline::CommitterConfig,
-    pipeline::sequential::SequentialConfig,
+    pipeline::sequential::SequentialConfig, service::Service,
 };
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
 
 pub mod args;
 pub mod config;
@@ -60,8 +58,7 @@ pub(crate) mod schema;
 mod store;
 
 /// Set-up and run the Indexer and RPC service, using the provided arguments (expected to be
-/// extracted from the command-line). The service will continue to run until the cancellation token
-/// is triggered, and will signal cancellation on the token when it is shutting down.
+/// extracted from the command-line).
 ///
 /// `path` is the path to the RocksDB database,which will be created if it does not exist.
 /// `indexer_args` and `client_args` control the behavior of the Indexer, while `rpc_args` controls
@@ -77,8 +74,7 @@ pub async fn start_service(
     version: &'static str,
     config: ServiceConfig,
     registry: &Registry,
-    cancel: CancellationToken,
-) -> anyhow::Result<JoinHandle<()>> {
+) -> anyhow::Result<Service> {
     let ServiceConfig {
         ingestion,
         consistency,
@@ -103,7 +99,6 @@ pub async fn start_service(
         ingestion.into(),
         rocksdb,
         registry,
-        cancel.child_token(),
     )
     .await?;
 
@@ -113,7 +108,7 @@ pub async fn start_service(
         consistency_config: Arc::new(consistency),
     };
 
-    let rpc = RpcService::new(rpc_args, version, registry, cancel.child_token())
+    let rpc = RpcService::new(rpc_args, version, registry)
         .await?
         .register_encoded_file_descriptor_set(proto::rpc::consistent::v1alpha::FILE_DESCRIPTOR_SET)
         .add_service(ConsistentServiceServer::new(state.clone()));
@@ -138,10 +133,8 @@ pub async fn start_service(
     add_sequential!(ObjectByOwner, object_by_owner);
     add_sequential!(ObjectByType, object_by_type);
 
-    let h_rpc = rpc.run().await?;
-    let h_indexer = indexer.run().await?;
+    let s_rpc = rpc.run().await?;
+    let s_indexer = indexer.run().await?;
 
-    Ok(tokio::spawn(async move {
-        let (_, _) = futures::join!(h_rpc, h_indexer);
-    }))
+    Ok(s_rpc.merge(s_indexer))
 }

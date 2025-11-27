@@ -4,27 +4,23 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use sui_futures::stream::TrySpawnStreamExt as _;
-use tokio::{sync::mpsc, task::JoinHandle};
+use sui_futures::{service::Service, stream::TrySpawnStreamExt as _};
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::{db::Db, store::Schema};
 
-use super::{Break, LiveObjects, Restore, RestorerMetrics};
+use super::{LiveObjects, Restore, RestorerMetrics};
 
 /// A worker that processes live objects from a single bucket and partition, for a given pipeline.
-///
-/// Returns `Ok(_)` if it was able to process all live objects it was given, or `Err(_)` otherwise.
 pub(super) fn worker<S: Schema + Send + Sync + 'static, R: Restore<S>>(
     rx: mpsc::Receiver<Arc<LiveObjects>>,
     db: Arc<Db>,
     schema: Arc<S>,
     metrics: Arc<RestorerMetrics>,
-    cancel: CancellationToken,
-) -> JoinHandle<Result<(), ()>> {
-    tokio::spawn(async move {
+) -> Service {
+    Service::new().spawn_aborting(async move {
         info!(pipeline = R::NAME, "Starting worker");
 
         match ReceiverStream::new(rx)
@@ -32,7 +28,6 @@ pub(super) fn worker<S: Schema + Send + Sync + 'static, R: Restore<S>>(
                 let db = db.clone();
                 let schema = schema.clone();
                 let metrics = metrics.clone();
-                let cancel = cancel.clone();
 
                 async move {
                     info!(
@@ -60,9 +55,7 @@ pub(super) fn worker<S: Schema + Send + Sync + 'static, R: Restore<S>>(
 
                     let mut batch = rocksdb::WriteBatch::default();
                     for object in &objects.objects {
-                        if cancel.is_cancelled() {
-                            return Err(Break::Cancel);
-                        }
+                        tokio::task::yield_now().await;
 
                         R::restore(&schema, object, &mut batch).with_context(|| {
                             format!(
@@ -111,15 +104,9 @@ pub(super) fn worker<S: Schema + Send + Sync + 'static, R: Restore<S>>(
                 Ok(())
             }
 
-            Err(Break::Cancel) => {
-                info!(pipeline = R::NAME, "Shutdown received, stopping worker");
-                Err(())
-            }
-
-            Err(Break::Err(e)) => {
+            Err(e) => {
                 error!(pipeline = R::NAME, "Error from worker: {e:#}");
-                cancel.cancel();
-                Err(())
+                Err(e)
             }
         }
     })
