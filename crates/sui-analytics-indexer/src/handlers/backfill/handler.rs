@@ -14,24 +14,24 @@ use anyhow::Result;
 use async_trait::async_trait;
 use object_store::PutMode;
 use serde::Serialize;
-use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::concurrent::{self, BatchStatus};
+use sui_indexer_alt_framework::pipeline::{Processor, WatermarkPart};
+use sui_indexer_alt_framework::store::Store;
 use sui_types::full_checkpoint_content::Checkpoint;
-use tracing::warn;
 
 use crate::config::PipelineConfig;
 use crate::handlers::handler::AnalyticsMetadata;
-use crate::handlers::{construct_file_path, record_file_metrics};
+use crate::handlers::{construct_object_store_path, record_file_metrics};
 use crate::metrics::Metrics;
 use crate::schema::RowSchema;
 
-use super::boundaries::BackfillBoundaries;
+use super::boundaries::BackfillTargets;
 
 /// Backfill-specific batch - tracks rows and target file boundaries.
 pub struct BackfillBatch<T> {
     rows: Mutex<Vec<T>>,
     /// Target file checkpoint range (start, end) - set on first value
-    boundaries: Mutex<Option<(u64, u64)>>,
+    target_range: Mutex<Option<(u64, u64)>>,
 }
 
 /// Handler for backfill mode - aligns batches with existing file boundaries.
@@ -39,15 +39,14 @@ pub struct BackfillHandler<P> {
     processor: P,
     config: PipelineConfig,
     metrics: Metrics,
-    /// Pre-loaded boundaries for file alignment
-    boundaries: Arc<BackfillBoundaries>,
+    targets: Arc<BackfillTargets>,
 }
 
 impl<T> Default for BackfillBatch<T> {
     fn default() -> Self {
         Self {
             rows: Mutex::new(Vec::new()),
-            boundaries: Mutex::new(None),
+            target_range: Mutex::new(None),
         }
     }
 }
@@ -57,13 +56,13 @@ impl<P> BackfillHandler<P> {
         processor: P,
         config: PipelineConfig,
         metrics: Metrics,
-        boundaries: Arc<BackfillBoundaries>,
+        targets: Arc<BackfillTargets>,
     ) -> Self {
         Self {
             processor,
             config,
             metrics,
-            boundaries,
+            targets,
         }
     }
 }
@@ -109,8 +108,8 @@ where
         assert!(!values_slice.is_empty(), "batch() called with empty values");
         let checkpoint_seq_num = values_slice[0].get_checkpoint();
         {
-            let mut boundaries = batch.boundaries.lock().unwrap();
-            match *boundaries {
+            let mut target_range = batch.target_range.lock().unwrap();
+            match *target_range {
                 Some((start, end)) => {
                     // Check if we've reached the file boundary (end is exclusive)
                     if checkpoint_seq_num == end {
@@ -123,10 +122,14 @@ where
                     }
                 }
                 None => {
-                    // First value - find and store the target range
-                    let target = self.boundaries.find_target(checkpoint_seq_num).unwrap_or_else(|| panic!("No target file for checkpoint {}. Backfill requires existing files.",
-                            checkpoint_seq_num));
-                    *boundaries =
+                    // First value - look up target by start checkpoint
+                    let target = self.targets.get(&checkpoint_seq_num).unwrap_or_else(|| {
+                        panic!(
+                            "No target file for checkpoint {}. Backfill requires existing files.",
+                            checkpoint_seq_num
+                        )
+                    });
+                    *target_range =
                         Some((target.checkpoint_range.start, target.checkpoint_range.end));
                 }
             }
@@ -140,8 +143,8 @@ where
     async fn commit<'a>(
         &self,
         batch: &Self::Batch,
-        watermarks: &[sui_indexer_alt_framework::pipeline::WatermarkPart],
-        conn: &mut <Self::Store as sui_indexer_alt_framework::store::Store>::Connection<'a>,
+        watermarks: &[WatermarkPart],
+        conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> Result<usize> {
         let rows = batch.rows.lock().unwrap().clone();
         assert!(!rows.is_empty(), "commit() called with empty batch");
@@ -154,19 +157,17 @@ where
             .serialize_rows::<P::Value>(rows)?
             .ok_or_else(|| anyhow::anyhow!("No data after serialization"))?;
 
-        let checkpoint_range =
-            sui_indexer_alt_framework::pipeline::WatermarkPart::checkpoint_range(watermarks)
-                .ok_or_else(|| anyhow::anyhow!("No watermarks provided"))?;
+        let checkpoint_range = WatermarkPart::checkpoint_range(watermarks)
+            .ok_or_else(|| anyhow::anyhow!("No watermarks provided"))?;
 
-        // Get target using the start we stored in batch()
         let (start, _end) =
-            batch.boundaries.lock().unwrap().ok_or_else(|| {
+            batch.target_range.lock().unwrap().ok_or_else(|| {
                 anyhow::anyhow!("No target_range set - batch() was never called?")
             })?;
 
         let target = self
-            .boundaries
-            .get_target(start)
+            .targets
+            .get(&start)
             .expect("target_range set but target not found");
 
         // Verify range matches exactly
@@ -179,49 +180,37 @@ where
             ));
         }
 
-        let object_path = construct_file_path(
+        let object_store_path = construct_object_store_path(
             self.config.dir_prefix(),
             target.epoch,
             checkpoint_range.clone(),
             self.config.file_format,
         );
 
-        let object_store_path =
-            object_store::path::Path::from(object_path.to_string_lossy().as_ref());
-
         record_file_metrics(&self.metrics, P::NAME, file_bytes.len());
 
-        // Get current e_tag (may have been refreshed on previous retry)
-        let (e_tag, version) = target.get_etag();
-
-        // Use conditional update
         let result = conn
             .object_store()
             .put_opts(
                 &object_store_path,
                 file_bytes.into(),
-                PutMode::Update(object_store::UpdateVersion { e_tag, version }).into(),
+                PutMode::Update(object_store::UpdateVersion {
+                    e_tag: target.e_tag.clone(),
+                    version: target.version.clone(),
+                })
+                .into(),
             )
             .await;
 
-        match result {
-            Ok(_) => Ok(row_count),
-            Err(e) => {
-                // On conflict, refresh e_tag for next retry
-                if let Err(refresh_err) = target.refresh_etag(conn.object_store().as_ref()).await {
-                    warn!(
-                        pipeline = P::NAME,
-                        start = checkpoint_range.start,
-                        "Failed to refresh e_tag: {}",
-                        refresh_err
-                    );
-                }
-                Err(anyhow::anyhow!(
-                    "Conditional update failed for {:?}: {}. Will retry.",
-                    object_store_path,
-                    e
-                ))
-            }
-        }
+        result.map_err(|e| {
+            anyhow::anyhow!(
+                "Conditional update failed for {:?}: {}. \
+                 File was modified during backfill.",
+                object_store_path,
+                e
+            )
+        })?;
+
+        Ok(row_count)
     }
 }

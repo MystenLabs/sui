@@ -18,7 +18,7 @@ use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_object_store::ObjectStore;
 
 use crate::config::{IndexerConfig, OutputStoreConfig};
-use crate::handlers::BackfillBoundaries;
+use crate::handlers::load_backfill_targets;
 use crate::metrics::Metrics;
 
 pub async fn build_analytics_indexer(
@@ -117,9 +117,9 @@ pub async fn build_analytics_indexer(
             let first = config.first_checkpoint.unwrap_or(0);
             let last = config.last_checkpoint.expect("validated above");
 
-            let boundaries = BackfillBoundaries::load_all(
+            let targets = load_backfill_targets(
                 object_store.clone(),
-                pipeline_config.dir_prefix().to_string(),
+                pipeline_config.dir_prefix(),
                 pipeline_config.file_format,
                 first..last,
             )
@@ -127,11 +127,11 @@ pub async fn build_analytics_indexer(
 
             info!(
                 pipeline = %pipeline_config.pipeline,
-                file_count = boundaries.len(),
-                "Loaded backfill boundaries"
+                file_count = targets.len(),
+                "Loaded backfill targets"
             );
 
-            Some(Arc::new(boundaries))
+            Some(Arc::new(targets))
         } else {
             None
         };

@@ -9,8 +9,8 @@
 //! - `tables`: Table-specific processors for each analytics pipeline
 
 use std::ops::Range;
-use std::path::PathBuf;
 
+use object_store::path::Path as ObjectStorePath;
 use sui_types::base_types::EpochId;
 
 use crate::config::FileFormat;
@@ -20,27 +20,25 @@ pub mod backfill;
 pub mod handler;
 pub mod tables;
 
-pub use backfill::{BackfillBoundaries, BackfillHandler};
+pub use backfill::{BackfillHandler, BackfillTargets, load_backfill_targets};
 pub use handler::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata};
 
 /// Construct the object store path for an analytics file.
 /// Path format: {dir_prefix}/epoch_{epoch}/{start}_{end}.{ext}
-pub fn construct_file_path(
+pub fn construct_object_store_path(
     dir_prefix: &str,
     epoch_num: EpochId,
     checkpoint_range: Range<u64>,
     file_format: FileFormat,
-) -> PathBuf {
+) -> ObjectStorePath {
     let extension = match file_format {
         FileFormat::Csv => "csv",
         FileFormat::Parquet => "parquet",
     };
-    PathBuf::from(dir_prefix)
-        .join(format!("epoch_{}", epoch_num))
-        .join(format!(
-            "{}_{}.{}",
-            checkpoint_range.start, checkpoint_range.end, extension
-        ))
+    ObjectStorePath::from(format!(
+        "{}/epoch_{}/{}_{}.{}",
+        dir_prefix, epoch_num, checkpoint_range.start, checkpoint_range.end, extension
+    ))
 }
 
 /// Record file size metrics for a pipeline.

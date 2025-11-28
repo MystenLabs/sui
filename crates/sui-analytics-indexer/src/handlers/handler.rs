@@ -12,7 +12,7 @@ use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::config::PipelineConfig;
-use crate::handlers::{construct_file_path, record_file_metrics};
+use crate::handlers::{construct_object_store_path, record_file_metrics};
 use crate::metrics::Metrics;
 use crate::schema::RowSchema;
 
@@ -155,15 +155,12 @@ where
             .unwrap()
             .ok_or_else(|| anyhow::anyhow!("No epoch set for batch"))?;
 
-        let object_path = construct_file_path(
+        let object_store_path = construct_object_store_path(
             self.config.dir_prefix(),
             epoch,
             checkpoint_range.clone(),
             self.config.file_format,
         );
-
-        let object_store_path =
-            object_store::path::Path::from(object_path.to_string_lossy().as_ref());
 
         record_file_metrics(&self.metrics, P::NAME, file_bytes.len());
 

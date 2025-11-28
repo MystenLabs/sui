@@ -21,7 +21,7 @@ use crate::handlers::tables::{
     PackageBCSProcessor, PackageProcessor, TransactionBCSProcessor, TransactionObjectsProcessor,
     TransactionProcessor, WrappedObjectProcessor,
 };
-use crate::handlers::{AnalyticsHandler, AnalyticsMetadata, BackfillBoundaries, BackfillHandler};
+use crate::handlers::{AnalyticsHandler, AnalyticsMetadata, BackfillHandler, BackfillTargets};
 use crate::metrics::Metrics;
 use crate::package_store::PackageCache;
 use crate::schema::RowSchema;
@@ -36,14 +36,14 @@ async fn concurrent_pipeline<P>(
     config: PipelineConfig,
     metrics: Metrics,
     concurrent_config: ConcurrentConfig,
-    backfill_cache: Option<Arc<BackfillBoundaries>>,
+    backfill_targets: Option<Arc<BackfillTargets>>,
 ) -> Result<()>
 where
     P: Processor + Send + Sync,
     P::Value: AnalyticsMetadata + Serialize + RowSchema + Clone + Send + Sync,
 {
-    if let Some(cache) = backfill_cache {
-        let handler = BackfillHandler::new(processor, config, metrics, cache);
+    if let Some(targets) = backfill_targets {
+        let handler = BackfillHandler::new(processor, config, metrics, targets);
         indexer
             .concurrent_pipeline(handler, concurrent_config)
             .await?;
@@ -111,7 +111,7 @@ impl Pipeline {
         package_cache: Arc<PackageCache>,
         metrics: Metrics,
         concurrent_config: ConcurrentConfig,
-        backfill_cache: Option<Arc<BackfillBoundaries>>,
+        backfill_targets: Option<Arc<BackfillTargets>>,
     ) -> Result<()> {
         match self {
             Pipeline::Checkpoint => {
@@ -121,7 +121,7 @@ impl Pipeline {
                     pipeline_config.clone(),
                     metrics,
                     concurrent_config,
-                    backfill_cache,
+                    backfill_targets,
                 )
                 .await
             }
@@ -132,7 +132,7 @@ impl Pipeline {
                     pipeline_config.clone(),
                     metrics,
                     concurrent_config,
-                    backfill_cache,
+                    backfill_targets,
                 )
                 .await
             }
@@ -143,7 +143,7 @@ impl Pipeline {
                     pipeline_config.clone(),
                     metrics,
                     concurrent_config,
-                    backfill_cache,
+                    backfill_targets,
                 )
                 .await
             }
@@ -154,7 +154,7 @@ impl Pipeline {
                     pipeline_config.clone(),
                     metrics,
                     concurrent_config,
-                    backfill_cache,
+                    backfill_targets,
                 )
                 .await
             }
@@ -165,7 +165,7 @@ impl Pipeline {
                     pipeline_config.clone(),
                     metrics,
                     concurrent_config,
-                    backfill_cache,
+                    backfill_targets,
                 )
                 .await
             }
@@ -180,7 +180,7 @@ impl Pipeline {
                     pipeline_config.clone(),
                     metrics,
                     concurrent_config,
-                    backfill_cache,
+                    backfill_targets,
                 )
                 .await
             }
@@ -191,7 +191,7 @@ impl Pipeline {
                     pipeline_config.clone(),
                     metrics,
                     concurrent_config,
-                    backfill_cache,
+                    backfill_targets,
                 )
                 .await
             }
@@ -202,7 +202,7 @@ impl Pipeline {
                     pipeline_config.clone(),
                     metrics,
                     concurrent_config,
-                    backfill_cache,
+                    backfill_targets,
                 )
                 .await
             }
@@ -213,7 +213,7 @@ impl Pipeline {
                     pipeline_config.clone(),
                     metrics,
                     concurrent_config,
-                    backfill_cache,
+                    backfill_targets,
                 )
                 .await
             }
@@ -224,7 +224,7 @@ impl Pipeline {
                     pipeline_config.clone(),
                     metrics,
                     concurrent_config,
-                    backfill_cache,
+                    backfill_targets,
                 )
                 .await
             }
@@ -235,7 +235,7 @@ impl Pipeline {
                     pipeline_config.clone(),
                     metrics,
                     concurrent_config,
-                    backfill_cache,
+                    backfill_targets,
                 )
                 .await
             }

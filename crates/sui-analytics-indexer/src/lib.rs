@@ -20,7 +20,8 @@ pub mod writers;
 // Re-exports for public API
 pub use config::{FileFormat, IndexerConfig, OutputStoreConfig, PipelineConfig};
 pub use handlers::{
-    AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, BackfillBoundaries, BackfillHandler,
+    AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, BackfillHandler, BackfillTargets,
+    load_backfill_targets,
 };
 pub use indexer::build_analytics_indexer;
 pub use pipeline::Pipeline;
