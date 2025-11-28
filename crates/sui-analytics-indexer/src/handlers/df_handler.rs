@@ -21,15 +21,13 @@ use sui_types::object::bounded_visitor::BoundedVisitor;
 use tap::tap::TapFallible;
 use tracing::warn;
 
+use crate::AnalyticsMetadata;
 use crate::package_store::PackageCache;
 use crate::tables::DynamicFieldEntry;
-use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct DynamicFieldProcessor {
     package_cache: Arc<PackageCache>,
 }
-
-pub type DynamicFieldHandler = AnalyticsHandler<DynamicFieldProcessor>;
 
 impl DynamicFieldProcessor {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {

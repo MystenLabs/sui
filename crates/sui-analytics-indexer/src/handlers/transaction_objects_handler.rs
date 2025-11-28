@@ -11,13 +11,11 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
 
+use crate::AnalyticsMetadata;
 use crate::handlers::{InputObjectTracker, ObjectStatusTracker};
 use crate::tables::TransactionObjectEntry;
-use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct TransactionObjectsProcessor;
-
-pub type TransactionObjectsHandler = AnalyticsHandler<TransactionObjectsProcessor>;
 
 impl AnalyticsMetadata for TransactionObjectEntry {
     fn get_epoch(&self) -> EpochId {

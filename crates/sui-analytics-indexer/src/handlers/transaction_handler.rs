@@ -15,12 +15,10 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
 use tracing::error;
 
+use crate::AnalyticsMetadata;
 use crate::tables::TransactionEntry;
-use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct TransactionProcessor;
-
-pub type TransactionHandler = AnalyticsHandler<TransactionProcessor>;
 
 impl AnalyticsMetadata for TransactionEntry {
     fn get_epoch(&self) -> EpochId {

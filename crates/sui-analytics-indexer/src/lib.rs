@@ -21,7 +21,7 @@ pub mod writers;
 // Re-exports for public API
 pub use backfill::{BackfillBoundaries, EpochBoundaries};
 pub use config::{FileFormat, IndexerConfig, OutputStoreConfig, PipelineConfig};
-pub use handlers::{AnalyticsHandler, AnalyticsMetadata};
+pub use handlers::{AnalyticsHandler, AnalyticsMetadata, BackfillHandler};
 pub use indexer::build_analytics_indexer;
 pub use pipeline::Pipeline;
 pub use progress::{MaxCheckpointReader, spawn_snowflake_monitors};

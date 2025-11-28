@@ -11,12 +11,10 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
 
+use crate::AnalyticsMetadata;
 use crate::tables::MoveCallEntry;
-use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct MoveCallProcessor;
-
-pub type MoveCallHandler = AnalyticsHandler<MoveCallProcessor>;
 
 impl AnalyticsMetadata for MoveCallEntry {
     fn get_epoch(&self) -> EpochId {

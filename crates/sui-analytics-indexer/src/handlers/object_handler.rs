@@ -12,6 +12,7 @@ use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::object::Object;
 
+use crate::AnalyticsMetadata;
 use crate::analytics_metrics::AnalyticsMetrics;
 use crate::handlers::{
     ObjectStatusTracker, get_is_consensus, get_move_struct, get_owner_address, get_owner_type,
@@ -19,15 +20,12 @@ use crate::handlers::{
 };
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
-use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct ObjectProcessor {
     package_cache: Arc<PackageCache>,
     package_filter: Option<ObjectID>,
     metrics: AnalyticsMetrics,
 }
-
-pub type ObjectHandler = AnalyticsHandler<ObjectProcessor>;
 
 impl ObjectProcessor {
     pub fn new(

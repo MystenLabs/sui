@@ -2,20 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::ops::Range;
+use std::path::PathBuf;
 
 use anyhow::{Result, anyhow};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_package_resolver::{PackageStore, Resolver};
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::object::{Object, Owner};
 use sui_types::transaction::{TransactionData, TransactionDataAPI};
 
+use crate::analytics_metrics::AnalyticsMetrics;
+use crate::config::FileFormat;
 use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
 
 pub mod analytics_handler;
+pub mod backfill_handler;
 pub mod checkpoint_handler;
 pub mod df_handler;
 pub mod event_handler;
@@ -29,6 +34,35 @@ pub mod transaction_objects_handler;
 pub mod wrapped_object_handler;
 
 pub use analytics_handler::{AnalyticsHandler, AnalyticsMetadata};
+pub use backfill_handler::BackfillHandler;
+
+/// Construct the object store path for an analytics file.
+/// Path format: {dir_prefix}/epoch_{epoch}/{start}_{end}.{ext}
+pub fn construct_file_path(
+    dir_prefix: &str,
+    epoch_num: EpochId,
+    checkpoint_range: Range<u64>,
+    file_format: FileFormat,
+) -> PathBuf {
+    let extension = match file_format {
+        FileFormat::Csv => "csv",
+        FileFormat::Parquet => "parquet",
+    };
+    PathBuf::from(dir_prefix)
+        .join(format!("epoch_{}", epoch_num))
+        .join(format!(
+            "{}_{}.{}",
+            checkpoint_range.start, checkpoint_range.end, extension
+        ))
+}
+
+/// Record file size metrics for a pipeline.
+pub fn record_file_metrics(metrics: &AnalyticsMetrics, pipeline_name: &str, size: usize) {
+    metrics
+        .file_size_bytes
+        .with_label_values(&[pipeline_name])
+        .observe(size as f64);
+}
 
 const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
     "0x1::string::String",

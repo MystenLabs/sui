@@ -10,16 +10,14 @@ use sui_indexer_alt_framework::pipeline::Processor;
 use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
 
+use crate::AnalyticsMetadata;
 use crate::handlers::{get_move_struct, parse_struct};
 use crate::package_store::PackageCache;
 use crate::tables::WrappedObjectEntry;
-use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct WrappedObjectProcessor {
     package_cache: Arc<PackageCache>,
 }
-
-pub type WrappedObjectHandler = AnalyticsHandler<WrappedObjectProcessor>;
 
 impl WrappedObjectProcessor {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {

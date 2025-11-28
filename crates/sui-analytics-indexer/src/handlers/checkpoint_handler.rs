@@ -12,12 +12,10 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
 
+use crate::AnalyticsMetadata;
 use crate::tables::CheckpointEntry;
-use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct CheckpointProcessor;
-
-pub type CheckpointHandler = AnalyticsHandler<CheckpointProcessor>;
 
 impl AnalyticsMetadata for CheckpointEntry {
     fn get_epoch(&self) -> EpochId {

@@ -13,15 +13,13 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::full_checkpoint_content::Checkpoint;
 
+use crate::AnalyticsMetadata;
 use crate::package_store::PackageCache;
 use crate::tables::EventEntry;
-use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct EventProcessor {
     package_cache: Arc<PackageCache>,
 }
-
-pub type EventHandler = AnalyticsHandler<EventProcessor>;
 
 impl EventProcessor {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {

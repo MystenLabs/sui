@@ -130,7 +130,7 @@ pub async fn build_analytics_indexer(
 
         pipeline_config
             .pipeline
-            .register_handler(
+            .register(
                 &mut indexer,
                 pipeline_config,
                 package_cache.clone(),

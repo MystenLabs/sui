@@ -10,12 +10,10 @@ use sui_indexer_alt_framework::pipeline::Processor;
 use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
 
+use crate::AnalyticsMetadata;
 use crate::tables::PackageBCSEntry;
-use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct PackageBCSProcessor;
-
-pub type PackageBCSHandler = AnalyticsHandler<PackageBCSProcessor>;
 
 impl AnalyticsMetadata for PackageBCSEntry {
     fn get_epoch(&self) -> EpochId {

@@ -11,12 +11,10 @@ use sui_types::base_types::EpochId;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 
+use crate::AnalyticsMetadata;
 use crate::tables::TransactionBCSEntry;
-use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct TransactionBCSProcessor;
-
-pub type TransactionBCSHandler = AnalyticsHandler<TransactionBCSProcessor>;
 
 impl AnalyticsMetadata for TransactionBCSEntry {
     fn get_epoch(&self) -> EpochId {

@@ -9,12 +9,10 @@ use sui_indexer_alt_framework::pipeline::Processor;
 use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
 
+use crate::AnalyticsMetadata;
 use crate::tables::MovePackageEntry;
-use crate::{AnalyticsHandler, AnalyticsMetadata};
 
 pub struct PackageProcessor;
-
-pub type PackageHandler = AnalyticsHandler<PackageProcessor>;
 
 impl AnalyticsMetadata for MovePackageEntry {
     fn get_epoch(&self) -> EpochId {
