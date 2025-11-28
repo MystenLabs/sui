@@ -17,10 +17,12 @@ use futures::future;
 use move_analyzer::analyzer;
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_compiler::editions::Flavor;
+use move_core_types::account_address::AccountAddress;
 use move_package::BuildConfig;
 use mysten_common::tempdir;
 use prometheus::Registry;
 use rand::rngs::OsRng;
+use serde_json::json;
 use std::collections::BTreeMap;
 use std::io::{Write, stdout};
 use std::net::{AddrParseError, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -44,16 +46,7 @@ use sui_config::{
     SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
 };
 use sui_faucet::{AppState, FaucetConfig, LocalFaucet, create_wallet_context, start_faucet};
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
-use sui_move::summary::PackageSummaryMetadata;
-use sui_sdk::SuiClient;
-use sui_sdk::apis::ReadApi;
-use sui_types::move_package::MovePackage;
-use tokio::time::interval;
-use tokio_util::sync::CancellationToken;
-
-use move_core_types::account_address::AccountAddress;
-use serde_json::json;
+use sui_futures::service::Service;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
 use sui_indexer_alt_consistent_store::{
     args::RpcArgs as ConsistentArgs, config::ServiceConfig as ConsistentConfig,
@@ -71,10 +64,12 @@ use sui_indexer_alt_reader::{
     consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs,
     system_package_task::SystemPackageTaskArgs,
 };
+use sui_json_rpc_types::{SuiObjectDataOptions, SuiRawData};
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::manage_package::resolve_lock_file_path;
+use sui_move::summary::PackageSummaryMetadata;
 use sui_move::{self, execute_move_command};
 use sui_move_build::{
     BuildConfig as SuiBuildConfig, SuiPackageHooks, check_conflicting_addresses,
@@ -85,6 +80,8 @@ use sui_pg_db::DbArgs;
 use sui_pg_db::temp::{LocalDatabase, get_available_port};
 use sui_protocol_config::Chain;
 use sui_replay_2 as SR2;
+use sui_sdk::SuiClient;
+use sui_sdk::apis::ReadApi;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
@@ -95,6 +92,8 @@ use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{SignatureScheme, SuiKeyPair, ToFromBytes};
 use sui_types::digests::ChainIdentifier;
+use sui_types::move_package::MovePackage;
+use tokio::time::interval;
 use tracing::info;
 use url::Url;
 
@@ -1055,8 +1054,7 @@ async fn start(
     info!("Fullnode RPC URL: {fullnode_rpc_url}");
 
     let prometheus_registry = Registry::new();
-    let cancel = CancellationToken::new();
-    let mut rpc_services = vec![];
+    let mut rpc_services = Service::new();
 
     // Set-up the database for the indexer, if needed
     let (_database, database_url) = match with_indexer {
@@ -1106,14 +1104,12 @@ async fn start(
             IndexerConfig::for_test(),
             None,
             &prometheus_registry,
-            cancel.child_token(),
         )
         .await
         .context("Failed to setup indexer")?;
 
         let pipelines = indexer.pipelines().map(|s| s.to_string()).collect();
-        let handle = indexer.run().await.context("Failed to start indexer")?;
-        rpc_services.push(handle);
+        rpc_services = rpc_services.merge(indexer.run().await.context("Failed to start indexer")?);
 
         info!("Indexer started with pipelines: {pipelines:?}");
         pipelines
@@ -1138,19 +1134,19 @@ async fn start(
             ..Default::default()
         };
 
-        let handle = start_consistent_store(
-            config_dir.join("consistent_store"),
-            IndexerArgs::default(),
-            client_args,
-            consistent_args,
-            "0.0.0",
-            ConsistentConfig::for_test(),
-            &prometheus_registry,
-            cancel.child_token(),
-        )
-        .await
-        .context("Failed to start Consistent Store")?;
-        rpc_services.push(handle);
+        rpc_services = rpc_services.merge(
+            start_consistent_store(
+                config_dir.join("consistent_store"),
+                IndexerArgs::default(),
+                client_args,
+                consistent_args,
+                "0.0.0",
+                ConsistentConfig::for_test(),
+                &prometheus_registry,
+            )
+            .await
+            .context("Failed to start Consistent Store")?,
+        );
 
         info!("Consistent Store started at {address}");
         Some(address)
@@ -1182,23 +1178,23 @@ async fn start(
         let mut graphql_config = GraphQlConfig::default();
         graphql_config.zklogin.env = sui_indexer_alt_graphql::config::ZkLoginEnv::Test;
 
-        let handle = start_graphql(
-            database_url.clone(),
-            fullnode_args,
-            DbArgs::default(),
-            GraphQlKvArgs::default(),
-            consistent_reader_args,
-            graphql_args,
-            SystemPackageTaskArgs::default(),
-            "0.0.0",
-            graphql_config,
-            pipelines,
-            &prometheus_registry,
-            cancel.child_token(),
-        )
-        .await
-        .context("Failed to start GraphQL server")?;
-        rpc_services.push(handle);
+        rpc_services = rpc_services.merge(
+            start_graphql(
+                database_url.clone(),
+                fullnode_args,
+                DbArgs::default(),
+                GraphQlKvArgs::default(),
+                consistent_reader_args,
+                graphql_args,
+                SystemPackageTaskArgs::default(),
+                "0.0.0",
+                graphql_config,
+                pipelines,
+                &prometheus_registry,
+            )
+            .await
+            .context("Failed to start GraphQL server")?,
+        );
 
         info!("GraphQL started at {address}");
     }
@@ -1301,13 +1297,8 @@ async fn start(
         }
     }
 
-    // Trigger cancellation to shut down all RPC services, and wait for all services to exit
-    // cleanly.
-    cancel.cancel();
-    // TODO (amnn): The indexer can take some time to shut down if the database it is talking to
-    // stops responding. Re-enable graceful shutdown once cancel handling is revamped across the
-    // framework.
-    // future::join_all(rpc_services).await;
+    info!("Shutting down RPC services...");
+    rpc_services.shutdown().await?;
     Ok(())
 }
 
