@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! File system implementation of the replay interfaces: `TransactionStore`, `EpochStore`,
+//! File system implementation of the data store interfaces: `TransactionStore`, `EpochStore`,
 //! and `ObjectStore`.
 //! Data is persisted on disk under a simple, human-inspectable directory layout.
 //!
 //! # Directory Structure
 //!
 //! ```text
-//! ~/.replay_data_store/
+//! ~/.sui_data_store/
 //!   node_mapping.csv              (CSV: "node,chain_id" mappings)
 //!   <chain_id>/
 //!     transaction/
@@ -22,7 +22,7 @@
 //!         checkpoint_versions    (CSV lines: "<checkpoint>,<actual_version>")
 //! ```
 //!
-//! - The top-level directory is fixed to `~/.replay_data_store`.
+//! - The top-level directory is fixed to `~/.sui_data_store`.
 //! - The `node_mapping.csv` file maps node types to chain identifiers.
 //! - The next level directory is the chain identifier (e.g., "sui_mainnet", "sui_testnet").
 //! - Node types: `mainnet`, `testnet`, `devnet` (not yet available), and custom URLs.
@@ -56,12 +56,9 @@
 //! it learns the concrete versions.
 
 use crate::{
-    Node,
-    replay_interface::{
-        EpochData, EpochStore, EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter,
-        SetupStore, StoreSummary, TransactionInfo, TransactionStore, TransactionStoreWriter,
-        VersionQuery,
-    },
+    EpochData, EpochStore, EpochStoreWriter, ObjectKey, ObjectStore, ObjectStoreWriter, SetupStore,
+    StoreSummary, TransactionInfo, TransactionStore, TransactionStoreWriter, VersionQuery,
+    node::Node,
 };
 use anyhow::{Context, Error, Result, anyhow};
 use std::{
@@ -83,7 +80,7 @@ use sui_types::{
 };
 
 // Public constants for file system paths
-pub const REPLAY_STORE_DIR: &str = ".replay_data_store";
+pub const DATA_STORE_DIR: &str = ".sui_data_store";
 pub const NODE_MAPPING_FILE: &str = "node_mapping.csv";
 pub const OBJECTS_DIR: &str = "objects";
 pub const TRANSACTION_DIR: &str = "transaction";
@@ -156,7 +153,7 @@ impl From<EpochData> for EpochFileData {
     }
 }
 
-/// File system implementation of the replay interfaces
+/// File system implementation of the data store interfaces.
 pub struct FileSystemStore {
     node: Node,
     base_path: PathBuf,
@@ -179,16 +176,16 @@ impl FileSystemStore {
     }
 
     pub fn base_path() -> Result<PathBuf, Error> {
-        let home_dir = std::env::var("REPLAY_STORE")
+        let home_dir = std::env::var("SUI_DATA_STORE")
             .or_else(|_| std::env::var("SUI_CONFIG_DIR"))
             .or_else(|_| std::env::var("HOME"))
             .or_else(|_| std::env::var("USERPROFILE"))
             .map_err(|_| {
                 anyhow!(
-                    "Cannot determine home directory. Define a REPLAY_STORE environment variable"
+                    "Cannot determine home directory. Define a SUI_DATA_STORE environment variable"
                 )
             })?;
-        Ok(PathBuf::from(home_dir).join(REPLAY_STORE_DIR))
+        Ok(PathBuf::from(home_dir).join(DATA_STORE_DIR))
     }
 
     fn node_dir(&self) -> Result<PathBuf, Error> {

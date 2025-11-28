@@ -68,7 +68,6 @@ use sui_storage::{
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::KeyPairWrapper;
-use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{
@@ -101,7 +100,8 @@ use sui_types::{
     transaction::{Transaction, TransactionData, VerifiedTransaction},
 };
 use sui_types::{
-    SUI_FRAMEWORK_PACKAGE_ID, programmable_transaction_builder::ProgrammableTransactionBuilder,
+    SUI_COIN_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
 use sui_types::{SUI_SYSTEM_PACKAGE_ID, utils::to_sender_signed_transaction};
 use sui_types::{execution_status::ExecutionStatus, transaction::TransactionKind};
@@ -129,6 +129,7 @@ const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     SUI_CLOCK_OBJECT_ID,
     SUI_DENY_LIST_OBJECT_ID,
     SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_COIN_REGISTRY_OBJECT_ID,
 ];
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [

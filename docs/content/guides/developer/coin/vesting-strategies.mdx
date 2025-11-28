@@ -7,30 +7,32 @@ keywords: [ vesting strategies, token vesting strategies, designing a token laun
 If you plan to launch a token on Sui, then you might consider implementing a vesting strategy to strengthen the long-term outlook of your token. A vesting strategy typically releases your tokens to team members, investors, or other early stakeholders over time, rather than releasing them all at once.
 
 Implementing and publishing the details of your vesting strategy helps to:
-  - Ensure long-term commitment of your token.
-  - Prevent market dumps.
-  - Allay fears of rug pulls (immediate withdraw of a large amount of early tokens that hurts token value).
-  - Align stakeholder incentives with the project's success.
+
+- Ensure long-term commitment of your token.
+
+- Prevent market dumps.
+
+- Allay fears of [rug pulls].
+
+- Align stakeholder incentives with the project's success.
 
 ## Vesting options
 
 There are different vesting strategies available for your token launch. The best option for your project depends on a number of factors unique to your project and its goals.
 
-The following sections highlight some available options to consider when launching a token on the Sui network.
-
 ### Cliff vesting
 
-Cliff vesting refers to a situation where the entire amount of tokens or assets becomes available after a specific period (the “cliff”). Until the cliff period is met, no tokens are released.
+Cliff vesting refers to a situation where the entire amount of tokens or assets becomes available after a specific period called _the cliff_. Until the cliff period is met, no tokens are released.
 
 :::info Example scenario
 
-Each of the ten employees of a project are granted 1,000 tokens with a one-year cliff. After one year, they receive the full 1,000 tokens. Before the year is up, they have no access to the tokens.
+Each of the 10 employees of a project are granted 1,000 tokens with a one-year cliff. After one year, they receive the full 1,000 tokens. Before the year is up, they have no access to the tokens.
 
 :::
 
 The following smart contract implements a cliff vesting schedule for token releases. The module includes a `new_wallet` function that you pass the total sum of coins to vest and the cliff date as a timestamp. You can then call the `claim` function to retrieve the tokens from the wallet if the cliff date is in the past. 
 
-Considering the example scenario, you would call `new_wallet` ten times so that a separate wallet existed for each employee. You would include 1,000 tokens in each call to load the wallet with the necessary funds. Subsequent calls to `claim` using the relevant wallet would compare the cliff time (`cliff_time` in the `Wallet` object) against the current time, returning tokens from the wallet if the cliff time is later than the current time. 
+Considering the example scenario, you would call `new_wallet` 10 times so that a separate wallet existed for each employee. You would include 1,000 tokens in each call to load the wallet with the necessary funds. Subsequent calls to `claim` using the relevant wallet would compare the cliff time (`cliff_time` in the `Wallet` object) against the current time, returning tokens from the wallet if the cliff time is later than the current time. 
 
 <details>
 
@@ -87,8 +89,8 @@ Backloaded vesting distributes the majority of tokens near the end of the vestin
 :::info Example scenario
 
 An employee's tokens release under the following schedule: 
-  - 10% in the first three years 
-  - 90% in the fourth year
+- 10% in the first three years 
+- 90% in the fourth year
 
 :::
 
@@ -128,7 +130,7 @@ Tokens unlock when Mainnet of a blockchain project launches.
 
 Like the other examples, the following smart contract creates a wallet to hold the coins to be distributed. Unlike the others, however, this `Wallet` object includes a `milestone_controller` field that you set to the address of the account that has the authority to update the milestone progress. The call to the `new_wallet` function aborts with an error if the wallet has the same address as the entity with milestone update privileges as an integrity check. 
 
-The milestone update authority can call `update_milestone_percentage` to update the percentage-to-complete value. The owner of the vested token wallet can call `claim` to retrieve the tokens that are unlocked based on the current percentage-to-complete value. Considering the first example scenario, you could update the milestone value by ten percent for every million MAUs the project achieves. You could use the same contract for the second scenario, updating the percentage one time to 100 only after mainnet launches.
+The milestone update authority can call `update_milestone_percentage` to update the percentage-to-complete value. The owner of the vested token wallet can call `claim` to retrieve the tokens that are unlocked based on the current percentage-to-complete value. Considering the first example scenario, you could update the milestone value by 10 percent for every million MAUs the project achieves. You could use the same contract for the second scenario, updating the percentage one time to 100 only after mainnet launches.
 
 <details>
 
@@ -178,11 +180,11 @@ An early investor receives their full allocation of tokens at the time of purcha
 
 :::
 
-With immediate investing, you could always just transfer tokens to an address. Opting for a smart contract approach provides several advantages over a manual transfer, however.
-   - Enhanced transparency and accountability because the transaction is stored on chain for any interested parties to verify. The smart contract logic identifies the exact purpose of the transaction.
-   - Possible to enforce specific conditions. For example, you could create a [milestone-based vesting](#milestone) contract that you update to 100% complete only after some conditions are met, like accepting terms of an agreement.
-   - Provides an auditable record for compliance and reporting.
-   - Allows flexibility to perform other actions as the terms of an agreement change, like conversion to another token before claiming.
+With immediate investing, you could always just transfer tokens to an address. Opting for a smart contract approach provides several advantages over a manual transfer, however:
+- Enhanced transparency and accountability because the transaction is stored on chain for any interested parties to verify. The smart contract logic identifies the exact purpose of the transaction.
+- Possible to enforce specific conditions. For example, you could create a [milestone-based vesting](#milestone) contract that you update to 100% complete only after some conditions are met, like accepting terms of an agreement.
+- Provides an auditable record for compliance and reporting.
+- Allows flexibility to perform other actions as the terms of an agreement change, like conversion to another token before claiming.
 
 The following test leverages the [linear vesting](#linear-vesting) smart contract example to demonstrate how to use one of the other vesting strategy smart contracts to support immediate vesting. The test uses the `Wallet` object and `new_wallet` function from `vesting::linear` to perform (or test) an immediate vest scenario. The test accomplishes this by setting the `duration` value to 0.
 

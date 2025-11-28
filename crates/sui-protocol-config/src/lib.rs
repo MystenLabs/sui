@@ -885,6 +885,10 @@ struct FeatureFlags {
     // If true, deprecate global storage ops everywhere.
     #[serde(skip_serializing_if = "is_false")]
     deprecate_global_storage_ops: bool,
+
+    // If true, skip GC'ed accept votes in CommitFinalizer.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_skip_gced_accept_votes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2157,9 +2161,6 @@ impl ProtocolConfig {
     }
 
     pub fn mysticeti_fastpath(&self) -> bool {
-        if let Some(enabled) = is_mysticeti_fpc_enabled_in_env() {
-            return enabled;
-        }
         self.feature_flags.mysticeti_fastpath
     }
 
@@ -2392,6 +2393,10 @@ impl ProtocolConfig {
 
     pub fn deprecate_global_storage_ops(&self) -> bool {
         self.feature_flags.deprecate_global_storage_ops
+    }
+
+    pub fn consensus_skip_gced_accept_votes(&self) -> bool {
+        self.feature_flags.consensus_skip_gced_accept_votes
     }
 }
 
@@ -4259,10 +4264,20 @@ impl ProtocolConfig {
                     cfg.gas_model_version = Some(11);
                     cfg.feature_flags.abstract_size_in_object_runtime = true;
                     cfg.feature_flags.object_runtime_charge_cache_load_gas = true;
+                    cfg.dynamic_field_hash_type_and_key_cost_base = Some(52);
+                    cfg.dynamic_field_add_child_object_cost_base = Some(52);
                     cfg.dynamic_field_add_child_object_value_cost_per_byte = Some(1);
+                    cfg.dynamic_field_borrow_child_object_cost_base = Some(52);
                     cfg.dynamic_field_borrow_child_object_child_ref_cost_per_byte = Some(1);
+                    cfg.dynamic_field_remove_child_object_cost_base = Some(52);
                     cfg.dynamic_field_remove_child_object_child_cost_per_byte = Some(1);
+                    cfg.dynamic_field_has_child_object_cost_base = Some(52);
+                    cfg.dynamic_field_has_child_object_with_ty_cost_base = Some(52);
                     cfg.feature_flags.enable_ptb_execution_v2 = true;
+
+                    cfg.poseidon_bn254_cost_base = Some(260);
+
+                    cfg.feature_flags.consensus_skip_gced_accept_votes = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4613,6 +4628,10 @@ impl ProtocolConfig {
     pub fn allow_references_in_ptbs_for_testing(&mut self) {
         self.feature_flags.allow_references_in_ptbs = true;
     }
+
+    pub fn set_consensus_skip_gced_accept_votes_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_skip_gced_accept_votes = val;
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
@@ -4702,18 +4721,6 @@ macro_rules! check_limit_by_meter {
         result
     }};
 }
-
-pub fn is_mysticeti_fpc_enabled_in_env() -> Option<bool> {
-    if let Ok(v) = std::env::var("CONSENSUS") {
-        if v == "mysticeti_fpc" {
-            return Some(true);
-        } else if v == "mysticeti" {
-            return Some(false);
-        }
-    }
-    None
-}
-
 #[cfg(all(test, not(msim)))]
 mod test {
     use insta::assert_yaml_snapshot;

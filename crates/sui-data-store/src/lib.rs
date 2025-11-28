@@ -1,20 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Logical stores needed by the replay tool.
-//! Those stores are loosely modeled after the GQL schema in
-//! `crates/sui-indexer-alt-graphql/schema.graphql`.
-//! A `TransactionStore` is used to retrieve transaction data and effects by digest.
-//! An `EpochStore` is used to retrieve epoch information and protocol configuration.
-//! An `ObjectStore` is used to retrieve objects by their keys, with different query options.
+//! Multi-tier caching data store for Sui blockchain data.
 //!
-//! Data is usually retrieved by getting BCS-encoded data rather than navigating the
-//! GQL schema.
-//! Essentially the code uses the schema to retrieve the data, deserializes it into runtime
-//! structures, and then operates on those.
+//! This crate provides a flexible data store abstraction for retrieving and caching
+//! Sui blockchain data (transactions, epochs, objects). The stores are loosely modeled
+//! after the GQL schema in `crates/sui-indexer-alt-graphql/schema.graphql`.
 //!
-//! A `DataStore` with reasonable defaults is provided for convenience (`data_store.rs`).
-//! Other styles of data stores are also provided in `data_stores` for different use cases.
+//! ## Core Traits
+//!
+//! - [`TransactionStore`] - Retrieve transaction data and effects by digest
+//! - [`EpochStore`] - Retrieve epoch information and protocol configuration
+//! - [`ObjectStore`] - Retrieve objects by their keys with flexible version queries
+//!
+//! ## Store Implementations
+//!
+//! - [`stores::DataStore`] - Remote GraphQL-backed store (mainnet/testnet)
+//! - [`stores::FileSystemStore`] - Persistent local disk cache
+//! - [`stores::InMemoryStore`] - Unbounded in-memory cache
+//! - [`stores::LruMemoryStore`] - Bounded LRU cache
+//! - [`stores::ReadThroughStore`] - Composable two-tier caching pattern
+//!
+//! ## Composition
+//!
+//! Use `ReadThroughStore<Primary, Secondary>` to compose cache layers:
+//! - `ReadThroughStore<LruMemoryStore, DataStore>` - LRU + remote
+//! - `ReadThroughStore<InMemoryStore, FileSystemStore>` - Memory + disk
+//!   (e.g., for testing in CI with pre-populated disk cache)
+
+mod gql_queries;
+pub mod node;
+pub mod stores;
+
+// Re-export commonly used types
+pub use node::Node;
 
 use anyhow::{Error, Result};
 use std::io::Write;
@@ -27,7 +46,7 @@ use sui_types::{
 // Data store read traits
 // ============================================================================
 
-/// Transaction data with effects and checkpoint required to replay a transaction.
+/// Transaction data with effects and checkpoint.
 #[derive(Clone, Debug)]
 pub struct TransactionInfo {
     pub data: TransactionData,
@@ -36,10 +55,9 @@ pub struct TransactionInfo {
 }
 
 /// A `TransactionStore` has to be able to retrieve transaction data for a given digest.
-/// To replay a transaction the data provided to
-/// `sui_execution::executor::Executor::execute_transaction_to_effects` must be available.
-/// Some of that data is not provided by the user. It is naturally available at runtime on a
-/// live system and later saved in effects and in the context of a checkpoint.
+/// The data provided to `sui_execution::executor::Executor::execute_transaction_to_effects`
+/// must be available. Some of that data is not provided by the user. It is naturally available
+/// at runtime on a live system and later saved in effects and in the context of a checkpoint.
 pub trait TransactionStore {
     /// Given a transaction digest, return transaction info including data, effects,
     /// and the checkpoint that transaction was executed in.
@@ -50,7 +68,7 @@ pub trait TransactionStore {
     ) -> Result<Option<TransactionInfo>, Error>;
 }
 
-/// Epoch data required to reaplay a transaction.
+/// Epoch data.
 #[derive(Clone, Debug)]
 pub struct EpochData {
     pub epoch_id: u64,
@@ -95,7 +113,7 @@ pub enum VersionQuery {
 ///
 /// This trait can execute a subset of what is allowed by
 /// `crates/sui-indexer-alt-graphql/schema.graphql::multiGetObjects`.
-/// That query likely allows more than what the replay tool needs, which is fairly limited in
+/// That query likely allows more than what most clients need, which is fairly limited in
 /// its usage.
 pub trait ObjectStore {
     /// Retrieve objects by their keys, with different query options.
@@ -116,7 +134,7 @@ pub trait ObjectStore {
 // we want to revisit in the future.
 
 /// A trait to set up the data store.
-/// This is used to setup internal state of the data store before starting the replay.
+/// This is used to setup internal state of the data store before use.
 /// At the moment is exclusively used by the FileSystemStore to map network to chain id.
 pub trait SetupStore {
     /// Set up the data store.

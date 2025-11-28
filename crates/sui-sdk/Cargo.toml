@@ -31,6 +31,7 @@ bcs.workspace = true
 thiserror.workspace = true
 reqwest.workspace = true
 
+mysten-common.workspace = true
 sui-json-rpc-api.workspace = true
 sui-transaction-builder.workspace = true
 sui-json-rpc-types.workspace = true

@@ -157,6 +157,11 @@ impl Value {
     pub fn typed_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
         self.0.typed_serialize(layout)
     }
+
+    /// Used for getting access to the inner VMValue for tracing purposes.
+    pub(super) fn inner_for_tracing(&self) -> &VMValue {
+        &self.0
+    }
 }
 
 impl From<VMValue> for Value {

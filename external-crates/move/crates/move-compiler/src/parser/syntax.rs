@@ -4511,6 +4511,7 @@ fn parse_module(
         consume_token(context.tokens, Tok::Module)?;
         false
     };
+    let name_start_loc = context.tokens.start_loc();
     let sp!(n1_loc, n1_) = parse_leading_name_access(context)?;
     let (address, name) = match (n1_, context.tokens.peek()) {
         (addr_ @ LeadingNameAccess_::AnonymousAddress(_), _)
@@ -4523,6 +4524,12 @@ fn parse_module(
         }
         (LeadingNameAccess_::Name(name), _) => (None, ModuleName(name)),
     };
+    let name_loc = Loc::new(
+        context.tokens.file_hash(),
+        name_start_loc as u32,
+        context.tokens.previous_end_loc() as u32,
+    );
+
     let definition_mode: ModuleDefinitionMode;
     match context.tokens.peek() {
         Tok::LBrace => {
@@ -4613,6 +4620,7 @@ fn parse_module(
         loc,
         address,
         name,
+        name_loc,
         is_spec_module,
         is_extension,
         members,

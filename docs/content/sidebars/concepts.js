@@ -60,7 +60,6 @@ const concepts = [
 			'concepts/tokenomics/staking-unstaking',
 			'concepts/tokenomics/sui-bridging',
 			'concepts/tokenomics/gas-in-sui',
-			'concepts/tokenomics/vesting-strategies',
 		],
 	},
 	{

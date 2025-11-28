@@ -381,7 +381,7 @@ impl std::fmt::Display for DataOp {
                 write!(f, "VecPopBack<{}>", rc_type)
             }
             DataOp::VecUnpack(rc_type) => {
-                write!(f, "VecUnpack<{}>", rc_type)
+                write!(f, "VecUnpack<{rc_type}>")
             }
             DataOp::VecSwap(rc_type) => {
                 write!(f, "VecSwap<{}>", rc_type)

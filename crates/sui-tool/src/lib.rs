@@ -1056,9 +1056,13 @@ async fn backfill_epoch_transaction_digests(
         }
     });
 
+    // Use reduced concurrency for backfill to avoid overwhelming the remote server
+    // when running in parallel with snapshot download
+    let backfill_concurrency = (concurrency / 4).max(1);
+
     futures::stream::iter(checkpoints_to_fetch)
         .map(|sq| CheckpointReader::fetch_from_object_store(&client, sq))
-        .buffer_unordered(concurrency)
+        .buffer_unordered(backfill_concurrency)
         .try_for_each(|checkpoint| {
             let perpetual_db = perpetual_db.clone();
             let tx_counter = tx_counter.clone();

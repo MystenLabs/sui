@@ -11,10 +11,7 @@
 //! This module also contains the traits used by execution to talk to
 //! the store (BackingPackageStore, ObjectStore, ChildObjectResolver)
 
-use crate::{
-    replay_interface::{EpochStore, ObjectKey, ObjectStore, VersionQuery},
-    replay_txn::ReplayTransaction,
-};
+use crate::replay_txn::ReplayTransaction;
 use anyhow::{Context, Error, anyhow};
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_trace_format::format::MoveTraceBuilder;
@@ -23,6 +20,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
 };
+use sui_data_store::{EpochStore, ObjectKey, ObjectStore, VersionQuery};
 use sui_execution::Executor;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},

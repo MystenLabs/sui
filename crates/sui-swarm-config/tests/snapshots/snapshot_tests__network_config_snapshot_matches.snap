@@ -122,6 +122,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Slack
+        - TestEveFrontier
         - TestIssuer
         - Threedos
         - Twitch
@@ -289,6 +290,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Slack
+        - TestEveFrontier
         - TestIssuer
         - Threedos
         - Twitch
@@ -456,6 +458,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Slack
+        - TestEveFrontier
         - TestIssuer
         - Threedos
         - Twitch
@@ -623,6 +626,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Slack
+        - TestEveFrontier
         - TestIssuer
         - Threedos
         - Twitch
@@ -790,6 +794,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Slack
+        - TestEveFrontier
         - TestIssuer
         - Threedos
         - Twitch
@@ -957,6 +962,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Slack
+        - TestEveFrontier
         - TestIssuer
         - Threedos
         - Twitch
@@ -1124,6 +1130,7 @@ validator_configs:
         - Onefc
         - Playtron
         - Slack
+        - TestEveFrontier
         - TestIssuer
         - Threedos
         - Twitch
