@@ -27,11 +27,11 @@ use crate::schema::RowSchema;
 
 use super::boundaries::BackfillBoundaries;
 
-/// Backfill-specific batch - tracks rows and target file key.
+/// Backfill-specific batch - tracks rows and target file boundaries.
 pub struct BackfillBatch<T> {
     rows: Mutex<Vec<T>>,
-    /// Target file key (epoch, start_checkpoint) - set on first value
-    target_key: Mutex<Option<(u64, u64)>>,
+    /// Target file checkpoint range (start, end) - set on first value
+    boundaries: Mutex<Option<(u64, u64)>>,
 }
 
 /// Handler for backfill mode - aligns batches with existing file boundaries.
@@ -47,7 +47,7 @@ impl<T> Default for BackfillBatch<T> {
     fn default() -> Self {
         Self {
             rows: Mutex::new(Vec::new()),
-            target_key: Mutex::new(None),
+            boundaries: Mutex::new(None),
         }
     }
 }
@@ -107,30 +107,30 @@ where
     ) -> BatchStatus {
         let values_slice = values.as_slice();
         assert!(!values_slice.is_empty(), "batch() called with empty values");
-
-        let incoming_checkpoint = values_slice[0].get_checkpoint();
-
-        let mut target_key = batch.target_key.lock().unwrap();
-        match *target_key {
-            Some((epoch, start)) => {
-                // Check if we've reached the target file boundary
-                let target = self.boundaries.get_target(epoch, start)
-                    .expect("target_key set but target not found");
-                if incoming_checkpoint >= target.checkpoint_range.end {
-                    return BatchStatus::Ready;
+        let checkpoint_seq_num = values_slice[0].get_checkpoint();
+        {
+            let mut boundaries = batch.boundaries.lock().unwrap();
+            match *boundaries {
+                Some((start, end)) => {
+                    // Check if we've reached the file boundary (end is exclusive)
+                    if checkpoint_seq_num == end {
+                        return BatchStatus::Ready;
+                    } else if checkpoint_seq_num > end {
+                        panic!(
+                            "Checkpoint {} is past target range {}..{}",
+                            checkpoint_seq_num, start, end
+                        );
+                    }
+                }
+                None => {
+                    // First value - find and store the target range
+                    let target = self.boundaries.find_target(checkpoint_seq_num).unwrap_or_else(|| panic!("No target file for checkpoint {}. Backfill requires existing files.",
+                            checkpoint_seq_num));
+                    *boundaries =
+                        Some((target.checkpoint_range.start, target.checkpoint_range.end));
                 }
             }
-            None => {
-                // First value - find and store the target
-                let target = self.boundaries.find_target(incoming_checkpoint)
-                    .unwrap_or_else(|| panic!(
-                        "No target file for checkpoint {}. Backfill requires existing files.",
-                        incoming_checkpoint
-                    ));
-                *target_key = Some((target.epoch, target.checkpoint_range.start));
-            }
         }
-        drop(target_key);
 
         batch.rows.lock().unwrap().extend(values.by_ref());
 
@@ -161,12 +161,16 @@ where
             sui_indexer_alt_framework::pipeline::WatermarkPart::checkpoint_range(watermarks)
                 .ok_or_else(|| anyhow::anyhow!("No watermarks provided"))?;
 
-        // Get target using the key we stored in batch()
-        let (epoch, start) = batch.target_key.lock().unwrap()
-            .ok_or_else(|| anyhow::anyhow!("No target_key set - batch() was never called?"))?;
+        // Get target using the start we stored in batch()
+        let (start, _end) =
+            batch.boundaries.lock().unwrap().ok_or_else(|| {
+                anyhow::anyhow!("No target_range set - batch() was never called?")
+            })?;
 
-        let target = self.boundaries.get_target(epoch, start)
-            .expect("target_key set but target not found");
+        let target = self
+            .boundaries
+            .get_target(start)
+            .expect("target_range set but target not found");
 
         // Verify range matches exactly
         if target.checkpoint_range != checkpoint_range {

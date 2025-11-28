@@ -79,8 +79,8 @@ impl TargetFile {
 pub struct BackfillBoundaries {
     /// Object store for e-tag refresh operations
     object_store: std::sync::Arc<dyn ObjectStore>,
-    /// All targets indexed by (epoch, start_checkpoint)
-    targets: HashMap<(u64, u64), TargetFile>,
+    /// All targets indexed by start_checkpoint
+    targets: HashMap<u64, TargetFile>,
 }
 
 impl BackfillBoundaries {
@@ -122,7 +122,7 @@ impl BackfillBoundaries {
                     );
 
                     targets.insert(
-                        (epoch, range.start),
+                        range.start,
                         TargetFile {
                             epoch,
                             checkpoint_range: range,
@@ -166,9 +166,9 @@ impl BackfillBoundaries {
         })
     }
 
-    /// Get a target by exact (epoch, start_checkpoint) key.
-    pub fn get_target(&self, epoch: u64, start_checkpoint: u64) -> Option<&TargetFile> {
-        self.targets.get(&(epoch, start_checkpoint))
+    /// Get a target by exact start_checkpoint key.
+    pub fn get_target(&self, start_checkpoint: u64) -> Option<&TargetFile> {
+        self.targets.get(&start_checkpoint)
     }
 
     /// Returns a reference to the object store.
