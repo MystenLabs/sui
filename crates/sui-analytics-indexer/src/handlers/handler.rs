@@ -11,9 +11,9 @@ use sui_indexer_alt_framework::pipeline::concurrent::{self, BatchStatus};
 use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use crate::analytics_metrics::AnalyticsMetrics;
 use crate::config::PipelineConfig;
 use crate::handlers::{construct_file_path, record_file_metrics};
+use crate::metrics::Metrics;
 use crate::schema::RowSchema;
 
 /// Entry types implement this to provide epoch and checkpoint information for batching.
@@ -40,7 +40,7 @@ pub struct AnalyticsBatch<T: AnalyticsMetadata + Serialize + RowSchema> {
 pub struct AnalyticsHandler<P> {
     processor: P,
     config: PipelineConfig,
-    metrics: AnalyticsMetrics,
+    metrics: Metrics,
 }
 
 impl<T: AnalyticsMetadata + Serialize + RowSchema + 'static> Default for AnalyticsBatch<T> {
@@ -53,7 +53,7 @@ impl<T: AnalyticsMetadata + Serialize + RowSchema + 'static> Default for Analyti
 }
 
 impl<P> AnalyticsHandler<P> {
-    pub fn new(processor: P, config: PipelineConfig, metrics: AnalyticsMetrics) -> Self {
+    pub fn new(processor: P, config: PipelineConfig, metrics: Metrics) -> Self {
         Self {
             processor,
             config,

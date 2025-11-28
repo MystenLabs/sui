@@ -17,13 +17,13 @@ use tracing::info;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_object_store::ObjectStore;
 
-use crate::analytics_metrics::AnalyticsMetrics;
 use crate::config::{IndexerConfig, OutputStoreConfig};
 use crate::handlers::BackfillBoundaries;
+use crate::metrics::Metrics;
 
 pub async fn build_analytics_indexer(
     config: IndexerConfig,
-    metrics: AnalyticsMetrics,
+    metrics: Metrics,
     registry: prometheus::Registry,
     cancel: tokio_util::sync::CancellationToken,
 ) -> Result<Indexer<ObjectStore>> {

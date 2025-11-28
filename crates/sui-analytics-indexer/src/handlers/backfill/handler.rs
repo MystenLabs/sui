@@ -21,10 +21,10 @@ use sui_indexer_alt_framework::pipeline::concurrent::{self, BatchStatus};
 use sui_types::full_checkpoint_content::Checkpoint;
 use tracing::warn;
 
-use crate::analytics_metrics::AnalyticsMetrics;
 use crate::config::PipelineConfig;
 use crate::handlers::handler::{AnalyticsBatch, AnalyticsMetadata};
 use crate::handlers::{construct_file_path, record_file_metrics};
+use crate::metrics::Metrics;
 use crate::schema::RowSchema;
 
 use super::boundaries::{BackfillBoundaries, EpochBoundaries};
@@ -43,7 +43,7 @@ pub struct BackfillBatch<T: AnalyticsMetadata + Serialize + RowSchema> {
 pub struct BackfillHandler<P> {
     processor: P,
     config: PipelineConfig,
-    metrics: AnalyticsMetrics,
+    metrics: Metrics,
     /// Lazy-loading cache for file boundaries
     backfill_cache: Arc<BackfillBoundaries>,
 }
@@ -62,7 +62,7 @@ impl<P> BackfillHandler<P> {
     pub fn new(
         processor: P,
         config: PipelineConfig,
-        metrics: AnalyticsMetrics,
+        metrics: Metrics,
         backfill_cache: Arc<BackfillBoundaries>,
     ) -> Self {
         Self {

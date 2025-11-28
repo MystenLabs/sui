@@ -17,21 +17,21 @@ use super::{
     initial_shared_version,
 };
 use crate::AnalyticsMetadata;
-use crate::analytics_metrics::AnalyticsMetrics;
+use crate::metrics::Metrics;
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
 
 pub struct ObjectProcessor {
     package_cache: Arc<PackageCache>,
     package_filter: Option<ObjectID>,
-    metrics: AnalyticsMetrics,
+    metrics: Metrics,
 }
 
 impl ObjectProcessor {
     pub fn new(
         package_cache: Arc<PackageCache>,
         package_filter: &Option<String>,
-        metrics: AnalyticsMetrics,
+        metrics: Metrics,
     ) -> Self {
         Self {
             package_cache,

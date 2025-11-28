@@ -13,8 +13,8 @@ use std::path::PathBuf;
 
 use sui_types::base_types::EpochId;
 
-use crate::analytics_metrics::AnalyticsMetrics;
 use crate::config::FileFormat;
+use crate::metrics::Metrics;
 
 pub mod backfill;
 pub mod handler;
@@ -44,7 +44,7 @@ pub fn construct_file_path(
 }
 
 /// Record file size metrics for a pipeline.
-pub fn record_file_metrics(metrics: &AnalyticsMetrics, pipeline_name: &str, size: usize) {
+pub fn record_file_metrics(metrics: &Metrics, pipeline_name: &str, size: usize) {
     metrics
         .file_size_bytes
         .with_label_values(&[pipeline_name])

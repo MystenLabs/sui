@@ -8,13 +8,13 @@ use prometheus::{
 };
 
 #[derive(Clone)]
-pub struct AnalyticsMetrics {
+pub struct Metrics {
     pub max_checkpoint_on_store: IntGaugeVec,
     pub total_too_large_to_deserialize: IntCounterVec,
     pub file_size_bytes: HistogramVec,
 }
 
-impl AnalyticsMetrics {
+impl Metrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
             max_checkpoint_on_store: register_int_gauge_vec_with_registry!(

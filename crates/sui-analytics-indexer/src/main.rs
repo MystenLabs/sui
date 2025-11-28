@@ -4,7 +4,7 @@
 use anyhow::Result;
 use prometheus::Registry;
 use std::env;
-use sui_analytics_indexer::analytics_metrics::AnalyticsMetrics;
+use sui_analytics_indexer::metrics::Metrics;
 use sui_analytics_indexer::{IndexerConfig, build_analytics_indexer, spawn_snowflake_monitors};
 use tracing::info;
 
@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
     let is_bounded_job = config.last_checkpoint.is_some();
 
     // Create metrics for Snowflake monitoring
-    let metrics = AnalyticsMetrics::new(&registry);
+    let metrics = Metrics::new(&registry);
 
     // Spawn Snowflake monitor tasks (if configured)
     let sf_handles = spawn_snowflake_monitors(&config, metrics.clone(), cancel.clone())?;

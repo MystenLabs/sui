@@ -15,7 +15,6 @@ use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_object_store::ObjectStore;
 
-use crate::analytics_metrics::AnalyticsMetrics;
 use crate::config::PipelineConfig;
 use crate::handlers::tables::{
     CheckpointProcessor, DynamicFieldProcessor, EventProcessor, MoveCallProcessor, ObjectProcessor,
@@ -23,6 +22,7 @@ use crate::handlers::tables::{
     TransactionProcessor, WrappedObjectProcessor,
 };
 use crate::handlers::{AnalyticsHandler, AnalyticsMetadata, BackfillBoundaries, BackfillHandler};
+use crate::metrics::Metrics;
 use crate::package_store::PackageCache;
 use crate::schema::RowSchema;
 
@@ -34,7 +34,7 @@ async fn concurrent_pipeline<P>(
     indexer: &mut Indexer<ObjectStore>,
     processor: P,
     config: PipelineConfig,
-    metrics: AnalyticsMetrics,
+    metrics: Metrics,
     concurrent_config: ConcurrentConfig,
     backfill_cache: Option<Arc<BackfillBoundaries>>,
 ) -> Result<()>
@@ -109,7 +109,7 @@ impl Pipeline {
         indexer: &mut Indexer<ObjectStore>,
         pipeline_config: &PipelineConfig,
         package_cache: Arc<PackageCache>,
-        metrics: AnalyticsMetrics,
+        metrics: Metrics,
         concurrent_config: ConcurrentConfig,
         backfill_cache: Option<Arc<BackfillBoundaries>>,
     ) -> Result<()> {

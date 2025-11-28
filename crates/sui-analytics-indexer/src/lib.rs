@@ -6,10 +6,10 @@
 //! This crate provides an analytics indexer that processes Sui blockchain data
 //! and writes it to columnar formats (CSV, Parquet) for analytics workloads.
 
-pub mod analytics_metrics;
 pub mod config;
 pub mod handlers;
 pub mod indexer;
+pub mod metrics;
 pub mod package_store;
 pub mod pipeline;
 pub mod progress;
