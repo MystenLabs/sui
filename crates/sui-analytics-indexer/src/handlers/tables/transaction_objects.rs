@@ -11,8 +11,8 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
 
+use super::{InputObjectTracker, ObjectStatusTracker};
 use crate::AnalyticsMetadata;
-use crate::handlers::{InputObjectTracker, ObjectStatusTracker};
 use crate::tables::TransactionObjectEntry;
 
 pub struct TransactionObjectsProcessor;

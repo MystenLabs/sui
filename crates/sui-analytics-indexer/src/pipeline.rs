@@ -16,20 +16,13 @@ use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_object_store::ObjectStore;
 
 use crate::analytics_metrics::AnalyticsMetrics;
-use crate::backfill::BackfillBoundaries;
 use crate::config::PipelineConfig;
-use crate::handlers::checkpoint_handler::CheckpointProcessor;
-use crate::handlers::df_handler::DynamicFieldProcessor;
-use crate::handlers::event_handler::EventProcessor;
-use crate::handlers::move_call_handler::MoveCallProcessor;
-use crate::handlers::object_handler::ObjectProcessor;
-use crate::handlers::package_bcs_handler::PackageBCSProcessor;
-use crate::handlers::package_handler::PackageProcessor;
-use crate::handlers::transaction_bcs_handler::TransactionBCSProcessor;
-use crate::handlers::transaction_handler::TransactionProcessor;
-use crate::handlers::transaction_objects_handler::TransactionObjectsProcessor;
-use crate::handlers::wrapped_object_handler::WrappedObjectProcessor;
-use crate::handlers::{AnalyticsHandler, AnalyticsMetadata, BackfillHandler};
+use crate::handlers::tables::{
+    CheckpointProcessor, DynamicFieldProcessor, EventProcessor, MoveCallProcessor, ObjectProcessor,
+    PackageBCSProcessor, PackageProcessor, TransactionBCSProcessor, TransactionObjectsProcessor,
+    TransactionProcessor, WrappedObjectProcessor,
+};
+use crate::handlers::{AnalyticsHandler, AnalyticsMetadata, BackfillBoundaries, BackfillHandler};
 use crate::package_store::PackageCache;
 use crate::schema::RowSchema;
 

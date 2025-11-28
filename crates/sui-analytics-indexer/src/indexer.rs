@@ -18,8 +18,8 @@ use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_object_store::ObjectStore;
 
 use crate::analytics_metrics::AnalyticsMetrics;
-use crate::backfill::BackfillBoundaries;
 use crate::config::{IndexerConfig, OutputStoreConfig};
+use crate::handlers::BackfillBoundaries;
 
 pub async fn build_analytics_indexer(
     config: IndexerConfig,

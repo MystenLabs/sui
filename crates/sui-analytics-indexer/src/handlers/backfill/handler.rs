@@ -22,11 +22,12 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use tracing::warn;
 
 use crate::analytics_metrics::AnalyticsMetrics;
-use crate::backfill::{BackfillBoundaries, EpochBoundaries};
 use crate::config::PipelineConfig;
-use crate::handlers::analytics_handler::{AnalyticsBatch, AnalyticsMetadata};
+use crate::handlers::handler::{AnalyticsBatch, AnalyticsMetadata};
 use crate::handlers::{construct_file_path, record_file_metrics};
 use crate::schema::RowSchema;
+
+use super::boundaries::{BackfillBoundaries, EpochBoundaries};
 
 /// Backfill-specific batch that wraps AnalyticsBatch with additional boundary tracking.
 pub struct BackfillBatch<T: AnalyticsMetadata + Serialize + RowSchema> {

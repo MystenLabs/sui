@@ -7,9 +7,8 @@
 //! and writes it to columnar formats (CSV, Parquet) for analytics workloads.
 
 pub mod analytics_metrics;
-pub mod backfill;
 pub mod config;
-mod handlers;
+pub mod handlers;
 pub mod indexer;
 pub mod package_store;
 pub mod pipeline;
@@ -19,9 +18,11 @@ pub mod tables;
 pub mod writers;
 
 // Re-exports for public API
-pub use backfill::{BackfillBoundaries, EpochBoundaries};
 pub use config::{FileFormat, IndexerConfig, OutputStoreConfig, PipelineConfig};
-pub use handlers::{AnalyticsHandler, AnalyticsMetadata, BackfillHandler};
+pub use handlers::{
+    AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, BackfillBoundaries, BackfillHandler,
+    EpochBoundaries,
+};
 pub use indexer::build_analytics_indexer;
 pub use pipeline::Pipeline;
 pub use progress::{MaxCheckpointReader, spawn_snowflake_monitors};
