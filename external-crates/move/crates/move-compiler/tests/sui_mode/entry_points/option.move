@@ -12,5 +12,4 @@ module a::m {
     ) {
         abort 0
     }
-
 }

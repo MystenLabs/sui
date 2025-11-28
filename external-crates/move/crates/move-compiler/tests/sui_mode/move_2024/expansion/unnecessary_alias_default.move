@@ -2,7 +2,9 @@ module sui::object {
     public struct ID()
     public struct UID()
 }
-module sui::transfer {}
+module sui::transfer {
+
+}
 module sui::tx_context {
     public struct TxContext()
 }

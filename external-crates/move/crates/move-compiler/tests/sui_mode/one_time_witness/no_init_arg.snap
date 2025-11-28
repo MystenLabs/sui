@@ -11,7 +11,7 @@ error[Sui E02003]: invalid 'init' function
 6 │     struct M has drop { dummy: bool }
   │            - One-time witness declared here
 7 │ 
-8 │     fun init(_ctx: &mut tx_context::TxContext) {
+8 │     fun init(_ctx: &mut tx_context::TxContext) {}
   │                    ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid first parameter to 'init'. Expected this module's one-time witness type 'a::m::M'
   │
   = One-time witness types are structs with the following requirements: their name is the upper-case version of the module's name, they have no fields (or a single boolean field), they have no type parameters, and they have only the 'drop' ability.

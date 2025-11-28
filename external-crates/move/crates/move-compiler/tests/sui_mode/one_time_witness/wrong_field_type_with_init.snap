@@ -13,7 +13,7 @@ error[Sui E02004]: invalid one-time witness declaration
   │            │             
   │            Invalid one-time witness declaration
 7 │ 
-8 │     fun init(_otw: M, _ctx: &mut tx_context::TxContext) {
+8 │     fun init(_otw: M, _ctx: &mut tx_context::TxContext) {}
   │                    - Attempted usage as a one-time witness here
   │
   = One-time witness types are structs with the following requirements: their name is the upper-case version of the module's name, they have no fields (or a single boolean field), they have no type parameters, and they have only the 'drop' ability.

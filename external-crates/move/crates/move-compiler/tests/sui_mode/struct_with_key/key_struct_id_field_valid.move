@@ -1,8 +1,9 @@
 // valid
 module a::m {
     use sui::object;
+
     struct S has key {
-        id: object::UID
+        id: object::UID,
     }
 }
 

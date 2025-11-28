@@ -6,10 +6,10 @@ info:
   lint: false
 ---
 error[E04001]: restricted visibility
-   ┌─ tests/sui_mode/id_leak/private_pack.move:19:9
+   ┌─ tests/sui_mode/id_leak/private_pack.move:20:9
    │
  5 │     struct A has key {
    │            - Struct defined in module 'a::a'
    ·
-19 │         A { id }
+20 │         A { id }
    │         ^^^^^^^^ Struct 'a::a::A' can only be instantiated within its defining module 'a::a'

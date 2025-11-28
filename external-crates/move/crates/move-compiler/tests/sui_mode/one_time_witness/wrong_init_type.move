@@ -6,8 +6,7 @@ module a::m {
     struct M has drop { dummy: bool }
     struct N has drop { dummy: bool }
 
-    fun init(_otw: N, _ctx: &mut tx_context::TxContext) {
-    }
+    fun init(_otw: N, _ctx: &mut tx_context::TxContext) {}
 }
 
 module sui::tx_context {

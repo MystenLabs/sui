@@ -27,5 +27,6 @@ module a::other {
 
 module sui::event {
     public fun emit<T: copy + drop>(_: T) { abort 0 }
+
     public fun emit_authenticated<T: copy + drop>(_: T) { abort 0 }
 }

@@ -3,17 +3,18 @@ module a::a {
     use sui::object::UID;
 
     struct A has key {
-        id: UID
+        id: UID,
     }
 }
 
 module b::b {
-    use sui::object::UID;
     use a::a::A;
+    use sui::object::UID;
 
     struct B has key {
-        id: UID
+        id: UID,
     }
+
     public fun no(b: B): A {
         let B { id } = b;
         A { id }

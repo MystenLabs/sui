@@ -6,6 +6,7 @@ module a::m {
     }
 
     struct Obj has key { id: sui::object::UID }
+
     public entry fun t2(_: bool, _: &mut Obj) {
         abort 0
     }

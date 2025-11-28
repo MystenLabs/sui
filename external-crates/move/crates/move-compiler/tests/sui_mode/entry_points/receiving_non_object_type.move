@@ -8,6 +8,6 @@ module a::m {
 
 module sui::transfer {
     struct Receiving<phantom T: key> has drop {
-        id: address
+        id: address,
     }
 }

@@ -6,9 +6,9 @@ info:
   lint: false
 ---
 error[Sui E02003]: invalid 'init' function
-  ┌─ tests/sui_mode/init/return_values.move:4:9
+  ┌─ tests/sui_mode/init/return_values.move:5:9
   │
-4 │     fun init(_: &mut tx_context::TxContext): u64 {
+5 │     fun init(_: &mut tx_context::TxContext): u64 {
   │         ^^^^                                 --- 'init' functions must have a return type of '()'
   │         │                                     
   │         Invalid 'init' function declaration

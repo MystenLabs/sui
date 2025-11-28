@@ -8,7 +8,7 @@ module a::m {
     }
 
     public entry fun loop_forever(ctx: &mut TxContext) {
-        let obj = Obj { id:  object::new(ctx) };
+        let obj = Obj { id: object::new(ctx) };
         let Obj { id: uid } = obj;
         loop {
             object::delete(uid);
@@ -17,7 +17,7 @@ module a::m {
     }
 
     public entry fun loop_forever_2(ctx: &mut TxContext) {
-        let obj = Obj { id:  object::new(ctx) };
+        let obj = Obj { id: object::new(ctx) };
         let Obj { id: uid } = obj;
         loop {
             object::delete(uid);
@@ -32,14 +32,15 @@ module a::m {
     }
 }
 
-
 module sui::object {
     struct UID has store {
         id: address,
     }
+
     public fun new(_: &mut sui::tx_context::TxContext): UID {
         abort 0
     }
+
     public fun delete(_: UID) {
         abort 0
     }
@@ -47,6 +48,7 @@ module sui::object {
 
 module sui::tx_context {
     struct TxContext has drop {}
+
     public fun sender(_: &TxContext): address {
         @0
     }

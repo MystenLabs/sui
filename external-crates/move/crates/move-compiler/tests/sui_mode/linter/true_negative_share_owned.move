@@ -1,11 +1,11 @@
 // object is re shared, but it is never transferred and doesn't have public transfer
 module a::is_not_transferred {
+    use sui::object::UID;
     use sui::transfer;
     use sui::tx_context::TxContext;
-    use sui::object::UID;
 
     struct Obj has key {
-        id: UID
+        id: UID,
     }
 
     public fun make_obj(ctx: &mut TxContext): Obj {
@@ -23,11 +23,11 @@ module a::is_not_transferred {
 
 // object is created locally, even though it is transferred somewhere else and has public share
 module a::can_determine_to_be_new {
-    use sui::transfer;
     use sui::object::UID;
+    use sui::transfer;
 
     struct Obj has key, store {
-        id: UID
+        id: UID,
     }
 
     fun make_obj(_: u64, _: vector<vector<u8>>, ctx: &mut sui::tx_context::TxContext): Obj {
@@ -45,14 +45,13 @@ module a::can_determine_to_be_new {
     }
 }
 
-
 // object is created locally, but the analysis cannot determine that currently
 module b::can_determine_to_be_new_with_struct {
-    use sui::transfer;
     use sui::object::UID;
+    use sui::transfer;
 
     struct Obj has key {
-        id: UID
+        id: UID,
     }
 
     struct X<phantom T> has drop {}
@@ -72,10 +71,9 @@ module b::can_determine_to_be_new_with_struct {
     }
 }
 
-
-
 module sui::tx_context {
     struct TxContext has drop {}
+
     public fun sender(_: &TxContext): address {
         @0
     }
@@ -83,12 +81,15 @@ module sui::tx_context {
 
 module sui::object {
     const ZERO: u64 = 0;
+
     struct UID has store {
         id: address,
     }
+
     public fun delete(_: UID) {
         abort ZERO
     }
+
     public fun new(_: &mut sui::tx_context::TxContext): UID {
         abort ZERO
     }
@@ -96,12 +97,15 @@ module sui::object {
 
 module sui::transfer {
     const ZERO: u64 = 0;
+
     public fun transfer<T: key>(_: T, _: address) {
         abort ZERO
     }
+
     public fun share_object<T: key>(_: T) {
         abort ZERO
     }
+
     public fun public_share_object<T: key>(_: T) {
         abort ZERO
     }

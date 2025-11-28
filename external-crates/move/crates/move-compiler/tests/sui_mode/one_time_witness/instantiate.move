@@ -5,8 +5,7 @@ module a::m {
 
     struct M has drop { dummy: bool }
 
-    fun init(_otw: M, _ctx: &mut tx_context::TxContext) {
-    }
+    fun init(_otw: M, _ctx: &mut tx_context::TxContext) {}
 
     fun pack(): M {
         M { dummy: false }

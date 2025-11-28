@@ -15,9 +15,9 @@ error[Sui E02003]: invalid 'init' function
   │         'init' functions must have their last parameter as '&sui::tx_context::TxContext' or '&mut sui::tx_context::TxContext'
 
 error[Sui E02003]: invalid 'init' function
-   ┌─ tests/sui_mode/init/must_have_txn_context.move:11:9
+   ┌─ tests/sui_mode/init/must_have_txn_context.move:12:9
    │
-11 │     fun init(_ctx: &mut tx_context::TxContext, _ctx2: &mut tx_context::TxContext) {
+12 │     fun init(_ctx: &mut tx_context::TxContext, _ctx2: &mut tx_context::TxContext) {
    │         ^^^^       -------------------------- Invalid parameter '_ctx' of type '&mut sui::tx_context::TxContext'. Expected a one-time witness type, 'a::n::N
    │         │           
    │         Invalid 'init' function declaration

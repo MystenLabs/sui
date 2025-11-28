@@ -14,7 +14,6 @@ module a::m {
     public entry fun t2<T>(_: Obj<T>) {
         abort 0
     }
-
 }
 
 module sui::object {

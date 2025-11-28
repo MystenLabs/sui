@@ -17,7 +17,6 @@ module a::m {
         _ = &s.f;
         transfer(new(id), @42);
     }
-
 }
 
 module sui::object {

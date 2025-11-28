@@ -6,9 +6,9 @@ info:
   lint: false
 ---
 error[Sui E02006]: invalid 'init' call
-  ┌─ tests/sui_mode/init/cannot_call_init.move:9:9
-  │
-9 │         init(ctx)
-  │         ^^^^^^^^^ Invalid call to 'a::m::init'. Module initializers cannot be called directly
-  │
-  = Module initializers are called implicitly upon publishing. If you need to reuse this function (or want to call it from a test), consider extracting the logic into a new function and calling that instead.
+   ┌─ tests/sui_mode/init/cannot_call_init.move:10:9
+   │
+10 │         init(ctx)
+   │         ^^^^^^^^^ Invalid call to 'a::m::init'. Module initializers cannot be called directly
+   │
+   = Module initializers are called implicitly upon publishing. If you need to reuse this function (or want to call it from a test), consider extracting the logic into a new function and calling that instead.

@@ -7,7 +7,7 @@ module a::test {
     use sui::transfer;
 
     struct Inner has key, store {
-        id: UID
+        id: UID,
     }
 
     struct Wrapper has key, store {
@@ -16,7 +16,7 @@ module a::test {
     }
 
     struct S has store {
-        inner: Inner
+        inner: Inner,
     }
 
     struct IndirectWrapper has key, store {
@@ -30,14 +30,13 @@ module a::test {
     }
 
     struct S2<T: key + store> has store {
-        inner: T
+        inner: T,
     }
 
     struct IndirectGenWrapper<T: key + store> has key, store {
         id: UID,
         inner: S2<T>,
     }
-
 
     public fun freeze_direct(w: Wrapper) {
         transfer::public_freeze_object(w);
@@ -61,9 +60,8 @@ module a::test {
     }
 
     public fun freeze_arg(w1: Wrapper, w2: Wrapper) {
-        transfer::public_freeze_object({ transfer::public_freeze_object(w1) ; w2});
+        transfer::public_freeze_object({ transfer::public_freeze_object(w1); w2 });
     }
-
 }
 
 module sui::object {
@@ -74,6 +72,7 @@ module sui::object {
 
 module sui::transfer {
     const ZERO: u64 = 0;
+
     public fun public_freeze_object<T: key>(_: T) {
         abort ZERO
     }
