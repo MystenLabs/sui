@@ -4,11 +4,11 @@
 //! Backfill mode support for re-processing analytics data.
 //!
 //! This module provides:
-//! - `BackfillBoundaries`: Lazy-loading cache for existing file boundaries
+//! - `BackfillBoundaries`: Pre-loaded map of existing file boundaries
 //! - `BackfillHandler`: Handler that aligns batches with existing files
 
 mod boundaries;
 mod handler;
 
-pub use boundaries::{BackfillBoundaries, EpochBoundaries, TargetRange};
+pub use boundaries::{BackfillBoundaries, TargetFile};
 pub use handler::{BackfillBatch, BackfillHandler};

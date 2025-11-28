@@ -98,32 +98,42 @@ pub async fn build_analytics_indexer(
     .await?;
 
     // Validate backfill mode configuration
-    if config.backfill_mode && config.task_name.is_none() {
-        return Err(anyhow!(
-            "backfill_mode requires task_name to be set for watermark isolation"
-        ));
+    if config.backfill_mode {
+        if config.task_name.is_none() {
+            return Err(anyhow!(
+                "backfill_mode requires task_name to be set for watermark isolation"
+            ));
+        }
+        if config.last_checkpoint.is_none() {
+            return Err(anyhow!(
+                "backfill_mode requires last_checkpoint to be set"
+            ));
+        }
     }
 
     for pipeline_config in config.pipeline_configs() {
         info!("Registering pipeline: {}", pipeline_config.pipeline);
 
-        // Create lazy-loading backfill cache if in backfill mode
-        let backfill_cache = if config.backfill_mode {
-            // BackfillBoundaries::new() validates that files exist but doesn't list them all.
-            // Epoch boundaries are loaded lazily on first access.
-            let cache = BackfillBoundaries::new(
+        // Load backfill boundaries upfront if in backfill mode
+        let backfill_boundaries = if config.backfill_mode {
+            let first = config.first_checkpoint.unwrap_or(0);
+            let last = config.last_checkpoint.expect("validated above");
+
+            let boundaries = BackfillBoundaries::load_all(
                 object_store.clone(),
                 pipeline_config.dir_prefix().to_string(),
                 pipeline_config.file_format,
+                first..last,
             )
             .await?;
 
             info!(
-                "Initialized lazy backfill cache for {}",
-                pipeline_config.pipeline
+                pipeline = %pipeline_config.pipeline,
+                file_count = boundaries.len(),
+                "Loaded backfill boundaries"
             );
 
-            Some(Arc::new(cache))
+            Some(Arc::new(boundaries))
         } else {
             None
         };
@@ -136,7 +146,7 @@ pub async fn build_analytics_indexer(
                 package_cache.clone(),
                 metrics.clone(),
                 concurrent_config.clone(),
-                backfill_cache,
+                backfill_boundaries,
             )
             .await?;
     }

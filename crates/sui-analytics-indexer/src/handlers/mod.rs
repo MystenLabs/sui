@@ -20,7 +20,7 @@ pub mod backfill;
 pub mod handler;
 pub mod tables;
 
-pub use backfill::{BackfillBoundaries, BackfillHandler, EpochBoundaries};
+pub use backfill::{BackfillBoundaries, BackfillHandler};
 pub use handler::{AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata};
 
 /// Construct the object store path for an analytics file.

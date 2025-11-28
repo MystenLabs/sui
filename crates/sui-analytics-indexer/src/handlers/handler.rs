@@ -100,9 +100,7 @@ where
         values: &mut std::vec::IntoIter<Self::Value>,
     ) -> BatchStatus {
         let values_slice = values.as_slice();
-        if values_slice.is_empty() {
-            return BatchStatus::Pending;
-        }
+        assert!(!values_slice.is_empty(), "batch() called with empty values");
 
         let incoming_epoch = values_slice[0].get_epoch();
 

@@ -21,7 +21,6 @@ pub mod writers;
 pub use config::{FileFormat, IndexerConfig, OutputStoreConfig, PipelineConfig};
 pub use handlers::{
     AnalyticsBatch, AnalyticsHandler, AnalyticsMetadata, BackfillBoundaries, BackfillHandler,
-    EpochBoundaries,
 };
 pub use indexer::build_analytics_indexer;
 pub use pipeline::Pipeline;
