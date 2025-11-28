@@ -105,9 +105,7 @@ pub async fn build_analytics_indexer(
             ));
         }
         if config.last_checkpoint.is_none() {
-            return Err(anyhow!(
-                "backfill_mode requires last_checkpoint to be set"
-            ));
+            return Err(anyhow!("backfill_mode requires last_checkpoint to be set"));
         }
     }
 

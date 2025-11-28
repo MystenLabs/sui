@@ -161,9 +161,9 @@ impl BackfillBoundaries {
 
     /// Find the target file that contains a given checkpoint.
     pub fn find_target(&self, checkpoint: u64) -> Option<&TargetFile> {
-        self.targets.values().find(|t| {
-            t.checkpoint_range.start <= checkpoint && checkpoint < t.checkpoint_range.end
-        })
+        self.targets
+            .values()
+            .find(|t| t.checkpoint_range.start <= checkpoint && checkpoint < t.checkpoint_range.end)
     }
 
     /// Get a target by exact start_checkpoint key.

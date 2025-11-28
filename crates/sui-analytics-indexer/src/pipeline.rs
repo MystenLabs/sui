@@ -40,7 +40,7 @@ async fn concurrent_pipeline<P>(
 ) -> Result<()>
 where
     P: Processor + Send + Sync,
-    P::Value: AnalyticsMetadata + Serialize + RowSchema + Send + Sync,
+    P::Value: AnalyticsMetadata + Serialize + RowSchema + Clone + Send + Sync,
 {
     if let Some(cache) = backfill_cache {
         let handler = BackfillHandler::new(processor, config, metrics, cache);

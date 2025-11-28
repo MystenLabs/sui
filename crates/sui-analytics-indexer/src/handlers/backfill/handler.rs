@@ -87,7 +87,7 @@ where
 impl<P> concurrent::Handler for BackfillHandler<P>
 where
     P: Processor + Send + Sync,
-    P::Value: AnalyticsMetadata + Serialize + RowSchema + Send + Sync,
+    P::Value: AnalyticsMetadata + Serialize + RowSchema + Clone + Send + Sync,
 {
     type Store = sui_indexer_alt_object_store::ObjectStore;
     type Batch = BackfillBatch<P::Value>;
@@ -143,11 +143,8 @@ where
         watermarks: &[sui_indexer_alt_framework::pipeline::WatermarkPart],
         conn: &mut <Self::Store as sui_indexer_alt_framework::store::Store>::Connection<'a>,
     ) -> Result<usize> {
-        let rows = std::mem::take(&mut *batch.rows.lock().unwrap());
-
-        if rows.is_empty() {
-            return Ok(0);
-        }
+        let rows = batch.rows.lock().unwrap().clone();
+        assert!(!rows.is_empty(), "commit() called with empty batch");
 
         let row_count = rows.len();
 
