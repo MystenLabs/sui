@@ -70,6 +70,15 @@ pub struct GasStatus {
     instructions_current_tier_mult: u64,
 
     pub num_native_calls: u64,
+    pub transl_gas: u64,
+}
+
+#[derive(Debug)]
+pub struct GasDetails {
+    pub instructions_executed: u64,
+    pub stack_height: u64,
+    pub memory_allocated: u64,
+    pub transl_gas_used: u64,
 }
 
 impl GasStatus {
@@ -106,6 +115,7 @@ impl GasStatus {
             stack_size_next_tier_start,
             instructions_next_tier_start,
             num_native_calls: 0,
+            transl_gas: 0,
         }
     }
 
@@ -133,6 +143,20 @@ impl GasStatus {
             stack_size_next_tier_start: None,
             instructions_next_tier_start: None,
             num_native_calls: 0,
+            transl_gas: 0,
+        }
+    }
+
+    pub fn set_transl_gas(&mut self, transl_gas: u64) {
+        self.transl_gas = transl_gas
+    }
+
+    pub fn gas_details(&self) -> GasDetails {
+        GasDetails {
+            instructions_executed: self.instructions_executed,
+            stack_height: self.stack_height_high_water_mark,
+            memory_allocated: self.stack_size_high_water_mark,
+            transl_gas_used: self.transl_gas,
         }
     }
 

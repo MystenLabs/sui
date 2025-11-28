@@ -26,6 +26,7 @@ mod checked {
     };
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
+    use sui_types::gas_model::tables::GasDetails;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::LimitsMetrics;
     use sui_types::object::OBJECT_START_VERSION;
@@ -107,6 +108,13 @@ mod checked {
                     "old_storage_rebate",
                     "new_gas_used",
                     "old_gas_used",
+                    "new_instructions",
+                    "old_instructions",
+                    "new_stack_height",
+                    "old_stack_height",
+                    "new_memory_allocated",
+                    "old_memory_allocated",
+                    "translation",
                 ])
                 .expect("failed to write gas header");
             Mutex::new(writer)
@@ -115,7 +123,9 @@ mod checked {
     fn write_gas_row(
         transaction_digest: String,
         new_gas: &GasUsageReport,
+        new_gas_details: &GasDetails,
         old_gas: &GasUsageReport,
+        old_gas_details: &GasDetails,
     ) {
         if new_gas.cost_summary == old_gas.cost_summary {
             return;
@@ -133,6 +143,13 @@ mod checked {
                 &old_gas.cost_summary.storage_rebate.to_string(),
                 &new_gas.gas_used.to_string(),
                 &old_gas.gas_used.to_string(),
+                &new_gas_details.instructions_executed.to_string(),
+                &old_gas_details.instructions_executed.to_string(),
+                &new_gas_details.stack_height.to_string(),
+                &old_gas_details.stack_height.to_string(),
+                &new_gas_details.memory_allocated.to_string(),
+                &old_gas_details.memory_allocated.to_string(),
+                &new_gas_details.transl_gas_used.to_string(),
             ])
             .expect("failed to write gas row");
         writer.flush().expect("failed to flush gas writer");
@@ -207,7 +224,8 @@ mod checked {
 
         compare_effects::<Mode>(&normal_effects, &new_effects);
 
-        normal_effects
+        let (tmp_store, gas_status, effects, timing, result, _gas_details) = normal_effects;
+        (tmp_store, gas_status, effects, timing, result)
     }
 
     #[instrument(name = "new_tx_execute_to_effects", level = "debug", skip_all)]
@@ -233,6 +251,7 @@ mod checked {
         TransactionEffects,
         Vec<ExecutionTiming>,
         Result<Mode::ExecutionResults, ExecutionError>,
+        GasDetails,
     ) {
         let mutable_inputs = if enable_expensive_checks {
             input_objects.all_mutable_inputs().keys().copied().collect()
@@ -304,6 +323,8 @@ mod checked {
             execution_params,
             trace_builder_opt,
         );
+
+        let gas_details = gas_charger.move_gas_status().gas_details();
 
         let status = if let Err(error) = &execution_result {
             // Elaborate errors in logs if they are unexpected or their status is terse.
@@ -399,6 +420,7 @@ mod checked {
             effects,
             timings,
             execution_result,
+            gas_details,
         )
     }
 
@@ -409,6 +431,7 @@ mod checked {
             TransactionEffects,
             Vec<ExecutionTiming>,
             Result<Mode::ExecutionResults, ExecutionError>,
+            GasDetails,
         ),
         new_effects: &(
             InnerTemporaryStore,
@@ -416,6 +439,7 @@ mod checked {
             TransactionEffects,
             Vec<ExecutionTiming>,
             Result<Mode::ExecutionResults, ExecutionError>,
+            GasDetails,
         ),
     ) {
         let ok = match (normal_effects.2.status(), new_effects.2.status()) {
@@ -451,7 +475,9 @@ mod checked {
         write_gas_row(
             normal_effects.2.transaction_digest().to_string(),
             &new_effects.1.gas_usage_report(),
+            &new_effects.5,
             &normal_effects.1.gas_usage_report(),
+            &normal_effects.5,
         );
 
         if !ok {
