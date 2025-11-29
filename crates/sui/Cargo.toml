@@ -22,6 +22,7 @@ bin-version.workspace = true
 bip32.workspace = true
 camino.workspace = true
 clap.workspace = true
+clap_complete.workspace = true
 codespan-reporting.workspace = true
 datatest-stable.workspace = true
 futures.workspace = true

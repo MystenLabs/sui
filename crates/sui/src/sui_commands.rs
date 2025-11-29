@@ -407,6 +407,14 @@ pub enum SuiCommand {
         #[command(flatten)]
         replay_config: SR2::ReplayConfigStable,
     },
+
+    /// Generate shell completion scripts for CLI
+    #[clap(name = "completion")]
+    Completion {
+        /// If provided, outputs the completion file for given shell
+        #[arg(long = "generate", value_enum)]
+        generator: clap_complete::Shell,
+    },
 }
 
 impl SuiCommand {
@@ -758,6 +766,12 @@ impl SuiCommand {
                     )?;
                 }
 
+                Ok(())
+            }
+            SuiCommand::Completion { generator } => {
+                let mut app: Command = SuiCommand::command();
+                let name = app.get_name().to_string();
+                clap_complete::generate(generator, &mut app, name, &mut std::io::stdout());
                 Ok(())
             }
         }
