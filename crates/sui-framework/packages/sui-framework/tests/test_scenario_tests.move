@@ -1,4 +1,4 @@
-crates/sui-framework/packages/sui-framework/sources/transfer.move// Copyright (c) Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
@@ -1320,13 +1320,15 @@ fun create_system_objects() {
 #[test]
 fun tx_macro() {
     let mut test = test_scenario::begin(@0);
-    test.create_system_objects();
     let effects = test.tx!(@0xa11ce, |test| {
-        let mut clock = test.take_shared<sui::clock::Clock>();
-        clock.increment_for_testing(10);
-        test_scenario::return_shared(clock);
+        let object = Object {
+            id: object::new(test.ctx()),
+            value: 10,
+        };
+
+        transfer::share_object(object);
     });
 
-    assert_eq!(effects.transferred_to_account().length(), 0);
+    assert_eq!(effects.shared().length(), 1);
     test.end();
 }
