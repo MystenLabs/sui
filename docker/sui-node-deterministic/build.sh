@@ -40,13 +40,5 @@ docker build -f "$DOCKERFILE" "$REPO_ROOT" \
 	--build-arg PROFILE="$PROFILE" \
 	--platform "$PLATFORM" \
 	--progress=plain \
-	--output type=tar,dest=$DIR/final.tar "$@" 
-
-#docker build -f "$DOCKERFILE" "$REPO_ROOT" \
-#	--build-arg GIT_REVISION="$GIT_REVISION" \
-#	--build-arg BUILD_DATE="$BUILD_DATE" \
-#	--build-arg PROFILE="$PROFILE" \
-#	--platform "$PLATFORM" \
-#	--progress=plain \
-#	--output type=oci,rewrite-timestamp=true,force-compression=true,tar=false,dest=$OCI_OUTPUT/sui-node-deterministic,name=sui-node-deterministic "$@" 
+	--output type=oci,rewrite-timestamp=true,force-compression=true,tar=false,dest=$OCI_OUTPUT/sui-node-deterministic,name=sui-node-deterministic "$@" 
 
