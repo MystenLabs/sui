@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs, Inc.
+crates/sui-framework/packages/sui-framework/sources/transfer.move// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
@@ -1313,4 +1313,20 @@ fun create_system_objects() {
     test_scenario::return_shared(deny_list);
 
     scenario.end();
+}
+
+// === Macros ===
+
+#[test]
+fun tx_macro() {
+    let mut test = test_scenario::begin(@0);
+    test.create_system_objects();
+    let effects = test.tx!(@0xa11ce, |test| {
+        let mut clock = test.take_shared<sui::clock::Clock>();
+        clock.increment_for_testing(10);
+        test_scenario::return_shared(clock);
+    });
+
+    assert_eq!(effects.transferred_to_account().length(), 0);
+    test.end();
 }

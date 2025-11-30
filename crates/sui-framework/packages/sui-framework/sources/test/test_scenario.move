@@ -428,6 +428,31 @@ public fun num_user_events(effects: &TransactionEffects): u64 {
     effects.num_user_events
 }
 
+// == Macros ===
+
+/// Execute a transaction `$f` in a `Scenario` and return the transaction effects.
+///
+/// ```move
+/// let test = test_scenario::begin(@0);
+/// let effects = test.tx!(@a11ce, |test| {
+///    // ...
+/// });
+///
+/// assert_eq!(effects.shared().length(), 0);
+///
+/// test.end();
+/// ```
+public macro fun tx(
+    $scenario: &mut Scenario,
+    $sender: address,
+    $f: |&mut Scenario|,
+): TransactionEffects {
+    let test = $scenario;
+    test.next_tx($sender);
+    $f(test);
+    test.next_tx($sender)
+}
+
 // == from address ==
 
 /// Remove the object of type `T` with ID `id` from the inventory of the `account`
