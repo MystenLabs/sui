@@ -18,7 +18,7 @@ FROM stagex/user-glibc@sha256:287280459258953d86a8e42b87003d2b0b1ddf0aa2e0fa70ba
 ################
 
 FROM pallet-rust AS build
-ARG PROFILE=release
+ARG PROFILE
 ARG CARGO_BUILD_TARGET
 ARG GIT_REVISION
 
@@ -63,7 +63,7 @@ RUN cargo build --profile ${PROFILE} --target ${CARGO_BUILD_TARGET} --bin sui-no
 ##################
 
 FROM scratch AS package
-ARG PROFILE=release
+ARG PROFILE
 ARG CARGO_BUILD_TARGET
 WORKDIR /sui
 ENV LD_LIBRARY_PATH=/lib64
