@@ -738,7 +738,6 @@ impl SuiCommand {
                 }
                 let rgp = context.get_reference_gas_price().await?;
                 let rpc_url = &context.get_active_env()?.rpc;
-                println!("rpc_url: {}", rpc_url);
                 let bridge_metrics = Arc::new(BridgeMetrics::new_for_testing());
                 let sui_bridge_client = SuiBridgeClient::new(rpc_url, bridge_metrics).await?;
                 let bridge_arg = sui_bridge_client
@@ -1049,7 +1048,10 @@ async fn start(
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     info!("Cluster started");
 
-    let fullnode_rpc_url = socket_addr_to_url(fullnode_rpc_address)?.to_string();
+    let fullnode_rpc_url = socket_addr_to_url(fullnode_rpc_address)?
+        .to_string()
+        .trim_end_matches("/")
+        .to_string();
     info!("Fullnode RPC URL: {fullnode_rpc_url}");
 
     let prometheus_registry = Registry::new();
@@ -1203,19 +1205,14 @@ async fn start(
 
     // Update the wallet_context with the configured fullnode rpc url so client operations will
     // succeed if a non-default port was provided.
-    let mut wallet_context = create_wallet_context(
-        FaucetConfig::default().wallet_client_timeout_secs,
-        config_dir.clone(),
-    )?;
-    if let Some(env) = wallet_context
-        .config
-        .envs
-        .iter_mut()
-        .find(|env| env.alias == "localnet")
-    {
-        env.rpc = fullnode_rpc_url.clone();
+
+    if config_dir.join(SUI_CLIENT_CONFIG).exists() {
+        let _ = update_wallet_config_rpc(config_dir.clone(), fullnode_rpc_url.clone())?;
     }
-    wallet_context.config.save()?;
+
+    if force_regenesis {
+        let _ = update_wallet_config_rpc(sui_config_dir()?, fullnode_rpc_url.clone())?;
+    }
 
     if let Some(input) = with_faucet {
         let faucet_address = parse_host_port(input, DEFAULT_FAUCET_PORT)
@@ -1264,7 +1261,11 @@ async fn start(
             .unwrap();
         }
 
-        let local_faucet = LocalFaucet::new(wallet_context, config.clone()).await?;
+        let local_faucet = LocalFaucet::new(
+            create_wallet_context(config.wallet_client_timeout_secs, config_dir.clone())?,
+            config.clone(),
+        )
+        .await?;
 
         let app_state = Arc::new(AppState {
             faucet: local_faucet,
@@ -1874,4 +1875,25 @@ fn normalize_bind_addr(addr: SocketAddr) -> IpAddr {
         IpAddr::V6(v6) if v6.is_unspecified() => IpAddr::V6(Ipv6Addr::LOCALHOST),
         ip => ip,
     }
+}
+
+fn update_wallet_config_rpc(
+    config_dir: PathBuf,
+    fullnode_rpc_url: String,
+) -> anyhow::Result<WalletContext, anyhow::Error> {
+    let mut wallet_context = create_wallet_context(
+        FaucetConfig::default().wallet_client_timeout_secs,
+        config_dir.clone(),
+    )?;
+    if let Some(env) = wallet_context
+        .config
+        .envs
+        .iter_mut()
+        .find(|env| env.alias == "localnet")
+    {
+        env.rpc = fullnode_rpc_url;
+    }
+    wallet_context.config.save()?;
+
+    Ok(wallet_context)
 }
