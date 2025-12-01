@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::pin::Pin;
+use std::time::Duration;
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -10,7 +11,10 @@ use sui_rpc::proto::sui::rpc::v2::{
     SubscribeCheckpointsRequest, subscription_service_client::SubscriptionServiceClient,
 };
 use sui_rpc_api::client::checkpoint_data_field_mask;
-use tonic::{Status, transport::Uri};
+use tonic::{
+    Status,
+    transport::{Endpoint, Uri},
+};
 
 use crate::ingestion::MAX_GRPC_MESSAGE_SIZE_BYTES;
 use crate::ingestion::error::{Error, Result};
@@ -35,18 +39,24 @@ pub struct StreamingClientArgs {
 /// gRPC-based implementation of the CheckpointStreamingClient trait.
 pub struct GrpcStreamingClient {
     uri: Uri,
+    connection_timeout: Duration,
 }
 
 impl GrpcStreamingClient {
-    pub fn new(uri: Uri) -> Self {
-        Self { uri }
+    pub fn new(uri: Uri, connection_timeout: Duration) -> Self {
+        Self {
+            uri,
+            connection_timeout,
+        }
     }
 }
 
 #[async_trait]
 impl CheckpointStreamingClient for GrpcStreamingClient {
     async fn connect(&mut self) -> Result<CheckpointStream> {
-        let mut client = SubscriptionServiceClient::connect(self.uri.clone())
+        let endpoint = Endpoint::from(self.uri.clone()).connect_timeout(self.connection_timeout);
+
+        let mut client = SubscriptionServiceClient::connect(endpoint)
             .await
             .map_err(|err| Error::RpcClientError(Status::from_error(err.into())))?
             .max_decoding_message_size(MAX_GRPC_MESSAGE_SIZE_BYTES);
@@ -107,49 +117,39 @@ pub mod test_utils {
             if actions.is_empty() {
                 return std::task::Poll::Ready(None);
             }
-            let action = actions.remove(0);
 
-            match action {
+            match &actions[0] {
                 StreamAction::Checkpoint(seq) => {
+                    let seq = *seq;
+                    actions.remove(0);
                     let mut builder = TestCheckpointBuilder::new(seq);
                     std::task::Poll::Ready(Some(Ok(builder.build_checkpoint())))
                 }
-                StreamAction::Error => std::task::Poll::Ready(Some(Err(Error::StreamingError(
-                    anyhow::anyhow!("Mock streaming error"),
-                )))),
-                StreamAction::Timeout { deadline, duration } => {
-                    match deadline {
-                        None => {
-                            // First poll: set deadline and re-insert
-                            let deadline = Instant::now() + duration;
-                            actions.insert(
-                                0,
-                                StreamAction::Timeout {
-                                    deadline: Some(deadline),
-                                    duration,
-                                },
-                            );
+                StreamAction::Error => {
+                    actions.remove(0);
+                    std::task::Poll::Ready(Some(Err(Error::StreamingError(anyhow::anyhow!(
+                        "Mock streaming error"
+                    )))))
+                }
+                StreamAction::Timeout { deadline, duration } => match deadline {
+                    None => {
+                        let deadline = Instant::now() + *duration;
+                        actions[0] = StreamAction::Timeout {
+                            deadline: Some(deadline),
+                            duration: *duration,
+                        };
+                        std::task::Poll::Pending
+                    }
+                    Some(deadline_instant) => {
+                        if Instant::now() >= *deadline_instant {
+                            actions.remove(0);
+                            drop(actions);
+                            self.poll_next(_cx)
+                        } else {
                             std::task::Poll::Pending
                         }
-                        Some(deadline_instant) => {
-                            if Instant::now() >= deadline_instant {
-                                // Timeout expired: remove and process next action
-                                drop(actions);
-                                self.poll_next(_cx)
-                            } else {
-                                // Still pending: re-insert and stay pending
-                                actions.insert(
-                                    0,
-                                    StreamAction::Timeout {
-                                        deadline: Some(deadline_instant),
-                                        duration,
-                                    },
-                                );
-                                std::task::Poll::Pending
-                            }
-                        }
                     }
-                }
+                },
             }
         }
     }
@@ -198,12 +198,8 @@ pub mod test_utils {
         }
 
         /// Insert a timeout at the back of the queue (causes poll_next to return Pending).
-        /// Defaults to 6 seconds to ensure 5-second wrapper times out first.
         pub fn insert_timeout(&mut self) {
-            self.actions.lock().unwrap().push(StreamAction::Timeout {
-                deadline: None,
-                duration: self.timeout_duration,
-            });
+            self.insert_timeout_with_duration(self.timeout_duration)
         }
 
         /// Insert a timeout with custom duration.

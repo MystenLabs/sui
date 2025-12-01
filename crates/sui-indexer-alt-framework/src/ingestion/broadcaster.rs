@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use futures::{Stream, StreamExt, future::try_join_all, stream};
+use futures::{Stream, future::try_join_all, stream};
 use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
 };
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
@@ -288,33 +289,29 @@ where
         (noop_streaming_task(ingestion_end), ingestion_end)
     };
 
-    let stream = match tokio::time::timeout(
-        config.streaming_connection_timeout(),
-        streaming_client.connect(),
-    )
-    .await
-    {
-        Ok(Ok(stream)) => stream,
-        Ok(Err(e)) => {
+    let stream = match streaming_client.connect().await {
+        Ok(stream) => stream,
+        Err(e) => {
             return handle_streaming_fallback(&format!("Streaming connection failed: {}", e));
         }
-        Err(_) => return handle_streaming_fallback("Streaming connection timed out"),
     };
 
-    let mut peekable_stream = Box::pin(stream).peekable();
+    // Wrap the stream with a statement timeout to prevent hanging indefinitely.
+    let timeout_stream = stream
+        .timeout(config.streaming_statement_timeout())
+        .map(|result| match result {
+            Ok(inner) => inner,
+            Err(_) => Err(Error::StreamingError(anyhow::anyhow!("Stream timeout"))),
+        });
 
-    let peeked_checkpoint = match tokio::time::timeout(
-        config.streaming_statement_timeout(),
-        Pin::new(&mut peekable_stream).peek(),
-    )
-    .await
-    {
-        Ok(Some(Ok(checkpoint))) => checkpoint,
-        Ok(Some(Err(e))) => {
+    let mut peekable_stream = Box::pin(timeout_stream).peekable();
+
+    let peeked_checkpoint = match peekable_stream.peek().await {
+        Some(Ok(checkpoint)) => checkpoint,
+        Some(Err(e)) => {
             return handle_streaming_fallback(&format!("Failed to peek latest checkpoint: {}", e));
         }
-        Ok(None) => return handle_streaming_fallback("Stream ended during peek"),
-        Err(_) => return handle_streaming_fallback("Peek operation timed out"),
+        None => return handle_streaming_fallback("Stream ended during peek"),
     };
 
     // We have successfully connected and peeked, reset backoff batch size.
@@ -345,7 +342,6 @@ where
         ingest_hi_watch_rx.clone(),
         metrics.clone(),
         cancel.clone(),
-        config.streaming_statement_timeout(),
     ));
 
     (streaming_handle, ingestion_end)
@@ -365,7 +361,6 @@ async fn stream_and_broadcast_range(
     mut ingest_hi_rx: watch::Receiver<Option<u64>>,
     metrics: Arc<IngestionMetrics>,
     cancel: CancellationToken,
-    statement_timeout: Duration,
 ) -> u64 {
     while lo < hi {
         tokio::select! {
@@ -373,14 +368,7 @@ async fn stream_and_broadcast_range(
                 info!(lo, "Shutdown received, stopping streaming");
                 break;
             }
-            result = tokio::time::timeout(statement_timeout, stream.next()) => {
-                let item = match result {
-                    Ok(item) => item,
-                    Err(_) => {
-                        warn!(lo, "Stream next() timed out");
-                        break;
-                    }
-                };
+            item = stream.next() => {
                 match item {
                     Some(Ok(checkpoint)) => {
                         let sequence_number = *checkpoint.summary.sequence_number();

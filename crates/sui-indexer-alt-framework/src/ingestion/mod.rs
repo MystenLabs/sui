@@ -111,7 +111,10 @@ impl IngestionService {
     ) -> Result<Self> {
         let metrics = IngestionMetrics::new(metrics_prefix, registry);
         let ingestion_client = IngestionClient::new(args.ingestion, metrics.clone())?;
-        let streaming_client = args.streaming.streaming_url.map(GrpcStreamingClient::new);
+        let streaming_client = args
+            .streaming
+            .streaming_url
+            .map(|uri| GrpcStreamingClient::new(uri, config.streaming_connection_timeout()));
 
         let subscribers = Vec::new();
         let (commit_hi_tx, commit_hi_rx) = mpsc::unbounded_channel();
