@@ -3568,8 +3568,8 @@ fn find_faucet_url(address: SuiAddress, rpc: &str) -> anyhow::Result<String> {
     }
 
     if host == localhost || host == localhost_0 {
-        return Ok("http://127.0.0.1:9123/v2/gas".to_string());
+        Ok("http://127.0.0.1:9123/v2/gas".to_string())
     } else {
-        bail!("Cannot recognize the active network. Please provide the gas faucet full URL.");
+        bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
     }
 }
