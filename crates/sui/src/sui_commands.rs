@@ -1206,11 +1206,12 @@ async fn start(
     // Update the wallet_context with the configured fullnode rpc url so client operations will
     // succeed if a non-default port was provided.
 
+    println!("Config dir {:?}", config_dir.display());
     if config_dir.join(SUI_CLIENT_CONFIG).exists() {
         let _ = update_wallet_config_rpc(config_dir.clone(), fullnode_rpc_url.clone())?;
     }
 
-    if force_regenesis {
+    if force_regenesis && sui_config_dir()?.join(SUI_CLIENT_CONFIG).exists() {
         let _ = update_wallet_config_rpc(sui_config_dir()?, fullnode_rpc_url.clone())?;
     }
 
@@ -1542,7 +1543,10 @@ async fn genesis(
         client_config.active_address = active_address;
     }
 
-    let rpc = socket_addr_to_url(fullnode_config.json_rpc_address)?.to_string();
+    let rpc = socket_addr_to_url(fullnode_config.json_rpc_address)?
+        .to_string()
+        .trim_end_matches("/")
+        .to_string();
     client_config.add_env(SuiEnv {
         alias: "localnet".to_string(),
         rpc,
