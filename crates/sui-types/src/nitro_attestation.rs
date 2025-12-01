@@ -97,9 +97,14 @@ impl From<NitroAttestationVerifyError> for SuiError {
 pub fn parse_nitro_attestation(
     attestation_bytes: &[u8],
     is_upgraded_parsing: bool,
+    include_all_nonzero_pcrs: bool,
 ) -> SuiResult<(Vec<u8>, Vec<u8>, AttestationDocument)> {
     let cose_sign1 = CoseSign1::parse_and_validate(attestation_bytes)?;
-    let doc = AttestationDocument::parse_payload(&cose_sign1.payload, is_upgraded_parsing)?;
+    let doc = AttestationDocument::parse_payload(
+        &cose_sign1.payload,
+        is_upgraded_parsing,
+        include_all_nonzero_pcrs,
+    )?;
     let msg = cose_sign1.to_signed_message()?;
     let signature = cose_sign1.signature;
     Ok((signature, msg, doc))
@@ -391,9 +396,10 @@ impl AttestationDocument {
     pub fn parse_payload(
         payload: &[u8],
         is_upgraded_parsing: bool,
+        include_all_nonzero_pcrs: bool,
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
         let document_map = Self::to_map(payload, is_upgraded_parsing)?;
-        Self::validate_document_map(&document_map, is_upgraded_parsing)
+        Self::validate_document_map(&document_map, is_upgraded_parsing, include_all_nonzero_pcrs)
     }
 
     fn to_map(
@@ -444,6 +450,7 @@ impl AttestationDocument {
     fn validate_document_map(
         document_map: &BTreeMap<String, Value>,
         is_upgraded_parsing: bool,
+        include_all_nonzero_pcrs: bool,
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
         let module_id = document_map
             .get("module_id")
@@ -604,19 +611,26 @@ impl AttestationDocument {
                             )
                         })?;
 
-                        // Valid PCR indices are 0, 1, 2, 3, 4, 8 for AWS. Ignores other keys.
-                        // See: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where>
-                        if !matches!(key_u8, 0 | 1 | 2 | 3 | 4 | 8) {
-                            continue;
-                        }
-
                         if pcr_map.contains_key(&key_u8) {
                             return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
                                 format!("duplicate PCR index {}", key_u8),
                             ));
                         }
 
-                        pcr_map.insert(key_u8, value.to_vec());
+                        if include_all_nonzero_pcrs {
+                            // If flag=true, parse all 0..31 PCRs, but skip all-zero values.
+                            // See: <https://github.com/aws/aws-nitro-enclaves-nsm-api/issues/18#issuecomment-970172662>
+                            // Also: <https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/nsm-test/src/bin/nsm-check.rs#L193-L199>
+                            if key_u8 <= 31 && !value.iter().all(|&b| b == 0) {
+                                pcr_map.insert(key_u8, value.to_vec());
+                            }
+                        } else {
+                            // In legacy mode (flag=false): Parse only specific PCRs (0, 1, 2, 3, 4, 8), including zero values.
+                            // See: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where>
+                            if matches!(key_u8, 0 | 1 | 2 | 3 | 4 | 8) {
+                                pcr_map.insert(key_u8, value.to_vec());
+                            }
+                        }
                     }
                 }
                 Ok((pcr_vec, pcr_map))
