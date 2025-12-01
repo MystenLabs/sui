@@ -248,3 +248,66 @@ async fn test_archive_epoch_if_needed() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_snapshot_restore_from_archive() -> Result<(), anyhow::Error> {
+    let db_path = temp_dir();
+    let restored_db_path = temp_dir();
+    let local = temp_dir().join("local_dir");
+    let remote = temp_dir().join("remote_dir");
+    let restored_local = temp_dir().join("local_dir_restore");
+    let local_store_config = ObjectStoreConfig {
+        object_store: Some(ObjectStoreType::File),
+        directory: Some(local),
+        ..Default::default()
+    };
+    let remote_store_config = ObjectStoreConfig {
+        object_store: Some(ObjectStoreType::File),
+        directory: Some(remote.clone()),
+        ..Default::default()
+    };
+
+    let snapshot_writer = StateSnapshotWriterV1::new(
+        &local_store_config,
+        &remote_store_config,
+        FileCompression::Zstd,
+        NonZeroUsize::new(1).unwrap(),
+    )
+    .await?;
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None, None));
+    insert_keys(&perpetual_db, 1000)?;
+    let root_accumulator =
+        ECMHLiveObjectSetDigest::from(accumulate_live_object_set(&perpetual_db, true).digest());
+    snapshot_writer
+        .write_internal(0, true, perpetual_db.clone(), root_accumulator)
+        .await?;
+
+    // Move snapshot to archive
+    let remote_path = remote.join("epoch_0");
+    let archive_path = remote.join("archive").join("epoch_0");
+    std::fs::create_dir_all(archive_path.parent().unwrap())?;
+    std::fs::rename(&remote_path, &archive_path)?;
+
+    let local_store_restore_config = ObjectStoreConfig {
+        object_store: Some(ObjectStoreType::File),
+        directory: Some(restored_local),
+        ..Default::default()
+    };
+    let mut snapshot_reader = StateSnapshotReaderV1::new(
+        0,
+        &remote_store_config,
+        &local_store_restore_config,
+        NonZeroUsize::new(1).unwrap(),
+        MultiProgress::new(),
+        false, // skip_reset_local_store
+        3,     // max_retries
+    )
+    .await?;
+    let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None, None);
+    let (_abort_handle, abort_registration) = AbortHandle::new_pair();
+    snapshot_reader
+        .read(&restored_perpetual_db, abort_registration, None)
+        .await?;
+    compare_live_objects(&perpetual_db, &restored_perpetual_db, true)?;
+    Ok(())
+}
