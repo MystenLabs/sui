@@ -1318,6 +1318,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             commit_info,
             state.indirect_state_observer.take().unwrap(),
         );
+        debug!(
+            tx_digest=?transaction.digest(),
+            "Consensus commit prologue transaction: {:?}",
+            transaction.transaction_data()
+        );
         Some(transaction)
     }
 
