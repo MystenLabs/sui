@@ -86,7 +86,6 @@ enum ArgumentKind {
 #[serde(rename_all = "camelCase")]
 struct SimulationResult {
     effects: Option<TransactionEffects>,
-    events: Option<Events>,
     outputs: Option<Vec<CommandResult>>,
     error: Option<String>,
 }
@@ -116,16 +115,6 @@ struct Sender {
 struct GasInput {
     #[serde(rename = "gasBudget")]
     gas_budget: String,
-}
-
-// Events is now a Vec<EventNode> directly, not wrapped in nodes
-type Events = Vec<EventNode>;
-
-#[derive(Debug, Deserialize)]
-struct EventNode {
-    #[serde(rename = "eventBcs")]
-    event_bcs: String,
-    sender: Sender,
 }
 
 #[derive(Debug, Deserialize)]
@@ -348,12 +337,25 @@ async fn test_simulate_transaction_with_events() {
             query($txData: JSON!) {
                 simulateTransaction(transaction: $txData) {
                     effects {
-                        digest
                         status
-                    }
-                    events {
-                        eventBcs
-                        sender { address }
+                        events {
+                            nodes {
+                                contents {
+                                    json
+                                }
+                                transactionModule {
+                                    package {
+                                        version
+                                        modules {
+                                            nodes {
+                                                name
+                                            }         
+                                        }
+                                    }
+                                    name
+                                }
+                            }
+                        }
                     }
                     error
                 }
@@ -370,19 +372,40 @@ async fn test_simulate_transaction_with_events() {
         .await
         .expect("GraphQL request failed");
 
-    let simulation_result: SimulationResult =
-        serde_json::from_value(result.pointer("/data/simulateTransaction").unwrap().clone())
-            .unwrap();
-
-    // Verify events were simulated
-    let events = simulation_result.events.unwrap();
-    assert!(!events.is_empty());
-
-    let sender_address = validator_cluster.get_address_0();
-    for event_node in &events {
-        assert!(!event_node.event_bcs.is_empty());
-        assert_eq!(event_node.sender.address, sender_address.to_string());
+    // Verify package version and digest are populated correctly from execution context
+    insta::assert_json_snapshot!(result.pointer("/data/simulateTransaction"), @r#"
+    {
+      "effects": {
+        "status": "SUCCESS",
+        "events": {
+          "nodes": [
+            {
+              "contents": {
+                "json": {
+                  "message": "Package published successfully!",
+                  "value": "42"
+                }
+              },
+              "transactionModule": {
+                "package": {
+                  "version": 1,
+                  "modules": {
+                    "nodes": [
+                      {
+                        "name": "emit_event"
+                      }
+                    ]
+                  }
+                },
+                "name": "emit_event"
+              }
+            }
+          ]
+        }
+      },
+      "error": null
     }
+    "#);
 
     graphql_cluster.stopped().await;
 }

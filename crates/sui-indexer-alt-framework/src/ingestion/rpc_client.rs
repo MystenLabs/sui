@@ -17,8 +17,8 @@ use crate::ingestion::ingestion_client::{
 #[async_trait]
 impl IngestionClientTrait for RpcClient {
     async fn fetch(&self, checkpoint: u64) -> FetchResult {
-        let request = GetCheckpointRequest::by_sequence_number(checkpoint).with_read_mask(
-            FieldMask::from_paths([
+        let request: GetCheckpointRequest = GetCheckpointRequest::by_sequence_number(checkpoint)
+            .with_read_mask(FieldMask::from_paths([
                 "summary.bcs",
                 "signature",
                 "contents.bcs",
@@ -27,8 +27,7 @@ impl IngestionClientTrait for RpcClient {
                 "transactions.effects.unchanged_loaded_runtime_objects",
                 "transactions.events.bcs",
                 "objects.objects.bcs",
-            ]),
-        );
+            ]));
 
         let response = self
             .clone()
