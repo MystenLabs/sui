@@ -62,15 +62,10 @@ public fun new_entry<T: drop>(priority: u64, value: T): Entry<T> {
     Entry { priority, value }
 }
 
-public fun create_entries<T: drop>(mut p: vector<u64>, mut v: vector<T>): vector<Entry<T>> {
-    let len = p.length();
-    assert!(v.length() == len, ELengthMismatch);
+public fun create_entries<T: drop>(p: vector<u64>, v: vector<T>): vector<Entry<T>> {
+    assert!(v.length() == p.length(), ELengthMismatch);
     let mut res = vector[];
-    len.do!(|_| {
-        let priority = p.pop_back();
-        let value = v.pop_back();
-        res.push_back(Entry { priority, value });
-    });
+    p.zip_do_reverse!(v, |priority, value| res.push_back(Entry { priority, value }));
     res.reverse();
     res
 }

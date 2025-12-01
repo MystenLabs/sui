@@ -250,15 +250,10 @@ Insert a new entry into the queue.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_create_entries">create_entries</a>&lt;T: drop&gt;(<b>mut</b> p: vector&lt;u64&gt;, <b>mut</b> v: vector&lt;T&gt;): vector&lt;<a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a>&lt;T&gt;&gt; {
-    <b>let</b> len = p.length();
-    <b>assert</b>!(v.length() == len, <a href="../sui/priority_queue.md#sui_priority_queue_ELengthMismatch">ELengthMismatch</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_create_entries">create_entries</a>&lt;T: drop&gt;(p: vector&lt;u64&gt;, v: vector&lt;T&gt;): vector&lt;<a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a>&lt;T&gt;&gt; {
+    <b>assert</b>!(v.length() == p.length(), <a href="../sui/priority_queue.md#sui_priority_queue_ELengthMismatch">ELengthMismatch</a>);
     <b>let</b> <b>mut</b> res = vector[];
-    len.do!(|_| {
-        <b>let</b> priority = p.pop_back();
-        <b>let</b> value = v.pop_back();
-        res.push_back(<a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a> { priority, value });
-    });
+    p.zip_do_reverse!(v, |priority, value| res.push_back(<a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a> { priority, value }));
     res.reverse();
     res
 }
