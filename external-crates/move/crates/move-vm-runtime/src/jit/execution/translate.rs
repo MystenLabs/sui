@@ -1060,7 +1060,7 @@ fn code(
     jump_tables: &mut [VMPointer<VariantJumpTable>],
     blocks: BTreeMap<u16, Vec<input::Bytecode>>,
 ) -> PartialVMResult<ArenaVec<Bytecode>> {
-    let function_bytecode = flatten_and_renumber_blocks(blocks, jump_tables);
+    let function_bytecode = flatten_and_renumber_blocks(blocks, jump_tables)?;
     let result = context.package_context.package_arena.alloc_vec(
         function_bytecode
             .into_iter()
@@ -1074,16 +1074,34 @@ fn code(
 pub(crate) fn flatten_and_renumber_blocks(
     blocks: BTreeMap<u16, Vec<input::Bytecode>>,
     jump_tables: &mut [VMPointer<VariantJumpTable>],
-) -> Vec<input::Bytecode> {
+) -> PartialVMResult<Vec<input::Bytecode>> {
     dbg_println!("Input: {:#?}", blocks);
     let mut offset_map = BTreeMap::new(); // Map line name (u16) -> new bytecode offset
     let mut concatenated = Vec::new();
 
     // Calculate new offsets and build concatenated bytecode
-    let mut current_offset = 0;
+    let mut current_offset: u16 = 0;
     for (line_name, bytecodes) in &blocks {
         offset_map.insert(*line_name, current_offset);
-        current_offset += bytecodes.len() as u16;
+
+        // Check for overflow when adding bytecode length
+        let bytecode_len_u16 = u16::try_from(bytecodes.len()).map_err(|_| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                format!("Bytecode block size {} exceeds u16::MAX", bytecodes.len()),
+            )
+        })?;
+
+        current_offset = current_offset
+            .checked_add(bytecode_len_u16)
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!(
+                        "Bytecode offset overflow: {} + {} exceeds u16::MAX",
+                        current_offset, bytecode_len_u16
+                    ),
+                )
+            })?;
+
         concatenated.extend_from_slice(bytecodes);
     }
     dbg_println!("Concatenated: {:#?}", concatenated);
@@ -1100,7 +1118,7 @@ pub(crate) fn flatten_and_renumber_blocks(
     }
 
     // Rewrite branch instructions with new offsets
-    concatenated
+    Ok(concatenated
         .into_iter()
         .map(|bytecode| match bytecode {
             input::Bytecode::BrFalse(target) => {
@@ -1119,7 +1137,7 @@ pub(crate) fn flatten_and_renumber_blocks(
             }
             other => other,
         })
-        .collect()
+        .collect())
 }
 
 fn bytecode(
