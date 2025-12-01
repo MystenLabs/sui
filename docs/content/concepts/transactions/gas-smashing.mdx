@@ -4,36 +4,35 @@ description: Sui optimizes coin management by combining multiple coins into a si
 keywords: [ gas smashing, smash gas, combine coins, combine coins into one object, create ptb for coins, create coin ptb, group coins together, group coins into ptb, create ptb with multiple coins, coin management, multiple coin management ]
 ---
 
-Every transaction on Sui has a gas fee that must be paid for successful execution. Gas smashing lets you pay this fee using multiple coins instead of a single one. This is useful when you have many smaller denomination coins or want to reduce the number of coins in your account. Gas smashing is most powerful when paired with the `GasCoin` programmable transaction block (PTB) argument.
+Every transaction on Sui has a gas fee that must be paid for successful execution. Gas smashing lets you pay this fee using multiple coins instead of a single one. This is useful when you have many smaller denomination coins or want to reduce the number of coins in your account. Gas smashing is most powerful when paired with the `GasCoin` [programmable transaction block (PTB)](/concepts/transactions/prog-txn-blocks.mdx) argument.
 
-## Smashing gas
+Gas smashing happens automatically in a transaction if you provide multiple coins to pay for the gas fee. When Sui executes the transaction, the network combines, or smashes, all of the provided coins into a single coin. Smashing occurs regardless of coin amounts or the gas budget provided with the transaction, as long as it is within the minimum and maximum gas budgets. Sui deducts the gas fee from the single coin regardless of the execution status of the transaction. This means that even if the transaction fails to execute for some reason, such as an execution error, the provided gas coins remain smashed after the transaction's execution.
 
-Gas smashing happens automatically in a transaction if you provide multiple coins to pay for the gas fee. When Sui executes a transaction, Sui combines, or _smashes_, all of the coins you provide to pay for the gas into a single coin. The smashing occurs regardless of coin amounts or the gas budget provided with the transaction (as long as it is within the minimum and maximum gas budgets). Sui deducts the gas fee from the single coin regardless of the execution status of the transaction. In particular, this means that even if the transaction fails to execute for some reason (such as an execution error) the coins that you provided as gas coins remain smashed after the transaction's execution.
+This design makes gas smashing a practical way to both manage coins and pay gas in the same transaction, as you can combine many small coins while simultaneously executing unrelated operations in one PTB.
 
-Key points:  
-- The transaction deducts gas from the smashed coin whether execution succeeds or fails.  
-- If execution fails, the gas coins remain combined after the transaction.  
-- The smashed coin can then be used in the same PTB for other operations, such as transferring the remaining SUI after gas is deducted.  
+You can smash at most 256 coins in a single PTB. Transactions with more than 256 gas coins fail.
 
-This design makes gas smashing a practical way to both manage coins and pay gas in the same transaction. For example, you can combine many small coins while simultaneously executing unrelated operations in one PTB.
+## Rebates
 
-Limitations and effects:  
-- You can smash at most 256 coins in a single PTB. Transactions with more than 256 gas coins fail.  
-- All but the first coin are deleted, often generating a storage rebate.  
-- Rebates cannot be applied to pay for gas in the same transaction. Instead, the rebate and the remaining balance after gas deduction are credited to the first coin once execution completes.  
+All but the first coin are deleted, often generating a storage rebate.  
 
-## Running out of gas with a refund
+Rebates cannot be applied to pay for gas in the same transaction. Instead, the rebate and the remaining balance after gas deduction are credited to the first coin once execution completes.  
+
+### Running out of gas with a refund
 
 Because smashing always occurs, storage rebates can lead to unusual outcomes where a transaction both runs out of gas and still produces a net refund.  
 
-Example:  
+Consider the following scenario:
+
 - Transaction `T` has a gas budget of `5000`.  
-- You provide five coins with balances: `C1 = 1000`, `C2 = 2000`, `C3 = 3000`, `C4 = 4000`, `C5 = 5000`.  
+
+- You provide 5 coins with the balances: `C1 = 1000`, `C2 = 2000`, `C3 = 3000`, `C4 = 4000`, `C5 = 5000`. 
+
 - The storage rebate per coin is `2000`.  
+
 - If the gas cost exceeds the `5000` budget, `T` fails with `OutOfGas`.  
 
 However, after smashing and rebates:  
-
 ```
 Final balance in C1 =
   (1000 + 2000 + 3000 + 4000 + 5000)   // all coin balances
@@ -43,4 +42,4 @@ Final balance in C1 =
 = 18000
 ```
 
-In this case, `T` fails but you still receive a net refund of `3000`.  
+In this case, `T` fails but you still receive a net refund of `3000`.

@@ -4,20 +4,16 @@ description: Intent signing provides a compact domain separator to data signed b
 keywords: [ intent, signing, intent signatures, intent message, domain separators, compact structs, signing standard, compact domain separator, user signatures, authority signatures, proof of possession, generate proof of possession ]
 ---
 
-In Sui, an intent is a compact struct that serves as the domain separator for a message that a signature commits to. The data that the signature commits to is an intent message. All signatures in Sui must commit to an intent message, instead of the message itself.
-
-## Motivation
-
-In previous releases, Sui used a special `Signable` trait that attached the Rust struct name as a prefix to the serialized data. This is not ideal because it is:
-
-- **Not compact:** The prefix `TransactionData::` is significantly larger than 1 byte.
-- **Not user-friendly:** Non-Rust applications need to maintain a list of Rust-struct names.
+In Sui, an intent is a compact struct that serves as the domain separator for a message that a signature commits to. The data that the signature commits to is an intent message. All signatures in Sui must commit to an intent message instead of the message itself.
 
 The intent signing standard provides a compact domain separator to the data being signed for both user signatures and authority signatures. It has several benefits, including:
 
 - The intent scope is replaced by a u8 representation instead of a Rust struct tag name string.
+
 - In addition to the intent scope, other important domain separators can be committed as well (such as intent version and app ID).
+
 - The data itself no longer needs to implement the `Signable` trait, it just needs to implement `Serialize`.
+
 - All signatures can adopt the same intent message structure, including both user signatures (only to commit to `TransactionData`) and authority signature (commits to all internal intent scopes such as `TransactionEffects`, `ProofOfPossession`, and `SenderSignedTransaction`).
 
 ## Structs
@@ -71,24 +67,19 @@ const signature = await this.sign(intentMessage);
 Under the hood, the `new_secure` method in Rust and the `signData` method in TypeScript does the following:
 
 1.  Serializes the intent message as the 3-byte intent concatenated with the BCS serialized bytes of the transaction data.
+
 1.  Applies Blake2b hash to get the 32-byte digest.
-1.  Passes the digest to the signing API for each corresponding scheme of the signer. The supported signature schemes are pure Ed25519, ECDSA Secp256k1, and ECDSA Secp256r1. See [Sui Signatures](./signatures.mdx#signature-requirements) for requirements of each scheme.
+
+1.  Passes the digest to the signing API for each corresponding scheme of the signer. The supported signature schemes are pure Ed25519, ECDSA Secp256k1, and ECDSA Secp256r1. See [Sui Signatures](/concepts/transactions/transaction-auth.mdx#signature-requirements) for requirements of each scheme.
 
 ## Authority signature
 
 The authority signature is created using the protocol key. The data that it commits to is also an intent message `intent || message`. See all available intent scopes [in the source code](https://github.com/MystenLabs/sui/blob/0dc1a38f800fc2d8fabe11477fdef702058cf00d/crates/sui-types/src/intent.rs#L66).
 
-### How to generate proof of possession for an authority
+#### How to generate proof of possession for an authority
 
 When an authority requests to join the network, the protocol public key and its proof of possession (PoP) are required to be submitted. PoP is required to prevent [rogue key attack](https://crypto.stanford.edu/~dabo/pubs/papers/BLSmultisig.html).
 
 The proof of possession is a BLS signature created using the authority protocol private key, committed over the following message: `intent || pubkey || address || epoch`. Here `intent` is serialized to `[5, 0, 0]` representing an intent with scope as `Proof of Possession`, `version` as `V0`, and `app_id` as `Sui`. The `pubkey` value is the serialized public key bytes of the authority BLS protocol key. The `address` value is the account address associated with the authority account key. The `epoch` value is serialized to `[0, 0, 0, 0, 0, 0, 0, 0]`.
 
 To generate a proof of possession in Rust, see implementation at `fn generate_proof_of_possession`. For test vectors, see `fn test_proof_of_possession`.
-
-# Implementation
-
-1. [Struct and enum definitions](https://github.com/MystenLabs/sui/blob/0dc1a38f800fc2d8fabe11477fdef702058cf00d/crates/sui-types/src/intent.rs)
-2. [Test](https://github.com/MystenLabs/sui/blob/d009e82fa35bda4f2b3e7a86a9529d36c32a8159/crates/sui-types/src/unit_tests/intent_tests.rs)
-3. User transaction intent signing [PR 1](https://github.com/MystenLabs/sui/pull/6445), [PR 2](https://github.com/MystenLabs/sui/pull/8321)
-4. Authority intent signing [PR 1](https://github.com/MystenLabs/sui/pull/8154), [PR 2](https://github.com/MystenLabs/sui/pull/8726)
