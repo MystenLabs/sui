@@ -150,12 +150,17 @@ impl EffectsContents {
     }
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.
+    ///
+    /// `null` for executed/simulated transactions that have not been included in a checkpoint.
     async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
         let Some(content) = &self.contents else {
             return Ok(None);
         };
 
-        Ok(Some(DateTime::from_ms(content.timestamp_ms() as i64)?))
+        content
+            .timestamp_ms()
+            .map(|ms| DateTime::from_ms(ms as i64))
+            .transpose()
     }
 
     /// The epoch this transaction was finalized in.

@@ -340,6 +340,7 @@ async fn test_simulate_transaction_with_events() {
                         status
                         events {
                             nodes {
+                                timestamp
                                 contents {
                                     json
                                 }
@@ -380,6 +381,7 @@ async fn test_simulate_transaction_with_events() {
         "events": {
           "nodes": [
             {
+              "timestamp": null,
               "contents": {
                 "json": {
                   "message": "Package published successfully!",
