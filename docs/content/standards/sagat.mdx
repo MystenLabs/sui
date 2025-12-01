@@ -1,0 +1,111 @@
+## Overview 
+
+High level view of what Sagat is 
+
+## Risks 
+
+Describe risks, include info for self hosting Sagat to minimize risks 
+
+## Using the Sagat web interface 
+
+https://sagat.mystenlabs.com/
+
+### Connecting Slush 
+
+Instructions/screenshots to connect Slush to Sagat UI 
+
+### Testnet vs Mainnet
+
+Indication of differences between networks 
+
+### Signature analyzer 
+
+What signature analyzer does and how to use it via UI 
+
+### Transaction signer 
+
+What transaction signer does and how to use it via UI
+
+## Using the Sagat SDK 
+
+### Register public keys
+
+Register Addresses: User  with the system (required before creating multisigs)
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L214-L222
+
+### Creating and managing multisig 
+
+Create Multisig: User creates a new multisig wallet with specified members, weights, and threshold
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L72-L94
+
+View Multisig: User retrieves details about a specific multisig wallet
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L96-L100
+
+Manage Proposers: Add or remove addresses that can create proposals for the multisig
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L297-L346
+
+Get Multisig Connections: User retrieves all multisigs they're connected to across different public keys
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L283-L294
+
+Get Address Info: User looks up public key information for a registered address
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L279-L281
+
+### Multisig invitations 
+
+View Invitations: User checks pending multisig invitations for their public key
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L234-L251
+
+Accept Invitation: User accepts an invitation to join a multisig by signing a message
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L102-L113
+
+Reject Invitation: User declines a multisig invitation
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L115-L126
+
+### Proposal creation and voting 
+
+Create Proposal: User proposes a transaction for the multisig to execute
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L128-L134
+
+
+View Proposals: User browses proposals for a multisig (with filtering by status, pagination)
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L136-L171
+
+
+View Proposal by Digest: User looks up a specific proposal using its transaction digest
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L173-L177
+
+
+Vote on Proposal: User approves or rejects a proposal by signing
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L179-L190
+
+
+Cancel Proposal: User cancels their own proposal before it's executed
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L197-L208
+
+### Proposal execution 
+
+Verify Proposal: After executing a proposal on-chain, user marks it as completed or failed in the system to unblock the pending queue
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L258-L265
+
+Verify by Digest: Alternative verification method using the transaction digest
+
+https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L267-L274
+
+## Self hosting Sagat 
+
+Instructions to self host Sagat 
