@@ -1258,6 +1258,8 @@ type Event {
 	"""
 	Timestamp corresponding to the checkpoint this event's transaction was finalized in.
 	All events from the same transaction share the same timestamp.
+	
+	`null` for simulated/executed transactions as they are not included in a checkpoint.
 	"""
 	timestamp: DateTime
 	"""
@@ -3821,6 +3823,8 @@ type TransactionEffects {
 	status: ExecutionStatus
 	"""
 	Timestamp corresponding to the checkpoint this transaction was finalized in.
+	
+	`null` for executed/simulated transactions that have not been included in a checkpoint.
 	"""
 	timestamp: DateTime
 	"""
