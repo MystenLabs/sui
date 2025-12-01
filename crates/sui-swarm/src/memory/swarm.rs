@@ -606,7 +606,12 @@ enum SwarmDirectory {
 
 impl SwarmDirectory {
     fn new_temporary() -> Self {
-        SwarmDirectory::Temporary(nondeterministic!(TempDir::new().unwrap()))
+        let temp_dir = nondeterministic!(TempDir::new().unwrap());
+        // Write callstack to a file for debugging purposes
+        let callstack = std::backtrace::Backtrace::force_capture();
+        let callstack_file = temp_dir.path().join("CREATED_BY_CALLSTACK.txt");
+        std::fs::write(&callstack_file, callstack.to_string()).ok();
+        SwarmDirectory::Temporary(temp_dir)
     }
 }
 
