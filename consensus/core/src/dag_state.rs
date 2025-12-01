@@ -106,6 +106,13 @@ pub struct DagState {
 }
 
 impl DagState {
+    /// Checks if the given authority index is valid for this committee.
+    /// Returns true if the index is within bounds, false otherwise.
+    #[inline]
+    fn is_valid_authority(&self, authority: AuthorityIndex) -> bool {
+        authority.value() < self.context.committee.size()
+    }
+
     /// Initializes DagState from storage.
     pub fn new(context: Arc<Context>, store: Arc<dyn Store>) -> Self {
         let cached_rounds = context.parameters.dag_state_cached_rounds as Round;
@@ -144,6 +151,16 @@ impl DagState {
                 .iter()
                 .for_each(|commit| {
                     for block_ref in commit.blocks() {
+                        // Bounds check for defense in depth - stored commits should have valid indices
+                        if block_ref.author.value() >= num_authorities {
+                            tracing::error!(
+                                "Recovery: invalid authority index {} in block_ref {} from commit {}",
+                                block_ref.author,
+                                block_ref,
+                                commit.index()
+                            );
+                            continue;
+                        }
                         last_committed_rounds[block_ref.author] =
                             max(last_committed_rounds[block_ref.author], block_ref.round);
                     }
@@ -336,6 +353,15 @@ impl DagState {
     /// Updates internal metadata for a block.
     fn update_block_metadata(&mut self, block: &VerifiedBlock) {
         let block_ref = block.reference();
+
+        // Debug assertion for defense in depth - VerifiedBlock should have valid author
+        debug_assert!(
+            self.is_valid_authority(block_ref.author),
+            "update_block_metadata: invalid authority index {} in block {}",
+            block_ref.author,
+            block_ref
+        );
+
         self.recent_blocks
             .insert(block_ref, BlockInfo::new(block.clone()));
         self.recent_refs_by_authority[block_ref.author].insert(block_ref);
@@ -525,7 +551,17 @@ impl DagState {
 
     /// Retrieves the last accepted block from the specified `authority`. If no block is found in cache
     /// then the genesis block is returned as no other block has been received from that authority.
+    ///
+    /// # Panics
+    /// Panics if the authority index is out of bounds. Callers must ensure the authority is valid.
     pub(crate) fn get_last_block_for_authority(&self, authority: AuthorityIndex) -> VerifiedBlock {
+        assert!(
+            self.is_valid_authority(authority),
+            "Invalid authority index: {} >= committee size {}",
+            authority,
+            self.context.committee.size()
+        );
+
         if let Some(last) = self.recent_refs_by_authority[authority].last() {
             return self
                 .recent_blocks
@@ -559,6 +595,8 @@ impl DagState {
 
     // Retrieves the cached block within the range [start_round, end_round) from a given authority,
     // limited in total number of blocks.
+    //
+    // Returns empty vec if authority index is invalid.
     pub(crate) fn get_cached_blocks_in_range(
         &self,
         authority: AuthorityIndex,
@@ -567,6 +605,16 @@ impl DagState {
         limit: usize,
     ) -> Vec<VerifiedBlock> {
         if start_round >= end_round || limit == 0 {
+            return vec![];
+        }
+
+        // Bounds check: return empty for invalid authority
+        if !self.is_valid_authority(authority) {
+            debug!(
+                "get_cached_blocks_in_range called with invalid authority index: {} >= {}",
+                authority,
+                self.context.committee.size()
+            );
             return vec![];
         }
 
@@ -592,6 +640,8 @@ impl DagState {
     }
 
     // Retrieves the last cached block within the range [start_round, end_round) from a given authority.
+    //
+    // Returns None if authority index is invalid.
     pub(crate) fn get_last_cached_block_in_range(
         &self,
         authority: AuthorityIndex,
@@ -599,6 +649,16 @@ impl DagState {
         end_round: Round,
     ) -> Option<VerifiedBlock> {
         if start_round >= end_round {
+            return None;
+        }
+
+        // Bounds check: return None for invalid authority
+        if !self.is_valid_authority(authority) {
+            debug!(
+                "get_last_cached_block_in_range called with invalid authority index: {} >= {}",
+                authority,
+                self.context.committee.size()
+            );
             return None;
         }
 
@@ -690,10 +750,22 @@ impl DagState {
 
     /// Checks whether a block exists in the slot. The method checks only against the cached data.
     /// If the user asks for a slot that is not within the cached data then a panic is thrown.
+    ///
+    /// Returns false if the authority index is invalid.
     pub(crate) fn contains_cached_block_at_slot(&self, slot: Slot) -> bool {
         // Always return true for genesis slots.
         if slot.round == GENESIS_ROUND {
             return true;
+        }
+
+        // Bounds check: return false for invalid authority
+        if !self.is_valid_authority(slot.authority) {
+            debug!(
+                "contains_cached_block_at_slot called with invalid authority index: {} >= {}",
+                slot.authority,
+                self.context.committee.size()
+            );
+            return false;
         }
 
         let eviction_round = self.evicted_rounds[slot.authority];
@@ -715,11 +787,24 @@ impl DagState {
 
     /// Checks whether the required blocks are in cache, if exist, or otherwise will check in store. The method is not caching
     /// back the results, so its expensive if keep asking for cache missing blocks.
+    ///
+    /// For block refs with invalid authority indices, returns false (block does not exist).
     pub(crate) fn contains_blocks(&self, block_refs: Vec<BlockRef>) -> Vec<bool> {
         let mut exist = vec![false; block_refs.len()];
         let mut missing = Vec::new();
 
         for (index, block_ref) in block_refs.into_iter().enumerate() {
+            // Bounds check: treat invalid authority as "block does not exist"
+            if !self.is_valid_authority(block_ref.author) {
+                debug!(
+                    "contains_blocks: invalid authority index {} in block_ref {}, treating as non-existent",
+                    block_ref.author,
+                    block_ref
+                );
+                exist[index] = false;
+                continue;
+            }
+
             let recent_refs = &self.recent_refs_by_authority[block_ref.author];
             if recent_refs.contains(&block_ref) || self.genesis.contains_key(&block_ref) {
                 exist[index] = true;
@@ -899,6 +984,16 @@ impl DagState {
         }
 
         for block_ref in commit.blocks().iter() {
+            // Bounds check for defense in depth - TrustedCommit should have valid indices
+            if !self.is_valid_authority(block_ref.author) {
+                error!(
+                    "add_commit: invalid authority index {} in block_ref {} from commit {}",
+                    block_ref.author,
+                    block_ref,
+                    commit.index()
+                );
+                continue;
+            }
             self.last_committed_rounds[block_ref.author] = max(
                 self.last_committed_rounds[block_ref.author],
                 block_ref.round,
@@ -1164,6 +1259,14 @@ impl DagState {
     /// guaranteed to have all the produced blocks from that authority. For any round that is
     /// <= `last_evicted_round` we don't have such guarantees as out of order blocks might exist.
     fn calculate_authority_eviction_round(&self, authority_index: AuthorityIndex) -> Round {
+        // This is a private method called only with valid indices from committee iteration,
+        // but assert for defense in depth
+        debug_assert!(
+            self.is_valid_authority(authority_index),
+            "calculate_authority_eviction_round: invalid authority index {}",
+            authority_index
+        );
+
         let last_round = self.recent_refs_by_authority[authority_index]
             .last()
             .map(|block_ref| block_ref.round)

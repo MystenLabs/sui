@@ -50,6 +50,11 @@ mod test_dag_parser;
 #[path = "tests/randomized_tests.rs"]
 mod randomized_tests;
 
+/// Phantom Voter attack tests for invalid authority index bounds.
+#[cfg(test)]
+#[path = "tests/phantom_voter_test.rs"]
+mod phantom_voter_test;
+
 /// Exported Consensus API.
 pub use authority_node::{ConsensusAuthority, NetworkType};
 pub use block::{BlockAPI, CertifiedBlock, CertifiedBlocksOutput};

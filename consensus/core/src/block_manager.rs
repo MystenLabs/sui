@@ -7,6 +7,7 @@ use std::{
     time::Instant,
 };
 
+use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
 use itertools::Itertools as _;
 use mysten_metrics::monitored_scope;
@@ -70,6 +71,17 @@ impl BlockManager {
             missing_ancestors: BTreeMap::new(),
             missing_blocks: BTreeSet::new(),
             received_block_rounds: vec![None; committee_size],
+        }
+    }
+
+    /// Returns the hostname for the given authority index, or "unknown" if the index is invalid.
+    /// This prevents panics from invalid authority indices in metrics reporting.
+    #[inline]
+    fn get_hostname(&self, authority: AuthorityIndex) -> &str {
+        if self.context.committee.is_valid_index(authority) {
+            &self.context.committee.authority(authority).hostname
+        } else {
+            "unknown"
         }
     }
 
@@ -250,8 +262,7 @@ impl BlockManager {
                 // to seamlessly GC the block later if needed.
                 self.missing_ancestors.entry(*block_ref).or_default();
 
-                let block_ref_hostname =
-                    &self.context.committee.authority(block_ref.author).hostname;
+                let block_ref_hostname = self.get_hostname(block_ref.author);
                 self.context
                     .metrics
                     .node_metrics
@@ -327,12 +338,13 @@ impl BlockManager {
                     .or_default()
                     .insert(block_ref);
 
-                let ancestor_hostname = &self.context.committee.authority(ancestor.author).hostname;
+                // Copy hostname to avoid borrow conflicts with missing_blocks modification
+                let ancestor_hostname = self.get_hostname(ancestor.author).to_string();
                 self.context
                     .metrics
                     .node_metrics
                     .block_manager_missing_ancestors_by_authority
-                    .with_label_values(&[ancestor_hostname])
+                    .with_label_values(&[&ancestor_hostname])
                     .inc();
 
                 // Add the ancestor to the missing blocks set only if it doesn't already exist in the suspended blocks - meaning
@@ -345,7 +357,7 @@ impl BlockManager {
                             .metrics
                             .node_metrics
                             .block_manager_missing_blocks_by_authority
-                            .with_label_values(&[ancestor_hostname])
+                            .with_label_values(&[&ancestor_hostname])
                             .inc();
                     }
                 }
@@ -357,12 +369,7 @@ impl BlockManager {
         self.missing_blocks.remove(&block.reference());
 
         if !missing_ancestors.is_empty() {
-            let hostname = self
-                .context
-                .committee
-                .authority(block.author())
-                .hostname
-                .as_str();
+            let hostname = self.get_hostname(block.author());
             self.context
                 .metrics
                 .node_metrics
@@ -548,6 +555,16 @@ impl BlockManager {
     }
 
     fn update_block_received_metrics(&mut self, block: &VerifiedBlock) {
+        // Bounds check for defense in depth - VerifiedBlock should have valid author
+        if !self.context.committee.is_valid_index(block.author()) {
+            debug!(
+                "update_block_received_metrics: invalid author index {} in block {}",
+                block.author(),
+                block.reference()
+            );
+            return;
+        }
+
         let (min_round, max_round) =
             if let Some((curr_min, curr_max)) = self.received_block_rounds[block.author()] {
                 (curr_min.min(block.round()), curr_max.max(block.round()))
@@ -556,7 +573,7 @@ impl BlockManager {
             };
         self.received_block_rounds[block.author()] = Some((min_round, max_round));
 
-        let hostname = &self.context.committee.authority(block.author()).hostname;
+        let hostname = self.get_hostname(block.author());
         self.context
             .metrics
             .node_metrics
