@@ -1052,7 +1052,6 @@ async fn start(
         .to_string()
         .trim_end_matches("/")
         .to_string();
-    println!("Fullnode RPC URL: {fullnode_rpc_url}");
     info!("Fullnode RPC URL: {fullnode_rpc_url}");
 
     let prometheus_registry = Registry::new();
