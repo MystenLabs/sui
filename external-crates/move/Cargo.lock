@@ -389,6 +389,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytecode-verifier-tests-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "move-abstract-interpreter",
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-replay_cut",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
 name = "bytecode-verifier-tests-v0"
 version = "0.1.0"
 dependencies = [
@@ -2053,6 +2068,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-abstract-interpreter-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "itertools 0.10.5",
+]
+
+[[package]]
 name = "move-abstract-interpreter-v2"
 version = "0.1.0"
 dependencies = [
@@ -2170,6 +2192,22 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-config",
+]
+
+[[package]]
+name = "move-bytecode-verifier-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "hex-literal",
+ "move-abstract-interpreter",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-regex-borrow-graph",
+ "move-vm-config",
+ "petgraph",
 ]
 
 [[package]]
@@ -2802,6 +2840,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stdlib-natives-replay_cut"
+version = "0.1.1"
+dependencies = [
+ "hex",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-runtime-replay_cut",
+ "move-vm-types-replay_cut",
+ "sha2",
+ "sha3",
+ "smallvec",
+]
+
+[[package]]
 name = "move-stdlib-natives-v0"
 version = "0.1.1"
 dependencies = [
@@ -2985,6 +3037,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-vm-runtime-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "better_any",
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-replay_cut",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-compiler",
+ "move-trace-format",
+ "move-vm-config",
+ "move-vm-types-replay_cut",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "proptest",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
 name = "move-vm-runtime-v0"
 version = "0.1.0"
 dependencies = [
@@ -3057,6 +3132,19 @@ dependencies = [
  "datatest-stable",
  "insta",
  "move-transactional-test-runner",
+]
+
+[[package]]
+name = "move-vm-types-replay_cut"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-profiler",
+ "proptest",
+ "serde",
+ "smallvec",
 ]
 
 [[package]]

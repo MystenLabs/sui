@@ -3861,6 +3861,7 @@ impl std::fmt::Debug for InputObjects {
 
 // An InputObjects new-type that has been verified by sui-transaction-checks, and can be
 // safely passed to execution.
+#[derive(Clone)]
 pub struct CheckedInputObjects(InputObjects);
 
 // DO NOT CALL outside of sui-transaction-checks, genesis, or replay.
