@@ -16,10 +16,7 @@ use sui_core::{
         QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
         reconfig_observer::ReconfigObserver,
     },
-    transaction_driver::{
-        SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics,
-        choose_transaction_driver_percentage,
-    },
+    transaction_driver::{SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics},
     validator_client_monitor::ValidatorClientMetrics,
 };
 use sui_json_rpc_types::{
@@ -283,14 +280,13 @@ impl LocalValidatorAggregatorProxy {
             .with_registry(registry)
             .build_network_clients();
         let committee = genesis.committee().unwrap();
-        let td_percentage = choose_transaction_driver_percentage(None);
         Self::new_impl(
             aggregator,
             registry,
             reconfig_fullnode_rpc_url,
             clients,
             committee,
-            td_percentage,
+            100,
         )
         .await
     }

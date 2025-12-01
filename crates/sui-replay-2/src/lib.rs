@@ -3,12 +3,7 @@
 
 use crate::{
     artifacts::{Artifact, ArtifactManager},
-    data_stores::{
-        data_store::DataStore, file_system_store::FileSystemStore, in_memory_store::InMemoryStore,
-        read_through_store::ReadThroughStore,
-    },
     displays::Pretty,
-    replay_interface::{ReadDataStore, SetupStore, StoreSummary},
     replay_txn::replay_transaction,
     summary_metrics::TotalMetrics,
 };
@@ -20,30 +15,26 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
-    str::FromStr,
 };
 use sui_config::sui_config_dir;
+use sui_data_store::{
+    Node, ReadDataStore, SetupStore, StoreSummary,
+    stores::{DataStore, FileSystemStore, InMemoryStore, ReadThroughStore},
+};
 use sui_json_rpc_types::SuiTransactionBlockEffects;
-use sui_types::{effects::TransactionEffects, supported_protocol_versions::Chain};
+use sui_types::effects::TransactionEffects;
 // Disambiguate external tracing crate from local `crate::tracing` module using absolute path.
 use ::tracing::{Instrument, debug, error, info, info_span, warn};
 
 pub mod artifacts;
-#[path = "data-stores/mod.rs"]
-pub mod data_stores;
 pub mod displays;
 pub mod execution;
 pub mod package_tools;
-pub mod replay_interface;
 pub mod replay_txn;
 pub mod summary_metrics;
 pub mod tracing;
 
 const DEFAULT_OUTPUT_DIR: &str = ".replay";
-const MAINNET_GQL_URL: &str = "https://graphql.mainnet.sui.io/graphql";
-const TESTNET_GQL_URL: &str = "https://graphql.testnet.sui.io/graphql";
-const MAINNET_RPC_URL: &str = "https://fullnode.mainnet.sui.io:443";
-const TESTNET_RPC_URL: &str = "https://fullnode.testnet.sui.io:443";
 const CONFIG_FILE_NAME: &str = "replay.toml";
 
 // Arguments to the replay tool.
@@ -245,68 +236,6 @@ pub enum StoreMode {
     InmemFs,
     #[value(name = "inmem-fs-gql")]
     InmemFsGql,
-}
-
-/// Enum around rpc gql endpoints.
-#[derive(Clone, Debug)]
-pub enum Node {
-    Mainnet,
-    Testnet,
-    // TODO: define once we have stable end points.
-    //       Use `Custom` for now.
-    // Devnet,
-    Custom(String),
-}
-
-impl Node {
-    pub fn chain(&self) -> Chain {
-        match self {
-            Node::Mainnet => Chain::Mainnet,
-            Node::Testnet => Chain::Testnet,
-            // Node::Devnet => Chain::Unknown,
-            Node::Custom(_) => Chain::Unknown,
-        }
-    }
-
-    pub fn network_name(&self) -> String {
-        match self {
-            Node::Mainnet => "mainnet".to_string(),
-            Node::Testnet => "testnet".to_string(),
-            // Node::Devnet => "devnet".to_string(),
-            Node::Custom(url) => url.clone(),
-        }
-    }
-
-    pub fn gql_url(&self) -> &str {
-        match self {
-            Node::Mainnet => MAINNET_GQL_URL,
-            Node::Testnet => TESTNET_GQL_URL,
-            // Node::Devnet => "",
-            Node::Custom(_url) => todo!("custom gql url not implemented"),
-        }
-    }
-
-    pub fn node_url(&self) -> &str {
-        match self {
-            Node::Mainnet => MAINNET_RPC_URL,
-            Node::Testnet => TESTNET_RPC_URL,
-            // For custom, assume it's already an RPC URL
-            Node::Custom(url) => url.as_str(),
-        }
-    }
-}
-
-impl FromStr for Node {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "mainnet" => Ok(Node::Mainnet),
-            "testnet" => Ok(Node::Testnet),
-            // "devnet" => Ok(Node::Devnet),
-            _ => Ok(Node::Custom(s.to_string())),
-        }
-    }
 }
 
 /// Load replay configuration from ~/.sui/sui_config/replay.toml file.

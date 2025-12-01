@@ -12,7 +12,7 @@ The signature is provided with the private key owned by the wallet, and its publ
 
 Sui uses a `SuiKeyPair` to produce the signature, which commits to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`). The signature schemes currently supported are `Ed25519 Pure`, `ECDSA Secp256k1`, `ECDSA Secp256r1`, `Multisig`, and `zkLogin`.
 
-You can instantiate `Ed25519 Pure`, `ECDSA Secp256k1`, and `ECDSA Secp256r1` using `SuiKeyPair` and use it to sign transactions. Note that this guide does not apply to `Multisig` and `zkLogin`, refer to their own pages ([Multisig](/concepts/cryptography/transaction-auth/multisig) and [zkLogin](https://docs.sui.io/concepts/cryptography/zklogin) respectively) for instructions.
+You can instantiate `Ed25519 Pure`, `ECDSA Secp256k1`, and `ECDSA Secp256r1` using `SuiKeyPair` and use it to sign transactions. Note that this guide does not apply to `Multisig` and `zkLogin`, refer to their own pages ([Multisig](/concepts/transactions/transaction-auth/multisig) and [zkLogin](https://docs.sui.io/concepts/cryptography/zklogin) respectively) for instructions.
 
 With a signature and the transaction bytes, a transaction can be submitted to be executed.
 
@@ -22,7 +22,7 @@ The following high-level process describes the overall workflow for constructing
 
 - Construct the transaction data by creating a `Transaction` where multiple transactions are chained. See [Building Programmable Transaction Blocks](/guides/developer/sui-101/building-ptb.mdx) for more information.
 - The SDK's built-in gas estimation and coin selection picks the gas coin.
-- Sign the transaction to generate a [signature](/concepts/cryptography/transaction-auth/signatures#user-signature).
+- Sign the transaction to generate a [signature](/concepts/transactions/transaction-auth.mdx).
 - Submit the `Transaction` and its signature for on-chain execution.
 
 :::info
@@ -78,7 +78,7 @@ const kp_import_2 = Secp256r1Keypair.fromSecretKey(
 	fromHex('0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf0a3e82'),
 );
 
-// $MNEMONICS refers to 12/15/18/21/24 words from the wordlist, for example, "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
+// $MNEMONICS refers to 12/15/18/21/24 words from the wordlist, for example, "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/transactions/transaction-auth.mdx) for more.
 const kp_derive_0 = Ed25519Keypair.deriveKeypair('$MNEMONICS');
 const kp_derive_1 = Secp256k1Keypair.deriveKeypair('$MNEMONICS');
 const kp_derive_2 = Secp256r1Keypair.deriveKeypair('$MNEMONICS');
@@ -247,14 +247,14 @@ sui keytool import "0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf
 sui keytool import "0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf0a3e82" secp256r1
 
 # import the mnemonics (recovery phrase) with derivation path to keystore.
-# $MNEMONICS refers to 12/15/18/21/24 words from the wordlist, for example, "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
+# $MNEMONICS refers to 12/15/18/21/24 words from the wordlist, for example, "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/transactions/transaction-auth.mdx) for more.
 
 sui keytool import "$MNEMONICS" ed25519
 sui keytool import "$MNEMONICS" secp256k1
 sui keytool import "$MNEMONICS" secp256r1
 ```
 
-Create a transfer transaction in the CLI. Set the `$SUI_ADDRESS` to the one corresponding to the key pair used to sign. `$GAS_COIN_ID` refers to the object ID that is owned by the sender to be used as gas. `$GAS_BUDGET` refers to the budget used to execute transaction. Then sign with the private key corresponding to the sender address. `$MNEMONICS` refers to 12/15/18/21/24 words from the wordlist, for example, "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
+Create a transfer transaction in the CLI. Set the `$SUI_ADDRESS` to the one corresponding to the key pair used to sign. `$GAS_COIN_ID` refers to the object ID that is owned by the sender to be used as gas. `$GAS_BUDGET` refers to the budget used to execute transaction. Then sign with the private key corresponding to the sender address. `$MNEMONICS` refers to 12/15/18/21/24 words from the wordlist, for example, "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/transactions/transaction-auth.mdx) for more.
 
 <ImportContent source="info-gas-budget.mdx" mode="snippet" />
 
@@ -276,8 +276,8 @@ $ sui client execute-signed-tx --tx-bytes $TX_BYTES --signatures $SERIALIZED_SIG
 
 ### Notes
 
-1. This guide demonstrates how to sign with a single private key. Refer to [Multisig](/concepts/cryptography/transaction-auth/multisig.mdx) when it is preferred to set up more complex signing policies.
+1. This guide demonstrates how to sign with a single private key. Refer to [Multisig](/concepts/transactions/transaction-auth/multisig.mdx) when it is preferred to set up more complex signing policies.
 2. Similarly, native zkLogin does not follow the above steps, see [the docs](/concepts/cryptography/zklogin.mdx) to understand how to derive a zkLogin address and produce a zkLogin signature with an ephemeral key pair.
-3. If you decide to implement your own signing mechanisms instead of using the previous tools, see the [Signatures](/concepts/cryptography/transaction-auth/signatures.mdx) doc on the accepted signature specifications for each scheme.
-4. Flag is 1 byte that differentiates signature schemes. See supported schemes and its flag in [Signatures](/concepts/cryptography/transaction-auth/signatures.mdx).
+3. If you decide to implement your own signing mechanisms instead of using the previous tools, see the [Signatures](/concepts/transactions/transaction-auth.mdx) doc on the accepted signature specifications for each scheme.
+4. Flag is 1 byte that differentiates signature schemes. See supported schemes and its flag in [Signatures](/concepts/transactions/transaction-auth.mdx).
 5. The `execute_transaction_block` endpoint takes a list of signatures, so it should contain exactly 1 user signature, unless you are using sponsored transaction that a second signature for the gas object can be provided. See [Sponsored Transactions](/concepts/transactions/sponsored-transactions.mdx) for more information.

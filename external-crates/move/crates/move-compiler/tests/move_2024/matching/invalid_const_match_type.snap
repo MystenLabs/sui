@@ -20,5 +20,11 @@ error[E04007]: incompatible types
 error[E03009]: unbound variable
   ┌─ tests/move_2024/matching/invalid_const_match_type.move:9:28
   │
+7 │     fun test(s: S): u64 {
+  │              - Similarly named defintion found here
+8 │         match (s) {
 9 │             S { n: Z8 } => n,
-  │                            ^ Unbound variable 'n'
+  │                            ^
+  │                            │
+  │                            Unbound variable 'n'
+  │                            Did you mean: 's'

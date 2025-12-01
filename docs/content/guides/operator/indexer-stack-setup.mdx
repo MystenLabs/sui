@@ -340,7 +340,7 @@ Multiple `--indexer-config` parameters can be provided, one for each general-pur
 
 | CLI parameter                        | Description                                                                        |
 |----------------------------------|------------------------------------------------------------------------------------|
-| `CONFIG_FILE`                    | Path to GraphQL RPC server configuration file                                                 |
+| `CONFIG_FILE`                    | Path to the optional GraphQL RPC server configuration file |
 | `INDEXER_CONFIG_FILE`            | Path to general-purpose indexer configuration file; can be set multiple times for different pipelines                 |
 | `LEDGER_GRPC_URL`                | URL to Archival service's `LedgerService` gRPC API                                   |
 | `CONSISTENT_STORE_URL`           | URL to [Consistent store](#consistent-store-setup) API                             |
@@ -365,13 +365,21 @@ sui-indexer-alt-graphql rpc \
     --fullnode-rpc-url https://localhost:9000
 ```
 
-### Configuration recommendations
+### Generating Configuration
 
-The default GraphQL RPC configuration is provided in the `examples` directory of the Sui repo.
+You can run the GraphQL RPC server without a configuration file, which will use default values. To customize settings, generate a config file using the command below and edit it as needed:
 
-<ImportContent source="/examples/prod-config/graphql.toml" mode="code" />
-|-----------------------------------------------------------------------------------------------|-----------------------------------|
-| [`graphql.toml`](https://github.com/MystenLabs/sui/blob/main/examples/prod-config/graphql.toml) | Default GraphQL API configuration |
+```sh
+
+sui-indexer-alt-graphql generate-config > <PATH_TO_GRAPHQL_CONFIG_FILE>
+```
+
+It will produce output similar to the following:
+
+<details>
+	<summary>`graphql.toml`</summary>
+	<ImportContent source="examples/prod-config/graphql.toml" mode="code" />
+</details>
 
 ## Related links
 

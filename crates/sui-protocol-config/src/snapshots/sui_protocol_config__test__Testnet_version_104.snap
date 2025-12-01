@@ -1,6 +1,7 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
+snapshot_kind: text
 ---
 version: 104
 feature_flags:
@@ -49,6 +50,7 @@ feature_flags:
   enable_group_ops_native_functions: true
   enable_nitro_attestation: true
   enable_nitro_attestation_upgraded_parsing: true
+  enable_nitro_attestation_all_nonzero_pcrs_parsing: true
   reject_mutable_random_on_entry_functions: true
   per_object_congestion_control_mode:
     ExecutionTimeEstimate:
@@ -127,6 +129,7 @@ feature_flags:
   generate_df_type_layouts: true
   private_generics_verifier_v2: true
   deprecate_global_storage_ops: true
+  consensus_skip_gced_accept_votes: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -223,22 +226,22 @@ address_to_u256_cost_base: 52
 address_from_u256_cost_base: 52
 config_read_setting_impl_cost_base: 100
 config_read_setting_impl_cost_per_byte: 40
-dynamic_field_hash_type_and_key_cost_base: 100
+dynamic_field_hash_type_and_key_cost_base: 52
 dynamic_field_hash_type_and_key_type_cost_per_byte: 2
 dynamic_field_hash_type_and_key_value_cost_per_byte: 2
 dynamic_field_hash_type_and_key_type_tag_cost_per_byte: 2
-dynamic_field_add_child_object_cost_base: 100
+dynamic_field_add_child_object_cost_base: 52
 dynamic_field_add_child_object_type_cost_per_byte: 10
 dynamic_field_add_child_object_value_cost_per_byte: 1
 dynamic_field_add_child_object_struct_tag_cost_per_byte: 10
-dynamic_field_borrow_child_object_cost_base: 100
+dynamic_field_borrow_child_object_cost_base: 52
 dynamic_field_borrow_child_object_child_ref_cost_per_byte: 1
 dynamic_field_borrow_child_object_type_cost_per_byte: 10
-dynamic_field_remove_child_object_cost_base: 100
+dynamic_field_remove_child_object_cost_base: 52
 dynamic_field_remove_child_object_child_cost_per_byte: 1
 dynamic_field_remove_child_object_type_cost_per_byte: 2
-dynamic_field_has_child_object_cost_base: 100
-dynamic_field_has_child_object_with_ty_cost_base: 100
+dynamic_field_has_child_object_cost_base: 52
+dynamic_field_has_child_object_with_ty_cost_base: 52
 dynamic_field_has_child_object_with_ty_type_cost_per_byte: 2
 dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: 2
 event_emit_cost_base: 52
@@ -321,6 +324,7 @@ hash_blake2b256_data_cost_per_block: 2
 hash_keccak256_cost_base: 10
 hash_keccak256_data_cost_per_byte: 2
 hash_keccak256_data_cost_per_block: 2
+poseidon_bn254_cost_base: 260
 poseidon_bn254_cost_per_block: 388
 group_ops_bls12381_decode_scalar_cost: 7
 group_ops_bls12381_decode_g1_cost: 2848

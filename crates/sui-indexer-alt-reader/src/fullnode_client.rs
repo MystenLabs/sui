@@ -61,9 +61,7 @@ impl FullnodeClient {
         let execution_client = if let Some(url) = &args.fullnode_rpc_url {
             let channel = Channel::from_shared(url.clone())
                 .context("Failed to create channel for gRPC endpoint")?
-                .connect()
-                .await
-                .context("Failed to connect to gRPC endpoint")?;
+                .connect_lazy();
 
             Some(TransactionExecutionServiceClient::new(channel))
         } else {
@@ -110,6 +108,7 @@ impl FullnodeClient {
         .with_signatures(signatures)
         .with_read_mask(FieldMask::from_paths([
             "effects.bcs",
+            "effects.lamport_version",
             "events.bcs",
             "balance_changes",
             "objects.objects.bcs",
@@ -135,6 +134,7 @@ impl FullnodeClient {
         request.transaction = Some(transaction);
         request.read_mask = Some(FieldMask::from_paths([
             "transaction.effects.bcs",
+            "transaction.effects.lamport_version",
             "transaction.events.bcs",
             "transaction.balance_changes",
             "transaction.objects.objects.bcs",

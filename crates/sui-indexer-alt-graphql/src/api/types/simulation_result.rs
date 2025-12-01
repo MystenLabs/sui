@@ -8,20 +8,15 @@ use sui_types::transaction::TransactionData;
 
 use crate::{error::RpcError, scope::Scope};
 
-use super::{command_result::CommandResult, event::Event, transaction_effects::TransactionEffects};
+use super::{command_result::CommandResult, transaction_effects::TransactionEffects};
 
-/// The result of simulating a transaction, including the predicted effects, events, and any errors.
+/// The result of simulating a transaction, including the predicted effects and any errors.
 #[derive(Clone, SimpleObject)]
 pub struct SimulationResult {
     /// The predicted effects of the transaction if it were executed.
     ///
     /// `None` if the simulation failed due to an error.
     pub effects: Option<TransactionEffects>,
-
-    /// The events that would be emitted if the transaction were executed.
-    ///
-    /// `None` if the simulation failed or no events would be emitted.
-    pub events: Option<Vec<Event>>,
 
     /// The intermediate outputs for each command of the transaction simulation, including contents of mutated references and return values.
     pub outputs: Option<Vec<CommandResult>>,
@@ -39,42 +34,20 @@ impl SimulationResult {
         response: proto::SimulateTransactionResponse,
         transaction_data: TransactionData,
     ) -> Result<Self, RpcError> {
-        let effects = Some(TransactionEffects::from_simulation_response(
-            scope.clone(),
-            response.clone(),
-            transaction_data.clone(),
-        )?);
-
-        // Parse events - break into clear steps
         let executed_transaction = response
             .transaction
             .as_ref()
-            .context("No transaction in simulation response")?;
+            .context("SimulateTransactionResponse should have transaction")?;
 
-        let events_bcs = executed_transaction
-            .events
-            .as_ref()
-            .and_then(|events| events.bcs.as_ref());
+        // Create scope with execution objects
+        let scope = scope.with_executed_transaction(executed_transaction)?;
 
-        let transaction_events = events_bcs
-            .map(|bcs| bcs.deserialize())
-            .transpose()
-            .context("Failed to deserialize events BCS")?;
-
-        let events = transaction_events.map(|events: sui_types::effects::TransactionEvents| {
-            events
-                .data
-                .into_iter()
-                .enumerate()
-                .map(|(sequence, native_event)| Event {
-                    scope: scope.clone(),
-                    native: native_event,
-                    transaction_digest: transaction_data.digest(),
-                    sequence_number: sequence as u64,
-                    timestamp_ms: 0, // No timestamp for simulation
-                })
-                .collect()
-        });
+        let effects = TransactionEffects::from_executed_transaction(
+            scope.clone(),
+            executed_transaction,
+            transaction_data.clone(),
+            vec![], // No signatures for simulated transactions
+        )?;
 
         // Extract command results from the response
         let outputs = Some(
@@ -86,8 +59,7 @@ impl SimulationResult {
         );
 
         Ok(Self {
-            effects,
-            events,
+            effects: Some(effects),
             outputs,
             error: None,
         })

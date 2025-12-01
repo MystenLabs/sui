@@ -103,6 +103,7 @@ bool.json
 debug.json
 fixed_point32.json
 hash.json
+internal.json
 macros.json
 option.json
 string.json

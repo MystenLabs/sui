@@ -277,6 +277,7 @@ const MAX_PROTOCOL_VERSION: u64 = 104;
 //              Set max updates per settlement txn to 100.
 // Version 103: Framework update: internal Coin methods
 // Version 104: Framework update: CoinRegistry follow up for Coin methods
+//              Enable all non-zero PCRs parsing for nitro attestation native function in Devnet and Testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -553,6 +554,10 @@ struct FeatureFlags {
     // Enable upgraded parsing of nitro attestation that interprets pcrs as a map.
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation_upgraded_parsing: bool,
+
+    // Enable upgraded parsing of nitro attestation containing all nonzero PCRs.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_nitro_attestation_all_nonzero_pcrs_parsing: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -885,6 +890,10 @@ struct FeatureFlags {
     // If true, deprecate global storage ops everywhere.
     #[serde(skip_serializing_if = "is_false")]
     deprecate_global_storage_ops: bool,
+
+    // If true, skip GC'ed accept votes in CommitFinalizer.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_skip_gced_accept_votes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2157,9 +2166,6 @@ impl ProtocolConfig {
     }
 
     pub fn mysticeti_fastpath(&self) -> bool {
-        if let Some(enabled) = is_mysticeti_fpc_enabled_in_env() {
-            return enabled;
-        }
         self.feature_flags.mysticeti_fastpath
     }
 
@@ -2229,6 +2235,11 @@ impl ProtocolConfig {
 
     pub fn enable_nitro_attestation_upgraded_parsing(&self) -> bool {
         self.feature_flags.enable_nitro_attestation_upgraded_parsing
+    }
+
+    pub fn enable_nitro_attestation_all_nonzero_pcrs_parsing(&self) -> bool {
+        self.feature_flags
+            .enable_nitro_attestation_all_nonzero_pcrs_parsing
     }
 
     pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
@@ -2392,6 +2403,10 @@ impl ProtocolConfig {
 
     pub fn deprecate_global_storage_ops(&self) -> bool {
         self.feature_flags.deprecate_global_storage_ops
+    }
+
+    pub fn consensus_skip_gced_accept_votes(&self) -> bool {
+        self.feature_flags.consensus_skip_gced_accept_votes
     }
 }
 
@@ -4259,10 +4274,24 @@ impl ProtocolConfig {
                     cfg.gas_model_version = Some(11);
                     cfg.feature_flags.abstract_size_in_object_runtime = true;
                     cfg.feature_flags.object_runtime_charge_cache_load_gas = true;
+                    cfg.dynamic_field_hash_type_and_key_cost_base = Some(52);
+                    cfg.dynamic_field_add_child_object_cost_base = Some(52);
                     cfg.dynamic_field_add_child_object_value_cost_per_byte = Some(1);
+                    cfg.dynamic_field_borrow_child_object_cost_base = Some(52);
                     cfg.dynamic_field_borrow_child_object_child_ref_cost_per_byte = Some(1);
+                    cfg.dynamic_field_remove_child_object_cost_base = Some(52);
                     cfg.dynamic_field_remove_child_object_child_cost_per_byte = Some(1);
+                    cfg.dynamic_field_has_child_object_cost_base = Some(52);
+                    cfg.dynamic_field_has_child_object_with_ty_cost_base = Some(52);
                     cfg.feature_flags.enable_ptb_execution_v2 = true;
+
+                    cfg.poseidon_bn254_cost_base = Some(260);
+
+                    cfg.feature_flags.consensus_skip_gced_accept_votes = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -4613,6 +4642,10 @@ impl ProtocolConfig {
     pub fn allow_references_in_ptbs_for_testing(&mut self) {
         self.feature_flags.allow_references_in_ptbs = true;
     }
+
+    pub fn set_consensus_skip_gced_accept_votes_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_skip_gced_accept_votes = val;
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
@@ -4702,18 +4735,6 @@ macro_rules! check_limit_by_meter {
         result
     }};
 }
-
-pub fn is_mysticeti_fpc_enabled_in_env() -> Option<bool> {
-    if let Ok(v) = std::env::var("CONSENSUS") {
-        if v == "mysticeti_fpc" {
-            return Some(true);
-        } else if v == "mysticeti" {
-            return Some(false);
-        }
-    }
-    None
-}
-
 #[cfg(all(test, not(msim)))]
 mod test {
     use insta::assert_yaml_snapshot;

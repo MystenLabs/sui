@@ -14,11 +14,8 @@ bin-version.workspace = true
 clap.workspace = true
 chrono.workspace = true
 csv.workspace = true
-cynic.workspace = true
-cynic-codegen.workspace = true
 fastcrypto.workspace = true
 futures.workspace = true
-lru.workspace = true
 move-binary-format.workspace = true
 move-bytecode-source-map.workspace = true
 move-cli.workspace = true
@@ -29,28 +26,25 @@ move-ir-types.workspace = true
 move-package.workspace = true
 move-trace-format.workspace = true
 prometheus.workspace = true
-reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
 similar.workspace = true
+sui-config.workspace = true
+sui-data-store.workspace = true
 sui-execution.workspace = true
 sui-framework.workspace = true
-sui-types.workspace = true
-sui-config.workspace = true
+sui-json-rpc-types.workspace = true
 sui-move.workspace = true
 sui-move-build.workspace = true
 sui-package-management.workspace = true
+sui-types.workspace = true
+serde_json.workspace = true
+tabled.workspace = true
 telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 toml.workspace = true
 tracing.workspace = true
-sui-json-rpc-types.workspace = true
-serde_json.workspace = true
 zstd.workspace = true
-tabled.workspace = true
-
-[build-dependencies]
-cynic-codegen.workspace = true
 
 [features]
 tracing = [

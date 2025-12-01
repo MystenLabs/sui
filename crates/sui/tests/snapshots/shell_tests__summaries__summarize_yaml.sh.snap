@@ -101,6 +101,7 @@ bool.yaml
 debug.yaml
 fixed_point32.yaml
 hash.yaml
+internal.yaml
 macros.yaml
 option.yaml
 string.yaml
