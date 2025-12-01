@@ -881,7 +881,7 @@ fn coin_mut_ref_argument(
     command_arg_idx: usize,
     location: SplatLocation,
 ) -> Result<T::Argument, ExecutionError> {
-    let arg_ = coin_mut_ref_argument_(env, context, location)
+    let arg_ = coin_mut_ref_argument_(env, context, command_arg_idx, location)
         .map_err(|e| e.into_execution_error(command_arg_idx))?;
     Ok(sp(command_arg_idx as u16, arg_))
 }
@@ -889,12 +889,28 @@ fn coin_mut_ref_argument(
 fn coin_mut_ref_argument_(
     env: &Env,
     context: &mut Context,
+    command_arg_idx: usize,
     location: SplatLocation,
 ) -> Result<T::Argument_, EitherError> {
     let Some((location, actual_ty)) = context.fixed_type(env, location)? else {
         // TODO we do not currently bytes in any mode as that would require additional type
         // inference not currently supported
         return Err(CommandArgumentError::TypeMismatch.into());
+    };
+    let (location, actual_ty) = if env.protocol_config.enable_accumulators()
+        && let Some(actual_withdrawal_inner) = withdrawal_inner_type(&actual_ty)
+        && let Some(actual_inner) = balance_inner_type(actual_withdrawal_inner)
+    {
+        convert_withdrawal_to_coin(
+            env,
+            context,
+            command_arg_idx,
+            location,
+            actual_ty.clone(),
+            actual_inner,
+        )?
+    } else {
+        (location, actual_ty)
     };
     Ok(match &actual_ty {
         Type::Reference(is_mut, ty) if *is_mut => {
