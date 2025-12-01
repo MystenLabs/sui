@@ -19,6 +19,11 @@ use crate::{
     dag_state::DagState,
 };
 
+/// Maximum number of missing blocks to track. This prevents OOM attacks where
+/// Byzantine validators produce blocks with invalid causal history.
+/// With 100K entries at ~100 bytes each, this uses ~10MB of memory.
+pub(crate) const MAX_MISSING_BLOCKS: usize = 100_000;
+
 struct SuspendedBlock {
     block: VerifiedBlock,
     missing_ancestors: BTreeSet<BlockRef>,
@@ -37,9 +42,9 @@ impl SuspendedBlock {
 
 /// Block manager suspends incoming blocks until they are connected to the existing graph,
 /// returning newly connected blocks.
-/// TODO: As it is possible to have Byzantine validators who produce Blocks without valid causal
-/// history we need to make sure that BlockManager takes care of that and avoid OOM (Out Of Memory)
-/// situations.
+///
+/// Note: Byzantine validators may produce blocks without valid causal history. To prevent OOM,
+/// missing blocks are capped at MAX_MISSING_BLOCKS with automatic GC when capacity is reached.
 pub(crate) struct BlockManager {
     context: Arc<Context>,
     dag_state: Arc<RwLock<DagState>>,
@@ -207,6 +212,103 @@ impl BlockManager {
         TryAcceptResult::Accepted(block)
     }
 
+    /// Garbage collect missing blocks that are at or below the GC round.
+    /// Also removes blocks far from current round if still at capacity after GC round cleanup.
+    /// This prevents OOM from Byzantine validators producing blocks with invalid causal history.
+    ///
+    /// The eviction strategy prioritizes removing entries FAR from current round (likely garbage)
+    /// over entries NEAR current round (likely legitimate). This prevents the "Future-Flooding"
+    /// attack where attackers flood with high-round garbage to evict legitimate missing blocks.
+    fn gc_missing_blocks(&mut self, gc_round: Round) {
+        let before_count = self.missing_blocks.len();
+
+        // First, remove blocks at or below GC round - these are no longer needed
+        self.missing_blocks.retain(|block_ref| block_ref.round > gc_round);
+        self.missing_ancestors.retain(|block_ref, _| block_ref.round > gc_round);
+
+        let gc_removed = before_count - self.missing_blocks.len();
+
+        // If still at capacity after GC, use distance-based eviction strategy
+        if self.missing_blocks.len() >= MAX_MISSING_BLOCKS {
+            // Get current round from the highest round we've seen
+            let current_round = self.dag_state.read().highest_accepted_round();
+            
+            // Define protection window: entries within ±EVICTION_PROTECTION_WINDOW rounds
+            // of current round are protected from eviction
+            const EVICTION_PROTECTION_WINDOW: Round = 50;
+            let protected_min = current_round.saturating_sub(EVICTION_PROTECTION_WINDOW);
+            let protected_max = current_round.saturating_add(EVICTION_PROTECTION_WINDOW);
+
+            // Collect all entries and sort by distance from current round (farthest first)
+            let mut entries: Vec<_> = self.missing_blocks.iter().cloned().collect();
+            entries.sort_by(|a, b| {
+                let dist_a = (a.round as i64 - current_round as i64).unsigned_abs();
+                let dist_b = (b.round as i64 - current_round as i64).unsigned_abs();
+                // Sort by distance descending (farthest first), then by round for tie-breaking
+                dist_b.cmp(&dist_a).then_with(|| b.round.cmp(&a.round))
+            });
+
+            let to_remove = self.missing_blocks.len() - MAX_MISSING_BLOCKS / 2;
+            let mut removed_count = 0;
+            let mut protected_evicted = 0;
+
+            // First pass: evict unprotected entries (far from current round)
+            for block_ref in &entries {
+                if removed_count >= to_remove {
+                    break;
+                }
+                
+                let is_protected = block_ref.round >= protected_min && block_ref.round <= protected_max;
+                
+                if !is_protected {
+                    self.missing_blocks.remove(block_ref);
+                    self.missing_ancestors.remove(block_ref);
+                    removed_count += 1;
+                }
+            }
+
+            // Second pass: if still need to remove more, evict protected entries
+            // (sorted by distance, so farthest protected entries go first)
+            if removed_count < to_remove {
+                for block_ref in &entries {
+                    if removed_count >= to_remove {
+                        break;
+                    }
+                    
+                    // Only consider entries still in the set (not removed in first pass)
+                    if self.missing_blocks.contains(block_ref) {
+                        self.missing_blocks.remove(block_ref);
+                        self.missing_ancestors.remove(block_ref);
+                        removed_count += 1;
+                        protected_evicted += 1;
+                    }
+                }
+            }
+
+            warn!(
+                "GC'd {} missing blocks (gc_round cleanup: {}, capacity eviction: {}, protected evicted: {}), current_round: {}, remaining: {}",
+                gc_removed + removed_count,
+                gc_removed,
+                removed_count,
+                protected_evicted,
+                current_round,
+                self.missing_blocks.len()
+            );
+        } else if gc_removed > 0 {
+            debug!(
+                "GC'd {} missing blocks below gc_round {}, remaining: {}",
+                gc_removed, gc_round, self.missing_blocks.len()
+            );
+        }
+
+        // Update metrics
+        self.context
+            .metrics
+            .node_metrics
+            .block_manager_missing_blocks
+            .set(self.missing_blocks.len() as i64);
+    }
+
     /// Tries to find the provided block_refs in DagState and BlockManager,
     /// and returns missing block refs.
     pub(crate) fn try_find_blocks(&mut self, block_refs: Vec<BlockRef>) -> BTreeSet<BlockRef> {
@@ -233,6 +335,12 @@ impl BlockManager {
 
         let mut missing_blocks = BTreeSet::new();
 
+        // Cleanup old missing blocks if we're at capacity to prevent OOM.
+        // This addresses the TODO about Byzantine validators producing blocks without valid causal history.
+        if self.missing_blocks.len() >= MAX_MISSING_BLOCKS {
+            self.gc_missing_blocks(gc_round);
+        }
+
         for (found, block_ref) in self
             .dag_state
             .read()
@@ -245,6 +353,18 @@ impl BlockManager {
             }
             // Fetches the block if it is not in dag state or suspended.
             missing_blocks.insert(*block_ref);
+
+            // Check capacity before inserting
+            if self.missing_blocks.len() >= MAX_MISSING_BLOCKS {
+                // Skip adding more missing blocks when at capacity.
+                // The periodic sync will retry later.
+                debug!(
+                    "Missing blocks at capacity ({}), skipping {}",
+                    MAX_MISSING_BLOCKS, block_ref
+                );
+                continue;
+            }
+
             if self.missing_blocks.insert(*block_ref) {
                 // We want to report this as a missing ancestor even if there is no block that is actually references it right now. That will allow us
                 // to seamlessly GC the block later if needed.
@@ -279,8 +399,14 @@ impl BlockManager {
         let block_ref = block.reference();
         let mut missing_ancestors = BTreeSet::new();
         let mut ancestors_to_fetch = BTreeSet::new();
+        
+        // Preemptively GC missing blocks if at capacity (before acquiring dag_state lock)
+        let gc_round = self.dag_state.read().gc_round();
+        if self.missing_blocks.len() >= MAX_MISSING_BLOCKS {
+            self.gc_missing_blocks(gc_round);
+        }
+        
         let dag_state = self.dag_state.read();
-        let gc_round = dag_state.gc_round();
 
         // If block has been already received and suspended, or already processed and stored, or is a genesis block, then skip it.
         if self.suspended_blocks.contains_key(&block_ref) || dag_state.contains_block(&block_ref) {
@@ -338,15 +464,23 @@ impl BlockManager {
                 // Add the ancestor to the missing blocks set only if it doesn't already exist in the suspended blocks - meaning
                 // that we already have its payload.
                 if !self.suspended_blocks.contains_key(ancestor) {
-                    // Fetches the block if it is not in dag state or suspended.
-                    ancestors_to_fetch.insert(*ancestor);
-                    if self.missing_blocks.insert(*ancestor) {
-                        self.context
-                            .metrics
-                            .node_metrics
-                            .block_manager_missing_blocks_by_authority
-                            .with_label_values(&[ancestor_hostname])
-                            .inc();
+                    // Only insert if under capacity to prevent OOM (GC was done at function start)
+                    if self.missing_blocks.len() < MAX_MISSING_BLOCKS {
+                        // Fetches the block if it is not in dag state or suspended.
+                        ancestors_to_fetch.insert(*ancestor);
+                        if self.missing_blocks.insert(*ancestor) {
+                            self.context
+                                .metrics
+                                .node_metrics
+                                .block_manager_missing_blocks_by_authority
+                                .with_label_values(&[ancestor_hostname])
+                                .inc();
+                        }
+                    } else {
+                        debug!(
+                            "Missing blocks at capacity ({}), skipping ancestor {}",
+                            MAX_MISSING_BLOCKS, ancestor
+                        );
                     }
                 }
             }
@@ -581,7 +715,7 @@ impl BlockManager {
 
     /// Returns all the suspended blocks whose causal history we miss hence we can't accept them yet.
     #[cfg(test)]
-    fn suspended_blocks(&self) -> Vec<BlockRef> {
+    pub(crate) fn suspended_blocks(&self) -> Vec<BlockRef> {
         self.suspended_blocks.keys().cloned().collect()
     }
 }
