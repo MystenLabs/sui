@@ -333,7 +333,7 @@ where
     Ok(DynamicFieldKey(parent_id, key.clone(), K::get_type_tag())
         .into_unbounded_id()?
         .expect_object(key, object_store)?
-        .as_object())
+        .into_object())
 }
 
 /// Similar to `get_dynamic_field_object_from_store`, but returns the value in the field instead of
@@ -594,7 +594,7 @@ impl<K> DynamicFieldObject<K> {
     }
 
     /// Get the underlying Object.
-    pub fn as_object(self) -> Object {
+    pub fn into_object(self) -> Object {
         self.0
     }
 }
