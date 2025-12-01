@@ -39,15 +39,9 @@ As a developer, you can access GraphQL as a service from an indexer operator or 
 
 As a developer, you can:
 
-- Run the Indexer pipelines and GraphQL service, while using the Archival Service and a full node from an RPC provider or indexer operator.
+- Run the Indexer pipelines and GraphQL service, while using the [Archival Service](/concepts/data-access/archival-store.mdx) and a full node from an RPC provider or indexer operator.
 - Configure and manage a Postgres-compatible database (local Postgres, AlloyDB, and so on) as the primary data store.
 - Deploy the self-managed components on cloud infrastructure or baremetal.
-
-:::info
-
-You cannot run and operate the GraphQL service in self-managed configurations just yet. The functionality will become available after required changes are made to how the GraphQL service integrates with the Archival Service.
-
-:::
 
 ### Fully self-managed
 
@@ -347,7 +341,7 @@ This service is not stateless as it maintains its own database. A new instance c
 
 ## For RPC providers and data operators
 
-If you're running the GraphQL RPC + General-purpose Indexer stack as a service, here are a few key considerations for configuring your setup to offer builders a performant and cost-effective experience.
+If you're running the GraphQL RPC + General-purpose Indexer stack as a service, here are a few key considerations for configuring your setup to offer builders a performant and cost-effective experience. For step-by-step setup and operations instructions, see the [GraphQL and General-Purpose Indexer guide](/guides/operator/indexer-stack-setup.mdx).
 
 ### How much data to index and retain
 

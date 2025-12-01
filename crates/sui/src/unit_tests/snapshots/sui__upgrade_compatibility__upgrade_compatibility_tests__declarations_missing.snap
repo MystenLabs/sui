@@ -3,19 +3,19 @@ source: crates/sui/src/upgrade_compatibility/../unit_tests/upgrade_compatibility
 expression: normalize_path(err.to_string())
 ---
 error[Compatibility E01001]: missing public declaration
-  ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/enum.move:4:18
+  ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/enum.move:4:8
   │
 4 │ module upgrades::enum_ {
-  │                  ^^^^^ enum 'EnumToBeRemoved' is missing
+  │        ^^^^^^^^^^^^^^^ enum 'EnumToBeRemoved' is missing
   │
   = Enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = Add missing enum 'EnumToBeRemoved' back to the module 'enum_'.
 
 error[Compatibility E01001]: missing public declaration
-  ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/func.move:4:18
+  ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/func.move:4:8
   │
 4 │ module upgrades::func_ {
-  │                  ^^^^^ public function 'fun_to_be_removed' is missing
+  │        ^^^^^^^^^^^^^^^ public function 'fun_to_be_removed' is missing
   │
   = Public functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = Add missing public function 'fun_to_be_removed' back to the module 'func_'.
@@ -30,10 +30,10 @@ error[Compatibility E01001]: missing public declaration
   = Restore the original function's 'public' visibility for function 'fun_to_lose_public'.
 
 error[Compatibility E01001]: missing public declaration
-  ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/struct.move:4:18
+  ┌─ /fixtures/upgrade_errors/declaration_errors_v2/sources/struct.move:4:8
   │
 4 │ module upgrades::struct_ {
-  │                  ^^^^^^^ struct 'StructToBeRemoved' is missing
+  │        ^^^^^^^^^^^^^^^^^ struct 'StructToBeRemoved' is missing
   │
   = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
   = Add missing struct 'StructToBeRemoved' back to the module 'struct_'.

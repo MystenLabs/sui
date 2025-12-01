@@ -778,20 +778,32 @@ async fn test_upgrade_ticket_doesnt_match() {
             builder,
             (SUI_FRAMEWORK_PACKAGE_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
-        builder.upgrade(MOVE_STDLIB_PACKAGE_ID, upgrade_ticket, vec![], modules);
+        let upgrade_receipt =
+            builder.upgrade(MOVE_STDLIB_PACKAGE_ID, upgrade_ticket, vec![], modules);
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            ident_str!("package").to_owned(),
+            ident_str!("commit_upgrade").to_owned(),
+            vec![],
+            vec![Argument::Input(0), upgrade_receipt],
+        );
         builder.finish()
     };
     let effects = runner.run(pt).await;
 
-    assert!(matches!(
-        effects.into_status().unwrap_err().0,
-        ExecutionFailureStatus::PackageUpgradeError {
-            upgrade_error: PackageUpgradeError::PackageIDDoesNotMatch {
-                package_id: _,
-                ticket_id: _
+    let err = effects.into_status().unwrap_err().0;
+    assert!(
+        matches!(
+            err,
+            ExecutionFailureStatus::PackageUpgradeError {
+                upgrade_error: PackageUpgradeError::PackageIDDoesNotMatch {
+                    package_id: _,
+                    ticket_id: _
+                }
             }
-        }
-    ));
+        ),
+        "Expected PackageUpgradeError with PackageIDDoesNotMatch, got: {err:#?}",
+    );
 }
 
 #[tokio::test]

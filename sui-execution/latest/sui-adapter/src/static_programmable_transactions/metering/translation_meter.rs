@@ -14,7 +14,6 @@ use sui_types::error::{ExecutionError, ExecutionErrorKind};
 pub struct TranslationMeter<'pc, 'gas> {
     protocol_config: &'pc ProtocolConfig,
     charger: &'gas mut GasCharger,
-    charged: u64,
 }
 
 impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
@@ -25,7 +24,6 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
         TranslationMeter {
             protocol_config,
             charger: gas_charger,
-            charged: 0,
         }
     }
 
@@ -97,34 +95,10 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
     // far.
     fn charge(&mut self, amount: u64) -> Result<(), ExecutionError> {
         debug_assert!(amount > 0);
-        let scaled_charge = self.calculate_point_charge(amount);
         self.charger
             .move_gas_status_mut()
-            .deduct_gas(scaled_charge.into())
+            .deduct_gas(amount.into())
             .map_err(Self::gas_error)
-    }
-
-    // The point charge is calculated as:
-    // point_multiplier = (n / translation_metering_step_resolution)^2
-    // point_charge = point_multiplier * amount
-    // where `n` is the cumulative number of units charged so far.
-    //
-    // This function updates the `charged` field with the new cumulative charge once the point
-    // charge has been determined.
-    fn calculate_point_charge(&mut self, amount: u64) -> u64 {
-        debug_assert!(self.protocol_config.translation_metering_step_resolution() > 0);
-        let point_multiplier = self
-            .charged
-            .checked_div(self.protocol_config.translation_metering_step_resolution())
-            .unwrap_or(0)
-            .max(1);
-        debug_assert!(point_multiplier > 0);
-        debug_assert!(amount > 0);
-        let point_charge = point_multiplier
-            .saturating_mul(point_multiplier)
-            .saturating_mul(amount);
-        self.charged = self.charged.saturating_add(point_charge);
-        point_charge
     }
 
     fn gas_error<E>(e: E) -> ExecutionError

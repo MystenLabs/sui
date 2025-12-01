@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 103;
+const MAX_PROTOCOL_VERSION: u64 = 104;
 
 // Record history of protocol version allocations here:
 //
@@ -276,6 +276,8 @@ const MAX_PROTOCOL_VERSION: u64 = 103;
 // Version 101: Framework update
 //              Set max updates per settlement txn to 100.
 // Version 103: Framework update: internal Coin methods
+// Version 104: Framework update: CoinRegistry follow up for Coin methods
+//              Enable all non-zero PCRs parsing for nitro attestation native function in Devnet and Testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -552,6 +554,10 @@ struct FeatureFlags {
     // Enable upgraded parsing of nitro attestation that interprets pcrs as a map.
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation_upgraded_parsing: bool,
+
+    // Enable upgraded parsing of nitro attestation containing all nonzero PCRs.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_nitro_attestation_all_nonzero_pcrs_parsing: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -884,6 +890,10 @@ struct FeatureFlags {
     // If true, deprecate global storage ops everywhere.
     #[serde(skip_serializing_if = "is_false")]
     deprecate_global_storage_ops: bool,
+
+    // If true, skip GC'ed accept votes in CommitFinalizer.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_skip_gced_accept_votes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1738,10 +1748,6 @@ pub struct ProtocolConfig {
     /// checking.
     translation_per_reference_node_charge: Option<u64>,
 
-    /// The metering step resolution for translation costs. This is the granularity at which we
-    /// step up the metering for translation costs.
-    translation_metering_step_resolution: Option<u64>,
-
     /// The multiplier for each linkage entry when charging for linkage tables that we have
     /// created.
     translation_per_linkage_entry_charge: Option<u64>,
@@ -2160,9 +2166,6 @@ impl ProtocolConfig {
     }
 
     pub fn mysticeti_fastpath(&self) -> bool {
-        if let Some(enabled) = is_mysticeti_fpc_enabled_in_env() {
-            return enabled;
-        }
         self.feature_flags.mysticeti_fastpath
     }
 
@@ -2234,6 +2237,11 @@ impl ProtocolConfig {
         self.feature_flags.enable_nitro_attestation_upgraded_parsing
     }
 
+    pub fn enable_nitro_attestation_all_nonzero_pcrs_parsing(&self) -> bool {
+        self.feature_flags
+            .enable_nitro_attestation_all_nonzero_pcrs_parsing
+    }
+
     pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
         self.consensus_commit_rate_estimation_window_size
             .unwrap_or(0)
@@ -2286,21 +2294,7 @@ impl ProtocolConfig {
     }
 
     pub fn enable_ptb_execution_v2(&self) -> bool {
-        let enabled = self.feature_flags.enable_ptb_execution_v2;
-        // PTB execution v2 requires gas model version > 10 and the translation charges to be set.
-        if enabled {
-            debug_assert!(self.translation_per_command_base_charge.is_some());
-            debug_assert!(self.translation_per_input_base_charge.is_some());
-            debug_assert!(self.translation_pure_input_per_byte_charge.is_some());
-            debug_assert!(self.translation_per_type_node_charge.is_some());
-            debug_assert!(self.translation_per_reference_node_charge.is_some());
-            debug_assert!(self.translation_metering_step_resolution.is_some());
-            debug_assert!(self.translation_per_linkage_entry_charge.is_some());
-            debug_assert!(self.feature_flags.abstract_size_in_object_runtime);
-            debug_assert!(self.feature_flags.object_runtime_charge_cache_load_gas);
-            debug_assert!(self.gas_model_version.is_some_and(|version| version > 10));
-        }
-        enabled
+        self.feature_flags.enable_ptb_execution_v2
     }
 
     pub fn better_adapter_type_resolution_errors(&self) -> bool {
@@ -2409,6 +2403,10 @@ impl ProtocolConfig {
 
     pub fn deprecate_global_storage_ops(&self) -> bool {
         self.feature_flags.deprecate_global_storage_ops
+    }
+
+    pub fn consensus_skip_gced_accept_votes(&self) -> bool {
+        self.feature_flags.consensus_skip_gced_accept_votes
     }
 }
 
@@ -2980,7 +2978,6 @@ impl ProtocolConfig {
             translation_pure_input_per_byte_charge: None,
             translation_per_type_node_charge: None,
             translation_per_reference_node_charge: None,
-            translation_metering_step_resolution: None,
             translation_per_linkage_entry_charge: None,
 
             max_updates_per_settlement_txn: None,
@@ -4267,6 +4264,35 @@ impl ProtocolConfig {
                     cfg.feature_flags.deprecate_global_storage_ops = true;
                 }
                 103 => {}
+                104 => {
+                    cfg.translation_per_command_base_charge = Some(1);
+                    cfg.translation_per_input_base_charge = Some(1);
+                    cfg.translation_pure_input_per_byte_charge = Some(1);
+                    cfg.translation_per_type_node_charge = Some(1);
+                    cfg.translation_per_reference_node_charge = Some(1);
+                    cfg.translation_per_linkage_entry_charge = Some(10);
+                    cfg.gas_model_version = Some(11);
+                    cfg.feature_flags.abstract_size_in_object_runtime = true;
+                    cfg.feature_flags.object_runtime_charge_cache_load_gas = true;
+                    cfg.dynamic_field_hash_type_and_key_cost_base = Some(52);
+                    cfg.dynamic_field_add_child_object_cost_base = Some(52);
+                    cfg.dynamic_field_add_child_object_value_cost_per_byte = Some(1);
+                    cfg.dynamic_field_borrow_child_object_cost_base = Some(52);
+                    cfg.dynamic_field_borrow_child_object_child_ref_cost_per_byte = Some(1);
+                    cfg.dynamic_field_remove_child_object_cost_base = Some(52);
+                    cfg.dynamic_field_remove_child_object_child_cost_per_byte = Some(1);
+                    cfg.dynamic_field_has_child_object_cost_base = Some(52);
+                    cfg.dynamic_field_has_child_object_with_ty_cost_base = Some(52);
+                    cfg.feature_flags.enable_ptb_execution_v2 = true;
+
+                    cfg.poseidon_bn254_cost_base = Some(260);
+
+                    cfg.feature_flags.consensus_skip_gced_accept_votes = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4548,32 +4574,6 @@ impl ProtocolConfig {
         self.feature_flags.consensus_batched_block_sync = val;
     }
 
-    /// NB: We are setting a number of feature flags and protocol config fields here to to
-    /// facilitate testing of PTB execution v2. These feature flags and config fields should be set
-    /// with or before enabling PTB execution v2 in a real protocol upgrade.
-    pub fn set_enable_ptb_execution_v2_for_testing(&mut self, val: bool) {
-        self.feature_flags.enable_ptb_execution_v2 = val;
-        // Remove this and set these fields when we move this to be set for a specific protocol
-        // version.
-        if val {
-            self.translation_per_command_base_charge = Some(1);
-            self.translation_per_input_base_charge = Some(1);
-            self.translation_pure_input_per_byte_charge = Some(1);
-            self.translation_per_type_node_charge = Some(1);
-            self.translation_per_reference_node_charge = Some(1);
-            self.translation_metering_step_resolution = Some(1000);
-            self.translation_per_linkage_entry_charge = Some(10);
-            if self.gas_model_version.is_some_and(|version| version <= 10) {
-                self.gas_model_version = Some(11);
-            }
-            self.feature_flags.abstract_size_in_object_runtime = true;
-            self.feature_flags.object_runtime_charge_cache_load_gas = true;
-            self.dynamic_field_add_child_object_value_cost_per_byte = Some(1);
-            self.dynamic_field_borrow_child_object_child_ref_cost_per_byte = Some(1);
-            self.dynamic_field_remove_child_object_child_cost_per_byte = Some(1);
-        }
-    }
-
     pub fn set_record_time_estimate_processed_for_testing(&mut self, val: bool) {
         self.feature_flags.record_time_estimate_processed = val;
     }
@@ -4641,6 +4641,10 @@ impl ProtocolConfig {
 
     pub fn allow_references_in_ptbs_for_testing(&mut self) {
         self.feature_flags.allow_references_in_ptbs = true;
+    }
+
+    pub fn set_consensus_skip_gced_accept_votes_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_skip_gced_accept_votes = val;
     }
 }
 
@@ -4731,18 +4735,6 @@ macro_rules! check_limit_by_meter {
         result
     }};
 }
-
-pub fn is_mysticeti_fpc_enabled_in_env() -> Option<bool> {
-    if let Ok(v) = std::env::var("CONSENSUS") {
-        if v == "mysticeti_fpc" {
-            return Some(true);
-        } else if v == "mysticeti" {
-            return Some(false);
-        }
-    }
-    None
-}
-
 #[cfg(all(test, not(msim)))]
 mod test {
     use insta::assert_yaml_snapshot;

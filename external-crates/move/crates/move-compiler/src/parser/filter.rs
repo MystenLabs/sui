@@ -188,36 +188,16 @@ fn filter_module<T: FilterContext>(
     context: &mut T,
     module_def: P::ModuleDefinition,
 ) -> Option<P::ModuleDefinition> {
-    let module_def = context.filter_map_module(module_def)?;
+    let mut module_def = context.filter_map_module(module_def)?;
 
-    let P::ModuleDefinition {
-        doc,
-        attributes,
-        loc,
-        address,
-        name,
-        is_spec_module,
-        is_extension,
-        members,
-        definition_mode,
-    } = module_def;
-
+    let members = std::mem::take(&mut module_def.members);
     let new_members: Vec<_> = members
         .into_iter()
         .filter_map(|member| filter_module_member(context, member))
         .collect();
+    module_def.members = new_members;
 
-    Some(P::ModuleDefinition {
-        doc,
-        attributes,
-        loc,
-        address,
-        name,
-        is_spec_module,
-        is_extension,
-        members: new_members,
-        definition_mode,
-    })
+    Some(module_def)
 }
 
 fn filter_module_member<T: FilterContext>(

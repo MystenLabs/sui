@@ -24,8 +24,14 @@ error[E02001]: duplicate declaration, item, or annotation
 error[E03003]: unbound module member
    ┌─ tests/move_check/parser/nested_module_use_invalid.move:21:20
    │
+14 │     public fun baz(): B { B {} }
+   │                --- Similarly named defintion found here
+   ·
 21 │         let x: A = q::bar();
-   │                    ^^^^^^ Invalid module access. Unbound function 'bar' in module '0x42::b'
+   │                    ^^^^^^
+   │                    │
+   │                    Invalid module access. Unbound function 'bar' in module '0x42::b'
+   │                    Did you mean: 'baz'
 
 error[E03005]: unbound unscoped name
    ┌─ tests/move_check/parser/nested_module_use_invalid.move:22:18

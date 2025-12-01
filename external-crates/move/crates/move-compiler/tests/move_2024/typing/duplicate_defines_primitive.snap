@@ -9,7 +9,7 @@ error[E10004]: invalid usage of known attribute
   ┌─ tests/move_2024/typing/duplicate_defines_primitive.move:4:3
   │
 2 │ module a::m {}
-  │           - Previously declared here
+  │        ---- Previously declared here
 3 │ 
 4 │ #[defines_primitive(signer)]
   │   ^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate definer annotated for primitive type 'signer'
