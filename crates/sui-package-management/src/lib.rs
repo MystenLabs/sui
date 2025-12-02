@@ -140,12 +140,14 @@ pub fn set_package_id(
     id: AccountAddress,
 ) -> Result<Option<AccountAddress>, anyhow::Error> {
     let lock_file_path = package_path.join(SourcePackageLayout::Lock.path());
-    let Ok(mut lock_file) = File::open(lock_file_path.clone()) else {
-        return Ok(None);
+    let managed_package = {
+        let Ok(mut lock_file) = File::open(lock_file_path.clone()) else {
+            return Ok(None);
+        };
+        ManagedPackage::read(&mut lock_file)
+            .ok()
+            .and_then(|m| m.into_iter().find(|(_, v)| v.chain_id == *chain_id))
     };
-    let managed_package = ManagedPackage::read(&mut lock_file)
-        .ok()
-        .and_then(|m| m.into_iter().find(|(_, v)| v.chain_id == *chain_id));
     let Some((env, v)) = managed_package else {
         return Ok(None);
     };
