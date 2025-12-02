@@ -1992,7 +1992,10 @@ mod tests {
             ..Default::default()
         };
 
-        let ingestion_config = IngestionConfig::default();
+        let ingestion_config = IngestionConfig {
+            ingest_concurrency: 501,
+            ..Default::default()
+        };
 
         let mut tasked_indexer = Indexer::new(
             store.clone(),
