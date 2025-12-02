@@ -87,11 +87,16 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
         )?;
 
         let project_root = self.root_pkg.package_path();
-        let sorted_deps = self.root_pkg.sorted_deps().into_iter().cloned().collect();
+        let sorted_deps: Result<BTreeSet<_>, _> = self
+            .root_pkg
+            .sorted_deps()
+            .into_iter()
+            .map(|x| PackageName::new(x))
+            .collect();
 
         self.clean(
             &project_root.join(CompiledPackageLayout::Root.path()),
-            sorted_deps,
+            sorted_deps?,
         )?;
 
         Ok(compiled)
@@ -183,11 +188,17 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
         };
 
         let project_root = self.root_pkg.package_path();
-        let sorted_deps = self.root_pkg.sorted_deps().into_iter().cloned().collect();
+
+        let sorted_deps: Result<BTreeSet<_>, _> = self
+            .root_pkg
+            .sorted_deps()
+            .into_iter()
+            .map(|x| PackageName::new(x))
+            .collect();
 
         self.clean(
             &project_root.join(CompiledPackageLayout::Root.path()),
-            sorted_deps,
+            sorted_deps?,
         )?;
 
         Ok(migration)

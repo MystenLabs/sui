@@ -14,8 +14,8 @@ use crate::graph::PackageInfo;
 use crate::package::block_on;
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{
-    Environment, LocalPub, LockfileDependencyInfo, ModeName, PackageID, PackageName,
-    ParsedEphemeralPubs, ParsedPublishedFile, Publication, RenderToml,
+    Environment, LocalPub, LockfileDependencyInfo, ModeName, PackageID, ParsedEphemeralPubs,
+    ParsedPublishedFile, Publication, RenderToml,
 };
 use crate::{
     errors::{PackageError, PackageResult},
@@ -486,8 +486,15 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     // *** PATHS RELATED FUNCTIONS ***
 
     /// Return a list of sorted package names
-    pub fn sorted_deps(&self) -> Vec<&PackageName> {
+    pub fn sorted_deps(&self) -> Vec<&str> {
         self.filtered_graph.sorted_deps()
+    }
+
+    /// Return a list of package ids, topologically sorted
+    pub fn sorted_deps_ids(&self) -> Vec<&PackageID> {
+        let pkgs = self.filtered_graph.sorted_packages();
+        let ids = pkgs.into_iter().map(|p| p.id()).collect();
+        ids
     }
 }
 

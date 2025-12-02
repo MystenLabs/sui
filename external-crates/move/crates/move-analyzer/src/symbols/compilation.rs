@@ -339,13 +339,19 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
 
     let root_pkg = load_root_pkg::<F>(&build_config, pkg_path)?;
     let root_pkg_name = Symbol::from(root_pkg.name().to_string());
+    // the package's transitive dependencies
+    let dependencies: Vec<_> = root_pkg
+        .packages()
+        .into_iter()
+        .filter(|x| !x.is_root())
+        .collect();
     let build_plan =
         BuildPlan::create(&root_pkg, &build_config)?.set_compiler_vfs_root(overlay_fs_root.clone());
 
-    let mapped_files_data =
-        compute_mapped_files(&root_pkg, &build_config, overlay_fs_root.clone())?;
     // Hash dependencies so we can check if something has changed.
     // TODO: do we still need this?
+    let mapped_files_data =
+        compute_mapped_files(&root_pkg, &build_config, overlay_fs_root.clone())?;
     let file_paths: Arc<BTreeMap<FileHash, PathBuf>> = Arc::new(
         mapped_files_data
             .files
@@ -360,9 +366,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     let mut diagnostics = None;
     let mut compiler_analysis_info_opt = None;
     let mut compiler_autocomplete_info_opt = None;
-
-    // TODO: we need to rework on loading the root pkg only once.
-    let dependencies = root_pkg.packages();
 
     let compiler_flags = compiler_flags(&build_config);
     let (mut caching_result, other_diags) = if let Ok(deps_package_paths) =
@@ -435,14 +438,21 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 )
             }
             None => {
-                let sorted_deps = root_pkg.sorted_deps();
-                let sorted_deps: Vec<PackageName> = sorted_deps.into_iter().cloned().collect();
+                // get the topologically sorted dependencies, but use the package ids instead of
+                // package names. In the new pkg system, multiple packages with the same name can
+                // exist as the package system will assign unique package ids to them, before
+                // passing them to the compiler.
+                let sorted_deps: Result<Vec<_>> = root_pkg
+                    .sorted_deps_ids()
+                    .into_iter()
+                    .map(|x| PackageName::new(x.to_string()))
+                    .collect();
                 if let Some((program_deps, dep_names)) = compute_pre_compiled_dep_data(
                     &mut cached_packages.compiled_dep_pkgs,
                     mapped_files_data.dep_pkg_paths,
                     src_deps,
                     root_pkg_name,
-                    &sorted_deps,
+                    &sorted_deps?,
                     compiler_flags,
                     overlay_fs_root.clone(),
                 ) {
@@ -548,7 +558,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                         let failure = true;
                         diagnostics = Some((diags, failure));
                         eprintln!("typed AST compilation failed");
-                        eprintln!("diagnostics: {:#?}", diagnostics);
                         return Ok((files, vec![]));
                     }
                 };
@@ -827,10 +836,7 @@ fn compute_mapped_files<F: MoveFlavor>(
             if is_dep {
                 hasher.update(fhash.0);
                 dep_hashes.push(fhash);
-                dep_pkg_paths.insert(
-                    rpkg.name().as_str().into(),
-                    rpkg.path().path().to_path_buf(),
-                );
+                dep_pkg_paths.insert(rpkg.id().clone().into(), rpkg.path().path().to_path_buf());
             }
             // write to top layer of the overlay file system so that the content
             // is immutable for the duration of compilation and symbolication
