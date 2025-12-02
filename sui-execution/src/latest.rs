@@ -98,33 +98,12 @@ impl executor::Executor for Executor {
         Result<(), ExecutionError>,
     ) {
         use sui_adapter_replay_cut as replay_cut;
-        // old vm + old adapter
-        let current_main = replay_cut::execution_engine::execute_transaction_to_effects::<
-            replay_cut::execution_mode::Normal,
-        >(
-            store,
-            input_objects.clone(),
-            gas.clone(),
-            gas_status.clone(),
-            transaction_kind.clone(),
-            transaction_signer,
-            transaction_digest,
-            &self.current_main_runtime,
-            epoch_id,
-            epoch_timestamp_ms,
-            protocol_config,
-            metrics.clone(),
-            enable_expensive_checks,
-            execution_params.clone(),
-            trace_builder_opt,
-        );
+        let new_vm = protocol_config.get_use_vm_v2();
+        let new_adapter = protocol_config.get_use_adapter_v2();
 
-        let mut ptb_v2_protocol_config = protocol_config.clone();
-        ptb_v2_protocol_config.set_enable_ptb_execution_v2_for_testing(true);
-
-        // old vm + new adapter
-        let (m_inner_temporary_store, m_sui_gas_status, m_transaction_effects, _, _) =
-            replay_cut::execution_engine::execute_transaction_to_effects::<
+        if !new_vm && !new_adapter {
+            // old vm + old adapter
+            let current_main = replay_cut::execution_engine::execute_transaction_to_effects::<
                 replay_cut::execution_mode::Normal,
             >(
                 store,
@@ -137,13 +116,50 @@ impl executor::Executor for Executor {
                 &self.current_main_runtime,
                 epoch_id,
                 epoch_timestamp_ms,
-                &ptb_v2_protocol_config,
+                protocol_config,
                 metrics.clone(),
                 enable_expensive_checks,
                 execution_params.clone(),
                 trace_builder_opt,
             );
+            return current_main;
+        }
 
+        let mut ptb_v2_protocol_config = protocol_config.clone();
+        ptb_v2_protocol_config.set_enable_ptb_execution_v2_for_testing(true);
+
+        if !new_vm && new_adapter {
+            // old vm + new adapter
+            let (m_inner_temporary_store, m_sui_gas_status, m_transaction_effects, _, _) =
+                replay_cut::execution_engine::execute_transaction_to_effects::<
+                    replay_cut::execution_mode::Normal,
+                >(
+                    store,
+                    input_objects.clone(),
+                    gas.clone(),
+                    gas_status.clone(),
+                    transaction_kind.clone(),
+                    transaction_signer,
+                    transaction_digest,
+                    &self.current_main_runtime,
+                    epoch_id,
+                    epoch_timestamp_ms,
+                    &ptb_v2_protocol_config,
+                    metrics.clone(),
+                    enable_expensive_checks,
+                    execution_params.clone(),
+                    trace_builder_opt,
+                );
+            return (
+                m_inner_temporary_store,
+                m_sui_gas_status,
+                m_transaction_effects,
+                vec![],
+                Ok(()),
+            );
+        }
+
+        // New VM + New Adapter
         let (b_inner_temporary_store, b_sui_gas_status, b_transaction_effects, _, _) =
             execute_transaction_to_effects::<execution_mode::Normal>(
                 store,
@@ -162,23 +178,13 @@ impl executor::Executor for Executor {
                 execution_params,
                 trace_builder_opt,
             );
-
-        tracing::debug!("Executed transaction in three configurations");
-
-        compare_effects(
-            &(
-                m_inner_temporary_store,
-                m_sui_gas_status,
-                m_transaction_effects,
-            ),
-            &(
-                b_inner_temporary_store,
-                b_sui_gas_status,
-                b_transaction_effects,
-            ),
-        );
-
-        current_main
+        (
+            b_inner_temporary_store,
+            b_sui_gas_status,
+            b_transaction_effects,
+            vec![],
+            Ok(()),
+        )
     }
 
     fn dev_inspect_transaction(
@@ -317,6 +323,7 @@ pub fn init_vm_for_msim() {
     identifier_interner::init_interner();
 }
 
+#[allow(unused)]
 fn compare_effects(
     normal_effects: &(InnerTemporaryStore, SuiGasStatus, TransactionEffects),
     new_effects: &(InnerTemporaryStore, SuiGasStatus, TransactionEffects),

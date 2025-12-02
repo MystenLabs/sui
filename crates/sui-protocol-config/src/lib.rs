@@ -778,6 +778,14 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_ptb_execution_v2: bool,
 
+    // Enable the new VM
+    #[serde(skip_serializing_if = "is_false")]
+    enable_vm_v2: bool,
+
+    // Enable the new adapter
+    #[serde(skip_serializing_if = "is_false")]
+    enable_adapter_v2: bool,
+
     // Provide better type resolution errors in the adapter.
     #[serde(skip_serializing_if = "is_false")]
     better_adapter_type_resolution_errors: bool,
@@ -2523,6 +2531,13 @@ impl ProtocolConfig {
             panic!("get_for_max_version_UNSAFE called on validator");
         }
         ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
+    }
+
+    pub fn get_use_vm_v2(&self) -> bool {
+        self.feature_flags.enable_vm_v2
+    }
+    pub fn get_use_adapter_v2(&self) -> bool {
+        self.feature_flags.enable_adapter_v2
     }
 
     fn get_for_version_impl(version: ProtocolVersion, chain: Chain) -> Self {
