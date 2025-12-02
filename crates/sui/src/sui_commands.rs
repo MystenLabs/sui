@@ -1206,7 +1206,6 @@ async fn start(
     // Update the wallet_context with the configured fullnode rpc url so client operations will
     // succeed if a non-default port was provided.
 
-    println!("Config dir {:?}", config_dir.display());
     if config_dir.join(SUI_CLIENT_CONFIG).exists() {
         let _ = update_wallet_config_rpc(config_dir.clone(), fullnode_rpc_url.clone())?;
     }
