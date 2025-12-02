@@ -483,6 +483,7 @@ mod tests {
     #[async_trait]
     impl Processor for ControllableHandler {
         const NAME: &'static str = "controllable";
+        const FANOUT: usize = 501;
         type Value = MockValue;
 
         async fn process(
