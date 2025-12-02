@@ -316,14 +316,12 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     }
 
     pub fn coin_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
-        let Some(abilities) = AbilitySet::from_u8((Ability::Key as u8) | (Ability::Store as u8))
-        else {
-            invariant_violation!("Unable to create coin abilities");
-        };
+        const COIN_ABILITIES: AbilitySet =
+            AbilitySet::singleton(Ability::Key).union(AbilitySet::singleton(Ability::Store));
         let (a, m, n) = RESOLVED_COIN_STRUCT;
         let module = ModuleId::new(*a, m.to_owned());
         Ok(Type::Datatype(Rc::new(Datatype {
-            abilities,
+            abilities: COIN_ABILITIES,
             module,
             name: n.to_owned(),
             type_arguments: vec![inner_type],
@@ -331,13 +329,11 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     }
 
     pub fn balance_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
-        let Some(abilities) = AbilitySet::from_u8(Ability::Store as u8) else {
-            invariant_violation!("Unable to create balance abilities");
-        };
+        const BALANCE_ABILITIES: AbilitySet = AbilitySet::singleton(Ability::Store);
         let (a, m, n) = RESOLVED_BALANCE_STRUCT;
         let module = ModuleId::new(*a, m.to_owned());
         Ok(Type::Datatype(Rc::new(Datatype {
-            abilities,
+            abilities: BALANCE_ABILITIES,
             module,
             name: n.to_owned(),
             type_arguments: vec![inner_type],
@@ -345,13 +341,11 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     }
 
     pub fn withdrawal_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
-        let Some(abilities) = AbilitySet::from_u8(Ability::Drop as u8) else {
-            invariant_violation!("Unable to create withdrawal abilities");
-        };
+        const WITHDRAWAL_ABILITIES: AbilitySet = AbilitySet::singleton(Ability::Drop);
         let (a, m, n) = RESOLVED_WITHDRAWAL_STRUCT;
         let module = ModuleId::new(*a, m.to_owned());
         Ok(Type::Datatype(Rc::new(Datatype {
-            abilities,
+            abilities: WITHDRAWAL_ABILITIES,
             module,
             name: n.to_owned(),
             type_arguments: vec![inner_type],
