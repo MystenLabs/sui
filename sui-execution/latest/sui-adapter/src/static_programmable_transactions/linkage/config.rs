@@ -4,7 +4,7 @@
 use crate::{
     data_store::PackageStore,
     static_programmable_transactions::linkage::resolution::{
-        ResolutionTable, VersionConstraint, add_and_unify, get_package,
+        ResolutionTable, VersionConstraint, add_and_unify,
     },
 };
 use move_binary_format::binary_config::BinaryConfig;
@@ -66,6 +66,7 @@ impl LinkageConfig {
             for id in NATIVE_PACKAGE_IDS {
                 #[cfg(debug_assertions)]
                 {
+                    use crate::static_programmable_transactions::linkage::resolution::get_package;
                     let package = get_package(id, store)?;
                     debug_assert_eq!(package.id(), *id);
                     debug_assert_eq!(package.original_package_id(), *id);
