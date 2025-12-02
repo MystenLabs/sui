@@ -85,6 +85,75 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             round_tracker,
         }
     }
+
+    fn parse_excluded_ancestors(
+        &self,
+        peer: AuthorityIndex,
+        block: &VerifiedBlock,
+        mut excluded_ancestors: Vec<Vec<u8>>,
+    ) -> Vec<BlockRef> {
+        let peer_hostname = &self.context.committee.authority(peer).hostname;
+
+        let excluded_ancestors_limit = self.context.committee.size() * 2;
+        if excluded_ancestors.len() > excluded_ancestors_limit {
+            debug!(
+                "Dropping {} excluded ancestor(s) from {} {} due to size limit",
+                excluded_ancestors.len() - excluded_ancestors_limit,
+                peer,
+                peer_hostname,
+            );
+            excluded_ancestors.truncate(excluded_ancestors_limit);
+        }
+
+        let mut invalid_ancestors = 0;
+        let excluded_ancestors = excluded_ancestors
+            .into_iter()
+            .filter_map(|serialized| {
+                let Ok(block_ref) = bcs::from_bytes::<BlockRef>(&serialized) else {
+                    invalid_ancestors += 1;
+                    return None;
+                };
+                if !self.context.committee.is_valid_index(block_ref.author) {
+                    invalid_ancestors += 1;
+                    return None;
+                }
+                if block_ref.round >= block.round() {
+                    invalid_ancestors += 1;
+                    return None;
+                }
+                Some(block_ref)
+            })
+            .collect::<Vec<BlockRef>>();
+
+        if invalid_ancestors > 0 {
+            debug!(
+                "Dropping {} invalid excluded ancestor(s) from {} {}",
+                invalid_ancestors, peer, peer_hostname,
+            );
+        }
+
+        for excluded_ancestor in &excluded_ancestors {
+            let excluded_ancestor_hostname = &self
+                .context
+                .committee
+                .authority(excluded_ancestor.author)
+                .hostname;
+            self.context
+                .metrics
+                .node_metrics
+                .network_excluded_ancestors_count_by_authority
+                .with_label_values(&[excluded_ancestor_hostname])
+                .inc();
+        }
+        self.context
+            .metrics
+            .node_metrics
+            .network_received_excluded_ancestors_from_authority
+            .with_label_values(&[peer_hostname])
+            .inc_by(excluded_ancestors.len() as u64);
+
+        excluded_ancestors
+    }
 }
 
 #[async_trait]
@@ -224,51 +293,18 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         // ------------ After processing the block, process the excluded ancestors ------------
 
-        let mut excluded_ancestors = serialized_block
-            .excluded_ancestors
-            .into_iter()
-            .map(|serialized| bcs::from_bytes::<BlockRef>(&serialized))
-            .collect::<Result<Vec<BlockRef>, bcs::Error>>()
-            .map_err(ConsensusError::MalformedBlock)?;
-
-        let excluded_ancestors_limit = self.context.committee.size() * 2;
-        if excluded_ancestors.len() > excluded_ancestors_limit {
-            debug!(
-                "Dropping {} excluded ancestor(s) from {} {} due to size limit",
-                excluded_ancestors.len() - excluded_ancestors_limit,
-                peer,
-                peer_hostname,
-            );
-            excluded_ancestors.truncate(excluded_ancestors_limit);
-        }
+        let excluded_ancestors = self.parse_excluded_ancestors(
+            peer,
+            &verified_block,
+            serialized_block.excluded_ancestors,
+        );
 
         self.round_tracker
             .write()
-            .update_from_accepted_block(&ExtendedBlock {
+            .update_from_verified_block(&ExtendedBlock {
                 block: verified_block,
                 excluded_ancestors: excluded_ancestors.clone(),
             });
-
-        self.context
-            .metrics
-            .node_metrics
-            .network_received_excluded_ancestors_from_authority
-            .with_label_values(&[peer_hostname])
-            .inc_by(excluded_ancestors.len() as u64);
-
-        for excluded_ancestor in &excluded_ancestors {
-            let excluded_ancestor_hostname = &self
-                .context
-                .committee
-                .authority(excluded_ancestor.author)
-                .hostname;
-            self.context
-                .metrics
-                .node_metrics
-                .network_excluded_ancestors_count_by_authority
-                .with_label_values(&[excluded_ancestor_hostname])
-                .inc();
-        }
 
         let missing_excluded_ancestors = self
             .core_dispatcher
