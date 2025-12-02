@@ -5,25 +5,25 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
-use anyhow::{self, bail, Context};
+use anyhow::{self, Context, bail};
+use diesel::ExpressionMethods;
 use diesel::query_dsl::methods::FilterDsl;
 use diesel::upsert::excluded;
-use diesel::ExpressionMethods;
 use diesel_async::RunQueryDsl;
 use move_core_types::language_storage::StructTag;
-use sui_indexer_alt_framework::pipeline::{sequential::Handler, Processor};
+use sui_indexer_alt_framework::FieldCount;
+use sui_indexer_alt_framework::Result;
+use sui_indexer_alt_framework::pipeline::{Processor, sequential::Handler};
 use sui_indexer_alt_framework::postgres;
 use sui_indexer_alt_framework::types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
-use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_framework::types::object::Object;
 use sui_indexer_alt_framework::types::parse_sui_struct_tag;
-use sui_indexer_alt_framework::FieldCount;
-use sui_indexer_alt_framework::Result;
 
 use crate::schema::blog_post;
 use crate::storage::StoredBlogPost;
-use crate::types::{extract_content_from_metadata, BlogPostMetadata};
+use crate::types::{BlogPostMetadata, extract_content_from_metadata};
 
 // ============================================================================
 // PROCESSING TYPES
@@ -55,6 +55,7 @@ pub struct BlogPostPipeline {
     metadata_type: StructTag,
 }
 
+#[async_trait::async_trait]
 impl Processor for BlogPostPipeline {
     const NAME: &'static str = "blog_post";
 
@@ -62,7 +63,7 @@ impl Processor for BlogPostPipeline {
 
     /// This pipeline operates on a checkpoint granularity to produce a set of values reflecting the
     /// state of relevant Metadata dynamic fields at checkpoint boundary.
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
         let checkpoint_input_objects = checkpoint_input_objects(checkpoint)?;
         let latest_live_output_objects = checkpoint_output_objects(checkpoint)?;
         // Collect values to be passed to committer. This map is keyed on the dynamic field id.
@@ -113,10 +114,7 @@ impl Handler for BlogPostPipeline {
     type Store = postgres::Db;
     type Batch = BTreeMap<ObjectID, Self::Value>;
 
-    fn batch(
-        batch: &mut Self::Batch,
-        values: impl IntoIterator<Item = Self::Value>,
-    ) -> sui_indexer_alt_framework::pipeline::BatchStatus {
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
         for value in values {
             match value {
                 ProcessedWalrusMetadata::Upsert {
@@ -129,10 +127,13 @@ impl Handler for BlogPostPipeline {
                 }
             }
         }
-        sui_indexer_alt_framework::pipeline::BatchStatus::Pending
     }
 
-    async fn commit<'a>(batch: &Self::Batch, conn: &mut postgres::Connection<'a>) -> Result<usize> {
+    async fn commit<'a>(
+        &self,
+        batch: &Self::Batch,
+        conn: &mut postgres::Connection<'a>,
+    ) -> Result<usize> {
         // Partition the batch into items to delete and items to upsert
         let (to_delete, to_upsert): (Vec<_>, Vec<_>) = batch
             .values()
@@ -230,14 +231,13 @@ impl ProcessedWalrusMetadata {
 /// checkpoint. These are objects that existed prior to the checkpoint, and excludes objects that
 /// were created or unwrapped within the checkpoint.
 pub fn checkpoint_input_objects(
-    checkpoint: &CheckpointData,
+    checkpoint: &Checkpoint,
 ) -> anyhow::Result<BTreeMap<ObjectID, &Object>> {
     let mut output_objects_seen = HashSet::new();
     let mut checkpoint_input_objects = BTreeMap::new();
     for tx in &checkpoint.transactions {
         let input_objects_map: BTreeMap<(ObjectID, SequenceNumber), &Object> = tx
-            .input_objects
-            .iter()
+            .input_objects(&checkpoint.object_set)
             .map(|obj| ((obj.id(), obj.version()), obj))
             .collect();
 
@@ -281,13 +281,12 @@ pub fn checkpoint_input_objects(
 /// Returns all versions of objects that were output by transactions in the checkpoint, and are
 /// still live at the end of the checkpoint.
 pub(crate) fn checkpoint_output_objects(
-    checkpoint: &CheckpointData,
+    checkpoint: &Checkpoint,
 ) -> anyhow::Result<BTreeMap<ObjectID, &Object>> {
     let mut output_objects = BTreeMap::new();
     for tx in &checkpoint.transactions {
         let output_objects_map: BTreeMap<_, _> = tx
-            .output_objects
-            .iter()
+            .output_objects(&checkpoint.object_set)
             .map(|obj| ((obj.id(), obj.version()), obj))
             .collect();
 

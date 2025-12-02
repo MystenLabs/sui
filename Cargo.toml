@@ -7,6 +7,7 @@ exclude = [
   "examples/custom-indexer/rust",
   "examples/rust/basic-sui-indexer",
   "examples/rust/clickhouse-sui-indexer",
+  "examples/rust/walrus-attributes-indexer",
   "external-crates/move/crates/jsonrpc",
   "external-crates/move/crates/bytecode-interpreter-crypto",
   "external-crates/move/crates/bytecode-verifier-libfuzzer",
