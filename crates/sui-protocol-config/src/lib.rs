@@ -894,6 +894,10 @@ struct FeatureFlags {
     // If true, skip GC'ed accept votes in CommitFinalizer.
     #[serde(skip_serializing_if = "is_false")]
     consensus_skip_gced_accept_votes: bool,
+
+    // If true, automatically convert withdrawal PTB arguments to coin or balance when needed.
+    #[serde(skip_serializing_if = "is_false")]
+    convert_withdrawal_ptb_arguments: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2407,6 +2411,10 @@ impl ProtocolConfig {
 
     pub fn consensus_skip_gced_accept_votes(&self) -> bool {
         self.feature_flags.consensus_skip_gced_accept_votes
+    }
+
+    pub fn convert_withdrawal_ptb_arguments(&self) -> bool {
+        self.feature_flags.convert_withdrawal_ptb_arguments
     }
 }
 
@@ -4645,6 +4653,10 @@ impl ProtocolConfig {
 
     pub fn set_consensus_skip_gced_accept_votes_for_testing(&mut self, val: bool) {
         self.feature_flags.consensus_skip_gced_accept_votes = val;
+    }
+
+    pub fn enable_withdrawal_ptb_argument_conversion_for_testing(&mut self, val: bool) {
+        self.feature_flags.convert_withdrawal_ptb_arguments = val;
     }
 }
 

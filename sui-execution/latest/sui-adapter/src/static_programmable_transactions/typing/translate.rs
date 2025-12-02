@@ -12,6 +12,7 @@ use crate::{
     },
 };
 use indexmap::{IndexMap, IndexSet};
+use move_binary_format::file_format::{Ability, AbilitySet};
 use std::{collections::BTreeMap, rc::Rc};
 use sui_types::{
     balance::RESOLVED_BALANCE_STRUCT,
@@ -472,6 +473,8 @@ fn command<Mode: ExecutionMode>(
             )
         }
         L::Command::TransferObjects(lobjects, laddress) => {
+            const TRANSFER_OBJECTS_CONSTRAINT: AbilitySet =
+                AbilitySet::singleton(Ability::Store).union(AbilitySet::singleton(Ability::Key));
             let object_locs = locations(context, 0, lobjects)?;
             let address_loc = one_location(context, object_locs.len(), laddress)?;
             let objects = constrained_arguments(
@@ -479,10 +482,7 @@ fn command<Mode: ExecutionMode>(
                 context,
                 0,
                 object_locs,
-                |ty| {
-                    let abilities = ty.abilities();
-                    Ok(abilities.has_store() && abilities.has_key())
-                },
+                TRANSFER_OBJECTS_CONSTRAINT,
                 CommandArgumentError::InvalidTransferObject,
             )?;
             let address = argument(env, context, objects.len(), address_loc, Type::Address)?;
@@ -538,6 +538,7 @@ fn command<Mode: ExecutionMode>(
             )
         }
         L::Command::MakeMoveVec(None, lelems) => {
+            const MAKE_MOVE_VEC_OBJECT_CONSTRAINT: AbilitySet = AbilitySet::singleton(Ability::Key);
             let mut lelems = lelems.into_iter();
             let Some(lfirst) = lelems.next() else {
                 // TODO maybe this should be a different errors for CLI usage
@@ -551,7 +552,7 @@ fn command<Mode: ExecutionMode>(
                 context,
                 0,
                 first_loc,
-                |ty| Ok(ty.abilities().has_key()),
+                MAKE_MOVE_VEC_OBJECT_CONSTRAINT,
                 CommandArgumentError::InvalidMakeMoveVecNonObjectArgument,
             )?;
             let first_ty = first_arg.value.1.clone();
@@ -789,15 +790,14 @@ fn check_type(actual_ty: &Type, expected_ty: &Type) -> Result<(), CommandArgumen
     }
 }
 
-fn constrained_arguments<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
+fn constrained_arguments(
     env: &Env,
     context: &mut Context,
     start_idx: usize,
     locations: Vec<SplatLocation>,
-    mut is_valid: P,
+    constraint: AbilitySet,
     err_case: CommandArgumentError,
 ) -> Result<Vec<T::Argument>, ExecutionError> {
-    let is_valid = &mut is_valid;
     locations
         .into_iter()
         .enumerate()
@@ -805,50 +805,42 @@ fn constrained_arguments<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
             let Some(idx) = start_idx.checked_add(i) else {
                 invariant_violation!("usize overflow when calculating argument index");
             };
-            constrained_argument_(env, context, idx, location, is_valid, err_case)
+            constrained_argument(env, context, idx, location, constraint, err_case)
         })
         .collect()
 }
 
-fn constrained_argument<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
+fn constrained_argument(
     env: &Env,
     context: &mut Context,
     command_arg_idx: usize,
     location: SplatLocation,
-    mut is_valid: P,
+    constraint: AbilitySet,
     err_case: CommandArgumentError,
 ) -> Result<T::Argument, ExecutionError> {
-    constrained_argument_(
+    let arg_ = constrained_argument_(
         env,
         context,
         command_arg_idx,
         location,
-        &mut is_valid,
+        constraint,
         err_case,
     )
+    .map_err(|e| e.into_execution_error(command_arg_idx))?;
+    Ok(sp(command_arg_idx as u16, arg_))
 }
 
-fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
+fn constrained_argument_(
     env: &Env,
     context: &mut Context,
     command_arg_idx: usize,
     location: SplatLocation,
-    is_valid: &mut P,
-    err_case: CommandArgumentError,
-) -> Result<T::Argument, ExecutionError> {
-    let arg_ = constrained_argument__(env, context, location, is_valid, err_case)
-        .map_err(|e| e.into_execution_error(command_arg_idx))?;
-    Ok(sp(command_arg_idx as u16, arg_))
-}
-
-fn constrained_argument__<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
-    env: &Env,
-    context: &mut Context,
-    location: SplatLocation,
-    is_valid: &mut P,
+    constraint: AbilitySet,
     err_case: CommandArgumentError,
 ) -> Result<T::Argument_, EitherError> {
-    if let Some((location, ty)) = constrained_type(env, context, location, is_valid)? {
+    if let Some((location, ty)) =
+        constrained_type(env, context, command_arg_idx, location, constraint)?
+    {
         if ty.abilities().has_copy() {
             Ok((T::Argument__::new_copy(location), ty))
         } else {
@@ -859,16 +851,27 @@ fn constrained_argument__<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     }
 }
 
-fn constrained_type<'a, P: FnMut(&Type) -> Result<bool, ExecutionError>>(
+fn constrained_type<'a>(
     env: &'a Env,
     context: &'a mut Context,
+    command_arg_idx: usize,
     location: SplatLocation,
-    mut is_valid: P,
+    constraint: AbilitySet,
 ) -> Result<Option<(T::Location, Type)>, ExecutionError> {
     let Some((location, ty)) = context.fixed_type(env, location)? else {
         return Ok(None);
     };
-    Ok(if is_valid(&ty)? {
+    // if the argument is a balance withdrawal, and an object is needed, convert it to a coin
+    let (location, ty) = if env.protocol_config.convert_withdrawal_ptb_arguments()
+        && constraint.has_key()
+        && let Some(ty_withdrawal_inner) = withdrawal_inner_type(&ty)
+        && balance_inner_type(ty_withdrawal_inner).is_some()
+    {
+        convert_withdrawal_to_coin(env, context, command_arg_idx, location, ty)?
+    } else {
+        (location, ty)
+    };
+    Ok(if constraint.is_subset(ty.abilities()) {
         Some((location, ty))
     } else {
         None
@@ -897,18 +900,12 @@ fn coin_mut_ref_argument_(
         // inference not currently supported
         return Err(CommandArgumentError::TypeMismatch.into());
     };
-    let (location, actual_ty) = if env.protocol_config.enable_accumulators()
+    // if the argument is a balance withdrawal, convert it to a coin
+    let (location, actual_ty) = if env.protocol_config.convert_withdrawal_ptb_arguments()
         && let Some(actual_withdrawal_inner) = withdrawal_inner_type(&actual_ty)
-        && let Some(actual_inner) = balance_inner_type(actual_withdrawal_inner)
+        && balance_inner_type(actual_withdrawal_inner).is_some()
     {
-        convert_withdrawal_to_coin(
-            env,
-            context,
-            command_arg_idx,
-            location,
-            actual_ty.clone(),
-            actual_inner,
-        )?
+        convert_withdrawal_to_coin(env, context, command_arg_idx, location, actual_ty)?
     } else {
         (location, actual_ty)
     };
@@ -951,20 +948,13 @@ fn apply_conversion(
         Type::Reference(_, inner) => &**inner,
         ty => ty,
     };
-    if env.protocol_config.enable_accumulators()
+    if env.protocol_config.convert_withdrawal_ptb_arguments()
         && let Some(expected_inner) = coin_inner_type(expected_ty)
         && let Some(actual_withdrawal_inner) = withdrawal_inner_type(&actual_ty)
         && let Some(actual_inner) = balance_inner_type(actual_withdrawal_inner)
         && actual_inner == expected_inner
     {
-        convert_withdrawal_to_coin(
-            env,
-            context,
-            command_arg_idx,
-            location,
-            actual_ty,
-            expected_inner,
-        )
+        convert_withdrawal_to_coin(env, context, command_arg_idx, location, actual_ty)
     } else {
         Ok((location, actual_ty))
     }
@@ -1024,8 +1014,17 @@ fn convert_withdrawal_to_coin(
     command_arg_idx: usize,
     location: T::Location,
     withdrawal_type: Type,
-    inner_ty: &Type,
 ) -> Result<(T::Location, Type), ExecutionError> {
+    assert_invariant!(
+        env.protocol_config.convert_withdrawal_ptb_arguments(),
+        "convert_withdrawal_to_coin called when conversion is disabled"
+    );
+    let Some(inner_ty) = withdrawal_inner_type(&withdrawal_type)
+        .and_then(balance_inner_type)
+        .cloned()
+    else {
+        invariant_violation!("convert_withdrawal_to_coin called with non-withdrawal type");
+    };
     let idx = command_arg_idx as u16;
     // first store the owner of the withdrawal
     let withdrawal_borrow_ = T::Argument__::Borrow(false, location);
