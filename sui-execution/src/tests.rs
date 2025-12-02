@@ -141,3 +141,90 @@ impl Packages {
         self.normal_edges(pkg).map(move |(_, to)| to)
     }
 }
+
+#[cfg(test)]
+mod adapter_vm_v2_tests {
+    use sui_protocol_config::ProtocolConfig;
+
+    #[test]
+    fn test_executor_with_old_adapter_old_vm() {
+        // Clear the environment variable to use old vm + old adapter
+        // SAFETY: Tests run sequentially by using cargo test -- --test-threads=1
+        // or these env var modifications are scoped to test behavior only
+        unsafe {
+            std::env::remove_var("VM_ADAPTER_CONFIG");
+        }
+
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let executor_result = crate::executor(&protocol_config, true);
+
+        assert!(
+            executor_result.is_ok(),
+            "Executor should be created successfully with old VM and old adapter"
+        );
+    }
+
+    #[test]
+    fn test_executor_with_new_adapter_old_vm() {
+        // SAFETY: Tests run sequentially by using cargo test -- --test-threads=1
+        // or these env var modifications are scoped to test behavior only
+        unsafe {
+            std::env::set_var("VM_ADAPTER_CONFIG", "old_vm_old_adapter,old_vm_new_adapter");
+        }
+
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let executor_result = crate::executor(&protocol_config, true);
+
+        assert!(
+            executor_result.is_ok(),
+            "Executor should be created successfully with old_vm_new_adapter"
+        );
+
+        // Clean up
+        unsafe {
+            std::env::remove_var("VM_ADAPTER_CONFIG");
+        }
+    }
+
+    #[test]
+    fn test_executor_with_new_adapter_new_vm() {
+        // SAFETY: Tests run sequentially by using cargo test -- --test-threads=1
+        // or these env var modifications are scoped to test behavior only
+        unsafe {
+            std::env::set_var("VM_ADAPTER_CONFIG", "old_vm_old_adapter,new_vm_new_adapter");
+        }
+
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let executor_result = crate::executor(&protocol_config, true);
+
+        assert!(
+            executor_result.is_ok(),
+            "Executor should be created successfully with new VM and new adapter"
+        );
+
+        // Clean up
+        unsafe {
+            std::env::remove_var("VM_ADAPTER_CONFIG");
+        }
+    }
+
+    #[test]
+    fn test_parse_vm_adapter_config_variants() {
+        // SAFETY: Tests run sequentially by using cargo test -- --test-threads=1
+        // or these env var modifications are scoped to test behavior only
+        unsafe {
+            std::env::set_var("VM_ADAPTER_CONFIG", "old_vm_old_adapter,new_vm_new_adapter");
+        }
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let executor_result = crate::executor(&protocol_config, true);
+        assert!(
+            executor_result.is_ok(),
+            "Executor should be created successfully with new_vm_new_adapter"
+        );
+
+        // Clean up
+        unsafe {
+            std::env::remove_var("VM_ADAPTER_CONFIG");
+        }
+    }
+}
