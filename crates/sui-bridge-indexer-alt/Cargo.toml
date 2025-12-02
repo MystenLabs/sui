@@ -8,7 +8,6 @@ edition = "2024"
 
 [dependencies]
 tokio.workspace = true
-tokio-util.workspace = true
 anyhow.workspace = true
 sui-bridge.workspace = true
 sui-bridge-schema.workspace = true

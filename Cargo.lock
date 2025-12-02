@@ -13921,7 +13921,6 @@ dependencies = [
  "sui-indexer-alt-metrics",
  "telemetry-subscribers",
  "tokio",
- "tokio-util 0.7.13",
  "tracing",
  "url",
 ]
@@ -13955,7 +13954,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sui-config",
- "sui-futures",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",

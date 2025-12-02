@@ -8,11 +8,10 @@ use object_store::{
     gcp::GoogleCloudStorageBuilder, http::HttpBuilder, local::LocalFileSystem,
 };
 use sui_checkpoint_blob_indexer::{CheckpointBlobPipeline, EpochsPipeline};
-use sui_futures::service::Error;
+use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_framework::{Indexer, IndexerArgs, ingestion::ClientArgs};
 use sui_indexer_alt_metrics::MetricsArgs;
 use sui_indexer_alt_object_store::ObjectStore;
-use tracing::error;
 use url::Url;
 
 #[derive(Debug, clap::Parser)]
