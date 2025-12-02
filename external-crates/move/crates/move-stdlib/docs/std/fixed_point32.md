@@ -299,7 +299,7 @@ values directly.
 Returns true if the ratio is zero.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/fixed_point32.md#std_fixed_point32_is_zero">is_zero</a>(num: <a href="../std/fixed_point32.md#std_fixed_point32_FixedPoint32">std::fixed_point32::FixedPoint32</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../std/fixed_point32.md#std_fixed_point32_is_zero">is_zero</a>(num: <a href="../std/fixed_point32.md#std_fixed_point32_FixedPoint32">std::fixed_point32::FixedPoint32</a>): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -308,7 +308,7 @@ Returns true if the ratio is zero.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/fixed_point32.md#std_fixed_point32_is_zero">is_zero</a>(num: <a href="../std/fixed_point32.md#std_fixed_point32_FixedPoint32">FixedPoint32</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/fixed_point32.md#std_fixed_point32_is_zero">is_zero</a>(num: <a href="../std/fixed_point32.md#std_fixed_point32_FixedPoint32">FixedPoint32</a>): <a href="../std/bool.md#std_bool">bool</a> {
     num.value == 0
 }
 </code></pre>
