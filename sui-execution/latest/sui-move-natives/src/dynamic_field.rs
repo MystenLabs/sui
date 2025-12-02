@@ -332,6 +332,7 @@ pub fn borrow_child_object(
             child_ref.abstract_memory_size(&SizeConfig {
                 include_vector_size: true,
                 traverse_references: true,
+                fine_grained_value_size: true,
             })
         }
     };
@@ -417,6 +418,7 @@ pub fn remove_child_object(
         CacheInfo::CachedObject | CacheInfo::Loaded(_) => child.abstract_memory_size(&SizeConfig {
             include_vector_size: true,
             traverse_references: false,
+            fine_grained_value_size: true,
         }),
     };
     native_charge_gas_early_exit!(
