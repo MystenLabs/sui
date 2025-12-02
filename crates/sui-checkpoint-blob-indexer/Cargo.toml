@@ -15,6 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 sui-config.workspace = true
+sui-futures.workspace = true
 sui-indexer-alt-framework.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true
 sui-indexer-alt-object-store.workspace = true
@@ -31,7 +32,6 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
 prometheus.workspace = true
-tokio-util.workspace = true
 async-trait.workspace = true
 object_store.workspace = true
 serde_json.workspace = true
