@@ -100,6 +100,26 @@ For when heap is empty and there's no data to pop.
 
 
 
+<a name="sui_priority_queue_ELengthMismatch"></a>
+
+For when the value vector and priority vector have mismatched lengths
+
+
+<pre><code><b>const</b> <a href="../sui/priority_queue.md#sui_priority_queue_ELengthMismatch">ELengthMismatch</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="sui_priority_queue_EIndexOutOfBounds"></a>
+
+For when access a node of a priority_queue at an invalid index
+
+
+<pre><code><b>const</b> <a href="../sui/priority_queue.md#sui_priority_queue_EIndexOutOfBounds">EIndexOutOfBounds</a>: u64 = 2;
+</code></pre>
+
+
+
 <a name="sui_priority_queue_new"></a>
 
 ## Function `new`
@@ -230,17 +250,11 @@ Insert a new entry into the queue.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_create_entries">create_entries</a>&lt;T: drop&gt;(<b>mut</b> p: vector&lt;u64&gt;, <b>mut</b> v: vector&lt;T&gt;): vector&lt;<a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a>&lt;T&gt;&gt; {
-    <b>let</b> len = p.length();
-    <b>assert</b>!(v.length() == len, 0);
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_create_entries">create_entries</a>&lt;T: drop&gt;(p: vector&lt;u64&gt;, v: vector&lt;T&gt;): vector&lt;<a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a>&lt;T&gt;&gt; {
+    <b>assert</b>!(v.length() == p.length(), <a href="../sui/priority_queue.md#sui_priority_queue_ELengthMismatch">ELengthMismatch</a>);
     <b>let</b> <b>mut</b> res = vector[];
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; len) {
-        <b>let</b> priority = p.remove(0);
-        <b>let</b> value = v.remove(0);
-        res.push_back(<a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a> { priority, value });
-        i = i + 1;
-    };
+    p.zip_do_reverse!(v, |priority, value| res.push_back(<a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a> { priority, value }));
+    res.reverse();
     res
 }
 </code></pre>
@@ -306,7 +320,7 @@ do satisfy the max heap property.
     <b>if</b> (len == 0) {
         <b>return</b>
     };
-    <b>assert</b>!(i &lt; len, 1);
+    <b>assert</b>!(i &lt; len, <a href="../sui/priority_queue.md#sui_priority_queue_EIndexOutOfBounds">EIndexOutOfBounds</a>);
     <b>let</b> left = i * 2 + 1;
     <b>let</b> right = left + 1;
     <b>let</b> <b>mut</b> max = i;
@@ -349,13 +363,7 @@ do satisfy the max heap property.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_priorities">priorities</a>&lt;T: drop&gt;(pq: &<a href="../sui/priority_queue.md#sui_priority_queue_PriorityQueue">PriorityQueue</a>&lt;T&gt;): vector&lt;u64&gt; {
-    <b>let</b> <b>mut</b> res = vector[];
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; pq.entries.length()) {
-        res.push_back(pq.entries[i].priority);
-        i = i +1;
-    };
-    res
+    pq.entries.map_ref!(|e| e.priority)
 }
 </code></pre>
 
