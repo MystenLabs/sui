@@ -339,9 +339,13 @@ impl CommitFinalizer {
                 }
             }
             // Initialize the block state.
-            blocks_map
-                .entry(block_ref)
-                .or_insert_with(|| RwLock::new(BlockState::new(block)));
+            blocks_map.entry(block_ref).or_insert_with(|| {
+                RwLock::new(BlockState::new(
+                    block,
+                    commit_state.commit.commit_ref.index,
+                    commit_state.commit.leader.round,
+                ))
+            });
         }
     }
 
@@ -592,12 +596,10 @@ impl CommitFinalizer {
         let mut finalized_transactions = vec![];
         let blocks_map = blocks.read();
         // Use BTreeSet to ensure always visit blocks in the earliest round.
-        let mut to_visit_blocks = blocks_map
-            .get(&pending_block_ref)
-            .unwrap()
-            .read()
-            .children
-            .clone();
+        let (pending_block_commit_index, mut to_visit_blocks) = {
+            let block_state = blocks_map.get(&pending_block_ref).unwrap().read();
+            (block_state.commit_index, block_state.children.clone())
+        };
         // Blocks that have been visited.
         let mut visited = BTreeSet::new();
         // Blocks where votes and origin descendants should be ignored for processing.
@@ -608,15 +610,17 @@ impl CommitFinalizer {
                 continue;
             }
             let curr_block_state = blocks_map.get(&curr_block_ref).unwrap_or_else(|| panic!("Block {curr_block_ref} is either incorrectly gc'ed or failed to be recovered after crash.")).read();
-            // The first ancestor of current block should have the same origin / author as the current block.
-            // If it is not found in the blocks map but have round higher than the pending block, it might have
-            // voted on the pending block but have been GC'ed.
+            // Do not count votes, when there can be GC'ed blocks in the path from the pending block to the current block.
             // Because the GC'ed block might have voted on the pending block and rejected some of the pending transactions,
             // we cannot assume current block is voting to accept transactions from the pending block.
-            let curr_origin_ancestor_ref = curr_block_state.block.ancestors().first().unwrap();
-            let skip_votes = curr_block_ref.author == curr_origin_ancestor_ref.author
-                && pending_block_ref.round < curr_origin_ancestor_ref.round
-                && !blocks_map.contains_key(curr_origin_ancestor_ref);
+            //
+            // This check is more conservative than necessary, because GC round at current block is decided
+            // by the leader round of the previous commit. But skipping votes unnecessarily is still correct,
+            // as long as it is deterministic. Also GC depths in most environments
+            // are large enough to not unnecessarily skip valid accept votes.
+            let skip_votes = pending_block_commit_index < curr_block_state.commit_index
+                && pending_block_ref.round + context.protocol_config.consensus_gc_depth()
+                    <= curr_block_state.leader_round;
             // Skip counting votes from the block if it has been marked to be ignored.
             if ignored.insert(curr_block_ref) {
                 // Skip collecting votes from origin descendants of current block.
@@ -800,10 +804,14 @@ struct BlockState {
     // Other committed blocks that are origin descendants of this block.
     // See the comment above append_origin_descendants_from_last_commit() for more details.
     origin_descendants: Vec<BlockRef>,
+    // Commit which contains this block.
+    commit_index: CommitIndex,
+    // Commit leader round.
+    leader_round: Round,
 }
 
 impl BlockState {
-    fn new(block: VerifiedBlock) -> Self {
+    fn new(block: VerifiedBlock, commit_index: CommitIndex, leader_round: Round) -> Self {
         let reject_votes: BTreeMap<_, _> = block
             .transaction_votes()
             .iter()
@@ -817,6 +825,8 @@ impl BlockState {
             children: BTreeSet::new(),
             reject_votes,
             origin_descendants,
+            commit_index,
+            leader_round,
         }
     }
 }
