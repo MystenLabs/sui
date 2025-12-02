@@ -277,6 +277,7 @@ const MAX_PROTOCOL_VERSION: u64 = 104;
 //              Set max updates per settlement txn to 100.
 // Version 103: Framework update: internal Coin methods
 // Version 104: Framework update: CoinRegistry follow up for Coin methods
+//              Enable all non-zero PCRs parsing for nitro attestation native function in Devnet and Testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -553,6 +554,10 @@ struct FeatureFlags {
     // Enable upgraded parsing of nitro attestation that interprets pcrs as a map.
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation_upgraded_parsing: bool,
+
+    // Enable upgraded parsing of nitro attestation containing all nonzero PCRs.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_nitro_attestation_all_nonzero_pcrs_parsing: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -2230,6 +2235,11 @@ impl ProtocolConfig {
 
     pub fn enable_nitro_attestation_upgraded_parsing(&self) -> bool {
         self.feature_flags.enable_nitro_attestation_upgraded_parsing
+    }
+
+    pub fn enable_nitro_attestation_all_nonzero_pcrs_parsing(&self) -> bool {
+        self.feature_flags
+            .enable_nitro_attestation_all_nonzero_pcrs_parsing
     }
 
     pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
@@ -4278,6 +4288,10 @@ impl ProtocolConfig {
                     cfg.poseidon_bn254_cost_base = Some(260);
 
                     cfg.feature_flags.consensus_skip_gced_accept_votes = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

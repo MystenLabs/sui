@@ -428,31 +428,6 @@ public fun num_user_events(effects: &TransactionEffects): u64 {
     effects.num_user_events
 }
 
-// == Macros ===
-
-/// Execute a transaction `$f` in a `Scenario` and return the transaction effects.
-///
-/// ```move
-/// let test = test_scenario::begin(@0);
-/// let effects = test.tx!(@a11ce, |test| {
-///    // ...
-/// });
-///
-/// assert_eq!(effects.shared().length(), 0);
-///
-/// test.end();
-/// ```
-public macro fun tx(
-    $scenario: &mut Scenario,
-    $sender: address,
-    $f: |&mut Scenario|,
-): TransactionEffects {
-    let test = $scenario;
-    test.next_tx($sender);
-    $f(test);
-    test.next_tx($sender)
-}
-
 // == from address ==
 
 /// Remove the object of type `T` with ID `id` from the inventory of the `account`
@@ -620,6 +595,74 @@ public fun return_receiving_ticket<T: key>(ticket: sui::transfer::Receiving<T>) 
     let id = sui::transfer::receiving_id(&ticket);
     deallocate_receiving_ticket_for_object(id);
 }
+
+// == macros ==
+
+/// Take a shared object from the global inventory and call the function `$f` on it.
+///
+/// ```move
+/// use std::unit_test::assert_eq;
+/// use sui::test_scenario;
+///
+/// #[test]
+/// fun with_shared() {
+///     let mut test = test_scenario::begin(@0);
+///     test.create_system_objects();
+///
+///     // Take the `Clock` object from the inventory.
+///     test.with_shared!<Clock>(|clock, test| {
+///         assert_eq!(clock.timestamp_ms(), 0);
+///     });
+///
+///     test.end();
+/// }
+/// ```
+public macro fun with_shared<$T: key>($scenario: &mut Scenario, $f: |&mut $T, &mut Scenario| -> _) {
+    let s = $scenario;
+    let mut obj = s.take_shared<$T>();
+    $f(&mut obj, s);
+    return_shared(obj);
+}
+
+/// Take a shared object from the global inventory with the given `id` and call the function `$f` on it.
+/// Works similarly to `with_shared` but takes an extra `id` parameter.
+///
+/// See `with_shared` for more details.
+public macro fun with_shared_by_id<$T: key>(
+    $scenario: &mut Scenario,
+    $id: ID,
+    $f: |&mut $T, &mut Scenario| -> _,
+) {
+    let s = $scenario;
+    let mut obj = s.take_shared_by_id<$T>($id);
+    $f(&mut obj, s);
+    return_shared(obj);
+}
+
+/// Execute a transaction `$f` in a `Scenario` and return the transaction effects.
+///
+/// ```move
+/// let test = test_scenario::begin(@0);
+/// let effects = test.tx!(@a11ce, |test| {
+///    // ...
+/// });
+///
+/// assert_eq!(effects.shared().length(), 0);
+///
+/// test.end();
+/// ```
+public macro fun tx(
+    $scenario: &mut Scenario,
+    $sender: address,
+    $f: |&mut Scenario|,
+): TransactionEffects {
+    let test = $scenario;
+    test.next_tx($sender);
+    $f(test);
+    test.next_tx($sender)
+}
+
+// == natives ===
 
 /// Returns true if the object with `ID` id was an shared object in the global inventory
 native fun was_taken_shared(id: ID): bool;

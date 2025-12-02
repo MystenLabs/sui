@@ -30,7 +30,7 @@ use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, Live
 use sui_indexer_alt_framework::task::TrySpawnStreamExt;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::http::HttpDownloaderBuilder;
-use sui_storage::object_store::util::{copy_file, copy_files, path_to_filesystem};
+use sui_storage::object_store::util::{copy_files, path_to_filesystem};
 use sui_storage::object_store::{ObjectStoreGetExt, ObjectStoreListExt, ObjectStorePutExt};
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::global_state_hash::GlobalStateHash;
@@ -53,6 +53,7 @@ pub struct StateSnapshotReaderV1 {
     m: MultiProgress,
     concurrency: usize,
     max_retries: usize,
+    remote_epoch_prefix: Path,
 }
 
 impl StateSnapshotReaderV1 {
@@ -67,17 +68,44 @@ impl StateSnapshotReaderV1 {
         let max_attempts = max_retries + 1;
         loop {
             attempts += 1;
-            match copy_file(src, dest, src_store, dest_store).await {
-                Ok(()) => return Ok(()),
-                Err(e) if attempts >= max_attempts => {
-                    return Err(anyhow::anyhow!(
-                        "Failed to download {} after {} attempts: {}",
-                        src,
-                        attempts,
-                        e
-                    ));
+            match src_store.get_bytes(src).await {
+                Ok(bytes) => {
+                    if bytes.is_empty() {
+                        tracing::warn!("Not copying empty file: {:?}", src);
+                        return Ok(());
+                    }
+                    match dest_store.put_bytes(dest, bytes).await {
+                        Ok(_) => return Ok(()),
+                        Err(e) => {
+                            if attempts >= max_attempts {
+                                return Err(anyhow::anyhow!(
+                                    "Failed to write {} after {} attempts: {}",
+                                    dest,
+                                    attempts,
+                                    e
+                                ));
+                            }
+                            tracing::warn!(
+                                "Failed to write {} (attempt {}/{}): {}, retrying in {}ms",
+                                dest,
+                                attempts,
+                                max_attempts,
+                                e,
+                                1000 * attempts
+                            );
+                            tokio::time::sleep(Duration::from_millis(1000 * attempts as u64)).await;
+                        }
+                    }
                 }
                 Err(e) => {
+                    if attempts >= max_attempts {
+                        return Err(anyhow::anyhow!(
+                            "Failed to download {} after {} attempts: {}",
+                            src,
+                            attempts,
+                            e
+                        ));
+                    }
                     tracing::warn!(
                         "Failed to download {} (attempt {}/{}): {}, retrying in {}ms",
                         src,
@@ -101,7 +129,6 @@ impl StateSnapshotReaderV1 {
         skip_reset_local_store: bool,
         max_retries: usize,
     ) -> Result<Self> {
-        let epoch_dir = format!("epoch_{}", epoch);
         let remote_object_store = if remote_store_config.no_sign_request {
             remote_store_config.make_http()?
         } else {
@@ -116,26 +143,60 @@ impl StateSnapshotReaderV1 {
             .as_ref()
             .context("No directory specified")?
             .clone();
+
+        let local_epoch_dir_name = format!("epoch_{}", epoch);
+        let local_epoch_dir_path = Path::from(local_epoch_dir_name.clone());
+
         if !skip_reset_local_store {
-            let local_epoch_dir_path = local_staging_dir_root.join(&epoch_dir);
-            if local_epoch_dir_path.exists() {
-                fs::remove_dir_all(&local_epoch_dir_path)?;
+            let local_epoch_dir_absolute_path = local_staging_dir_root.join(&local_epoch_dir_name);
+            if local_epoch_dir_absolute_path.exists() {
+                fs::remove_dir_all(&local_epoch_dir_absolute_path)?;
             }
-            fs::create_dir_all(&local_epoch_dir_path)?;
+            fs::create_dir_all(&local_epoch_dir_absolute_path)?;
         }
-        // Download MANIFEST first
-        let manifest_file_path = Path::from(epoch_dir.clone()).child("MANIFEST");
-        Self::copy_file_with_retry(
-            &manifest_file_path,
-            &manifest_file_path,
+
+        // Try to download MANIFEST from standard location first, then archive
+        let standard_epoch_dir = Path::from(format!("epoch_{}", epoch));
+        let archive_epoch_dir = Path::from(format!("archive/epoch_{}", epoch));
+
+        let standard_manifest_path = standard_epoch_dir.child("MANIFEST");
+        let archive_manifest_path = archive_epoch_dir.child("MANIFEST");
+
+        // We always download to local epoch dir's MANIFEST
+        let local_manifest_path = local_epoch_dir_path.child("MANIFEST");
+
+        let (remote_epoch_prefix, manifest_download_result) = match Self::copy_file_with_retry(
+            &standard_manifest_path,
+            &local_manifest_path,
             &remote_object_store,
             &local_object_store,
             max_retries,
         )
-        .await?;
+        .await
+        {
+            Ok(_) => (standard_epoch_dir, Ok(())),
+            Err(_) => {
+                // Try archive
+                match Self::copy_file_with_retry(
+                    &archive_manifest_path,
+                    &local_manifest_path,
+                    &remote_object_store,
+                    &local_object_store,
+                    max_retries,
+                )
+                .await
+                {
+                    Ok(_) => (archive_epoch_dir, Ok(())),
+                    Err(e) => (standard_epoch_dir, Err(e)), // Return standard dir but error
+                }
+            }
+        };
+
+        manifest_download_result?;
+
         let manifest = Self::read_manifest(path_to_filesystem(
             local_staging_dir_root.clone(),
-            &manifest_file_path,
+            &local_manifest_path,
         )?)?;
         let snapshot_version = manifest.snapshot_version();
         if snapshot_version != 1u8 {
@@ -168,38 +229,39 @@ impl StateSnapshotReaderV1 {
                 }
             }
         }
-        let epoch_dir_path = Path::from(epoch_dir);
-        let files: Vec<Path> = ref_files
-            .values()
-            .flat_map(|entry| {
-                let files: Vec<_> = entry
-                    .values()
-                    .map(|file_metadata| file_metadata.file_path(&epoch_dir_path))
-                    .collect();
-                files
-            })
-            .collect();
 
-        let files_to_download = if skip_reset_local_store {
+        let mut src_files = Vec::new();
+        let mut dest_files = Vec::new();
+
+        let existing_files = if skip_reset_local_store {
+            let mut existing = std::collections::HashSet::new();
             let mut list_stream = local_object_store_list
-                .list_objects(Some(&epoch_dir_path))
+                .list_objects(Some(&local_epoch_dir_path))
                 .await;
-            let mut existing_files = std::collections::HashSet::new();
             while let Some(Ok(meta)) = list_stream.next().await {
-                existing_files.insert(meta.location);
+                existing.insert(meta.location);
             }
-            let mut missing_files = Vec::new();
-            for file in &files {
-                if !existing_files.contains(file) {
-                    missing_files.push(file.clone());
-                }
-            }
-            missing_files
+            Some(existing)
         } else {
-            files
+            None
         };
+
+        for entry in ref_files.values() {
+            for file_metadata in entry.values() {
+                let dest = file_metadata.file_path(&local_epoch_dir_path);
+                if existing_files
+                    .as_ref()
+                    .is_some_and(|existing| existing.contains(&dest))
+                {
+                    continue;
+                }
+                src_files.push(file_metadata.file_path(&remote_epoch_prefix));
+                dest_files.push(dest);
+            }
+        }
+
         let progress_bar = m.add(
-            ProgressBar::new(files_to_download.len() as u64).with_style(
+            ProgressBar::new(src_files.len() as u64).with_style(
                 ProgressStyle::with_template(
                     "[{elapsed_precise}] {wide_bar} {pos} out of {len} missing .ref files done ({msg})",
                 )
@@ -207,8 +269,8 @@ impl StateSnapshotReaderV1 {
             ),
         );
         copy_files(
-            &files_to_download,
-            &files_to_download,
+            &src_files,
+            &dest_files,
             &remote_object_store,
             &local_object_store,
             download_concurrency,
@@ -226,6 +288,7 @@ impl StateSnapshotReaderV1 {
             m,
             concurrency: download_concurrency.get(),
             max_retries,
+            remote_epoch_prefix,
         })
     }
 
@@ -420,7 +483,7 @@ impl StateSnapshotReaderV1 {
         abort_registration: AbortRegistration,
         sha3_digests: Arc<Mutex<DigestByBucketAndPartition>>,
     ) -> Result<(), anyhow::Error> {
-        let epoch_dir = self.epoch_dir();
+        let epoch_dir = self.remote_epoch_prefix.clone();
         let concurrency = self.concurrency;
         let remote_object_store = self.remote_object_store.clone();
         let input_files: Vec<_> = self
@@ -516,7 +579,7 @@ impl StateSnapshotReaderV1 {
         ),
         anyhow::Error,
     > {
-        let epoch_dir = self.epoch_dir();
+        let epoch_dir = self.remote_epoch_prefix.clone();
         let concurrency = self.concurrency;
         let remote_object_store = self.remote_object_store.clone();
         let input_files: Vec<(&u32, (u32, FileMetadata))> = self
