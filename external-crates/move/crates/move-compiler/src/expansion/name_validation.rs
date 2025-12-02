@@ -13,8 +13,10 @@ use std::collections::BTreeSet;
 
 // Implicit aliases for the Move Stdlib:
 // use std::vector;
+// use std::internal;
 // use std::option::{Self, Option};
-pub const IMPLICIT_STD_MODULES: &[Symbol] = &[symbol!("option"), symbol!("vector")];
+pub const IMPLICIT_STD_MODULES: &[Symbol] =
+    &[symbol!("option"), symbol!("vector"), symbol!("internal")];
 pub const IMPLICIT_STD_MEMBERS: &[(Symbol, Symbol, ModuleMemberKind)] = &[(
     symbol!("option"),
     symbol!("Option"),
