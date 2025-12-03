@@ -415,6 +415,10 @@ fn reduce_stack_size(gas_model_version: u64) -> bool {
     gas_model_version > 10
 }
 
+fn enable_fine_grained_value_size(gas_model_version: u64) -> bool {
+    gas_model_version > 10
+}
+
 fn size_config_for_gas_model_version(
     gas_model_version: u64,
     should_traverse_refs: bool,
@@ -423,16 +427,19 @@ fn size_config_for_gas_model_version(
         SizeConfig {
             traverse_references: false,
             include_vector_size: false,
+            fine_grained_value_size: false,
         }
     } else if should_traverse_refs {
         SizeConfig {
             traverse_references: enable_traverse_refs(gas_model_version),
             include_vector_size: true,
+            fine_grained_value_size: enable_fine_grained_value_size(gas_model_version),
         }
     } else {
         SizeConfig {
             traverse_references: false,
             include_vector_size: true,
+            fine_grained_value_size: enable_fine_grained_value_size(gas_model_version),
         }
     }
 }

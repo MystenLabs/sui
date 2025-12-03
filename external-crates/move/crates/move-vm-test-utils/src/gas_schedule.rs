@@ -62,6 +62,7 @@ pub const MIN_EXISTS_DATA_SIZE: AbstractMemorySize = AbstractMemorySize::new(100
 const MOVE_TEST_SIZE_CONFIG: SizeConfig = SizeConfig {
     traverse_references: false,
     include_vector_size: false,
+    fine_grained_value_size: false,
 };
 
 /// The cost tables, keyed by the serialized form of the bytecode instruction.  We use the
