@@ -13,6 +13,7 @@ use prometheus::Registry;
 use serde_json::json;
 use sui_futures::service::Service;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTask;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
@@ -262,6 +263,7 @@ pub async fn start_rpc(
     bigtable_instance: Option<String>,
     db_args: DbArgs,
     bigtable_args: BigtableArgs,
+    consistent_reader_args: ConsistentReaderArgs,
     rpc_args: RpcArgs,
     node_args: NodeArgs,
     system_package_task_args: SystemPackageTaskArgs,
@@ -275,6 +277,7 @@ pub async fn start_rpc(
         bigtable_instance,
         db_args,
         bigtable_args,
+        consistent_reader_args,
         rpc_config,
         rpc.metrics(),
         registry,
