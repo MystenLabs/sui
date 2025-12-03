@@ -11,6 +11,7 @@ use sui_package_management::system_package_versions::latest_system_packages;
 pub mod build;
 pub mod coverage;
 pub mod disassemble;
+pub mod fork;
 pub mod manage_package;
 pub mod migrate;
 pub mod new;
