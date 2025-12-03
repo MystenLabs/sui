@@ -2082,8 +2082,7 @@ mod tests {
         let lt_250 = data.iter().filter(|e| *e.key() < 250).count();
         // Checkpoints 250 to 500 inclusive must have been committed.
         assert_eq!(ge_250, 251);
-        // Lenient check that not all checkpoints < 250 were committed.
-        assert!(lt_250 < 250);
+        assert_eq!(lt_250, 11);
         assert_eq!(
             conn.committer_watermark(
                 &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap()
