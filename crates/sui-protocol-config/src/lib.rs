@@ -280,6 +280,7 @@ const MAX_PROTOCOL_VERSION: u64 = 105;
 //              Enable all non-zero PCRs parsing for nitro attestation native function in Devnet and Testnet.
 // Version 105: Framework update: address aliases
 //              Enable address balances on devnet
+//              Enable multi-epoch transaction expiration.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -780,6 +781,10 @@ struct FeatureFlags {
     // Enable address balance gas payments
     #[serde(skip_serializing_if = "is_false")]
     enable_address_balance_gas_payments: bool,
+
+    // Enable multi-epoch transaction expiration (max 1 epoch difference)
+    #[serde(skip_serializing_if = "is_false")]
+    enable_multi_epoch_transaction_expiration: bool,
 
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
@@ -2042,6 +2047,10 @@ impl ProtocolConfig {
 
     pub fn enable_address_balance_gas_payments(&self) -> bool {
         self.feature_flags.enable_address_balance_gas_payments
+    }
+
+    pub fn enable_multi_epoch_transaction_expiration(&self) -> bool {
+        self.feature_flags.enable_multi_epoch_transaction_expiration
     }
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
@@ -4332,6 +4341,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_authenticated_event_streams = true;
                         cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
+                    cfg.feature_flags.enable_multi_epoch_transaction_expiration = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4655,6 +4665,10 @@ impl ProtocolConfig {
 
     pub fn disable_address_balance_gas_payments_for_testing(&mut self) {
         self.feature_flags.enable_address_balance_gas_payments = false;
+    }
+
+    pub fn enable_multi_epoch_transaction_expiration_for_testing(&mut self) {
+        self.feature_flags.enable_multi_epoch_transaction_expiration = true;
     }
 
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {

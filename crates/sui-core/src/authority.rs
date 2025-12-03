@@ -1188,6 +1188,14 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
     ) -> SuiResult<HandleTransactionResponse> {
         let tx_digest = *transaction.digest();
+
+        if self
+            .get_transaction_cache_reader()
+            .transaction_executed_in_last_epoch(&tx_digest, epoch_store.epoch())?
+        {
+            return Err(UserInputError::TransactionAlreadyExecuted { digest: tx_digest }.into());
+        }
+
         let signed = self.handle_transaction_impl(transaction, /* sign */ true, epoch_store);
         match signed {
             Ok(Some(s)) => {
@@ -3692,6 +3700,32 @@ impl AuthorityState {
         state
             .create_owner_index_if_empty(genesis_objects, &epoch_store)
             .expect("Error indexing genesis objects.");
+
+        if epoch_store
+            .protocol_config()
+            .enable_multi_epoch_transaction_expiration()
+            && epoch_store.epoch() > 0
+        {
+            use typed_store::Map;
+            let previous_epoch = epoch_store.epoch() - 1;
+            let start_key = (previous_epoch, TransactionDigest::ZERO);
+            let end_key = (previous_epoch + 1, TransactionDigest::ZERO);
+            let has_previous_epoch_data = store
+                .perpetual_tables
+                .executed_transaction_digests
+                .safe_range_iter(start_key..end_key)
+                .next()
+                .is_some();
+
+            if !has_previous_epoch_data {
+                panic!(
+                    "enable_multi_epoch_transaction_expiration is enabled but no transaction data found for previous epoch {}. \
+                    This indicates the node was restored using an old version of sui-tool that does not backfill the table. \
+                    Please restore from a snapshot using the latest version of sui-tool.",
+                    previous_epoch
+                );
+            }
+        }
 
         state
     }
