@@ -31,6 +31,7 @@ async fn main() -> Result<()> {
                 package_source,
                 output_path,
                 node,
+                env,
             } => {
                 let object_id = ObjectID::from_str(package_id)
                     .map_err(|e| anyhow!("Invalid package ID: {}", e))?;
@@ -40,6 +41,7 @@ async fn main() -> Result<()> {
                     object_id,
                     package_source.clone(),
                     output_path.clone(),
+                    env.clone(),
                 )?;
 
                 return Ok(());

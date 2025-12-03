@@ -31,7 +31,7 @@ use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use std::{collections::BTreeMap, path::Path};
 use sui_json::{is_receiving_argument, primitive_type};
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
-use sui_sdk::apis::ReadApi;
+use sui_sdk::{apis::ReadApi, wallet_context::WalletContext};
 use sui_types::{
     Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     base_types::{ObjectID, TxContext, TxContextKind, is_primitive_type_tag},
@@ -234,8 +234,8 @@ pub struct PTBBuilder<'a> {
     resolved_arguments: BTreeMap<String, Tx::Argument>,
     /// Read API for reading objects from chain. Needed for object resolution.
     reader: &'a ReadApi,
-    /// Active env for building packaages
-    active_env: String,
+    /// Wallet used to find the active environment for the publish command
+    wallet: &'a WalletContext,
     /// The last command that we have added. This is used to support assignment commands.
     last_command: Option<Tx::Argument>,
     /// The actual PTB that we are building up.
@@ -290,7 +290,7 @@ impl<'a> PTBBuilder<'a> {
     pub fn new(
         starting_env: BTreeMap<String, AddressData>,
         reader: &'a ReadApi,
-        active_env: String,
+        wallet: &'a WalletContext,
     ) -> Self {
         Self {
             addresses: starting_env,
@@ -299,7 +299,7 @@ impl<'a> PTBBuilder<'a> {
             resolved_arguments: BTreeMap::new(),
             ptb: ProgrammableTransactionBuilder::new(),
             reader,
-            active_env,
+            wallet,
             last_command: None,
             errors: Vec::new(),
         }
@@ -932,19 +932,10 @@ impl<'a> PTBBuilder<'a> {
                 }
 
                 let build_config = MoveBuildConfig::default();
-                let chain_id = self
-                    .reader
-                    .get_chain_identifier()
-                    .await
-                    .map_err(|e| err!(pkg_loc, "{e}"))?;
-                let root_pkg = load_root_pkg_for_publish_upgrade(
-                    &chain_id,
-                    self.active_env.clone(),
-                    &build_config,
-                    package_path,
-                )
-                .await
-                .map_err(|e| err!(pkg_loc, "Cannot compile package: {e}"))?;
+                let root_pkg =
+                    load_root_pkg_for_publish_upgrade(self.wallet, &build_config, package_path)
+                        .await
+                        .map_err(|e| err!(pkg_loc, "Cannot compile package: {e}"))?;
 
                 let compiled_package = compile_package(
                     self.reader,
@@ -992,15 +983,10 @@ impl<'a> PTBBuilder<'a> {
 
                 let package_path = Path::new(&package_path);
                 let build_config = MoveBuildConfig::default();
-                let chain_id = self.reader.get_chain_identifier().await.unwrap(); //map_err(|_| err!(loc, "Cannot fetch the chain id"))?;
-                let root_pkg = load_root_pkg_for_publish_upgrade(
-                    &chain_id,
-                    self.active_env.clone(),
-                    &build_config,
-                    package_path,
-                )
-                .await
-                .unwrap();
+                let root_pkg =
+                    load_root_pkg_for_publish_upgrade(self.wallet, &build_config, package_path)
+                        .await
+                        .map_err(|e| err!(path_loc, "Cannot compile package: {e}"))?;
 
                 let upgrade_cap_arg = self
                     .resolve(

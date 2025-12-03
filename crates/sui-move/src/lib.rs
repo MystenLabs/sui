@@ -5,6 +5,7 @@ use clap::Parser;
 use move_cli::base::test::UnitTestResult;
 use move_package_alt_compilation::build_config::BuildConfig;
 use std::path::Path;
+use sui_sdk::wallet_context::WalletContext;
 
 pub mod build;
 pub mod cache_package;
@@ -41,9 +42,10 @@ pub async fn execute_move_command(
     build_config: BuildConfig,
     command: Command,
     command_meta: Option<CommandMeta>,
+    wallet: &WalletContext,
 ) -> anyhow::Result<()> {
     match command {
-        Command::Build(c) => c.execute(package_path, build_config),
+        Command::Build(c) => c.execute(package_path, build_config, wallet).await,
         Command::CachePackage(c) => c.execute().await,
         Command::Coverage(c) => c.execute(package_path, build_config).await,
         Command::Disassemble(c) => c.execute(package_path, build_config).await,
@@ -60,7 +62,7 @@ pub async fn execute_move_command(
                 .await
         }
         Command::Test(c) => {
-            let result = c.execute(package_path, build_config).await?;
+            let result = c.execute(package_path, build_config, wallet).await?;
 
             // Return a non-zero exit code if any test failed
             if let UnitTestResult::Failure = result {
@@ -69,6 +71,6 @@ pub async fn execute_move_command(
 
             Ok(())
         }
-        Command::UpdateDeps(c) => c.execute(package_path, build_config).await,
+        Command::UpdateDeps(c) => c.execute(package_path, build_config, wallet).await,
     }
 }

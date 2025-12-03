@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module example::example;
+use sui::clock;
 
 public struct Sword has key, store {
     id: UID,
@@ -18,4 +19,8 @@ public fun sword_create(magic: u64, strength: u64, ctx: &mut TxContext): Sword {
         magic: magic,
         strength: strength,
     }
+}
+
+public fun foo(clock: &clock::Clock) {
+  clock.timestamp_ms();
 }
