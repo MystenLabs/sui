@@ -923,15 +923,6 @@ impl SuiClientCommands {
                     let protocol_version =
                         read_api.get_protocol_config(None).await?.protocol_version;
 
-                    ensure!(
-                        ProtocolVersion::MAX >= protocol_version,
-                        "On-chain protocol version ({}) is ahead of the latest \
-                        known version ({}) in the CLI. Please update the CLI to the latest version \
-                        if you want to use --verify-compatibility flag",
-                        protocol_version.as_u64(),
-                        ProtocolVersion::MAX.as_u64()
-                    );
-
                     let protocol_config = ProtocolConfig::get_for_version(
                         protocol_version,
                         match chain_id
