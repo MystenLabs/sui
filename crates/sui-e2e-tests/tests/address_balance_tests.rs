@@ -27,7 +27,7 @@ use sui_types::{
     transaction::{
         Argument, CallArg, Command, FundsWithdrawalArg, GasData, ObjectArg, Transaction,
         TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
-        TransactionKind,
+        TransactionKind, VerifiedTransaction,
     },
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -1337,8 +1337,8 @@ fn create_address_balance_transaction_with_expiration(
         expiration: TransactionExpiration::ValidDuring {
             min_epoch,
             max_epoch,
-            min_timestamp_seconds: None,
-            max_timestamp_seconds: None,
+            min_timestamp: None,
+            max_timestamp: None,
             chain: chain_id,
             nonce,
         },
@@ -1472,7 +1472,8 @@ async fn test_transaction_expired_too_late() {
 
     let past_epoch = 0;
 
-    // trigger epoch 1
+    // trigger epoch 2
+    test_cluster.trigger_reconfiguration().await;
     test_cluster.trigger_reconfiguration().await;
 
     let tx = create_regular_gas_transaction_with_current_epoch(
@@ -3146,7 +3147,12 @@ async fn test_reject_transaction_executed_in_previous_epoch() {
 
     let gas_test_package_id = setup_test_package(&mut test_cluster.wallet).await;
 
-    let fund_tx = make_send_to_account_tx(100_000_000, sender, sender, gas_objects[1], rgp);
+    let fund_tx = TestTransactionBuilder::new(sender, gas_objects[1], rgp)
+        .transfer_sui_to_address_balance(
+            FundSource::coin(gas_objects[1]),
+            vec![(100_000_000, sender)],
+        )
+        .build();
     test_cluster.sign_and_execute_transaction(&fund_tx).await;
 
     let tx = create_address_balance_transaction_with_expiration(
@@ -3161,22 +3167,16 @@ async fn test_reject_transaction_executed_in_previous_epoch() {
 
     let signed_tx = test_cluster.sign_transaction(&tx).await;
 
-    let response = test_cluster
+    test_cluster
         .wallet
-        .execute_transaction_may_fail(signed_tx.clone())
-        .await
-        .unwrap();
-
-    assert!(
-        response.effects.unwrap().status().is_ok(),
-        "First execution should succeed"
-    );
+        .execute_transaction_must_succeed(signed_tx.clone())
+        .await;
 
     let tx_digest = *signed_tx.digest();
 
     test_cluster.trigger_reconfiguration().await;
 
-    for handle in test_cluster.swarm.validator_node_handles() {
+    for handle in test_cluster.all_node_handles() {
         handle.with(|node| {
             node.state()
                 .database_for_testing()
@@ -3187,16 +3187,6 @@ async fn test_reject_transaction_executed_in_previous_epoch() {
                 .evict_executed_effects_from_cache_for_testing(&tx_digest);
         });
     }
-
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        node.state()
-            .database_for_testing()
-            .remove_executed_effects_for_testing(&tx_digest)
-            .unwrap();
-        node.state()
-            .cache_for_testing()
-            .evict_executed_effects_from_cache_for_testing(&tx_digest);
-    });
 
     let result = test_cluster
         .execute_signed_txns_in_soft_bundle(std::slice::from_ref(&signed_tx))
@@ -3248,7 +3238,12 @@ async fn test_transaction_executes_in_next_epoch_with_one_epoch_range() {
 
     let gas_test_package_id = setup_test_package(&mut test_cluster.wallet).await;
 
-    let fund_tx = make_send_to_account_tx(100_000_000, sender, sender, gas_objects[1], rgp);
+    let fund_tx = TestTransactionBuilder::new(sender, gas_objects[1], rgp)
+        .transfer_sui_to_address_balance(
+            FundSource::coin(gas_objects[1]),
+            vec![(100_000_000, sender)],
+        )
+        .build();
     test_cluster.sign_and_execute_transaction(&fund_tx).await;
 
     let tx = create_address_balance_transaction_with_expiration(
@@ -3275,4 +3270,87 @@ async fn test_transaction_executes_in_next_epoch_with_one_epoch_range() {
         response.effects.unwrap().status().is_ok(),
         "Transaction with 1-epoch range should execute successfully in next epoch"
     );
+}
+
+#[sim_test]
+async fn test_reject_signing_transaction_executed_in_previous_epoch() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.enable_address_balance_gas_payments_for_testing();
+        cfg.enable_accumulators_for_testing();
+        cfg.enable_multi_epoch_transaction_expiration_for_testing();
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let (sender, gas_objects) = get_sender_and_all_gas(&mut test_cluster.wallet).await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let chain_id = test_cluster
+        .fullnode_handle
+        .sui_node
+        .with_async(|node| async { node.state().get_chain_identifier() })
+        .await;
+
+    let current_epoch = test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.state().epoch_store_for_testing().epoch());
+
+    let gas_test_package_id = setup_test_package(&mut test_cluster.wallet).await;
+
+    let fund_tx = TestTransactionBuilder::new(sender, gas_objects[1], rgp)
+        .transfer_sui_to_address_balance(
+            FundSource::coin(gas_objects[1]),
+            vec![(100_000_000, sender)],
+        )
+        .build();
+    test_cluster.sign_and_execute_transaction(&fund_tx).await;
+
+    let tx = create_address_balance_transaction_with_expiration(
+        sender,
+        rgp,
+        Some(current_epoch),
+        Some(current_epoch + 1),
+        chain_id,
+        100,
+        gas_test_package_id,
+    );
+
+    let signed_tx = test_cluster.sign_transaction(&tx).await;
+
+    test_cluster
+        .wallet
+        .execute_transaction_must_succeed(signed_tx.clone())
+        .await;
+
+    test_cluster.trigger_reconfiguration().await;
+
+    let result = test_cluster.swarm.validator_node_handles()[0]
+        .with_async(|node| async move {
+            let epoch_store = node.state().epoch_store_for_testing();
+            let verified_tx = VerifiedTransaction::new_unchecked(signed_tx);
+            node.state()
+                .handle_sign_transaction(&epoch_store, verified_tx)
+                .await
+        })
+        .await;
+
+    match result {
+        Err(e) => {
+            let err_str = e.to_string();
+            assert!(
+                err_str.contains("was already executed"),
+                "Expected 'was already executed' error when signing transaction that was executed in previous epoch, got: {}",
+                err_str
+            );
+        }
+        Ok(_) => {
+            panic!(
+                "Expected handle_sign_transaction to fail for transaction executed in previous epoch"
+            );
+        }
+    }
 }

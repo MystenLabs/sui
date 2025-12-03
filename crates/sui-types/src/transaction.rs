@@ -2613,13 +2613,17 @@ impl TransactionDataAPI for TransactionDataV1 {
                 ));
             }
 
-            /* We support a 1-epoch range for expiration, to handle cases where
-            a transaction is signed in one epoch and executed in the next. */
             match (min_epoch, max_epoch) {
                 (Some(min), Some(max)) => {
-                    if min > max || *max > min.saturating_add(1) {
+                    if config.enable_multi_epoch_transaction_expiration() {
+                        if min > max || *max > min.saturating_add(1) {
+                            return Err(UserInputError::Unsupported(
+                                "max_epoch must be at most min_epoch + 1".to_string(),
+                            ));
+                        }
+                    } else if min != max {
                         return Err(UserInputError::Unsupported(
-                            "max_epoch must be at most min_epoch + 1".to_string(),
+                            "min_epoch must equal max_epoch".to_string(),
                         ));
                     }
                 }
