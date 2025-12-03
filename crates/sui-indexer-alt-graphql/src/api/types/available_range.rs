@@ -21,7 +21,7 @@ pub enum Error {
     #[error("'{0}' is not an Object or Interface.")]
     NotAnObjectOrInterface(String),
 
-    #[error("Type '{0}' not found in schema registry.")]
+    #[error("Type '{0}' not found in schema.")]
     TypeNotFound(String),
 
     #[error("Field '{1}' not found in type '{0}'.")]
