@@ -22,7 +22,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 task 4, lines 38-40:
 //# run Test::M1::push_n_items --args 262144 --gas-budget 100000000000000
 mutated: object(0,0)
-gas summary: computation_cost: 3669000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 2620000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, line 41:
 //# run Test::M1::push_n_items --args 262145 --gas-budget 100000000000000
