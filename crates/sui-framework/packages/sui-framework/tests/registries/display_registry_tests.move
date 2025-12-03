@@ -67,7 +67,11 @@ fun test_legacy_claim() {
         let cap = take_migration_cap(scenario);
 
         // manually migrate `MyKeyOnlyType` to the new registry, as if we were the system.
-        registry.migrate<MyKeyOnlyType>(&cap, vec_map::empty(), scenario.ctx());
+        registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
+            &cap,
+            vec_map::empty(),
+            scenario.ctx(),
+        );
         scenario.next_tx(@0x1);
 
         // Claim the display using our legacy display obj.
@@ -82,7 +86,7 @@ fun test_legacy_claim() {
         test_scenario::return_shared(display);
         transfer::public_transfer(new_cap, @0x1);
 
-        cap.destroy_cap();
+        cap.destroy_system_migration_cap();
         publisher.burn();
     });
 }
@@ -92,7 +96,11 @@ fun test_legacy_claim_with_publisher() {
     test_tx!(|registry, scenario| {
         let mut publisher = package::test_claim(MY_OTW {}, scenario.ctx());
         let cap = take_migration_cap(scenario);
-        registry.migrate<MyKeyOnlyType>(&cap, vec_map::empty(), scenario.ctx());
+        registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
+            &cap,
+            vec_map::empty(),
+            scenario.ctx(),
+        );
         scenario.next_tx(@0x1);
 
         let mut display = scenario.take_shared<Display<MyKeyOnlyType>>();
@@ -101,7 +109,7 @@ fun test_legacy_claim_with_publisher() {
         test_scenario::return_shared(display);
         transfer::public_transfer(new_cap, @0x1);
 
-        cap.destroy_cap();
+        cap.destroy_system_migration_cap();
         publisher.burn();
     });
 }
@@ -150,8 +158,16 @@ fun test_display_already_exists() {
 fun test_migrate_twice() {
     test_tx!(|registry, scenario| {
         let cap = take_migration_cap(scenario);
-        registry.migrate<MyKeyOnlyType>(&cap, vec_map::empty(), scenario.ctx());
-        registry.migrate<MyKeyOnlyType>(&cap, vec_map::empty(), scenario.ctx());
+        registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
+            &cap,
+            vec_map::empty(),
+            scenario.ctx(),
+        );
+        registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
+            &cap,
+            vec_map::empty(),
+            scenario.ctx(),
+        );
         abort
     });
 }
@@ -161,7 +177,11 @@ fun test_claim_cap_twice() {
     test_tx!(|registry, scenario| {
         let mut publisher = package::test_claim(MY_OTW {}, scenario.ctx());
         let cap = take_migration_cap(scenario);
-        registry.migrate<MyKeyOnlyType>(&cap, vec_map::empty(), scenario.ctx());
+        registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
+            &cap,
+            vec_map::empty(),
+            scenario.ctx(),
+        );
         scenario.next_tx(@0x1);
 
         let mut display = scenario.take_shared<Display<MyKeyOnlyType>>();
@@ -177,7 +197,11 @@ fun test_claim_cap_twice() {
 fun test_delete_legacy_before_migration() {
     test_tx!(|registry, scenario| {
         let cap = take_migration_cap(scenario);
-        registry.migrate<MyKeyOnlyType>(&cap, vec_map::empty(), scenario.ctx());
+        registry.migrate_v1_to_v2_with_system_migration_cap<MyKeyOnlyType>(
+            &cap,
+            vec_map::empty(),
+            scenario.ctx(),
+        );
         scenario.next_tx(@0x1);
 
         let display = scenario.take_shared<Display<MyKeyOnlyType>>();

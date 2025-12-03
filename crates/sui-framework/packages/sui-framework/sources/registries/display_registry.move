@@ -12,9 +12,13 @@ use sui::vec_map::{Self, VecMap};
 /// TODO: Fill this in with the programmatic address responsible for
 /// migrating all V1 displays into V2.
 const SYSTEM_MIGRATION_ADDRESS: address = @0xf00;
+
+/// The version of the Display language that is currently supported.
+const DISPLAY_VERSION_2: u16 = 2;
+
 /// The current language version for Display. That helps parsers
 /// decide how to process display fields.
-const LANGUAGE_VERSION: u16 = 0;
+const LANGUAGE_VERSION: u16 = DISPLAY_VERSION_2;
 
 #[error(code = 0)]
 const ENotSystemAddress: vector<u8> = b"This is only callable from system address.";
@@ -56,8 +60,28 @@ public struct Display<phantom T> has key {
 /// The capability object that is used to manage the display.
 public struct DisplayCap<phantom T> has key, store { id: UID }
 
-/// The key used for deriving the instance of `Display`.
-public struct DisplayKey<phantom T>() has copy, drop, store;
+/// The key used for deriving the instance of `Display`. Contains the version of
+/// the Display language in it to separate concerns.
+public struct DisplayKey<phantom T>(u16) has copy, drop, store;
+
+/// Create a new Display object for a given type `T` using `internal::Permit` to
+/// prove type ownership.
+public fun new<T>(
+    registry: &mut DisplayRegistry,
+    _: internal::Permit<T>,
+    ctx: &mut TxContext,
+): (Display<T>, DisplayCap<T>) {
+    let key = DisplayKey<T>(LANGUAGE_VERSION);
+    assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
+    let display = Display<T> {
+        id: derived_object::claim(&mut registry.id, key),
+        fields: vec_map::empty(),
+        language_version: LANGUAGE_VERSION,
+        cap_id: option::none(),
+    };
+    let cap = DisplayCap<T> { id: object::new(ctx) };
+    (display, cap)
+}
 
 /// Create a new display object using the `Publisher` object.
 public fun new_with_publisher<T>(
@@ -65,11 +89,13 @@ public fun new_with_publisher<T>(
     publisher: &Publisher,
     ctx: &mut TxContext,
 ): (Display<T>, DisplayCap<T>) {
-    assert!(!derived_object::exists(&registry.id, DisplayKey<T>()), EDisplayAlreadyExists);
+    let key = DisplayKey<T>(LANGUAGE_VERSION);
+
+    assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
     assert!(publisher.from_package<T>(), ENotValidPublisher);
     let cap = DisplayCap<T> { id: object::new(ctx) };
     let display = Display<T> {
-        id: derived_object::claim(&mut registry.id, DisplayKey<T>()),
+        id: derived_object::claim(&mut registry.id, key),
         fields: vec_map::empty(),
         language_version: LANGUAGE_VERSION,
         cap_id: option::some(cap.id.to_inner()),
@@ -127,25 +153,35 @@ public fun claim_with_publisher<T: key>(
     cap
 }
 
-/// Allow the `SystemMigrationCap` holder to create display objects with supplied values.
-public fun migrate<T: key>(
+/// Allow the `SystemMigrationCap` holder to create display objects with supplied
+/// values. The migration is performed once on launch of the DisplayRegistry,
+/// further migrations will have to be performed for each object, and will only
+/// be possible until legacy `display` methods are finally deprecated.
+public fun migrate_v1_to_v2_with_system_migration_cap<T: key>(
     registry: &mut DisplayRegistry,
     _: &SystemMigrationCap,
     fields: VecMap<String, String>,
     _ctx: &mut TxContext,
 ) {
-    assert!(!derived_object::exists(&registry.id, DisplayKey<T>()), EDisplayAlreadyExists);
+    // System migration is only possible for V1 to V2.
+    // Should it keep V1 in Display originally?
+    let key = DisplayKey<T>(DISPLAY_VERSION_2);
+
+    assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
 
     transfer::share_object(Display<T> {
-        id: derived_object::claim(&mut registry.id, DisplayKey<T>()),
+        id: derived_object::claim(&mut registry.id, key),
         fields,
-        language_version: LANGUAGE_VERSION,
+        language_version: DISPLAY_VERSION_2,
         cap_id: option::none(),
     });
 }
 
-/// Destroy the `SystemMigrationCap` after successfuly migrating all V1 instances.
-entry fun destroy_cap(cap: SystemMigrationCap) {
+// TODO: decide on whether to keep this function or not.
+public fun migrate_v1_to_v2<T: key>(_: LegacyDisplay<T>): (Display<T>, DisplayCap<T>) { abort }
+
+/// Destroy the `SystemMigrationCap` after successfully migrating all V1 instances.
+entry fun destroy_system_migration_cap(cap: SystemMigrationCap) {
     let SystemMigrationCap { id } = cap;
     id.delete();
 }
@@ -166,7 +202,6 @@ public(package) fun create_internal(ctx: &mut TxContext) {
 
     // TODO: Replace with known system address.
     transfer::share_object(DisplayRegistry { id: object::new(ctx) });
-
     transfer::transfer(SystemMigrationCap { id: object::new(ctx) }, SYSTEM_MIGRATION_ADDRESS);
 }
 
