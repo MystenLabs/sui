@@ -4,6 +4,7 @@
 // Debug print code for development. Remove when moving into production mode.
 pub const DEBUG_PRINT: bool = false;
 
+#[allow(dead_code)]
 pub struct DebugFlags {
     pub function_list_sizes: bool,
     pub function_resolution: bool,

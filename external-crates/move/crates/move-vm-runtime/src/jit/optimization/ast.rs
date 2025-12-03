@@ -52,6 +52,7 @@ pub(crate) type Label = u16;
 
 /// Optimized Function Code
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Code {
     pub(crate) jump_tables: Vec<VariantJumpTable>,
     pub(crate) code: BTreeMap<Label, Vec<Bytecode>>,
@@ -237,6 +238,7 @@ impl ::std::fmt::Debug for Bytecode {
 // Impls
 // -------------------------------------------------------------------------------------------------
 
+#[allow(dead_code)]
 impl Bytecode {
     pub fn branch_target(&self, tables: &[VariantJumpTable]) -> Option<Vec<Label>> {
         match self {
