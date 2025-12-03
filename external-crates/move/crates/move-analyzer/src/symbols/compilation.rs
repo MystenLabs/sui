@@ -424,13 +424,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                         .dep_names
                         .contains(&Symbol::from(d.display_name().to_string()))
                 });
-                for d in &dependencies {
-                    eprintln!(
-                        "  dependency: {}, display name {}",
-                        d.name(),
-                        d.display_name()
-                    );
-                }
 
                 let deps = cached_pkg_info.deps.clone();
                 let analyzed_pkg_info = AnalyzedPkgInfo::new(

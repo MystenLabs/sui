@@ -483,18 +483,14 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         self.filtered_graph.root_package().publication()
     }
 
-    // *** PATHS RELATED FUNCTIONS ***
-
-    /// Return a list of sorted package names
-    pub fn sorted_deps(&self) -> Vec<&str> {
-        self.filtered_graph.sorted_deps()
-    }
-
-    /// Return a list of package ids, topologically sorted
+    /// Sorts topologically the dependency graph and returns the package IDs for each package. Note
+    /// that this will include the root package as well.
     pub fn sorted_deps_ids(&self) -> Vec<&PackageID> {
-        let pkgs = self.filtered_graph.sorted_packages();
-        let ids = pkgs.into_iter().map(|p| p.id()).collect();
-        ids
+        self.filtered_graph
+            .sorted_packages()
+            .into_iter()
+            .map(|p| p.id())
+            .collect()
     }
 }
 

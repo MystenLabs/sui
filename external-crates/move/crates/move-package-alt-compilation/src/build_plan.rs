@@ -27,7 +27,7 @@ use move_package_alt::{
     errors::PackageResult,
     flavor::MoveFlavor,
     package::{RootPackage, layout::SourcePackageLayout},
-    schema::{PackageID, PackageName},
+    schema::PackageID,
 };
 use move_symbol_pool::Symbol;
 use toml_edit::{DocumentMut, value};
@@ -36,14 +36,18 @@ const EDITION_NAME: &str = "edition";
 
 pub struct BuildPlan<'a, F: MoveFlavor> {
     root_pkg: &'a RootPackage<F>,
+    sorted_deps_ids: Vec<&'a PackageID>,
     compiler_vfs_root: Option<VfsPath>,
     build_config: BuildConfig,
 }
 
 impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
     pub fn create(root_pkg: &'a RootPackage<F>, build_config: &BuildConfig) -> PackageResult<Self> {
+        let mut sorted_deps_ids = root_pkg.sorted_deps_ids();
+        sorted_deps_ids.reverse();
         Ok(Self {
             root_pkg,
+            sorted_deps_ids,
             build_config: build_config.clone(),
             compiler_vfs_root: None,
         })
@@ -95,16 +99,10 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
         )?;
 
         let project_root = self.root_pkg.package_path();
-        let sorted_deps: Result<BTreeSet<_>, _> = self
-            .root_pkg
-            .sorted_deps()
-            .into_iter()
-            .map(|x| PackageName::new(x))
-            .collect();
 
         self.clean(
             &project_root.join(CompiledPackageLayout::Root.path()),
-            sorted_deps?,
+            self.sorted_deps_ids.clone(),
         )?;
 
         Ok(compiled)
@@ -133,16 +131,10 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
         )?;
 
         let project_root = self.root_pkg.package_path();
-        let sorted_deps: Result<BTreeSet<_>, _> = self
-            .root_pkg
-            .sorted_deps()
-            .into_iter()
-            .map(|x| PackageName::new(x))
-            .collect();
 
         self.clean(
             &project_root.join(CompiledPackageLayout::Root.path()),
-            sorted_deps?,
+            self.sorted_deps_ids.clone(),
         )?;
 
         Ok(compiled)
@@ -185,7 +177,7 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
 
     // Clean out old packages that are no longer used, or no longer used under the current
     // compilation flags
-    fn clean(&self, project_root: &Path, keep_paths: BTreeSet<PackageName>) -> anyhow::Result<()> {
+    fn clean(&self, project_root: &Path, keep_paths: Vec<&PackageID>) -> anyhow::Result<()> {
         // Compute the actual build directory based on install_dir configuration
         let build_root = shared::get_build_output_path(project_root, &self.build_config);
 
@@ -242,16 +234,9 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
 
         let project_root = self.root_pkg.package_path();
 
-        let sorted_deps: Result<BTreeSet<_>, _> = self
-            .root_pkg
-            .sorted_deps()
-            .into_iter()
-            .map(|x| PackageName::new(x))
-            .collect();
-
         self.clean(
             &project_root.join(CompiledPackageLayout::Root.path()),
-            sorted_deps?,
+            self.sorted_deps_ids.clone(),
         )?;
 
         Ok(migration)

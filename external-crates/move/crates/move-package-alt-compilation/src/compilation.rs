@@ -387,7 +387,7 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
             warning_filter: WarningFiltersBuilder::new_for_source(),
         };
 
-        // TODO: improve/rework this? Renaming the root pkg to have a unique name for the compiler
+        // Assign a unique name for the compiler for each package.
         let safe_name = Symbol::from(pkg.id().clone());
 
         debug!("Package name {:?} -- Safe name {:?}", name, safe_name);

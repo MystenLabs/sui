@@ -119,16 +119,6 @@ impl<F: MoveFlavor> PackageGraph<F> {
         sorted.iter().map(|x| self.package_info(*x)).collect()
     }
 
-    /// Return the sorted list of dependencies' name
-    pub(crate) fn sorted_deps(&self) -> Vec<&str> {
-        let sorted = toposort(&self.inner, None).expect("to sort the graph");
-        sorted
-            .iter()
-            .flat_map(|x| self.inner.node_weight(*x))
-            .map(|x| x.display_name())
-            .collect()
-    }
-
     /// For each entry in `overrides`, override the package publication in `self` for the
     /// corresponding dependency. Warns if the package ID is unrecognized.
     pub fn add_publish_overrides(
