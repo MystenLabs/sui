@@ -4,6 +4,7 @@
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
 use futures::{Stream, StreamExt, future::try_join_all, stream};
+use sui_futures::stream::TrySpawnStreamExt;
 use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
@@ -11,13 +12,13 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use super::{IngestionConfig, ingestion_client::IngestionClient};
 use crate::{
     ingestion::{error::Error, streaming_client::CheckpointStreamingClient},
     metrics::IngestionMetrics,
-    task::TrySpawnStreamExt,
     types::full_checkpoint_content::Checkpoint,
 };
+
+use super::{IngestionConfig, ingestion_client::IngestionClient};
 
 /// Broadcaster task that manages checkpoint flow and spawns broadcast tasks for ranges
 /// via either streaming or ingesting, or both.

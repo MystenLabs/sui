@@ -5,7 +5,7 @@ use std::{cmp::Ordering, collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::{Context, bail};
 use futures::future;
-use sui_indexer_alt_framework::task::with_slow_future_monitor;
+use sui_futures::future::with_slow_future_monitor;
 use tokio::{
     sync::{Barrier, mpsc},
     task::JoinHandle,
