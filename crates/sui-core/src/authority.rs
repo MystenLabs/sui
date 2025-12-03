@@ -3284,6 +3284,9 @@ impl AuthorityState {
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
+        // Do not merge: disable indexing for now
+        return Ok(());
+
         if self.indexes.is_none() {
             return Ok(());
         }
