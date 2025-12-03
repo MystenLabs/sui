@@ -396,7 +396,11 @@ impl TransactionTelemetryContext {
 impl Drop for Timer {
     fn drop(&mut self) {
         if !self.reported {
-            panic!("Timer of kind {:?} was not recorded before drop", self.kind);
+            debug_assert!(
+                false,
+                "Timer of kind {:?} was not recorded before drop",
+                self.kind
+            );
         }
     }
 }
