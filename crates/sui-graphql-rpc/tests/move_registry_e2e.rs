@@ -22,7 +22,6 @@ use sui_types::{
     digests::ObjectDigest,
     move_package::UpgradePolicy,
     object::Owner,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{CallArg, ObjectArg},
     Identifier, SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -369,8 +368,6 @@ async fn upgrade_pkg(
     current_package_object_id: ObjectID,
 ) -> (ObjectID, UpgradeCap) {
     // build the package upgrade to V2.
-    let mut builder = ProgrammableTransactionBuilder::new();
-
     let compiled_package = BuildConfig::new_for_testing()
         .build(&PathBuf::from(package_path))
         .unwrap();
@@ -378,42 +375,45 @@ async fn upgrade_pkg(
     let modules = compiled_package.get_package_bytes(false);
     let dependencies = compiled_package.get_dependency_storage_package_ids();
 
-    let cap = builder
-        .obj(ObjectArg::ImmOrOwnedObject((
-            upgrade_cap.0,
-            upgrade_cap.1,
-            upgrade_cap.2,
-        )))
-        .unwrap();
-
-    let policy = builder.pure(UpgradePolicy::Compatible as u8).unwrap();
-
-    let digest = builder.pure(digest.to_vec()).unwrap();
-
-    let ticket = builder.programmable_move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("package").unwrap(),
-        Identifier::new("authorize_upgrade").unwrap(),
-        vec![],
-        vec![cap, policy, digest],
-    );
-
-    let receipt = builder.upgrade(current_package_object_id, ticket, dependencies, modules);
-
-    builder.programmable_move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("package").unwrap(),
-        Identifier::new("commit_upgrade").unwrap(),
-        vec![],
-        vec![cap, receipt],
-    );
-
-    let tx = cluster
+    let mut tx_builder = cluster
         .validator_fullnode_handle
         .test_transaction_builder()
-        .await
-        .programmable(builder.finish())
-        .build();
+        .await;
+    let tx = {
+        let builder = tx_builder.ptb_builder_mut();
+
+        let cap = builder
+            .obj(ObjectArg::ImmOrOwnedObject((
+                upgrade_cap.0,
+                upgrade_cap.1,
+                upgrade_cap.2,
+            )))
+            .unwrap();
+
+        let policy = builder.pure(UpgradePolicy::Compatible as u8).unwrap();
+
+        let digest = builder.pure(digest.to_vec()).unwrap();
+
+        let ticket = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("package").unwrap(),
+            Identifier::new("authorize_upgrade").unwrap(),
+            vec![],
+            vec![cap, policy, digest],
+        );
+
+        let receipt = builder.upgrade(current_package_object_id, ticket, dependencies, modules);
+
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("package").unwrap(),
+            Identifier::new("commit_upgrade").unwrap(),
+            vec![],
+            vec![cap, receipt],
+        );
+
+        tx_builder.build()
+    };
 
     let upgraded = cluster
         .validator_fullnode_handle

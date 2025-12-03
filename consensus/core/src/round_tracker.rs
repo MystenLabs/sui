@@ -59,8 +59,9 @@ impl PeerRoundTracker {
     }
 
     /// Update accepted rounds based on a new block created locally or received from the network
-    /// and its excluded ancestors
-    pub(crate) fn update_from_accepted_block(&mut self, extended_block: &ExtendedBlock) {
+    /// and its excluded ancestors.
+    /// Assumes the block and the excluded ancestors have been verified for validity.
+    pub(crate) fn update_from_verified_block(&mut self, extended_block: &ExtendedBlock) {
         let block = &extended_block.block;
         let excluded_ancestors = &extended_block.excluded_ancestors;
         let author = block.author();
@@ -374,7 +375,7 @@ mod test {
             )])
             .build();
         let block = VerifiedBlock::new_for_test(test_block);
-        round_tracker.update_from_accepted_block(&ExtendedBlock {
+        round_tracker.update_from_verified_block(&ExtendedBlock {
             block,
             excluded_ancestors: vec![BlockRef::new(
                 8,
@@ -393,7 +394,7 @@ mod test {
             ])
             .build();
         let block = VerifiedBlock::new_for_test(test_block);
-        round_tracker.update_from_accepted_block(&ExtendedBlock {
+        round_tracker.update_from_verified_block(&ExtendedBlock {
             block,
             excluded_ancestors: vec![BlockRef::new(
                 8,
@@ -449,7 +450,7 @@ mod test {
             let round = 110 + (authority as u32 * 10);
             let block =
                 VerifiedBlock::new_for_test(TestBlock::new(round, authority as u32).build());
-            round_tracker.update_from_accepted_block(&ExtendedBlock {
+            round_tracker.update_from_verified_block(&ExtendedBlock {
                 block,
                 excluded_ancestors: vec![],
             });

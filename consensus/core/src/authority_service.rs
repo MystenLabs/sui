@@ -85,6 +85,70 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             round_tracker,
         }
     }
+
+    // Parses and validates serialized excluded ancestors.
+    fn parse_excluded_ancestors(
+        &self,
+        peer: AuthorityIndex,
+        block: &VerifiedBlock,
+        mut excluded_ancestors: Vec<Vec<u8>>,
+    ) -> ConsensusResult<Vec<BlockRef>> {
+        let peer_hostname = &self.context.committee.authority(peer).hostname;
+
+        let excluded_ancestors_limit = self.context.committee.size() * 2;
+        if excluded_ancestors.len() > excluded_ancestors_limit {
+            debug!(
+                "Dropping {} excluded ancestor(s) from {} {} due to size limit",
+                excluded_ancestors.len() - excluded_ancestors_limit,
+                peer,
+                peer_hostname,
+            );
+            excluded_ancestors.truncate(excluded_ancestors_limit);
+        }
+
+        let excluded_ancestors = excluded_ancestors
+            .into_iter()
+            .map(|serialized| {
+                let block_ref: BlockRef =
+                    bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
+                if !self.context.committee.is_valid_index(block_ref.author) {
+                    return Err(ConsensusError::InvalidAuthorityIndex {
+                        index: block_ref.author,
+                        max: self.context.committee.size(),
+                    });
+                }
+                if block_ref.round >= block.round() {
+                    return Err(ConsensusError::InvalidAncestorRound {
+                        ancestor: block_ref.round,
+                        block: block.round(),
+                    });
+                }
+                Ok(block_ref)
+            })
+            .collect::<ConsensusResult<Vec<BlockRef>>>()?;
+
+        for excluded_ancestor in &excluded_ancestors {
+            let excluded_ancestor_hostname = &self
+                .context
+                .committee
+                .authority(excluded_ancestor.author)
+                .hostname;
+            self.context
+                .metrics
+                .node_metrics
+                .network_excluded_ancestors_count_by_authority
+                .with_label_values(&[excluded_ancestor_hostname])
+                .inc();
+        }
+        self.context
+            .metrics
+            .node_metrics
+            .network_received_excluded_ancestors_from_authority
+            .with_label_values(&[peer_hostname])
+            .inc_by(excluded_ancestors.len() as u64);
+
+        Ok(excluded_ancestors)
+    }
 }
 
 #[async_trait]
@@ -224,51 +288,24 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         // ------------ After processing the block, process the excluded ancestors ------------
 
-        let mut excluded_ancestors = serialized_block
-            .excluded_ancestors
-            .into_iter()
-            .map(|serialized| bcs::from_bytes::<BlockRef>(&serialized))
-            .collect::<Result<Vec<BlockRef>, bcs::Error>>()
-            .map_err(ConsensusError::MalformedBlock)?;
-
-        let excluded_ancestors_limit = self.context.committee.size() * 2;
-        if excluded_ancestors.len() > excluded_ancestors_limit {
-            debug!(
-                "Dropping {} excluded ancestor(s) from {} {} due to size limit",
-                excluded_ancestors.len() - excluded_ancestors_limit,
-                peer,
-                peer_hostname,
-            );
-            excluded_ancestors.truncate(excluded_ancestors_limit);
-        }
+        let excluded_ancestors = self
+            .parse_excluded_ancestors(peer, &verified_block, serialized_block.excluded_ancestors)
+            .tap_err(|e| {
+                debug!("Failed to parse excluded ancestors from {peer} {peer_hostname}: {e}");
+                self.context
+                    .metrics
+                    .node_metrics
+                    .invalid_blocks
+                    .with_label_values(&[peer_hostname, "handle_send_block", e.name()])
+                    .inc();
+            })?;
 
         self.round_tracker
             .write()
-            .update_from_accepted_block(&ExtendedBlock {
+            .update_from_verified_block(&ExtendedBlock {
                 block: verified_block,
                 excluded_ancestors: excluded_ancestors.clone(),
             });
-
-        self.context
-            .metrics
-            .node_metrics
-            .network_received_excluded_ancestors_from_authority
-            .with_label_values(&[peer_hostname])
-            .inc_by(excluded_ancestors.len() as u64);
-
-        for excluded_ancestor in &excluded_ancestors {
-            let excluded_ancestor_hostname = &self
-                .context
-                .committee
-                .authority(excluded_ancestor.author)
-                .hostname;
-            self.context
-                .metrics
-                .node_metrics
-                .network_excluded_ancestors_count_by_authority
-                .with_label_values(&[excluded_ancestor_hostname])
-                .inc();
-        }
 
         let missing_excluded_ancestors = self
             .core_dispatcher
@@ -763,7 +800,7 @@ mod tests {
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
-    use consensus_types::block::{BlockRef, Round};
+    use consensus_types::block::{BlockDigest, BlockRef, Round};
     use mysten_metrics::monitored_mpsc;
     use parking_lot::{Mutex, RwLock};
     use tokio::{sync::broadcast, time::sleep};
@@ -965,11 +1002,15 @@ mod tests {
             excluded_ancestors: vec![],
         };
 
-        tokio::spawn(async move {
-            service
-                .handle_send_block(context.committee.to_authority_index(0).unwrap(), serialized)
-                .await
-                .unwrap();
+        tokio::spawn({
+            let service = service.clone();
+            let context = context.clone();
+            async move {
+                service
+                    .handle_send_block(context.committee.to_authority_index(0).unwrap(), serialized)
+                    .await
+                    .unwrap();
+            }
         });
 
         sleep(max_drift / 2).await;
@@ -977,6 +1018,44 @@ mod tests {
         let blocks = core_dispatcher.get_blocks();
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0], input_block);
+
+        // Test invalid block.
+        let invalid_block =
+            VerifiedBlock::new_for_test(TestBlock::new(10, 1000).set_timestamp_ms(10).build());
+        let extended_block = ExtendedSerializedBlock {
+            block: invalid_block.serialized().clone(),
+            excluded_ancestors: vec![],
+        };
+        service
+            .handle_send_block(
+                context.committee.to_authority_index(0).unwrap(),
+                extended_block,
+            )
+            .await
+            .unwrap_err();
+
+        // Test invalid excluded ancestors.
+        let invalid_excluded_ancestors = vec![
+            bcs::to_bytes(&BlockRef::new(
+                10,
+                AuthorityIndex::new_for_test(1000),
+                BlockDigest::MIN,
+            ))
+            .unwrap(),
+            vec![3u8; 40],
+            bcs::to_bytes(&invalid_block.reference()).unwrap(),
+        ];
+        let extended_block = ExtendedSerializedBlock {
+            block: input_block.serialized().clone(),
+            excluded_ancestors: invalid_excluded_ancestors,
+        };
+        service
+            .handle_send_block(
+                context.committee.to_authority_index(0).unwrap(),
+                extended_block,
+            )
+            .await
+            .unwrap_err();
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
