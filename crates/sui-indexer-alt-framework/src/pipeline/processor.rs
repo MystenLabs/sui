@@ -5,17 +5,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use backoff::ExponentialBackoff;
-use sui_futures::stream::TrySpawnStreamExt;
+use sui_futures::{
+    service::Service,
+    stream::{Break, TrySpawnStreamExt},
+};
 use sui_types::full_checkpoint_content::Checkpoint;
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
-use crate::{
-    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
-    pipeline::Break,
-};
+use crate::metrics::{CheckpointLagMetricReporter, IndexerMetrics};
 
 use super::IndexedCheckpoint;
 use async_trait::async_trait;
@@ -61,16 +60,13 @@ pub trait Processor: Send + Sync + 'static {
 ///
 /// Each worker processes a checkpoint into rows and sends them on to the committer using the `tx`
 /// channel.
-///
-/// The task will shutdown if the `cancel` token is cancelled.
 pub(super) fn processor<P: Processor>(
     processor: Arc<P>,
     rx: mpsc::Receiver<Arc<Checkpoint>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
-    cancel: CancellationToken,
-) -> JoinHandle<()> {
-    tokio::spawn(async move {
+) -> Service {
+    Service::new().spawn_aborting(async move {
         info!(pipeline = P::NAME, "Starting processor");
         let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<P>(
             &metrics.processed_checkpoint_timestamp_lag,
@@ -82,15 +78,10 @@ pub(super) fn processor<P: Processor>(
             .try_for_each_spawned(P::FANOUT, |checkpoint| {
                 let tx = tx.clone();
                 let metrics = metrics.clone();
-                let cancel = cancel.clone();
                 let checkpoint_lag_reporter = checkpoint_lag_reporter.clone();
                 let processor = processor.clone();
 
                 async move {
-                    if cancel.is_cancelled() {
-                        return Err(Break::Cancel);
-                    }
-
                     metrics
                         .total_handler_checkpoints_received
                         .with_label_values(&[P::NAME])
@@ -152,7 +143,7 @@ pub(super) fn processor<P: Processor>(
                         values,
                     ))
                     .await
-                    .map_err(|_| Break::Cancel)?;
+                    .map_err(|_| Break::Break)?;
 
                     Ok(())
                 }
@@ -163,15 +154,17 @@ pub(super) fn processor<P: Processor>(
                 info!(pipeline = P::NAME, "Checkpoints done, stopping processor");
             }
 
-            Err(Break::Cancel) => {
-                info!(pipeline = P::NAME, "Shutdown received, stopping processor");
+            Err(Break::Break) => {
+                info!(pipeline = P::NAME, "Channel closed, stopping processor");
             }
 
             Err(Break::Err(e)) => {
                 error!(pipeline = P::NAME, "Error from handler: {e}");
-                cancel.cancel();
+                return Err(e.context(format!("Error from processor {}", P::NAME)));
             }
         };
+
+        Ok(())
     })
 }
 
@@ -188,7 +181,6 @@ mod tests {
     };
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use tokio::{sync::mpsc, time::timeout};
-    use tokio_util::sync::CancellationToken;
 
     use super::*;
 
@@ -239,10 +231,9 @@ mod tests {
         let (data_tx, data_rx) = mpsc::channel(2);
         let (indexed_tx, mut indexed_rx) = mpsc::channel(2);
         let metrics = IndexerMetrics::new(None, &Default::default());
-        let cancel = CancellationToken::new();
 
         // Spawn the processor task
-        let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
+        let _svc = super::processor(processor, data_rx, indexed_tx, metrics);
 
         // Send both checkpoints
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -279,10 +270,6 @@ mod tests {
             timeout_result.is_err(),
             "Should timeout waiting for more checkpoints"
         );
-
-        // Clean up
-        drop(data_tx);
-        let _ = handle.await;
     }
 
     #[tokio::test]
@@ -298,10 +285,9 @@ mod tests {
         let (data_tx, data_rx) = mpsc::channel(2);
         let (indexed_tx, mut indexed_rx) = mpsc::channel(2);
         let metrics = IndexerMetrics::new(None, &Default::default());
-        let cancel = CancellationToken::new();
 
         // Spawn the processor task
-        let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
+        let svc = super::processor(processor, data_rx, indexed_tx, metrics);
 
         // Send first checkpoint.
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -313,21 +299,19 @@ mod tests {
             .expect("Should receive first IndexedCheckpoint");
         assert_eq!(indexed1.watermark.checkpoint_hi_inclusive, 1);
 
-        // Cancel the processor
-        cancel.cancel();
+        // Shutdown the processor
+        svc.shutdown().await.unwrap();
 
-        // Send second checkpoint after cancellation
-        data_tx.send(checkpoint2.clone()).await.unwrap();
+        // Sending second checkpoint after shutdown should fail, because the data_rx channel is
+        // closed.
+        data_tx.send(checkpoint2.clone()).await.unwrap_err();
 
         // Indexed channel is closed, and indexed_rx receives the last None result.
         let next_result = indexed_rx.recv().await;
         assert!(
             next_result.is_none(),
-            "Channel should be closed after cancellation"
+            "Channel should be closed after shutdown"
         );
-
-        // Clean up
-        let _ = handle.await;
     }
 
     #[tokio::test]
@@ -369,10 +353,9 @@ mod tests {
         let (indexed_tx, mut indexed_rx) = mpsc::channel(2);
 
         let metrics = IndexerMetrics::new(None, &Default::default());
-        let cancel = CancellationToken::new();
 
         // Spawn the processor task
-        let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
+        let _svc = super::processor(processor, data_rx, indexed_tx, metrics);
 
         // Send and verify first checkpoint (should succeed immediately)
         data_tx.send(checkpoint1.clone()).await.unwrap();
@@ -393,10 +376,6 @@ mod tests {
 
         // Verify that exactly 3 attempts were made (2 failures + 1 success)
         assert_eq!(attempt_count.load(Ordering::Relaxed), 3);
-
-        // Clean up
-        drop(data_tx);
-        let _ = handle.await;
     }
 
     // By default, Rust's async tests run on the single-threaded runtime.
@@ -434,10 +413,9 @@ mod tests {
         let (data_tx, data_rx) = mpsc::channel(10);
         let (indexed_tx, mut indexed_rx) = mpsc::channel(10);
         let metrics = IndexerMetrics::new(None, &Default::default());
-        let cancel = CancellationToken::new();
 
         // Spawn processor task
-        let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
+        let _svc = super::processor(processor, data_rx, indexed_tx, metrics);
 
         // Send all checkpoints and measure time
         let start = std::time::Instant::now();
@@ -460,8 +438,5 @@ mod tests {
 
         // Verify results
         assert_eq!(received.len(), 5);
-
-        // Clean up
-        let _ = handle.await;
     }
 }

@@ -4,12 +4,11 @@
 use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
 
 use scoped_futures::ScopedFutureExt;
+use sui_futures::service::Service;
 use tokio::{
     sync::mpsc,
-    task::JoinHandle,
     time::{MissedTickBehavior, interval},
 };
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::{
@@ -36,8 +35,6 @@ use super::{Handler, SequentialConfig};
 ///
 /// Upon successful write, the task sends its new watermark back to the ingestion service, to
 /// unblock its regulator.
-///
-/// The task can be shutdown using its `cancel` token or if either of its channels are closed.
 pub(super) fn committer<H>(
     handler: Arc<H>,
     config: SequentialConfig,
@@ -46,13 +43,12 @@ pub(super) fn committer<H>(
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     store: H::Store,
     metrics: Arc<IndexerMetrics>,
-    cancel: CancellationToken,
-) -> JoinHandle<()>
+) -> Service
 where
     H: Handler + Send + Sync + 'static,
     H::Store: TransactionalStore + 'static,
 {
-    tokio::spawn(async move {
+    Service::new().spawn_aborting(async move {
         // The `poll` interval controls the maximum time to wait between commits, regardless of the
         // amount of data available.
         let mut poll = interval(config.committer.collect_interval());
@@ -71,6 +67,7 @@ where
         let mut batch = H::Batch::default();
         let mut batch_rows = 0;
         let mut batch_checkpoints = 0;
+
         // The task keeps track of the highest (inclusive) checkpoint it has added to the batch
         // through `next_checkpoint`, and whether that batch needs to be written out. By extension
         // it also knows the next checkpoint to expect and add to the batch. In case of db txn
@@ -97,11 +94,6 @@ where
 
         loop {
             tokio::select! {
-                _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, "Shutdown received");
-                    break;
-                }
-
                 _ = poll.tick() => {
                     if batch_checkpoints == 0
                         && rx.is_closed()
@@ -369,6 +361,7 @@ where
         }
 
         info!(pipeline = H::NAME, "Stopping committer");
+        Ok(())
     })
 }
 
@@ -406,7 +399,6 @@ mod tests {
     use std::{sync::Arc, time::Duration};
     use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::sync::mpsc;
-    use tokio_util::sync::CancellationToken;
 
     // Test implementation of Handler
     #[derive(Default)]
@@ -450,14 +442,14 @@ mod tests {
         store: MockStore,
         checkpoint_tx: mpsc::Sender<IndexedCheckpoint<TestHandler>>,
         commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
-        committer_handle: JoinHandle<()>,
+        #[allow(unused)]
+        committer: Service,
     }
 
     /// Emulates adding a sequential pipeline to the indexer. The next_checkpoint is the checkpoint
     /// for the indexer to ingest from.
     fn setup_test(next_checkpoint: u64, config: SequentialConfig, store: MockStore) -> TestSetup {
         let metrics = IndexerMetrics::new(None, &Registry::default());
-        let cancel = CancellationToken::new();
 
         let (checkpoint_tx, checkpoint_rx) = mpsc::channel(10);
         #[allow(clippy::disallowed_methods)]
@@ -465,7 +457,7 @@ mod tests {
 
         let store_clone = store.clone();
         let handler = Arc::new(TestHandler);
-        let committer_handle = committer(
+        let committer = committer(
             handler,
             config,
             next_checkpoint,
@@ -473,14 +465,13 @@ mod tests {
             commit_hi_tx,
             store_clone,
             metrics,
-            cancel,
         );
 
         TestSetup {
             store,
             checkpoint_tx,
             commit_hi_rx,
-            committer_handle,
+            committer,
         }
     }
 
@@ -532,10 +523,6 @@ mod tests {
         let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
         assert_eq!(commit_hi.0, "test", "Pipeline name should be 'test'");
         assert_eq!(commit_hi.1, 3, "commit_hi should be 3 (checkpoint 2 + 1)");
-
-        // Clean up
-        drop(setup.checkpoint_tx);
-        let _ = setup.committer_handle.await;
     }
 
     /// Configure the MockStore with no watermark, and emulate `first_checkpoint` by passing the
@@ -577,10 +564,6 @@ mod tests {
             assert_eq!(watermark.checkpoint_hi_inclusive, 7);
             assert_eq!(watermark.tx_hi, 7);
         }
-
-        // Clean up
-        drop(setup.checkpoint_tx);
-        let _ = setup.committer_handle.await;
     }
 
     #[tokio::test]
@@ -613,10 +596,6 @@ mod tests {
         let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
         assert_eq!(commit_hi.0, "test", "Pipeline name should be 'test'");
         assert_eq!(commit_hi.1, 3, "commit_hi should be 3 (checkpoint 2 + 1)");
-
-        // Clean up
-        drop(setup.checkpoint_tx);
-        let _ = setup.committer_handle.await;
     }
 
     #[tokio::test]
@@ -650,10 +629,6 @@ mod tests {
 
         // Verify data is written in order across batches
         assert_eq!(setup.store.get_sequential_data(), vec![0, 1, 2, 3]);
-
-        // Clean up
-        drop(setup.checkpoint_tx);
-        let _ = setup.committer_handle.await;
     }
 
     #[tokio::test]
@@ -687,10 +662,6 @@ mod tests {
         assert_eq!(setup.store.get_sequential_data(), vec![0, 1, 2]);
         let commit_hi = setup.commit_hi_rx.recv().await.unwrap();
         assert_eq!(commit_hi.1, 3, "commit_hi should be 3 (checkpoint 2 + 1)");
-
-        // Clean up
-        drop(setup.checkpoint_tx);
-        let _ = setup.committer_handle.await;
     }
 
     #[tokio::test]
@@ -723,10 +694,6 @@ mod tests {
 
         // Verify all checkpoints are written
         assert_eq!(setup.store.get_sequential_data(), vec![0, 1, 2, 3]);
-
-        // Clean up
-        drop(setup.checkpoint_tx);
-        let _ = setup.committer_handle.await;
     }
 
     #[tokio::test]
@@ -762,10 +729,6 @@ mod tests {
 
         // Verify only checkpoint 0 is written (since it's the only one that satisfies checkpoint_lag)
         assert_eq!(setup.store.get_sequential_data(), vec![0]);
-
-        // Clean up
-        drop(setup.checkpoint_tx);
-        let _ = setup.committer_handle.await;
     }
 
     #[tokio::test]
@@ -805,9 +768,5 @@ mod tests {
             commit_hi.1, 11,
             "commit_hi should be 11 (checkpoint 10 + 1)"
         );
-
-        // Clean up
-        drop(setup.checkpoint_tx);
-        let _ = setup.committer_handle.await;
     }
 }

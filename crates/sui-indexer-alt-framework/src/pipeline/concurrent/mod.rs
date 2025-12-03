@@ -1,18 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    sync::{Arc, atomic::AtomicU64},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tokio::{
-    sync::{SetOnce, mpsc},
-    task::JoinHandle,
-};
-use tokio_util::sync::CancellationToken;
+use sui_futures::service::Service;
+use tokio::sync::{SetOnce, mpsc};
 use tracing::info;
 
 use crate::{
@@ -206,9 +200,9 @@ impl Default for PrunerConfig {
 /// watermark below which all data has been committed (modulo pruning).
 ///
 /// Checkpoint data is fed into the pipeline through the `checkpoint_rx` channel, and internal
-/// channels are created to communicate between its various components. The pipeline can be
-/// shutdown using its `cancel` token, and will also shutdown if any of its independent tasks
-/// reports an issue.
+/// channels are created to communicate between its various components. The pipeline will shutdown
+/// if any of its input or output channels close, any of its independent tasks fail, or if it is
+/// signalled to shutdown through the returned service handle.
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
     next_checkpoint: u64,
@@ -217,12 +211,12 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     task: Option<Task>,
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     metrics: Arc<IndexerMetrics>,
-    cancel: CancellationToken,
-) -> JoinHandle<()> {
+) -> Service {
     info!(
         pipeline = H::NAME,
-        "Starting pipeline with config: {:?}", config
+        "Starting pipeline with config: {config:#?}",
     );
+
     let ConcurrentConfig {
         committer: committer_config,
         pruner: pruner_config,
@@ -235,82 +229,62 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     //docs::/#buff
     let (committer_tx, watermark_rx) =
         mpsc::channel(committer_config.write_concurrency + PIPELINE_BUFFER);
+    let main_reader_lo = Arc::new(SetOnce::new());
 
-    // The pruner is not connected to the rest of the tasks by channels, so it needs to be
-    // explicitly signalled to shutdown when the other tasks shutdown, in addition to listening to
-    // the global cancel signal. We achieve this by creating a child cancel token that we call
-    // cancel on once the committer tasks have shutdown.
-    let pruner_cancel = cancel.child_token();
     let handler = Arc::new(handler);
 
-    let main_reader_lo = Arc::new(SetOnce::<AtomicU64>::new());
-
-    let main_reader_lo_task = track_main_reader_lo::<H>(
-        main_reader_lo.clone(),
-        task.as_ref().map(|t| t.reader_interval),
-        pruner_cancel.clone(),
-        store.clone(),
-    );
-
-    let processor = processor(
+    let s_processor = processor(
         handler.clone(),
         checkpoint_rx,
         processor_tx,
         metrics.clone(),
-        cancel.clone(),
     );
 
-    let collector = collector::<H>(
+    let s_collector = collector::<H>(
         handler.clone(),
         committer_config.clone(),
         collector_rx,
         collector_tx,
         main_reader_lo.clone(),
         metrics.clone(),
-        cancel.clone(),
     );
 
-    let committer = committer::<H>(
+    let s_committer = committer::<H>(
         handler.clone(),
         committer_config.clone(),
         committer_rx,
         committer_tx,
         store.clone(),
         metrics.clone(),
-        cancel.clone(),
     );
 
-    let commit_watermark = commit_watermark::<H>(
+    let s_commit_watermark = commit_watermark::<H>(
         next_checkpoint,
         committer_config,
         watermark_rx,
         store.clone(),
         task.as_ref().map(|t| t.task.clone()),
         metrics.clone(),
-        cancel,
     );
 
-    let reader_watermark = reader_watermark::<H>(
-        pruner_config.clone(),
+    let s_track_reader_lo = track_main_reader_lo::<H>(
+        main_reader_lo.clone(),
+        task.as_ref().map(|t| t.reader_interval),
         store.clone(),
-        metrics.clone(),
-        pruner_cancel.clone(),
     );
 
-    let pruner = pruner(
-        handler,
-        pruner_config,
-        store,
-        metrics,
-        pruner_cancel.clone(),
-    );
+    let s_reader_watermark =
+        reader_watermark::<H>(pruner_config.clone(), store.clone(), metrics.clone());
 
-    tokio::spawn(async move {
-        let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);
+    let s_pruner = pruner(handler, pruner_config, store, metrics);
 
-        pruner_cancel.cancel();
-        let _ = futures::join!(main_reader_lo_task, reader_watermark, pruner);
-    })
+    s_processor
+        .merge(s_collector)
+        .merge(s_committer)
+        .merge(s_commit_watermark)
+        .attach(s_track_reader_lo)
+        .attach(s_reader_watermark)
+        .attach(s_pruner)
 }
 
 #[cfg(test)]
@@ -319,7 +293,6 @@ mod tests {
 
     use prometheus::Registry;
     use tokio::{sync::mpsc, time::timeout};
-    use tokio_util::sync::CancellationToken;
 
     use crate::{
         FieldCount,
@@ -419,17 +392,16 @@ mod tests {
     struct TestSetup {
         store: MockStore,
         checkpoint_tx: mpsc::Sender<Arc<Checkpoint>>,
-        pipeline_handle: JoinHandle<()>,
-        cancel: CancellationToken,
+        #[allow(unused)]
+        pipeline: Service,
     }
 
     impl TestSetup {
         async fn new(config: ConcurrentConfig, store: MockStore, next_checkpoint: u64) -> Self {
             let (checkpoint_tx, checkpoint_rx) = mpsc::channel(TEST_CHECKPOINT_BUFFER_SIZE);
             let metrics = IndexerMetrics::new(None, &Registry::default());
-            let cancel = CancellationToken::new();
 
-            let pipeline_handle = pipeline(
+            let pipeline = pipeline(
                 DataPipeline,
                 next_checkpoint,
                 config,
@@ -437,14 +409,12 @@ mod tests {
                 None,
                 checkpoint_rx,
                 metrics,
-                cancel.clone(),
             );
 
             Self {
                 store,
                 checkpoint_tx,
-                pipeline_handle,
-                cancel,
+                pipeline,
             }
         }
 
@@ -458,12 +428,6 @@ mod tests {
             );
             self.checkpoint_tx.send(checkpoint).await?;
             Ok(())
-        }
-
-        async fn shutdown(self) {
-            drop(self.checkpoint_tx);
-            self.cancel.cancel();
-            let _ = self.pipeline_handle.await;
         }
 
         async fn send_checkpoint_with_timeout(
@@ -551,8 +515,6 @@ mod tests {
             assert!(!data.contains_key(&1));
             assert!(!data.contains_key(&2));
         };
-
-        setup.shutdown().await;
     }
 
     #[tokio::test]
@@ -598,8 +560,6 @@ mod tests {
             data.len()
         };
         assert_eq!(total_checkpoints, 10);
-
-        setup.shutdown().await;
     }
 
     #[tokio::test]
@@ -631,8 +591,6 @@ mod tests {
                 .await;
             assert_eq!(data, vec![i * 10 + 1, i * 10 + 2]);
         }
-
-        setup.shutdown().await;
     }
 
     #[tokio::test]
@@ -668,8 +626,6 @@ mod tests {
             .wait_for_watermark(DataPipeline::NAME, 4, TEST_TIMEOUT)
             .await;
         assert_eq!(watermark.checkpoint_hi_inclusive, 4);
-
-        setup.shutdown().await;
     }
 
     // ==================== BACK-PRESSURE TESTING ====================
@@ -738,8 +694,6 @@ mod tests {
             .wait_for_data(DataPipeline::NAME, 0, TEST_TIMEOUT)
             .await;
         assert_eq!(data, vec![1, 2]);
-
-        setup.shutdown().await;
     }
 
     #[tokio::test]
@@ -817,8 +771,6 @@ mod tests {
             .send_checkpoint_with_timeout(back_pressure_checkpoint.unwrap(), TEST_TIMEOUT)
             .await
             .unwrap();
-
-        setup.shutdown().await;
     }
 
     // ==================== FAILURE TESTING ====================
@@ -847,8 +799,6 @@ mod tests {
             .wait_for_data(DataPipeline::NAME, 0, Duration::from_secs(1))
             .await;
         assert_eq!(data, vec![1, 2]);
-
-        setup.shutdown().await;
     }
 
     #[tokio::test]
@@ -912,8 +862,6 @@ mod tests {
             assert!(!data.contains_key(&0));
             assert!(!data.contains_key(&1));
         };
-
-        setup.shutdown().await;
     }
 
     #[tokio::test]
@@ -952,8 +900,6 @@ mod tests {
         // Verify that reader watermark was eventually updated despite failures
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.reader_lo, 3);
-
-        setup.shutdown().await;
     }
 
     #[tokio::test]
@@ -980,7 +926,5 @@ mod tests {
             .wait_for_data(DataPipeline::NAME, 0, TEST_TIMEOUT)
             .await;
         assert_eq!(data, vec![1, 2]);
-
-        setup.shutdown().await;
     }
 }

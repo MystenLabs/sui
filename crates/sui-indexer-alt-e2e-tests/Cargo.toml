@@ -27,10 +27,10 @@ serde_json.workspace = true
 shared-crypto.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
-tokio-util.workspace = true
 url.workspace = true
 
 simulacrum.workspace = true
+sui-futures.workspace = true
 sui-indexer-alt.workspace = true
 sui-indexer-alt-consistent-api.workspace = true
 sui-indexer-alt-consistent-store.workspace = true

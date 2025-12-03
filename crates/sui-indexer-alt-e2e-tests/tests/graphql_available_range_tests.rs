@@ -9,7 +9,6 @@ use move_core_types::ident_str;
 use reqwest::Client;
 use serde_json::{Value, json};
 use simulacrum::Simulacrum;
-use tokio_util::sync::CancellationToken;
 
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
 use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig, find::address_owned};
@@ -138,8 +137,6 @@ async fn test_available_range_with_pipelines() {
     let (first, last) = collect_sequence_numbers(&transasction_available_range);
     assert_eq!(first, 1);
     assert_eq!(last, 10);
-
-    cluster.stopped().await;
 }
 
 /// Test that querying available range for a pipeline that is not enabled returns an error
@@ -171,7 +168,6 @@ async fn test_available_range_pipeline_unavailable() {
         }
       }
     ]"###);
-    cluster.stopped().await;
 }
 
 /// Test available range queries with retention configurations
@@ -236,8 +232,6 @@ async fn test_transaction_pagination_pruning() {
     let transactions_in_range = query_transactions(&cluster, b).await;
     let actual = collect_digests(&transactions_in_range);
     assert_eq!(&a_txs[6..], &actual);
-
-    cluster.stopped().await;
 }
 
 #[tokio::test]
@@ -276,8 +270,6 @@ async fn test_events_pagination_pruning() {
     let events_in_range = query_events(&cluster, json!({ "type": pkg.to_string() })).await;
     let actual = collect_digests(&events_in_range);
     assert_eq!(&tx_digests, &actual);
-
-    cluster.stopped().await;
 }
 
 #[tokio::test]
@@ -314,8 +306,6 @@ async fn test_checkpoint_pagination_pruning() {
         checkpoints[3]["sequenceNumber"].as_u64().unwrap(),
         cp_sequence_numbers[7]
     );
-
-    cluster.stopped().await;
 }
 
 /// Set-up a cluster with a custom configuration for pipelines.
@@ -336,7 +326,6 @@ async fn cluster_with_pipelines(pipeline: PipelineLayer) -> FullCluster {
             ..Default::default()
         },
         &prometheus::Registry::new(),
-        CancellationToken::new(),
     )
     .await
     .expect("Failed to create cluster")

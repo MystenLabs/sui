@@ -9,11 +9,11 @@ use async_trait::async_trait;
 use backoff::Error as BE;
 use backoff::ExponentialBackoff;
 use backoff::backoff::Constant;
+use bytes::Bytes;
 use sui_futures::future::with_slow_future_monitor;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
 use sui_storage::blob::Blob;
-use tokio_util::bytes::Bytes;
 use tracing::{debug, error, warn};
 use url::Url;
 
@@ -322,7 +322,6 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::time::timeout;
-    use tokio_util::bytes::Bytes;
 
     use crate::ingestion::test_utils::test_checkpoint_data;
 

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::Parser;
+use futures::TryFutureExt as _;
 use prometheus::Registry;
 use sui_indexer_alt_consistent_store::{
     args::{Args, Command},
@@ -12,10 +13,9 @@ use sui_indexer_alt_consistent_store::{
     restore::start_restorer,
     start_service,
 };
+use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_metrics::{MetricsService, uptime};
-use tokio::{fs, signal, task::JoinHandle};
-use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tokio::fs;
 
 // Define the `GIT_REVISION` const
 bin_version::git_revision!();
@@ -49,19 +49,17 @@ async fn main() -> anyhow::Result<()> {
             config,
         } => {
             let config = read_config(config).await?;
-            let cancel = CancellationToken::new();
             let registry = Registry::new_custom(Some("consistent_store".into()), None)
                 .context("Failed to create Prometheus registry")?;
 
-            let metrics = MetricsService::new(metrics_args, registry, cancel.child_token());
-            let h_ctrl_c = handle_interrupt(cancel.clone());
+            let metrics = MetricsService::new(metrics_args, registry);
 
             metrics
                 .registry()
                 .register(uptime(VERSION)?)
                 .context("Failed to register uptime metric")?;
 
-            let h_service = start_service(
+            let s_service = start_service(
                 database_path,
                 indexer_args,
                 client_args,
@@ -69,16 +67,22 @@ async fn main() -> anyhow::Result<()> {
                 VERSION,
                 config,
                 metrics.registry(),
-                cancel.child_token(),
             )
             .await?;
 
-            let h_metrics = metrics.run().await?;
+            let s_metrics = metrics.run().await?;
 
-            let _ = h_service.await;
-            cancel.cancel();
-            let _ = h_metrics.await;
-            let _ = h_ctrl_c.await;
+            match s_service.attach(s_metrics).main().await {
+                Ok(()) | Err(Error::Terminated) => {}
+
+                Err(Error::Aborted) => {
+                    std::process::exit(1);
+                }
+
+                Err(Error::Task(_)) => {
+                    std::process::exit(2);
+                }
+            }
         }
 
         Command::Restore {
@@ -91,19 +95,17 @@ async fn main() -> anyhow::Result<()> {
             config,
         } => {
             let config = read_config(config).await?;
-            let cancel = CancellationToken::new();
             let registry = Registry::new_custom(Some("consistent_store".into()), None)
                 .context("Failed to create Prometheus registry")?;
 
-            let metrics = MetricsService::new(metrics_args, registry, cancel.child_token());
-            let h_ctrl_c = handle_interrupt(cancel.clone());
+            let metrics = MetricsService::new(metrics_args, registry);
 
             metrics
                 .registry()
                 .register(uptime(VERSION)?)
                 .context("Failed to register uptime metric")?;
 
-            let h_restorer = start_restorer(
+            let (s_restorer, finalizer) = start_restorer(
                 database_path,
                 formal_snapshot_args,
                 storage_connection_args,
@@ -111,16 +113,29 @@ async fn main() -> anyhow::Result<()> {
                 pipeline.into_iter().collect(),
                 config.rocksdb,
                 metrics.registry(),
-                cancel.child_token(),
             )
             .await?;
 
-            let h_metrics = metrics.run().await?;
+            let s_metrics = metrics.run().await?;
 
-            let _ = h_restorer.await;
-            cancel.cancel();
-            let _ = h_metrics.await;
-            let _ = h_ctrl_c.await;
+            match s_restorer
+                .attach(s_metrics)
+                .main()
+                .and_then(|_| finalizer.run().main())
+                .await
+            {
+                Ok(()) => {}
+
+                // We can only guarantee that the restorer succeeded if it is allowed to complete
+                // without being instructed to exit or abort.
+                Err(Error::Terminated | Error::Aborted) => {
+                    std::process::exit(1);
+                }
+
+                Err(Error::Task(_)) => {
+                    std::process::exit(2);
+                }
+            }
         }
 
         Command::GenerateConfig => {
@@ -145,16 +160,4 @@ async fn read_config(path: Option<PathBuf>) -> anyhow::Result<ServiceConfig> {
     } else {
         Ok(ServiceConfig::default())
     }
-}
-
-fn handle_interrupt(cancel: CancellationToken) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        tokio::select! {
-            _ = cancel.cancelled() => {}
-            _ = signal::ctrl_c() => {
-                info!("Received Ctrl-C, shutting down...");
-                cancel.cancel();
-            }
-        }
-    })
 }

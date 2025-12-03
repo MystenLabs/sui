@@ -14,12 +14,12 @@ use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt::config::Merge;
 use sui_indexer_alt::setup_indexer;
 use sui_indexer_alt_framework::postgres::reset_database;
+use sui_indexer_alt_framework::service::Error;
+use sui_indexer_alt_framework::service::terminate;
 use sui_indexer_alt_metrics::MetricsService;
 use sui_indexer_alt_metrics::uptime;
 use sui_indexer_alt_schema::MIGRATIONS;
 use tokio::fs;
-use tokio::signal;
-use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 // Define the `GIT_REVISION` const
@@ -53,57 +53,57 @@ async fn main() -> Result<()> {
             metrics_args,
             config,
         } => {
+            let is_bounded = indexer_args.last_checkpoint.is_some();
+
             let indexer_config = read_config(&config).await?;
             info!("Starting indexer with config: {:#?}", indexer_config);
-
-            let cancel = CancellationToken::new();
 
             let registry = Registry::new_custom(Some("indexer_alt".into()), None)
                 .context("Failed to create Prometheus registry.")?;
 
-            let metrics = MetricsService::new(metrics_args, registry, cancel.child_token());
-
-            let h_ctrl_c = tokio::spawn({
-                let cancel = cancel.clone();
-                async move {
-                    tokio::select! {
-                        _ = cancel.cancelled() => {}
-                        _ = signal::ctrl_c() => {
-                            info!("Received Ctrl-C, shutting down...");
-                            cancel.cancel();
-                        }
-                    }
-                }
-            });
+            let metrics = MetricsService::new(metrics_args, registry);
 
             metrics
                 .registry()
                 .register(uptime(VERSION)?)
                 .context("Failed to register uptime metric.")?;
 
-            let h_indexer = setup_indexer(
-                database_url,
-                db_args,
-                indexer_args,
-                client_args,
-                indexer_config,
-                None,
-                metrics.registry(),
-                cancel.child_token(),
-            )
-            .await?
-            .run()
-            .await
-            .context("Failed to start indexer")?;
+            let indexer = tokio::select! {
+                _ = terminate() => {
+                    info!("Indexer terminated during setup");
+                    return Ok(());
+                }
 
-            let h_metrics = metrics.run().await?;
+                indexer = setup_indexer(
+                    database_url,
+                    db_args,
+                    indexer_args,
+                    client_args,
+                    indexer_config,
+                    None,
+                    metrics.registry(),
+                ) => {
+                    indexer?
+                }
+            };
 
-            // Wait for the indexer to finish, then force the supporting services to shut down
-            // using the cancellation token.
-            let _ = h_indexer.await;
-            cancel.cancel();
-            let _ = h_metrics.await;
-            let _ = h_ctrl_c.await;
+            let s_indexer = indexer.run().await?;
+            let s_metrics = metrics.run().await?;
+
+            match s_indexer.attach(s_metrics).main().await {
+                Ok(()) => {}
+                Err(Error::Terminated) => {
+                    if is_bounded {
+                        std::process::exit(1);
+                    }
+                }
+                Err(Error::Aborted) => {
+                    std::process::exit(1);
+                }
+                Err(Error::Task(_)) => {
+                    std::process::exit(2);
+                }
+            }
         }
 
         Command::GenerateConfig => {

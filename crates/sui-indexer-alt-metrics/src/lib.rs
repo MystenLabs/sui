@@ -7,8 +7,8 @@ use anyhow::Context;
 use axum::{Extension, Router, http::StatusCode, routing::get};
 use prometheus::{Registry, TextEncoder, core::Collector};
 use prometheus_closure_metric::{ClosureMetric, ValueType};
-use tokio::{net::TcpListener, task::JoinHandle};
-use tokio_util::sync::CancellationToken;
+use sui_futures::service::Service;
+use tokio::{net::TcpListener, sync::oneshot};
 use tracing::info;
 
 pub mod db;
@@ -25,20 +25,17 @@ pub struct MetricsArgs {
 pub struct MetricsService {
     addr: SocketAddr,
     registry: Registry,
-    cancel: CancellationToken,
 }
 
 impl MetricsService {
     /// Create a new instance of the service, listening on the address provided in `args`, serving
-    /// metrics from the `registry`. The service will shut down if the provided `cancel` token is
-    /// cancelled.
+    /// metrics from the `registry`.
     ///
     /// The service will not be run until [Self::run] is called.
-    pub fn new(args: MetricsArgs, registry: Registry, cancel: CancellationToken) -> Self {
+    pub fn new(args: MetricsArgs, registry: Registry) -> Self {
         Self {
             addr: args.metrics_address,
             registry,
-            cancel,
         }
     }
 
@@ -48,12 +45,8 @@ impl MetricsService {
     }
 
     /// Start the service. The service will run until the cancellation token is triggered.
-    pub async fn run(self) -> anyhow::Result<JoinHandle<()>> {
-        let Self {
-            addr,
-            registry,
-            cancel,
-        } = self;
+    pub async fn run(self) -> anyhow::Result<Service> {
+        let Self { addr, registry } = self;
 
         let listener = TcpListener::bind(&self.addr)
             .await
@@ -63,16 +56,20 @@ impl MetricsService {
             .route("/metrics", get(metrics))
             .layer(Extension(registry));
 
-        Ok(tokio::spawn(async move {
-            info!("Starting metrics service on {}", addr);
-            axum::serve(listener, app)
-                .with_graceful_shutdown(async move {
-                    cancel.cancelled().await;
-                    info!("Shutdown received, shutting down metrics service");
-                })
-                .await
-                .unwrap()
-        }))
+        let (stx, srx) = oneshot::channel::<()>();
+        Ok(Service::new()
+            .with_shutdown_signal(async move {
+                let _ = stx.send(());
+            })
+            .spawn(async move {
+                info!("Starting metrics service on {addr}");
+                Ok(axum::serve(listener, app)
+                    .with_graceful_shutdown(async move {
+                        let _ = srx.await;
+                        info!("Shutdown received, shutting down metrics service");
+                    })
+                    .await?)
+            }))
     }
 }
 

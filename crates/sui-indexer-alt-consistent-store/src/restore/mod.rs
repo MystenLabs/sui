@@ -8,11 +8,10 @@ use std::{
 };
 
 use anyhow::{Context as _, ensure};
-use futures::future;
 use prometheus::Registry;
+use sui_indexer_alt_framework::service::Service;
 use sui_indexer_alt_framework::{pipeline::Processor, types::object::Object};
-use tokio::{sync::mpsc, task::JoinHandle};
-use tokio_util::sync::CancellationToken;
+use tokio::sync::mpsc;
 use tracing::{info, warn};
 
 use crate::{
@@ -76,28 +75,19 @@ pub(crate) struct Restorer<S: Schema> {
     /// Channels to send live object partitions down, one per pipeline being restored.
     restore_tx: BTreeMap<String, mpsc::Sender<Arc<LiveObjects>>>,
 
-    /// Handles for tasks spawned by the restorer. They return `Ok(_)` if they complete
-    /// successfully, or `Err(_)` otherwise (they encountered an error, or they were cancelled).
-    handles: Vec<JoinHandle<Result<(), ()>>>,
+    /// Services spawned by the restorer, for individual pipelines.
+    workers: Vec<Service>,
 
     /// Number of object files to download concurrenctly
     object_file_concurrency: usize,
 
     /// Maximum size of the backlog of object files waiting to be processed by one worker.
     object_file_buffer_size: usize,
-
-    /// Cancellation token shared among all continuous tasks in the service.
-    cancel: CancellationToken,
 }
 
-/// Internal type used by tasks to propagate errors or shutdown signals.
-#[derive(thiserror::Error, Debug)]
-enum Break {
-    #[error("Shutdown received")]
-    Cancel,
-
-    #[error(transparent)]
-    Err(#[from] anyhow::Error),
+pub struct Finalizer {
+    db: Arc<Db>,
+    pipelines: Vec<String>,
 }
 
 impl<S: Schema + Send + Sync + 'static> Restorer<S> {
@@ -114,7 +104,6 @@ impl<S: Schema + Send + Sync + 'static> Restorer<S> {
         config: DbConfig,
         metrics_prefix: Option<&str>,
         registry: &Registry,
-        cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
         let RestoreArgs {
             object_file_concurrency,
@@ -144,10 +133,9 @@ impl<S: Schema + Send + Sync + 'static> Restorer<S> {
             snapshot,
             metrics,
             restore_tx: BTreeMap::new(),
-            handles: vec![],
+            workers: vec![],
             object_file_concurrency,
             object_file_buffer_size,
-            cancel,
         })
     }
 
@@ -165,12 +153,11 @@ impl<S: Schema + Send + Sync + 'static> Restorer<S> {
         let watermark = self.snapshot.watermark();
         self.db.restore_at(R::NAME, watermark)?;
 
-        self.handles.push(worker::<S, R>(
+        self.workers.push(worker::<S, R>(
             rx,
             self.db.clone(),
             self.schema.clone(),
             self.metrics.clone(),
-            self.cancel.clone(),
         ));
 
         Ok(())
@@ -179,41 +166,43 @@ impl<S: Schema + Send + Sync + 'static> Restorer<S> {
     /// Start restoring live objects across all registered pipelines. The service will run until it
     /// can confirm that every registered pipeline has been fully restored, at which point, it will
     /// clean up the restoration state and set the watermark for the restored pipeline.
-    fn run(mut self) -> JoinHandle<()> {
+    fn run(self) -> (Service, Finalizer) {
         // Remember the pipelines being restored for the clean-up process.
-        let pipelines: Vec<_> = self.restore_tx.keys().cloned().collect();
-        info!(?pipelines, "Starting restoration");
+        let finalizer = Finalizer {
+            db: self.db.clone(),
+            pipelines: self.restore_tx.keys().cloned().collect(),
+        };
 
-        let broadcaster_h = broadcaster(
+        info!(pipelines = ?finalizer.pipelines, "Starting restoration");
+        let mut service = broadcaster(
             self.object_file_concurrency,
             self.restore_tx,
-            self.db.clone(),
+            self.db,
             self.snapshot,
             self.metrics,
-            self.cancel,
         );
 
-        self.handles.push(broadcaster_h);
+        for worker in self.workers {
+            service = service.merge(worker);
+        }
 
-        tokio::spawn(async move {
-            // Wait for the broadcaster and all workers to wind down gracefully, and then clean up.
-            if future::join_all(self.handles)
-                .await
-                .into_iter()
-                .any(|r| matches!(r, Err(_) | Ok(Err(_))))
-            {
-                warn!("Restoration did not complete successfully, not updating watermarks");
-                return;
-            };
+        (service, finalizer)
+    }
+}
 
-            // Mark each pipeline as restored, setting its watermark.
-            for pipeline in pipelines {
+impl Finalizer {
+    pub fn run(self) -> Service {
+        Service::new().spawn_aborting(async move {
+            // Clean up restoration state for each pipeline.
+            for pipeline in self.pipelines {
                 if let Err(e) = self.db.complete_restore(&pipeline) {
-                    warn!(pipeline, "Failed to finalize restoration: {e:#}");
+                    warn!(pipeline, "Failed to clear restoration state: {e:#}");
                 } else {
-                    info!(pipeline, "Restoration complete");
+                    info!(pipeline, "Restoration state cleared");
                 }
             }
+
+            Ok(())
         })
     }
 }
@@ -228,8 +217,7 @@ impl Default for RestoreArgs {
 }
 
 /// Set-up and run the Restorer, using the provided arguments (expected to be extracted from the
-/// command-line). The service will run until restoration complete, or until the cancellation token
-/// is triggered.
+/// command-line). The service will run until restoration complete.
 ///
 /// `path` is the path to the RocksDB database to restore into. It will be created if it does not
 /// exist. `formal_snapshot_args` describes the formal snapshot source, `connection_args` controls
@@ -243,8 +231,7 @@ pub async fn start_restorer(
     mut pipelines: BTreeSet<String>,
     config: DbConfig,
     registry: &Registry,
-    cancel: CancellationToken,
-) -> anyhow::Result<JoinHandle<()>> {
+) -> anyhow::Result<(Service, Finalizer)> {
     let mut restorer: Restorer<crate::Schema> = Restorer::new(
         path,
         formal_snapshot_args,
@@ -253,7 +240,6 @@ pub async fn start_restorer(
         config,
         Some("restorer"),
         registry,
-        cancel.child_token(),
     )
     .await?;
 

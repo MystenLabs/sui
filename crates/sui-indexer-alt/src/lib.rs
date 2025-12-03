@@ -28,7 +28,6 @@ use sui_indexer_alt_framework::{
 };
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_indexer_alt_schema::MIGRATIONS;
-use tokio_util::sync::CancellationToken;
 use url::Url;
 
 pub mod args;
@@ -46,7 +45,6 @@ pub async fn setup_indexer(
     indexer_config: IndexerConfig,
     bootstrap_genesis: Option<BootstrapGenesis>,
     registry: &Registry,
-    cancel: CancellationToken,
 ) -> anyhow::Result<Indexer<Db>> {
     let IndexerConfig {
         ingestion,
@@ -109,7 +107,6 @@ pub async fn setup_indexer(
         ingestion,
         metrics_prefix,
         registry,
-        cancel.clone(),
     )
     .await?;
 
@@ -157,7 +154,7 @@ pub async fn setup_indexer(
         };
     }
 
-    let genesis = bootstrap(&indexer, retry_interval, cancel.clone(), bootstrap_genesis).await?;
+    let genesis = bootstrap(&indexer, retry_interval, bootstrap_genesis).await?;
 
     // Pipelines that rely on genesis information
     add_concurrent!(KvFeatureFlags(genesis.clone()), kv_feature_flags);
