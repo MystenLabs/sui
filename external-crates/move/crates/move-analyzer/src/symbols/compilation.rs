@@ -44,7 +44,7 @@ use move_compiler::{
 };
 use move_ir_types::location::Loc;
 
-use move_package_alt::{flavor::MoveFlavor, package::RootPackage, schema::PackageName};
+use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
 use move_package_alt_compilation::{
     build_config::BuildConfig,
     build_plan::BuildPlan,
@@ -422,7 +422,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 dependencies.retain(|d| {
                     !cached_pkg_info
                         .dep_names
-                        .contains(&Symbol::from(d.display_name().to_string()))
+                        .contains(&Symbol::from(d.id().to_string()))
                 });
 
                 let deps = cached_pkg_info.deps.clone();
@@ -447,17 +447,17 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 // package names. In the new pkg system, multiple packages with the same name can
                 // exist as the package system will assign unique package ids to them, before
                 // passing them to the compiler.
-                let sorted_deps: Result<Vec<_>> = root_pkg
+                let sorted_deps: Vec<Symbol> = root_pkg
                     .sorted_deps_ids()
                     .into_iter()
-                    .map(|x| PackageName::new(x.to_string()))
+                    .map(|x| Symbol::from(x.to_string()))
                     .collect();
                 if let Some((program_deps, dep_names)) = compute_pre_compiled_dep_data(
                     &mut cached_packages.compiled_dep_pkgs,
                     mapped_files_data.dep_pkg_paths,
                     src_deps,
                     root_pkg_name,
-                    &sorted_deps?,
+                    &sorted_deps,
                     compiler_flags,
                     overlay_fs_root.clone(),
                 ) {
@@ -709,7 +709,7 @@ fn compute_pre_compiled_dep_data(
     mut dep_paths: BTreeMap<Symbol, PathBuf>,
     mut src_deps: BTreeMap<Symbol, PackagePaths>,
     root_package_name: Symbol,
-    topological_order: &[PackageName],
+    topological_order: &[Symbol],
     compiler_flags: Flags,
     vfs_root: VfsPath,
 ) -> Option<(Arc<PreCompiledProgramInfo>, BTreeSet<Symbol>)> {
