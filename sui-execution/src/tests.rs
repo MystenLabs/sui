@@ -141,3 +141,61 @@ impl Packages {
         self.normal_edges(pkg).map(move |(_, to)| to)
     }
 }
+
+#[cfg(test)]
+mod adapter_vm_v2_tests {
+    use sui_protocol_config::ProtocolConfig;
+
+    #[test]
+    fn test_executor_with_old_adapter_old_vm() {
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+
+        // By default both adapter v2 and vm v2 are disabled.
+
+        let executor_result = crate::executor(&protocol_config, true);
+
+        assert!(
+            executor_result.is_ok(),
+            "Executor should be created successfully with VM v2 enabled"
+        );
+
+        assert!(!protocol_config.get_use_adapter_v2());
+        assert!(!protocol_config.get_use_vm_v2());
+    }
+
+    #[test]
+    fn test_executor_with_new_adapter_old_vm() {
+        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+
+        // Enable Adapter v2 (old vm + new adapter)
+        protocol_config.set_enable_adapter_v2_for_testing(true);
+
+        let executor_result = crate::executor(&protocol_config, true);
+
+        assert!(
+            executor_result.is_ok(),
+            "Executor should be created successfully with VM v2 enabled"
+        );
+
+        assert!(protocol_config.get_use_adapter_v2());
+        assert!(!protocol_config.get_use_vm_v2());
+    }
+    #[test]
+    fn test_executor_with_new_adapter_new_vm() {
+        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+
+        // Enable Adapter v2 (new vm + new adapter)
+        protocol_config.set_enable_adapter_v2_for_testing(true);
+        protocol_config.set_enable_vm_v2_for_testing(true);
+
+        let executor_result = crate::executor(&protocol_config, true);
+
+        assert!(
+            executor_result.is_ok(),
+            "Executor should be created successfully with VM v2 enabled"
+        );
+
+        assert!(protocol_config.get_use_adapter_v2());
+        assert!(protocol_config.get_use_vm_v2());
+    }
+}

@@ -4548,6 +4548,14 @@ impl ProtocolConfig {
         self.feature_flags.correct_gas_payment_limit_check = val;
     }
 
+    pub fn set_enable_vm_v2_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_vm_v2 = val;
+    }
+
+    pub fn set_enable_adapter_v2_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_adapter_v2 = val;
+    }
+
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {
         self.feature_flags
             .consensus_round_prober_probe_accepted_rounds = val;
