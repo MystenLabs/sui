@@ -1416,7 +1416,7 @@ pub(crate) fn abstract_size(protocol_config: &ProtocolConfig, v: &Value) -> Abst
         v.abstract_memory_size(&SizeConfig {
             include_vector_size: true,
             traverse_references: false,
-            fine_grained_value_size: protocol_config.enable_ptb_execution_v2(),
+            fine_grained_value_size: true,
         })
     } else {
         // TODO: Remove this (with glee!) in the next execution version cut.
