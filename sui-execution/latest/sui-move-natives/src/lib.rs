@@ -1397,9 +1397,8 @@ macro_rules! charge_cache_or_load_gas {
             CacheInfo::Loaded(bytes_opt) => {
                 let config = get_extension!($context, ObjectRuntime)?.protocol_config;
                 if config.object_runtime_charge_cache_load_gas() {
-                    let bytes = bytes_opt.unwrap_or(0);
-                    let cost = bytes.max(128);
-                    native_charge_gas_early_exit!($context, InternalGas::new(cost as u64));
+                    let bytes = bytes_opt.unwrap_or(0).max(1);
+                    native_charge_gas_early_exit!($context, InternalGas::new(bytes as u64));
                 }
             }
         }
