@@ -16308,6 +16308,7 @@ dependencies = [
  "sui-types",
  "tabled",
  "telemetry-subscribers",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "toml 0.7.4",
