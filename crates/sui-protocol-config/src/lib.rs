@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 104;
+const MAX_PROTOCOL_VERSION: u64 = 105;
 
 // Record history of protocol version allocations here:
 //
@@ -278,6 +278,7 @@ const MAX_PROTOCOL_VERSION: u64 = 104;
 // Version 103: Framework update: internal Coin methods
 // Version 104: Framework update: CoinRegistry follow up for Coin methods
 //              Enable all non-zero PCRs parsing for nitro attestation native function in Devnet and Testnet.
+// Version 105: Enable multi-epoch transaction expiration.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -778,6 +779,10 @@ struct FeatureFlags {
     // Enable address balance gas payments
     #[serde(skip_serializing_if = "is_false")]
     enable_address_balance_gas_payments: bool,
+
+    // Enable multi-epoch transaction expiration (max 1 epoch difference)
+    #[serde(skip_serializing_if = "is_false")]
+    enable_multi_epoch_transaction_expiration: bool,
 
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
@@ -2035,6 +2040,10 @@ impl ProtocolConfig {
 
     pub fn enable_address_balance_gas_payments(&self) -> bool {
         self.feature_flags.enable_address_balance_gas_payments
+    }
+
+    pub fn enable_multi_epoch_transaction_expiration(&self) -> bool {
+        self.feature_flags.enable_multi_epoch_transaction_expiration
     }
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
@@ -4293,6 +4302,9 @@ impl ProtocolConfig {
                             .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
                     }
                 }
+                105 => {
+                    cfg.feature_flags.enable_multi_epoch_transaction_expiration = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4598,6 +4610,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
         self.feature_flags.enable_address_balance_gas_payments = true;
+    }
+
+    pub fn enable_multi_epoch_transaction_expiration_for_testing(&mut self) {
+        self.feature_flags.enable_multi_epoch_transaction_expiration = true;
     }
 
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
