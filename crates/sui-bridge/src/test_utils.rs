@@ -150,15 +150,15 @@ pub fn get_test_authorities_and_run_mock_bridge_server(
 ) {
     assert_eq!(voting_power.len(), mock_handlers.len());
     let (handles, ports) = run_mock_bridge_server(mock_handlers);
-    let mut authorites = vec![];
+    let mut authorities = vec![];
     let mut secrets = vec![];
     for (port, vp) in ports.iter().zip(voting_power) {
         let (authority, _, secret) = get_test_authority_and_key(vp, *port);
-        authorites.push(authority);
+        authorities.push(authority);
         secrets.push(secret);
     }
 
-    (handles, authorites, secrets)
+    (handles, authorities, secrets)
 }
 
 pub fn sign_action_with_key(
@@ -219,7 +219,7 @@ pub fn mock_get_logs(
 }
 
 /// Returns a test Log and corresponding BridgeAction
-// Refernece: https://github.com/rust-ethereum/ethabi/blob/master/ethabi/src/event.rs#L192
+// Reference: https://github.com/rust-ethereum/ethabi/blob/master/ethabi/src/event.rs#L192
 pub fn get_test_log_and_action(
     contract_address: EthAddress,
     tx_hash: TxHash,
@@ -230,7 +230,7 @@ pub fn get_test_log_and_action(
     let source_address = EthAddress::random();
     let sui_address: SuiAddress = SuiAddress::random_for_testing_only();
     let target_address = Hex::decode(&sui_address.to_string()).unwrap();
-    // Note: must use `encode` rather than `encode_packged`
+    // Note: must use `encode` rather than `encode_packaged`
     let encoded = ethers::abi::encode(&[
         // u8/u64 is encoded as u256 in abi standard
         ethers::abi::Token::Uint(ethers::types::U256::from(token_id)),
@@ -294,10 +294,11 @@ pub async fn bridge_token(
     let sender = context.active_address().unwrap();
     let gas_object = context.get_one_gas_object().await.unwrap().unwrap().1;
     let tx = TestTransactionBuilder::new(sender, gas_object, rgp)
-        .move_call(
+        .move_call_with_type_args(
             BRIDGE_PACKAGE_ID,
             "bridge",
             "send_token",
+            vec![token_type],
             vec![
                 CallArg::Object(bridge_object_arg),
                 CallArg::Pure(bcs::to_bytes(&(BridgeChainId::EthCustom as u8)).unwrap()),
@@ -305,7 +306,6 @@ pub async fn bridge_token(
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(token_ref)),
             ],
         )
-        .with_type_args(vec![token_type])
         .build();
     let signed_tn = context.sign_transaction(&tx).await;
     let resp = context.execute_transaction_must_succeed(signed_tn).await;
@@ -393,7 +393,7 @@ pub async fn approve_action_with_validator_secrets(
         }
     }
     panic!(
-        "Didn't find the creted object owned by {}",
+        "Didn't find the created object owned by {}",
         expected_token_receiver
     );
 }

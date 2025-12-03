@@ -225,59 +225,57 @@ impl Payload for RandomizedTransactionPayload {
 
         let config = generate_random_transaction_config(self.shared_objects.len() as u64);
 
-        let mut builder = ProgrammableTransactionBuilder::new();
+        let mut tx_builder = TestTransactionBuilder::new(self.gas.1, self.gas.0, rgp);
+        {
+            let builder = tx_builder.ptb_builder_mut();
 
-        // Generate inputs in addition to move calls.
-        if config.contain_owned_object {
-            builder
-                .obj(ObjectArg::ImmOrOwnedObject(self.owned_object))
-                .unwrap();
-        }
-        for i in 0..config.num_shared_inputs {
-            builder
-                .obj(ObjectArg::SharedObject {
-                    id: self.shared_objects[i as usize].0,
-                    initial_shared_version: self.shared_objects[i as usize].1,
-                    mutability: if rand::thread_rng().gen_bool(0.5) {
-                        SharedObjectMutability::Mutable
-                    } else {
-                        SharedObjectMutability::Immutable
-                    },
-                })
-                .unwrap();
-        }
-        for _i in 0..config.num_pure_input {
-            let len = rand::thread_rng().gen_range(0..=3);
-            let mut bytes = vec![0u8; len];
-            rand::thread_rng().fill(&mut bytes[..]);
-            builder.pure_bytes(bytes, false);
-        }
+            // Generate inputs in addition to move calls.
+            if config.contain_owned_object {
+                builder
+                    .obj(ObjectArg::ImmOrOwnedObject(self.owned_object))
+                    .unwrap();
+            }
+            for i in 0..config.num_shared_inputs {
+                builder
+                    .obj(ObjectArg::SharedObject {
+                        id: self.shared_objects[i as usize].0,
+                        initial_shared_version: self.shared_objects[i as usize].1,
+                        mutability: if rand::thread_rng().gen_bool(0.5) {
+                            SharedObjectMutability::Mutable
+                        } else {
+                            SharedObjectMutability::Immutable
+                        },
+                    })
+                    .unwrap();
+            }
+            for _i in 0..config.num_pure_input {
+                let len = rand::thread_rng().gen_range(0..=3);
+                let mut bytes = vec![0u8; len];
+                rand::thread_rng().fill(&mut bytes[..]);
+                builder.pure_bytes(bytes, false);
+            }
 
-        // Generate move calls.
-        let mut next_shared_input_index: usize = 0;
-        for _i in 0..config.num_move_calls {
-            match choose_move_call_type(next_shared_input_index, config.num_shared_inputs) {
-                MoveCallType::ContractCall => {
-                    self.make_counter_move_call(&mut builder, next_shared_input_index);
-                    next_shared_input_index += 1;
-                }
-                MoveCallType::Randomness => {
-                    self.make_randomness_move_call(&mut builder);
-                    // TODO: add TransferObject move call after randomness command.
-                    break;
-                }
-                MoveCallType::NativeCall => {
-                    self.make_native_move_call(&mut builder);
+            // Generate move calls.
+            let mut next_shared_input_index: usize = 0;
+            for _i in 0..config.num_move_calls {
+                match choose_move_call_type(next_shared_input_index, config.num_shared_inputs) {
+                    MoveCallType::ContractCall => {
+                        self.make_counter_move_call(builder, next_shared_input_index);
+                        next_shared_input_index += 1;
+                    }
+                    MoveCallType::Randomness => {
+                        self.make_randomness_move_call(builder);
+                        // TODO: add TransferObject move call after randomness command.
+                        break;
+                    }
+                    MoveCallType::NativeCall => {
+                        self.make_native_move_call(builder);
+                    }
                 }
             }
         }
-        let tx = builder.finish();
 
-        tracing::info!("Randomized transaction: {:?}", tx);
-
-        let signed_tx = TestTransactionBuilder::new(self.gas.1, self.gas.0, rgp)
-            .programmable(tx)
-            .build_and_sign(self.gas.2.as_ref());
+        let signed_tx = tx_builder.build_and_sign(self.gas.2.as_ref());
 
         tracing::debug!("Signed transaction digest: {:?}", signed_tx.digest());
         signed_tx

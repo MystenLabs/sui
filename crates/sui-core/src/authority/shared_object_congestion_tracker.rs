@@ -418,7 +418,6 @@ mod object_cost_tests {
     use sui_types::Identifier;
     use sui_types::base_types::{SequenceNumber, random_object_ref};
     use sui_types::crypto::{AccountKeyPair, get_key_pair};
-    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability, VerifiedTransaction};
 
     fn construct_shared_input_objects(objects: &[(ObjectID, bool)]) -> Vec<SharedInputObject> {
@@ -534,41 +533,39 @@ mod object_cost_tests {
         let gas_object = random_object_ref();
 
         let package_id = ObjectID::random();
-        let mut pt_builder = ProgrammableTransactionBuilder::new();
-        let mut arguments = Vec::new();
-        for object in objects {
-            arguments.push(
-                pt_builder
-                    .obj(ObjectArg::SharedObject {
-                        id: object.0,
-                        initial_shared_version: SequenceNumber::new(),
-                        mutability: if object.1 {
-                            SharedObjectMutability::Mutable
-                        } else {
-                            SharedObjectMutability::Immutable
-                        },
-                    })
-                    .unwrap(),
-            );
-        }
-        for _ in 0..number_of_commands {
-            pt_builder.programmable_move_call(
-                package_id,
-                Identifier::new("unimportant_module").unwrap(),
-                Identifier::new("unimportant_function").unwrap(),
-                vec![],
-                arguments.clone(),
-            );
+        let mut tx_builder =
+            TestTransactionBuilder::new(sender, gas_object, 1000).with_gas_budget(gas_budget);
+        {
+            let pt_builder = tx_builder.ptb_builder_mut();
+            let mut arguments = Vec::new();
+            for object in objects {
+                arguments.push(
+                    pt_builder
+                        .obj(ObjectArg::SharedObject {
+                            id: object.0,
+                            initial_shared_version: SequenceNumber::new(),
+                            mutability: if object.1 {
+                                SharedObjectMutability::Mutable
+                            } else {
+                                SharedObjectMutability::Immutable
+                            },
+                        })
+                        .unwrap(),
+                );
+            }
+            for _ in 0..number_of_commands {
+                pt_builder.programmable_move_call(
+                    package_id,
+                    Identifier::new("unimportant_module").unwrap(),
+                    Identifier::new("unimportant_function").unwrap(),
+                    vec![],
+                    arguments.clone(),
+                );
+            }
         }
 
-        let pt = pt_builder.finish();
         VerifiedExecutableTransaction::new_system(
-            VerifiedTransaction::new_unchecked(
-                TestTransactionBuilder::new(sender, gas_object, 1000)
-                    .with_gas_budget(gas_budget)
-                    .programmable(pt)
-                    .build_and_sign(&keypair),
-            ),
+            VerifiedTransaction::new_unchecked(tx_builder.build_and_sign(&keypair)),
             0,
         )
     }

@@ -7,7 +7,6 @@ use move_core_types::identifier::Identifier;
 use std::collections::HashMap;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
     CallArg, DEFAULT_VALIDATOR_GAS_PRICE, ObjectArg, SharedObjectMutability, Transaction,
 };
@@ -52,8 +51,13 @@ impl MoveTxGenerator {
 
 impl TxGenerator for MoveTxGenerator {
     fn generate_tx(&self, account: Account) -> Transaction {
-        let pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
+        let mut tx_builder = TestTransactionBuilder::new(
+            account.sender,
+            account.gas_objects[0],
+            DEFAULT_VALIDATOR_GAS_PRICE,
+        );
+        {
+            let builder = tx_builder.ptb_builder_mut();
             // Step 1: transfer `num_transfers` objects.
             // First object in the gas_objects is the gas object and we are not transferring it.
             for i in 1..=self.num_transfers {
@@ -157,15 +161,8 @@ impl TxGenerator for MoveTxGenerator {
                     }
                 }
             }
-            builder.finish()
-        };
-        TestTransactionBuilder::new(
-            account.sender,
-            account.gas_objects[0],
-            DEFAULT_VALIDATOR_GAS_PRICE,
-        )
-        .programmable(pt)
-        .build_and_sign(account.keypair.as_ref())
+        }
+        tx_builder.build_and_sign(account.keypair.as_ref())
     }
 
     fn name(&self) -> &'static str {

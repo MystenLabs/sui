@@ -308,7 +308,7 @@ async fn test_simulate_transaction_basic() {
         transaction.sender.address,
         validator_cluster.get_address_0().to_string()
     );
-    assert_eq!(transaction.gas_input.gas_budget, "10000000");
+    assert_eq!(transaction.gas_input.gas_budget, "5000000000");
 
     // For simulation, signatures should be empty since we don't provide them
     assert_eq!(transaction.signatures.len(), 0);

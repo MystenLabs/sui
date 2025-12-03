@@ -16,7 +16,6 @@ use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::object::Owner;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use sui_types::{Identifier, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::{
@@ -59,39 +58,38 @@ impl Payload for RandomnessTestPayload {
             .borrow()
             .reference_gas_price;
 
-        let mut builder = ProgrammableTransactionBuilder::new();
-        builder
-            .move_call(
-                self.package_id,
-                Identifier::new("counter").unwrap(),
-                Identifier::new("increment").unwrap(),
-                vec![],
-                vec![CallArg::Object(ObjectArg::SharedObject {
-                    id: self.counter_id,
-                    initial_shared_version: self.counter_initial_shared_version,
-                    mutability: SharedObjectMutability::Mutable,
-                })],
-            )
-            .unwrap();
-        builder
-            .move_call(
-                self.package_id,
-                Identifier::new("random").unwrap(),
-                Identifier::new("new").unwrap(),
-                vec![],
-                vec![CallArg::Object(ObjectArg::SharedObject {
-                    id: SUI_RANDOMNESS_STATE_OBJECT_ID,
-                    initial_shared_version: self.randomness_initial_shared_version,
-                    mutability: SharedObjectMutability::Immutable,
-                })],
-            )
-            .unwrap();
+        let mut tx_builder = TestTransactionBuilder::new(self.gas.1, self.gas.0, rgp);
+        {
+            let builder = tx_builder.ptb_builder_mut();
+            builder
+                .move_call(
+                    self.package_id,
+                    Identifier::new("counter").unwrap(),
+                    Identifier::new("increment").unwrap(),
+                    vec![],
+                    vec![CallArg::Object(ObjectArg::SharedObject {
+                        id: self.counter_id,
+                        initial_shared_version: self.counter_initial_shared_version,
+                        mutability: SharedObjectMutability::Mutable,
+                    })],
+                )
+                .unwrap();
+            builder
+                .move_call(
+                    self.package_id,
+                    Identifier::new("random").unwrap(),
+                    Identifier::new("new").unwrap(),
+                    vec![],
+                    vec![CallArg::Object(ObjectArg::SharedObject {
+                        id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                        initial_shared_version: self.randomness_initial_shared_version,
+                        mutability: SharedObjectMutability::Immutable,
+                    })],
+                )
+                .unwrap();
+        }
 
-        let tx = builder.finish();
-
-        TestTransactionBuilder::new(self.gas.1, self.gas.0, rgp)
-            .programmable(tx)
-            .build_and_sign(self.gas.2.as_ref())
+        tx_builder.build_and_sign(self.gas.2.as_ref())
     }
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
         None
