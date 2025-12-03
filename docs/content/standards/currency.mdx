@@ -117,7 +117,9 @@ Currency created with the `new_currency` function is immediately complete after 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize" signatureOnly />
 
 If you publish a package that uses an OTW to create a coin in the package `init` function, then a call must be made to `coin_registry::finalize_registration` after initialization. The function transforms the coin into a shared object.
-
+:::caution OTW currencies 
+For OTW created currencies, you **must** call `finalize_registration` to promote the currency to the registry.
+:::
 
 {/* Add a code sample for how to call the function */}
 
