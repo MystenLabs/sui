@@ -79,6 +79,7 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
     build_config: &BuildConfig,
     compiler_driver: impl FnOnce(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
 ) -> Result<CompiledPackage> {
+    let instant = std::time::Instant::now();
     let project_root = root_pkg.package_path().to_path_buf();
     let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
     let package_name = Symbol::from(root_pkg.name().as_str());
@@ -88,6 +89,10 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
             compiler_driver(compiler)
         })?;
 
+    eprintln!(
+        "Time passed after build_for_driver {:#?}",
+        instant.elapsed()
+    );
     let mut all_compiled_units_vec = vec![];
     let mut root_compiled_units = vec![];
     let mut deps_compiled_units = vec![];
@@ -96,6 +101,7 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
     // this has to match whatever we're doing in build_for_driver function
     let root_package_name = Symbol::from(package_name.to_string());
 
+    let compiled_units_instant = std::time::Instant::now();
     for mut annot_unit in all_compiled_units {
         let source_path = PathBuf::from(
             file_map
@@ -125,6 +131,12 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
         }
         all_compiled_units_vec.push((unit.source_path, unit.unit));
     }
+    eprintln!(
+        "Time passed for all compiled units processing {:#?}",
+        compiled_units_instant.elapsed()
+    );
+
+    eprintln!("Build config docs {:#?}", build_config.generate_docs);
 
     let mut compiled_docs = None;
 
@@ -167,6 +179,7 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
         build_flags: build_config.clone(),
     };
 
+    let i = std::time::Instant::now();
     let under_path = shared::get_build_output_path(&project_root, build_config);
 
     save_to_disk(
@@ -177,7 +190,9 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
         package_name,
         under_path,
     )?;
+    eprintln!("Time to save compiled package {:#?}", i.elapsed());
 
+    eprintln!("Time to compile package {:#?}", instant.elapsed());
     let compiled_package = CompiledPackage {
         compiled_package_info,
         root_compiled_units,
@@ -197,8 +212,12 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     root_pkg: &RootPackage<F>,
     compiler_driver: impl FnOnce(Compiler) -> Result<T>,
 ) -> Result<T> {
+    let instant = std::time::Instant::now();
+    let i = instant.clone();
+    // TODO: pkg-alt this seems to add more packages for the compiler than necessary.
     let packages = root_pkg.packages();
     let package_paths = make_deps_for_compiler(w, packages, build_config)?;
+    eprintln!("Source packages paths size: {}", package_paths.len());
 
     debug!("Package paths {:#?}", package_paths);
 
@@ -212,7 +231,6 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     let lint_level = build_config.lint_flag.get();
     let sui_mode = build_config.default_flavor == Some(Flavor::Sui);
     let flags = compiler_flags(build_config);
-
     let mut compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
         .unwrap()
         .set_flags(flags);
@@ -227,7 +245,16 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
         .add_custom_known_filters(filter_attr_name, filters)
         .add_visitors(linters::linter_visitors(lint_level));
 
-    compiler_driver(compiler)
+    eprintln!(
+        "Time to setup compiler from package paths {:#?}",
+        i.elapsed()
+    );
+    let result = compiler_driver(compiler)?;
+    eprintln!(
+        "Time to finish compiling and configuring the driver compiler {:#?}",
+        instant.elapsed()
+    );
+    Ok(result)
 }
 
 /// Save the compiled package to disk
