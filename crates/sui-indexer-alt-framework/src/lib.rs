@@ -483,6 +483,11 @@ mod tests {
     #[async_trait]
     impl Processor for ControllableHandler {
         const NAME: &'static str = "controllable";
+        /// The checkpoints to process come out of order. To account for potential flakiness in test
+        /// `test_tasked_pipelines_skip_checkpoints_trailing_main_reader_lo`, we set the FANOUT to
+        /// the total number of checkpoints to process, so we can ensure the correct checkpoints are
+        /// processed.
+        const FANOUT: usize = 501;
         type Value = MockValue;
 
         async fn process(
@@ -1960,7 +1965,7 @@ mod tests {
 
     /// During a run, the tasked pipeline will stop sending checkpoints below the main pipeline's
     /// reader watermark to the committer. Committer watermark should still advance.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn test_tasked_pipelines_skip_checkpoints_trailing_main_reader_lo() {
         let cancel = CancellationToken::new();
         let registry = Registry::new();
@@ -2077,8 +2082,7 @@ mod tests {
         let lt_250 = data.iter().filter(|e| *e.key() < 250).count();
         // Checkpoints 250 to 500 inclusive must have been committed.
         assert_eq!(ge_250, 251);
-        // Lenient check that not all checkpoints < 250 were committed.
-        assert!(lt_250 < 250);
+        assert_eq!(lt_250, 11);
         assert_eq!(
             conn.committer_watermark(
                 &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap()
