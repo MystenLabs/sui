@@ -9,8 +9,8 @@ use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl};
 use move_core_types::language_storage::StructTag;
 use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 use sui_types::{
+    SUI_FRAMEWORK_ADDRESS, TypeTag,
     coin::{COIN_METADATA_STRUCT_NAME, COIN_MODULE_NAME},
-    TypeTag, SUI_FRAMEWORK_ADDRESS,
 };
 
 use crate::{error::Error, pg_reader::PgReader};

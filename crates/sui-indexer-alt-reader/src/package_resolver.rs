@@ -10,7 +10,7 @@ use diesel::{
 };
 use move_core_types::account_address::AccountAddress;
 use sui_indexer_alt_schema::schema::kv_packages;
-use sui_package_resolver::{error::Error, Package, PackageStore, PackageStoreWithLruCache, Result};
+use sui_package_resolver::{Package, PackageStore, PackageStoreWithLruCache, Result, error::Error};
 use sui_types::object::Object;
 
 use crate::pg_reader::PgReader;

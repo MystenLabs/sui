@@ -9,7 +9,7 @@ use x509_parser::public_key::PublicKey;
 use x509_parser::time::ASN1Time;
 use x509_parser::x509::SubjectPublicKeyInfo;
 
-use crate::error::{SuiError, SuiResult};
+use crate::error::{SuiError, SuiErrorKind, SuiResult};
 
 use ciborium::value::{Integer, Value};
 use once_cell::sync::Lazy;
@@ -89,7 +89,7 @@ impl fmt::Display for NitroAttestationVerifyError {
 
 impl From<NitroAttestationVerifyError> for SuiError {
     fn from(err: NitroAttestationVerifyError) -> Self {
-        SuiError::NitroAttestationFailedToVerify(err.to_string())
+        SuiErrorKind::NitroAttestationFailedToVerify(err.to_string()).into()
     }
 }
 
@@ -97,9 +97,14 @@ impl From<NitroAttestationVerifyError> for SuiError {
 pub fn parse_nitro_attestation(
     attestation_bytes: &[u8],
     is_upgraded_parsing: bool,
+    include_all_nonzero_pcrs: bool,
 ) -> SuiResult<(Vec<u8>, Vec<u8>, AttestationDocument)> {
     let cose_sign1 = CoseSign1::parse_and_validate(attestation_bytes)?;
-    let doc = AttestationDocument::parse_payload(&cose_sign1.payload, is_upgraded_parsing)?;
+    let doc = AttestationDocument::parse_payload(
+        &cose_sign1.payload,
+        is_upgraded_parsing,
+        include_all_nonzero_pcrs,
+    )?;
     let msg = cose_sign1.to_signed_message()?;
     let signature = cose_sign1.signature;
     Ok((signature, msg, doc))
@@ -291,7 +296,7 @@ impl CoseSign1 {
             Some(_) => {
                 return Err(NitroAttestationVerifyError::InvalidCoseSign1(
                     "invalid tag".to_string(),
-                ))
+                ));
             }
         }
 
@@ -363,7 +368,7 @@ impl CoseSign1 {
         // 17 for extra metadata bytes
         let mut bytes = Vec::with_capacity(self.protected.len() + self.payload.len() + 17);
         ciborium::ser::into_writer(&value, &mut bytes).map_err(|_| {
-            SuiError::NitroAttestationFailedToVerify("cannot parse message".to_string())
+            SuiErrorKind::NitroAttestationFailedToVerify("cannot parse message".to_string())
         })?;
         Ok(bytes)
     }
@@ -391,9 +396,10 @@ impl AttestationDocument {
     pub fn parse_payload(
         payload: &[u8],
         is_upgraded_parsing: bool,
+        include_all_nonzero_pcrs: bool,
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
         let document_map = Self::to_map(payload, is_upgraded_parsing)?;
-        Self::validate_document_map(&document_map, is_upgraded_parsing)
+        Self::validate_document_map(&document_map, is_upgraded_parsing, include_all_nonzero_pcrs)
     }
 
     fn to_map(
@@ -435,7 +441,7 @@ impl AttestationDocument {
                 return Err(NitroAttestationVerifyError::InvalidAttestationDoc(format!(
                     "expected map, got {:?}",
                     document_data
-                )))
+                )));
             }
         };
         Ok(document_map)
@@ -444,6 +450,7 @@ impl AttestationDocument {
     fn validate_document_map(
         document_map: &BTreeMap<String, Value>,
         is_upgraded_parsing: bool,
+        include_all_nonzero_pcrs: bool,
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
         let module_id = document_map
             .get("module_id")
@@ -527,12 +534,12 @@ impl AttestationDocument {
             .and_then(|v| v.as_bytes())
             .map(|bytes| bytes.to_vec());
 
-        if let Some(data) = &user_data {
-            if data.len() > MAX_USER_DATA_LENGTH {
-                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
-                    "invalid user data".to_string(),
-                ));
-            }
+        if let Some(data) = &user_data
+            && data.len() > MAX_USER_DATA_LENGTH
+        {
+            return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "invalid user data".to_string(),
+            ));
         }
 
         let nonce = document_map
@@ -540,12 +547,12 @@ impl AttestationDocument {
             .and_then(|v| v.as_bytes())
             .map(|bytes| bytes.to_vec());
 
-        if let Some(data) = &nonce {
-            if data.len() > MAX_USER_DATA_LENGTH {
-                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
-                    "invalid nonce".to_string(),
-                ));
-            }
+        if let Some(data) = &nonce
+            && data.len() > MAX_USER_DATA_LENGTH
+        {
+            return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "invalid nonce".to_string(),
+            ));
         }
 
         let (pcr_vec, pcr_map) = document_map
@@ -604,19 +611,26 @@ impl AttestationDocument {
                             )
                         })?;
 
-                        // Valid PCR indices are 0, 1, 2, 3, 4, 8 for AWS. Ignores other keys.
-                        // See: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where>
-                        if !matches!(key_u8, 0 | 1 | 2 | 3 | 4 | 8) {
-                            continue;
-                        }
-
                         if pcr_map.contains_key(&key_u8) {
                             return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
                                 format!("duplicate PCR index {}", key_u8),
                             ));
                         }
 
-                        pcr_map.insert(key_u8, value.to_vec());
+                        if include_all_nonzero_pcrs {
+                            // If flag=true, parse all 0..31 PCRs, but skip all-zero values.
+                            // See: <https://github.com/aws/aws-nitro-enclaves-nsm-api/issues/18#issuecomment-970172662>
+                            // Also: <https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/nsm-test/src/bin/nsm-check.rs#L193-L199>
+                            if key_u8 <= 31 && !value.iter().all(|&b| b == 0) {
+                                pcr_map.insert(key_u8, value.to_vec());
+                            }
+                        } else {
+                            // In legacy mode (flag=false): Parse only specific PCRs (0, 1, 2, 3, 4, 8), including zero values.
+                            // See: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where>
+                            if matches!(key_u8, 0 | 1 | 2 | 3 | 4 | 8) {
+                                pcr_map.insert(key_u8, value.to_vec());
+                            }
+                        }
                     }
                 }
                 Ok((pcr_vec, pcr_map))

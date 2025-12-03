@@ -13,9 +13,10 @@ use move_binary_format::file_format::{
 };
 use sui_package_resolver::{DataDef, FunctionDef, MoveData, VariantDef};
 use sui_rpc::proto::sui::rpc::v2::{
-    datatype_descriptor::DatatypeKind, function_descriptor::Visibility, open_signature::Reference,
-    open_signature_body::Type as SignatureType, Ability, DatatypeDescriptor, FieldDescriptor,
-    FunctionDescriptor, Module, OpenSignature, OpenSignatureBody, TypeParameter, VariantDescriptor,
+    Ability, DatatypeDescriptor, FieldDescriptor, FunctionDescriptor, Module, OpenSignature,
+    OpenSignatureBody, TypeParameter, VariantDescriptor, datatype_descriptor::DatatypeKind,
+    function_descriptor::Visibility, open_signature::Reference,
+    open_signature_body::Type as SignatureType,
 };
 use sui_types::base_types::ObjectID;
 

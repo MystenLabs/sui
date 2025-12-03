@@ -9,7 +9,25 @@
 //! directly to avoid going through the BCS machinery.
 
 use fastcrypto::traits::ToFromBytes;
-use sui_sdk_types::*;
+use sui_sdk_types::{
+    self, ActiveJwk, Address, Argument, AuthenticatorStateExpire, Bitmap, Bls12381PublicKey,
+    Bls12381Signature, CanceledTransaction, CanceledTransactionV2, ChangeEpoch,
+    CheckpointCommitment, CheckpointContents, CheckpointData, CheckpointSummary, Command,
+    CommandArgumentError, ConsensusDeterminedVersionAssignments, Digest, Ed25519PublicKey,
+    Ed25519Signature, EndOfEpochTransactionKind, ExecutionError, ExecutionStatus,
+    ExecutionTimeObservationKey, ExecutionTimeObservations, IdOperation, Identifier, Input, Jwk,
+    JwkId, MakeMoveVector, MergeCoins, MoveCall, MoveLocation, MovePackage,
+    MultisigMemberPublicKey, MultisigMemberSignature, Object, ObjectIn, ObjectOut, ObjectReference,
+    Owner, PackageUpgradeError, PasskeyAuthenticator, PasskeyPublicKey, Publish,
+    Secp256k1PublicKey, Secp256k1Signature, Secp256r1PublicKey, Secp256r1Signature,
+    SignatureScheme, SignedCheckpointSummary, SignedTransaction, SimpleSignature, SplitCoins,
+    StructTag, SystemPackage, Transaction, TransactionEffects, TransactionEffectsV1,
+    TransactionEffectsV2, TransactionEvents, TransactionExpiration, TransactionKind,
+    TransferObjects, TypeArgumentError, TypeParseError, TypeTag, UnchangedConsensusKind, Upgrade,
+    UserSignature, ValidatorAggregatedSignature, ValidatorCommittee, ValidatorCommitteeMember,
+    ValidatorExecutionTimeObservation, VersionAssignment, VersionAssignmentV2,
+    ZkLoginAuthenticator, ZkLoginPublicIdentifier,
+};
 use tap::Pipe;
 
 use crate::crypto::SuiSignature as _;
@@ -314,13 +332,7 @@ pub fn struct_tag_core_to_sdk(
         .into_iter()
         .map(type_tag_core_to_sdk)
         .collect::<Result<_, _>>()?;
-    StructTag {
-        address,
-        module,
-        name,
-        type_params,
-    }
-    .pipe(Ok)
+    StructTag::new(address, module, name, type_params).pipe(Ok)
 }
 
 pub fn type_tag_sdk_to_core(
@@ -349,18 +361,17 @@ pub fn type_tag_sdk_to_core(
 pub fn struct_tag_sdk_to_core(
     value: StructTag,
 ) -> Result<move_core_types::language_storage::StructTag, SdkTypeConversionError> {
-    let StructTag {
-        address,
-        module,
-        name,
-        type_params,
-    } = value;
+    let address = value.address();
+    let module = value.module();
+    let name = value.name();
+    let type_params = value.type_params();
 
     let address = move_core_types::account_address::AccountAddress::new(address.into_inner());
     let module = move_core_types::identifier::Identifier::new(module.as_str())?;
     let name = move_core_types::identifier::Identifier::new(name.as_str())?;
     let type_params = type_params
-        .into_iter()
+        .iter()
+        .cloned()
         .map(type_tag_sdk_to_core)
         .collect::<Result<_, _>>()?;
     move_core_types::language_storage::StructTag {
@@ -401,16 +412,16 @@ impl TryFrom<crate::type_input::StructInput> for StructTag {
     type Error = SdkTypeConversionError;
 
     fn try_from(value: crate::type_input::StructInput) -> Result<Self, Self::Error> {
-        Self {
-            address: Address::new(value.address.into_bytes()),
-            module: Identifier::new(value.module)?,
-            name: Identifier::new(value.name)?,
-            type_params: value
+        Self::new(
+            Address::new(value.address.into_bytes()),
+            Identifier::new(value.module)?,
+            Identifier::new(value.name)?,
+            value
                 .type_params
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
-        }
+        )
         .pipe(Ok)
     }
 }
@@ -437,11 +448,16 @@ impl From<StructTag> for crate::type_input::StructInput {
     fn from(value: StructTag) -> Self {
         Self {
             address: move_core_types::account_address::AccountAddress::new(
-                value.address.into_inner(),
+                value.address().into_inner(),
             ),
-            module: value.module.as_str().into(),
-            name: value.name.as_str().into(),
-            type_params: value.type_params.into_iter().map(Into::into).collect(),
+            module: value.module().as_str().into(),
+            name: value.name().as_str().into(),
+            type_params: value
+                .type_params()
+                .iter()
+                .cloned()
+                .map(crate::type_input::TypeInput::from)
+                .collect(),
         }
     }
 }
@@ -763,15 +779,17 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
             crate::execution_status::CommandArgumentError::InvalidObjectByMutRef => Self::InvalidObjectByMutRef,
             crate::execution_status::CommandArgumentError::SharedObjectOperationNotAllowed => Self::ConsensusObjectOperationNotAllowed,
             crate::execution_status::CommandArgumentError::InvalidArgumentArity => Self::InvalidArgumentArity,
-            crate::execution_status::CommandArgumentError::InvalidTransferObject |
-            crate::execution_status::CommandArgumentError::InvalidMakeMoveVecNonObjectArgument |
-            crate::execution_status::CommandArgumentError::ArgumentWithoutValue |
-            crate::execution_status::CommandArgumentError::CannotMoveBorrowedValue |
-            crate::execution_status::CommandArgumentError::CannotWriteToExtendedReference |
-            crate::execution_status::CommandArgumentError::InvalidReferenceArgument => {
-                    todo!("New errors need to be added to SDK once stabilized")
-            }
-
+            crate::execution_status::CommandArgumentError::InvalidTransferObject  => Self::InvalidTransferObject,
+            crate::execution_status::CommandArgumentError::InvalidMakeMoveVecNonObjectArgument =>
+                Self::InvalidMakeMoveVecNonObjectArgument,
+            crate::execution_status::CommandArgumentError::ArgumentWithoutValue  =>
+                Self::ArgumentWithoutValue,
+            crate::execution_status::CommandArgumentError::CannotMoveBorrowedValue =>
+                Self::CannotMoveBorrowedValue,
+            crate::execution_status::CommandArgumentError::CannotWriteToExtendedReference =>
+                Self::CannotWriteToExtendedReference,
+            crate::execution_status::CommandArgumentError::InvalidReferenceArgument =>
+                Self::InvalidReferenceArgument,
         }
     }
 }
@@ -805,6 +823,16 @@ impl From<CommandArgumentError> for crate::execution_status::CommandArgumentErro
                 Self::SharedObjectOperationNotAllowed
             }
             CommandArgumentError::InvalidArgumentArity => Self::InvalidArgumentArity,
+            CommandArgumentError::InvalidTransferObject => Self::InvalidTransferObject,
+            CommandArgumentError::InvalidMakeMoveVecNonObjectArgument => {
+                Self::InvalidMakeMoveVecNonObjectArgument
+            }
+            CommandArgumentError::ArgumentWithoutValue => Self::ArgumentWithoutValue,
+            CommandArgumentError::CannotMoveBorrowedValue => Self::CannotMoveBorrowedValue,
+            CommandArgumentError::CannotWriteToExtendedReference => {
+                Self::CannotWriteToExtendedReference
+            }
+            CommandArgumentError::InvalidReferenceArgument => Self::InvalidReferenceArgument,
             _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
@@ -855,6 +883,9 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::InvalidLinkage => Self::InvalidLinkage,
             crate::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw => {
                 todo!("Add InsufficientBalanceForWithdraw to sdk")
+            }
+            crate::execution_status::ExecutionFailureStatus::NonExclusiveWriteInputObjectModified { .. } => {
+                todo!("Add NonExclusiveWriteInputObjectModified to sdk")
             }
         }
     }
@@ -1158,11 +1189,16 @@ impl From<crate::transaction::CallArg> for Input {
                 crate::transaction::ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
-                    mutable,
+                    mutability,
                 } => Self::Shared {
                     object_id: id.into(),
                     initial_shared_version: initial_shared_version.value(),
-                    mutable,
+                    mutable: match mutability {
+                        crate::transaction::SharedObjectMutability::Mutable => true,
+                        crate::transaction::SharedObjectMutability::Immutable => false,
+                        // TODO(address-balances): expose non-exclusive writes to sdk
+                        crate::transaction::SharedObjectMutability::NonExclusiveWrite => false,
+                    },
                 },
                 crate::transaction::ObjectArg::Receiving((id, version, digest)) => Self::Receiving(
                     ObjectReference::new(id.into(), version.value(), digest.into()),
@@ -1197,7 +1233,11 @@ impl From<Input> for crate::transaction::CallArg {
             } => Self::Object(ObjectArg::SharedObject {
                 id: object_id.into(),
                 initial_shared_version: initial_shared_version.into(),
-                mutable,
+                mutability: if mutable {
+                    crate::transaction::SharedObjectMutability::Mutable
+                } else {
+                    crate::transaction::SharedObjectMutability::Immutable
+                },
             }),
             Input::Receiving(object_reference) => {
                 let (id, version, digest) = object_reference.into_parts();

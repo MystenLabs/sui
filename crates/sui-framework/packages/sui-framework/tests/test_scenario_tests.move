@@ -1314,3 +1314,48 @@ fun create_system_objects() {
 
     scenario.end();
 }
+
+// === macros ===
+
+#[test]
+#[allow(unused_mut_ref)]
+fun with_shared() {
+    use sui::clock::Clock;
+    use sui::random::Random;
+
+    let mut test = test_scenario::begin(@0);
+    test.create_system_objects();
+
+    test.with_shared!<Clock>(|clock, test| {
+        assert_eq!(clock.timestamp_ms(), 0);
+
+        test.with_shared!<Random>(|random, test| {
+            let _ = random.new_generator(test.ctx());
+        });
+    });
+
+    test.end();
+}
+
+#[test]
+#[allow(unused_mut_ref)]
+fun with_shared_by_id() {
+    use sui::clock::Clock;
+
+    let mut test = test_scenario::begin(@0);
+    test.create_system_objects();
+
+    let test_clock_id;
+
+    test.with_shared!<Clock>(|clock, _| {
+        test_clock_id = object::id(clock);
+    });
+
+    test.next_tx(@0);
+
+    test.with_shared_by_id!<Clock>(test_clock_id, |clock, _| {
+        assert_eq!(clock.timestamp_ms(), 0);
+    });
+
+    test.end();
+}

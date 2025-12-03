@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 
 use async_graphql::{
+    OutputType,
     connection::{Connection, CursorType, Edge},
     registry::MetaField,
-    OutputType,
 };
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
@@ -168,7 +168,7 @@ impl<C> Page<C> {
     }
 
     /// Direction for sorting SQL queries.
-    pub(crate) fn order_by_direction(&self) -> Query {
+    pub(crate) fn order_by_direction(&self) -> Query<'_> {
         if self.is_from_front() {
             query!("ASC")
         } else {

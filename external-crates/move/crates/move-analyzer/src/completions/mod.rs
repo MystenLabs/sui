@@ -155,6 +155,14 @@ fn completions(
     ))
 }
 
+/// Get the source code for a file from the symbols.
+fn file_source_from_symbols(symbols: &Symbols, path: &Path) -> Option<Arc<str>> {
+    let fhash = symbols.file_hash(path)?;
+    let file_id = symbols.files.file_mapping().get(&fhash)?;
+    let file = symbols.files.files().get(*file_id).ok()?;
+    Some(file.source().clone())
+}
+
 /// Computes a list of auto-completions for a given position in a file,
 /// based on the current symbols.
 pub fn compute_completions(
@@ -176,7 +184,13 @@ pub fn compute_completions(
         flavor,
         auto_import,
     )
-    .unwrap_or_else(|| compute_completions_with_symbols(current_symbols, path, pos, auto_import))
+    .unwrap_or_else(|| {
+        let Some(file_source) = file_source_from_symbols(current_symbols, path) else {
+            return vec![];
+        };
+        let (completions, _) = no_cursor_completion_items(current_symbols, path, &file_source, pos);
+        completions
+    })
 }
 
 /// Computes a list of auto-completions for a given position in a file,
@@ -225,18 +239,9 @@ pub fn compute_completions_with_symbols(
     auto_import: bool,
 ) -> Vec<CompletionItem> {
     let mut completions = vec![];
-
-    let Some(fhash) = symbols.file_hash(path) else {
+    let Some(file_source) = file_source_from_symbols(symbols, path) else {
         return completions;
     };
-    let Some(file_id) = symbols.files.file_mapping().get(&fhash) else {
-        return completions;
-    };
-    let Ok(file) = symbols.files.files().get(*file_id) else {
-        return completions;
-    };
-
-    let file_source = file.source().clone();
     if !file_source.is_empty() {
         let completion_finalized;
         match &symbols.cursor_context {

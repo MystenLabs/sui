@@ -186,7 +186,7 @@ mod tests {
     use super::*;
 
     /// Test helper for lexing and parsing a format string.
-    fn parse(s: &str) -> Result<Format, Error> {
+    fn parse(s: &str) -> Result<Format<'_>, Error> {
         let lexemes: Vec<_> = Lexer::new(s).collect();
         Parser::new(&lexemes).format()
     }

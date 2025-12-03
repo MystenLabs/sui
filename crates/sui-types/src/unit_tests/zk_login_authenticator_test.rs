@@ -8,15 +8,15 @@ use crate::crypto::{PublicKey, SignatureScheme, ZkLoginPublicIdentifier};
 
 use crate::signature::VerifyParams;
 use crate::signature_verification::VerifiedDigestCache;
+use crate::utils::{SHORT_ADDRESS_SEED, load_test_vectors};
 use crate::utils::{get_zklogin_user_address, make_zklogin_tx, sign_zklogin_personal_msg};
-use crate::utils::{load_test_vectors, SHORT_ADDRESS_SEED};
 use crate::{
     base_types::SuiAddress, signature::GenericSignature, zk_login_util::DEFAULT_JWK_BYTES,
 };
 use fastcrypto::encoding::Base64;
 use fastcrypto::traits::ToFromBytes;
 
-use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, ZkLoginInputs, JWK};
+use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId, OIDCProvider, ZkLoginInputs, parse_jwks};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
 use im::hashmap::HashMap as ImHashMap;

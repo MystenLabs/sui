@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, Context, Object};
+use async_graphql::{Context, Object, connection::Connection};
 
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
@@ -17,19 +19,21 @@ use crate::{
     api::{
         query::Query,
         scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
+        types::available_range::AvailableRangeKey,
     },
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
+    task::watermark::Watermarks,
 };
 
 use super::{
-    checkpoint::filter::{checkpoint_bounds, cp_by_epoch, cp_unfiltered, CheckpointFilter},
+    checkpoint::filter::{CheckpointFilter, checkpoint_bounds, cp_by_epoch, cp_unfiltered},
     epoch::Epoch,
     gas::GasCostSummary,
     transaction::{
-        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
         CTransaction, Transaction,
+        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
     },
     validator_aggregated_signature::ValidatorAggregatedSignature,
 };
@@ -241,8 +245,14 @@ impl Checkpoint {
         page: Page<CCheckpoint>,
         filter: CheckpointFilter,
     ) -> Result<Connection<String, Checkpoint>, RpcError> {
-        // TODO: (henrychen) Update when we figure out retention for key-value stores.
-        let cp_lo = 0;
+        let watermarks: &Arc<Watermarks> = ctx.data()?;
+        let available_range_key = AvailableRangeKey {
+            type_: "Query".to_string(),
+            field: Some("checkpoints".to_string()),
+            filters: Some(filter.active_filters()),
+        };
+        let reader_lo = available_range_key.reader_lo(watermarks)?;
+
         let Some(cp_hi_inclusive) = scope.checkpoint_viewed_at() else {
             // In execution scope, checkpoint pagination returns empty results
             return Ok(Connection::new(false, false));
@@ -252,7 +262,7 @@ impl Checkpoint {
             filter.after_checkpoint.map(u64::from),
             filter.at_checkpoint.map(u64::from),
             filter.before_checkpoint.map(u64::from),
-            cp_lo,
+            reader_lo,
             cp_hi_inclusive,
         ) else {
             return Ok(Connection::new(false, false));

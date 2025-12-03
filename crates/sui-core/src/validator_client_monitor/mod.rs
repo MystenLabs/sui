@@ -45,7 +45,7 @@ pub struct OperationFeedback {
     pub display_name: String,
     /// The operation type
     pub operation: OperationType,
-    /// The ping type. If it's not a ping request, then this is is None.
+    /// The ping type. If it's not a ping request, then this is None.
     pub ping_type: Option<PingType>,
     /// Result of the operation: Ok(latency) if successful, Err(()) if failed.
     /// Only errors specific to the target validator should be recorded,

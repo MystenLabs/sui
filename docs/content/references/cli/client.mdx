@@ -394,7 +394,7 @@ Client commands to replay transactions have been deprecated in favor of the `sui
 
 ## Publish a Move package
 
-One of the main uses of the `sui client` command is to publish smart contracts on the Sui network. This example switches the current environment to the Devnet network, then builds, tests, and publishes one of the existing Move examples available in the Sui repository: [sui/examples/move](https://github.com/MystenLabs/sui/tree/main/examples/move)
+One of the main uses of the `sui client` command is to publish smart contracts on the Sui network. This example switches the current environment to Devnet, then builds, tests, and publishes one of the existing Move examples available in the Sui repository: [sui/examples/move](https://github.com/MystenLabs/sui/tree/main/examples/move)
 
 This example also makes use of `sui move` commands. To learn more about those commands, see [Sui Move CLI](./move.mdx).
 
@@ -402,7 +402,7 @@ This example also makes use of `sui move` commands. To learn more about those co
     ```sh
     $ cd examples/move/first_package
     ```
-1. Switch to the Devnet network. This command uses an alias, so the `devnet` value might be different for you, depending on the alias name set in your configuration (use `sui client envs` for a list of your defined networks and their aliases).
+1. Switch to Devnet network. This command uses an alias, so the `devnet` value might be different for you, depending on the alias name set in your configuration (use `sui client envs` for a list of your defined networks and their aliases).
     ```sh
     $ sui client switch --env devnet
     ```

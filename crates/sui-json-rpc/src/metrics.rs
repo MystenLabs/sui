@@ -5,8 +5,8 @@ use futures::FutureExt;
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::types::{ErrorCode, ErrorObject, Id};
 use prometheus::{
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec,
+    HistogramVec, IntCounterVec, IntGaugeVec, register_histogram_vec_with_registry,
+    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry,
 };
 use std::collections::HashSet;
 use std::sync::Arc;

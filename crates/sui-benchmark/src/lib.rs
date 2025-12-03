@@ -13,13 +13,10 @@ use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::NetworkAuthorityClient,
     quorum_driver::{
-        reconfig_observer::ReconfigObserver, QuorumDriver, QuorumDriverHandler,
-        QuorumDriverHandlerBuilder, QuorumDriverMetrics,
+        QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
+        reconfig_observer::ReconfigObserver,
     },
-    transaction_driver::{
-        choose_transaction_driver_percentage, SubmitTransactionOptions, TransactionDriver,
-        TransactionDriverMetrics,
-    },
+    transaction_driver::{SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics},
     validator_client_monitor::ValidatorClientMetrics,
 };
 use sui_json_rpc_types::{
@@ -46,7 +43,9 @@ use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
 };
-use sui_types::{digests::ChainIdentifier, gas::GasCostSummary};
+use sui_types::{
+    digests::ChainIdentifier, gas::GasCostSummary, transaction::SharedObjectMutability,
+};
 use sui_types::{
     effects::{TransactionEffectsAPI, TransactionEvents},
     execution_status::ExecutionFailureStatus,
@@ -276,28 +275,18 @@ impl LocalValidatorAggregatorProxy {
         genesis: &Genesis,
         registry: &Registry,
         reconfig_fullnode_rpc_url: &str,
-        transaction_driver_percentage: Option<u8>,
     ) -> Self {
         let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
             .with_registry(registry)
             .build_network_clients();
         let committee = genesis.committee().unwrap();
-
-        let td_percentage = if let Some(tx_driver_percentage) = transaction_driver_percentage {
-            tx_driver_percentage
-        } else {
-            // We don't need to gate transaction driver for benchmark since we
-            // are not running it on mainnet.
-            choose_transaction_driver_percentage(None)
-        };
-
         Self::new_impl(
             aggregator,
             registry,
             reconfig_fullnode_rpc_url,
             clients,
             committee,
-            td_percentage,
+            100,
         )
         .await
     }
@@ -665,11 +654,16 @@ impl ValidatorProxy for FullNodeProxy {
                     );
                 }
                 Err(err) => {
+                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
                     warn!(
                         ?tx_digest,
-                        retry_cnt, "Transaction failed with err: {:?}", err
+                        retry_cnt,
+                        "Transaction failed with err: {:?}. Sleeping for {:?} ...",
+                        err,
+                        delay,
                     );
                     retry_cnt += 1;
+                    sleep(delay).await;
                 }
             }
         }
@@ -712,7 +706,7 @@ impl ValidatorProxy for FullNodeProxy {
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum BenchMoveCallArg {
     Pure(Vec<u8>),
-    Shared((ObjectID, SequenceNumber, bool)),
+    Shared((ObjectID, SequenceNumber, SharedObjectMutability)),
     ImmOrOwnedObject(ObjectRef),
     ImmOrOwnedObjectVec(Vec<ObjectRef>),
     SharedObjectVec(Vec<(ObjectID, SequenceNumber, bool)>),
@@ -782,8 +776,8 @@ impl From<CallArg> for BenchMoveCallArg {
                 ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
-                    mutable,
-                } => BenchMoveCallArg::Shared((id, initial_shared_version, mutable)),
+                    mutability,
+                } => BenchMoveCallArg::Shared((id, initial_shared_version, mutability)),
                 ObjectArg::Receiving(_) => {
                     unimplemented!("Receiving is not supported for benchmarks")
                 }
@@ -806,11 +800,11 @@ pub fn convert_move_call_args(
             BenchMoveCallArg::Pure(bytes) => {
                 pt_builder.input(CallArg::Pure(bytes.clone())).unwrap()
             }
-            BenchMoveCallArg::Shared((id, initial_shared_version, mutable)) => pt_builder
+            BenchMoveCallArg::Shared((id, initial_shared_version, mutability)) => pt_builder
                 .input(CallArg::Object(ObjectArg::SharedObject {
                     id: *id,
                     initial_shared_version: *initial_shared_version,
-                    mutable: *mutable,
+                    mutability: *mutability,
                 }))
                 .unwrap(),
             BenchMoveCallArg::ImmOrOwnedObject(obj_ref) => {
@@ -827,7 +821,11 @@ pub fn convert_move_call_args(
                             |(id, initial_shared_version, mutable)| ObjectArg::SharedObject {
                                 id: *id,
                                 initial_shared_version: *initial_shared_version,
-                                mutable: *mutable,
+                                mutability: if *mutable {
+                                    SharedObjectMutability::Mutable
+                                } else {
+                                    SharedObjectMutability::Immutable
+                                },
                             },
                         ),
                 )

@@ -9,7 +9,7 @@ use tokio::{
         watch,
     },
     task::JoinHandle,
-    time::{sleep_until, Instant},
+    time::{Instant, sleep_until},
 };
 use tracing::{debug, warn};
 
@@ -128,7 +128,7 @@ mod tests {
     use consensus_config::Parameters;
     use consensus_types::block::{BlockRef, Round};
     use parking_lot::Mutex;
-    use tokio::time::{sleep, Instant};
+    use tokio::time::{Instant, sleep};
 
     use crate::{
         block::VerifiedBlock,
@@ -187,10 +187,6 @@ mod tests {
         }
 
         fn set_propagation_delay(&self, _propagation_delay: Round) -> Result<(), CoreError> {
-            todo!()
-        }
-
-        fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
             todo!()
         }
 

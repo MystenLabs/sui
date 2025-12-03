@@ -3,14 +3,14 @@
 
 use std::sync::Arc;
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use async_graphql::dataloader::DataLoader;
 use diesel::deserialize::FromSqlRow;
 use diesel::expression::QueryMetadata;
 use diesel::pg::Pg;
 use diesel::query_builder::{Query, QueryFragment, QueryId};
-use diesel::query_dsl::methods::LimitDsl;
 use diesel::query_dsl::CompatibleType;
+use diesel::query_dsl::methods::LimitDsl;
 use diesel_async::RunQueryDsl;
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;

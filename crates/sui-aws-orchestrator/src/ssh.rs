@@ -12,7 +12,7 @@ use std::{
 
 use futures::future::try_join_all;
 use russh::client::Msg;
-use russh::{client, Channel};
+use russh::{Channel, client};
 use russh_keys::key;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;

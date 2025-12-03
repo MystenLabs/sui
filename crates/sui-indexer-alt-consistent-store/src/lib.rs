@@ -36,14 +36,14 @@ use db::config::DbConfig;
 use handlers::{balances::Balances, object_by_owner::ObjectByOwner, object_by_type::ObjectByType};
 use indexer::Indexer;
 use prometheus::Registry;
-use rpc::{state::State, RpcArgs, RpcService};
+use rpc::{RpcArgs, RpcService, state::State};
 use schema::Schema;
 use sui_indexer_alt_consistent_api::proto::{
     self, rpc::consistent::v1alpha::consistent_service_server::ConsistentServiceServer,
 };
 use sui_indexer_alt_framework::{
-    ingestion::ClientArgs, pipeline::sequential::SequentialConfig, pipeline::CommitterConfig,
-    IndexerArgs,
+    IndexerArgs, ingestion::ClientArgs, pipeline::CommitterConfig,
+    pipeline::sequential::SequentialConfig,
 };
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;

@@ -9,7 +9,7 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     ServiceConfigResponse,
 };
 
-use super::state::{checkpointed_response, State};
+use super::state::{State, checkpointed_response};
 
 use self::available_range::available_range;
 use self::balances::{batch_get_balances, get_balance, list_balances};

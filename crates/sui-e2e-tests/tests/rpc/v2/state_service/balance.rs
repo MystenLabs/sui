@@ -3,13 +3,13 @@
 
 use std::path::PathBuf;
 use sui_macros::sim_test;
-use sui_rpc::client::v2::Client;
+use sui_rpc::Client;
 use sui_rpc::proto::sui::rpc::v2::{ExecutedTransaction, GasCostSummary};
 use sui_rpc::proto::sui::rpc::v2::{GetBalanceRequest, ListBalancesRequest};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, TransactionData};
-use sui_types::{base_types::SuiAddress, Identifier};
+use sui_types::{Identifier, base_types::SuiAddress};
 use test_cluster::TestClusterBuilder;
 const SUI_COIN_TYPE: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI";
@@ -116,32 +116,32 @@ async fn test_custom_coin_balance() {
         .unwrap()
         .unwrap();
 
-    let mut builder = ProgrammableTransactionBuilder::new();
-    builder
-        .move_call(
-            package_id.clone().parse().unwrap(),
-            Identifier::new("trusted_coin").unwrap(),
-            Identifier::new("mint").unwrap(),
-            vec![],
-            vec![
-                CallArg::Object(ObjectArg::ImmOrOwnedObject((
-                    treasury_cap.object_id.as_ref().unwrap().parse().unwrap(),
-                    treasury_cap.output_version.unwrap().into(),
-                    treasury_cap
-                        .output_digest
-                        .as_ref()
-                        .unwrap()
-                        .parse()
-                        .unwrap(),
-                ))),
-                CallArg::Pure(bcs::to_bytes(&mint_amount).unwrap()),
-            ],
-        )
-        .unwrap();
-    let ptb = builder.finish();
-    let tx_data = TestTransactionBuilder::new(address, gas_object, gas_price)
-        .programmable(ptb)
-        .build();
+    let mut tx_builder = TestTransactionBuilder::new(address, gas_object, gas_price);
+    let tx_data = {
+        let builder = tx_builder.ptb_builder_mut();
+        builder
+            .move_call(
+                package_id.clone().parse().unwrap(),
+                Identifier::new("trusted_coin").unwrap(),
+                Identifier::new("mint").unwrap(),
+                vec![],
+                vec![
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject((
+                        treasury_cap.object_id.as_ref().unwrap().parse().unwrap(),
+                        treasury_cap.output_version.unwrap().into(),
+                        treasury_cap
+                            .output_digest
+                            .as_ref()
+                            .unwrap()
+                            .parse()
+                            .unwrap(),
+                    ))),
+                    CallArg::Pure(bcs::to_bytes(&mint_amount).unwrap()),
+                ],
+            )
+            .unwrap();
+        tx_builder.build()
+    };
     let txn = test_cluster.wallet.sign_transaction(&tx_data).await;
     let (_, mint_gas_used) = execute_transaction(&test_cluster, &txn).await;
 

@@ -5,21 +5,22 @@ use std::path::PathBuf;
 
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
-use sui_rpc::client::v2::Client;
+use sui_rpc::Client;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2::changed_object::IdOperation;
-use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+use sui_rpc::proto::sui::rpc::v2::changed_object::IdOperation;
+use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
+use sui_types::Identifier;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::CallArg;
 use sui_types::transaction::ObjectArg;
+use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionKind;
-use sui_types::Identifier;
 use test_cluster::TestClusterBuilder;
 
 use crate::{stake_with_validator, transfer_coin};
@@ -33,7 +34,7 @@ async fn test_unchanged_loaded_runtime_objects() {
     let _transaction_digest = transfer_coin(&test_cluster.wallet).await;
     let transaction_digest = stake_with_validator(&test_cluster).await;
 
-    let mut client = sui_rpc::client::v2::Client::new(test_cluster.rpc_url()).unwrap();
+    let mut client = Client::new(test_cluster.rpc_url()).unwrap();
     let t = client
         .ledger_client()
         .get_transaction(
@@ -60,11 +61,12 @@ async fn test_unchanged_loaded_runtime_objects() {
         .checkpoint
         .unwrap();
 
-    assert!(!c
-        .objects()
-        .objects()
-        .iter()
-        .any(|o| o.object_type() == "package"));
+    assert!(
+        !c.objects()
+            .objects()
+            .iter()
+            .any(|o| o.object_type() == "package")
+    );
 
     let address = test_cluster.get_address_0();
     let objects = client
@@ -91,7 +93,7 @@ async fn test_unchanged_loaded_runtime_objects() {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: "0x5".parse().unwrap(),
                 initial_shared_version: 1.into(),
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             })],
         )
         .unwrap();
@@ -303,18 +305,20 @@ async fn test_tto_receive_twice() {
     );
 
     // 0x0 starts with 0 coins
-    assert!(client
-        .state_client()
-        .list_owned_objects({
-            let mut message = ListOwnedObjectsRequest::default();
-            message.owner = Some("0x0".to_owned());
-            message
-        })
-        .await
-        .unwrap()
-        .into_inner()
-        .objects
-        .is_empty());
+    assert!(
+        client
+            .state_client()
+            .list_owned_objects({
+                let mut message = ListOwnedObjectsRequest::default();
+                message.owner = Some("0x0".to_owned());
+                message
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .objects
+            .is_empty()
+    );
 
     //
     // Run the `receive` function to receive the coin from TTO twice, which will result in a fail
@@ -394,17 +398,22 @@ async fn test_tto_receive_twice() {
         .transaction
         .unwrap();
 
-    assert_eq!(t.effects().unchanged_loaded_runtime_objects().len(), 1);
-    assert_eq!(
-        t.effects().unchanged_loaded_runtime_objects()[0].object_id(),
-        coin.0.as_str(),
-    );
+    // assert_eq!(t.effects().unchanged_loaded_runtime_objects().len(), 1);
+    // assert_eq!(
+    //     t.effects().unchanged_loaded_runtime_objects()[0].object_id(),
+    //     coin.0.as_str(),
+    // );
+    // Since the adapter rewrite, the usage of Receiving of the same type causes a move, meaning
+    // that a given receiving input cannot be used twice for the same type, as such, this
+    // text can no longer run, and will hit an error during memory safety checking before execution.
+    assert_eq!(t.effects().unchanged_loaded_runtime_objects().len(), 0);
     // received object does not show up in changed obejcts
-    assert!(!t
-        .effects()
-        .changed_objects()
-        .iter()
-        .any(|o| o.object_id() == coin.0.as_str()));
+    assert!(
+        !t.effects()
+            .changed_objects()
+            .iter()
+            .any(|o| o.object_id() == coin.0.as_str())
+    );
 }
 
 #[sim_test]
@@ -568,18 +577,20 @@ async fn test_tto_success() {
     );
 
     // 0x0 starts with 0 coins
-    assert!(client
-        .state_client()
-        .list_owned_objects({
-            let mut message = ListOwnedObjectsRequest::default();
-            message.owner = Some("0x0".to_owned());
-            message
-        })
-        .await
-        .unwrap()
-        .into_inner()
-        .objects
-        .is_empty());
+    assert!(
+        client
+            .state_client()
+            .list_owned_objects({
+                let mut message = ListOwnedObjectsRequest::default();
+                message.owner = Some("0x0".to_owned());
+                message
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .objects
+            .is_empty()
+    );
 
     //
     // Run the `receive` function to receive the coin from TTO twice, which will result in a fail
@@ -642,25 +653,28 @@ async fn test_tto_success() {
     // No unchanged_loaded_runtime_objects
     assert!(t.effects().unchanged_loaded_runtime_objects().is_empty());
     // received object shows up in changed obejcts
-    assert!(t
-        .effects()
-        .changed_objects()
-        .iter()
-        .any(|o| o.object_id() == coin.0.as_str()));
+    assert!(
+        t.effects()
+            .changed_objects()
+            .iter()
+            .any(|o| o.object_id() == coin.0.as_str())
+    );
 
     // Parent ends with 0 coins
-    assert!(client
-        .state_client()
-        .list_owned_objects({
-            let mut message = ListOwnedObjectsRequest::default();
-            message.owner = Some(parent.0.clone());
-            message
-        })
-        .await
-        .unwrap()
-        .into_inner()
-        .objects
-        .is_empty());
+    assert!(
+        client
+            .state_client()
+            .list_owned_objects({
+                let mut message = ListOwnedObjectsRequest::default();
+                message.owner = Some(parent.0.clone());
+                message
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .objects
+            .is_empty()
+    );
 
     // 0x0 ends with 1 coin
     assert_eq!(
@@ -921,18 +935,20 @@ async fn test_receive_input() {
     );
 
     // 0x0 starts with 0 coins
-    assert!(client
-        .state_client()
-        .list_owned_objects({
-            let mut message = ListOwnedObjectsRequest::default();
-            message.owner = Some("0x0".to_owned());
-            message
-        })
-        .await
-        .unwrap()
-        .into_inner()
-        .objects
-        .is_empty());
+    assert!(
+        client
+            .state_client()
+            .list_owned_objects({
+                let mut message = ListOwnedObjectsRequest::default();
+                message.owner = Some("0x0".to_owned());
+                message
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .objects
+            .is_empty()
+    );
 
     //
     // Run the `receive` function to receive the coin from TTO twice, which will result in a fail
@@ -994,9 +1010,10 @@ async fn test_receive_input() {
 
     assert!(t.effects().unchanged_loaded_runtime_objects().is_empty());
     // received object does not show up in changed obejcts
-    assert!(!t
-        .effects()
-        .changed_objects()
-        .iter()
-        .any(|o| o.object_id() == coin.0.as_str()));
+    assert!(
+        !t.effects()
+            .changed_objects()
+            .iter()
+            .any(|o| o.object_id() == coin.0.as_str())
+    );
 }

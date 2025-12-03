@@ -5,7 +5,7 @@ use async_graphql::*;
 use move_core_types::language_storage::StructTag;
 use std::{fmt, str::FromStr};
 use sui_types::{
-    parse_sui_address, parse_sui_module_id, parse_sui_struct_tag, parse_sui_type_tag, TypeTag,
+    TypeTag, parse_sui_address, parse_sui_module_id, parse_sui_struct_tag, parse_sui_type_tag,
 };
 
 use crate::api::scalars::{impl_string_input, sui_address::SuiAddress};

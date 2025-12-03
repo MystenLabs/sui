@@ -9,12 +9,12 @@ use dotenvy::dotenv;
 use std::env;
 
 use diesel::{ConnectionError, ConnectionResult};
-use diesel_async::pooled_connection::bb8::Pool;
+use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::ManagerConfig;
-use diesel_async::AsyncPgConnection;
-use futures_util::future::BoxFuture;
+use diesel_async::pooled_connection::bb8::Pool;
 use futures_util::FutureExt;
+use futures_util::future::BoxFuture;
 use std::time::Duration;
 
 pub type PgConnectionPool =
@@ -42,7 +42,7 @@ pub async fn get_connection_pool() -> PgConnectionPool {
         .expect("Could not build Postgres DB connection pool")
 }
 
-fn establish_connection(config: &str) -> BoxFuture<ConnectionResult<AsyncPgConnection>> {
+fn establish_connection(config: &str) -> BoxFuture<'_, ConnectionResult<AsyncPgConnection>> {
     let fut = async {
         // We first set up the way we want rustls to work.
         let rustls_config = rustls::ClientConfig::builder()

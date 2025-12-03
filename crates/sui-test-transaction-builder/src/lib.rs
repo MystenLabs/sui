@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::ident_str;
+use move_core_types::u256::U256;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::path::PathBuf;
 use sui_genesis_builder::validator_info::GenesisValidatorMetadata;
@@ -10,24 +11,53 @@ use sui_sdk::rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
 };
 use sui_sdk::wallet_context::WalletContext;
+use sui_types::balance::Balance;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
-use sui_types::crypto::{get_key_pair, AccountKeyPair, Signature, Signer};
+use sui_types::crypto::{AccountKeyPair, Signature, Signer, get_key_pair};
 use sui_types::digests::TransactionDigest;
+use sui_types::gas_coin::GAS;
 use sui_types::multisig::{BitmapUnit, MultiSig, MultiSigPublicKey};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
-    CallArg, ObjectArg, ProgrammableTransaction, Transaction, TransactionData,
-    DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    Argument, CallArg, DEFAULT_VALIDATOR_GAS_PRICE, FundsWithdrawalArg, ObjectArg,
+    SharedObjectMutability, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData,
 };
-use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
-use sui_types::{TypeTag, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
+use sui_types::{SUI_SYSTEM_PACKAGE_ID, TypeTag};
+
+#[derive(Clone)]
+pub enum FundSource {
+    Coin(ObjectRef),
+    AddressFund {
+        /// If None, it will be set the same as the total transfer amount.
+        reservation: Option<u64>,
+    },
+    // TODO: Add object fund source
+}
+
+impl FundSource {
+    pub fn coin(coin: ObjectRef) -> Self {
+        Self::Coin(coin)
+    }
+
+    pub fn address_fund() -> Self {
+        Self::AddressFund { reservation: None }
+    }
+
+    pub fn address_fund_with_reservation(reservation: u64) -> Self {
+        Self::AddressFund {
+            reservation: Some(reservation),
+        }
+    }
+}
 
 pub struct TestTransactionBuilder {
-    test_data: TestTransactionData,
+    ptb_builder: ProgrammableTransactionBuilder,
     sender: SuiAddress,
     gas_object: ObjectRef,
     gas_price: u64,
@@ -37,7 +67,7 @@ pub struct TestTransactionBuilder {
 impl TestTransactionBuilder {
     pub fn new(sender: SuiAddress, gas_object: ObjectRef, gas_price: u64) -> Self {
         Self {
-            test_data: TestTransactionData::Empty,
+            ptb_builder: ProgrammableTransactionBuilder::new(),
             sender,
             gas_object,
             gas_price,
@@ -53,32 +83,38 @@ impl TestTransactionBuilder {
         self.gas_object
     }
 
-    // Use `with_type_args` below to provide type args if any
+    pub fn ptb_builder_mut(&mut self) -> &mut ProgrammableTransactionBuilder {
+        &mut self.ptb_builder
+    }
+
     pub fn move_call(
-        mut self,
+        self,
         package_id: ObjectID,
         module: &'static str,
         function: &'static str,
         args: Vec<CallArg>,
     ) -> Self {
-        assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Move(MoveData {
-            package_id,
-            module,
-            function,
-            args,
-            type_args: vec![],
-        });
-        self
+        self.move_call_with_type_args(package_id, module, function, vec![], args)
     }
 
-    pub fn with_type_args(mut self, type_args: Vec<TypeTag>) -> Self {
-        if let TestTransactionData::Move(data) = &mut self.test_data {
-            assert!(data.type_args.is_empty());
-            data.type_args = type_args;
-        } else {
-            panic!("Cannot set type args for non-move call");
-        }
+    pub fn move_call_with_type_args(
+        mut self,
+        package_id: ObjectID,
+        module: &'static str,
+        function: &'static str,
+        type_args: Vec<TypeTag>,
+        args: Vec<CallArg>,
+    ) -> Self {
+        self.ptb_builder
+            .move_call(
+                package_id,
+                ident_str!(module).to_owned(),
+                ident_str!(function).to_owned(),
+                type_args,
+                args,
+            )
+            .unwrap();
+
         self
     }
 
@@ -104,7 +140,7 @@ impl TestTransactionBuilder {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: counter_id,
                 initial_shared_version: counter_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })],
         )
     }
@@ -122,7 +158,7 @@ impl TestTransactionBuilder {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: counter_id,
                 initial_shared_version: counter_initial_shared_version,
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             })],
         )
     }
@@ -140,7 +176,7 @@ impl TestTransactionBuilder {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: counter_id,
                 initial_shared_version: counter_initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             })],
         )
     }
@@ -194,7 +230,7 @@ impl TestTransactionBuilder {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_RANDOMNESS_STATE_OBJECT_ID,
                 initial_shared_version: randomness_initial_shared_version,
-                mutable: false,
+                mutability: SharedObjectMutability::Immutable,
             })],
         )
     }
@@ -285,35 +321,138 @@ impl TestTransactionBuilder {
     }
 
     pub fn transfer(mut self, object: FullObjectRef, recipient: SuiAddress) -> Self {
-        self.test_data = TestTransactionData::Transfer(TransferData { object, recipient });
+        self.ptb_builder.transfer_object(recipient, object).unwrap();
         self
     }
 
     pub fn transfer_sui(mut self, amount: Option<u64>, recipient: SuiAddress) -> Self {
-        self.test_data = TestTransactionData::TransferSui(TransferSuiData { amount, recipient });
+        self.ptb_builder.transfer_sui(recipient, amount);
+        self
+    }
+
+    pub fn transfer_sui_to_address_balance(
+        self,
+        source: FundSource,
+        amounts_and_recipients: Vec<(u64, SuiAddress)>,
+    ) -> Self {
+        self.transfer_funds_to_address_balance(source, amounts_and_recipients, GAS::type_tag())
+    }
+
+    pub fn transfer_funds_to_address_balance(
+        mut self,
+        fund_source: FundSource,
+        amounts_and_recipients: Vec<(u64, SuiAddress)>,
+        type_arg: TypeTag,
+    ) -> Self {
+        let source = match fund_source.clone() {
+            FundSource::Coin(coin) => {
+                if coin == self.gas_object {
+                    Argument::GasCoin
+                } else {
+                    self.ptb_builder
+                        .obj(ObjectArg::ImmOrOwnedObject(coin))
+                        .unwrap()
+                }
+            }
+            FundSource::AddressFund { reservation } => {
+                let reservation = reservation.unwrap_or_else(|| {
+                    amounts_and_recipients
+                        .iter()
+                        .map(|(amount, _)| *amount)
+                        .sum::<u64>()
+                });
+                self.ptb_builder
+                    .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
+                        reservation,
+                        type_arg.clone().into(),
+                    ))
+                    .unwrap()
+            }
+        };
+        for (amount, recipient) in amounts_and_recipients {
+            let balance = match fund_source.clone() {
+                FundSource::Coin(_) => {
+                    let amount_arg = self.ptb_builder.pure(amount).unwrap();
+                    let coin = self.ptb_builder.programmable_move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        Identifier::new("coin").unwrap(),
+                        Identifier::new("split").unwrap(),
+                        vec![type_arg.clone()],
+                        vec![source, amount_arg],
+                    );
+                    self.ptb_builder.programmable_move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        Identifier::new("coin").unwrap(),
+                        Identifier::new("into_balance").unwrap(),
+                        vec![type_arg.clone()],
+                        vec![coin],
+                    )
+                }
+                FundSource::AddressFund { .. } => {
+                    let amount_arg = self.ptb_builder.pure(U256::from(amount)).unwrap();
+                    let split = self.ptb_builder.programmable_move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        Identifier::new("funds_accumulator").unwrap(),
+                        Identifier::new("withdrawal_split").unwrap(),
+                        vec![Balance::type_tag(type_arg.clone())],
+                        vec![source, amount_arg],
+                    );
+                    self.ptb_builder.programmable_move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        Identifier::new("balance").unwrap(),
+                        Identifier::new("redeem_funds").unwrap(),
+                        vec![type_arg.clone()],
+                        vec![split],
+                    )
+                }
+            };
+
+            let recipient_arg = self.ptb_builder.pure(recipient).unwrap();
+            self.ptb_builder.programmable_move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                Identifier::new("balance").unwrap(),
+                Identifier::new("send_funds").unwrap(),
+                vec![type_arg.clone()],
+                vec![balance, recipient_arg],
+            );
+        }
         self
     }
 
     pub fn split_coin(mut self, coin: ObjectRef, amounts: Vec<u64>) -> Self {
-        self.test_data = TestTransactionData::SplitCoin(SplitCoinData { coin, amounts });
+        self.ptb_builder.split_coin(self.sender, coin, amounts);
         self
     }
 
-    pub fn publish(mut self, path: PathBuf) -> Self {
-        assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(PublishData::Source(path, false));
-        self
+    pub fn publish(self, path: PathBuf) -> Self {
+        self.publish_with_data(PublishData::Source(path, false))
     }
 
-    pub fn publish_with_deps(mut self, path: PathBuf) -> Self {
-        assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(PublishData::Source(path, true));
-        self
+    pub fn publish_with_deps(self, path: PathBuf) -> Self {
+        self.publish_with_data(PublishData::Source(path, true))
     }
 
     pub fn publish_with_data(mut self, data: PublishData) -> Self {
-        assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(data);
+        let (all_module_bytes, dependencies) = match data {
+            PublishData::Source(path, with_unpublished_deps) => {
+                let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
+                let all_module_bytes = compiled_package.get_package_bytes(with_unpublished_deps);
+                let dependencies = compiled_package.get_dependency_storage_package_ids();
+                (all_module_bytes, dependencies)
+            }
+            PublishData::ModuleBytes(bytecode) => (bytecode, vec![]),
+            PublishData::CompiledPackage(compiled_package) => {
+                let all_module_bytes = compiled_package.get_package_bytes(false);
+                let dependencies = compiled_package.get_dependency_storage_package_ids();
+                (all_module_bytes, dependencies)
+            }
+        };
+
+        let upgrade_cap = self
+            .ptb_builder
+            .publish_upgradeable(all_module_bytes, dependencies);
+        self.ptb_builder.transfer_arg(self.sender, upgrade_cap);
+
         self
     }
 
@@ -330,93 +469,16 @@ impl TestTransactionBuilder {
         self.publish(path)
     }
 
-    pub fn programmable(mut self, programmable: ProgrammableTransaction) -> Self {
-        self.test_data = TestTransactionData::Programmable(programmable);
-        self
-    }
-
     pub fn build(self) -> TransactionData {
-        match self.test_data {
-            TestTransactionData::Move(data) => TransactionData::new_move_call(
-                self.sender,
-                data.package_id,
-                ident_str!(data.module).to_owned(),
-                ident_str!(data.function).to_owned(),
-                data.type_args,
-                self.gas_object,
-                data.args,
-                self.gas_budget
-                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE),
-                self.gas_price,
-            )
-            .unwrap(),
-            TestTransactionData::Transfer(data) => TransactionData::new_transfer(
-                data.recipient,
-                data.object,
-                self.sender,
-                self.gas_object,
-                self.gas_budget
-                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
-                self.gas_price,
-            ),
-            TestTransactionData::TransferSui(data) => TransactionData::new_transfer_sui(
-                data.recipient,
-                self.sender,
-                data.amount,
-                self.gas_object,
-                self.gas_budget
-                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
-                self.gas_price,
-            ),
-            TestTransactionData::SplitCoin(data) => TransactionData::new_split_coin(
-                self.sender,
-                data.coin,
-                data.amounts,
-                self.gas_object,
-                self.gas_budget
-                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
-                self.gas_price,
-            ),
-            TestTransactionData::Publish(data) => {
-                let (all_module_bytes, dependencies) = match data {
-                    PublishData::Source(path, with_unpublished_deps) => {
-                        let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
-                        let all_module_bytes =
-                            compiled_package.get_package_bytes(with_unpublished_deps);
-                        let dependencies = compiled_package.get_dependency_storage_package_ids();
-                        (all_module_bytes, dependencies)
-                    }
-                    PublishData::ModuleBytes(bytecode) => (bytecode, vec![]),
-                    PublishData::CompiledPackage(compiled_package) => {
-                        let all_module_bytes = compiled_package.get_package_bytes(false);
-                        let dependencies = compiled_package.get_dependency_storage_package_ids();
-                        (all_module_bytes, dependencies)
-                    }
-                };
-
-                TransactionData::new_module(
-                    self.sender,
-                    self.gas_object,
-                    all_module_bytes,
-                    dependencies,
-                    self.gas_budget.unwrap_or(
-                        self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
-                    ),
-                    self.gas_price,
-                )
-            }
-            TestTransactionData::Programmable(pt) => TransactionData::new_programmable(
-                self.sender,
-                vec![self.gas_object],
-                pt,
-                self.gas_budget
-                    .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE),
-                self.gas_price,
-            ),
-            TestTransactionData::Empty => {
-                panic!("Cannot build empty transaction");
-            }
-        }
+        let pt = self.ptb_builder.finish();
+        TransactionData::new_programmable(
+            self.sender,
+            vec![self.gas_object],
+            pt,
+            self.gas_budget
+                .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE),
+            self.gas_price,
+        )
     }
 
     pub fn build_and_sign(self, signer: &dyn Signer<Signature>) -> Transaction {
@@ -469,24 +531,7 @@ impl TestTransactionBuilder {
     }
 }
 
-enum TestTransactionData {
-    Move(MoveData),
-    Transfer(TransferData),
-    TransferSui(TransferSuiData),
-    SplitCoin(SplitCoinData),
-    Publish(PublishData),
-    Programmable(ProgrammableTransaction),
-    Empty,
-}
-
-struct MoveData {
-    package_id: ObjectID,
-    module: &'static str,
-    function: &'static str,
-    args: Vec<CallArg>,
-    type_args: Vec<TypeTag>,
-}
-
+#[allow(clippy::large_enum_variant)]
 pub enum PublishData {
     /// Path to source code directory and with_unpublished_deps.
     /// with_unpublished_deps indicates whether to publish unpublished dependencies in the same transaction or not.
@@ -495,20 +540,7 @@ pub enum PublishData {
     CompiledPackage(CompiledPackage),
 }
 
-struct TransferData {
-    object: FullObjectRef,
-    recipient: SuiAddress,
-}
-
-struct TransferSuiData {
-    amount: Option<u64>,
-    recipient: SuiAddress,
-}
-
-struct SplitCoinData {
-    coin: ObjectRef,
-    amounts: Vec<u64>,
-}
+// TODO: Cleanup the following floating functions.
 
 /// A helper function to make Transactions with controlled accounts in WalletContext.
 /// Particularly, the wallet needs to own gas objects for transactions.
@@ -761,7 +793,7 @@ pub async fn emit_new_random_u128(
     let random_call_arg = CallArg::Object(ObjectArg::SharedObject {
         id: SUI_RANDOMNESS_STATE_OBJECT_ID,
         initial_shared_version,
-        mutable: false,
+        mutability: SharedObjectMutability::Immutable,
     });
 
     let txn = context

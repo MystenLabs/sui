@@ -8,7 +8,6 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, SharedInput};
-use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::layout_resolver::LayoutResolver;
@@ -72,7 +71,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &ProtocolConfig,
     ) -> Self {
-        let mutable_input_refs = input_objects.mutable_inputs();
+        let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&[]);
         let deleted_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
@@ -158,7 +157,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_runtime_objects: self.loaded_child_objects,
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,
-            binary_config: to_binary_config(&self.protocol_config),
+            binary_config: self.protocol_config.binary_config(None),
         }
     }
 
@@ -997,7 +996,10 @@ impl Storage for TemporaryStore<'_> {
         TemporaryStore::read_object(self, id)
     }
 
-    fn record_execution_results(&mut self, results: ExecutionResults) {
+    fn record_execution_results(
+        &mut self,
+        results: ExecutionResults,
+    ) -> Result<(), ExecutionError> {
         let ExecutionResults::V1(results) = results else {
             panic!("ExecutionResults::V1 expected in sui-execution v0");
         };
@@ -1005,6 +1007,7 @@ impl Storage for TemporaryStore<'_> {
         for event in results.user_events {
             TemporaryStore::log_event(self, event);
         }
+        Ok(())
     }
 
     fn save_loaded_runtime_objects(

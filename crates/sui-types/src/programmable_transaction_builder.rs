@@ -4,18 +4,23 @@
 //! Utility for generating programmable transactions, either by specifying a command or for
 //! migrating legacy transactions
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use indexmap::IndexMap;
 use move_core_types::{ident_str, identifier::Identifier, language_storage::TypeTag};
 use serde::Serialize;
 
 use crate::{
+    SUI_FRAMEWORK_PACKAGE_ID,
+    balance::{
+        BALANCE_MODULE_NAME, BALANCE_REDEEM_FUNDS_FUNCTION_NAME, BALANCE_SEND_FUNDS_FUNCTION_NAME,
+    },
     base_types::{FullObjectID, FullObjectRef, ObjectID, ObjectRef, SuiAddress},
     move_package::PACKAGE_MODULE_NAME,
     transaction::{
         Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, ProgrammableTransaction,
+        SharedObjectMutability,
     },
-    SUI_FRAMEWORK_PACKAGE_ID,
+    type_input::TypeInput,
 };
 
 #[cfg(test)]
@@ -87,12 +92,12 @@ impl ProgrammableTransactionBuilder {
                     ObjectArg::SharedObject {
                         id: id1,
                         initial_shared_version: v1,
-                        mutable: mut1,
+                        mutability: mut1,
                     },
                     ObjectArg::SharedObject {
                         id: id2,
                         initial_shared_version: v2,
-                        mutable: mut2,
+                        mutability: mut2,
                     },
                 ) if v1 == &v2 => {
                     anyhow::ensure!(
@@ -102,7 +107,13 @@ impl ProgrammableTransactionBuilder {
                     ObjectArg::SharedObject {
                         id,
                         initial_shared_version: v2,
-                        mutable: *mut1 || mut2,
+                        mutability: if mut1 == &SharedObjectMutability::Mutable
+                            || mut2 == SharedObjectMutability::Mutable
+                        {
+                            SharedObjectMutability::Mutable
+                        } else {
+                            mut2
+                        },
                     }
                 }
                 (old_obj_arg, obj_arg) => {
@@ -252,7 +263,7 @@ impl ProgrammableTransactionBuilder {
             FullObjectID::Consensus((id, initial_shared_version)) => ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             },
         });
         self.commands
@@ -269,6 +280,38 @@ impl ProgrammableTransactionBuilder {
             Argument::GasCoin
         };
         self.command(Command::TransferObjects(vec![coin_arg], rec_arg));
+    }
+
+    pub fn redeem_funds(&mut self, amount: u64, type_arg: TypeTag) -> anyhow::Result<Argument> {
+        let withdrawal_arg =
+            FundsWithdrawalArg::balance_from_sender(amount, TypeInput::from(type_arg.clone()));
+        let withdrawal_arg = self.funds_withdrawal(withdrawal_arg)?;
+        Ok(self.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            BALANCE_MODULE_NAME.to_owned(),
+            BALANCE_REDEEM_FUNDS_FUNCTION_NAME.to_owned(),
+            vec![type_arg],
+            vec![withdrawal_arg],
+        ))
+    }
+
+    pub fn transfer_balance(
+        &mut self,
+        recipient: SuiAddress,
+        amount: u64,
+        type_arg: TypeTag,
+    ) -> anyhow::Result<()> {
+        let rec_arg = self.pure(recipient).unwrap();
+        let balance = self.redeem_funds(amount, type_arg.clone())?;
+
+        self.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            BALANCE_MODULE_NAME.to_owned(),
+            BALANCE_SEND_FUNDS_FUNCTION_NAME.to_owned(),
+            vec![type_arg],
+            vec![balance, rec_arg],
+        );
+        Ok(())
     }
 
     pub fn pay_all_sui(&mut self, recipient: SuiAddress) {

@@ -3,7 +3,7 @@
 
 use fastcrypto::hash::{Blake2b256, HashFunction};
 use move_core_types::u256::U256;
-use sui_types::accumulator_root::{build_event_merkle_root, EventCommitment, EventStreamHead};
+use sui_types::accumulator_root::{EventCommitment, EventStreamHead, build_event_merkle_root};
 
 const U256_ZERO: U256 = U256::zero();
 

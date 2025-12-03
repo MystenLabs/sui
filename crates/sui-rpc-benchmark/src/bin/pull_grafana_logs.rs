@@ -64,26 +64,26 @@ fn extract_from_message(message: &str) -> Option<LogEntry> {
         .unwrap_or("unknown_host")
         .to_string();
 
-    if let Some(body_start) = message.find("body=") {
-        if let Some(peer_type_start) = message.find(" peer_type=") {
-            let raw_body = &message[(body_start + 5)..peer_type_start].trim();
-            if raw_body.starts_with('b') {
-                let trimmed = raw_body.trim_start_matches('b').trim_matches('"');
-                let unescaped = trimmed.replace("\\\"", "\"");
+    if let Some(body_start) = message.find("body=")
+        && let Some(peer_type_start) = message.find(" peer_type=")
+    {
+        let raw_body = &message[(body_start + 5)..peer_type_start].trim();
+        if raw_body.starts_with('b') {
+            let trimmed = raw_body.trim_start_matches('b').trim_matches('"');
+            let unescaped = trimmed.replace("\\\"", "\"");
 
-                if let Ok(parsed) = serde_json::from_str::<Value>(&unescaped) {
-                    let method = parsed
-                        .get("method")
-                        .and_then(|m| m.as_str())
-                        .unwrap_or("unknown_method")
-                        .to_string();
-                    return Some(LogEntry {
-                        timestamp,
-                        host,
-                        method,
-                        body: unescaped,
-                    });
-                }
+            if let Ok(parsed) = serde_json::from_str::<Value>(&unescaped) {
+                let method = parsed
+                    .get("method")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("unknown_method")
+                    .to_string();
+                return Some(LogEntry {
+                    timestamp,
+                    host,
+                    method,
+                    body: unescaped,
+                });
             }
         }
     }
@@ -205,16 +205,13 @@ async fn run() -> Result<(), Box<dyn Error>> {
         "UNKNOWN_NET".to_string()
     };
 
-    let query = if net == "mainnet-proxy" {
-        format!(r#"{{namespace="{}"}} |= "{}""#, namespace, "Request:")
+    let default_substring = if net == "mainnet-proxy" {
+        "Request:"
     } else {
-        let substring =
-            env::var("SUBSTRING").unwrap_or_else(|_| "Sampled read request".to_string());
-        format!(
-            r#"{{namespace="{}", container="sui-edge-proxy-mysten"}} |= "{}""#,
-            namespace, substring
-        )
+        "Sampled read request"
     };
+    let substring = env::var("SUBSTRING").unwrap_or_else(|_| default_substring.to_string());
+    let query = format!(r#"{{namespace="{}"}} |= "{}""#, namespace, substring);
     debug!("Query: {}", query);
 
     let now = chrono::Utc::now();
@@ -290,10 +287,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
 
     let output_dir = env::var("OUTPUT_DIR").unwrap_or_else(|_| ".".to_string());
     let output_file = format!("{}/sampled_read_requests.jsonl", output_dir);
-    if let Some(parent) = std::path::Path::new(&output_file).parent() {
-        if !parent.exists() {
-            std::fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = std::path::Path::new(&output_file).parent()
+        && !parent.exists()
+    {
+        std::fs::create_dir_all(parent)?;
     }
 
     let file = File::create(&output_file)?;

@@ -3,13 +3,13 @@
 
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context as _};
+use anyhow::{Context as _, anyhow};
 use async_graphql::{
+    Context, InputObject, Interface, Object,
     connection::{Connection, CursorType, Edge},
     dataloader::DataLoader,
-    Context, InputObject, Interface, Object,
 };
-use diesel::{sql_types::Bool, ExpressionMethods, QueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, sql_types::Bool};
 use fastcrypto::encoding::{Base58, Encoding};
 use futures::future::try_join_all;
 use move_core_types::language_storage::StructTag;
@@ -45,7 +45,7 @@ use crate::{
         type_filter::{TypeFilter, TypeInput},
         uint53::UInt53,
     },
-    error::{bad_user_input, feature_unavailable, upcast, RpcError},
+    error::{RpcError, bad_user_input, feature_unavailable, upcast},
     intersect,
     pagination::{Page, PageLimits, PaginationConfig},
     scope::Scope,
@@ -60,7 +60,7 @@ use super::{
     move_package::MovePackage,
     object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
     owner::Owner,
-    transaction::{filter::TransactionFilter, CTransaction, Transaction},
+    transaction::{CTransaction, Transaction, filter::TransactionFilter},
 };
 
 /// Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
@@ -195,7 +195,9 @@ pub(crate) enum Error {
     #[error("Cursors are pinned to different checkpoints: {0} vs {1}")]
     CursorInconsistency(u64, u64),
 
-    #[error("At most one of a version, a root version, or a checkpoint bound can be specified when fetching an object")]
+    #[error(
+        "At most one of a version, a root version, or a checkpoint bound can be specified when fetching an object"
+    )]
     OneBound,
 
     #[error("Request is outside consistent range")]
@@ -204,7 +206,9 @@ pub(crate) enum Error {
     #[error("Checkpoint {0} in the future")]
     Future(u64),
 
-    #[error("Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.")]
+    #[error(
+        "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects."
+    )]
     RootVersionOwnership,
 }
 
@@ -623,11 +627,23 @@ impl Object {
         }
     }
 
-    /// Construct an object that is represented by just its address. This does not check that the
-    /// object exists, so should not be used to "fetch" an address provided as user input. When the
-    /// object's contents are fetched from the latest version of that object as of the current
-    /// checkpoint.
+    /// Construct an object that is represented by just its address.
+    ///
+    /// This function first checks the execution context for freshly created/modified objects.
+    /// If found there, returns an Object with its contents already loaded. Otherwise, returns
+    /// an Object that will lazy-load its contents from the database when accessed.
+    ///
+    /// This does not verify that the object exists in the database (for the lazy-loading case),
+    /// so should not be used to "fetch" an address provided as user input. Contents from the
+    /// database are fetched from the latest version of that object available in the database,
+    /// which may not be as current as the checkpoint specified in scope.
     pub(crate) fn with_address(scope: Scope, address: NativeSuiAddress) -> Self {
+        // Check execution context first for freshly created/modified objects
+        if let Some(native_obj) = scope.execution_output_object_latest(address.into()) {
+            return Self::from_contents(scope.clone(), native_obj.clone());
+        }
+
+        // Fallback to lazy loading from database
         Self {
             super_: Address::with_address(scope, address),
             version_digest: None,
@@ -857,6 +873,7 @@ impl Object {
 
         let mut query = v::obj_versions
             .filter(v::object_id.eq(address.to_vec()))
+            .filter(v::object_digest.is_not_null())
             .filter(sql!(as Bool,
                 r#"
                     object_version <= (SELECT
@@ -1016,7 +1033,7 @@ impl Object {
             _ => {
                 return Err(
                     anyhow!("Invalid ObjectFilter not caught by validation: {filter:?}").into(),
-                )
+                );
             }
         }
         .map_err(|e| match e {

@@ -5,14 +5,14 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::StructTag;
 
+use crate::SUI_SYSTEM_ADDRESS;
 use crate::balance::Balance;
 use crate::base_types::ObjectID;
 use crate::committee::EpochId;
-use crate::error::SuiError;
+use crate::error::{SuiError, SuiErrorKind};
 use crate::gas_coin::MIST_PER_SUI;
 use crate::id::{ID, UID};
 use crate::object::{Data, Object};
-use crate::SUI_SYSTEM_ADDRESS;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -160,16 +160,20 @@ impl TryFrom<&Object> for StakedSui {
         match &object.data {
             Data::Move(o) => {
                 if o.type_().is_staked_sui() {
-                    return bcs::from_bytes(o.contents()).map_err(|err| SuiError::TypeError {
-                        error: format!("Unable to deserialize StakedSui object: {:?}", err),
+                    return bcs::from_bytes(o.contents()).map_err(|err| {
+                        SuiErrorKind::TypeError {
+                            error: format!("Unable to deserialize StakedSui object: {:?}", err),
+                        }
+                        .into()
                     });
                 }
             }
             Data::Package(_) => {}
         }
 
-        Err(SuiError::TypeError {
+        Err(SuiErrorKind::TypeError {
             error: format!("Object type is not a StakedSui: {:?}", object),
-        })
+        }
+        .into())
     }
 }

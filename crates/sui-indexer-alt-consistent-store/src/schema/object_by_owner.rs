@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bincode::{
-    de::{read::Reader, Decoder},
-    enc::{write::Writer, Encoder},
+    Decode, Encode,
+    de::{Decoder, read::Reader},
+    enc::{Encoder, write::Writer},
     error::{AllowedEnumVariants, DecodeError, EncodeError},
     serde::{BorrowCompat, Compat},
-    Decode, Encode,
 };
 use move_core_types::language_storage::StructTag;
 use sui_indexer_alt_framework::types::{

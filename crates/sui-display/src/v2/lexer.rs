@@ -25,13 +25,22 @@ pub(crate) struct Lexer<'s> {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Lexeme<'s>(pub bool, pub Token, pub usize, pub &'s str);
 
-/// Like [Lexeme] but owns the slice of source string. Useful for capturing context in an error
+/// Like `Lexeme` but owns the slice of source string. Useful for capturing context in an error
 /// message.
-#[derive(Debug)]
-pub(crate) struct OwnedLexeme(pub bool, pub Token, pub usize, pub String);
+#[derive(Debug, Clone)]
+pub struct OwnedLexeme(
+    pub(crate) bool,
+    pub(crate) Token,
+    pub(crate) usize,
+    pub(crate) String,
+);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Token {
+    /// '->'
+    Arrow,
+    /// '=>'
+    AArrow,
     /// '@'
     At,
     /// ':'
@@ -130,6 +139,10 @@ impl<'s> Lexer<'s> {
 
         use Token as T;
         Some(match bytes.first()? {
+            b'-' if bytes.get(1) == Some(&b'>') => self.take(ws, T::Arrow, 2),
+
+            b'=' if bytes.get(1) == Some(&b'>') => self.take(ws, T::AArrow, 2),
+
             b'@' => self.take(ws, T::At, 1),
 
             b':' if bytes.get(1) == Some(&b':') => self.take(ws, T::CColon, 2),
@@ -283,6 +296,8 @@ impl fmt::Display for OwnedLexeme {
         }
 
         match self {
+            L(_, T::Arrow, _, _) => write!(f, "'->'"),
+            L(_, T::AArrow, _, _) => write!(f, "'=>'"),
             L(_, T::At, _, _) => write!(f, "'@'"),
             L(_, T::Colon, _, _) => write!(f, "':'"),
             L(_, T::CColon, _, _) => write!(f, "'::'"),
@@ -330,6 +345,8 @@ impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Token as T;
         match self {
+            T::Arrow => write!(f, "'->'"),
+            T::AArrow => write!(f, "'=>'"),
             T::At => write!(f, "'@'"),
             T::Colon => write!(f, "':'"),
             T::CColon => write!(f, "'::'"),
@@ -372,8 +389,8 @@ fn is_valid_decimal_byte(b: u8) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use insta::assert_snapshot;
     use Lexeme as L;
+    use insta::assert_snapshot;
 
     fn lexemes(src: &str) -> String {
         Lexer::new(src)
@@ -559,12 +576,11 @@ mod tests {
         "###);
     }
 
-    // Display supports two kinds of index -- `foo[i]` and `bar[[j]]`. Unlike braces, doubly nested
-    // brackets do not have their own token. The two cases are distinguished by the parser, which
-    // uses significant whitespace to distinguish between two separate `]`'s vs a single `]]`.
+    // Display supports three kinds of index -- `foo[i]`, `bar->[j]`, and `baz=>[k]`, representing
+    // vector/VecMap, dynamic field, and dynamic object field access respectively.
     #[test]
     fn test_indices() {
-        assert_snapshot!(lexemes(r#"foo {bar[baz].qux[[quy]][quz]}"#), @r###"
+        assert_snapshot!(lexemes(r#"foo {bar[baz].qux=>[quy]->[quz]}"#), @r###"
         L(false, Text, 0, "foo ")
         L(false, LBrace, 4, "{")
         L(false, Ident, 5, "bar")
@@ -573,15 +589,15 @@ mod tests {
         L(false, RBracket, 12, "]")
         L(false, Dot, 13, ".")
         L(false, Ident, 14, "qux")
-        L(false, LBracket, 17, "[")
-        L(false, LBracket, 18, "[")
-        L(false, Ident, 19, "quy")
-        L(false, RBracket, 22, "]")
+        L(false, AArrow, 17, "=>")
+        L(false, LBracket, 19, "[")
+        L(false, Ident, 20, "quy")
         L(false, RBracket, 23, "]")
-        L(false, LBracket, 24, "[")
-        L(false, Ident, 25, "quz")
-        L(false, RBracket, 28, "]")
-        L(false, RBrace, 29, "}")
+        L(false, Arrow, 24, "->")
+        L(false, LBracket, 26, "[")
+        L(false, Ident, 27, "quz")
+        L(false, RBracket, 30, "]")
+        L(false, RBrace, 31, "}")
         "###);
     }
 

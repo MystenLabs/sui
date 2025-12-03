@@ -18,17 +18,17 @@ use fastcrypto::traits::{KeyPair, ToFromBytes};
 use move_core_types::ident_str;
 use std::path::{Path, PathBuf};
 use sui_config::node::{AuthorityKeyPairWithPath, KeyPairWithPath};
-use sui_config::{local_ip_utils, Config, NodeConfig, PersistedConfig};
+use sui_config::{Config, NodeConfig, PersistedConfig, local_ip_utils};
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockResponseOptions};
 use sui_keys::keypair_file::read_keypair_from_file;
-use sui_sdk::{rpc_types::SuiTransactionBlockEffectsAPI, SuiClient, SuiClientBuilder};
+use sui_sdk::{SuiClient, SuiClientBuilder, rpc_types::SuiTransactionBlockEffectsAPI};
 use sui_types::base_types::{ObjectRef, SuiAddress};
-use sui_types::crypto::{generate_proof_of_possession, get_key_pair, SuiKeyPair};
+use sui_types::crypto::{SuiKeyPair, generate_proof_of_possession, get_key_pair};
 use sui_types::multiaddr::{Multiaddr, Protocol};
 use sui_types::transaction::{
-    CallArg, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+    CallArg, TEST_ONLY_GAS_UNIT_FOR_GENERIC, Transaction, TransactionData,
 };
-use sui_types::{committee::EpochId, crypto::get_authority_key_pair, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{SUI_SYSTEM_PACKAGE_ID, committee::EpochId, crypto::get_authority_key_pair};
 use tracing::info;
 
 #[derive(Parser)]
@@ -75,7 +75,9 @@ async fn run_metadata_rotation(metadata_rotation: MetadataRotation) -> anyhow::R
     let sui_client = SuiClientBuilder::default().build(fullnode_rpc_url).await?;
     let sui_address = SuiAddress::from(&account_key.public());
     let starting_epoch = current_epoch(&sui_client).await?;
-    info!("Running Metadata Rotation fire drill for validator address {sui_address} in epoch {starting_epoch}.");
+    info!(
+        "Running Metadata Rotation fire drill for validator address {sui_address} in epoch {starting_epoch}."
+    );
 
     // Prepare new metadata for next epoch
     let new_config_path =

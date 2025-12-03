@@ -10,7 +10,7 @@ Sponsored transactions are a primitive on the Sui blockchain that enable the exe
 
 ## Roles in sponsored transactions
 
-In a sponsored transaction there are three roles: the user, the gas station, and the sponsor.
+In a sponsored transaction there are 3 roles: the user, the gas station, and the sponsor.
 
 - The user is the entity who wants to execute a transaction. 
 - The gas station is the entity that fulfills the sponsorship request for the user's transaction by providing the gas payment they own.
@@ -35,10 +35,10 @@ In this scenario, the sponsor has a specific set of applications they want to sp
 
 In this scenario, the sponsor has few restrictions on the type of transactions the gas payment can be used for.
 
-- If the sponsor is a gasless wallet, it may agree to sponsor any valid transactions proposed by its users.
+- If the sponsor is a gasless wallet, it might agree to sponsor any valid transactions proposed by its users.
 - In the form of a reward or discount, the sponsor could offer the user a wildcard gas payment, expressly promising to execute any transactions with that gas payment.
 
-A sponsored transaction is not restricted to these use cases. Essentially, a sponsored transaction is any transaction jointly made by the user and the sponsor. As long as the stakeholders can agree on the transaction details, then the number of possible ways to provide sponsored transactions is limited only by the imagination. Because at least two stakeholders are involved in a sponsored transaction, however, there are some [additional risks](#risk) that you should take steps to mitigate.
+A sponsored transaction is not restricted to these use cases. Essentially, a sponsored transaction is any transaction jointly made by the user and the sponsor. As long as the stakeholders can agree on the transaction details, then the number of possible ways to provide sponsored transactions is limited only by the imagination. Because at least 2 stakeholders are involved in a sponsored transaction, however, there are some [additional risks](#risk) that you should take steps to mitigate.
 
 
 ## Sponsored transaction flow
@@ -77,12 +77,12 @@ A few details of note for the preceding code:
 
 - `sender` in `TransactionDataV1` (a variant of `TransactionData`) is the user address.
 - `gas_data` in `TransactionDataV1` is the gas payment.
-- `GasData` allows a list of gas objects, but the same address must own them, namely the `owner` in `GasData` (the sponsor). When `owner` is equal to `sender`, then it is a regular/non-sponsored transaction.
+- `GasData` allows a list of gas objects, but the same address must own them, namely the `owner` in `GasData` (the sponsor). When `owner` is equal to `sender`, then it is a regular or non-sponsored transaction.
 - `tx_signatures` in `SenderSignedTransaction` is a list of signatures. For a sponsored transaction, the list needs to contain both signatures of the user and the sponsor in some order. The signatures are signed over the entire `TransactionData`, including `GasData`.
 
-So, to construct a correct sponsored transaction, you must first build a `TransactionData` object. If you are neither the user or the sponsor, you would then pass the transaction to both parties to sign. If you're the sponsor, you would sign the transaction and then pass it and the signature to the other party (in the form of `SenderSignedTransaction`) for them to sign. In practice, the latter is the more common scenario. 
+So, to construct a correct sponsored transaction, you must first build a `TransactionData` object. If you are neither the user or the sponsor, you pass the transaction to both parties to sign. If you're the sponsor, you sign the transaction and then pass it and the signature to the other party (in the form of `SenderSignedTransaction`) for them to sign. In practice, the latter is the more common scenario. 
 
-There are three flows of sponsored transaction.
+There are 3 flows of sponsored transaction.
 
 **User proposed transaction**
 
@@ -107,13 +107,13 @@ There are three flows of sponsored transaction.
 
 ## Risk considerations {#risk}
 
-Because at least two stakeholders are involved in a sponsored transaction, you should take steps to mitigate risk.
+Because at least 2 stakeholders are involved in a sponsored transaction, you should take steps to mitigate risk.
 
 ### Client equivocation risk
 
-Client equivocation happens when more than one legit transaction that shares at least one owned object (such as a gas coin object) at a certain version are submitted to the network simultaneously. On Sui, before a transaction is executed, owned objects in this transaction are locked on validators at specific versions. An honest validator only accepts one transaction and rejects others. Depending on the order validators receive these transactions, validators might accept different transactions. In the event of no single transaction getting accepted by at least 2/3rds of validators, the owned object is locked until end of the epoch.
+Client equivocation happens when more than 1 legit transaction that shares at least 1 owned object (such as a gas coin object) at a certain version are submitted to the network simultaneously. On Sui, before a transaction is executed, owned objects in this transaction are locked on validators at specific versions. An honest validator only accepts 1 transaction and rejects others. Depending on the order validators receive these transactions, validators might accept different transactions. In the event of no single transaction getting accepted by at least 2/3rds of validators, the owned object is locked until end of the epoch.
 
-Practically speaking, client equivocation is rare, mostly caused by buggy client software. After all, no one has incentives to lock their own objects. However, sponsored transactions come with counterparty risks. For example, a malicious user could equivocate the gas station's gas coin object by submitting another transaction that uses one owned object in the gas station signed transaction at the same version. Similarly, a Byzantine gas station could do the same to the user owned objects.
+Practically speaking, client equivocation is rare, mostly caused by buggy client software. After all, no one has incentives to lock their own objects. However, sponsored transactions come with counterparty risks. For example, a malicious user could equivocate the gas station's gas coin object by submitting another transaction that uses 1 owned object in the gas station signed transaction at the same version. Similarly, a Byzantine gas station could do the same to the user owned objects.
 
 Although this risk might seem trivial, it is helpful to be aware of it. Your gas station should actively monitor user behavior and alert on anything abnormal. Whether you're a user taking advantage of sponsored transactions or a developer integrating with a gas station, consider your reputation to minimize the risk of client equivocation.
 
@@ -121,6 +121,6 @@ Both the user and the sponsor need to sign over the entire `TransactionData`, in
 
 ### Censorship risk
 
-If you chooses to submit the dual-signed transaction to the sponsor or gas station rather than a full node, the transaction might be subject to sponsor or gas station censorship. Namely, the sponsor might choose not to submit the transaction to the network, or delay the submission. 
+If you choose to submit the dual-signed transaction to the sponsor or gas station rather than a full node, the transaction might be subject to sponsor or gas station censorship. Namely, the sponsor might choose not to submit the transaction to the network or delay the submission. 
 
 You can mitigate this risk by submitting the transaction directly to a full node.

@@ -12,17 +12,17 @@ use crate::metrics::BridgeMetrics;
 use crate::server::BridgeNodePublicMetadata;
 use crate::sui_transaction_builder::build_add_tokens_on_sui_transaction;
 use crate::sui_transaction_builder::build_committee_register_transaction;
-use crate::types::BridgeCommitteeValiditySignInfo;
 use crate::types::CertifiedBridgeAction;
 use crate::types::VerifiedCertifiedBridgeAction;
-use crate::types::{BridgeAction, BridgeActionStatus, SuiToEthBridgeAction};
+use crate::types::{BridgeAction, BridgeActionStatus};
+use crate::types::{BridgeCommitteeValiditySignInfo, SuiToEthTokenTransfer};
+use crate::utils::EthSigner;
 use crate::utils::get_eth_signer_client;
 use crate::utils::publish_and_register_coins_return_add_coins_on_sui_action;
 use crate::utils::wait_for_server_to_be_up;
-use crate::utils::EthSigner;
 use ethers::types::Address as EthAddress;
-use futures::future::join_all;
 use futures::Future;
+use futures::future::join_all;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use prometheus::Registry;
 use rand::rngs::SmallRng;
@@ -49,18 +49,18 @@ use sui_json_rpc_types::TransactionFilter;
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef};
-use sui_types::bridge::get_bridge_obj_initial_shared_version;
 use sui_types::bridge::BridgeChainId;
 use sui_types::bridge::BridgeSummary;
 use sui_types::bridge::BridgeTrait;
-use sui_types::bridge::{get_bridge, BRIDGE_MODULE_NAME};
+use sui_types::bridge::get_bridge_obj_initial_shared_version;
+use sui_types::bridge::{BRIDGE_MODULE_NAME, get_bridge};
 use sui_types::bridge::{TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT};
 use sui_types::committee::{ProtocolVersion, TOTAL_VOTING_POWER};
-use sui_types::crypto::get_key_pair;
 use sui_types::crypto::ToFromBytes;
+use sui_types::crypto::get_key_pair;
 use sui_types::digests::TransactionDigest;
 use sui_types::object::Object;
-use sui_types::transaction::{ObjectArg, Transaction, TransactionData};
+use sui_types::transaction::{ObjectArg, SharedObjectMutability, Transaction, TransactionData};
 use sui_types::{BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
 use tokio::join;
 use tokio::task::JoinHandle;
@@ -177,7 +177,9 @@ impl BridgeTestClusterBuilder {
 
     pub async fn build(self) -> BridgeTestCluster {
         init_all_struct_tags();
-        std::env::set_var("__TEST_ONLY_CONSENSUS_USE_LONG_MIN_ROUND_DELAY", "1");
+        unsafe {
+            std::env::set_var("__TEST_ONLY_CONSENSUS_USE_LONG_MIN_ROUND_DELAY", "1");
+        };
         let metrics = Arc::new(BridgeMetrics::new_for_testing());
         let mut bridge_keys = vec![];
         let mut bridge_keys_copy = vec![];
@@ -414,18 +416,22 @@ impl BridgeTestCluster {
                 .iter()
                 .any(|e| &e.type_ == TokenTransferApproved.get().unwrap())
             {
-                assert!(events
-                    .iter()
-                    .any(|e| &e.type_ == TokenTransferClaimed.get().unwrap()
-                        || &e.type_ == TokenTransferApproved.get().unwrap()));
+                assert!(
+                    events
+                        .iter()
+                        .any(|e| &e.type_ == TokenTransferClaimed.get().unwrap()
+                            || &e.type_ == TokenTransferApproved.get().unwrap())
+                );
             } else if events
                 .iter()
                 .any(|e| &e.type_ == TokenTransferAlreadyClaimed.get().unwrap())
             {
-                assert!(events
-                    .iter()
-                    .all(|e| &e.type_ == TokenTransferAlreadyClaimed.get().unwrap()
-                        || &e.type_ == TokenTransferAlreadyApproved.get().unwrap()));
+                assert!(
+                    events
+                        .iter()
+                        .all(|e| &e.type_ == TokenTransferAlreadyClaimed.get().unwrap()
+                            || &e.type_ == TokenTransferAlreadyApproved.get().unwrap())
+                );
             }
             // TODO: check for other events e.g. TokenRegistrationEvent, NewTokenEvent etc
         }
@@ -441,8 +447,8 @@ impl BridgeTestCluster {
         assert_success: bool,
     ) -> Vec<SuiEvent> {
         let txes = self.new_bridge_transactions(assert_success).await;
-        let events = txes
-            .iter()
+
+        txes.iter()
             .flat_map(|tx| {
                 tx.events
                     .as_ref()
@@ -452,8 +458,7 @@ impl BridgeTestCluster {
                     .filter(|e| event_types.contains(&e.type_))
                     .cloned()
             })
-            .collect();
-        events
+            .collect()
     }
 }
 
@@ -566,13 +571,15 @@ pub(crate) async fn deploy_sol_contract(
     file.write_all(serialized_config.as_bytes()).unwrap();
 
     // override for the deploy script
-    std::env::set_var("OVERRIDE_CONFIG_PATH", deploy_config_path.to_str().unwrap());
-    std::env::set_var("PRIVATE_KEY", eth_private_key_hex);
-    std::env::set_var("ETHERSCAN_API_KEY", "n/a");
+    unsafe {
+        std::env::set_var("OVERRIDE_CONFIG_PATH", deploy_config_path.to_str().unwrap());
+        std::env::set_var("PRIVATE_KEY", eth_private_key_hex);
+        std::env::set_var("ETHERSCAN_API_KEY", "n/a");
+    };
 
     // We provide a unique out path for each run to avoid conflicts
     let mut rng = SmallRng::from_entropy();
-    let random_number = rng.gen::<u32>();
+    let random_number = rng.r#gen::<u32>();
     let forge_out_path = PathBuf::from(format!("out-{random_number}"));
     let _dir = TempDir::new(
         PathBuf::from(sol_path.clone())
@@ -580,7 +587,9 @@ pub(crate) async fn deploy_sol_contract(
             .as_path(),
     )
     .unwrap();
-    std::env::set_var("FOUNDRY_OUT", forge_out_path.to_str().unwrap());
+    unsafe {
+        std::env::set_var("FOUNDRY_OUT", forge_out_path.to_str().unwrap());
+    };
 
     info!("Deploying solidity contracts");
     Command::new("forge")
@@ -1175,7 +1184,7 @@ async fn get_mut_bridge_arg(test_cluster: &TestCluster) -> Option<ObjectArg> {
     .map(|seq| ObjectArg::SharedObject {
         id: SUI_BRIDGE_OBJECT_ID,
         initial_shared_version: seq,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     })
 }
 
@@ -1284,7 +1293,7 @@ pub async fn initiate_bridge_sui_to_eth(
     token: ObjectRef,
     nonce: u64,
     sui_amount: u64,
-) -> Result<SuiToEthBridgeAction, anyhow::Error> {
+) -> Result<SuiToEthTokenTransfer, anyhow::Error> {
     let bridge_object_arg = bridge_test_cluster
         .bridge_client()
         .get_mutable_bridge_object_arg_must_succeed()
@@ -1320,14 +1329,14 @@ pub async fn initiate_bridge_sui_to_eth(
     };
 
     let sui_events = resp.events.unwrap().data;
-    let bridge_event = sui_events
+    let bridge_action = sui_events
         .iter()
         .filter_map(|e| {
             let sui_bridge_event = SuiBridgeEvent::try_from_sui_event(e).unwrap()?;
-            sui_bridge_event.try_into_bridge_action(e.id.tx_digest, e.id.event_seq as u16)
+            sui_bridge_event.try_into_bridge_action()
         })
         .find_map(|e| {
-            if let BridgeAction::SuiToEthBridgeAction(a) = e {
+            if let BridgeAction::SuiToEthTokenTransfer(a) = e {
                 Some(a)
             } else {
                 None
@@ -1335,22 +1344,19 @@ pub async fn initiate_bridge_sui_to_eth(
         })
         .unwrap();
     info!("Deposited Eth to move package");
-    assert_eq!(bridge_event.sui_bridge_event.nonce, nonce);
+    assert_eq!(bridge_action.nonce, nonce);
     assert_eq!(
-        bridge_event.sui_bridge_event.sui_chain_id,
+        bridge_action.sui_chain_id,
         bridge_test_cluster.sui_chain_id()
     );
     assert_eq!(
-        bridge_event.sui_bridge_event.eth_chain_id,
+        bridge_action.eth_chain_id,
         bridge_test_cluster.eth_chain_id()
     );
-    assert_eq!(bridge_event.sui_bridge_event.sui_address, sui_address);
-    assert_eq!(bridge_event.sui_bridge_event.eth_address, eth_address);
-    assert_eq!(bridge_event.sui_bridge_event.token_id, TOKEN_ID_ETH);
-    assert_eq!(
-        bridge_event.sui_bridge_event.amount_sui_adjusted,
-        sui_amount
-    );
+    assert_eq!(bridge_action.sui_address, sui_address);
+    assert_eq!(bridge_action.eth_address, eth_address);
+    assert_eq!(bridge_action.token_id, TOKEN_ID_ETH);
+    assert_eq!(bridge_action.amount_adjusted, sui_amount);
 
     // Wait for the bridge action to be approved
     wait_for_transfer_action_status(
@@ -1363,7 +1369,7 @@ pub async fn initiate_bridge_sui_to_eth(
     .unwrap();
     info!("Sui to Eth bridge transfer approved.");
 
-    Ok(bridge_event)
+    Ok(bridge_action)
 }
 
 async fn wait_for_transfer_action_status(

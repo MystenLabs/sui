@@ -12,8 +12,8 @@ use std::collections::VecDeque;
 use sui_types::{base_types::ObjectID, digests::TransactionDigest};
 
 use crate::{
-    get_extension, get_extension_mut, object_runtime::ObjectRuntime,
-    transaction_context::TransactionContext, NativesCostTable,
+    NativesCostTable, get_extension, get_extension_mut, object_runtime::ObjectRuntime,
+    transaction_context::TransactionContext,
 };
 
 #[derive(Clone)]

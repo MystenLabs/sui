@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_histogram_with_registry, register_int_gauge_with_registry, Histogram, IntGauge,
-    Registry,
+    Histogram, IntGauge, Registry, register_histogram_with_registry,
+    register_int_gauge_with_registry,
 };
 use std::sync::Arc;
 use sui_types::{committee::EpochId, crypto::RandomnessRound};

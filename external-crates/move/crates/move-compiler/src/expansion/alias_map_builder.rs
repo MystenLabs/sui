@@ -10,7 +10,7 @@ use crate::{
     shared::{unique_map::UniqueMap, *},
 };
 use move_ir_types::location::*;
-use std::{collections::BTreeSet, fmt};
+use std::fmt;
 
 #[derive(Clone)]
 pub enum AliasMapBuilder {
@@ -38,6 +38,7 @@ pub enum AliasEntry {
     Module(Name, ModuleIdent),
     Member(Name, ModuleIdent, Name),
     TypeParam(Name),
+    LambdaParam(Name),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -48,28 +49,18 @@ pub enum LeadingAccessEntry {
     TypeParam,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 #[allow(clippy::large_enum_variant)]
 pub enum MemberEntry {
-    Member(ModuleIdent, Name),
+    Member(ModuleIdent, Name, ModuleMemberKind),
     TypeParam,
+    LambdaParam,
 }
 
 #[derive(Clone, Copy)]
 pub enum NameSpace {
     LeadingAccess,
     ModuleMembers,
-}
-
-pub struct AliasMap {
-    unused: BTreeSet<AliasEntry>,
-    // the start of an access path, excludes functions
-    leading_access: UniqueMap<Name, LeadingAccessEntry>,
-    // a module member is expected, not a module
-    // For now, this excludes local variables because the only case where this can overlap is with
-    // macro lambdas, but those have to have a leading `$` and cannot conflict with module members
-    module_members: UniqueMap<Name, MemberEntry>,
-    previous: Option<Box<AliasMap>>,
 }
 
 pub struct ParserExplicitUseFun {
@@ -93,7 +84,8 @@ impl AliasEntry {
             AliasEntry::Address(n, _)
             | AliasEntry::Module(n, _)
             | AliasEntry::Member(n, _, _)
-            | AliasEntry::TypeParam(n) => n.loc,
+            | AliasEntry::TypeParam(n)
+            | AliasEntry::LambdaParam(n) => n.loc,
         }
     }
 }
@@ -207,13 +199,13 @@ impl AliasMapBuilder {
             } => match kind {
                 // constants and functions are not in the leading access namespace
                 ModuleMemberKind::Constant | ModuleMemberKind::Function => {
-                    let entry = (MemberEntry::Member(ident, member), is_implicit);
+                    let entry = (MemberEntry::Member(ident, member, kind), is_implicit);
                     module_members.add(alias, entry).unwrap();
                 }
                 // structs and enums are in the leading access namespace in addition to the module
                 // members namespace
                 ModuleMemberKind::Struct | ModuleMemberKind::Enum => {
-                    let member_entry = (MemberEntry::Member(ident, member), is_implicit);
+                    let member_entry = (MemberEntry::Member(ident, member, kind), is_implicit);
                     module_members.add(alias, member_entry).unwrap();
                     let leading_access_entry =
                         (LeadingAccessEntry::Member(ident, member), is_implicit);
@@ -311,8 +303,9 @@ impl From<(Name, LeadingAccessEntry)> for AliasEntry {
 impl From<(Name, MemberEntry)> for AliasEntry {
     fn from((name, entry): (Name, MemberEntry)) -> Self {
         match entry {
-            MemberEntry::Member(mident, member) => AliasEntry::Member(name, mident, member),
+            MemberEntry::Member(mident, member, _) => AliasEntry::Member(name, mident, member),
             MemberEntry::TypeParam => AliasEntry::TypeParam(name),
+            MemberEntry::LambdaParam => AliasEntry::LambdaParam(name),
         }
     }
 }
@@ -322,6 +315,26 @@ impl UseFunsBuilder {
         Self {
             explicit: vec![],
             implicit: UniqueMap::new(),
+        }
+    }
+}
+
+//**************************************************************************************************
+// Eq
+//**************************************************************************************************
+
+impl PartialEq for MemberEntry {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                MemberEntry::Member(mident1, name1, _kind1),
+                MemberEntry::Member(mident2, name2, _kind2),
+            ) => {
+                // Do not consider kind for equality
+                mident1 == mident2 && name1 == name2
+            }
+            (MemberEntry::TypeParam, MemberEntry::TypeParam) => true,
+            _ => false,
         }
     }
 }
@@ -337,6 +350,7 @@ impl fmt::Debug for AliasEntry {
             AliasEntry::Address(alias, addr) => write!(f, "({alias}, @{addr})"),
             AliasEntry::Member(alias, mident, name) => write!(f, "({alias},{mident}::{name})"),
             AliasEntry::TypeParam(alias) => write!(f, "({alias},[tparam])"),
+            AliasEntry::LambdaParam(alias) => write!(f, "({alias},[lparam])"),
         }
     }
 }
@@ -355,8 +369,9 @@ impl fmt::Debug for LeadingAccessEntry {
 impl fmt::Debug for MemberEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         match self {
-            MemberEntry::Member(mident, name) => write!(f, "{mident}::{name}"),
+            MemberEntry::Member(mident, name, _) => write!(f, "{mident}::{name}"),
             MemberEntry::TypeParam => write!(f, "[tparam]"),
+            MemberEntry::LambdaParam => write!(f, "[lparam]"),
         }
     }
 }
@@ -390,30 +405,5 @@ impl fmt::Debug for AliasMapBuilder {
                 writeln!(f, "])")
             }
         }
-    }
-}
-
-impl fmt::Debug for AliasMap {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        let Self {
-            unused,
-            leading_access,
-            module_members,
-            previous,
-        } = self;
-        writeln!(f, "AliasMap(\n  unused: [")?;
-        for entry in unused {
-            writeln!(f, "    {entry:?},")?;
-        }
-        writeln!(f, "],\n  modules: [")?;
-        for (_, alias, entry) in leading_access {
-            writeln!(f, "    {alias} => {entry:?}")?;
-        }
-        writeln!(f, "],\n  members: [")?;
-        for (_, alias, entry) in module_members {
-            writeln!(f, "    {alias} => {entry:?}")?;
-        }
-        writeln!(f, "])")?;
-        writeln!(f, "--> PREVIOUS \n: {previous:?}")
     }
 }

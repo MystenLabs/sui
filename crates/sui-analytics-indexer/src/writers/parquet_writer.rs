@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{AnalyticsWriter, FileFormat, FileType, ParquetSchema, ParquetValue};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use arrow_array::{
-    builder::{ArrayBuilder, BooleanBuilder, GenericStringBuilder, Int64Builder, UInt64Builder},
     ArrayRef, RecordBatch,
+    builder::{ArrayBuilder, BooleanBuilder, GenericStringBuilder, Int64Builder, UInt64Builder},
 };
 use serde::Serialize;
-use std::fs::{create_dir_all, remove_file, File};
+use std::fs::{File, create_dir_all, remove_file};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -106,21 +106,21 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         }
 
         // Lazily sample the first row to infer the schema and decide which concrete builder to instantiate
-        if self.builders.is_empty() {
-            if let Some(first_row) = row_iter.peek() {
-                for col_idx in 0..S::schema().len() {
-                    let value = first_row.get_column(col_idx);
-                    self.builders.push(match value {
-                        ParquetValue::U64(_) | ParquetValue::OptionU64(_) => {
-                            ColumnBuilder::U64(UInt64Builder::new())
-                        }
-                        ParquetValue::I64(_) => ColumnBuilder::I64(Int64Builder::new()),
-                        ParquetValue::Bool(_) => ColumnBuilder::Bool(BooleanBuilder::new()),
-                        ParquetValue::Str(_) | ParquetValue::OptionStr(_) => {
-                            ColumnBuilder::Str(StrBuilder::new())
-                        }
-                    });
-                }
+        if self.builders.is_empty()
+            && let Some(first_row) = row_iter.peek()
+        {
+            for col_idx in 0..S::schema().len() {
+                let value = first_row.get_column(col_idx);
+                self.builders.push(match value {
+                    ParquetValue::U64(_) | ParquetValue::OptionU64(_) => {
+                        ColumnBuilder::U64(UInt64Builder::new())
+                    }
+                    ParquetValue::I64(_) => ColumnBuilder::I64(Int64Builder::new()),
+                    ParquetValue::Bool(_) => ColumnBuilder::Bool(BooleanBuilder::new()),
+                    ParquetValue::Str(_) | ParquetValue::OptionStr(_) => {
+                        ColumnBuilder::Str(StrBuilder::new())
+                    }
+                });
             }
         }
 

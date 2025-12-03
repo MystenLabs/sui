@@ -5,8 +5,14 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03005]: unbound unscoped name
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/unbound_var_call.move:6:9
   │
+2 │     fun foo() {}
+  │         --- Similarly named defintion found here
+  ·
 6 │         fo();
-  │         ^^ Unbound function 'fo' in current scope
+  │         ^^
+  │         │
+  │         Could not resolve the name 'fo'
+  │         Did you mean: 'foo'

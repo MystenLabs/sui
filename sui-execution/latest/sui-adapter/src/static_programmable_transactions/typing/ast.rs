@@ -5,6 +5,7 @@ use crate::static_programmable_transactions::{
     linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
 };
 use indexmap::IndexSet;
+use move_core_types::{account_address::AccountAddress, u256::U256};
 use move_vm_types::values::VectorSpecialization;
 use std::cell::OnceCell;
 use sui_types::base_types::{ObjectID, ObjectRef};
@@ -19,6 +20,8 @@ pub struct Transaction {
     pub bytes: IndexSet<Vec<u8>>,
     // All input objects
     pub objects: Vec<ObjectInput>,
+    /// All Withdrawal inputs
+    pub withdrawals: Vec<WithdrawalInput>,
     /// All pure inputs
     pub pure: Vec<PureInput>,
     /// All receiving inputs
@@ -58,6 +61,16 @@ pub struct ReceivingInput {
     pub ty: Type,
     // Information about where this constraint came from
     pub constraint: BytesConstraint,
+}
+
+#[derive(Debug)]
+pub struct WithdrawalInput {
+    pub original_input_index: InputIndex,
+    /// The full type `sui::funds_accumulator::Withdrawal<T>`
+    pub ty: Type,
+    pub owner: AccountAddress,
+    /// This amount is verified to be <= the max for the type described by the `T` in `ty`
+    pub amount: U256,
 }
 
 pub type Commands = Vec<Command>;
@@ -127,6 +140,7 @@ pub enum Location {
     TxContext,
     GasCoin,
     ObjectInput(u16),
+    WithdrawalInput(u16),
     PureInput(u16),
     ReceivingInput(u16),
     Result(u16, u16),
@@ -162,6 +176,19 @@ pub enum Argument__ {
 //**************************************************************************************************
 // impl
 //**************************************************************************************************
+
+impl Transaction {
+    pub fn types(&self) -> impl Iterator<Item = &Type> {
+        let pure_types = self.pure.iter().map(|p| &p.ty);
+        let object_types = self.objects.iter().map(|o| &o.ty);
+        let receiving_types = self.receiving.iter().map(|r| &r.ty);
+        let command_types = self.commands.iter().flat_map(command_types);
+        pure_types
+            .chain(object_types)
+            .chain(receiving_types)
+            .chain(command_types)
+    }
+}
 
 impl Usage {
     pub fn new_move(location: Location) -> Usage {
@@ -199,6 +226,85 @@ impl Argument__ {
             Self::Freeze(usage) => usage.location(),
         }
     }
+}
+
+impl Command__ {
+    pub fn arguments(&self) -> Box<dyn Iterator<Item = &Argument> + '_> {
+        match self {
+            Command__::MoveCall(mc) => Box::new(mc.arguments.iter()),
+            Command__::TransferObjects(objs, addr) => {
+                Box::new(objs.iter().chain(std::iter::once(addr)))
+            }
+            Command__::SplitCoins(_, coin, amounts) => {
+                Box::new(std::iter::once(coin).chain(amounts))
+            }
+            Command__::MergeCoins(_, target, sources) => {
+                Box::new(std::iter::once(target).chain(sources))
+            }
+            Command__::MakeMoveVec(_, elems) => Box::new(elems.iter()),
+            Command__::Publish(_, _, _) => Box::new(std::iter::empty()),
+            Command__::Upgrade(_, _, _, arg, _) => Box::new(std::iter::once(arg)),
+        }
+    }
+
+    pub fn types(&self) -> Box<dyn Iterator<Item = &Type> + '_> {
+        match self {
+            Command__::TransferObjects(args, arg) => {
+                Box::new(std::iter::once(arg).chain(args.iter()).map(argument_type))
+            }
+            Command__::SplitCoins(ty, arg, args) | Command__::MergeCoins(ty, arg, args) => {
+                Box::new(
+                    std::iter::once(arg)
+                        .chain(args.iter())
+                        .map(argument_type)
+                        .chain(std::iter::once(ty)),
+                )
+            }
+            Command__::MakeMoveVec(ty, args) => {
+                Box::new(args.iter().map(argument_type).chain(std::iter::once(ty)))
+            }
+            Command__::MoveCall(call) => Box::new(
+                call.arguments
+                    .iter()
+                    .map(argument_type)
+                    .chain(call.function.type_arguments.iter())
+                    .chain(call.function.signature.parameters.iter())
+                    .chain(call.function.signature.return_.iter()),
+            ),
+            Command__::Upgrade(_, _, _, arg, _) => {
+                Box::new(std::iter::once(arg).map(argument_type))
+            }
+            Command__::Publish(_, _, _) => Box::new(std::iter::empty()),
+        }
+    }
+
+    pub fn arguments_len(&self) -> usize {
+        let n = match self {
+            Command__::MoveCall(mc) => mc.arguments.len(),
+            Command__::TransferObjects(objs, _) => objs.len().saturating_add(1),
+            Command__::SplitCoins(_, _, amounts) => amounts.len().saturating_add(1),
+            Command__::MergeCoins(_, _, sources) => sources.len().saturating_add(1),
+            Command__::MakeMoveVec(_, elems) => elems.len(),
+            Command__::Publish(_, _, _) => 0,
+            Command__::Upgrade(_, _, _, _, _) => 1,
+        };
+        debug_assert_eq!(self.arguments().count(), n);
+        n
+    }
+}
+
+//**************************************************************************************************
+// Standalone functions
+//**************************************************************************************************
+
+pub fn command_types(cmd: &Command) -> impl Iterator<Item = &Type> {
+    let result_types = cmd.value.result_type.iter();
+    let command_types = cmd.value.command.types();
+    result_types.chain(command_types)
+}
+
+pub fn argument_type(arg: &Argument) -> &Type {
+    &arg.value.1
 }
 
 //**************************************************************************************************

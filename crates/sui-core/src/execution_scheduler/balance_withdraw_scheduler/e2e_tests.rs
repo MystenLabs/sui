@@ -8,21 +8,20 @@ use std::time::Duration;
 use move_core_types::language_storage::TypeTag;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::accumulator_root::{
-    update_account_balance_for_testing, AccumulatorObjId, AccumulatorValue,
+    AccumulatorObjId, AccumulatorValue, update_account_balance_for_testing,
 };
 use sui_types::balance::Balance;
 use sui_types::base_types::ObjectID;
 use sui_types::digests::TransactionDigest;
 use sui_types::execution_params::BalanceWithdrawStatus;
-use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
-    crypto::{get_account_key_pair, AccountKeyPair},
+    crypto::{AccountKeyPair, get_account_key_pair},
     executable_transaction::VerifiedExecutableTransaction,
     gas_coin::GAS,
     object::Object,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::FundsWithdrawalArg,
 };
 use tokio::sync::mpsc::{self, unbounded_channel};
@@ -31,9 +30,8 @@ use tokio::time::timeout;
 use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 use crate::{
     authority::{
-        shared_object_version_manager::{Schedulable, WithdrawType},
+        AuthorityState, ExecutionEnv, shared_object_version_manager::Schedulable,
         test_authority_builder::TestAuthorityBuilder,
-        AuthorityState, ExecutionEnv,
     },
     execution_scheduler::{ExecutionScheduler, PendingCertificate},
 };
@@ -71,7 +69,7 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
         .await;
     let scheduler = Arc::new(ExecutionScheduler::new(
         state.get_object_cache_reader().clone(),
-        state.get_object_store().clone(),
+        state.get_child_object_resolver().clone(),
         state.get_transaction_cache_reader().clone(),
         tx_ready_certificates,
         &state.epoch_store_for_testing(),
@@ -96,16 +94,17 @@ impl TestEnv {
             .map(|(idx, amount)| {
                 let withdraw =
                     FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag().into());
-                let mut ptb = ProgrammableTransactionBuilder::new();
-                ptb.funds_withdrawal(withdraw).unwrap();
-                let tx_data = TestTransactionBuilder::new(
+                let mut tx_builder = TestTransactionBuilder::new(
                     self.sender,
                     self.gas_object.compute_object_reference(),
                     // Use a unique index to make the transaction digests unique.
                     idx as u64 + 1,
-                )
-                .programmable(ptb.finish())
-                .build();
+                );
+                let tx_data = {
+                    let ptb = tx_builder.ptb_builder_mut();
+                    ptb.funds_withdrawal(withdraw).unwrap();
+                    tx_builder.build()
+                };
                 VerifiedExecutableTransaction::new_for_testing(tx_data, &self.sender_key)
             })
             .collect()
@@ -136,7 +135,7 @@ impl TestEnv {
                 .iter()
                 .map(|tx| {
                     let mut env = ExecutionEnv::default();
-                    env.assigned_versions.withdraw_type = WithdrawType::Withdraw(version);
+                    env.assigned_versions.accumulator_version = Some(version);
                     (Schedulable::Transaction(tx.clone()), env)
                 })
                 .collect(),

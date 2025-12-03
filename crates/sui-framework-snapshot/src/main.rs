@@ -5,7 +5,7 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use sui_framework::{BuiltInFramework, SystemPackage};
-use sui_framework_snapshot::{update_bytecode_snapshot_manifest, SnapshotPackage};
+use sui_framework_snapshot::{SnapshotPackage, update_bytecode_snapshot_manifest};
 use sui_protocol_config::ProtocolVersion;
 
 // Define the `GIT_FULL_SHA_REVISION` const

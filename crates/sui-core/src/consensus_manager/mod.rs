@@ -11,23 +11,23 @@ use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use consensus_core::{
-    Clock, CommitConsumerArgs, CommitConsumerMonitor, CommitIndex, ConsensusAuthority,
+    Clock, CommitConsumerArgs, CommitConsumerMonitor, CommitIndex, ConsensusAuthority, NetworkType,
 };
 use core::panic;
 use fastcrypto::traits::KeyPair as _;
 use mysten_metrics::{RegistryID, RegistryService};
-use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
+use prometheus::{IntGauge, Registry, register_int_gauge_with_registry};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::{ConsensusConfig, NodeConfig};
-use sui_protocol_config::{ConsensusNetwork, ProtocolVersion};
+use sui_protocol_config::ProtocolVersion;
 use sui_types::error::SuiResult;
 use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
 use sui_types::{
     committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{Mutex, broadcast};
 use tokio::time::{sleep, timeout};
 use tracing::{error, info};
 
@@ -113,7 +113,6 @@ impl ConsensusManager {
         let committee: Committee = system_state.get_consensus_committee();
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
-        let network_type = self.pick_network(&epoch_store);
 
         // Ensure start() is not called twice.
         let start_time = Instant::now();
@@ -205,7 +204,7 @@ impl ConsensusManager {
         }
 
         let authority = ConsensusAuthority::start(
-            network_type,
+            NetworkType::Tonic,
             epoch_store.epoch_start_config().epoch_start_timestamp_ms(),
             own_index,
             committee.clone(),
@@ -315,22 +314,6 @@ impl ConsensusManager {
         store_path.push(format!("{}", epoch));
         store_path
     }
-
-    fn pick_network(&self, epoch_store: &AuthorityPerEpochStore) -> ConsensusNetwork {
-        if let Ok(type_str) = std::env::var("CONSENSUS_NETWORK") {
-            match type_str.to_lowercase().as_str() {
-                "anemo" => return ConsensusNetwork::Anemo,
-                "tonic" => return ConsensusNetwork::Tonic,
-                _ => {
-                    info!(
-                        "Invalid consensus network type {} in env var. Continue to use the value from protocol config.",
-                        type_str
-                    );
-                }
-            }
-        }
-        epoch_store.protocol_config().consensus_network()
-    }
 }
 
 /// A ConsensusClient that can be updated internally at any time. This usually happening during epoch
@@ -349,7 +332,7 @@ impl UpdatableConsensusClient {
     }
 
     async fn get(&self) -> Arc<Arc<dyn ConsensusClient>> {
-        const START_TIMEOUT: Duration = Duration::from_secs(30);
+        const START_TIMEOUT: Duration = Duration::from_secs(300);
         const RETRY_INTERVAL: Duration = Duration::from_millis(100);
         if let Ok(client) = timeout(START_TIMEOUT, async {
             loop {

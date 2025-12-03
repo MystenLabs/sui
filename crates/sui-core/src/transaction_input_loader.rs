@@ -211,11 +211,14 @@ impl TransactionInputLoader {
             fetches.into_iter()
         ) {
             results[index] = Some(match (object, input) {
-                (Some(obj), InputObjectKind::SharedMoveObject { .. }) if obj.full_id() == input.full_object_id() => {
+                (Some(obj), InputObjectKind::SharedMoveObject { .. })
+                    if obj.full_id() == input.full_object_id() =>
+                {
                     ObjectReadResult {
-                    input_object_kind: *input,
-                    object: obj.into(),
-                }},
+                        input_object_kind: *input,
+                        object: obj.into(),
+                    }
+                }
                 (_, InputObjectKind::SharedMoveObject { .. }) => {
                     assert!(key.1.is_valid());
                     // If the full ID on a shared input doesn't match, check if the object
@@ -227,17 +230,24 @@ impl TransactionInputLoader {
                     ) {
                         ObjectReadResult {
                             input_object_kind: *input,
-                            object: ObjectReadResultKind::ObjectConsensusStreamEnded(version, dependency),
+                            object: ObjectReadResultKind::ObjectConsensusStreamEnded(
+                                version, dependency,
+                            ),
                         }
                     } else {
-                        panic!("All dependencies of tx {tx_key:?} should have been executed now, but Shared Object id: {:?}, version: {version} is absent in epoch {epoch_id}", input.full_object_id());
+                        panic!(
+                            "All dependencies of tx {tx_key:?} should have been executed now, but Shared Object id: {:?}, version: {version} is absent in epoch {epoch_id}",
+                            input.full_object_id()
+                        );
                     }
-                },
+                }
                 (Some(obj), input_object_kind) => ObjectReadResult {
                     input_object_kind: *input_object_kind,
                     object: obj.into(),
                 },
-                _ => panic!("All dependencies of tx {tx_key:?} should have been executed now, but obj {key:?} is absent"),
+                _ => panic!(
+                    "All dependencies of tx {tx_key:?} should have been executed now, but obj {key:?} is absent"
+                ),
             });
         }
 

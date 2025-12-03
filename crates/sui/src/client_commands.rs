@@ -9,7 +9,7 @@ use crate::{
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map::Entry},
     fmt::{Debug, Display, Formatter, Write},
     fs,
     path::{Path, PathBuf},
@@ -17,7 +17,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{Context, anyhow, bail, ensure};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
@@ -32,10 +32,10 @@ use move_bytecode_verifier_meter::Scope;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
 };
-use move_package::{source_package::parsed_manifest::Dependencies, BuildConfig as MoveBuildConfig};
+use move_package::{BuildConfig as MoveBuildConfig, source_package::parsed_manifest::Dependencies};
 use prometheus::Registry;
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_move::manage_package::resolve_lock_file_path;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -53,26 +53,27 @@ use sui_json_rpc_types::{
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
-    build_from_resolution_graph, check_conflicting_addresses, check_invalid_dependencies,
-    check_unpublished_dependencies, gather_published_ids, implicit_deps, BuildConfig,
-    CompiledPackage,
+    BuildConfig, CompiledPackage, build_from_resolution_graph, check_conflicting_addresses,
+    check_invalid_dependencies, check_unpublished_dependencies, gather_published_ids,
+    implicit_deps,
 };
 use sui_package_management::{
-    system_package_versions::{latest_system_packages, system_packages_for_protocol},
     LockCommand, PublishedAtError,
+    system_package_versions::{latest_system_packages, system_packages_for_protocol},
 };
 use sui_sdk::{
+    SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
+    SuiClient,
     apis::ReadApi,
     sui_client_config::{SuiClientConfig, SuiEnv},
     wallet_context::WalletContext,
-    SuiClient, SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0,
-    SUI_TESTNET_URL,
 };
 use sui_types::{
+    SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{FullObjectID, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
-    error::SuiError,
+    error::SuiErrorKind,
     gas::GasCostSummary,
     gas_coin::GasCoin,
     message_envelope::Envelope,
@@ -84,21 +85,20 @@ use sui_types::{
     signature::GenericSignature,
     sui_serde,
     transaction::{
-        InputObjectKind, ObjectArg, SenderSignedData, Transaction, TransactionData,
-        TransactionDataAPI, TransactionKind,
+        InputObjectKind, ObjectArg, SenderSignedData, SharedObjectMutability, Transaction,
+        TransactionData, TransactionDataAPI, TransactionKind,
     },
-    SUI_FRAMEWORK_PACKAGE_ID,
 };
 
 use json_to_table::json_to_table;
 use tabled::{
     builder::Builder as TableBuilder,
     settings::{
+        Alignment as TableAlignment, Border as TableBorder, Modify as TableModify,
+        Panel as TablePanel, Style as TableStyle,
         object::{Cell as TableCell, Columns as TableCols, Rows as TableRows},
         span::Span as TableSpan,
         style::HorizontalLine,
-        Alignment as TableAlignment, Border as TableBorder, Modify as TableModify,
-        Panel as TablePanel, Style as TableStyle,
     },
 };
 
@@ -770,6 +770,7 @@ impl SuiClientCommands {
             } => {
                 let address = context.get_identity_address(address)?;
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
 
                 let mut objects: Vec<Coin> = Vec::new();
                 let mut cursor = None;
@@ -840,6 +841,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
                 let df_read = client
                     .read_api()
                     .get_dynamic_fields(id, cursor, Some(limit))
@@ -861,16 +863,16 @@ impl SuiClientCommands {
             } => {
                 let sender = context.infer_sender(&payment.gas).await?;
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
                 let read_api = client.read_api();
                 let chain_id = read_api.get_chain_identifier().await.ok();
 
                 check_protocol_version_and_warn(read_api).await?;
-                let package_path =
-                    package_path
-                        .canonicalize()
-                        .map_err(|e| SuiError::ModulePublishFailure {
-                            error: format!("Failed to canonicalize package path: {}", e),
-                        })?;
+                let package_path = package_path.canonicalize().map_err(|e| {
+                    SuiErrorKind::ModulePublishFailure {
+                        error: format!("Failed to canonicalize package path: {}", e),
+                    }
+                })?;
                 let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                 let previous_id = if let Some(ref chain_id) = chain_id {
                     sui_package_management::set_package_id(
@@ -978,8 +980,8 @@ impl SuiClientCommands {
                 )
                 .await?;
 
-                if let SuiClientCommandResult::TransactionBlock(ref response) = result {
-                    if let Err(e) = sui_package_management::update_lock_file(
+                if let SuiClientCommandResult::TransactionBlock(ref response) = result
+                    && let Err(e) = sui_package_management::update_lock_file(
                         context,
                         LockCommand::Upgrade,
                         build_config.install_dir,
@@ -987,14 +989,13 @@ impl SuiClientCommands {
                         response,
                     )
                     .await
-                    {
-                        eprintln!(
-                            "{} {e}",
-                            "Warning: Issue while updating `Move.lock` for published package."
-                                .bold()
-                                .yellow()
-                        )
-                    };
+                {
+                    eprintln!(
+                        "{} {e}",
+                        "Warning: Issue while updating `Move.lock` for published package."
+                            .bold()
+                            .yellow()
+                    )
                 };
                 result
             }
@@ -1009,7 +1010,7 @@ impl SuiClientCommands {
                 processing,
             } => {
                 if build_config.test_mode {
-                    return Err(SuiError::ModulePublishFailure {
+                    return Err(SuiErrorKind::ModulePublishFailure {
                         error:
                             "The `publish` subcommand should not be used with the `--test` flag\n\
                             \n\
@@ -1025,16 +1026,16 @@ impl SuiClientCommands {
 
                 let sender = context.infer_sender(&payment.gas).await?;
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
                 let read_api = client.read_api();
                 let chain_id = read_api.get_chain_identifier().await.ok();
 
                 check_protocol_version_and_warn(read_api).await?;
-                let package_path =
-                    package_path
-                        .canonicalize()
-                        .map_err(|e| SuiError::ModulePublishFailure {
-                            error: format!("Failed to canonicalize package path: {}", e),
-                        })?;
+                let package_path = package_path.canonicalize().map_err(|e| {
+                    SuiErrorKind::ModulePublishFailure {
+                        error: format!("Failed to canonicalize package path: {}", e),
+                    }
+                })?;
                 let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
                 let previous_id = if let Some(ref chain_id) = chain_id {
                     sui_package_management::set_package_id(
@@ -1092,8 +1093,8 @@ impl SuiClientCommands {
                 )
                 .await?;
 
-                if let SuiClientCommandResult::TransactionBlock(ref response) = result {
-                    if let Err(e) = sui_package_management::update_lock_file(
+                if let SuiClientCommandResult::TransactionBlock(ref response) = result
+                    && let Err(e) = sui_package_management::update_lock_file(
                         context,
                         LockCommand::Publish,
                         build_config.install_dir,
@@ -1101,14 +1102,13 @@ impl SuiClientCommands {
                         response,
                     )
                     .await
-                    {
-                        eprintln!(
-                            "{} {e}",
-                            "Warning: Issue while updating `Move.lock` for published package."
-                                .bold()
-                                .yellow()
-                        )
-                    };
+                {
+                    eprintln!(
+                        "{} {e}",
+                        "Warning: Issue while updating `Move.lock` for published package."
+                            .bold()
+                            .yellow()
+                    )
                 };
                 result
             }
@@ -1120,6 +1120,7 @@ impl SuiClientCommands {
                 build_config,
             } => {
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
                 let read_api = client.read_api();
                 let protocol_version =
                     protocol_version.map_or(ProtocolVersion::MAX, ProtocolVersion::new);
@@ -1160,7 +1161,8 @@ impl SuiClientCommands {
                     }
                 };
 
-                let signing_limits = Some(VerifierSigningConfig::default().limits_for_signing());
+                let limits = VerifierSigningConfig::default();
+                let signing_limits = Some(limits.limits_for_signing());
                 let mut verifier = sui_execution::verifier(
                     &protocol_config,
                     signing_limits,
@@ -1204,6 +1206,7 @@ impl SuiClientCommands {
             SuiClientCommands::Object { id, bcs } => {
                 // Fetch the object ref
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
                 if !bcs {
                     let object_read = client
                         .read_api()
@@ -1221,6 +1224,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::TransactionBlock { digest } => {
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
                 let tx_read = client
                     .read_api()
                     .get_transaction_with_options(
@@ -1262,6 +1266,7 @@ impl SuiClientCommands {
                     .collect::<Vec<_>>();
 
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
 
                 let tx_kind = client
                     .transaction_builder()
@@ -1295,6 +1300,7 @@ impl SuiClientCommands {
                 let signer = context.get_object_owner(&object_id).await?;
                 let to = context.get_identity_address(Some(to))?;
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
 
                 let tx_kind = client
                     .transaction_builder()
@@ -1327,6 +1333,7 @@ impl SuiClientCommands {
                 let signer = context.get_object_owner(&object_id).await?;
                 let to = context.get_identity_address(Some(to))?;
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
 
                 let tx_kind = client
                     .transaction_builder()
@@ -1379,6 +1386,7 @@ impl SuiClientCommands {
                     .map_err(|e| anyhow!("{e}"))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
                 let tx_kind = client
                     .transaction_builder()
                     .pay_tx_kind(input_coins.clone(), recipients.clone(), amounts.clone())
@@ -1435,6 +1443,7 @@ impl SuiClientCommands {
                     .map_err(|e| anyhow!("{e}"))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
 
                 let tx_kind = client
                     .transaction_builder()
@@ -1469,6 +1478,7 @@ impl SuiClientCommands {
                 let recipient = context.get_identity_address(Some(recipient))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
 
                 let tx_kind = client.transaction_builder().pay_all_sui_tx_kind(recipient);
                 let gas_payment = client
@@ -1490,6 +1500,7 @@ impl SuiClientCommands {
             SuiClientCommands::Objects { address } => {
                 let address = context.get_identity_address(address)?;
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
                 let mut objects: Vec<SuiObjectResponse> = Vec::new();
                 let mut cursor = None;
                 loop {
@@ -1562,6 +1573,7 @@ impl SuiClientCommands {
                     // Ok to unwrap() since `get_gas_objects` guarantees gas
                     .map(|(_val, object)| GasCoin::try_from(object).unwrap())
                     .collect();
+                let _ = context.cache_chain_id(&context.get_client().await?).await?;
                 SuiClientCommandResult::Gas(coins)
             }
             SuiClientCommands::Faucet { address, url } => {
@@ -1574,31 +1586,19 @@ impl SuiClientCommands {
                     url
                 } else {
                     let active_env = context.get_active_env();
-
                     if let Ok(env) = active_env {
-                        let network = match env.rpc.as_str() {
-                            SUI_DEVNET_URL => "https://faucet.devnet.sui.io/v2/gas",
-                            SUI_TESTNET_URL => {
-                                bail!("For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}");
-                            }
-                            SUI_LOCAL_NETWORK_URL | SUI_LOCAL_NETWORK_URL_0 => "http://127.0.0.1:9123/v2/gas",
-                            _ => bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
-                        };
-                        network.to_string()
+                        find_faucet_url(address, &env.rpc)?
                     } else {
                         bail!("No URL for faucet was provided and there is no active network.")
                     }
                 };
                 request_tokens_from_faucet(address, url).await?;
+                let _ = context.cache_chain_id(&context.get_client().await?).await?;
                 SuiClientCommandResult::NoOutput
             }
             SuiClientCommands::ChainIdentifier => {
-                let ci = context
-                    .get_client()
-                    .await?
-                    .read_api()
-                    .get_chain_identifier()
-                    .await?;
+                let client = context.get_client().await?;
+                let ci = context.cache_chain_id(&client).await?;
                 SuiClientCommandResult::ChainIdentifier(ci)
             }
             SuiClientCommands::SplitCoin {
@@ -1617,6 +1617,7 @@ impl SuiClientCommands {
                 }
 
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
                 let signer = context.get_object_owner(&coin_id).await?;
 
                 let tx_kind = client
@@ -1647,6 +1648,7 @@ impl SuiClientCommands {
                 processing,
             } => {
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
                 let signer = context.get_object_owner(&primary_coin).await?;
 
                 let tx_kind = client
@@ -1809,17 +1811,20 @@ impl SuiClientCommands {
                         "Environment config with name [{alias}] already exists."
                     ));
                 }
-                let env = SuiEnv {
+                let mut env = SuiEnv {
                     alias,
                     rpc,
                     ws,
                     basic_auth,
+                    chain_id: None,
                 };
 
                 // Check urls are valid and server is reachable
                 env.create_rpc_client(None, None).await?;
                 context.config.envs.push(env.clone());
                 context.config.save()?;
+                let chain_id = context.cache_chain_id(&context.get_client().await?).await?;
+                env.chain_id = Some(chain_id);
                 SuiClientCommandResult::NewEnv(env)
             }
             SuiClientCommands::ActiveEnv => SuiClientCommandResult::ActiveEnv(
@@ -1850,12 +1855,7 @@ impl SuiClientCommands {
 
                 build_config.implicit_dependencies = implicit_deps(latest_system_packages());
                 let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
-                let chain_id = context
-                    .get_client()
-                    .await?
-                    .read_api()
-                    .get_chain_identifier()
-                    .await?;
+                let chain_id = context.cache_chain_id(&context.get_client().await?).await?;
                 let compiled_package = BuildConfig {
                     config: build_config,
                     run_bytecode_verifier: true,
@@ -1881,6 +1881,7 @@ impl SuiClientCommands {
                 let signer = context.get_object_owner(&object_id).await?;
                 let to = context.get_identity_address(Some(to))?;
                 let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
                 let transaction_builder = client.transaction_builder();
 
                 let (full_obj_ref, object_type) = transaction_builder
@@ -1900,7 +1901,7 @@ impl SuiClientCommands {
                         ObjectArg::SharedObject {
                             id,
                             initial_shared_version,
-                            mutable: true,
+                            mutability: SharedObjectMutability::Mutable,
                         }
                     }
                 })?;
@@ -1937,6 +1938,8 @@ impl SuiClientCommands {
                 .await?
             }
             SuiClientCommands::PTB(ptb) => {
+                let client = context.get_client().await?;
+                let _ = context.cache_chain_id(&client).await?;
                 ptb.execute(context).await?;
                 SuiClientCommandResult::NoOutput
             }
@@ -1946,7 +1949,10 @@ impl SuiClientCommands {
 
     pub fn switch_env(config: &mut SuiClientConfig, env: &str) -> Result<(), anyhow::Error> {
         let env = Some(env.into());
-        ensure!(config.get_env(&env).is_some(), "Environment config not found for [{env:?}], add new environment config using the `sui client new-env` command.");
+        ensure!(
+            config.get_env(&env).is_some(),
+            "Environment config not found for [{env:?}], add new environment config using the `sui client new-env` command."
+        );
         config.active_env = env;
         Ok(())
     }
@@ -1965,16 +1971,20 @@ fn check_dep_verification_flags(
         ),
 
         (false, false) => {
-            eprintln!("{}: Dependency sources are no longer verified automatically during publication and upgrade. \
+            eprintln!(
+                "{}: Dependency sources are no longer verified automatically during publication and upgrade. \
                 You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.",
-                "[Note]".bold().yellow());
+                "[Note]".bold().yellow()
+            );
             Ok(verify_dependencies)
         }
 
         (true, false) => {
-            eprintln!("{}: Dependency sources are no longer verified automatically during publication and upgrade, \
+            eprintln!(
+                "{}: Dependency sources are no longer verified automatically during publication and upgrade, \
                 so the `--skip-dependency-verification` flag is no longer necessary.",
-                "[Warning]".bold().yellow());
+                "[Warning]".bold().yellow()
+            );
             Ok(verify_dependencies)
         }
 
@@ -2132,7 +2142,7 @@ pub(crate) async fn compile_package(
     {
         for module in compiled_package.get_modules_and_deps() {
             if module.version() < *min_version {
-                return Err(SuiError::ModulePublishFailure {
+                return Err(SuiErrorKind::ModulePublishFailure {
                     error: format!(
                         "Module {} has a version {} that is \
                          lower than the minimum version {min_version} supported by the chain.",
@@ -2157,7 +2167,7 @@ pub(crate) async fn compile_package(
                 } else {
                     ""
                 };
-                return Err(SuiError::ModulePublishFailure {
+                return Err(SuiErrorKind::ModulePublishFailure {
                     error: format!(
                         "Module {} has a version {} that is \
                          higher than the maximum version {max_version} supported by the chain.{help_msg}",
@@ -2170,17 +2180,17 @@ pub(crate) async fn compile_package(
         }
     }
 
-    if !compiled_package.is_system_package() {
-        if let Some(already_published) = compiled_package.published_root_module() {
-            return Err(SuiError::ModulePublishFailure {
-                error: format!(
-                    "Modules must all have 0x0 as their addresses. \
+    if !compiled_package.is_system_package()
+        && let Some(already_published) = compiled_package.published_root_module()
+    {
+        return Err(SuiErrorKind::ModulePublishFailure {
+            error: format!(
+                "Modules must all have 0x0 as their addresses. \
                      Violated by module {:?}",
-                    already_published.self_id(),
-                ),
-            }
-            .into());
+                already_published.self_id(),
+            ),
         }
+        .into());
     }
     if with_unpublished_dependencies {
         compiled_package.verify_unpublished_dependencies(&dependencies.unpublished)?;
@@ -2191,7 +2201,7 @@ pub(crate) async fn compile_package(
             .verify(&compiled_package, ValidationMode::deps())
             .await
         {
-            return Err(SuiError::ModulePublishFailure {
+            return Err(SuiErrorKind::ModulePublishFailure {
                 error: format!(
                     "[warning] {e}\n\
                      \n\
@@ -2221,7 +2231,7 @@ pub(crate) async fn compile_package(
         .get_package_bytes(with_unpublished_dependencies)
         .is_empty()
     {
-        return Err(SuiError::ModulePublishFailure {
+        return Err(SuiErrorKind::ModulePublishFailure {
             error: "No modules found in the package".to_string(),
         }
         .into());
@@ -2232,7 +2242,7 @@ pub(crate) async fn compile_package(
         .compiled_package_info
         .build_flags
         .update_lock_file_toolchain_version(package_path, env!("CARGO_PKG_VERSION").into())
-        .map_err(|e| SuiError::ModuleBuildFailure {
+        .map_err(|e| SuiErrorKind::ModuleBuildFailure {
             error: format!("Failed to update Move.lock toolchain version: {e}"),
         })?;
 
@@ -2935,7 +2945,9 @@ pub async fn request_tokens_from_faucet(
             if let Some(err) = faucet_resp.error {
                 bail!("Faucet request was unsuccessful: {err}")
             } else {
-                println!("Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins.");
+                println!(
+                    "Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins."
+                );
             }
         }
         StatusCode::BAD_REQUEST => {
@@ -2945,7 +2957,9 @@ pub async fn request_tokens_from_faucet(
             }
         }
         StatusCode::TOO_MANY_REQUESTS => {
-            bail!("Faucet service received too many requests from this IP address. Please try again after 60 minutes.");
+            bail!(
+                "Faucet service received too many requests from this IP address. Please try again after 60 minutes."
+            );
         }
         StatusCode::SERVICE_UNAVAILABLE => {
             bail!("Faucet service is currently overloaded or unavailable. Please try again later.");
@@ -3314,24 +3328,26 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     } else if tx_digest {
         Ok(SuiClientCommandResult::ComputeTransactionDigest(tx_data))
     } else {
-        let mut signatures = vec![context
-            .config
-            .keystore
-            .sign_secure(&signer, &tx_data, Intent::sui_transaction())
-            .await?
-            .into()];
+        let mut signatures = vec![
+            context
+                .config
+                .keystore
+                .sign_secure(&signer, &tx_data, Intent::sui_transaction())
+                .await?
+                .into(),
+        ];
 
-        if let Some(gas_sponsor) = gas_sponsor {
-            if gas_sponsor != signer {
-                signatures.push(
-                    context
-                        .config
-                        .keystore
-                        .sign_secure(&gas_sponsor, &tx_data, Intent::sui_transaction())
-                        .await?
-                        .into(),
-                );
-            }
+        if let Some(gas_sponsor) = gas_sponsor
+            && gas_sponsor != signer
+        {
+            signatures.push(
+                context
+                    .config
+                    .keystore
+                    .sign_secure(&gas_sponsor, &tx_data, Intent::sui_transaction())
+                    .await?
+                    .into(),
+            );
         }
 
         let sender_signed_data = SenderSignedData::new(tx_data, signatures);
@@ -3401,10 +3417,10 @@ pub(crate) async fn prerender_clever_errors(
     read_api: &ReadApi,
 ) {
     let SuiTransactionBlockEffects::V1(effects) = effects;
-    if let SuiExecutionStatus::Failure { error } = &mut effects.status {
-        if let Some(rendered) = render_clever_error_opt(error, read_api).await {
-            *error = rendered;
-        }
+    if let SuiExecutionStatus::Failure { error } = &mut effects.status
+        && let Some(rendered) = render_clever_error_opt(error, read_api).await
+    {
+        *error = rendered;
     }
 }
 
@@ -3522,4 +3538,38 @@ pub(crate) async fn pkg_tree_shake(
     });
 
     Ok(())
+}
+
+/// Extract the host from a URL string
+fn url_to_host(url: &str) -> anyhow::Result<String> {
+    url::Url::parse(url)?
+        .host_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| anyhow!("Cannot extract host from url: {}", url))
+}
+
+/// Find the faucet URL based on the RPC URL. It maps the public networks to their faucet URLs, for
+/// devnet and localnet. For testnet, it instructs the user to use the web UI.
+fn find_faucet_url(address: SuiAddress, rpc: &str) -> anyhow::Result<String> {
+    let host = url_to_host(rpc)?;
+    let devnet_host = url_to_host(SUI_DEVNET_URL)?;
+    let testnet_host = url_to_host(SUI_TESTNET_URL)?;
+    let localhost = url_to_host(SUI_LOCAL_NETWORK_URL)?;
+    let localhost_0 = url_to_host(SUI_LOCAL_NETWORK_URL_0)?;
+
+    if host == devnet_host {
+        return Ok("https://faucet.devnet.sui.io/v2/gas".to_string());
+    }
+
+    if host == testnet_host {
+        bail!(
+            "For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}"
+        );
+    }
+
+    if host == localhost || host == localhost_0 {
+        Ok("http://127.0.0.1:9123/v2/gas".to_string())
+    } else {
+        bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
+    }
 }

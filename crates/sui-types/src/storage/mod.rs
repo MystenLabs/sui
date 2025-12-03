@@ -13,7 +13,7 @@ use crate::base_types::{
 };
 use crate::committee::EpochId;
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
-use crate::error::{ExecutionError, SuiError};
+use crate::error::{ExecutionError, SuiError, SuiErrorKind};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
 use crate::full_checkpoint_content::ObjectSet;
 use crate::message_envelope::Message;
@@ -217,7 +217,8 @@ pub trait Storage {
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object>;
 
-    fn record_execution_results(&mut self, results: ExecutionResults);
+    fn record_execution_results(&mut self, results: ExecutionResults)
+    -> Result<(), ExecutionError>;
 
     fn save_loaded_runtime_objects(
         &mut self,
@@ -303,9 +304,10 @@ pub fn load_package_object_from_object_store(
     if let Some(obj) = &package {
         fp_ensure!(
             obj.is_package(),
-            SuiError::BadObjectType {
+            SuiErrorKind::BadObjectType {
                 error: format!("Package expected, Move object found: {package_id}"),
             }
+            .into()
         );
     }
     Ok(package.map(PackageObject::new))

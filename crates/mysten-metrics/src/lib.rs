@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::{extract::Extension, http::StatusCode, routing::get, Router};
+use axum::{Router, extract::Extension, http::StatusCode, routing::get};
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use prometheus::core::{AtomicI64, GenericGauge};
@@ -15,12 +15,11 @@ use std::time::Instant;
 
 use once_cell::sync::OnceCell;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, Histogram, IntCounterVec, IntGaugeVec, Registry,
-    TextEncoder,
+    Histogram, IntCounterVec, IntGaugeVec, Registry, TextEncoder, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry,
 };
 use tap::TapFallible;
-use tracing::{warn, Span};
+use tracing::{Span, warn};
 
 pub use scopeguard;
 use uuid::Uuid;
@@ -62,8 +61,8 @@ pub const COUNT_BUCKETS: &[f64] = &[
 ];
 
 pub const BYTES_BUCKETS: &[f64] = &[
-    1., 4., 16., 64., 256., 1024., 4096., 16384., 65536., 262144., 524288., 1048576., 2097152.,
-    4194304., 8388608., 16777216., 33554432., 67108864.,
+    1., 4., 16., 64., 256., 1024., 4096., 8192., 16384., 32768., 65536., 131072., 262144., 524288.,
+    1048576., 2097152., 4194304., 8388608., 16777216., 33554432., 67108864.,
 ];
 
 #[derive(Debug)]
@@ -232,9 +231,7 @@ pub fn add_server_timing(name: &str) {
 
 #[macro_export]
 macro_rules! monitored_future {
-    ($fut: expr) => {{
-        monitored_future!(futures, $fut, "", INFO, false)
-    }};
+    ($fut: expr) => {{ monitored_future!(futures, $fut, "", INFO, false) }};
 
     ($metric: ident, $fut: expr, $name: expr, $logging_level: ident, $logging_enabled: expr) => {{
         let location: &str = if $name.is_empty() {

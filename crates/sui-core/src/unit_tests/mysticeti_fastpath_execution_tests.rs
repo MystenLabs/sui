@@ -12,8 +12,8 @@ use sui_types::object::Object;
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::utils::to_sender_signed_transaction;
 
-use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::ExecutionEnv;
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::execution_scheduler::SchedulingSource;
 use crate::transaction_outputs::TransactionOutputs;
 
@@ -33,10 +33,12 @@ async fn test_notify_read_fastpath_transaction_outputs() {
 
     let tx_outputs = Arc::new(TransactionOutputs::new_for_testing(tx, effects));
 
-    assert!(state
-        .get_transaction_cache_reader()
-        .get_mysticeti_fastpath_outputs(&tx_digest)
-        .is_none());
+    assert!(
+        state
+            .get_transaction_cache_reader()
+            .get_mysticeti_fastpath_outputs(&tx_digest)
+            .is_none()
+    );
 
     // Write fastpath transaction outputs
     state
@@ -44,14 +46,18 @@ async fn test_notify_read_fastpath_transaction_outputs() {
         .write_fastpath_transaction_outputs(tx_outputs);
 
     // Verify that the transaction is marked as fastpath executed
-    assert!(state
-        .get_transaction_cache_reader()
-        .get_mysticeti_fastpath_outputs(&tx_digest)
-        .is_some());
+    assert!(
+        state
+            .get_transaction_cache_reader()
+            .get_mysticeti_fastpath_outputs(&tx_digest)
+            .is_some()
+    );
 
-    assert!(!state
-        .get_transaction_cache_reader()
-        .is_tx_already_executed(&tx_digest));
+    assert!(
+        !state
+            .get_transaction_cache_reader()
+            .is_tx_already_executed(&tx_digest)
+    );
 
     // Test notification and reading of fastpath transaction outputs
     let outputs = state
@@ -115,9 +121,11 @@ async fn test_fast_path_execution() {
         .unwrap();
     assert_eq!(outputs.effects.digest(), effects.digest());
 
-    assert!(!state
-        .get_transaction_cache_reader()
-        .is_tx_already_executed(&tx_digest));
+    assert!(
+        !state
+            .get_transaction_cache_reader()
+            .is_tx_already_executed(&tx_digest)
+    );
 
     let state_clone = state.clone();
     let notify_read_task = tokio::spawn(async move {
@@ -168,12 +176,14 @@ async fn test_fast_path_then_consensus_execution() {
         .unwrap();
 
     let tx_digest = *cert.digest();
-    assert!(!state
-        .epoch_store_for_testing()
-        .transactions_executed_in_cur_epoch(&[tx_digest])
-        .unwrap()
-        .pop()
-        .unwrap());
+    assert!(
+        !state
+            .epoch_store_for_testing()
+            .transactions_executed_in_cur_epoch(&[tx_digest])
+            .unwrap()
+            .pop()
+            .unwrap()
+    );
 
     let (effects2, _) = state
         .try_execute_immediately(
@@ -185,21 +195,27 @@ async fn test_fast_path_then_consensus_execution() {
         .unwrap();
 
     // Verify that the transaction is marked as executed
-    assert!(state
-        .epoch_store_for_testing()
-        .transactions_executed_in_cur_epoch(&[tx_digest])
-        .unwrap()
-        .pop()
-        .unwrap());
+    assert!(
+        state
+            .epoch_store_for_testing()
+            .transactions_executed_in_cur_epoch(&[tx_digest])
+            .unwrap()
+            .pop()
+            .unwrap()
+    );
 
     assert_eq!(effects1.digest(), effects2.digest());
-    assert!(state
-        .get_transaction_cache_reader()
-        .get_mysticeti_fastpath_outputs(&tx_digest)
-        .is_none());
-    assert!(state
-        .get_transaction_cache_reader()
-        .is_tx_already_executed(&tx_digest));
+    assert!(
+        state
+            .get_transaction_cache_reader()
+            .get_mysticeti_fastpath_outputs(&tx_digest)
+            .is_none()
+    );
+    assert!(
+        state
+            .get_transaction_cache_reader()
+            .is_tx_already_executed(&tx_digest)
+    );
 }
 
 #[tokio::test]
@@ -244,13 +260,17 @@ async fn test_consensus_then_fast_path_execution() {
 
     assert_eq!(effects1.digest(), effects2.digest());
     let tx_digest = cert.digest();
-    assert!(state
-        .get_transaction_cache_reader()
-        .get_mysticeti_fastpath_outputs(tx_digest)
-        .is_none());
-    assert!(state
-        .get_transaction_cache_reader()
-        .is_tx_already_executed(tx_digest));
+    assert!(
+        state
+            .get_transaction_cache_reader()
+            .get_mysticeti_fastpath_outputs(tx_digest)
+            .is_none()
+    );
+    assert!(
+        state
+            .get_transaction_cache_reader()
+            .is_tx_already_executed(tx_digest)
+    );
 }
 
 #[tokio::test]
@@ -298,13 +318,17 @@ async fn test_fast_path_then_consensus_execution_e2e() {
     .unwrap();
     assert_eq!(outputs.transaction.digest(), &tx_digest);
 
-    assert!(state
-        .get_transaction_cache_reader()
-        .get_mysticeti_fastpath_outputs(&tx_digest)
-        .is_some());
-    assert!(!state
-        .get_transaction_cache_reader()
-        .is_tx_already_executed(&tx_digest));
+    assert!(
+        state
+            .get_transaction_cache_reader()
+            .get_mysticeti_fastpath_outputs(&tx_digest)
+            .is_some()
+    );
+    assert!(
+        !state
+            .get_transaction_cache_reader()
+            .is_tx_already_executed(&tx_digest)
+    );
 
     state.execution_scheduler().enqueue_transactions(
         vec![(
@@ -326,13 +350,17 @@ async fn test_fast_path_then_consensus_execution_e2e() {
     .unwrap();
 
     assert_eq!(effects_digest, outputs.effects.digest());
-    assert!(state
-        .get_transaction_cache_reader()
-        .get_mysticeti_fastpath_outputs(&tx_digest)
-        .is_none());
-    assert!(state
-        .get_transaction_cache_reader()
-        .is_tx_already_executed(&tx_digest));
+    assert!(
+        state
+            .get_transaction_cache_reader()
+            .get_mysticeti_fastpath_outputs(&tx_digest)
+            .is_none()
+    );
+    assert!(
+        state
+            .get_transaction_cache_reader()
+            .is_tx_already_executed(&tx_digest)
+    );
 }
 
 #[tokio::test]
@@ -371,13 +399,17 @@ async fn test_consensus_then_fast_path_execution_e2e() {
         .notify_read_executed_effects_digests("", &[tx_digest])
         .await;
 
-    assert!(state
-        .get_transaction_cache_reader()
-        .get_mysticeti_fastpath_outputs(&tx_digest)
-        .is_none());
-    assert!(state
-        .get_transaction_cache_reader()
-        .is_tx_already_executed(&tx_digest));
+    assert!(
+        state
+            .get_transaction_cache_reader()
+            .get_mysticeti_fastpath_outputs(&tx_digest)
+            .is_none()
+    );
+    assert!(
+        state
+            .get_transaction_cache_reader()
+            .is_tx_already_executed(&tx_digest)
+    );
 
     state.execution_scheduler().enqueue_transactions(
         vec![(
@@ -387,11 +419,15 @@ async fn test_consensus_then_fast_path_execution_e2e() {
         &state.epoch_store_for_testing(),
     );
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-    assert!(state
-        .get_transaction_cache_reader()
-        .get_mysticeti_fastpath_outputs(&tx_digest)
-        .is_none());
-    assert!(state
-        .get_transaction_cache_reader()
-        .is_tx_already_executed(&tx_digest));
+    assert!(
+        state
+            .get_transaction_cache_reader()
+            .get_mysticeti_fastpath_outputs(&tx_digest)
+            .is_none()
+    );
+    assert!(
+        state
+            .get_transaction_cache_reader()
+            .is_tx_already_executed(&tx_digest)
+    );
 }

@@ -274,6 +274,8 @@ pub struct ModuleDefinition {
     pub loc: Loc,
     pub address: Option<LeadingNameAccess>,
     pub name: ModuleName,
+    /// Location of the module name, including any address qualifier
+    pub name_loc: Loc,
     pub is_spec_module: bool,
     pub is_extension: bool,
     pub definition_mode: ModuleDefinitionMode,
@@ -842,6 +844,16 @@ impl fmt::Debug for LeadingNameAccess_ {
 //**************************************************************************************************
 // Impl
 //**************************************************************************************************
+
+impl ModuleDefinition {
+    pub fn modes(&self) -> UniqueSet<Name> {
+        let mut result = UniqueSet::new();
+        for attr in self.attributes.iter().map(|attr| attr.value.modes()) {
+            result = result.union(&attr);
+        }
+        result
+    }
+}
 
 impl ParsedAttribute_ {
     pub fn loc_str(&self) -> Spanned<&str> {
@@ -1783,9 +1795,10 @@ impl AstDebug for ModuleDefinition {
         let ModuleDefinition {
             doc,
             attributes,
-            loc: _loc,
+            loc: _,
             address,
             name,
+            name_loc: _,
             is_spec_module,
             is_extension,
             members,

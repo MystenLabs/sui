@@ -173,10 +173,10 @@ impl<T> Drop for Permit<'_, T> {
     fn drop(&mut self) {
         // In the case the permit is dropped without sending, we still want to decrease the occupancy of the channel.
         // Otherwise, receiver should be responsible for decreasing the inflight gauge.
-        if self.permit.is_some() {
-            if let Some(inflight_ref) = self.inflight_ref {
-                inflight_ref.dec();
-            }
+        if self.permit.is_some()
+            && let Some(inflight_ref) = self.inflight_ref
+        {
+            inflight_ref.dec();
         }
     }
 }
@@ -526,7 +526,7 @@ pub fn unbounded_channel<T>(name: &str) -> (UnboundedSender<T>, UnboundedReceive
 mod test {
     use std::task::{Context, Poll};
 
-    use futures::{task::noop_waker, FutureExt as _};
+    use futures::{FutureExt as _, task::noop_waker};
     use prometheus::Registry;
     use tokio::sync::mpsc::error::TrySendError;
 

@@ -17,8 +17,12 @@ mod checked {
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
-        ReceivingObjectReadResult, ReceivingObjects, TransactionData, TransactionDataAPI,
-        TransactionKind,
+        ReceivingObjectReadResult, ReceivingObjects, SharedObjectMutability, TransactionData,
+        TransactionDataAPI, TransactionKind,
+    };
+    use sui_types::{
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+        SUI_RANDOMNESS_STATE_OBJECT_ID,
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
@@ -26,10 +30,6 @@ mod checked {
         fp_bail, fp_ensure,
         gas::SuiGasStatus,
         object::{Object, Owner},
-    };
-    use sui_types::{
-        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-        SUI_RANDOMNESS_STATE_OBJECT_ID,
     };
     use tracing::error;
     use tracing::instrument;
@@ -54,6 +54,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         transaction: &TransactionData,
+        gas_paid_from_address_balance: bool,
     ) -> SuiResult<SuiGasStatus> {
         check_gas(
             objects,
@@ -63,6 +64,7 @@ mod checked {
             transaction.gas_budget(),
             transaction.gas_price(),
             transaction.kind(),
+            gas_paid_from_address_balance,
         )
     }
 
@@ -211,6 +213,7 @@ mod checked {
             protocol_config,
             reference_gas_price,
             transaction,
+            transaction.is_gas_paid_from_address_balance(),
         )?;
         check_objects(transaction, input_objects)?;
 
@@ -284,36 +287,45 @@ mod checked {
 
                 match object.owner {
                     Owner::AddressOwner(_) => {
-                        debug_assert!(false,
+                        debug_assert!(
+                            false,
                             "Receiving object {:?} is invalid but we expect it should be valid. {:?}",
-                            (*object_id, *version, *object_id), object
+                            (*object_id, *version, *object_id),
+                            object
                         );
                         error!(
                             "Receiving object {:?} is invalid but we expect it should be valid. {:?}",
-                            (*object_id, *version, *object_id), object
+                            (*object_id, *version, *object_id),
+                            object
                         );
                         // We should never get here, but if for some reason we do just default to
                         // object not found and reject signing the transaction.
-                        fp_bail!(UserInputError::ObjectNotFound {
-                            object_id: *object_id,
-                            version: Some(*version),
-                        }
-                        .into())
+                        fp_bail!(
+                            UserInputError::ObjectNotFound {
+                                object_id: *object_id,
+                                version: Some(*version),
+                            }
+                            .into()
+                        )
                     }
                     Owner::ObjectOwner(owner) => {
-                        fp_bail!(UserInputError::InvalidChildObjectArgument {
-                            child_id: object.id(),
-                            parent_id: owner.into(),
-                        }
-                        .into())
+                        fp_bail!(
+                            UserInputError::InvalidChildObjectArgument {
+                                child_id: object.id(),
+                                parent_id: owner.into(),
+                            }
+                            .into()
+                        )
                     }
                     Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => {
                         fp_bail!(UserInputError::NotSharedObjectError.into())
                     }
-                    Owner::Immutable => fp_bail!(UserInputError::MutableParameterExpected {
-                        object_id: *object_id
-                    }
-                    .into()),
+                    Owner::Immutable => fp_bail!(
+                        UserInputError::MutableParameterExpected {
+                            object_id: *object_id
+                        }
+                        .into()
+                    ),
                 };
             }
 
@@ -338,6 +350,7 @@ mod checked {
         gas_budget: u64,
         gas_price: u64,
         tx_kind: &TransactionKind,
+        gas_paid_from_address_balance: bool,
     ) -> SuiResult<SuiGasStatus> {
         if tx_kind.is_system_tx() {
             Ok(SuiGasStatus::new_unmetered())
@@ -357,7 +370,11 @@ mod checked {
                 })?;
                 gas_objects.push(obj);
             }
-            gas_status.check_gas_balance(&gas_objects, gas_budget)?;
+            // Skip gas balance check for address balance payments
+            // We reserve gas budget in advance
+            if !gas_paid_from_address_balance {
+                gas_status.check_gas_balance(&gas_objects, gas_budget)?;
+            }
             Ok(gas_status)
         }
     }
@@ -469,11 +486,13 @@ mod checked {
                     Owner::AddressOwner(actual_owner) => {
                         // Check the owner is correct.
                         fp_ensure!(
-                        owner == &actual_owner,
-                        UserInputError::IncorrectUserSignature {
-                            error: format!("Object {object_id:?} is owned by account address {actual_owner:?}, but given owner/signer address is {owner:?}"),
-                        }
-                    );
+                            owner == &actual_owner,
+                            UserInputError::IncorrectUserSignature {
+                                error: format!(
+                                    "Object {object_id:?} is owned by account address {actual_owner:?}, but given owner/signer address is {owner:?}"
+                                ),
+                            }
+                        );
                     }
                     Owner::ObjectOwner(owner) => {
                         return Err(UserInputError::InvalidChildObjectArgument {
@@ -491,7 +510,7 @@ mod checked {
             InputObjectKind::SharedMoveObject {
                 id: SUI_CLOCK_OBJECT_ID,
                 initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
             } => {
                 // Only system transactions can accept the Clock
                 // object as a mutable parameter.
@@ -517,7 +536,7 @@ mod checked {
             }
             InputObjectKind::SharedMoveObject {
                 id: SUI_RANDOMNESS_STATE_OBJECT_ID,
-                mutable: true,
+                mutability: SharedObjectMutability::Mutable,
                 ..
             } => {
                 // Only system transactions can accept the Random
@@ -565,7 +584,9 @@ mod checked {
                         fp_ensure!(
                             owner == actual_owner,
                             UserInputError::IncorrectUserSignature {
-                                error: format!("Object {object_id:?} is owned by account address {actual_owner:?}, but given owner/signer address is {owner:?}"),
+                                error: format!(
+                                    "Object {object_id:?} is owned by account address {actual_owner:?}, but given owner/signer address is {owner:?}"
+                                ),
                             }
                         )
                     }

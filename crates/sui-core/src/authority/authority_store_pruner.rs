@@ -11,8 +11,8 @@ use bincode::Options;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use once_cell::sync::Lazy;
 use prometheus::{
-    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
-    Registry,
+    IntCounter, IntGauge, Registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry,
 };
 #[cfg(tidehunter)]
 use serde::de::DeserializeOwned;
@@ -23,7 +23,6 @@ use std::sync::{Mutex, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
-use sui_types::base_types::SequenceNumber;
 use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
@@ -32,14 +31,14 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointDigest, CheckpointSequenceNumber,
 };
 use sui_types::{
-    base_types::{ObjectID, VersionNumber},
+    base_types::{ObjectID, SequenceNumber, TransactionDigest, VersionNumber},
     storage::ObjectKey,
 };
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
-use typed_store::rocksdb::compaction_filter::Decision;
 use typed_store::rocksdb::LiveFile;
+use typed_store::rocksdb::compaction_filter::Decision;
 use typed_store::{Map, TypedStoreError};
 
 static PERIODIC_PRUNING_TABLES: Lazy<BTreeSet<String>> = Lazy::new(|| {
@@ -310,6 +309,7 @@ impl AuthorityStorePruner {
         metrics
             .last_pruned_effects_checkpoint
             .set(checkpoint_number as i64);
+
         Ok(())
     }
 
@@ -382,17 +382,17 @@ impl AuthorityStorePruner {
                     .unwrap_or_default(),
             );
         }
-        if config.smooth {
-            if let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints {
-                max_eligible_checkpoint = Self::smoothed_max_eligible_checkpoint_number(
-                    checkpoint_store,
-                    max_eligible_checkpoint,
-                    pruned_checkpoint_number,
-                    epoch_id,
-                    epoch_duration_ms,
-                    num_epochs_to_retain,
-                )?;
-            }
+        if config.smooth
+            && let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints
+        {
+            max_eligible_checkpoint = Self::smoothed_max_eligible_checkpoint_number(
+                checkpoint_store,
+                max_eligible_checkpoint,
+                pruned_checkpoint_number,
+                epoch_id,
+                epoch_duration_ms,
+                num_epochs_to_retain,
+            )?;
         }
         debug!("Max eligible checkpoint {}", max_eligible_checkpoint);
         Self::prune_for_eligible_epochs(
@@ -571,6 +571,67 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
+    async fn prune_executed_tx_digests(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        checkpoint_store: &Arc<CheckpointStore>,
+    ) -> anyhow::Result<()> {
+        let current_epoch = checkpoint_store
+            .get_highest_executed_checkpoint()?
+            .map(|c| c.epoch)
+            .unwrap_or_default();
+
+        if current_epoch < 2 {
+            return Ok(());
+        }
+
+        let target_epoch = current_epoch - 1;
+
+        let start_key = (0u64, TransactionDigest::ZERO);
+        let end_key = (target_epoch, TransactionDigest::ZERO);
+
+        info!(
+            "Pruning executed_transaction_digests for epochs < {} (current epoch: {})",
+            target_epoch, current_epoch
+        );
+
+        let mut batch = perpetual_db.executed_transaction_digests.batch();
+        batch.schedule_delete_range(
+            &perpetual_db.executed_transaction_digests,
+            &start_key,
+            // `to` is non-inclusive so target_epoch and all later epochs are preserved
+            &end_key,
+        )?;
+        batch.write()?;
+        Ok(())
+    }
+
+    #[cfg(tidehunter)]
+    fn prune_executed_tx_digests_th(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        checkpoint_store: &Arc<CheckpointStore>,
+    ) -> anyhow::Result<()> {
+        let current_epoch = checkpoint_store
+            .get_highest_executed_checkpoint()?
+            .map(|c| c.epoch)
+            .unwrap_or_default();
+
+        if current_epoch < 2 {
+            return Ok(());
+        }
+
+        let last_epoch_to_delete = current_epoch - 2;
+        let from_key = (0u64, TransactionDigest::ZERO);
+        let to_key = (last_epoch_to_delete, TransactionDigest::new([0xff; 32]));
+        info!(
+            "Pruning executed_transaction_digests for epochs 0 to {} (current epoch: {})",
+            last_epoch_to_delete, current_epoch
+        );
+        perpetual_db
+            .executed_transaction_digests
+            .drop_cells_in_range(&from_key, &to_key)?;
+        Ok(())
+    }
+
     fn update_pruning_watermarks(
         checkpoint_store: &Arc<CheckpointStore>,
         num_epochs_to_retain: u64,
@@ -627,6 +688,7 @@ impl AuthorityStorePruner {
         }
         perpetual_db.objects.db.start_relocation()?;
         checkpoint_store.tables.watermarks.db.start_relocation()?;
+        Self::prune_executed_tx_digests_th(perpetual_db, checkpoint_store)?;
         Ok(())
     }
 
@@ -654,10 +716,10 @@ impl AuthorityStorePruner {
             {
                 continue;
             }
-            if let Some(candidate) = &sst_file_for_compaction {
-                if candidate.size > sst_file.size {
-                    continue;
-                }
+            if let Some(candidate) = &sst_file_for_compaction
+                && candidate.size > sst_file.size
+            {
+                continue;
             }
             sst_file_for_compaction = Some(sst_file);
         }
@@ -803,6 +865,9 @@ impl AuthorityStorePruner {
                             if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
                                 error!("Failed to prune objects: {:?}", err);
                             }
+                            if let Err(err) = Self::prune_executed_tx_digests(&perpetual_db, &checkpoint_store).await {
+                                error!("Failed to prune executed_tx_digests: {:?}", err);
+                            }
                         },
                         _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
                             if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms, &pruner_watermarks).await {
@@ -836,7 +901,10 @@ impl AuthorityStorePruner {
     ) -> Self {
         if pruning_config.num_epochs_to_retain > 0 && pruning_config.num_epochs_to_retain < u64::MAX
         {
-            warn!("Using objects pruner with num_epochs_to_retain = {} can lead to performance issues", pruning_config.num_epochs_to_retain);
+            warn!(
+                "Using objects pruner with num_epochs_to_retain = {} can lead to performance issues",
+                pruning_config.num_epochs_to_retain
+            );
             if is_validator {
                 warn!("Resetting to aggressive pruner.");
                 pruning_config.num_epochs_to_retain = 0;
@@ -914,18 +982,18 @@ impl ObjectsCompactionFilter {
             .with_fixint_encoding()
             .deserialize(key)?;
         let object: StoreObjectWrapper = bcs::from_bytes(value)?;
-        if matches!(object.into_inner(), StoreObject::Value(_)) {
-            if let Some(db) = self.db.upgrade() {
-                match db.object_tombstones.get(&object_id)? {
-                    Some(gc_version) => {
-                        if version <= gc_version {
-                            self.metrics.key_removed.inc();
-                            return Ok(Decision::Remove);
-                        }
-                        self.metrics.key_kept.inc();
+        if matches!(object.into_inner(), StoreObject::Value(_))
+            && let Some(db) = self.db.upgrade()
+        {
+            match db.object_tombstones.get(&object_id)? {
+                Some(gc_version) => {
+                    if version <= gc_version {
+                        self.metrics.key_removed.inc();
+                        return Ok(Decision::Remove);
                     }
-                    None => self.metrics.key_not_found.inc(),
+                    self.metrics.key_kept.inc();
                 }
+                None => self.metrics.key_not_found.inc(),
             }
         }
         Ok(Decision::Keep)
@@ -974,7 +1042,7 @@ mod tests {
     use crate::authority::authority_store_pruner::AuthorityStorePruningMetrics;
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
     use crate::authority::authority_store_types::{
-        get_store_object, StoreObject, StoreObjectWrapper,
+        StoreObject, StoreObjectWrapper, get_store_object,
     };
     use prometheus::Registry;
     use sui_types::base_types::ObjectDigest;
@@ -985,8 +1053,8 @@ mod tests {
         object::Object,
         storage::ObjectKey,
     };
-    use typed_store::rocks::{default_db_options, DBMap, MetricConf, ReadWriteOptions};
     use typed_store::Map;
+    use typed_store::rocks::{DBMap, MetricConf, ReadWriteOptions, default_db_options};
 
     use super::AuthorityStorePruner;
 

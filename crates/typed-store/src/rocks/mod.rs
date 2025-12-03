@@ -9,7 +9,7 @@ use crate::memstore::{InMemoryBatch, InMemoryDB};
 use crate::rocks::errors::typed_store_err_from_bcs_err;
 use crate::rocks::errors::typed_store_err_from_rocks_err;
 pub use crate::rocks::options::{
-    default_db_options, read_size_from_env, DBMapTableConfigMap, DBOptions, ReadWriteOptions,
+    DBMapTableConfigMap, DBOptions, ReadWriteOptions, default_db_options, read_size_from_env,
 };
 use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
 #[cfg(tidehunter)]
@@ -17,22 +17,22 @@ use crate::tidehunter_util::{
     apply_range_bounds, transform_th_iterator, transform_th_key, typed_store_error_from_th_error,
 };
 use crate::util::{be_fix_int_ser, iterator_bounds, iterator_bounds_with_range};
+use crate::{DbIterator, TypedStoreError};
 use crate::{
     metrics::{DBMetrics, RocksDBPerfContext, SamplingInterval},
     traits::{Map, TableSummary},
 };
-use crate::{DbIterator, TypedStoreError};
 use backoff::backoff::Backoff;
 use fastcrypto::hash::{Digest, HashFunction};
 use mysten_common::debug_fatal;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::properties::num_files_at_level;
-use rocksdb::{checkpoint::Checkpoint, DBPinnableSlice, LiveFile};
 use rocksdb::{
-    properties, AsColumnFamilyRef, ColumnFamilyDescriptor, Error, MultiThreaded, ReadOptions,
-    WriteBatch,
+    AsColumnFamilyRef, ColumnFamilyDescriptor, Error, MultiThreaded, ReadOptions, WriteBatch,
+    properties,
 };
-use serde::{de::DeserializeOwned, Serialize};
+use rocksdb::{DBPinnableSlice, LiveFile, checkpoint::Checkpoint};
+use serde::{Serialize, de::DeserializeOwned};
 use std::ops::{Bound, Deref};
 use std::{
     borrow::Borrow,
@@ -394,6 +394,22 @@ impl Database {
         Ok(())
     }
 
+    #[cfg(tidehunter)]
+    pub fn drop_cells_in_range(
+        &self,
+        ks: KeySpace,
+        from_inclusive: &[u8],
+        to_inclusive: &[u8],
+    ) -> anyhow::Result<()> {
+        if let Storage::TideHunter(db) = &self.storage {
+            db.drop_cells_in_range(ks, from_inclusive, to_inclusive)
+                .map_err(|e| anyhow::anyhow!("{:?}", e))?;
+        } else {
+            panic!("drop_cells_in_range called on non-TideHunter storage");
+        }
+        Ok(())
+    }
+
     pub fn compact_range_cf<K: AsRef<[u8]>>(
         &self,
         cf_name: &str,
@@ -655,6 +671,25 @@ impl<K, V> DBMap<K, V> {
         end: Vec<u8>,
     ) -> Result<(), TypedStoreError> {
         self.db.compact_range_cf(cf_name, Some(start), Some(end));
+        Ok(())
+    }
+
+    #[cfg(tidehunter)]
+    pub fn drop_cells_in_range<J: Serialize>(
+        &self,
+        from_inclusive: &J,
+        to_inclusive: &J,
+    ) -> Result<(), TypedStoreError>
+    where
+        K: Serialize,
+    {
+        let from_buf = be_fix_int_ser(from_inclusive);
+        let to_buf = be_fix_int_ser(to_inclusive);
+        if let ColumnFamily::TideHunter((ks, _)) = &self.column_family {
+            self.db
+                .drop_cells_in_range(*ks, &from_buf, &to_buf)
+                .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
+        }
         Ok(())
     }
 
@@ -1817,6 +1852,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
 }
 
 // Drops a database if there is no other handle to it, with retries and timeout.
+#[cfg(not(tidehunter))]
 pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksdb::Error> {
     let mut backoff = backoff::ExponentialBackoff {
         max_elapsed_time: Some(timeout),
@@ -1831,6 +1867,11 @@ pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksd
             },
         }
     }
+}
+
+#[cfg(tidehunter)]
+pub async fn safe_drop_db(path: PathBuf, _: Duration) -> Result<(), std::io::Error> {
+    std::fs::remove_dir_all(path)
 }
 
 fn populate_missing_cfs(

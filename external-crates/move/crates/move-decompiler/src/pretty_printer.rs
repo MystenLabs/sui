@@ -285,18 +285,21 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                     .concat_space(D::text("="))
                     .concat_space(recur(context, exp))
             }
-            Exp::UnpackVariant(unpack_kind, (mod_, enum_, variant), items, exp) => {
+            Exp::VecUnpack(lhs, exp) => {
+                if lhs.is_empty() {
+                    D::text("std::vector::destroy_empty").concat(recur(context, exp).parens())
+                } else {
+                    D::text("/* UNSUPPORT OP: MULTIARG VEC UNPACK ON ")
+                        .concat(recur(context, exp))
+                        .concat(D::text(" */"))
+                }
+            }
+            Exp::UnpackVariant(_unpack_kind, (mod_, enum_, variant), items, exp) => {
                 let items_doc = fields(items);
-                let unpack_str = match unpack_kind {
-                    crate::ast::UnpackKind::Value => "",
-                    crate::ast::UnpackKind::ImmRef => "&",
-                    crate::ast::UnpackKind::MutRef => "&mut ",
-                };
                 D::text(format!("{mod_}::{enum_}::{variant}"))
                     .concat_space(items_doc)
                     .concat_space(D::text("="))
-                    .concat_space(D::text(unpack_str))
-                    .concat(recur(context, exp))
+                    .concat_space(recur(context, exp))
             }
         }
     }

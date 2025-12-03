@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, Context, Object};
+use async_graphql::{Context, Object, connection::Connection};
 use diesel::{prelude::QueryableByName, sql_types::BigInt};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -24,11 +26,13 @@ use crate::{
     error::RpcError,
     pagination::Page,
     scope::Scope,
+    task::watermark::Watermarks,
 };
 
 use super::{
-    address::Address, move_module::MoveModule, move_package::MovePackage, move_type::MoveType,
-    move_value::MoveValue, transaction::Transaction,
+    address::Address, available_range::AvailableRangeKey, move_module::MoveModule,
+    move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
+    transaction::Transaction,
 };
 
 pub(crate) mod filter;
@@ -52,8 +56,8 @@ pub(crate) struct Event {
     pub(crate) transaction_digest: TransactionDigest,
     /// Position of this event within the transaction's events list (0-indexed)
     pub(crate) sequence_number: u64,
-    /// Timestamp when the transaction containing this event was finalized (checkpoint time)
-    pub(crate) timestamp_ms: u64,
+    /// Timestamp of the checkpoint that includes the transaction containing this event.
+    pub(crate) timestamp_ms: Option<u64>,
 }
 
 #[Object]
@@ -90,8 +94,12 @@ impl Event {
 
     /// Timestamp corresponding to the checkpoint this event's transaction was finalized in.
     /// All events from the same transaction share the same timestamp.
+    ///
+    /// `null` for simulated/executed transactions as they are not included in a checkpoint.
     async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        Ok(Some(DateTime::from_ms(self.timestamp_ms as i64)?))
+        self.timestamp_ms
+            .map(|ms| DateTime::from_ms(ms as i64))
+            .transpose()
     }
 
     /// The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.
@@ -124,8 +132,13 @@ impl Event {
     ) -> Result<Connection<String, Event>, RpcError> {
         let pg_reader: &PgReader = ctx.data()?;
 
-        // TODO: (henry) Use watermarks once we have a strategy for kv pruning.
-        let reader_lo = 0;
+        let watermarks: &Arc<Watermarks> = ctx.data()?;
+        let available_range_key = AvailableRangeKey {
+            type_: "Query".to_string(),
+            field: Some("events".to_string()),
+            filters: Some(filter.active_filters()),
+        };
+        let reader_lo = available_range_key.reader_lo(watermarks)?;
 
         let Some(mut query) = filter.tx_bounds(ctx, &scope, reader_lo, &page).await? else {
             return Ok(Connection::new(false, false));

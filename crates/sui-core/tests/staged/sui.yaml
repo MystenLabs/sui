@@ -28,9 +28,11 @@ AccumulatorValue:
           - U64
     2:
       EventDigest:
-        TUPLE:
-          - U64
-          - TYPENAME: Digest
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - U64
+              - TYPENAME: Digest
 AccumulatorWriteV1:
   STRUCT:
     - address:
@@ -631,6 +633,11 @@ ExecutionFailureStatus:
       InvalidLinkage: UNIT
     40:
       InsufficientBalanceForWithdraw: UNIT
+    41:
+      NonExclusiveWriteInputObjectModified:
+        STRUCT:
+          - id:
+              TYPENAME: ObjectID
 ExecutionStatus:
   ENUM:
     0:
@@ -855,7 +862,8 @@ ObjectArg:
               TYPENAME: ObjectID
           - initial_shared_version:
               TYPENAME: SequenceNumber
-          - mutable: BOOL
+          - mutability:
+              TYPENAME: SharedObjectMutability
     2:
       Receiving:
         NEWTYPE:
@@ -1040,6 +1048,14 @@ SenderSignedTransaction:
           TYPENAME: GenericSignature
 SequenceNumber:
   NEWTYPESTRUCT: U64
+SharedObjectMutability:
+  ENUM:
+    0:
+      Immutable: UNIT
+    1:
+      Mutable: UNIT
+    2:
+      NonExclusiveWrite: UNIT
 StoredExecutionTimeObservations:
   ENUM:
     0:
@@ -1407,6 +1423,8 @@ WithdrawFrom:
   ENUM:
     0:
       Sender: UNIT
+    1:
+      Sponsor: UNIT
 WithdrawalTypeArg:
   ENUM:
     0:

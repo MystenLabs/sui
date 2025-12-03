@@ -6,13 +6,13 @@ use sui_json_rpc_types::ObjectChange;
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
 use sui_rpc::proto::sui::rpc::v2::{
-    move_package_service_client::MovePackageServiceClient, ListPackageVersionsRequest,
+    ListPackageVersionsRequest, move_package_service_client::MovePackageServiceClient,
 };
 use sui_types::{
+    SUI_FRAMEWORK_PACKAGE_ID,
     move_package::UpgradePolicy,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{ObjectArg, TransactionData, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
-    SUI_FRAMEWORK_PACKAGE_ID,
+    transaction::{ObjectArg, TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TransactionData},
 };
 use test_cluster::TestClusterBuilder;
 

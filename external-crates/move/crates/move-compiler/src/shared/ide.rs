@@ -250,7 +250,7 @@ impl
             .filter(|(symbol, _)| symbol.to_string() != UNIT_TEST_POISON_INJECTION_NAME.to_string())
         {
             match entry {
-                MemberEntry::Member(mident, name) => {
+                MemberEntry::Member(mident, name, _) => {
                     members
                         .entry((*mident, name.value))
                         .or_default()
@@ -259,6 +259,7 @@ impl
                 MemberEntry::TypeParam => {
                     type_params.insert(*symbol);
                 }
+                MemberEntry::LambdaParam => (),
             }
         }
 
@@ -388,8 +389,7 @@ impl fmt::Display for PatternSuggestion {
                 field_count,
             } => {
                 write!(f, "{module}::{name}")?;
-                let wildcards = std::iter::repeat("_")
-                    .take(*field_count)
+                let wildcards = std::iter::repeat_n("_", *field_count)
                     .collect::<Vec<_>>()
                     .join(", ");
                 write!(f, "({wildcards})")
@@ -401,8 +401,7 @@ impl fmt::Display for PatternSuggestion {
                 field_count,
             } => {
                 write!(f, "{module}::{enum_name}::{variant_name}")?;
-                let wildcards = std::iter::repeat("_")
-                    .take(*field_count)
+                let wildcards = std::iter::repeat_n("_", *field_count)
                     .collect::<Vec<_>>()
                     .join(", ");
                 write!(f, "({wildcards})")

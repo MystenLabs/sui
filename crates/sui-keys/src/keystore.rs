@@ -6,13 +6,13 @@ use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 use crate::key_identity::KeyIdentity;
 use crate::random_names::{random_name, random_names};
 
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{Context, anyhow, bail, ensure};
 use async_trait::async_trait;
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
 #[cfg(unix)]
 use colored::Colorize as _;
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng};
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use shared_crypto::intent::{Intent, IntentMessage};
@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::{
-    enum_dispatch, EncodeDecodeBase64, PublicKey, Signature, SignatureScheme, SuiKeyPair,
+    EncodeDecodeBase64, PublicKey, Signature, SignatureScheme, SuiKeyPair, enum_dispatch,
 };
 
 pub const ALIASES_FILE_EXTENSION: &str = "aliases";
@@ -407,7 +407,7 @@ impl FileBasedKeystore {
             });
 
             let reader =
-                BufReader::new(std::fs::File::open(path).with_context(|| {
+                BufReader::new(fs::File::open(path).with_context(|| {
                     format!("Cannot open the keystore file: {}", path.display())
                 })?);
             let kp_strings: Vec<String> = serde_json::from_reader(reader).with_context(|| {
@@ -430,7 +430,7 @@ impl FileBasedKeystore {
         aliases_path.set_extension(ALIASES_FILE_EXTENSION);
 
         let aliases = if aliases_path.exists() {
-            let reader = BufReader::new(std::fs::File::open(&aliases_path).with_context(|| {
+            let reader = BufReader::new(fs::File::open(&aliases_path).with_context(|| {
                 format!(
                     "Cannot open aliases file in keystore: {}",
                     aliases_path.display()
@@ -484,7 +484,7 @@ impl FileBasedKeystore {
                     )
                 })?;
 
-            std::fs::write(aliases_path, aliases_store)?;
+            fs::write(aliases_path, aliases_store)?;
             aliases
         };
 
@@ -513,7 +513,7 @@ impl FileBasedKeystore {
             let mut aliases_path = path.clone();
             aliases_path.set_extension(ALIASES_FILE_EXTENSION);
             // no reactor for tokio::fs::write in simtest, so we use spawn_blocking
-            tokio::task::spawn_blocking(move || std::fs::write(aliases_path, aliases_store))
+            tokio::task::spawn_blocking(move || fs::write(aliases_path, aliases_store))
                 .await?
                 .with_context(|| format!("Cannot write aliases to file: {}", path.display()))?;
         }
@@ -536,7 +536,7 @@ impl FileBasedKeystore {
             let keystore_path = path.clone();
             // no reactor for tokio::fs::write in simtest, so we use spawn_blocking
             tokio::task::spawn_blocking(move || {
-                let ret = std::fs::write(&keystore_path, store);
+                let ret = fs::write(&keystore_path, store);
                 #[cfg(unix)]
                 if ret.is_ok() {
                     let _ = set_reduced_file_permissions(&keystore_path).inspect_err(|error| {

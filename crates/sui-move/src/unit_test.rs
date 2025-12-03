@@ -7,14 +7,14 @@ use move_cli::base::{
     test::{self, UnitTestResult},
 };
 use move_package::BuildConfig;
-use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
+use move_unit_test::{UnitTestingConfig, extensions::set_extension_hook};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
 use std::{cell::RefCell, collections::BTreeMap, path::Path, rc::Rc, sync::Arc};
 use sui_move_build::{decorate_warnings, implicit_deps};
 use sui_move_natives::{
-    object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
-    transaction_context::TransactionContext, NativesCostTable,
+    NativesCostTable, object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
+    transaction_context::TransactionContext,
 };
 use sui_package_management::system_package_versions::latest_system_packages;
 use sui_protocol_config::ProtocolConfig;
@@ -107,10 +107,10 @@ pub fn run_move_unit_tests(
         &mut std::io::stdout(),
     );
     result.map(|(test_result, warning_diags)| {
-        if test_result == UnitTestResult::Success {
-            if let Some(diags) = warning_diags {
-                decorate_warnings(diags, None);
-            }
+        if test_result == UnitTestResult::Success
+            && let Some(diags) = warning_diags
+        {
+            decorate_warnings(diags, None);
         }
         test_result
     })

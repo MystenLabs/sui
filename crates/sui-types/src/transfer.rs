@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::{file_format::SignatureToken, CompiledModule};
+use move_binary_format::{CompiledModule, file_format::SignatureToken};
 use move_bytecode_utils::resolve_struct;
 use move_core_types::{
     account_address::AccountAddress,
@@ -12,9 +12,9 @@ use move_core_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    SUI_FRAMEWORK_ADDRESS,
     base_types::{ObjectID, SequenceNumber},
     id::ID,
-    SUI_FRAMEWORK_ADDRESS,
 };
 
 const TRANSFER_MODULE_NAME: &IdentStr = ident_str!("transfer");

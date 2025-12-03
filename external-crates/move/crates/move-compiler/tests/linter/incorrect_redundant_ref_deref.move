@@ -108,7 +108,7 @@ module 0x42::M {
     }
 
     public fun mixed_borrow_types() {
-        let mut resource = MyResource { value: 10 };
+        let resource = MyResource { value: 10 };
         let _ref = &*&mut *&resource;  // Mixed mutable and immutable redundant borrows
     }
 

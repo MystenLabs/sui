@@ -3,6 +3,7 @@
 use crate::crypto::PublicKey;
 use crate::crypto::Secp256r1SuiSignature;
 use crate::crypto::SuiSignatureInner;
+use crate::error::SuiErrorKind;
 use crate::signature_verification::VerifiedDigestCache;
 use crate::{
     base_types::{EpochId, SuiAddress},
@@ -79,40 +80,42 @@ impl TryFrom<RawPasskeyAuthenticator> for PasskeyAuthenticator {
     fn try_from(raw: RawPasskeyAuthenticator) -> Result<Self, Self::Error> {
         let client_data_json_parsed: CollectedClientData =
             serde_json::from_str(&raw.client_data_json).map_err(|_| {
-                SuiError::InvalidSignature {
+                SuiErrorKind::InvalidSignature {
                     error: "Invalid client data json".to_string(),
                 }
             })?;
 
         if client_data_json_parsed.ty != ClientDataType::Get {
-            return Err(SuiError::InvalidSignature {
+            return Err(SuiErrorKind::InvalidSignature {
                 error: "Invalid client data type".to_string(),
-            });
+            }
+            .into());
         };
 
         let challenge = Base64UrlUnpadded::decode_vec(&client_data_json_parsed.challenge)
-            .map_err(|_| SuiError::InvalidSignature {
+            .map_err(|_| SuiErrorKind::InvalidSignature {
                 error: "Invalid encoded challenge".to_string(),
             })?
             .try_into()
-            .map_err(|_| SuiError::InvalidSignature {
+            .map_err(|_| SuiErrorKind::InvalidSignature {
                 error: "Invalid size for challenge".to_string(),
             })?;
 
         if raw.user_signature.scheme() != SignatureScheme::Secp256r1 {
-            return Err(SuiError::InvalidSignature {
+            return Err(SuiErrorKind::InvalidSignature {
                 error: "Invalid signature scheme".to_string(),
-            });
+            }
+            .into());
         };
 
         let pk = Secp256r1PublicKey::from_bytes(raw.user_signature.public_key_bytes()).map_err(
-            |_| SuiError::InvalidSignature {
+            |_| SuiErrorKind::InvalidSignature {
                 error: "Invalid r1 pk".to_string(),
             },
         )?;
 
         let signature = Secp256r1Signature::from_bytes(raw.user_signature.signature_bytes())
-            .map_err(|_| SuiError::InvalidSignature {
+            .map_err(|_| SuiErrorKind::InvalidSignature {
                 error: "Invalid r1 sig".to_string(),
             })?;
 
@@ -241,16 +244,18 @@ impl AuthenticatorTrait for PasskeyAuthenticator {
     {
         // Check if author is derived from the public key.
         if author != SuiAddress::from(&self.get_pk()?) {
-            return Err(SuiError::InvalidSignature {
+            return Err(SuiErrorKind::InvalidSignature {
                 error: "Invalid author".to_string(),
-            });
+            }
+            .into());
         };
 
         // Check the intent and signing is consisted from what's parsed from client_data_json.challenge
         if self.challenge != to_signing_message(intent_msg) {
-            return Err(SuiError::InvalidSignature {
+            return Err(SuiErrorKind::InvalidSignature {
                 error: "Invalid challenge".to_string(),
-            });
+            }
+            .into());
         };
 
         // Construct msg = authenticator_data || sha256(client_data_json).
@@ -259,11 +264,12 @@ impl AuthenticatorTrait for PasskeyAuthenticator {
         message.extend_from_slice(&client_data_hash);
 
         // Verify the signature against pk and message.
-        self.pk
-            .verify(&message, &self.signature)
-            .map_err(|_| SuiError::InvalidSignature {
+        self.pk.verify(&message, &self.signature).map_err(|_| {
+            SuiErrorKind::InvalidSignature {
                 error: "Fails to verify".to_string(),
-            })
+            }
+            .into()
+        })
     }
 }
 

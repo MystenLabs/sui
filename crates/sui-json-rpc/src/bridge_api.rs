@@ -4,17 +4,17 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+use jsonrpsee::core::RpcResult;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::{BridgeReadApiOpenRpc, BridgeReadApiServer, JsonRpcMetrics};
 use sui_open_rpc::Module;
-use sui_types::bridge::{get_bridge_obj_initial_shared_version, BridgeSummary, BridgeTrait};
+use sui_types::bridge::{BridgeSummary, BridgeTrait, get_bridge_obj_initial_shared_version};
 use tracing::instrument;
 
 use crate::authority_state::StateRead;
 use crate::error::Error;
-use crate::{with_tracing, SuiRpcModule};
+use crate::{SuiRpcModule, with_tracing};
 
 #[derive(Clone)]
 pub struct BridgeReadApi {

@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use prost_types::FieldMask;
 use sui_move_build::BuildConfig;
-use sui_rpc::client::v2::Client;
+use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{
     Bcs, ExecuteTransactionRequest, ExecutedTransaction, Transaction, UserSignature,
@@ -59,14 +59,16 @@ async fn execute_transaction(
         .to_owned();
 
     // Assert that the txn was successful
-    assert!(transaction
-        .effects
-        .as_ref()
-        .unwrap()
-        .status
-        .as_ref()
-        .unwrap()
-        .success());
+    assert!(
+        transaction
+            .effects
+            .as_ref()
+            .unwrap()
+            .status
+            .as_ref()
+            .unwrap()
+            .success()
+    );
 
     transaction
 }

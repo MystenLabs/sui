@@ -4,7 +4,8 @@
 #[test_only]
 module std::u32_tests;
 
-use std::{integer_tests, unit_test::assert_eq};
+use std::integer_tests;
+use std::unit_test::assert_eq;
 
 const BIT_SIZE: u8 = 32;
 const MAX: u32 = 0xFFFF_FFFF;

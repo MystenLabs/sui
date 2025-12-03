@@ -12,12 +12,12 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
 
 use crate::{
+    SUI_FRAMEWORK_ADDRESS,
     balance::Balance,
     base_types::{ObjectID, SequenceNumber},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     object::{Data, MoveObject, Object},
-    SUI_FRAMEWORK_ADDRESS,
 };
 
 /// The number of Mist per Sui token

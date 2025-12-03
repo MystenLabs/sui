@@ -5,22 +5,28 @@
 use std::borrow::Cow;
 use std::fmt;
 
-use move_core_types::{
-    account_address::AccountAddress,
-    identifier::{IdentStr, Identifier},
-    language_storage::{StructTag, TypeTag},
-    u256::U256,
-};
+use base64::engine::general_purpose::GeneralPurpose;
+use base64::engine::general_purpose::STANDARD;
+use base64::engine::general_purpose::STANDARD_NO_PAD;
+use base64::engine::general_purpose::URL_SAFE;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::IdentStr;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
+use move_core_types::u256::U256;
 
-use super::peek::{Peekable2, Peekable2Ext};
-use super::{
-    error::{Error, Expected, ExpectedSet, Match},
-    meter::Limits,
-};
-use super::{
-    lexer::{Lexeme as Lex, Lexer, Token as T},
-    meter::Meter,
-};
+use crate::v2::error::Expected;
+use crate::v2::error::ExpectedSet;
+use crate::v2::error::FormatError;
+use crate::v2::error::Match;
+use crate::v2::lexer::Lexeme as Lex;
+use crate::v2::lexer::Lexer;
+use crate::v2::lexer::Token as T;
+use crate::v2::meter::Meter;
+use crate::v2::peek::Peekable2;
+use crate::v2::peek::Peekable2Ext;
 
 /// A single Display string template is a sequence of strands.
 #[derive(PartialEq, Eq)]
@@ -38,18 +44,18 @@ pub enum Strand<'s> {
 /// transform is provided, it is applied to the result to convert it to a string.
 #[derive(PartialEq, Eq)]
 pub struct Expr<'s> {
-    alternates: Vec<Chain<'s>>,
-    transform: Option<&'s str>,
+    pub(crate) alternates: Vec<Chain<'s>>,
+    pub(crate) transform: Option<Transform>,
 }
 
 /// Chains are a sequence of nested field accesses.
 #[derive(PartialEq, Eq)]
 pub struct Chain<'s> {
     /// An optional root expression. If not provided, the object being displayed is the root.
-    root: Option<Literal<'s>>,
+    pub(crate) root: Option<Literal<'s>>,
 
     /// A sequence of field accessors that go successively deeper into the object.
-    accessors: Vec<Accessor<'s>>,
+    pub(crate) accessors: Vec<Accessor<'s>>,
 }
 
 /// Different ways to nest deeply into an object.
@@ -64,8 +70,11 @@ pub enum Accessor<'s> {
     /// Index into a vector, VecMap, or dynamic field.
     Index(Chain<'s>),
 
+    /// Index into a dynamic field.
+    DFIndex(Chain<'s>),
+
     /// Index into a dynamic object field.
-    IIndex(Chain<'s>),
+    DOFIndex(Chain<'s>),
 }
 
 /// Literal forms are elements whose syntax determines their (outer) type.
@@ -95,24 +104,24 @@ pub enum Literal<'s> {
 #[derive(PartialEq, Eq)]
 pub struct Vector<'s> {
     /// Element type, optional for non-empty vectors.
-    type_: Option<TypeTag>,
-    elements: Vec<Chain<'s>>,
+    pub(crate) type_: Option<TypeTag>,
+    pub(crate) elements: Vec<Chain<'s>>,
 }
 
 /// Contents of a struct literal.
 #[derive(PartialEq, Eq)]
 pub struct Struct<'s> {
-    type_: StructTag,
-    fields: Fields<'s>,
+    pub(crate) type_: StructTag,
+    pub(crate) fields: Fields<'s>,
 }
 
 /// Contents of an enum literal.
 #[derive(PartialEq, Eq)]
 pub struct Enum<'s> {
-    type_: StructTag,
-    variant_name: Option<&'s str>,
-    variant_index: u16,
-    fields: Fields<'s>,
+    pub(crate) type_: StructTag,
+    pub(crate) variant_name: Option<&'s str>,
+    pub(crate) variant_index: u16,
+    pub(crate) fields: Fields<'s>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -120,6 +129,21 @@ pub enum Fields<'s> {
     Positional(Vec<Chain<'s>>),
     Named(Vec<(&'s str, Chain<'s>)>),
 }
+
+/// Ways to modify a value before displaying it.
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
+pub enum Transform {
+    Base64(Base64Modifier),
+    Bcs(Base64Modifier),
+    Hex,
+    #[default]
+    Str,
+    Timestamp,
+    Url,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct Base64Modifier(u8);
 
 pub(crate) struct Parser<'s> {
     lexer: Peekable2<Lexer<'s>>,
@@ -202,26 +226,27 @@ macro_rules! match_token_opt {
 ///
 ///   part     ::= TEXT | '{{' | '}}'
 ///
-///   expr     ::= '{' chain ('|' chain)* (':' IDENT)? '}'
+///   expr     ::= '{' chain ('|' chain)* (':' xform)? '}'
 ///
 ///   chain    ::= (literal | IDENT) accessor*
 ///
 ///   accessor ::= '.' IDENT
 ///              | '.' NUM_DEC
 ///              | '[' chain ']'
-///              | '[' '[' chain ']' ']'
+///              | '->' '[' chain ']'
+///              | '=>' '[' chain ']'
 ///
 ///   literal  ::= address | bool | number | string | vector | struct | enum
 ///
-///   address  ::= '@' NUM_HEX
+///   address  ::= '@' (NUM_DEC | NUM_HEX)
 ///
 ///   bool     ::= 'true' | 'false'
 ///
-///   number   ::= (NUM_DEC | NUM_HEX) numeric?
+///   number   ::= (NUM_DEC | NUM_HEX) numeric
 ///
 ///   string   ::= ('b' | 'x')? STRING
 ///
-///   vector   ::= 'vector'  '<' type ','? '>'
+///   vector   ::= 'vector'  '<' type ','? '>' ('[' ']')?
 ///              | 'vector' ('<' type ','? '>')?  array
 ///
 ///   array    ::= '[' chain (',' chain)* ','? ']'
@@ -235,11 +260,22 @@ macro_rules! match_token_opt {
 ///
 ///   named    ::= IDENT ':' chain
 ///
-///   type     ::= 'address' | 'bool' | | 'vector' '<' type '>' |  numtype | datatype
+///   type     ::= 'address' | 'bool' | | 'vector' '<' type '>' |  numeric | datatype
 ///
 ///   datatype ::= NUM_HEX '::' IDENT ('<' type (',' type)* ','? '>')?
 ///
 ///   numeric  ::= 'u8' | 'u16' | 'u32' | 'u64' | 'u128' | 'u256'
+///
+///   xform    ::= 'str'
+///              | 'hex'
+///              | 'base64' xmod?
+///              | 'bcs'
+///              | 'timestamp'
+///              | 'url'
+///
+///  xmod      ::= '(' b64mod (',' b64mod)* ','? )'
+///
+///  b64mod    ::= 'url' | 'nopad'
 ///
 impl<'s> Parser<'s> {
     /// Construct a new parser, consuming input from the `src` string.
@@ -250,13 +286,14 @@ impl<'s> Parser<'s> {
     }
 
     /// Entrypoint into the parser, parsing the root non-terminal -- `format`.
-    pub(crate) fn run(src: &'s str, limits: Limits) -> Result<Vec<Strand<'s>>, Error> {
-        let mut budget = limits.budget();
-        let mut meter = Meter::new(limits.max_depth, &mut budget);
-        Self::new(src).parse_format(&mut meter)
+    pub(crate) fn run<'b>(
+        src: &'s str,
+        meter: &mut Meter<'b>,
+    ) -> Result<Vec<Strand<'s>>, FormatError> {
+        Self::new(src).parse_format(meter)
     }
 
-    fn parse_format<'b>(mut self, meter: &mut Meter<'b>) -> Result<Vec<Strand<'s>>, Error> {
+    fn parse_format<'b>(mut self, meter: &mut Meter<'b>) -> Result<Vec<Strand<'s>>, FormatError> {
         let mut strands = vec![];
         while self.lexer.peek().is_some() {
             strands.push(self.parse_strand(meter)?);
@@ -265,14 +302,14 @@ impl<'s> Parser<'s> {
         Ok(strands)
     }
 
-    fn parse_strand<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Strand<'s>, Error> {
+    fn parse_strand<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Strand<'s>, FormatError> {
         Ok(match_token! { self.lexer;
             Tok(_, T::Text | T::LLBrace | T::RRBrace, _, _) => Strand::Text(self.parse_text(meter)?),
             Tok(_, T::LBrace, _, _) => Strand::Expr(self.parse_expr(meter)?),
         })
     }
 
-    fn parse_text<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Cow<'s, str>, Error> {
+    fn parse_text<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Cow<'s, str>, FormatError> {
         let mut text = self.parse_part()?;
         while let Some(Lex(_, T::Text | T::LLBrace | T::RRBrace, _, _)) = self.lexer.peek() {
             text += self.parse_part()?;
@@ -282,7 +319,7 @@ impl<'s> Parser<'s> {
         Ok(text)
     }
 
-    fn parse_part(&mut self) -> Result<Cow<'s, str>, Error> {
+    fn parse_part(&mut self) -> Result<Cow<'s, str>, FormatError> {
         Ok(match_token! { self.lexer;
             Tok(_, T::Text | T::LLBrace | T::RRBrace, _, slice) => {
                 self.lexer.next();
@@ -291,7 +328,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_expr<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Expr<'s>, Error> {
+    fn parse_expr<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Expr<'s>, FormatError> {
         match_token! { self.lexer; Tok(_, T::LBrace, _, _) => self.lexer.next() };
         let mut alternates = vec![self.parse_chain(meter)?];
         let mut transform = None;
@@ -305,10 +342,7 @@ impl<'s> Parser<'s> {
 
                 Tok(_, T::Colon, _, _) => {
                     self.lexer.next();
-                    match_token! { self.lexer; Tok(_, T::Ident, _, t) => {
-                        self.lexer.next();
-                        transform = Some(t);
-                    }};
+                    transform = Some(self.parse_xform()?);
                     match_token! { self.lexer; Tok(_, T::RBrace, _, _) => {
                         self.lexer.next()
                     }};
@@ -329,7 +363,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_chain<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Chain<'s>, Error> {
+    fn parse_chain<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Chain<'s>, FormatError> {
         let meter = &mut meter.nest()?;
         let mut accessors = vec![];
 
@@ -340,7 +374,7 @@ impl<'s> Parser<'s> {
             Match::Tried(_, tried) => {
                 accessors.push(match_token! { self.lexer, tried;
                     Tok(_, T::Ident, _, ident) @ lex => {
-                        let ident = IdentStr::new(ident).map_err(|_| Error::InvalidIdentifier(lex.detach()))?;
+                        let ident = IdentStr::new(ident).map_err(|_| FormatError::InvalidIdentifier(lex.detach()))?;
                         self.lexer.next();
                         meter.alloc()?;
                         Accessor::Field(ident)
@@ -361,7 +395,7 @@ impl<'s> Parser<'s> {
     fn try_parse_literal<'b>(
         &mut self,
         meter: &mut Meter<'b>,
-    ) -> Result<Match<Literal<'s>>, Error> {
+    ) -> Result<Match<Literal<'s>>, FormatError> {
         Ok(match_token_opt! { self.lexer;
             Tok(_, T::At, _, _) => {
                 self.lexer.next();
@@ -434,14 +468,14 @@ impl<'s> Parser<'s> {
                     // SAFETY: Bounds check on `type_params.len()` guarantees safety.
                     1 => Some(type_params.pop().unwrap()),
                     0 => None,
-                    arity => return Err(Error::VectorArity { offset, arity }),
+                    arity => return Err(FormatError::VectorArity { offset, arity }),
                 };
 
                 let elements = self.parse_array_elements(meter)?;
 
                 // If the vector is empty, the type parameter becomes mandatory.
                 if elements.is_empty() && type_.is_none() {
-                    return Err(Error::VectorArity {
+                    return Err(FormatError::VectorArity {
                         offset,
                         arity: 0,
                     });
@@ -456,14 +490,14 @@ impl<'s> Parser<'s> {
     fn try_parse_accessor<'b>(
         &mut self,
         meter: &mut Meter<'b>,
-    ) -> Result<Match<Accessor<'s>>, Error> {
+    ) -> Result<Match<Accessor<'s>>, FormatError> {
         Ok(match_token_opt! { self.lexer;
             Tok(_, T::Dot, _, _) => {
                 self.lexer.next();
                 match_token! { self.lexer;
                     Tok(_, T::Ident, _, ident) @ lex => {
                         let ident = IdentStr::new(ident)
-                            .map_err(|_| Error::InvalidIdentifier(lex.detach()))?;
+                            .map_err(|_| FormatError::InvalidIdentifier(lex.detach()))?;
                         self.lexer.next();
                         meter.alloc()?;
                         Accessor::Field(ident)
@@ -479,33 +513,48 @@ impl<'s> Parser<'s> {
                 }
             },
 
+            Tok(_, T::Arrow, _, _) => {
+                self.lexer.next();
+
+                match_token! { self.lexer; Tok(_, T::LBracket, _, _) => self.lexer.next() };
+                let chain = self.parse_chain(meter)?;
+                match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
+
+                meter.load()?;
+                meter.alloc()?;
+                Accessor::DFIndex(chain)
+            },
+
+            Tok(_, T::AArrow, _, _) => {
+                self.lexer.next();
+
+                match_token! { self.lexer; Tok(_, T::LBracket, _, _) => self.lexer.next() };
+                let chain = self.parse_chain(meter)?;
+                match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
+
+                // Dynamic Object Fields require two successive loads.
+                meter.load()?;
+                meter.load()?;
+                meter.alloc()?;
+                Accessor::DOFIndex(chain)
+            },
+
             Tok(_, T::LBracket, _, _) => {
                 self.lexer.next();
 
-                let doubled = match_token_opt! { self.lexer;
-                    Tok(false, T::LBracket, _, _) => { self.lexer.next(); }
-                };
+                let chain = self.parse_chain(meter)?;
+                match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
 
-                if let Match::Tried(offset, doubled) = doubled {
-                    let chain = self.parse_chain(meter)
-                        .map_err(|e| e.also_tried(offset, doubled))?;
-                    match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
-
-                    meter.alloc()?;
-                    Accessor::Index(chain)
-                } else {
-                    let chain = self.parse_chain(meter)?;
-                    match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
-                    match_token! { self.lexer; Tok(false, T::RBracket, _, _) => self.lexer.next() };
-
-                    meter.alloc()?;
-                    Accessor::IIndex(chain)
-                }
+                meter.alloc()?;
+                Accessor::Index(chain)
             },
         })
     }
 
-    fn parse_array_elements<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Vec<Chain<'s>>, Error> {
+    fn parse_array_elements<'b>(
+        &mut self,
+        meter: &mut Meter<'b>,
+    ) -> Result<Vec<Chain<'s>>, FormatError> {
         let mut elements = vec![];
 
         if match_token_opt! { self.lexer; Tok(_, T::LBracket, _, _) => { self.lexer.next(); } }
@@ -541,7 +590,7 @@ impl<'s> Parser<'s> {
                 (_, Match::Found(_)) => break,
                 (Match::Found(_), _) => continue,
                 (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
-                    return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                    return Err(delimited.union(terminated).into_error(self.lexer.peek()));
                 }
             }
         }
@@ -549,7 +598,7 @@ impl<'s> Parser<'s> {
         Ok(elements)
     }
 
-    fn parse_data<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Literal<'s>, Error> {
+    fn parse_data<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Literal<'s>, FormatError> {
         let type_ = self.parse_datatype(meter)?;
 
         let enum_ = match_token_opt! { self.lexer;
@@ -601,7 +650,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_fields<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Fields<'s>, Error> {
+    fn parse_fields<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Fields<'s>, FormatError> {
         let is_named = match_token! { self.lexer;
             Tok(_, T::LParen, _, _) => { self.lexer.next(); false },
             Tok(_, T::LBrace, _, _) => { self.lexer.next(); true }
@@ -641,7 +690,7 @@ impl<'s> Parser<'s> {
                     (_, Match::Found(_)) => break,
                     (Match::Found(_), _) => continue,
                     (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
-                        return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                        return Err(delimited.union(terminated).into_error(self.lexer.peek()));
                     }
                 }
             }
@@ -677,7 +726,7 @@ impl<'s> Parser<'s> {
                     (_, Match::Found(_)) => break,
                     (Match::Found(_), _) => continue,
                     (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
-                        return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                        return Err(delimited.union(terminated).into_error(self.lexer.peek()));
                     }
                 }
             }
@@ -686,7 +735,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_type(&mut self, meter: &mut Meter<'_>) -> Result<TypeTag, Error> {
+    fn parse_type(&mut self, meter: &mut Meter<'_>) -> Result<TypeTag, FormatError> {
         let meter = &mut meter.nest()?;
         Ok(match_token! { self.lexer;
             Lit(_, T::Ident, _, "address") => {
@@ -749,7 +798,7 @@ impl<'s> Parser<'s> {
                         TypeTag::Vector(Box::new(inner))
                     }
 
-                    arity => return Err(Error::VectorArity { offset, arity }),
+                    arity => return Err(FormatError::VectorArity { offset, arity }),
                 }
             },
 
@@ -759,7 +808,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_datatype(&mut self, meter: &mut Meter<'_>) -> Result<StructTag, Error> {
+    fn parse_datatype(&mut self, meter: &mut Meter<'_>) -> Result<StructTag, FormatError> {
         let address = self.parse_address()?;
 
         match_token! { self.lexer; Tok(_, T::CColon, _, _) => self.lexer.next() };
@@ -779,7 +828,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    fn parse_type_params(&mut self, meter: &mut Meter<'_>) -> Result<Vec<TypeTag>, Error> {
+    fn parse_type_params(&mut self, meter: &mut Meter<'_>) -> Result<Vec<TypeTag>, FormatError> {
         let mut type_params = vec![];
         if match_token_opt! { self.lexer; Tok(_, T::LAngle, _, _) => { self.lexer.next(); } }
             .is_not_found()
@@ -802,7 +851,7 @@ impl<'s> Parser<'s> {
                 (_, Match::Found(_)) => break,
                 (Match::Found(_), _) => continue,
                 (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
-                    return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                    return Err(delimited.union(terminated).into_error(self.lexer.peek()));
                 }
             }
         }
@@ -810,7 +859,7 @@ impl<'s> Parser<'s> {
         Ok(type_params)
     }
 
-    fn parse_address(&mut self) -> Result<AccountAddress, Error> {
+    fn parse_address(&mut self) -> Result<AccountAddress, FormatError> {
         let addr = match_token! { self.lexer;
             Tok(_, T::NumHex, _, slice) => {
                 self.lexer.next();
@@ -826,10 +875,10 @@ impl<'s> Parser<'s> {
         Ok(AccountAddress::from(addr.to_be_bytes()))
     }
 
-    fn parse_identifier(&mut self) -> Result<Identifier, Error> {
+    fn parse_identifier(&mut self) -> Result<Identifier, FormatError> {
         match_token! { self.lexer;
             Tok(_, T::Ident, _, ident) @ lex => {
-                let ident = Identifier::new(ident).map_err(|_| Error::InvalidIdentifier(lex.detach()));
+                let ident = Identifier::new(ident).map_err(|_| FormatError::InvalidIdentifier(lex.detach()));
                 self.lexer.next();
                 ident
             },
@@ -841,7 +890,7 @@ impl<'s> Parser<'s> {
         num: &'s str,
         radix: u32,
         meter: &mut Meter<'b>,
-    ) -> Result<Literal<'s>, Error> {
+    ) -> Result<Literal<'s>, FormatError> {
         Ok(match_token! { self.lexer;
             Lit(false, T::Ident, _, "u8") => {
                 self.lexer.next();
@@ -880,6 +929,115 @@ impl<'s> Parser<'s> {
             },
         })
     }
+
+    fn parse_xform(&mut self) -> Result<Transform, FormatError> {
+        Ok(match_token! { self.lexer;
+            Lit(_, T::Ident, _, "base64") => {
+                self.lexer.next();
+                Transform::Base64(self.parse_xmod()?)
+            },
+
+            Lit(_, T::Ident, _, "bcs") => {
+                self.lexer.next();
+                Transform::Bcs(self.parse_xmod()?)
+            },
+
+            Lit(_, T::Ident, _, "hex") => {
+                self.lexer.next();
+                Transform::Hex
+            },
+
+            Lit(_, T::Ident, _, "str") => {
+                self.lexer.next();
+                Transform::Str
+            },
+
+            Lit(_, T::Ident, _, "ts") => {
+                self.lexer.next();
+                Transform::Timestamp
+            },
+
+            Lit(_, T::Ident, _, "url") => {
+                self.lexer.next();
+                Transform::Url
+            },
+        })
+    }
+
+    fn parse_xmod(&mut self) -> Result<Base64Modifier, FormatError> {
+        let mut xmod = Base64Modifier::EMPTY;
+        if match_token_opt! { self.lexer; Tok(_, T::LParen, _, _) => { self.lexer.next(); } }
+            .is_not_found()
+        {
+            return Ok(xmod);
+        }
+
+        loop {
+            xmod = xmod.union(match_token! { self.lexer;
+                Lit(_, T::Ident, _, "url") => { self.lexer.next(); Base64Modifier::URL },
+                Lit(_, T::Ident, _, "nopad") => { self.lexer.next(); Base64Modifier::NOPAD },
+            });
+
+            let delimited = match_token_opt! { self.lexer;
+                Tok(_, T::Comma, _, _) => { self.lexer.next(); }
+            };
+
+            let terminated = match_token_opt! { self.lexer;
+                Tok(_, T::RParen, _, _) => { self.lexer.next(); }
+            };
+
+            match (delimited, terminated) {
+                (_, Match::Found(_)) => break,
+                (Match::Found(_), _) => continue,
+                (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
+                    return Err(delimited.union(terminated).into_error(self.lexer.peek()));
+                }
+            }
+        }
+
+        Ok(xmod)
+    }
+}
+
+impl Base64Modifier {
+    /// Use a standard Base64 encoding.
+    const EMPTY: Self = Self(0);
+
+    /// Use the URL-safe character set.
+    const URL: Self = Self(1 << 1);
+
+    /// Don't add padding characters.
+    const NOPAD: Self = Self(1 << 2);
+
+    pub fn standard(&self) -> bool {
+        self.0 == Self::EMPTY.0
+    }
+
+    pub fn url(&self) -> bool {
+        self.0 & Self::URL.0 > 0
+    }
+
+    pub fn nopad(&self) -> bool {
+        self.0 & Self::NOPAD.0 > 0
+    }
+
+    /// The Base64 encoding engine for this set of modifiers
+    pub fn engine(&self) -> &'static GeneralPurpose {
+        if self.url() && self.nopad() {
+            &URL_SAFE_NO_PAD
+        } else if self.url() {
+            &URL_SAFE
+        } else if self.nopad() {
+            &STANDARD_NO_PAD
+        } else {
+            &STANDARD
+        }
+    }
+
+    #[must_use]
+    pub fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
 }
 
 impl fmt::Debug for Strand<'_> {
@@ -912,7 +1070,7 @@ impl fmt::Debug for Expr<'_> {
         }
 
         if let Some(transform) = self.transform {
-            write!(f, ": {transform}")?;
+            write!(f, ": {transform:?}")?;
         }
 
         write!(f, "}}")
@@ -936,7 +1094,8 @@ impl fmt::Debug for Chain<'_> {
                 A::Field(name) => write!(f, ".{name}")?,
                 A::Positional(index) => write!(f, ".{index}")?,
                 A::Index(chain) => write!(f, "[{chain:?}]")?,
-                A::IIndex(chain) => write!(f, "[[{chain:?}]]")?,
+                A::DFIndex(chain) => write!(f, "->[{chain:?}]")?,
+                A::DOFIndex(chain) => write!(f, "=>[{chain:?}]")?,
             }
         }
 
@@ -1040,43 +1199,79 @@ impl fmt::Debug for Enum<'_> {
     }
 }
 
-fn read_u8(slice: &str, radix: u32, what: &'static str) -> Result<u8, Error> {
-    u8::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+impl fmt::Debug for Transform {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Transform::Base64(xmod) => write!(f, "base64{xmod:?}"),
+            Transform::Bcs(xmod) => write!(f, "bcs{xmod:?}"),
+            Transform::Hex => write!(f, "hex"),
+            Transform::Str => write!(f, "str"),
+            Transform::Timestamp => write!(f, "ts"),
+            Transform::Url => write!(f, "url"),
+        }
+    }
+}
+
+impl fmt::Debug for Base64Modifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut prefix = "(";
+
+        if self.url() {
+            f.write_str(prefix)?;
+            f.write_str("url")?;
+            prefix = ", ";
+        }
+
+        if self.nopad() {
+            f.write_str(prefix)?;
+            f.write_str("nopad")?;
+        }
+
+        if prefix != "(" {
+            f.write_str(")")?;
+        }
+
+        Ok(())
+    }
+}
+
+fn read_u8(slice: &str, radix: u32, what: &'static str) -> Result<u8, FormatError> {
+    u8::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
         err: err.to_string(),
     })
 }
 
-fn read_u16(slice: &str, radix: u32, what: &'static str) -> Result<u16, Error> {
-    u16::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+fn read_u16(slice: &str, radix: u32, what: &'static str) -> Result<u16, FormatError> {
+    u16::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
         err: err.to_string(),
     })
 }
 
-fn read_u32(slice: &str, radix: u32, what: &'static str) -> Result<u32, Error> {
-    u32::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+fn read_u32(slice: &str, radix: u32, what: &'static str) -> Result<u32, FormatError> {
+    u32::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
         err: err.to_string(),
     })
 }
 
-fn read_u64(slice: &str, radix: u32, what: &'static str) -> Result<u64, Error> {
-    u64::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+fn read_u64(slice: &str, radix: u32, what: &'static str) -> Result<u64, FormatError> {
+    u64::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
         err: err.to_string(),
     })
 }
 
-fn read_u128(slice: &str, radix: u32, what: &'static str) -> Result<u128, Error> {
-    u128::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+fn read_u128(slice: &str, radix: u32, what: &'static str) -> Result<u128, FormatError> {
+    u128::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
         err: err.to_string(),
     })
 }
 
-fn read_u256(slice: &str, radix: u32, what: &'static str) -> Result<U256, Error> {
-    U256::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+fn read_u256(slice: &str, radix: u32, what: &'static str) -> Result<U256, FormatError> {
+    U256::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
         err: err.to_string(),
     })
@@ -1102,15 +1297,15 @@ fn read_string_literal(slice: &str) -> Cow<'_, str> {
     output
 }
 
-fn read_hex_literal(lexeme: &Lex<'_>, slice: &str) -> Result<Vec<u8>, Error> {
-    if slice.len() % 2 != 0 {
-        return Err(Error::OddHexLiteral(lexeme.detach()));
+fn read_hex_literal(lexeme: &Lex<'_>, slice: &str) -> Result<Vec<u8>, FormatError> {
+    if !slice.len().is_multiple_of(2) {
+        return Err(FormatError::OddHexLiteral(lexeme.detach()));
     }
 
     let mut output = Vec::with_capacity(slice.len() / 2);
     for i in (0..slice.len()).step_by(2) {
         let byte = u8::from_str_radix(&slice[i..i + 2], 16)
-            .map_err(|_| Error::InvalidHexCharacter(lexeme.detach()))?;
+            .map_err(|_| FormatError::InvalidHexCharacter(lexeme.detach()))?;
         output.push(byte);
     }
 
@@ -1124,10 +1319,16 @@ mod tests {
     use insta::assert_snapshot;
     use move_core_types::ident_str;
 
+    use crate::v2::meter::Limits;
+
     use super::{Accessor as A, Chain as C, Expr as E, Literal as L, Parser, Strand as S, *};
 
     fn strands(src: &str) -> String {
-        let strands = match Parser::run(src, Limits::default()) {
+        let limits = Limits::default();
+        let mut budget = limits.budget();
+        let mut meter = Meter::new(limits.max_depth, &mut budget);
+
+        let strands = match Parser::run(src, &mut meter) {
             Ok(strands) => strands,
             Err(e) => return format!("Error: {e}"),
         };
@@ -1140,23 +1341,29 @@ mod tests {
         output
     }
 
-    fn nodes(src: &str) -> (usize, Vec<Strand<'_>>) {
+    fn nodes_and_loads(src: &str) -> (usize, usize, Vec<Strand<'_>>) {
         let limits = Limits {
             max_depth: usize::MAX,
             max_nodes: usize::MAX,
+            max_loads: usize::MAX,
         };
 
         let mut budget = limits.budget();
         let mut meter = Meter::new(limits.max_depth, &mut budget);
 
         let strands = Parser::new(src).parse_format(&mut meter).unwrap();
-        (usize::MAX - budget.nodes, strands)
+        (
+            usize::MAX - budget.nodes,
+            usize::MAX - budget.loads,
+            strands,
+        )
     }
 
-    fn parse_with_depth(depth: usize, src: &str) -> Result<Vec<Strand<'_>>, Error> {
+    fn parse_with_depth(depth: usize, src: &str) -> Result<Vec<Strand<'_>>, FormatError> {
         let limits = Limits {
             max_depth: depth,
             max_nodes: usize::MAX,
+            max_loads: usize::MAX,
         };
 
         let mut budget = limits.budget();
@@ -1167,22 +1374,25 @@ mod tests {
 
     #[test]
     fn test_metering_text() {
-        let (nodes, strands) = nodes("foo bar");
+        let (nodes, loads, strands) = nodes_and_loads("foo bar");
         assert_eq!(nodes, 1);
+        assert_eq!(loads, 0);
         assert_eq!(strands, vec![S::Text("foo bar".into())]);
     }
 
     #[test]
     fn test_metering_text_with_escapes() {
-        let (nodes, strands) = nodes("foo {{bar}}");
+        let (nodes, loads, strands) = nodes_and_loads("foo {{bar}}");
         assert_eq!(nodes, 1);
+        assert_eq!(loads, 0);
         assert_eq!(strands, vec![S::Text("foo {bar}".into())]);
     }
 
     #[test]
     fn test_metering_expression() {
-        let (nodes, strands) = nodes("{foo}");
+        let (nodes, loads, strands) = nodes_and_loads("{foo}");
         assert_eq!(nodes, 3);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1197,8 +1407,9 @@ mod tests {
 
     #[test]
     fn test_metering_expression_with_transform() {
-        let (nodes, strands) = nodes("{foo:hex}");
+        let (nodes, loads, strands) = nodes_and_loads("{foo:str}");
         assert_eq!(nodes, 3);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1206,15 +1417,16 @@ mod tests {
                     root: None,
                     accessors: vec![A::Field(ident_str!("foo"))],
                 }],
-                transform: Some("hex"),
+                transform: Some(Transform::Str),
             })]
         );
     }
 
     #[test]
     fn test_metering_field_access() {
-        let (nodes, strands) = nodes("{foo.bar}");
+        let (nodes, loads, strands) = nodes_and_loads("{foo.bar}");
         assert_eq!(nodes, 4);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1229,8 +1441,9 @@ mod tests {
 
     #[test]
     fn test_metering_text_and_expr() {
-        let (nodes, strands) = nodes("foo {bar} baz");
+        let (nodes, loads, strands) = nodes_and_loads("foo {bar} baz");
         assert_eq!(nodes, 5);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![
@@ -1249,8 +1462,9 @@ mod tests {
 
     #[test]
     fn test_metering_alternates() {
-        let (nodes, strands) = nodes("{foo | bar | baz}");
+        let (nodes, loads, strands) = nodes_and_loads("{foo | bar | baz}");
         assert_eq!(nodes, 7);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1275,8 +1489,9 @@ mod tests {
 
     #[test]
     fn test_metering_indexed_access() {
-        let (nodes, strands) = nodes("{foo[bar][[baz]]}");
+        let (nodes, loads, strands) = nodes_and_loads("{foo[bar]->[baz]}");
         assert_eq!(nodes, 9);
+        assert_eq!(loads, 1);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1288,7 +1503,7 @@ mod tests {
                             root: None,
                             accessors: vec![A::Field(ident_str!("bar"))],
                         }),
-                        A::IIndex(C {
+                        A::DFIndex(C {
                             root: None,
                             accessors: vec![A::Field(ident_str!("baz"))],
                         }),
@@ -1300,9 +1515,52 @@ mod tests {
     }
 
     #[test]
+    fn test_metering_nested_loads() {
+        let (nodes, loads, strands) = nodes_and_loads("{foo=>[bar->[baz]] | qux->[quy]}");
+        assert_eq!(nodes, 14);
+        assert_eq!(loads, 4);
+        assert_eq!(
+            strands,
+            vec![S::Expr(E {
+                alternates: vec![
+                    C {
+                        root: None,
+                        accessors: vec![
+                            A::Field(ident_str!("foo")),
+                            A::DOFIndex(C {
+                                root: None,
+                                accessors: vec![
+                                    A::Field(ident_str!("bar")),
+                                    A::DFIndex(C {
+                                        root: None,
+                                        accessors: vec![A::Field(ident_str!("baz"))],
+                                    }),
+                                ],
+                            }),
+                        ],
+                    },
+                    C {
+                        root: None,
+                        accessors: vec![
+                            A::Field(ident_str!("qux")),
+                            A::DFIndex(C {
+                                root: None,
+                                accessors: vec![A::Field(ident_str!("quy"))],
+                            }),
+                        ],
+                    },
+                ],
+                transform: None,
+            })]
+        );
+    }
+
+    #[test]
     fn test_metering_primitive_literals() {
-        let (nodes, strands) = nodes("{true | @0x1234 | 5678u64 | x'abcdef' | b'hello' | 'world'}");
+        let (nodes, loads, strands) =
+            nodes_and_loads("{true | @0x1234 | 5678u64 | x'abcdef' | b'hello' | 'world'}");
         assert_eq!(nodes, 13);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1341,7 +1599,7 @@ mod tests {
 
     #[test]
     fn test_metering_vectors() {
-        let (nodes, strands) = nodes(
+        let (nodes, loads, strands) = nodes_and_loads(
             r#"{ vector[1u8, 2u8, 3u8]
                | vector<u16>[4u16, 5u16]
                | vector<u32>
@@ -1351,6 +1609,7 @@ mod tests {
         );
 
         assert_eq!(nodes, 26);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1422,12 +1681,13 @@ mod tests {
 
     #[test]
     fn test_metering_datatypes() {
-        let (nodes, strands) = nodes(
+        let (nodes, loads, strands) = nodes_and_loads(
             r#"{ 0x1::string::String(42u64, 'foo', vector[1u256, 2u256, 3u256])
                | 0x2::coin::Coin<0x2::sui::SUI>::Foo#1 { balance: 100u64 } }"#,
         );
 
         assert_eq!(nodes, 22);
+        assert_eq!(loads, 0);
         assert_eq!(
             strands,
             vec![S::Expr(E {
@@ -1571,12 +1831,12 @@ mod tests {
 
     #[test]
     fn test_alternates_with_transform() {
-        assert_snapshot!(strands(r#"{foo | bar | baz :base64}"#));
+        assert_snapshot!(strands(r#"{foo | bar | baz :str}"#));
     }
 
     #[test]
     fn test_expr_with_transform() {
-        assert_snapshot!(strands(r#"{foo.bar.baz:url}"#));
+        assert_snapshot!(strands(r#"{foo.bar.baz:str}"#));
     }
 
     #[test]
@@ -1714,12 +1974,12 @@ mod tests {
 
     #[test]
     fn test_index_chain() {
-        assert_snapshot!(strands(r#"{foo[bar][[baz]].qux[quy]}"#));
+        assert_snapshot!(strands(r#"{foo[bar]=>[baz].qux->[quy]}"#));
     }
 
     #[test]
     fn test_index_with_root() {
-        assert_snapshot!(strands(r#"{true[[foo]][bar].baz}"#));
+        assert_snapshot!(strands(r#"{true=>[foo]->[bar].baz}"#));
     }
 
     #[test]
@@ -1764,23 +2024,13 @@ mod tests {
     }
 
     #[test]
-    fn test_spaced_out_left_double_index() {
-        assert_snapshot!(strands(r#"{foo[ [bar]]}"#));
+    fn test_arrow_missing_index() {
+        assert_snapshot!(strands(r#"{foo->bar}"#));
     }
 
     #[test]
-    fn test_spaced_out_right_double_index() {
-        assert_snapshot!(strands(r#"{foo[[bar] ]}"#));
-    }
-
-    #[test]
-    fn test_unbalanced_double_index() {
-        assert_snapshot!(strands(r#"{foo[[bar}"#));
-    }
-
-    #[test]
-    fn test_triple_index() {
-        assert_snapshot!(strands(r#"{foo[[[bar]]]}"#));
+    fn test_double_arrow_missing_index() {
+        assert_snapshot!(strands(r#"{foo=>}"#));
     }
 
     #[test]

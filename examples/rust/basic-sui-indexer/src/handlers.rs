@@ -4,10 +4,8 @@
 // docs::#processordeps (see sui/docs/content/guides/developer/advanced/custom-indexer.mdx)
 use std::sync::Arc;
 use anyhow::Result;
-use sui_indexer_alt_framework::{
-    pipeline::Processor,
-    types::full_checkpoint_content::CheckpointData,
-};
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::models::StoredTransactionDigest;
 use crate::schema::transaction_digests::dsl::*;
@@ -28,8 +26,8 @@ impl Processor for TransactionDigestHandler {
 
     type Value = StoredTransactionDigest;
 
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number as i64;
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+        let checkpoint_seq = checkpoint.summary.sequence_number as i64;
 
         let digests = checkpoint.transactions.iter().map(|tx| {
             StoredTransactionDigest {
@@ -48,11 +46,12 @@ impl Handler for TransactionDigestHandler {
     type Store = Db;
     type Batch = Vec<Self::Value>;
 
-    fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
+    fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
         batch.extend(values);
     }
 
     async fn commit<'a>(
+        &self,
         batch: &Self::Batch,
         conn: &mut Connection<'a>,
     ) -> Result<usize> {

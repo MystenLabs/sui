@@ -243,13 +243,12 @@ impl GasMeter for SuiGasMeter<'_> {
         // We read the reference so we are decreasing the size of the stack by the size of the
         // reference, and adding to it the size of the value that has been read from that
         // reference.
-        self.0.charge(
-            1,
-            1,
-            1,
-            abstract_memory_size(self.0, ref_val).into(),
-            REFERENCE_SIZE.into(),
-        )
+        let size = if reweight_read_ref(self.0.gas_model_version) {
+            abstract_memory_size_with_traversal(self.0, ref_val)
+        } else {
+            abstract_memory_size(self.0, ref_val)
+        };
+        self.0.charge(1, 1, 1, size.into(), REFERENCE_SIZE.into())
     }
 
     fn charge_write_ref(
@@ -260,10 +259,15 @@ impl GasMeter for SuiGasMeter<'_> {
         // TODO(tzakian): We should account for this elsewhere as the owner of data the
         // reference points to won't be on the stack. For now though, we treat it as adding to the
         // stack size.
+        let (pushes, pops) = if reduce_stack_size(self.0.gas_model_version) {
+            (0, 2)
+        } else {
+            (1, 2)
+        };
         self.0.charge(
             1,
-            1,
-            2,
+            pushes,
+            pops,
             abstract_memory_size(self.0, new_val).into(),
             abstract_memory_size(self.0, old_val).into(),
         )
@@ -356,7 +360,12 @@ impl GasMeter for SuiGasMeter<'_> {
 
     fn charge_vec_swap(&mut self, _ty: impl TypeView) -> PartialVMResult<()> {
         let size_decrease = REFERENCE_SIZE + Type::U64.size() + Type::U64.size();
-        self.0.charge(1, 1, 1, 0, size_decrease.into())
+        let (pushes, pops) = if reduce_stack_size(self.0.gas_model_version) {
+            (0, 3)
+        } else {
+            (1, 1)
+        };
+        self.0.charge(1, pushes, pops, 0, size_decrease.into())
     }
 
     fn charge_drop_frame(
@@ -391,8 +400,22 @@ fn enable_traverse_refs(gas_model_version: u64) -> bool {
     gas_model_version > 9
 }
 
+fn reweight_read_ref(gas_model_version: u64) -> bool {
+    // Reweighting `ReadRef` is only done in gas model versions 10 and above.
+    gas_model_version > 10
+}
+
 fn reweight_move_loc(gas_model_version: u64) -> bool {
     // Reweighting `MoveLoc` is only done in gas model versions 10 and above.
+    gas_model_version > 10
+}
+
+fn reduce_stack_size(gas_model_version: u64) -> bool {
+    // Reducing stack size is only done in gas model versions 10 and above.
+    gas_model_version > 10
+}
+
+fn enable_fine_grained_value_size(gas_model_version: u64) -> bool {
     gas_model_version > 10
 }
 
@@ -404,16 +427,19 @@ fn size_config_for_gas_model_version(
         SizeConfig {
             traverse_references: false,
             include_vector_size: false,
+            fine_grained_value_size: false,
         }
     } else if should_traverse_refs {
         SizeConfig {
             traverse_references: enable_traverse_refs(gas_model_version),
             include_vector_size: true,
+            fine_grained_value_size: enable_fine_grained_value_size(gas_model_version),
         }
     } else {
         SizeConfig {
             traverse_references: false,
             include_vector_size: true,
+            fine_grained_value_size: enable_fine_grained_value_size(gas_model_version),
         }
     }
 }

@@ -7,9 +7,9 @@ use std::sync::Arc;
 use sui_types::Identifier;
 
 use sui_types::event::EventID;
-use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::DBMapUtils;
 use typed_store::Map;
+use typed_store::rocks::{DBMap, MetricConf};
 
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::{BridgeAction, BridgeActionDigest};
@@ -189,7 +189,9 @@ mod tests {
         );
 
         // insert an existing action is ok
-        store.insert_pending_actions(&[action1.clone()]).unwrap();
+        store
+            .insert_pending_actions(std::slice::from_ref(&action1))
+            .unwrap();
         let actions = store.get_all_pending_actions();
         assert_eq!(
             actions,
@@ -215,10 +217,12 @@ mod tests {
         // update eth event cursor
         let eth_contract_address = ethers::types::Address::random();
         let eth_block_num = 199999u64;
-        assert!(store
-            .get_eth_event_cursors(&[eth_contract_address])
-            .unwrap()[0]
-            .is_none());
+        assert!(
+            store
+                .get_eth_event_cursors(&[eth_contract_address])
+                .unwrap()[0]
+                .is_none()
+        );
         store
             .update_eth_event_cursor(eth_contract_address, eth_block_num)
             .unwrap();
@@ -236,12 +240,20 @@ mod tests {
             tx_digest: TransactionDigest::random(),
             event_seq: 1,
         };
-        assert!(store.get_sui_event_cursors(&[sui_module.clone()]).unwrap()[0].is_none());
+        assert!(
+            store
+                .get_sui_event_cursors(std::slice::from_ref(&sui_module))
+                .unwrap()[0]
+                .is_none()
+        );
         store
             .update_sui_event_cursor(sui_module.clone(), sui_cursor)
             .unwrap();
         assert_eq!(
-            store.get_sui_event_cursors(&[sui_module.clone()]).unwrap()[0].unwrap(),
+            store
+                .get_sui_event_cursors(std::slice::from_ref(&sui_module))
+                .unwrap()[0]
+                .unwrap(),
             sui_cursor
         );
     }

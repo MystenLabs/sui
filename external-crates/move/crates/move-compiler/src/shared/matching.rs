@@ -67,7 +67,7 @@ pub struct ArmResult {
 /// compilation in HLIR lowering.
 pub trait MatchContext<const AFTER_TYPING: bool> {
     fn env(&self) -> &CompilationEnv;
-    fn reporter(&self) -> &DiagnosticReporter;
+    fn reporter(&self) -> &DiagnosticReporter<'_>;
     fn new_match_var(&mut self, name: String, loc: Loc) -> N::Var;
     fn program_info(&self) -> &ProgramInfo<AFTER_TYPING>;
 

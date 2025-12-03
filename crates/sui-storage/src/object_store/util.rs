@@ -4,7 +4,7 @@
 use crate::object_store::{
     ObjectStoreDeleteExt, ObjectStoreGetExt, ObjectStoreListExt, ObjectStorePutExt,
 };
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use backoff::future::retry;
 use bytes::Bytes;
 use futures::StreamExt;
@@ -275,6 +275,21 @@ pub async fn list_all_epochs(object_store: Arc<DynObjectStore>) -> Result<Vec<u6
             }
         }
     }
+
+    // Also check for archived epochs in the archive/ directory
+    let archive_prefix = Path::from("archive");
+    if let Ok(archive_epoch_dirs) =
+        find_all_dirs_with_epoch_prefix(&object_store, Some(&archive_prefix)).await
+    {
+        for (epoch, path) in archive_epoch_dirs.iter().sorted() {
+            let success_marker = path.child("_SUCCESS");
+            let get_result = object_store.get(&success_marker).await;
+            if get_result.is_ok() && !out.contains(epoch) {
+                out.push(*epoch);
+            }
+        }
+    }
+
     Ok(out)
 }
 
@@ -357,7 +372,9 @@ pub async fn find_missing_epochs_dirs(
             }
             Err(_) => {
                 // Probably a transient error
-                warn!("Failed while trying to read success marker in db checkpoint for epoch: {epoch_num}");
+                warn!(
+                    "Failed while trying to read success marker in db checkpoint for epoch: {epoch_num}"
+                );
             }
             Ok(_) => {
                 // Nothing to do
@@ -412,7 +429,7 @@ pub async fn write_snapshot_manifest<S: ObjectStoreListExt + ObjectStorePutExt>(
 #[cfg(test)]
 mod tests {
     use crate::object_store::util::{
-        copy_recursively, delete_recursively, write_snapshot_manifest, MANIFEST_FILENAME,
+        MANIFEST_FILENAME, copy_recursively, delete_recursively, write_snapshot_manifest,
     };
     use object_store::path::Path;
     use std::fs;
@@ -461,11 +478,13 @@ mod tests {
         assert!(output_path.join("child").exists());
         assert!(output_path.join("child").join("file1").exists());
         assert!(output_path.join("child").join("grand_child").exists());
-        assert!(output_path
-            .join("child")
-            .join("grand_child")
-            .join("file2")
-            .exists());
+        assert!(
+            output_path
+                .join("child")
+                .join("grand_child")
+                .join("file2")
+                .exists()
+        );
         let content = fs::read_to_string(output_path.join("child").join("file1"))?;
         assert_eq!(content, "Lorem ipsum");
         let content =
@@ -539,11 +558,13 @@ mod tests {
         .await?;
 
         assert!(!input_path.join("child").join("file1").exists());
-        assert!(!input_path
-            .join("child")
-            .join("grand_child")
-            .join("file2")
-            .exists());
+        assert!(
+            !input_path
+                .join("child")
+                .join("grand_child")
+                .join("file2")
+                .exists()
+        );
         Ok(())
     }
 }

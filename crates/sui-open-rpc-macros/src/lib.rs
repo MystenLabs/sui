@@ -7,14 +7,14 @@ use derive_syn_parse::Parse;
 use itertools::Itertools;
 use proc_macro2::{Ident, TokenTree};
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::token::{Comma, Paren};
 use syn::{
-    parse, parse_macro_input, Attribute, GenericArgument, LitStr, PatType, Path, PathArguments,
-    Token, TraitItem, Type,
+    Attribute, GenericArgument, LitStr, PatType, Path, PathArguments, Token, TraitItem, Type,
+    parse, parse_macro_input,
 };
 use unescape::unescape;
 
@@ -205,24 +205,22 @@ fn parse_rpc_method(trait_data: &mut syn::ItemTrait) -> Result<RpcDefinition, sy
 
                 let deprecated = attributes.find("deprecated").is_some();
 
-                if let Some(version_attr) = attributes.find("version") {
-                    if let (Some(token), Some(version)) = (&version_attr.token, &version_attr.value)
-                    {
-                        let route_to =
-                            format!("{method_name}_{}", version.value().replace('.', "_"));
-                        version_routing.push(Routing {
-                            name: method_name,
-                            route_to: route_to.clone(),
-                            token: token.to_token_stream(),
-                            version: version.value(),
-                        });
-                        if let Some(name) = attributes.find_mut("name") {
-                            name.value
-                                .replace(LitStr::new(&route_to, Span::call_site()));
-                        }
-                        attr.tokens = remove_sui_rpc_attributes(attributes);
-                        continue;
+                if let Some(version_attr) = attributes.find("version")
+                    && let (Some(token), Some(version)) = (&version_attr.token, &version_attr.value)
+                {
+                    let route_to = format!("{method_name}_{}", version.value().replace('.', "_"));
+                    version_routing.push(Routing {
+                        name: method_name,
+                        route_to: route_to.clone(),
+                        token: token.to_token_stream(),
+                        version: version.value(),
+                    });
+                    if let Some(name) = attributes.find_mut("name") {
+                        name.value
+                            .replace(LitStr::new(&route_to, Span::call_site()));
                     }
+                    attr.tokens = remove_sui_rpc_attributes(attributes);
+                    continue;
                 }
                 attr.tokens = remove_sui_rpc_attributes(attributes);
                 (method_name, returns, false, deprecated)
@@ -276,14 +274,13 @@ fn extract_type_from(ty: &Type, from_ty: &str) -> Option<Type> {
             && path.segments.iter().next().unwrap().ident == from_ty
     }
 
-    if let Type::Path(p) = ty {
-        if p.qself.is_none() && path_is(&p.path, from_ty) {
-            if let PathArguments::AngleBracketed(a) = &p.path.segments[0].arguments {
-                if let Some(GenericArgument::Type(ty)) = a.args.first() {
-                    return Some(ty.clone());
-                }
-            }
-        }
+    if let Type::Path(p) = ty
+        && p.qself.is_none()
+        && path_is(&p.path, from_ty)
+        && let PathArguments::AngleBracketed(a) = &p.path.segments[0].arguments
+        && let Some(GenericArgument::Type(ty)) = a.args.first()
+    {
+        return Some(ty.clone());
     }
     None
 }

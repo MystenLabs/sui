@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use anyhow::Result;
+use anyhow::anyhow;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 use sui_config::NodeConfig;

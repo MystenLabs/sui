@@ -115,7 +115,7 @@ impl GasStatus {
     /// code that does not have to charge the user.
     pub fn new_unmetered() -> Self {
         Self {
-            gas_model_version: 4,
+            gas_model_version: 11,
             gas_left: InternalGas::new(0),
             gas_price: 1,
             initial_budget: InternalGas::new(0),
@@ -160,13 +160,13 @@ impl GasStatus {
             }
         }
 
-        if let Some(stack_height_tier_next) = self.stack_height_next_tier_start {
-            if self.stack_height_current > stack_height_tier_next {
-                let (next_mul, next_tier) =
-                    self.cost_table.stack_height_tier(self.stack_height_current);
-                self.stack_height_current_tier_mult = next_mul;
-                self.stack_height_next_tier_start = next_tier;
-            }
+        if let Some(stack_height_tier_next) = self.stack_height_next_tier_start
+            && self.stack_height_current > stack_height_tier_next
+        {
+            let (next_mul, next_tier) =
+                self.cost_table.stack_height_tier(self.stack_height_current);
+            self.stack_height_current_tier_mult = next_mul;
+            self.stack_height_next_tier_start = next_tier;
         }
 
         Ok(())
@@ -184,13 +184,13 @@ impl GasStatus {
             }
         }
 
-        if let Some(instr_tier_next) = self.instructions_next_tier_start {
-            if self.instructions_executed > instr_tier_next {
-                let (instr_cost, next_tier) =
-                    self.cost_table.instruction_tier(self.instructions_executed);
-                self.instructions_current_tier_mult = instr_cost;
-                self.instructions_next_tier_start = next_tier;
-            }
+        if let Some(instr_tier_next) = self.instructions_next_tier_start
+            && self.instructions_executed > instr_tier_next
+        {
+            let (instr_cost, next_tier) =
+                self.cost_table.instruction_tier(self.instructions_executed);
+            self.instructions_current_tier_mult = instr_cost;
+            self.instructions_next_tier_start = next_tier;
         }
 
         Ok(())
@@ -207,13 +207,12 @@ impl GasStatus {
             }
         }
 
-        if let Some(stack_size_tier_next) = self.stack_size_next_tier_start {
-            if self.stack_size_current > stack_size_tier_next {
-                let (next_mul, next_tier) =
-                    self.cost_table.stack_size_tier(self.stack_size_current);
-                self.stack_size_current_tier_mult = next_mul;
-                self.stack_size_next_tier_start = next_tier;
-            }
+        if let Some(stack_size_tier_next) = self.stack_size_next_tier_start
+            && self.stack_size_current > stack_size_tier_next
+        {
+            let (next_mul, next_tier) = self.cost_table.stack_size_tier(self.stack_size_current);
+            self.stack_size_current_tier_mult = next_mul;
+            self.stack_size_next_tier_start = next_tier;
         }
 
         Ok(())
@@ -337,6 +336,14 @@ impl GasStatus {
 
     pub fn instructions_executed(&self) -> u64 {
         self.instructions_executed
+    }
+
+    pub fn stack_height_current(&self) -> u64 {
+        self.stack_height_current
+    }
+
+    pub fn stack_size_current(&self) -> u64 {
+        self.stack_size_current
     }
 }
 

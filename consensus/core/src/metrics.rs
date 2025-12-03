@@ -4,10 +4,10 @@
 use std::sync::Arc;
 
 use prometheus::{
+    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
     exponential_buckets, register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
-    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 
 use crate::network::metrics::NetworkMetrics;
@@ -116,7 +116,6 @@ pub(crate) struct NodeMetrics {
     pub(crate) block_timestamp_drift_ms: IntCounterVec,
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) blocks_pruned_on_commit: IntCounterVec,
-    pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
     pub(crate) commit_observer_last_recovered_commit_index: IntGauge,
     pub(crate) core_add_blocks_batch_size: Histogram,
     pub(crate) core_check_block_refs_batch_size: Histogram,
@@ -214,11 +213,13 @@ pub(crate) struct NodeMetrics {
     pub(crate) certifier_output_blocks: IntCounterVec,
     pub(crate) certifier_rejected_transactions: IntCounterVec,
     pub(crate) certifier_accepted_transactions: IntCounterVec,
+    pub(crate) certifier_missing_ancestor_during_certification: IntCounterVec,
     pub(crate) finalizer_buffered_commits: IntGauge,
     pub(crate) finalizer_round_delay: Histogram,
     pub(crate) finalizer_transaction_status: IntCounterVec,
     pub(crate) finalizer_reject_votes: IntCounterVec,
     pub(crate) finalizer_output_commits: IntCounterVec,
+    pub(crate) finalizer_skipped_voting_blocks: IntCounterVec,
     pub(crate) uptime: Histogram,
 }
 
@@ -325,12 +326,6 @@ impl NodeMetrics {
                 "blocks_pruned_on_commit",
                 "Number of blocks that got pruned due to garbage collection during a commit. This is not an accurate metric and measures the pruned blocks on the edge of the commit.",
                 &["authority", "commit_status"],
-                registry,
-            ).unwrap(),
-            broadcaster_rtt_estimate_ms: register_int_gauge_vec_with_registry!(
-                "broadcaster_rtt_estimate_ms",
-                "Estimated RTT latency per peer authority, for block sending in Broadcaster",
-                &["peer"],
                 registry,
             ).unwrap(),
             commit_observer_last_recovered_commit_index: register_int_gauge_with_registry!(
@@ -514,6 +509,12 @@ impl NodeMetrics {
                 "certifier_accepted_transactions",
                 "Number of transactions accepted by authority in transaction certifier",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            certifier_missing_ancestor_during_certification: register_int_counter_vec_with_registry!(
+                "certifier_missing_ancestor_during_certification",
+                "Number of missing ancestors during certification",
+                &["reason"],
                 registry,
             ).unwrap(),
             rejected_blocks: register_int_counter_vec_with_registry!(
@@ -908,6 +909,12 @@ impl NodeMetrics {
                 "finalizer_output_commits",
                 "Number of output commits finalized by the finalizer, grouped by type.",
                 &["type"],
+                registry
+            ).unwrap(),
+            finalizer_skipped_voting_blocks: register_int_counter_vec_with_registry!(
+                "finalizer_skipped_voting_blocks",
+                "Number of blocks skipped from voting due to potentially not being an immediate descendant.",
+                &["authority"],
                 registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(

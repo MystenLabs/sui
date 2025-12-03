@@ -761,10 +761,10 @@ where
     let (adapter, result_opt) =
         Adapter::init(default_syntax, pre_compiled_program, init_opt, path).await;
 
-    if let Some(result) = result_opt {
-        if let Err(e) = writeln!(output, "\ninit:\n{}", result) {
-            return Err(Box::new(e));
-        }
+    if let Some(result) = result_opt
+        && let Err(e) = writeln!(output, "\ninit:\n{}", result)
+    {
+        return Err(Box::new(e));
     }
     Ok((output, adapter))
 }

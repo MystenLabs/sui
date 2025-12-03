@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, Context, Interface, Object};
+use async_graphql::{Context, Interface, Object, connection::Connection};
 use futures::future::try_join_all;
 use sui_types::{dynamic_field::DynamicFieldType, object::MoveObject as NativeMoveObject};
 use tokio::sync::OnceCell;
@@ -27,7 +27,7 @@ use super::{
     object::{self, CLive, CVersion, Object, VersionFilter},
     object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
     owner::Owner,
-    transaction::{filter::TransactionFilter, CTransaction, Transaction},
+    transaction::{CTransaction, Transaction, filter::TransactionFilter},
 };
 
 #[derive(Clone)]

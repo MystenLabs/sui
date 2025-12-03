@@ -7,7 +7,9 @@ use sui_types::{
     accumulator_root::AccumulatorObjId, base_types::SequenceNumber, digests::TransactionDigest,
 };
 
-mod balance_read;
+#[cfg(test)]
+pub(crate) mod mock_balance_read;
+
 mod eager_scheduler;
 mod naive_scheduler;
 pub(crate) mod scheduler;
@@ -44,7 +46,7 @@ pub(crate) struct ScheduleResult {
 
 /// Details regarding a balance settlement, generated when a settlement transaction has been executed
 /// and committed to the writeback cache.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BalanceSettlement {
     // After this settlement, the accumulator object will be at this version.
     // This means that all transactions that read `next_accumulator_version - 1`

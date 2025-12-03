@@ -6,8 +6,8 @@ use sui_json_rpc_api::ReadApiClient;
 use sui_json_rpc_types::SuiObjectResponse;
 use sui_macros::sim_test;
 use sui_types::{
-    base_types::ObjectID, digests::TransactionDigest, object::Object, MOVE_STDLIB_PACKAGE_ID,
-    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID,
+    MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID,
+    base_types::ObjectID, digests::TransactionDigest, object::Object,
 };
 use test_cluster::TestClusterBuilder;
 

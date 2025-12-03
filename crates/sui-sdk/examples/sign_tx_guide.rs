@@ -13,15 +13,15 @@ use fastcrypto::{
     secp256r1::Secp256r1KeyPair,
     traits::{EncodeDecodeBase64, KeyPair},
 };
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng};
 use shared_crypto::intent::{Intent, IntentMessage};
 use sui_sdk::{
+    SuiClientBuilder,
     rpc_types::SuiTransactionBlockResponseOptions,
     types::{
         programmable_transaction_builder::ProgrammableTransactionBuilder,
         transaction::TransactionData,
     },
-    SuiClientBuilder,
 };
 use sui_types::crypto::Signer;
 use sui_types::crypto::SuiSignature;
@@ -29,7 +29,7 @@ use sui_types::crypto::ToFromBytes;
 use sui_types::signature::GenericSignature;
 use sui_types::{
     base_types::SuiAddress,
-    crypto::{get_key_pair_from_rng, SuiKeyPair},
+    crypto::{SuiKeyPair, get_key_pair_from_rng},
 };
 
 /// This example walks through the Rust SDK use case described in

@@ -8,8 +8,8 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use pretty_assertions::assert_str_eq;
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 use roaring::RoaringBitmap;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
@@ -33,8 +33,8 @@ use sui_types::messages_grpc::ObjectInfoRequestKind;
 use sui_types::move_package::TypeOrigin;
 use sui_types::object::Object;
 use sui_types::transaction::{
-    GenesisObject, Reservation, SenderSignedData, StoredExecutionTimeObservations, TransactionData,
-    WithdrawFrom, WithdrawalTypeArg,
+    GenesisObject, Reservation, SenderSignedData, SharedObjectMutability,
+    StoredExecutionTimeObservations, TransactionData, WithdrawFrom, WithdrawalTypeArg,
 };
 use sui_types::type_input::{StructInput, TypeInput};
 use sui_types::{
@@ -51,8 +51,8 @@ use sui_types::{
         self, MoveObjectType, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest,
     },
     crypto::{
-        get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-        AuthorityPublicKeyBytes, AuthoritySignature, KeypairTraits, Signature, SuiKeyPair,
+        AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignature,
+        KeypairTraits, Signature, SuiKeyPair, get_key_pair, get_key_pair_from_rng,
     },
     multisig::{MultiSig, MultiSigPublicKey},
     object::{Data, Owner},
@@ -205,6 +205,9 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<WithdrawalTypeArg>(&samples).unwrap();
     tracer.trace_type::<CallArg>(&samples).unwrap();
     tracer.trace_type::<ObjectArg>(&samples).unwrap();
+    tracer
+        .trace_type::<SharedObjectMutability>(&samples)
+        .unwrap();
     tracer.trace_type::<Data>(&samples).unwrap();
     tracer.trace_type::<TypeTag>(&samples).unwrap();
     tracer.trace_type::<TypedStoreError>(&samples).unwrap();

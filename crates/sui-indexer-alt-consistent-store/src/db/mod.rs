@@ -13,8 +13,8 @@ use std::{
 
 use anyhow::Context;
 use bincode::Encode;
-use rocksdb::{properties, AsColumnFamilyRef};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use rocksdb::{AsColumnFamilyRef, properties};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sui_indexer_alt_framework::store::CommitterWatermark;
 
 use self::error::Error;

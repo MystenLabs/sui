@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -9,7 +9,7 @@ use std::str::FromStr;
 
 use move_core_types::account_address::AccountAddress;
 use move_package::{
-    lock_file::{self, schema::ManagedPackage, LockFile},
+    lock_file::{self, LockFile, schema::ManagedPackage},
     resolution::resolution_graph::Package,
     source_package::layout::SourcePackageLayout,
 };
@@ -140,12 +140,14 @@ pub fn set_package_id(
     id: AccountAddress,
 ) -> Result<Option<AccountAddress>, anyhow::Error> {
     let lock_file_path = package_path.join(SourcePackageLayout::Lock.path());
-    let Ok(mut lock_file) = File::open(lock_file_path.clone()) else {
-        return Ok(None);
+    let managed_package = {
+        let Ok(mut lock_file) = File::open(lock_file_path.clone()) else {
+            return Ok(None);
+        };
+        ManagedPackage::read(&mut lock_file)
+            .ok()
+            .and_then(|m| m.into_iter().find(|(_, v)| v.chain_id == *chain_id))
     };
-    let managed_package = ManagedPackage::read(&mut lock_file)
-        .ok()
-        .and_then(|m| m.into_iter().find(|(_, v)| v.chain_id == *chain_id));
     let Some((env, v)) = managed_package else {
         return Ok(None);
     };

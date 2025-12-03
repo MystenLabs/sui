@@ -10,7 +10,6 @@ pub mod programmable_transaction_test_parser;
 mod simulator_persisted_store;
 pub mod test_adapter;
 
-use move_command_line_common::testing::InstaOptions;
 pub use move_transactional_test_runner::framework::{
     create_adapter, run_tasks_with_adapter, run_test_impl,
 };
@@ -21,10 +20,10 @@ use simulacrum::SimulatorStore;
 use simulator_persisted_store::PersistedStore;
 use std::path::Path;
 use std::sync::Arc;
+use sui_core::authority::AuthorityState;
 use sui_core::authority::authority_per_epoch_store::CertLockGuard;
 use sui_core::authority::authority_test_utils::send_and_confirm_transaction_with_execution_error;
 use sui_core::authority::shared_object_version_manager::AssignedVersions;
-use sui_core::authority::AuthorityState;
 use sui_json_rpc::authority_state::StateRead;
 use sui_json_rpc_types::EventFilter;
 use sui_json_rpc_types::{DevInspectResults, DryRunTransactionBlockResponse};
@@ -37,7 +36,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEvents;
 use sui_types::error::ExecutionError;
-use sui_types::error::SuiError;
+use sui_types::error::SuiErrorKind;
 use sui_types::error::SuiResult;
 use sui_types::event::Event;
 use sui_types::executable_transaction::{ExecutableTransaction, VerifiedExecutableTransaction};
@@ -46,42 +45,21 @@ use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionKind;
 use sui_types::transaction::{InputObjects, TransactionData};
-use test_adapter::{SuiTestAdapter, PRE_COMPILED};
-
-use crate::test_adapter::ENABLE_PTB_V2;
+use test_adapter::{PRE_COMPILED, SuiTestAdapter};
 
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    ENABLE_PTB_V2.set(false).unwrap();
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
     run_test_impl::<SuiTestAdapter>(path, Some(std::sync::Arc::new(PRE_COMPILED.clone())), None)
         .await?;
-    Ok(())
-}
-
-#[cfg_attr(not(msim), tokio::main)]
-#[cfg_attr(msim, msim::main)]
-pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    ENABLE_PTB_V2.set(true).unwrap();
-    let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
-        .with_env()
-        .init();
-    let mut options = InstaOptions::new();
-    options.suffix("v2");
-    run_test_impl::<SuiTestAdapter>(
-        path,
-        Some(std::sync::Arc::new(PRE_COMPILED.clone())),
-        Some(options),
-    )
-    .await?;
     Ok(())
 }
 
@@ -291,7 +269,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
             .fullnode
             .get_system_state()
             .map_err(|e| {
-                SuiError::SuiSystemStateReadError(format!(
+                SuiErrorKind::SuiSystemStateReadError(format!(
                     "Failed to get system state from fullnode: {}",
                     e
                 ))
@@ -416,6 +394,13 @@ impl ReadStore for ValidatorWithFullnode {
         &self,
         _digest: &TransactionDigest,
     ) -> Option<Vec<sui_types::storage::ObjectKey>> {
+        None
+    }
+
+    fn get_transaction_checkpoint(
+        &self,
+        _digest: &TransactionDigest,
+    ) -> Option<sui_types::messages_checkpoint::CheckpointSequenceNumber> {
         None
     }
 }

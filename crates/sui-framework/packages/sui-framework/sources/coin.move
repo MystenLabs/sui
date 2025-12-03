@@ -162,6 +162,21 @@ public fun put<T>(balance: &mut Balance<T>, coin: Coin<T>) {
     balance.join(into_balance(coin));
 }
 
+// === Address Balance <-> Coin utility functions ===
+
+/// Redeem a `Withdrawal<Balance<T>>` and create a `Coin<T>` from the withdrawn Balance<T>.
+public fun redeem_funds<T>(
+    withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>,
+    ctx: &mut TxContext,
+): Coin<T> {
+    balance::redeem_funds(withdrawal).into_coin(ctx)
+}
+
+/// Send a coin to an address balance
+public fun send_funds<T>(coin: Coin<T>, recipient: address) {
+    balance::send_funds(coin.into_balance(), recipient);
+}
+
 // === Base Coin functionality ===
 
 #[allow(lint(public_entry))]
@@ -514,6 +529,39 @@ public(package) fun new_treasury_cap<T>(ctx: &mut TxContext): TreasuryCap<T> {
 
 public(package) fun allow_global_pause<T>(cap: &DenyCapV2<T>): bool {
     cap.allow_global_pause
+}
+
+public(package) fun new_coin_metadata<T>(
+    decimals: u8,
+    name: string::String,
+    symbol: ascii::String,
+    description: string::String,
+    icon_url: ascii::String,
+    ctx: &mut TxContext,
+): CoinMetadata<T> {
+    CoinMetadata {
+        id: object::new(ctx),
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url: option::some(url::new_unsafe(icon_url)),
+    }
+}
+
+/// Internal function to refresh the `CoinMetadata` with new values in
+/// `CoinRegistry` borrowing.
+public(package) fun update_coin_metadata<T>(
+    metadata: &mut CoinMetadata<T>,
+    name: string::String,
+    symbol: ascii::String,
+    description: string::String,
+    icon_url: ascii::String,
+) {
+    metadata.name = name;
+    metadata.symbol = symbol;
+    metadata.description = description;
+    metadata.icon_url = option::some(url::new_unsafe(icon_url));
 }
 
 // === Test-only code ===

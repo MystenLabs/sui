@@ -10,7 +10,7 @@ mod transaction_submitter;
 /// Exports
 pub use error::TransactionDriverError;
 pub use metrics::*;
-use tokio_retry::strategy::ExponentialBackoff;
+use mysten_common::backoff::ExponentialBackoff;
 
 use std::{
     net::SocketAddr,
@@ -39,7 +39,7 @@ use transaction_submitter::*;
 use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
-    quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
+    quorum_driver::{AuthorityAggregatorUpdatable, reconfig_observer::ReconfigObserver},
     validator_client_monitor::{
         OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
@@ -55,6 +55,10 @@ pub struct SubmitTransactionOptions {
     /// When submitting a transaction, only the validators in the allowed validator list can be used to submit the transaction to.
     /// When the allowed validator list is empty, any validator can be used.
     pub allowed_validators: Vec<String>,
+
+    /// When submitting a transaction, the validators in the blocked validator list cannot be used to submit the transaction to.
+    /// When the blocked validator list is empty, no restrictions are applied.
+    pub blocked_validators: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -83,6 +87,7 @@ impl<A> TransactionDriver<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    // TODO: accept a TransactionDriverConfig to set default allowed & blocked validators.
     pub fn new(
         authority_aggregator: Arc<AuthorityAggregator<A>>,
         reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
@@ -90,6 +95,12 @@ where
         node_config: Option<&NodeConfig>,
         client_metrics: Arc<ValidatorClientMetrics>,
     ) -> Arc<Self> {
+        if std::env::var("TRANSACTION_DRIVER").is_ok() {
+            tracing::warn!(
+                "Transaction Driver is the only supported driver for transaction submission. Setting TRANSACTION_DRIVER is a no-op."
+            );
+        }
+
         let shared_swap = Arc::new(ArcSwap::new(authority_aggregator));
 
         // Extract validator client monitor config from NodeConfig or use default
@@ -114,6 +125,235 @@ where
 
         driver.enable_reconfig(reconfig_observer);
         driver
+    }
+
+    /// Returns the authority aggregator wrapper which upgrades on epoch changes.
+    pub fn authority_aggregator(&self) -> &Arc<ArcSwap<AuthorityAggregator<A>>> {
+        &self.authority_aggregator
+    }
+
+    /// Drives transaction to finalization.
+    ///
+    /// Internally, retries the attempt to finalize a transaction until:
+    /// - The transaction is finalized.
+    /// - The transaction observes a non-retriable error.
+    /// - Timeout is reached.
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.as_ref().map(|t| t.digest()), ping = %request.ping_type.is_some()))]
+    pub async fn drive_transaction(
+        &self,
+        request: SubmitTxRequest,
+        options: SubmitTransactionOptions,
+        timeout_duration: Option<Duration>,
+    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
+        const MAX_DRIVE_TRANSACTION_RETRY_DELAY: Duration = Duration::from_secs(10);
+
+        // For ping requests, the amplification factor is always 1.
+        let amplification_factor = if request.ping_type.is_some() {
+            1
+        } else {
+            let gas_price = request
+                .transaction
+                .as_ref()
+                .unwrap()
+                .transaction_data()
+                .gas_price();
+            let reference_gas_price = self.authority_aggregator.load().reference_gas_price;
+            let amplification_factor = gas_price / reference_gas_price.max(1);
+            if amplification_factor == 0 {
+                return Err(TransactionDriverError::ValidationFailed {
+                    error: UserInputError::GasPriceUnderRGP {
+                        gas_price,
+                        reference_gas_price,
+                    }
+                    .to_string(),
+                });
+            }
+            amplification_factor
+        };
+
+        let tx_type = request.tx_type();
+        let ping_label = if request.ping_type.is_some() {
+            "true"
+        } else {
+            "false"
+        };
+        let timer = Instant::now();
+
+        self.metrics
+            .total_transactions_submitted
+            .with_label_values(&[tx_type.as_str(), ping_label])
+            .inc();
+
+        let mut backoff = ExponentialBackoff::new(
+            Duration::from_millis(100),
+            MAX_DRIVE_TRANSACTION_RETRY_DELAY,
+        );
+        let mut attempts = 0;
+        let mut latest_retriable_error = None;
+
+        let retry_loop = async {
+            loop {
+                // TODO(fastpath): Check local state before submitting transaction
+                match self
+                    .drive_transaction_once(amplification_factor, request.clone(), &options)
+                    .await
+                {
+                    Ok(resp) => {
+                        let settlement_finality_latency = timer.elapsed().as_secs_f64();
+                        self.metrics
+                            .settlement_finality_latency
+                            .with_label_values(&[tx_type.as_str(), ping_label])
+                            .observe(settlement_finality_latency);
+                        // Record the number of retries for successful transaction
+                        self.metrics
+                            .transaction_retries
+                            .with_label_values(&["success", tx_type.as_str(), ping_label])
+                            .observe(attempts as f64);
+                        return Ok(resp);
+                    }
+                    Err(e) => {
+                        self.metrics
+                            .drive_transaction_errors
+                            .with_label_values(&[
+                                e.categorize().into(),
+                                tx_type.as_str(),
+                                ping_label,
+                            ])
+                            .inc();
+                        if !e.is_submission_retriable() {
+                            // Record the number of retries for failed transaction
+                            self.metrics
+                                .transaction_retries
+                                .with_label_values(&["failure", tx_type.as_str(), ping_label])
+                                .observe(attempts as f64);
+                            if request.transaction.is_some() {
+                                tracing::info!(
+                                    "User transaction failed to finalize (attempt {}), with non-retriable error: {}",
+                                    attempts,
+                                    e
+                                );
+                            }
+                            return Err(e);
+                        }
+                        if request.transaction.is_some() {
+                            tracing::info!(
+                                "User transaction failed to finalize (attempt {}): {}. Retrying ...",
+                                attempts,
+                                e
+                            );
+                        }
+                        // Buffer the latest retriable error to be returned in case of timeout
+                        latest_retriable_error = Some(e);
+                    }
+                }
+
+                let overload = if let Some(e) = &latest_retriable_error {
+                    e.categorize() == ErrorCategory::ValidatorOverloaded
+                } else {
+                    false
+                };
+                let delay = if overload {
+                    // Increase delay during overload.
+                    const OVERLOAD_ADDITIONAL_DELAY: Duration = Duration::from_secs(10);
+                    backoff.next().unwrap() + OVERLOAD_ADDITIONAL_DELAY
+                } else {
+                    backoff.next().unwrap()
+                };
+                sleep(delay).await;
+
+                attempts += 1;
+            }
+        };
+
+        match timeout_duration {
+            Some(duration) => {
+                tokio::time::timeout(duration, retry_loop)
+                    .await
+                    .unwrap_or_else(|_| {
+                        // Timeout occurred, return with latest retriable error if available
+                        let e = TransactionDriverError::TimeoutWithLastRetriableError {
+                            last_error: latest_retriable_error.map(Box::new),
+                            attempts,
+                            timeout: duration,
+                        };
+                        if request.transaction.is_some() {
+                            tracing::info!(
+                                "User transaction timed out after {} attempts. Last error: {}",
+                                attempts,
+                                e
+                            );
+                        }
+                        Err(e)
+                    })
+            }
+            None => retry_loop.await,
+        }
+    }
+
+    #[instrument(level = "error", skip_all, err(level = "debug"))]
+    async fn drive_transaction_once(
+        &self,
+        amplification_factor: u64,
+        request: SubmitTxRequest,
+        options: &SubmitTransactionOptions,
+    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
+        let auth_agg = self.authority_aggregator.load();
+        let amplification_factor =
+            amplification_factor.min(auth_agg.committee.num_members() as u64);
+        let start_time = Instant::now();
+        let tx_type = request.tx_type();
+        let tx_digest = request.tx_digest();
+        let ping_type = request.ping_type;
+
+        let (name, submit_txn_result) = self
+            .submitter
+            .submit_transaction(
+                &auth_agg,
+                &self.client_monitor,
+                tx_type,
+                amplification_factor,
+                request,
+                options,
+            )
+            .await?;
+        if let SubmitTxResult::Rejected { error } = &submit_txn_result {
+            return Err(TransactionDriverError::ClientInternal {
+                error: format!(
+                    "SubmitTxResult::Rejected should have been returned as an error in submit_transaction(): {}",
+                    error
+                ),
+            });
+        }
+
+        // Wait for quorum effects using EffectsCertifier
+        let result = self
+            .certifier
+            .get_certified_finalized_effects(
+                &auth_agg,
+                &self.client_monitor,
+                tx_digest,
+                tx_type,
+                name,
+                submit_txn_result,
+                options,
+            )
+            .await;
+
+        if result.is_ok() {
+            self.client_monitor
+                .record_interaction_result(OperationFeedback {
+                    authority_name: name,
+                    display_name: auth_agg.get_display_name(&name),
+                    operation: if tx_type == TxType::SingleWriter {
+                        OperationType::FastPath
+                    } else {
+                        OperationType::Consensus
+                    },
+                    ping_type,
+                    result: Ok(start_time.elapsed()),
+                });
+        }
+        result
     }
 
     // Runs a background task to send ping transactions to all validators to perform latency checks to test both the fast path and the consensus path.
@@ -142,7 +382,7 @@ where
 
             while let Some(result) = tasks.join_next().await {
                 if let Err(e) = result {
-                    tracing::info!("Error while driving ping transaction: {}", e);
+                    tracing::debug!("Error while driving ping transaction: {}", e);
                 }
             }
         }
@@ -204,209 +444,18 @@ where
                         );
                     }
                     Err(err) => {
-                        tracing::info!("Failed to get certified finalized effects for tx type {}, for ping transaction to validator {}: {}", tx_type.as_str(), display_name, err);
+                        tracing::debug!(
+                            "Failed to get certified finalized effects for tx type {}, for ping transaction to validator {}: {}",
+                            tx_type.as_str(),
+                            display_name,
+                            err
+                        );
                     }
                 }
             };
 
             tasks.spawn(task);
         }
-    }
-
-    /// Drives transaction to submission and effects certification. Ping requests are derived from the submitted payload.
-    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.as_ref().map(|t| t.digest()), ping = %request.ping_type.is_some()))]
-    pub async fn drive_transaction(
-        &self,
-        request: SubmitTxRequest,
-        options: SubmitTransactionOptions,
-        timeout_duration: Option<Duration>,
-    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
-        // For ping requests, the amplification factor is always 1.
-        let amplification_factor = if request.ping_type.is_some() {
-            1
-        } else {
-            let gas_price = request
-                .transaction
-                .as_ref()
-                .unwrap()
-                .transaction_data()
-                .gas_price();
-            let reference_gas_price = self.authority_aggregator.load().reference_gas_price;
-            let amplification_factor = gas_price / reference_gas_price.max(1);
-            if amplification_factor == 0 {
-                return Err(TransactionDriverError::ValidationFailed {
-                    error: UserInputError::GasPriceUnderRGP {
-                        gas_price,
-                        reference_gas_price,
-                    }
-                    .to_string(),
-                });
-            }
-            amplification_factor
-        };
-
-        let tx_type = request.tx_type();
-        let ping_label = if request.ping_type.is_some() {
-            "true"
-        } else {
-            "false"
-        };
-        let timer = Instant::now();
-
-        self.metrics
-            .total_transactions_submitted
-            .with_label_values(&[tx_type.as_str(), ping_label])
-            .inc();
-
-        const MAX_RETRY_DELAY: Duration = Duration::from_secs(10);
-        // Exponential backoff with jitter to prevent thundering herd on retries
-        let mut backoff = ExponentialBackoff::from_millis(100)
-            .max_delay(MAX_RETRY_DELAY)
-            .map(|duration| duration.mul_f64(rand::thread_rng().gen_range(0.5..1.0)));
-        let mut attempts = 0;
-        let mut latest_retriable_error = None;
-
-        let retry_loop = async {
-            loop {
-                // TODO(fastpath): Check local state before submitting transaction
-                match self
-                    .drive_transaction_once(amplification_factor, request.clone(), &options)
-                    .await
-                {
-                    Ok(resp) => {
-                        let settlement_finality_latency = timer.elapsed().as_secs_f64();
-                        self.metrics
-                            .settlement_finality_latency
-                            .with_label_values(&[tx_type.as_str(), ping_label])
-                            .observe(settlement_finality_latency);
-                        // Record the number of retries for successful transaction
-                        self.metrics
-                            .transaction_retries
-                            .with_label_values(&["success", tx_type.as_str(), ping_label])
-                            .observe(attempts as f64);
-                        return Ok(resp);
-                    }
-                    Err(e) => {
-                        if !e.is_submission_retriable() {
-                            // Record the number of retries for failed transaction
-                            self.metrics
-                                .transaction_retries
-                                .with_label_values(&["failure", tx_type.as_str(), ping_label])
-                                .observe(attempts as f64);
-                            tracing::info!("Failed to finalize transaction with non-retriable error after {} attempts: {}", attempts, e);
-                            return Err(e);
-                        }
-                        tracing::info!(
-                            "Failed to finalize transaction (attempt {}): {}. Retrying ...",
-                            attempts,
-                            e
-                        );
-                        // Buffer the latest retriable error to be returned in case of timeout
-                        latest_retriable_error = Some(e);
-                    }
-                }
-
-                let overload = if let Some(e) = &latest_retriable_error {
-                    e.categorize() == ErrorCategory::ValidatorOverloaded
-                } else {
-                    false
-                };
-                let delay = if overload {
-                    // Increase delay during overload.
-                    backoff.next().unwrap_or(MAX_RETRY_DELAY) + MAX_RETRY_DELAY
-                } else {
-                    backoff.next().unwrap_or(MAX_RETRY_DELAY)
-                };
-                sleep(delay).await;
-
-                attempts += 1;
-            }
-        };
-
-        match timeout_duration {
-            Some(duration) => {
-                tokio::time::timeout(duration, retry_loop)
-                    .await
-                    .unwrap_or_else(|_| {
-                        // Timeout occurred, return with latest retriable error if available
-                        let e = TransactionDriverError::TimeoutWithLastRetriableError {
-                            last_error: latest_retriable_error.map(Box::new),
-                            attempts,
-                            timeout: duration,
-                        };
-                        tracing::info!(
-                            "Transaction timed out after {} attempts. Last error: {}",
-                            attempts,
-                            e
-                        );
-                        Err(e)
-                    })
-            }
-            None => retry_loop.await,
-        }
-    }
-
-    #[instrument(level = "error", skip_all, err)]
-    async fn drive_transaction_once(
-        &self,
-        amplification_factor: u64,
-        request: SubmitTxRequest,
-        options: &SubmitTransactionOptions,
-    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
-        let auth_agg = self.authority_aggregator.load();
-        let amplification_factor =
-            amplification_factor.min(auth_agg.committee.num_members() as u64);
-        let start_time = Instant::now();
-        let tx_type = request.tx_type();
-        let tx_digest = request.tx_digest();
-        let ping_type = request.ping_type;
-
-        let (name, submit_txn_result) = self
-            .submitter
-            .submit_transaction(
-                &auth_agg,
-                &self.client_monitor,
-                tx_type,
-                amplification_factor,
-                request,
-                options,
-            )
-            .await?;
-        if let SubmitTxResult::Rejected { error } = &submit_txn_result {
-            return Err(TransactionDriverError::ClientInternal {
-                error: format!("SubmitTxResult::Rejected should have been returned as an error in submit_transaction(): {}", error),
-            });
-        }
-
-        // Wait for quorum effects using EffectsCertifier
-        let result = self
-            .certifier
-            .get_certified_finalized_effects(
-                &auth_agg,
-                &self.client_monitor,
-                tx_digest,
-                tx_type,
-                name,
-                submit_txn_result,
-                options,
-            )
-            .await;
-
-        if result.is_ok() {
-            self.client_monitor
-                .record_interaction_result(OperationFeedback {
-                    authority_name: name,
-                    display_name: auth_agg.get_display_name(&name),
-                    operation: if tx_type == TxType::SingleWriter {
-                        OperationType::FastPath
-                    } else {
-                        OperationType::Consensus
-                    },
-                    ping_type,
-                    result: Ok(start_time.elapsed()),
-                });
-        }
-        result
     }
 
     fn enable_reconfig(
@@ -441,30 +490,6 @@ where
 
         self.authority_aggregator.store(new_authorities);
     }
-}
-
-// Chooses the percentage of transactions to be driven by TransactionDriver.
-pub fn choose_transaction_driver_percentage(
-    chain_id: Option<sui_types::digests::ChainIdentifier>,
-) -> u8 {
-    if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
-        if let Ok(tx_driver_percentage) = v.parse::<u8>() {
-            if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
-                return tx_driver_percentage;
-            }
-        }
-    }
-
-    if let Some(chain_identifier) = chain_id {
-        if chain_identifier.chain() == sui_protocol_config::Chain::Mainnet {
-            // Require explicit opt-in to TransactionDriver on mainnet,
-            // via the TRANSACTION_DRIVER environment variable.
-            return 0;
-        }
-    }
-
-    // Default to 50% everywhere except mainnet
-    50
 }
 
 // Inner state of TransactionDriver.

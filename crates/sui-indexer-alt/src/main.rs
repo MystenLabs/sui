@@ -3,9 +3,9 @@
 
 use std::path::Path;
 
-use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
+use anyhow::bail;
 use clap::Parser;
 use prometheus::Registry;
 use sui_indexer_alt::args::Args;
@@ -14,8 +14,8 @@ use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt::config::Merge;
 use sui_indexer_alt::setup_indexer;
 use sui_indexer_alt_framework::postgres::reset_database;
-use sui_indexer_alt_metrics::uptime;
 use sui_indexer_alt_metrics::MetricsService;
+use sui_indexer_alt_metrics::uptime;
 use sui_indexer_alt_schema::MIGRATIONS;
 use tokio::fs;
 use tokio::signal;

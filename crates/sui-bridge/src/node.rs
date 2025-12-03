@@ -3,7 +3,7 @@
 
 use crate::config::WatchdogConfig;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
-use crate::metered_eth_provider::MeteredEthHttpProvier;
+use crate::metered_eth_provider::MeteredEthHttpProvider;
 use crate::sui_bridge_watchdog::eth_bridge_status::EthBridgeStatus;
 use crate::sui_bridge_watchdog::eth_vault_balance::{EthereumVaultBalance, VaultAsset};
 use crate::sui_bridge_watchdog::metrics::WatchdogMetrics;
@@ -24,7 +24,7 @@ use crate::{
     metrics::BridgeMetrics,
     monitor::BridgeMonitor,
     orchestrator::BridgeOrchestrator,
-    server::{handler::BridgeRequestHandler, run_server, BridgeNodePublicMetadata},
+    server::{BridgeNodePublicMetadata, handler::BridgeRequestHandler, run_server},
     storage::BridgeOrchestratorTables,
     sui_syncer::SuiSyncer,
 };
@@ -40,12 +40,12 @@ use std::{
     time::Duration,
 };
 use sui_types::{
+    Identifier,
     bridge::{
         BRIDGE_COMMITTEE_MODULE_NAME, BRIDGE_LIMITER_MODULE_NAME, BRIDGE_MODULE_NAME,
         BRIDGE_TREASURY_MODULE_NAME,
     },
     event::EventID,
-    Identifier,
 };
 use tokio::task::JoinHandle;
 use tracing::info;
@@ -104,7 +104,7 @@ pub async fn run_bridge_node(
     // Before reconfiguration happens we only set it once when the node starts
     let sui_system = server_config
         .sui_client
-        .sui_client()
+        .jsonrpc_client()
         .governance_api()
         .get_latest_sui_system_state()
         .await?;
@@ -143,7 +143,6 @@ pub async fn run_bridge_node(
             server_config.sui_client,
             server_config.eth_client,
             server_config.approved_governance_actions,
-            metrics.clone(),
         ),
         metrics,
         Arc::new(metadata),
@@ -153,7 +152,7 @@ pub async fn run_bridge_node(
 async fn start_watchdog(
     watchdog_config: Option<WatchdogConfig>,
     registry: &prometheus::Registry,
-    eth_provider: Arc<Provider<MeteredEthHttpProvier>>,
+    eth_provider: Arc<Provider<MeteredEthHttpProvider>>,
     eth_bridge_proxy_address: EthAddress,
     sui_client: Arc<SuiBridgeClient>,
 ) {
@@ -241,15 +240,15 @@ async fn start_watchdog(
         observables.push(Box::new(balance));
     }
 
-    if let Some(watchdog_config) = watchdog_config {
-        if !watchdog_config.total_supplies.is_empty() {
-            let total_supplies = TotalSupplies::new(
-                Arc::new(sui_client.sui_client().clone()),
-                watchdog_config.total_supplies,
-                watchdog_metrics.total_supplies.clone(),
-            );
-            observables.push(Box::new(total_supplies));
-        }
+    if let Some(watchdog_config) = watchdog_config
+        && !watchdog_config.total_supplies.is_empty()
+    {
+        let total_supplies = TotalSupplies::new(
+            Arc::new(sui_client.jsonrpc_client().clone()),
+            watchdog_config.total_supplies,
+            watchdog_metrics.total_supplies.clone(),
+        );
+        observables.push(Box::new(total_supplies));
     }
 
     BridgeWatchDog::new(observables).run().await
@@ -438,10 +437,10 @@ mod tests {
     use prometheus::Registry;
 
     use super::*;
-    use crate::config::default_ed25519_key_pair;
     use crate::config::BridgeNodeConfig;
     use crate::config::EthConfig;
     use crate::config::SuiConfig;
+    use crate::config::default_ed25519_key_pair;
     use crate::e2e_tests::test_utils::BridgeTestCluster;
     use crate::e2e_tests::test_utils::BridgeTestClusterBuilder;
     use crate::utils::wait_for_server_to_be_up;
@@ -449,10 +448,10 @@ mod tests {
     use sui_config::local_ip_utils::get_available_port;
     use sui_types::base_types::SuiAddress;
     use sui_types::bridge::BridgeChainId;
-    use sui_types::crypto::get_key_pair;
     use sui_types::crypto::EncodeDecodeBase64;
     use sui_types::crypto::KeypairTraits;
     use sui_types::crypto::SuiKeyPair;
+    use sui_types::crypto::get_key_pair;
     use sui_types::digests::TransactionDigest;
     use sui_types::event::EventID;
     use tempfile::tempdir;

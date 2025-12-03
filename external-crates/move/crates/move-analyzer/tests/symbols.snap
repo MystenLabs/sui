@@ -683,7 +683,7 @@ public fun Symbols::M5::combined_long_type_param_list<
 -- test 16 -------------------
 use line: 75, use_ndx: 2
 Use: 'extract', start: 37, end: 44
-Def: 'extract', line: 78, def char: 11
+Def: 'extract', line: 75, def char: 11
 TypeDef: no info
 On Hover:
 public fun option::extract<Element>(

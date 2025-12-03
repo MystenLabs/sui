@@ -7,7 +7,7 @@ use crate::{
     sp,
     static_programmable_transactions::{
         env::Env,
-        loading::ast::Type,
+        loading::ast::{ObjectMutability, Type},
         typing::ast::{self as T, BytesConstraint, ObjectArg},
     },
 };
@@ -43,9 +43,19 @@ impl Context {
                     allow_by_value: true,
                     allow_by_mut_ref: true,
                 },
-                ObjectArg::SharedObject { mutable, .. } => ObjectUsage {
-                    allow_by_value: *mutable,
-                    allow_by_mut_ref: *mutable,
+                ObjectArg::SharedObject { mutability, .. } => ObjectUsage {
+                    allow_by_value: match mutability {
+                        ObjectMutability::Mutable => true,
+                        ObjectMutability::Immutable => false,
+                        // NonExclusiveWrite can be taken by value, but unless it is re-shared
+                        // with no mutations, the transaction will abort.
+                        ObjectMutability::NonExclusiveWrite => true,
+                    },
+                    allow_by_mut_ref: match mutability {
+                        ObjectMutability::Mutable => true,
+                        ObjectMutability::Immutable => false,
+                        ObjectMutability::NonExclusiveWrite => true,
+                    },
                 },
             })
             .collect();
@@ -63,6 +73,7 @@ pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(
     let T::Transaction {
         bytes,
         objects: _,
+        withdrawals: _,
         pure,
         receiving,
         commands,
@@ -287,7 +298,8 @@ fn check_obj_by_mut_ref(
     location: &T::Location,
 ) -> Result<(), ExecutionError> {
     match location {
-        T::Location::PureInput(_)
+        T::Location::WithdrawalInput(_)
+        | T::Location::PureInput(_)
         | T::Location::ReceivingInput(_)
         | T::Location::TxContext
         | T::Location::GasCoin
@@ -315,6 +327,7 @@ fn check_by_value(
         T::Location::GasCoin
         | T::Location::Result(_, _)
         | T::Location::TxContext
+        | T::Location::WithdrawalInput(_)
         | T::Location::PureInput(_)
         | T::Location::ReceivingInput(_) => Ok(()),
         T::Location::ObjectInput(idx) => {
@@ -357,6 +370,7 @@ fn check_gas_by_value_loc(idx: u16, location: &T::Location) -> Result<(), Execut
         )),
         T::Location::TxContext
         | T::Location::ObjectInput(_)
+        | T::Location::WithdrawalInput(_)
         | T::Location::PureInput(_)
         | T::Location::ReceivingInput(_)
         | T::Location::Result(_, _) => Ok(()),

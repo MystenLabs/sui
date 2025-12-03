@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Enum, Object};
+use async_graphql::{Context, Enum, Object, connection::Connection, dataloader::DataLoader};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
     kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
@@ -12,12 +12,11 @@ use sui_indexer_alt_reader::{
     tx_balance_changes::TxBalanceChangeKey,
 };
 use sui_indexer_alt_schema::transactions::BalanceChange as NativeBalanceChange;
-use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffectsAPI,
     execution_status::ExecutionStatus as NativeExecutionStatus,
-    object::Object as NativeObject,
     signature::GenericSignature,
     transaction::{TransactionData, TransactionDataAPI},
 };
@@ -151,12 +150,17 @@ impl EffectsContents {
     }
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.
+    ///
+    /// `null` for executed/simulated transactions that have not been included in a checkpoint.
     async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
         let Some(content) = &self.contents else {
             return Ok(None);
         };
 
-        Ok(Some(DateTime::from_ms(content.timestamp_ms() as i64)?))
+        content
+            .timestamp_ms()
+            .map(|ms| DateTime::from_ms(ms as i64))
+            .transpose()
     }
 
     /// The epoch this transaction was finalized in.
@@ -362,7 +366,7 @@ impl EffectsContents {
 
 impl TransactionEffects {
     /// Create a new TransactionEffects from an ExecutedTransaction.
-    fn from_executed_transaction(
+    pub(crate) fn from_executed_transaction(
         scope: Scope,
         executed_transaction: &ExecutedTransaction,
         transaction_data: TransactionData,
@@ -375,11 +379,9 @@ impl TransactionEffects {
         )
         .context("Failed to create TransactionContents from ExecutedTransaction")?;
 
-        let objects = extract_objects_from_executed_transaction(executed_transaction);
         let digest = contents
             .digest()
             .context("Failed to get digest from transaction contents")?;
-        let scope = scope.with_execution_output(objects);
 
         Ok(Self {
             digest,
@@ -388,35 +390,6 @@ impl TransactionEffects {
                 contents: Some(Arc::new(contents)),
             },
         })
-    }
-
-    /// Create a new TransactionEffects from a gRPC ExecuteTransactionResponse.
-    pub(crate) fn from_execution_response(
-        scope: Scope,
-        response: sui_rpc::proto::sui::rpc::v2beta2::ExecuteTransactionResponse,
-        transaction_data: TransactionData,
-        signatures: Vec<GenericSignature>,
-    ) -> Result<Self, RpcError> {
-        let executed_transaction = response
-            .transaction
-            .as_ref()
-            .context("ExecuteTransactionResponse should have transaction")?;
-
-        Self::from_executed_transaction(scope, executed_transaction, transaction_data, signatures)
-    }
-
-    /// Create a new TransactionEffects from a gRPC SimulateTransactionResponse.
-    pub(crate) fn from_simulation_response(
-        scope: Scope,
-        response: sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionResponse,
-        transaction_data: TransactionData,
-    ) -> Result<Self, RpcError> {
-        let executed_transaction = response
-            .transaction
-            .as_ref()
-            .context("SimulateTransactionResponse should have transaction")?;
-
-        Self::from_executed_transaction(scope, executed_transaction, transaction_data, vec![])
     }
 
     /// Load the effects from the store, and return it fully inflated (with contents already
@@ -498,23 +471,4 @@ impl From<Transaction> for TransactionEffects {
             contents: EffectsContents { scope, contents },
         }
     }
-}
-
-/// Extract input and output object contents from an ExecutedTransaction.
-fn extract_objects_from_executed_transaction(
-    executed_transaction: &ExecutedTransaction,
-) -> Vec<NativeObject> {
-    let input_objects = executed_transaction
-        .input_objects
-        .iter()
-        .filter_map(|obj| obj.bcs.as_ref())
-        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
-
-    let output_objects = executed_transaction
-        .output_objects
-        .iter()
-        .filter_map(|obj| obj.bcs.as_ref())
-        .map(|bcs| bcs.deserialize().expect("Object BCS should be valid"));
-
-    input_objects.chain(output_objects).collect()
 }

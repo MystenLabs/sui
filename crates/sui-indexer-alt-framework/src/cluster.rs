@@ -15,10 +15,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use url::Url;
 
-use crate::postgres::{Db, DbArgs};
 use crate::{
+    Indexer, IndexerArgs, Result,
     ingestion::{ClientArgs, IngestionConfig},
-    Indexer, IndexerArgs, IndexerMetrics, Result,
+    metrics::{IndexerMetrics, IngestionMetrics},
+    postgres::{Db, DbArgs},
 };
 
 /// Bundle of arguments for setting up an indexer cluster (an Indexer and its associated Metrics
@@ -185,8 +186,14 @@ impl IndexerCluster {
 
     /// Access to the indexer's metrics. This can be cloned before a call to [Self::run], to retain
     /// shared access to the underlying metrics.
-    pub fn metrics(&self) -> &Arc<IndexerMetrics> {
-        self.indexer.metrics()
+    pub fn indexer_metrics(&self) -> &Arc<IndexerMetrics> {
+        self.indexer.indexer_metrics()
+    }
+
+    /// Access to the ingestion service's metrics. This can be cloned before a call to [Self::run],
+    /// to retain shared access to the underlying metrics.
+    pub fn ingestion_metrics(&self) -> &Arc<IngestionMetrics> {
+        self.indexer.ingestion_metrics()
     }
 
     /// This token controls stopping the indexer and metrics service. Clone it before calling
@@ -242,20 +249,22 @@ impl DerefMut for IndexerCluster {
 mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
+    use async_trait::async_trait;
     use diesel::{Insertable, QueryDsl, Queryable};
     use diesel_async::RunQueryDsl;
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
 
-    use crate::ingestion::ClientArgs;
-    use crate::pipeline::concurrent::{self, ConcurrentConfig};
-    use crate::pipeline::Processor;
-    use crate::postgres::{
-        temp::{get_available_port, TempDb},
-        Connection, Db, DbArgs,
-    };
-    use crate::types::full_checkpoint_content::CheckpointData;
     use crate::FieldCount;
+    use crate::ingestion::ClientArgs;
+    use crate::ingestion::ingestion_client::IngestionClientArgs;
+    use crate::pipeline::Processor;
+    use crate::pipeline::concurrent::ConcurrentConfig;
+    use crate::postgres::{
+        Connection, Db, DbArgs,
+        temp::{TempDb, get_available_port},
+    };
+    use crate::types::full_checkpoint_content::Checkpoint;
 
     use super::*;
 
@@ -277,22 +286,21 @@ mod tests {
     /// Test concurrent pipeline for populating [tx_counts].
     struct TxCounts;
 
+    #[async_trait]
     impl Processor for TxCounts {
         const NAME: &'static str = "tx_counts";
         type Value = StoredTxCount;
 
-        fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![StoredTxCount {
-                cp_sequence_number: checkpoint.checkpoint_summary.sequence_number as i64,
+                cp_sequence_number: checkpoint.summary.sequence_number as i64,
                 count: checkpoint.transactions.len() as i64,
             }])
         }
     }
 
-    #[async_trait::async_trait]
-    impl concurrent::Handler for TxCounts {
-        type Store = Db;
-
+    #[async_trait]
+    impl crate::postgres::handler::Handler for TxCounts {
         async fn commit<'a>(
             values: &[Self::Value],
             conn: &mut Connection<'a>,
@@ -345,11 +353,11 @@ mod tests {
 
         let args = Args {
             client_args: Some(ClientArgs {
-                local_ingestion_path: Some(checkpoint_dir.path().to_owned()),
-                remote_store_url: None,
-                rpc_api_url: None,
-                rpc_username: None,
-                rpc_password: None,
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some(checkpoint_dir.path().to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
             }),
             indexer_args: IndexerArgs {
                 first_checkpoint: Some(0),
@@ -371,7 +379,8 @@ mod tests {
             .await
             .unwrap();
 
-        let metrics = indexer.metrics().clone();
+        let ingestion_metrics = indexer.ingestion_metrics().clone();
+        let indexer_metrics = indexer.indexer_metrics().clone();
 
         // Run the indexer until it signals completion. We have configured it to stop after
         // ingesting 10 checkpoints, so it should shut itself down.
@@ -393,15 +402,15 @@ mod tests {
             }
         }
 
-        // Check that metrics were updated.
-        assert_eq!(metrics.total_ingested_checkpoints.get(), 10);
-        assert_eq!(metrics.total_ingested_transactions.get(), 20);
-        assert_eq!(metrics.latest_ingested_checkpoint.get(), 9);
+        // Check that ingestion metrics were updated.
+        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 10);
+        assert_eq!(ingestion_metrics.total_ingested_transactions.get(), 20);
+        assert_eq!(ingestion_metrics.latest_ingested_checkpoint.get(), 9);
 
         macro_rules! assert_pipeline_metric {
             ($name:ident, $value:expr) => {
                 assert_eq!(
-                    metrics
+                    indexer_metrics
                         .$name
                         .get_metric_with_label_values(&["tx_counts"])
                         .unwrap()
@@ -435,7 +444,10 @@ mod tests {
                     ..Default::default()
                 },
                 client_args: Some(ClientArgs {
-                    local_ingestion_path: Some("/bundled".into()),
+                    ingestion: IngestionClientArgs {
+                        local_ingestion_path: Some("/bundled".into()),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 }),
                 metrics_args: MetricsArgs {
@@ -447,7 +459,10 @@ mod tests {
                 ..Default::default()
             })
             .with_client_args(ClientArgs {
-                local_ingestion_path: Some("/individual".into()),
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some("/individual".into()),
+                    ..Default::default()
+                },
                 ..Default::default()
             })
             .with_metrics_args(MetricsArgs {
@@ -460,6 +475,7 @@ mod tests {
                 .args
                 .client_args
                 .unwrap()
+                .ingestion
                 .local_ingestion_path
                 .unwrap()
                 .to_string_lossy(),
@@ -479,7 +495,10 @@ mod tests {
                 ..Default::default()
             })
             .with_client_args(ClientArgs {
-                local_ingestion_path: Some("/individual".into()),
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some("/individual".into()),
+                    ..Default::default()
+                },
                 ..Default::default()
             })
             .with_metrics_args(MetricsArgs {
@@ -491,7 +510,10 @@ mod tests {
                     ..Default::default()
                 },
                 client_args: Some(ClientArgs {
-                    local_ingestion_path: Some("/bundled".into()),
+                    ingestion: IngestionClientArgs {
+                        local_ingestion_path: Some("/bundled".into()),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 }),
                 metrics_args: MetricsArgs {
@@ -505,6 +527,7 @@ mod tests {
                 .args
                 .client_args
                 .unwrap()
+                .ingestion
                 .local_ingestion_path
                 .unwrap()
                 .to_string_lossy(),

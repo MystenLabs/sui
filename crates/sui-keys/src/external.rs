@@ -2,21 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::keystore::{
-    validate_alias, AccountKeystore, Alias, GenerateOptions, GeneratedKey, ALIASES_FILE_EXTENSION,
+    ALIASES_FILE_EXTENSION, AccountKeystore, Alias, GenerateOptions, GeneratedKey, validate_alias,
 };
 use crate::random_names::random_name;
 
-use anyhow::{anyhow, bail};
 use anyhow::{Context, Error};
+use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use base64;
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use bcs;
 use fastcrypto::traits::{EncodeDecodeBase64, VerifyingKey};
 use jsonrpc::client::Endpoint;
 use mockall::{automock, predicate::*};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Debug;
@@ -602,15 +602,15 @@ mod tests {
     use fastcrypto::traits::{EncodeDecodeBase64, KeyPair, ToFromBytes};
     use mockall::predicate::eq;
     use rand::prelude::StdRng;
-    use rand::{thread_rng, SeedableRng};
+    use rand::{SeedableRng, thread_rng};
     use serde_json::Value as JsonValue;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use shared_crypto::intent::{Intent, IntentMessage};
     use std::collections::BTreeMap;
     use std::path::PathBuf;
     use std::str::FromStr;
     use sui_types::base_types::SuiAddress;
-    use sui_types::crypto::SignatureScheme::{Secp256k1, ED25519};
+    use sui_types::crypto::SignatureScheme::{ED25519, Secp256k1};
     use sui_types::crypto::{PublicKey, Signature, SuiKeyPair};
     use tempfile::TempDir;
 
@@ -728,10 +728,12 @@ mod tests {
 
         let external = External::new_for_test(Box::new(mock), None);
         let args = json!(["arg1", "arg2"]);
-        assert!(external
-            .exec("sui-key-tool", "test_method", args)
-            .await
-            .is_ok());
+        assert!(
+            external
+                .exec("sui-key-tool", "test_method", args)
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]
@@ -1011,9 +1013,11 @@ mod tests {
         let external = load_external_keystore();
         let addresses_with_alias = external.addresses_with_alias();
         assert!(!addresses_with_alias.is_empty());
-        assert!(addresses_with_alias
-            .iter()
-            .any(|(addr, alias)| { addr.to_string() == ADDRESS && alias.alias == "test_alias" }));
+        assert!(
+            addresses_with_alias.iter().any(|(addr, alias)| {
+                addr.to_string() == ADDRESS && alias.alias == "test_alias"
+            })
+        );
     }
 
     #[test]

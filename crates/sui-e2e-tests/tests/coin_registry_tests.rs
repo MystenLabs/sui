@@ -37,9 +37,11 @@ async fn test_create_coin_registry_object() {
         .unwrap();
 
     // Make sure that `coin_registry` does not exist on previous protocol version.
-    assert!(!package
-        .serialized_module_map()
-        .contains_key("coin_registry"));
+    assert!(
+        !package
+            .serialized_module_map()
+            .contains_key("coin_registry")
+    );
 
     let test_cluster = TestClusterBuilder::new()
         .with_protocol_version(95.into())
@@ -54,11 +56,12 @@ async fn test_create_coin_registry_object() {
     // no node has the coin registry object yet
     for h in &handles {
         h.with(|node| {
-            assert!(node
-                .state()
-                .get_object_cache_reader()
-                .get_latest_object_ref_or_tombstone(SUI_COIN_REGISTRY_OBJECT_ID)
-                .is_none());
+            assert!(
+                node.state()
+                    .get_object_cache_reader()
+                    .get_latest_object_ref_or_tombstone(SUI_COIN_REGISTRY_OBJECT_ID)
+                    .is_none()
+            );
         });
     }
 

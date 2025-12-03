@@ -12,7 +12,7 @@ use crate::crypto::BridgeAuthorityPublicKey;
 use crate::error::BridgeError;
 use crate::error::BridgeResult;
 use crate::types::BridgeAction;
-use crate::types::SuiToEthBridgeAction;
+use crate::types::SuiToEthTokenTransfer;
 use ethers::types::Address as EthAddress;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
@@ -21,6 +21,8 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use sui_json_rpc_types::SuiEvent;
+use sui_types::BRIDGE_PACKAGE_ID;
+use sui_types::TypeTag;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeChainId;
 use sui_types::bridge::MoveTypeBridgeMessageKey;
@@ -28,10 +30,7 @@ use sui_types::bridge::MoveTypeCommitteeMember;
 use sui_types::bridge::MoveTypeCommitteeMemberRegistration;
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::ToFromBytes;
-use sui_types::digests::TransactionDigest;
 use sui_types::parse_sui_type_tag;
-use sui_types::TypeTag;
-use sui_types::BRIDGE_PACKAGE_ID;
 
 // `TokendDepositedEvent` emitted in bridge.move
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -402,17 +401,27 @@ macro_rules! declare_events {
 }
 
 impl SuiBridgeEvent {
-    pub fn try_into_bridge_action(
-        self,
-        sui_tx_digest: TransactionDigest,
-        sui_tx_event_index: u16,
-    ) -> Option<BridgeAction> {
+    pub fn try_into_bridge_action(self) -> Option<BridgeAction> {
         match self {
             SuiBridgeEvent::SuiToEthTokenBridgeV1(event) => {
-                Some(BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
-                    sui_tx_digest,
-                    sui_tx_event_index,
-                    sui_bridge_event: event.clone(),
+                let EmittedSuiToEthTokenBridgeV1 {
+                    nonce,
+                    sui_chain_id,
+                    eth_chain_id,
+                    sui_address,
+                    eth_address,
+                    token_id,
+                    amount_sui_adjusted,
+                } = event;
+
+                Some(BridgeAction::SuiToEthTokenTransfer(SuiToEthTokenTransfer {
+                    nonce,
+                    sui_chain_id,
+                    eth_chain_id,
+                    sui_address,
+                    eth_address,
+                    token_id,
+                    amount_adjusted: amount_sui_adjusted,
                 }))
             }
             SuiBridgeEvent::TokenTransferApproved(_event) => None,
@@ -445,6 +454,7 @@ pub mod tests {
     use ethers::types::Address as EthAddress;
     use sui_json_rpc_types::BcsEvent;
     use sui_json_rpc_types::SuiEvent;
+    use sui_types::Identifier;
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SuiAddress;
     use sui_types::bridge::BridgeChainId;
@@ -452,7 +462,6 @@ pub mod tests {
     use sui_types::crypto::get_key_pair;
     use sui_types::digests::TransactionDigest;
     use sui_types::event::EventID;
-    use sui_types::Identifier;
 
     /// Returns a test SuiEvent and corresponding BridgeAction
     pub fn get_test_sui_event_and_action(identifier: Identifier) -> (SuiEvent, BridgeAction) {

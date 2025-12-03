@@ -9,7 +9,7 @@ use crate::{
     },
     command_line as cli,
     diagnostics::{
-        DiagnosticReporter, Diagnostics, DiagnosticsFormat,
+        Diagnostic, DiagnosticReporter, Diagnostics, DiagnosticsFormat,
         codes::{DiagnosticsID, Severity},
         warning_filters::{
             FILTER_ALL, FilterName, FilterPrefix, WarningFilter, WarningFiltersBuilder,
@@ -351,7 +351,7 @@ impl CompilationEnv {
         &self.mapped_files
     }
 
-    pub fn diagnostic_reporter_at_top_level(&self) -> DiagnosticReporter {
+    pub fn diagnostic_reporter_at_top_level(&self) -> DiagnosticReporter<'_> {
         DiagnosticReporter::new(
             &self.flags,
             &self.known_filter_names,
@@ -361,7 +361,7 @@ impl CompilationEnv {
         )
     }
 
-    pub fn dummy_diagnostic_reporter(&self) -> DiagnosticReporter {
+    pub fn dummy_diagnostic_reporter(&self) -> DiagnosticReporter<'_> {
         DiagnosticReporter::dummy_reporter(
             &self.flags,
             &self.known_filter_names,
@@ -729,7 +729,7 @@ pub struct Flags {
     ide_mode: bool,
 
     /// Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]`
-    /// annodations during compiltaion.
+    /// annotations during compilation.
     #[arg(
         long = "mode",
         value_name = "MODE",
@@ -820,7 +820,7 @@ impl Flags {
     }
 
     pub fn set_modes(self, value: Vec<Symbol>) -> Self {
-        let test = self.test || value.iter().any(|mode| *mode == symbol!("test"));
+        let test = self.test || value.contains(&symbol!("test"));
         Self {
             test,
             modes: value,
@@ -869,7 +869,7 @@ impl Flags {
     }
 
     pub fn mode(&self, mode: Symbol) -> bool {
-        self.modes.iter().any(|m| *m == mode)
+        self.modes.contains(&mode)
     }
 
     pub fn publishable(&self) -> bool {
@@ -1155,11 +1155,11 @@ impl SaveHook {
 ///
 /// * `$e` - The initial expression to start processing.
 /// * `$work_pat` - The pattern used to disassemble entries in the work queue. Note that the work
-///    queue may contain any arbitrary type (such as a tuple of a block and expression), so the
-///    work pattern is used to disassemble and bind component parts.
+///   queue may contain any arbitrary type (such as a tuple of a block and expression), so the
+///   work pattern is used to disassemble and bind component parts.
 /// * `$work_exp` - The actual expression to match on, as defined in the `$work_pat`.
 /// * `$binop_pat` - This is a pattern matched against the `$work_exp` that matches if and only if
-///    the `$work_exp` is in fact a binary operation expression.
+///   the `$work_exp` is in fact a binary operation expression.
 /// * `$bind_rhs` - This block is executed when `$work_exp` matches `$binop_pat`, with any pattern
 ///   binders from `$binop_pat` in scope. This block must return a 3-tuple consisting of the
 ///   left-hand side work queue entry, the `$optype` entry for the operand, and the right-hand side
@@ -1274,3 +1274,89 @@ impl IndexedPhysicalPackagePath {
         })
     }
 }
+
+//**************************************************************************************************
+// Levenshtein Candidate Suggestions
+//**************************************************************************************************
+
+const MAX_EDIT_DISTANCE: usize = 3;
+
+/// Computes the Levenshtein distance between two strings, but stops and returns None if the
+/// distance exceeds the given threshold.
+fn levenshtein_distance_with_threshold(a: &str, b: &str, threshold: usize) -> Option<usize> {
+    if a.len() > b.len() + threshold || b.len() > a.len() + threshold {
+        return None;
+    }
+
+    let mut cost = 0;
+    let mut a = a.chars();
+    let mut b = b.chars();
+    while let (Some(a_head), Some(b_head)) = (a.next(), b.next()) {
+        if a_head != b_head {
+            cost += 1;
+            if cost > threshold {
+                return None;
+            }
+        }
+    }
+    cost = cost + a.count() + b.count();
+    if cost > threshold { None } else { Some(cost) }
+}
+
+/// Suggests a candidate from the given candidates based on Levenshtein distance to the given name.
+/// The `to_string` function is used to convert each candidate to a string for comparison.
+/// Uses MAX_EDIT_DISTANCE as the threshold for suggestions, meaning that only candidates within
+/// that distance will be returned.
+pub(crate) fn suggest_levenshtein_candidate<F>(
+    candidates: impl IntoIterator<Item = F>,
+    name_str: &str,
+    to_string: impl Fn(&F) -> &str,
+) -> Option<F> {
+    let mut cur_candidate = None;
+    for candidate in candidates {
+        let candidate_str = to_string(&candidate);
+        if let Some(dist) =
+            levenshtein_distance_with_threshold(name_str, candidate_str, MAX_EDIT_DISTANCE)
+        {
+            if let Some((best_dist, _)) = &cur_candidate {
+                if dist < *best_dist {
+                    cur_candidate = Some((dist, candidate));
+                }
+            } else {
+                cur_candidate = Some((dist, candidate));
+            }
+        }
+    }
+    cur_candidate.map(|(_, candidate)| candidate)
+}
+
+/// Adds a suggestion to the given diagnostic at the given location, with an optional definition
+/// location.
+/// # Arguments
+/// * `diag` - The diagnostic to add the suggestion to.
+/// * `loc` - The location to add the suggestion at.
+/// * `suggestion` - The name of the suggestion to add.
+/// * `defn_loc` - An optional location of the definition of the suggested item, which will be
+///   indicated in the diagnostic if provided.
+pub(crate) fn add_suggestion(
+    diag: &mut Diagnostic,
+    loc: Loc,
+    suggestion: impl fmt::Display,
+    defn_loc: Option<Loc>,
+) {
+    let msg = format!("Did you mean: '{suggestion}'");
+    diag.add_secondary_label((loc, msg));
+    if let Some(loc) = defn_loc {
+        diag.add_secondary_label((loc, "Similarly named defintion found here"));
+    }
+}
+
+pub(crate) const UPPERCASE_LETTERS: [char; 26] = [
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
+    'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+];
+
+pub(crate) const LOWERCASE_LETTERS: [char; 26] = [
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
+    't', 'u', 'v', 'w', 'x', 'y', 'z',
+];

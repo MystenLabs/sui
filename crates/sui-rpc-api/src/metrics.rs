@@ -6,9 +6,9 @@ use std::{borrow::Cow, sync::Arc, time::Instant};
 
 use mysten_network::callback::{MakeCallbackHandler, ResponseHandler};
 use prometheus::{
+    HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry,
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, HistogramVec,
-    IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 
 #[derive(Clone)]

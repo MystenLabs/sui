@@ -4,10 +4,10 @@
 use std::path::PathBuf;
 
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
-    consistent_service_client::ConsistentServiceClient, BatchGetBalancesRequest, GetBalanceRequest,
-    ListBalancesRequest,
+    BatchGetBalancesRequest, GetBalanceRequest, ListBalancesRequest,
+    consistent_service_client::ConsistentServiceClient,
 };
-use sui_indexer_alt_e2e_tests::{find, FullCluster};
+use sui_indexer_alt_e2e_tests::{FullCluster, find};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},

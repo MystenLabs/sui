@@ -1,0 +1,240 @@
+---
+title: Margin Pool SDK
+sidebar_label: Margin Pool
+description: Learn how to use the DeepBook Margin SDK to supply liquidity and manage positions in margin pools.
+keywords:
+  [
+    margin pool,
+    liquidity,
+    supply,
+    withdraw,
+    supplier cap,
+    referral,
+    interest rate,
+    utilization rate,
+    deepbook margin sdk,
+  ]
+---
+
+Supplying liquidity to margin pools enables lenders to earn interest on their assets while providing borrowing capacity for margin traders. The Margin Pool SDK provides functions for managing liquidity positions and earning referral fees.
+
+## Margin Pool functions
+
+The DeepBook Margin SDK provides the following functions for interacting with margin pools.
+
+### `mintSupplierCap`
+
+Use `mintSupplierCap` to create a new supplier capability that can be used to supply and withdraw from margin pools. One `SupplierCap` can be used across multiple margin pools. The call returns a function that takes a `Transaction` object.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="mintSupplierCap" signatureOnly />
+
+### `supplyToMarginPool`
+
+Use `supplyToMarginPool` to supply assets to a margin pool and earn interest. You can optionally provide a referral ID to share fees with the referrer. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `coinKey`: String that identifies the asset type.
+- `supplierCap`: `TransactionObjectArgument` representing the supplier cap.
+- `amountToDeposit`: Number representing the amount to supply.
+- `referralId`: Optional string representing the referral ID.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="supplyToMarginPool" signatureOnly />
+
+### `withdrawFromMarginPool`
+
+Use `withdrawFromMarginPool` to withdraw supplied assets from a margin pool. If no amount is specified, it withdraws all available shares. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `coinKey`: String that identifies the asset type.
+- `supplierCap`: `TransactionObjectArgument` representing the supplier cap.
+- `amountToWithdraw`: Optional number representing the amount to withdraw.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="withdrawFromMarginPool" signatureOnly />
+
+### `mintSupplyReferral`
+
+Use `mintSupplyReferral` to create a supply referral for earning fees. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `coinKey`: String that identifies the asset type.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="mintSupplyReferral" signatureOnly />
+
+### `withdrawReferralFees`
+
+Use `withdrawReferralFees` to withdraw accumulated referral fees. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `coinKey`: String that identifies the asset type.
+- `referralId`: String representing the referral ID.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="withdrawReferralFees" signatureOnly />
+
+## Read-only functions
+
+The following functions query margin pool state without modifying it.
+
+### Pool information
+
+Query basic pool information and configuration.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getId,deepbookPoolAllowed,supplyCap,maxUtilizationRate,protocolSpread,minBorrow" signatureOnly />
+
+### Supply and borrow metrics
+
+Query current supply and borrow amounts and shares.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="totalSupply,supplyShares,totalBorrow,borrowShares,lastUpdateTimestamp" signatureOnly />
+
+### Interest rate
+
+Query the current interest rate based on utilization.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="interestRate" signatureOnly />
+
+### User positions
+
+Query a supplier's position in the pool.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginPool.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="userSupplyShares,userSupplyAmount" signatureOnly />
+
+## Examples
+
+The following examples demonstrate common margin pool operations.
+
+### Create a supplier cap
+
+```tsx
+/**
+ * @description Mint a supplier cap for margin pool
+ * @returns A function that takes a Transaction object
+ */
+mintSupplierCap = () => (tx: Transaction) => {};
+
+// Example usage
+createSupplierCap = (tx: Transaction) => {
+	const supplierCap = tx.add(this.marginPoolContract.mintSupplierCap());
+	// Transfer to user or store for later use
+	tx.transferObjects([supplierCap], tx.pure.address(this.config.address));
+};
+```
+
+### Supply liquidity
+
+```tsx
+// Example: Supply 1000 USDC to the margin pool
+supplyLiquidity = (tx: Transaction) => {
+	const coinKey = 'USDC';
+	const supplierCapId = '0x...'; // ID of your supplier cap
+	const supplierCap = tx.object(supplierCapId);
+	const amountToSupply = 1000;
+
+	tx.add(
+		this.marginPoolContract.supplyToMarginPool(
+			coinKey,
+			supplierCap,
+			amountToSupply,
+			// Optional: provide referral ID
+		),
+	);
+};
+```
+
+### Supply with referral
+
+```tsx
+// Example: Supply 1000 USDC with a referral
+supplyWithReferral = (tx: Transaction) => {
+	const coinKey = 'USDC';
+	const supplierCapId = '0x...';
+	const supplierCap = tx.object(supplierCapId);
+	const referralId = '0x...'; // Referral object ID
+
+	tx.add(
+		this.marginPoolContract.supplyToMarginPool(
+			coinKey,
+			supplierCap,
+			1000,
+			referralId, // Referral will earn fees
+		),
+	);
+};
+```
+
+### Withdraw liquidity
+
+```tsx
+// Example: Withdraw 500 USDC from the margin pool
+withdrawLiquidity = (tx: Transaction) => {
+	const coinKey = 'USDC';
+	const supplierCapId = '0x...';
+	const supplierCap = tx.object(supplierCapId);
+
+	tx.add(this.marginPoolContract.withdrawFromMarginPool(coinKey, supplierCap, 500));
+};
+
+// Example: Withdraw all available liquidity
+withdrawAll = (tx: Transaction) => {
+	const coinKey = 'USDC';
+	const supplierCapId = '0x...';
+	const supplierCap = tx.object(supplierCapId);
+
+	// No amount specified = withdraw all
+	tx.add(this.marginPoolContract.withdrawFromMarginPool(coinKey, supplierCap));
+};
+```
+
+### Create and manage referrals
+
+```tsx
+// Example: Create a supply referral
+createReferral = (tx: Transaction) => {
+	const coinKey = 'USDC';
+	tx.add(this.marginPoolContract.mintSupplyReferral(coinKey));
+};
+
+// Example: Withdraw referral fees
+claimReferralFees = (tx: Transaction) => {
+	const coinKey = 'USDC';
+	const referralId = '0x...'; // Your referral object ID
+	tx.add(this.marginPoolContract.withdrawReferralFees(coinKey, referralId));
+};
+```
+
+### Query pool state
+
+```tsx
+// Example: Check interest rate and utilization
+checkPoolMetrics = async (tx: Transaction) => {
+	const coinKey = 'USDC';
+
+	// Get total supply and borrow
+	const totalSupply = tx.add(this.marginPoolContract.totalSupply(coinKey));
+	const totalBorrow = tx.add(this.marginPoolContract.totalBorrow(coinKey));
+
+	// Get current interest rate
+	const interestRate = tx.add(this.marginPoolContract.interestRate(coinKey));
+
+	// Query user position
+	const supplierCapId = '0x...';
+	const userShares = tx.add(this.marginPoolContract.userSupplyShares(coinKey, supplierCapId));
+	const userAmount = tx.add(this.marginPoolContract.userSupplyAmount(coinKey, supplierCapId));
+};
+```
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3/tree/main/packages/deepbook_margin"
+	label="DeepBook Margin package"
+	desc="The DeepBook Margin package on GitHub."
+/>
+<RelatedLink
+	href="https://www.npmjs.com/package/@mysten/deepbook-v3"
+	label="DeepBookV3 SDK node package"
+	desc="The DeepBookV3 SDK node package on NPM."
+/>

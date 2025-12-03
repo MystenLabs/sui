@@ -1,0 +1,11 @@
+current frame stack:
+  function: test (m.move:17)
+    scope 0 :
+      my_value : 42
+      type: u64
+
+  function: return_ref_param (m.move:8)
+    scope 0 :
+      value_ref : 42
+      type: &u64
+

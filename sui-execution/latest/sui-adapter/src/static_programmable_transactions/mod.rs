@@ -1,12 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![deny(clippy::arithmetic_side_effects)]
+
 use crate::{
     data_store::cached_package_store::CachedPackageStore,
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
     gas_charger::GasCharger,
-    static_programmable_transactions::{env::Env, linkage::analysis::LinkageAnalyzer},
+    static_programmable_transactions::{
+        env::Env, linkage::analysis::LinkageAnalyzer, metering::translation_meter,
+    },
 };
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::move_vm::MoveVM;
@@ -24,6 +28,7 @@ pub mod env;
 pub mod execution;
 pub mod linkage;
 pub mod loading;
+pub mod metering;
 pub mod spanned;
 pub mod typing;
 
@@ -49,8 +54,16 @@ pub fn execute<Mode: ExecutionMode>(
         &package_store,
         &linkage_analysis,
     );
-    let txn = loading::translate::transaction(&env, txn).map_err(|e| (e, vec![]))?;
-    let txn = typing::translate_and_verify::<Mode>(&env, txn).map_err(|e| (e, vec![]))?;
+    let mut translation_meter =
+        translation_meter::TranslationMeter::new(protocol_config, gas_charger);
+
+    let txn = {
+        let tx_context_ref = tx_context.borrow();
+        loading::translate::transaction(&mut translation_meter, &env, &tx_context_ref, txn)
+            .map_err(|e| (e, vec![]))?
+    };
+    let txn = typing::translate_and_verify::<Mode>(&mut translation_meter, &env, txn)
+        .map_err(|e| (e, vec![]))?;
     execution::interpreter::execute::<Mode>(
         &mut env,
         metrics,

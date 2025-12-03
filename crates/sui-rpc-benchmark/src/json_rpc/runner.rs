@@ -247,8 +247,8 @@ pub async fn run_queries(
                     });
                 async move {
                     // Update the cursor parameter if the request uses pagination
-                    if let Some(cursor_idx) = PaginationCursorState::get_method_cursor_index(&request_line.method) {
-                        if !params.is_empty() {
+                    if let Some(cursor_idx) = PaginationCursorState::get_method_cursor_index(&request_line.method)
+                        && !params.is_empty() {
                             let method_key = match PaginationCursorState::get_method_key(&request_line.method, &params) {
                                 Ok(key) => key,
                                 Err(e) => return Err(BenchmarkError::Other(e)),
@@ -262,7 +262,6 @@ pub async fn run_queries(
                                 return Err(BenchmarkError::Other(e));
                             }
                         }
-                    }
 
                     let now = Instant::now();
                     debug!("Sending request for method: {} body: {:?}", request_line.method, request_line.body_json);

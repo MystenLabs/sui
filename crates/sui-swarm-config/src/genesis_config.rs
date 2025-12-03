@@ -5,16 +5,16 @@ use std::net::{IpAddr, SocketAddr};
 
 use anyhow::Result;
 use fastcrypto::traits::KeyPair;
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng};
 use serde::{Deserialize, Serialize};
 use sui_config::genesis::{GenesisCeremonyParameters, TokenAllocation};
 use sui_config::node::{DEFAULT_COMMISSION_RATE, DEFAULT_VALIDATOR_GAS_PRICE};
-use sui_config::{local_ip_utils, Config};
+use sui_config::{Config, local_ip_utils};
 use sui_genesis_builder::validator_info::{GenesisValidatorInfo, ValidatorInfo};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
-    generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-    AuthorityPublicKeyBytes, NetworkKeyPair, NetworkPublicKey, PublicKey, SuiKeyPair,
+    AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, NetworkPublicKey,
+    PublicKey, SuiKeyPair, generate_proof_of_possession, get_key_pair_from_rng,
 };
 use sui_types::multiaddr::Multiaddr;
 use tracing::info;

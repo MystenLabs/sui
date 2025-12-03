@@ -20,12 +20,12 @@ use crate::{
     authority_client::AuthorityAPI,
     safe_client::SafeClient,
     transaction_driver::{
+        SubmitTransactionOptions, TransactionDriverMetrics,
         error::{
-            aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
-            TransactionRequestError,
+            AggregatedEffectsDigests, TransactionDriverError, TransactionRequestError,
+            aggregate_request_errors,
         },
         request_retrier::RequestRetrier,
-        SubmitTransactionOptions, TransactionDriverMetrics,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
@@ -71,6 +71,7 @@ impl TransactionSubmitter {
             client_monitor,
             tx_type,
             options.allowed_validators.clone(),
+            options.blocked_validators.clone(),
         );
 
         let ping_label = if request.ping_type.is_some() {
@@ -152,11 +153,7 @@ impl TransactionSubmitter {
                     return Ok((name, result));
                 }
                 Some((name, display_name, Err(e))) => {
-                    let error_type = if e.is_submission_retriable() {
-                        "retriable"
-                    } else {
-                        "non_retriable"
-                    };
+                    let error_type = e.categorize().into();
                     self.metrics
                         .validator_submit_transaction_errors
                         .with_label_values(&[

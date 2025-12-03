@@ -1220,7 +1220,6 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "is_one_time_witness",
             make_native!(types::is_one_time_witness),
         ),
-        ("test_utils", "destroy", make_native!(test_utils::destroy)),
         (
             "test_utils",
             "create_one_time_witness",
@@ -1346,7 +1345,7 @@ pub(crate) fn get_tag_and_layouts(
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Sui verifier guarantees this is a struct".to_string()),
-            )
+            );
         }
     };
     let Some(layout) = context.type_to_type_layout(ty)? else {
@@ -1391,18 +1390,19 @@ macro_rules! get_extension_mut {
 
 #[macro_export]
 macro_rules! charge_cache_or_load_gas {
-    ($context:ident, $cache_info:expr) => {
+    ($context:ident, $cache_info:expr) => {{
+        use $crate::object_runtime::object_store::CacheInfo;
         match $cache_info {
-            $crate::object_runtime::object_store::CacheInfo::Cached => (),
-            $crate::object_runtime::object_store::CacheInfo::Loaded(size) => {
+            CacheInfo::CachedObject | CacheInfo::CachedValue => (),
+            CacheInfo::Loaded(bytes_opt) => {
                 let config = get_extension!($context, ObjectRuntime)?.protocol_config;
                 if config.object_runtime_charge_cache_load_gas() {
-                    let cost = size * config.obj_access_cost_read_per_byte() as usize;
-                    native_charge_gas_early_exit!($context, InternalGas::new(cost as u64));
+                    let bytes = bytes_opt.unwrap_or(0).max(1);
+                    native_charge_gas_early_exit!($context, InternalGas::new(bytes as u64));
                 }
             }
         }
-    };
+    }};
 }
 
 pub(crate) fn legacy_test_cost() -> InternalGas {
@@ -1414,6 +1414,7 @@ pub(crate) fn abstract_size(protocol_config: &ProtocolConfig, v: &Value) -> Abst
         v.abstract_memory_size(&SizeConfig {
             include_vector_size: true,
             traverse_references: false,
+            fine_grained_value_size: true,
         })
     } else {
         // TODO: Remove this (with glee!) in the next execution version cut.

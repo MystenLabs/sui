@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::encoding::{
-    BridgeMessageEncoding, ADD_TOKENS_ON_EVM_MESSAGE_VERSION, ASSET_PRICE_UPDATE_MESSAGE_VERSION,
+    ADD_TOKENS_ON_EVM_MESSAGE_VERSION, ASSET_PRICE_UPDATE_MESSAGE_VERSION, BridgeMessageEncoding,
     EVM_CONTRACT_UPGRADE_MESSAGE_VERSION, LIMIT_UPDATE_MESSAGE_VERSION,
 };
 use crate::encoding::{
@@ -14,12 +14,12 @@ use crate::types::ParsedTokenTransferMessage;
 use crate::types::{
     AddTokensOnEvmAction, AssetPriceUpdateAction, BlocklistCommitteeAction, BridgeAction,
     BridgeActionType, EmergencyAction, EthLog, EthToSuiBridgeAction, EvmContractUpgradeAction,
-    LimitUpdateAction, SuiToEthBridgeAction,
+    LimitUpdateAction, SuiToEthBridgeAction, SuiToEthTokenTransfer,
 };
 use ethers::types::Log;
 use ethers::{
     abi::RawLog,
-    contract::{abigen, EthLogDecode},
+    contract::{EthLogDecode, abigen},
     types::Address as EthAddress,
 };
 use serde::{Deserialize, Serialize};
@@ -119,7 +119,10 @@ impl EthBridgeEvent {
                             // We log error here.
                             // TODO: add metrics and alert
                             Err(e) => {
-                                return Err(BridgeError::Generic(format!("Manual intervention is required. Failed to convert TokensDepositedFilter log to EthToSuiTokenBridgeV1. This indicates incorrect parameters or a bug in the code: {:?}. Err: {:?}", event, e)));
+                                return Err(BridgeError::Generic(format!(
+                                    "Manual intervention is required. Failed to convert TokensDepositedFilter log to EthToSuiTokenBridgeV1. This indicates incorrect parameters or a bug in the code: {:?}. Err: {:?}",
+                                    event, e
+                                )));
                             }
                         };
 
@@ -212,6 +215,23 @@ impl TryFrom<SuiToEthBridgeAction> for eth_sui_bridge::Message {
             version: TOKEN_TRANSFER_MESSAGE_VERSION,
             nonce: action.sui_bridge_event.nonce,
             chain_id: action.sui_bridge_event.sui_chain_id as u8,
+            payload: action
+                .as_payload_bytes()
+                .map_err(|e| BridgeError::Generic(format!("Failed to encode payload: {}", e)))?
+                .into(),
+        })
+    }
+}
+
+impl TryFrom<SuiToEthTokenTransfer> for eth_sui_bridge::Message {
+    type Error = BridgeError;
+
+    fn try_from(action: SuiToEthTokenTransfer) -> BridgeResult<Self> {
+        Ok(eth_sui_bridge::Message {
+            message_type: BridgeActionType::TokenTransfer as u8,
+            version: TOKEN_TRANSFER_MESSAGE_VERSION,
+            nonce: action.nonce,
+            chain_id: action.sui_chain_id as u8,
             payload: action
                 .as_payload_bytes()
                 .map_err(|e| BridgeError::Generic(format!("Failed to encode payload: {}", e)))?
@@ -569,10 +589,11 @@ mod tests {
                 ),
             },
         ));
-        assert!(e
-            .try_into_bridge_action(TxHash::random(), 0)
-            .unwrap()
-            .is_some());
+        assert!(
+            e.try_into_bridge_action(TxHash::random(), 0)
+                .unwrap()
+                .is_some()
+        );
 
         let e = EthBridgeEvent::EthSuiBridgeEvents(EthSuiBridgeEvents::TokensDepositedFilter(
             TokensDepositedFilter {

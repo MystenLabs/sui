@@ -17,6 +17,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_types::{
+    TypeTag,
     base_types::{ObjectID, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
     effects::{IDOperation, ObjectChange, TransactionEffects, TransactionEffectsAPI},
@@ -24,13 +25,12 @@ use sui_types::{
     object::Object,
     signature::GenericSignature,
     transaction::{TransactionData, TransactionDataAPI},
-    TypeTag,
 };
 use tokio::join;
 
 use crate::{
     context::Context,
-    error::{invalid_params, rpc_bail, RpcError},
+    error::{RpcError, invalid_params, rpc_bail},
 };
 
 use super::error::Error;
@@ -69,7 +69,7 @@ pub(super) async fn transaction(
 
     let mut response = SuiTransactionBlockResponse::new(digest);
 
-    response.timestamp_ms = Some(tx.timestamp_ms());
+    response.timestamp_ms = tx.timestamp_ms();
     response.checkpoint = tx.cp_sequence_number();
 
     if options.show_input {
@@ -155,9 +155,8 @@ async fn events(
             ),
         };
 
-        let sui_event =
-            SuiEvent::try_from(event, digest, ix as u64, Some(tx.timestamp_ms()), layout)
-                .with_context(|| format!("Failed to convert Event {ix} into response"))?;
+        let sui_event = SuiEvent::try_from(event, digest, ix as u64, tx.timestamp_ms(), layout)
+            .with_context(|| format!("Failed to convert Event {ix} into response"))?;
 
         sui_events.push(sui_event)
     }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use sui_synthetic_ingestion::synthetic_ingestion::{generate_ingestion, Config};
+use sui_synthetic_ingestion::synthetic_ingestion::{Config, generate_ingestion};
 
 #[tokio::main]
 async fn main() {

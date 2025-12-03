@@ -4,7 +4,7 @@
 use std::sync::OnceLock;
 use std::{path::Path, sync::Arc, time::Duration};
 
-use anyhow::{anyhow, bail, Context as _};
+use anyhow::{Context as _, anyhow, bail};
 use prometheus::Registry;
 use scoped_futures::ScopedBoxFuture;
 use sui_indexer_alt_framework::store::{self, CommitterWatermark, Store as _};
@@ -38,7 +38,7 @@ pub(crate) struct Store<S>(Arc<Inner<S>>);
 pub(crate) struct Connection<'s, S> {
     pub store: &'s Store<S>,
     pub batch: rocksdb::WriteBatch,
-    watermark: Option<(&'static str, Watermark)>,
+    watermark: Option<(String, Watermark)>,
 }
 
 /// The contents of the store.
@@ -147,7 +147,7 @@ impl<S: Send + Sync + 'static> store::TransactionalStore for Store<S> {
             .queue
             .get()
             .context("Synchronizer not running for store")?
-            .get(pipeline)
+            .get(pipeline.as_str())
             .with_context(|| format!("No {pipeline:?} synchronizer queue"))?
             .send((watermark, conn.batch))
             .await
@@ -161,17 +161,22 @@ impl<S: Send + Sync + 'static> store::TransactionalStore for Store<S> {
 impl<S: Send + Sync> store::Connection for Connection<'_, S> {
     async fn committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline_task: &str,
     ) -> anyhow::Result<Option<CommitterWatermark>> {
-        Ok(self.store.0.db.commit_watermark(pipeline)?.map(Into::into))
+        Ok(self
+            .store
+            .0
+            .db
+            .commit_watermark(pipeline_task)?
+            .map(Into::into))
     }
 
     async fn set_committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline_task: &str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
-        self.watermark = Some((pipeline, watermark.into()));
+        self.watermark = Some((pipeline_task.to_string(), watermark.into()));
         Ok(true)
     }
 

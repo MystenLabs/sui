@@ -287,10 +287,10 @@ impl VMTracer<'_> {
         let global = self.loaded_data.get_mut(idx)?;
 
         // This was an alias to a local reference further up the call stack -- do nothing.
-        if let GlobalValue::InLocal(fidx, _) = global {
-            if current_frame_identifier != *fidx {
-                return Some(());
-            }
+        if let GlobalValue::InLocal(fidx, _) = global
+            && current_frame_identifier != *fidx
+        {
+            return Some(());
         }
 
         let new_state = GlobalValue::AtStackOffset(interpreter.operand_stack.value.len() - 1);
@@ -1714,8 +1714,6 @@ impl VMTracer<'_> {
             | B::ImmBorrowGlobalGenericDeprecated(_) => unreachable!(),
         }
 
-        // At this point the type stack and the operand stack should be in sync.
-        assert_eq!(self.type_stack.len(), interpreter.operand_stack.value.len());
         Some(())
     }
 }
@@ -1854,6 +1852,9 @@ impl<'a> VMTracer<'a> {
         } else if let Some(err) = err {
             self.trace
                 .effect(EF::ExecutionError(format!("{:?}", err.major_status())));
+        } else {
+            // At this point the type stack and the operand stack should be in sync.
+            assert_eq!(self.type_stack.len(), interpreter.operand_stack.value.len());
         }
     }
 }

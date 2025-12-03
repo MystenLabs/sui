@@ -27,8 +27,6 @@ custom coins with <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a
 -  [Function `create_staking_rewards`](#sui_balance_create_staking_rewards)
 -  [Function `destroy_storage_rebates`](#sui_balance_destroy_storage_rebates)
 -  [Function `destroy_supply`](#sui_balance_destroy_supply)
--  [Function `send_to_account`](#sui_balance_send_to_account)
--  [Function `withdraw_from_account`](#sui_balance_withdraw_from_account)
 
 
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
@@ -440,7 +438,7 @@ Destroy a zero <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a>
 Send a <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a></code> to an address's funds accumulator.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_send_funds">send_funds</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, recipient: <b>address</b>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_send_funds">send_funds</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, recipient: <b>address</b>)
 </code></pre>
 
 
@@ -449,7 +447,7 @@ Send a <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a></code> 
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_send_funds">send_funds</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;, recipient: <b>address</b>) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_send_funds">send_funds</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;, recipient: <b>address</b>) {
     <a href="../sui/funds_accumulator.md#sui_funds_accumulator_add_impl">sui::funds_accumulator::add_impl</a>(<a href="../sui/balance.md#sui_balance">balance</a>, recipient);
 }
 </code></pre>
@@ -466,7 +464,7 @@ Redeem a <code>Withdrawal&lt;<a href="../sui/balance.md#sui_balance_Balance">Bal
 accumulator.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_redeem_funds">redeem_funds</a>&lt;T&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;&gt;): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_redeem_funds">redeem_funds</a>&lt;T&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;&gt;): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -475,9 +473,7 @@ accumulator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_redeem_funds">redeem_funds</a>&lt;T&gt;(
-    withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt;,
-): <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_redeem_funds">redeem_funds</a>&lt;T&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt;): <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt; {
     withdrawal.redeem()
 }
 </code></pre>
@@ -621,56 +617,6 @@ Destroy a <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a></code>
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/balance.md#sui_balance_destroy_supply">destroy_supply</a>&lt;T&gt;(self: <a href="../sui/balance.md#sui_balance_Supply">Supply</a>&lt;T&gt;): u64 {
     <b>let</b> <a href="../sui/balance.md#sui_balance_Supply">Supply</a> { <a href="../sui/balance.md#sui_balance_value">value</a> } = self;
     <a href="../sui/balance.md#sui_balance_value">value</a>
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_balance_send_to_account"></a>
-
-## Function `send_to_account`
-
-
-
-<pre><code><b>fun</b> <a href="../sui/balance.md#sui_balance_send_to_account">send_to_account</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;, recipient: <b>address</b>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui/balance.md#sui_balance_send_to_account">send_to_account</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;, recipient: <b>address</b>) {
-    <a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/balance.md#sui_balance_send_funds">send_funds</a>(recipient)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_balance_withdraw_from_account"></a>
-
-## Function `withdraw_from_account`
-
-
-
-<pre><code><b>fun</b> <a href="../sui/balance.md#sui_balance_withdraw_from_account">withdraw_from_account</a>&lt;T&gt;(amount: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui/balance.md#sui_balance_withdraw_from_account">withdraw_from_account</a>&lt;T&gt;(amount: u64, ctx: &TxContext): <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt; {
-    <b>let</b> owner = ctx.sender();
-    <b>let</b> withdrawal = <a href="../sui/funds_accumulator.md#sui_funds_accumulator_create_withdrawal">sui::funds_accumulator::create_withdrawal</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt;(owner, amount <b>as</b> u256);
-    withdrawal.redeem()
 }
 </code></pre>
 

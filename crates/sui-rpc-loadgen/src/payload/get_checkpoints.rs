@@ -124,7 +124,10 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                     // ignore the None value because it's warned above
                     let eq = x.is_none() || x.as_ref().unwrap() == &valid_checkpoint;
                     if !eq {
-                        error!("getCheckpoint {seq} has a different result between the {valid_checkpoint_idx}th and {i}th URL {:?} {:?}", x, checkpoints[valid_checkpoint_idx])
+                        error!(
+                            "getCheckpoint {seq} has a different result between the {valid_checkpoint_idx}th and {i}th URL {:?} {:?}",
+                            x, checkpoints[valid_checkpoint_idx]
+                        )
                     }
                 }
             }

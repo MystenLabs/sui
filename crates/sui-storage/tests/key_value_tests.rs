@@ -8,11 +8,11 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{
-    random_object_ref, ExecutionDigests, FullObjectRef, ObjectID, SequenceNumber, VersionNumber,
+    ExecutionDigests, FullObjectRef, ObjectID, SequenceNumber, VersionNumber, random_object_ref,
 };
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
-use sui_types::crypto::{get_key_pair, AccountKeyPair};
+use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest, TransactionDigest};
 use sui_types::effects::{
     TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI, TransactionEvents,

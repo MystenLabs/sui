@@ -1229,17 +1229,14 @@ impl Locals {
         let mut v = self.0.borrow_mut();
         match v.get_mut(idx) {
             Some(v) => {
-                if violation_check {
-                    if let ValueImpl::Container(c) = v {
-                        if c.rc_count() > 1 {
-                            return Err(PartialVMError::new(
-                                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                            )
-                            .with_message(
-                                "moving container with dangling references".to_string(),
-                            ));
-                        }
-                    }
+                if violation_check
+                    && let ValueImpl::Container(c) = v
+                    && c.rc_count() > 1
+                {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message("moving container with dangling references".to_string()),
+                    );
                 }
                 Ok(Value(std::mem::replace(v, x.0)))
             }
@@ -3385,97 +3382,6 @@ impl Value {
             val: &self.0,
         })
         .ok()
-    }
-
-    pub fn serialize(&self) -> Option<Vec<u8>> {
-        bcs::to_bytes(&self.0).ok()
-    }
-}
-
-impl serde::Serialize for ValueImpl {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
-            ValueImpl::U8(u) => serializer.serialize_u8(*u),
-            ValueImpl::U16(u) => serializer.serialize_u16(*u),
-            ValueImpl::U32(u) => serializer.serialize_u32(*u),
-            ValueImpl::U64(u) => serializer.serialize_u64(*u),
-            ValueImpl::U128(u) => serializer.serialize_u128(**u),
-            ValueImpl::U256(u) => u.serialize(serializer),
-            ValueImpl::Bool(b) => serializer.serialize_bool(*b),
-            ValueImpl::Address(a) => a.serialize(serializer),
-            ValueImpl::Container(container) => container.serialize(serializer),
-            v @ (ValueImpl::ContainerRef(_) | ValueImpl::IndexedRef(_) | ValueImpl::Invalid) => {
-                Err(invariant_violation::<S>(format!(
-                    "cannot serialize value {:?}",
-                    v
-                )))
-            }
-        }
-    }
-}
-
-impl serde::Serialize for Container {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
-            Container::VecU8(r) => r.borrow().serialize(serializer),
-            Container::VecU16(r) => r.borrow().serialize(serializer),
-            Container::VecU32(r) => r.borrow().serialize(serializer),
-            Container::VecU64(r) => r.borrow().serialize(serializer),
-            Container::VecU128(r) => r.borrow().serialize(serializer),
-            Container::VecU256(r) => r.borrow().serialize(serializer),
-            Container::VecBool(r) => r.borrow().serialize(serializer),
-            Container::VecAddress(r) => r.borrow().serialize(serializer),
-            Container::Vec(r) => {
-                let v = r.borrow();
-                let mut s = serializer.serialize_seq(Some(v.len()))?;
-                for v in v.iter() {
-                    s.serialize_element(v)?;
-                }
-                s.end()
-            }
-            Container::Struct(r) => {
-                let v = r.borrow();
-                let mut t = serializer.serialize_tuple(v.len())?;
-                for val in v.iter() {
-                    t.serialize_element(&val)?;
-                }
-                t.end()
-            }
-            Container::Variant(r) => {
-                let (tag, values) = &*r.borrow();
-                let tag = if *tag as u64 > VARIANT_TAG_MAX_VALUE {
-                    return Err(serde::ser::Error::custom(format!(
-                        "Variant tag {} is greater than the maximum allowed value of {}",
-                        tag, VARIANT_TAG_MAX_VALUE
-                    )));
-                } else {
-                    *tag as u8
-                };
-
-                struct VariantsSerializer<'a>(&'a [ValueImpl]);
-                impl serde::Serialize for VariantsSerializer<'_> {
-                    fn serialize<S: serde::Serializer>(
-                        &self,
-                        serializer: S,
-                    ) -> Result<S::Ok, S::Error> {
-                        let mut t = serializer.serialize_tuple(self.0.len())?;
-                        for val in self.0.iter() {
-                            t.serialize_element(val)?;
-                        }
-                        t.end()
-                    }
-                }
-
-                let mut t = serializer.serialize_tuple(2)?;
-                t.serialize_element(&tag)?;
-                t.serialize_element(&VariantsSerializer(values))?;
-                t.end()
-            }
-            Container::Locals(_) => Err(invariant_violation::<S>(format!(
-                "Tried to serialize a locals container {:?}",
-                self
-            ))),
-        }
     }
 }
 

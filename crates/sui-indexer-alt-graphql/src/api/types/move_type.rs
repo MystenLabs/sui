@@ -4,15 +4,15 @@
 use std::fmt;
 
 use anyhow::anyhow;
-use async_graphql::{scalar, Enum, Object};
+use async_graphql::{Enum, Object, scalar};
 use move_binary_format::file_format::{Ability, AbilitySet};
 use move_core_types::annotated_value as A;
 use serde::{Deserialize, Serialize};
 use sui_package_resolver::error::Error as ResolverError;
-use sui_types::{type_input::TypeInput, TypeTag};
+use sui_types::{TypeTag, type_input::TypeInput};
 
 use crate::{
-    error::{bad_user_input, resource_exhausted, RpcError},
+    error::{RpcError, bad_user_input, resource_exhausted},
     scope::Scope,
 };
 
@@ -213,7 +213,7 @@ impl MoveType {
             ) => return Err(resource_exhausted(err)),
 
             Err(err @ (RE::TypeArityMismatch(_, _) | RE::TypeParamOOB(_, _))) => {
-                return Err(bad_user_input(Error::Resolve(err)))
+                return Err(bad_user_input(Error::Resolve(err)));
             }
 
             Err(

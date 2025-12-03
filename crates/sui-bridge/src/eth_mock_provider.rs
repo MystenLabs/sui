@@ -6,7 +6,7 @@
 use async_trait::async_trait;
 use ethers::providers::JsonRpcClient;
 use ethers::providers::MockError;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Debug;

@@ -21,8 +21,7 @@ use crate::models::VerifiedDomain;
 const REGISTRY_TABLE_ID: &str =
     "0xe64cd9db9f829c6cc405d9790bd71567ae07259855f4fba6f02c84f52298c106";
 const NAME_RECORD_TYPE: &str = "0x2::dynamic_field::Field<0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::domain::Domain,0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::name_record::NameRecord>";
-const SUBDOMAIN_REGISTRATION_TYPE: &str =
-    "0x00c2f85e07181b90c140b15c5ce27d863f93c4d9159d2a4e7bdaeb40e286d6f5::subdomain_registration::SubDomainRegistration";
+const SUBDOMAIN_REGISTRATION_TYPE: &str = "0x00c2f85e07181b90c140b15c5ce27d863f93c4d9159d2a4e7bdaeb40e286d6f5::subdomain_registration::SubDomainRegistration";
 
 #[derive(Debug, Clone)]
 pub struct NameRecordChange(Field<Domain, NameRecord>);

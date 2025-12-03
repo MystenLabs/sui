@@ -7,16 +7,16 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use backoff::future::retry;
 use backoff::ExponentialBackoff;
+use backoff::future::retry;
 use fastcrypto::encoding::Base64;
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::join_all;
 use im::hashmap::HashMap as ImHashMap;
 use indexmap::map::IndexMap;
 use itertools::Itertools;
-use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+use jsonrpsee::core::RpcResult;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
@@ -32,11 +32,10 @@ use tap::TapFallible;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use mysten_metrics::add_server_timing;
-use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::{
-    validate_limit, JsonRpcMetrics, ReadApiOpenRpc, ReadApiServer, QUERY_MAX_RESULT_LIMIT,
-    QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
+    JsonRpcMetrics, QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS, ReadApiOpenRpc,
+    ReadApiServer, validate_limit,
 };
 use sui_json_rpc_types::{
     BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse, EventFilter,
@@ -62,15 +61,15 @@ use sui_types::transaction::{Transaction, TransactionData};
 
 use crate::authority_state::{StateRead, StateReadError, StateReadResult};
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
+use crate::{ObjectProvider, with_tracing};
 use crate::{
-    get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
+    ObjectProviderCache, SuiRpcModule, get_balance_changes_from_effect, get_object_changes,
 };
-use crate::{with_tracing, ObjectProvider};
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::ToFromBytes;
 use shared_crypto::intent::Intent;
 use sui_json_rpc_types::ZkLoginVerifyResult;
-use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
+use sui_types::authenticator_state::{ActiveJwk, get_authenticator_state};
 
 /// A field access in a  Display string cannot exceed this level of nesting.
 const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
@@ -341,10 +340,10 @@ impl ReadApi {
             trace!("getting events");
             let mut non_empty_digests = vec![];
             for cache_entry in temp_response.values() {
-                if let Some(effects) = &cache_entry.effects {
-                    if effects.events_digest().is_some() {
-                        non_empty_digests.push(cache_entry.digest);
-                    }
+                if let Some(effects) = &cache_entry.effects
+                    && effects.events_digest().is_some()
+                {
+                    non_empty_digests.push(cache_entry.digest);
                 }
             }
             // fetch events from the DB with retry, retry each 0.5s for 3s
@@ -373,8 +372,8 @@ impl ReadApi {
             .await
             .map_err(|e| {
                 Error::UnexpectedError(format!(
-                "Retrieving events with retry failed for transaction digests {digests:?}: {e:?}"
-            ))
+                    "Retrieving events with retry failed for transaction digests {digests:?}: {e:?}"
+                ))
             })?
             .into_iter();
 
@@ -390,7 +389,9 @@ impl ReadApi {
                                 Some(to_sui_transaction_events(self, cache_entry.digest, ev)?)
                         }
                         None | Some(None) => {
-                            error!("Failed to fetch events with event digest {events_digest:?} for txn {transaction_digest}");
+                            error!(
+                                "Failed to fetch events with event digest {events_digest:?} for txn {transaction_digest}"
+                            );
                             cache_entry.errors.push(format!(
                                 "Failed to fetch events with event digest {events_digest:?}",
                             ))
@@ -550,14 +551,10 @@ impl ReadApiServer for ReadApi {
     ) -> RpcResult<SuiObjectResponse> {
         with_tracing!(async move {
             let state = self.state.clone();
-            let object_read = spawn_monitored_task!(async move {
-                state.get_object_read(&object_id).map_err(|e| {
-                    warn!(?object_id, "Failed to get object: {:?}", e);
-                    Error::from(e)
-                })
-            })
-            .await
-            .map_err(Error::from)??;
+            let object_read = state.get_object_read(&object_id).map_err(|e| {
+                warn!(?object_id, "Failed to get object: {:?}", e);
+                Error::from(e)
+            })?;
             let options = options.unwrap_or_default();
 
             match object_read {
@@ -652,12 +649,12 @@ impl ReadApiServer for ReadApi {
     ) -> RpcResult<SuiPastObjectResponse> {
         with_tracing!(async move {
             let state = self.state.clone();
-            let past_read = spawn_monitored_task!(async move {
-            state.get_past_object_read(&object_id, version)
-            .map_err(|e| {
-                error!("Failed to call try_get_past_object for object: {object_id:?} version: {version:?} with error: {e:?}");
-                Error::from(e)
-            })}).await.map_err(Error::from)??;
+            let past_read = state
+                .get_past_object_read(&object_id, version)
+                .map_err(|e| {
+                    error!("Failed to call try_get_past_object for object: {object_id:?} version: {version:?} with error: {e:?}");
+                    Error::from(e)
+                })?;
             let options = options.unwrap_or_default();
             match past_read {
                 PastObjectRead::ObjectNotExists(id) => {
@@ -784,16 +781,15 @@ impl ReadApiServer for ReadApi {
 
             // Fetch transaction to determine existence
             let transaction_kv_store = self.transaction_kv_store.clone();
-            let transaction = spawn_monitored_task!(async move {
+            let transaction = async move {
                 let ret = transaction_kv_store.get_tx(digest).await.map_err(|err| {
                     debug!(tx_digest=?digest, "Failed to get transaction: {}", err);
                     Error::from(err)
                 });
                 add_server_timing("tx_kv_lookup");
                 ret
-            })
-            .await
-            .map_err(Error::from)??;
+            }
+            .await?;
             let input_objects = transaction
                 .data()
                 .inner()
@@ -811,17 +807,13 @@ impl ReadApiServer for ReadApi {
             if opts.require_effects() {
                 let transaction_kv_store = self.transaction_kv_store.clone();
                 temp_response.effects = Some(
-                    spawn_monitored_task!(async move {
-                        transaction_kv_store
-                            .get_fx_by_tx_digest(digest)
-                            .await
-                            .map_err(|err| {
-                                debug!(tx_digest=?digest, "Failed to get effects: {:?}", err);
-                                Error::from(err)
-                            })
-                    })
-                    .await
-                    .map_err(Error::from)??,
+                    transaction_kv_store
+                        .get_fx_by_tx_digest(digest)
+                        .await
+                        .map_err(|err| {
+                            debug!(tx_digest=?digest, "Failed to get effects: {:?}", err);
+                            Error::from(err)
+                        })?,
                 );
             }
 
@@ -837,33 +829,27 @@ impl ReadApiServer for ReadApi {
             if let Some(checkpoint_seq) = &temp_response.checkpoint_seq {
                 let kv_store = self.transaction_kv_store.clone();
                 let checkpoint_seq = *checkpoint_seq;
-                let checkpoint = spawn_monitored_task!(async move {
-                    kv_store
+                let checkpoint = kv_store
                     // safe to unwrap because we have checked `is_some` above
                     .get_checkpoint_summary(checkpoint_seq)
                     .await
                     .map_err(|e| {
                         error!("Failed to get checkpoint by sequence number: {checkpoint_seq:?} with error: {e:?}");
                         Error::from(e)
-                    })
-                }).await.map_err(Error::from)??;
+                    })?;
                 // TODO(chris): we don't need to fetch the whole checkpoint summary
                 temp_response.timestamp = Some(checkpoint.timestamp_ms);
             }
 
             if opts.show_events && temp_response.effects.is_some() {
                 let transaction_kv_store = self.transaction_kv_store.clone();
-                let events = spawn_monitored_task!(async move {
-                    transaction_kv_store
-                        .multi_get_events_by_tx_digests(&[digest])
-                        .await
-                        .map_err(|e| {
-                            error!("Failed to call get transaction events for transaction: {digest:?} with error {e:?}");
-                            Error::from(e)
-                        })
-                    })
+                let events = transaction_kv_store
+                    .multi_get_events_by_tx_digests(&[digest])
                     .await
-                    .map_err(Error::from)??
+                    .map_err(|e| {
+                        error!("Failed to call get transaction events for transaction: {digest:?} with error {e:?}");
+                        Error::from(e)
+                    })?
                     .pop()
                     .flatten();
                 match events {
@@ -877,50 +863,45 @@ impl ReadApiServer for ReadApi {
 
             let object_cache =
                 ObjectProviderCache::new((self.state.clone(), self.transaction_kv_store.clone()));
-            if opts.show_balance_changes {
-                if let Some(effects) = &temp_response.effects {
-                    let balance_changes = get_balance_changes_from_effect(
-                        &object_cache,
-                        effects,
-                        input_objects,
-                        None,
-                    )
-                    .await;
+            if opts.show_balance_changes
+                && let Some(effects) = &temp_response.effects
+            {
+                let balance_changes =
+                    get_balance_changes_from_effect(&object_cache, effects, input_objects, None)
+                        .await;
 
-                    if let Ok(balance_changes) = balance_changes {
-                        temp_response.balance_changes = Some(balance_changes);
-                    } else {
-                        temp_response.errors.push(format!(
-                            "Cannot retrieve balance changes: {}",
-                            balance_changes.unwrap_err()
-                        ));
-                    }
+                if let Ok(balance_changes) = balance_changes {
+                    temp_response.balance_changes = Some(balance_changes);
+                } else {
+                    temp_response.errors.push(format!(
+                        "Cannot retrieve balance changes: {}",
+                        balance_changes.unwrap_err()
+                    ));
                 }
             }
 
-            if opts.show_object_changes {
-                if let (Some(effects), Some(input)) =
+            if opts.show_object_changes
+                && let (Some(effects), Some(input)) =
                     (&temp_response.effects, &temp_response.transaction)
-                {
-                    let sender = input.data().intent_message().value.sender();
-                    let object_changes = get_object_changes(
-                        &object_cache,
-                        effects,
-                        sender,
-                        effects.modified_at_versions(),
-                        effects.all_changed_objects(),
-                        effects.all_removed_objects(),
-                    )
-                    .await;
+            {
+                let sender = input.data().intent_message().value.sender();
+                let object_changes = get_object_changes(
+                    &object_cache,
+                    effects,
+                    sender,
+                    effects.modified_at_versions(),
+                    effects.all_changed_objects(),
+                    effects.all_removed_objects(),
+                )
+                .await;
 
-                    if let Ok(object_changes) = object_changes {
-                        temp_response.object_changes = Some(object_changes);
-                    } else {
-                        temp_response.errors.push(format!(
-                            "Cannot retrieve object changes: {}",
-                            object_changes.unwrap_err()
-                        ));
-                    }
+                if let Ok(object_changes) = object_changes {
+                    temp_response.object_changes = Some(object_changes);
+                } else {
+                    temp_response.errors.push(format!(
+                        "Cannot retrieve object changes: {}",
+                        object_changes.unwrap_err()
+                    ));
                 }
             }
             let epoch_store = self.state.load_epoch_store_one_call_per_task();
@@ -935,14 +916,8 @@ impl ReadApiServer for ReadApi {
         opts: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
         with_tracing!(async move {
-            let cloned_self = self.clone();
-            spawn_monitored_task!(async move {
-                cloned_self
-                    .multi_get_transaction_blocks_internal(digests, opts)
-                    .await
-            })
-            .await
-            .map_err(Error::from)?
+            self.multi_get_transaction_blocks_internal(digests, opts)
+                .await
         })
     }
 
@@ -951,32 +926,37 @@ impl ReadApiServer for ReadApi {
         with_tracing!(async move {
             let state = self.state.clone();
             let transaction_kv_store = self.transaction_kv_store.clone();
-            spawn_monitored_task!(async move{
-            let store = state.load_epoch_store_one_call_per_task();
-            let events = transaction_kv_store
-                .multi_get_events_by_tx_digests(&[transaction_digest])
-                .await
-                .map_err(
-                    |e| {
+            async move {
+                let store = state.load_epoch_store_one_call_per_task();
+                let events = transaction_kv_store
+                    .multi_get_events_by_tx_digests(&[transaction_digest])
+                    .await
+                    .map_err(|e| {
                         error!("Failed to get transaction events for transaction {transaction_digest:?} with error: {e:?}");
                         Error::StateReadError(e.into())
                     })?
-                .pop()
-                .flatten();
-            Ok(match events {
-                Some(events) => events
-                    .data
-                    .into_iter()
-                    .enumerate()
-                    .map(|(seq, e)| {
-                        let layout = store.executor().type_layout_resolver(Box::new(&state.get_backing_package_store().as_ref())).get_annotated_layout(&e.type_)?;
-                        SuiEvent::try_from(e, transaction_digest, seq as u64, None, layout)
-                    })
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(Error::SuiError)?,
-                None => vec![],
-            })
-        }).await.map_err(Error::from)?
+                    .pop()
+                    .flatten();
+                Ok(match events {
+                    Some(events) => events
+                        .data
+                        .into_iter()
+                        .enumerate()
+                        .map(|(seq, e)| {
+                            let layout = store
+                                .executor()
+                                .type_layout_resolver(Box::new(
+                                    &state.get_backing_package_store().as_ref(),
+                                ))
+                                .get_annotated_layout(&e.type_)?;
+                            SuiEvent::try_from(e, transaction_digest, seq as u64, None, layout)
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(Error::SuiError)?,
+                    None => vec![],
+                })
+            }
+            .await
         })
     }
 
@@ -1017,15 +997,14 @@ impl ReadApiServer for ReadApi {
 
             self.metrics.get_checkpoints_limit.observe(limit as f64);
 
-            let mut data = spawn_monitored_task!(Self::get_checkpoints_internal(
+            let mut data = Self::get_checkpoints_internal(
                 state,
                 kv_store,
                 cursor.map(|s| *s),
                 limit as u64 + 1,
                 descending_order,
-            ))
+            )
             .await
-            .map_err(Error::from)?
             .map_err(Error::from)?;
 
             let has_next_page = data.len() > limit;

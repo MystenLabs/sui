@@ -26,7 +26,6 @@ use crate::{
     context::Context,
     inlay_hints,
     symbols::{
-        self,
         compilation::CachedPackages,
         requests::{
             on_document_symbol_request, on_go_to_def_request, on_go_to_type_def_request,
@@ -168,30 +167,8 @@ pub fn run(
         lint,
         implicit_deps.clone(),
         flavor,
+        initialize_params.process_id,
     );
-
-    // If initialization information from the client contains a path to the directory being
-    // opened, try to initialize symbols before sending response to the client. Do not bother
-    // with diagnostics as they will be recomputed whenever the first source file is opened. The
-    // main reason for this is to enable unit tests that rely on the symbolication information
-    // to be available right after the client is initialized.
-    if let Some(uri) = initialize_params.root_uri {
-        let build_path = uri.to_file_path().unwrap();
-        if let Some(p) = SymbolicatorRunner::root_dir(&build_path) {
-            if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
-                Arc::new(Mutex::new(CachedPackages::new())),
-                ide_files_root.clone(),
-                p.as_path(),
-                lint,
-                None,
-                implicit_deps.clone(),
-                flavor,
-            ) {
-                let mut old_symbols_map = symbols_map.lock().unwrap();
-                old_symbols_map.insert(p, new_symbols);
-            }
-        }
-    }
 
     let context = Context {
         connection,
@@ -300,7 +277,12 @@ pub fn run(
                             _ => on_notification(ide_files_root.clone(), &symbolicator_runner, &notification),
                         }
                     }
-                    Err(error) => eprintln!("IDE message error: {:?}", error),
+                    Err(error) => {
+                        eprintln!("IDE message error: {:?}", error);
+                        // `error` is of type `RecvError`, which hasonly one meaning: the channel is empty
+                        // and disconnected. We should exit the process in such case.
+                        std::process::exit(-1);
+                    }
                 }
             }
         };
@@ -309,6 +291,8 @@ pub fn run(
     io_threads.join().expect("I/O threads could not finish");
     symbolicator_runner.quit();
     eprintln!("Shut down language server '{}'.", exe);
+    // quit process just in case
+    std::process::exit(0);
 }
 
 /// This function returns `true` if shutdown request has been received, and `false` otherwise.

@@ -4,7 +4,7 @@
 use anyhow::anyhow;
 use camino::Utf8Path;
 use clap::Parser;
-use nexlint::{prelude::*, NexLintContext};
+use nexlint::{NexLintContext, prelude::*};
 use nexlint_lints::{
     content::*,
     package::*,
@@ -92,6 +92,8 @@ pub fn run(args: Args) -> crate::Result<()> {
             "axum-extra".to_owned(),
             // consistent-store uses a newer version of bincode with breaking interface changes
             "bincode".to_owned(),
+            // TODO: remove once we've migrated ethers to alloy: https://linear.app/mysten-labs/issue/BR-191
+            "reqwest".to_owned(),
         ],
     };
 
@@ -164,10 +166,10 @@ pub fn handle_lint_results_exclude_external_crate_checks(
     // TODO: handle skipped results
     let mut errs = false;
     for (source, message) in &results.messages {
-        if let LintKind::Content(path) = source.kind() {
-            if ignore_funcs.iter().any(|func| func(source, path)) {
-                continue;
-            }
+        if let LintKind::Content(path) = source.kind()
+            && ignore_funcs.iter().any(|func| func(source, path))
+        {
+            continue;
         }
         println!(
             "[{}] [{}] [{}]: {}\n",

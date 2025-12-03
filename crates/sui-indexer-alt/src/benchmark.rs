@@ -3,16 +3,16 @@
 
 use std::{path::PathBuf, time::Instant};
 
-use crate::{config::IndexerConfig, setup_indexer, BootstrapGenesis};
+use crate::{BootstrapGenesis, config::IndexerConfig, setup_indexer};
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
-    ingestion::ClientArgs,
-    postgres::{reset_database, DbArgs},
     IndexerArgs,
+    ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
+    postgres::{DbArgs, reset_database},
 };
+use sui_indexer_alt_schema::MIGRATIONS;
 use sui_indexer_alt_schema::checkpoints::StoredGenesis;
 use sui_indexer_alt_schema::epochs::StoredEpochStart;
-use sui_indexer_alt_schema::MIGRATIONS;
 use sui_synthetic_ingestion::synthetic_ingestion::read_ingestion_data;
 use tokio_util::sync::CancellationToken;
 use url::Url;
@@ -55,11 +55,11 @@ pub async fn run_benchmark(
     };
 
     let client_args = ClientArgs {
-        remote_store_url: None,
-        local_ingestion_path: Some(ingestion_path.clone()),
-        rpc_api_url: None,
-        rpc_username: None,
-        rpc_password: None,
+        ingestion: IngestionClientArgs {
+            local_ingestion_path: Some(ingestion_path.clone()),
+            ..Default::default()
+        },
+        ..Default::default()
     };
 
     let cur_time = Instant::now();

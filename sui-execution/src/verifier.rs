@@ -6,11 +6,14 @@ use move_bytecode_verifier_meter::Meter;
 use move_vm_config::verifier::MeterConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::error::SuiResult;
-use sui_types::execution_config_utils::to_binary_config;
 
 pub trait Verifier {
     /// Create a new bytecode verifier meter.
     fn meter(&self, config: MeterConfig) -> Box<dyn Meter>;
+
+    /// Specifies whether or not deprecate_global_storage_ops_during_deserialization should
+    /// be overridden for the `BinaryConfig`
+    fn override_deprecate_global_storage_ops_during_deserialization(&self) -> Option<bool>;
 
     /// Run the bytecode verifier with a meter limit
     ///
@@ -30,7 +33,8 @@ pub trait Verifier {
         module_bytes: &[Vec<u8>],
         meter: &mut dyn Meter,
     ) -> SuiResult<()> {
-        let binary_config = to_binary_config(protocol_config);
+        let binary_config = protocol_config
+            .binary_config(self.override_deprecate_global_storage_ops_during_deserialization());
         let Ok(modules) = module_bytes
             .iter()
             .map(|b| CompiledModule::deserialize_with_config(b, &binary_config))

@@ -11,15 +11,15 @@ use crate::test_utils::make_transfer_sui_transaction;
 use crate::{quorum_driver::QuorumDriverMetrics, unit_test_utils::init_local_authorities};
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use sui_macros::{register_fail_point, sim_test};
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::TransactionDigest;
-use sui_types::crypto::{deterministic_random_account_key, get_key_pair, AccountKeyPair};
+use sui_types::crypto::{AccountKeyPair, deterministic_random_account_key, get_key_pair};
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::object::{generate_test_gas_objects, Object};
+use sui_types::object::{Object, generate_test_gas_objects};
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequestV3, QuorumDriverError, QuorumDriverResponse, QuorumDriverResult,
 };
@@ -208,8 +208,12 @@ async fn test_quorum_driver_update_validators_and_max_retry_times() {
             .unwrap();
         // We have a timeout here to make the test fail fast if fails
         match tokio::time::timeout(Duration::from_secs(20), ticket).await {
-            Ok(Err(QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts { total_attempts })) => assert_eq!(total_attempts, 4),
-            _ => panic!("The transaction should err on SafeClient epoch check mismatch, be retried 3 times and raise QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts error"),
+            Ok(Err(QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts {
+                total_attempts,
+            })) => assert_eq!(total_attempts, 4),
+            _ => panic!(
+                "The transaction should err on SafeClient epoch check mismatch, be retried 3 times and raise QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts error"
+            ),
         };
     });
 
@@ -274,14 +278,18 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
     let client2 = aggregator.clone_client_test_only(names[2]);
 
     println!("Case 0 - two validators lock the object with the same tx");
-    assert!(client0
-        .handle_transaction(tx.clone(), Some(client_ip))
-        .await
-        .is_ok());
-    assert!(client1
-        .handle_transaction(tx.clone(), Some(client_ip))
-        .await
-        .is_ok());
+    assert!(
+        client0
+            .handle_transaction(tx.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
+    assert!(
+        client1
+            .handle_transaction(tx.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
 
     let tx2 = make_tx(&gas, sender, &keypair, rgp);
     let res = quorum_driver
@@ -308,18 +316,24 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
     let gas = gas_objects.pop().unwrap();
     let tx = make_tx(&gas, sender, &keypair, rgp);
 
-    assert!(client0
-        .handle_transaction(tx.clone(), Some(client_ip))
-        .await
-        .is_ok());
-    assert!(client1
-        .handle_transaction(tx.clone(), Some(client_ip))
-        .await
-        .is_ok(),);
-    assert!(client2
-        .handle_transaction(tx.clone(), Some(client_ip))
-        .await
-        .is_ok(),);
+    assert!(
+        client0
+            .handle_transaction(tx.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
+    assert!(
+        client1
+            .handle_transaction(tx.clone(), Some(client_ip))
+            .await
+            .is_ok(),
+    );
+    assert!(
+        client2
+            .handle_transaction(tx.clone(), Some(client_ip))
+            .await
+            .is_ok(),
+    );
 
     let tx2 = make_tx(&gas, sender, &keypair, rgp);
 
@@ -342,10 +356,12 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
     println!("Case 2 - one validator locks the object");
     let gas = gas_objects.pop().unwrap();
     let tx = make_tx(&gas, sender, &keypair, rgp);
-    assert!(client0
-        .handle_transaction(tx.clone(), Some(client_ip))
-        .await
-        .is_ok());
+    assert!(
+        client0
+            .handle_transaction(tx.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
 
     let tx2 = make_tx(&gas, sender, &keypair, rgp);
     let tx2_digest = *tx2.digest();
@@ -361,23 +377,31 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
     let QuorumDriverResponse { effects_cert, .. } = res;
     assert_eq!(*effects_cert.transaction_digest(), tx2_digest);
 
-    println!("Case 3 - object is locked by 2 txes with weight 2 and 1 respectivefully. Then try to execute the third txn");
+    println!(
+        "Case 3 - object is locked by 2 txes with weight 2 and 1 respectivefully. Then try to execute the third txn"
+    );
     let gas = gas_objects.pop().unwrap();
     let tx = make_tx(&gas, sender, &keypair, rgp);
     let tx2 = make_tx(&gas, sender, &keypair, rgp);
 
-    assert!(client0
-        .handle_transaction(tx.clone(), Some(client_ip))
-        .await
-        .is_ok());
-    assert!(client1
-        .handle_transaction(tx.clone(), Some(client_ip))
-        .await
-        .is_ok());
-    assert!(client2
-        .handle_transaction(tx2.clone(), Some(client_ip))
-        .await
-        .is_ok());
+    assert!(
+        client0
+            .handle_transaction(tx.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
+    assert!(
+        client1
+            .handle_transaction(tx.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
+    assert!(
+        client2
+            .handle_transaction(tx2.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
 
     let tx3 = make_tx(&gas, sender, &keypair, rgp);
 
@@ -402,22 +426,30 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
         )
     }
 
-    println!("Case 4 - object is locked by 2 txes with weight 2 and 1, try to execute the lighter stake tx");
+    println!(
+        "Case 4 - object is locked by 2 txes with weight 2 and 1, try to execute the lighter stake tx"
+    );
     let gas = gas_objects.pop().unwrap();
     let tx = make_tx(&gas, sender, &keypair, rgp);
     let tx2 = make_tx(&gas, sender, &keypair, rgp);
-    assert!(client0
-        .handle_transaction(tx.clone(), Some(client_ip))
-        .await
-        .is_ok());
-    assert!(client1
-        .handle_transaction(tx.clone(), Some(client_ip))
-        .await
-        .is_ok());
-    assert!(client2
-        .handle_transaction(tx2.clone(), Some(client_ip))
-        .await
-        .is_ok());
+    assert!(
+        client0
+            .handle_transaction(tx.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
+    assert!(
+        client1
+            .handle_transaction(tx.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
+    assert!(
+        client2
+            .handle_transaction(tx2.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
     let res = quorum_driver
         .submit_transaction(ExecuteTransactionRequestV3::new_v2(tx2))
         .await
@@ -434,24 +466,32 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
         )
     }
 
-    println!("Case 5 - object is locked by 2 txes with weight 2 and 1, try to execute the heavier stake tx");
+    println!(
+        "Case 5 - object is locked by 2 txes with weight 2 and 1, try to execute the heavier stake tx"
+    );
     let gas = gas_objects.pop().unwrap();
     let tx = make_tx(&gas, sender, &keypair, rgp);
     let tx_digest = *tx.digest();
     let tx2 = make_tx(&gas, sender, &keypair, rgp);
 
-    assert!(client0
-        .handle_transaction(tx.clone(), Some(client_ip))
-        .await
-        .is_ok());
-    assert!(client1
-        .handle_transaction(tx.clone(), Some(client_ip))
-        .await
-        .is_ok());
-    assert!(client2
-        .handle_transaction(tx2, Some(client_ip))
-        .await
-        .is_ok());
+    assert!(
+        client0
+            .handle_transaction(tx.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
+    assert!(
+        client1
+            .handle_transaction(tx.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
+    assert!(
+        client2
+            .handle_transaction(tx2, Some(client_ip))
+            .await
+            .is_ok()
+    );
 
     let res = quorum_driver
         .submit_transaction(ExecuteTransactionRequestV3::new_v2(tx))
@@ -468,18 +508,24 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
     let tx = make_tx(&gas, sender, &keypair, rgp);
     let tx2 = make_tx(&gas, sender, &keypair, rgp);
     let tx3 = make_tx(&gas, sender, &keypair, rgp);
-    assert!(client0
-        .handle_transaction(tx.clone(), Some(client_ip))
-        .await
-        .is_ok());
-    assert!(client1
-        .handle_transaction(tx2.clone(), Some(client_ip))
-        .await
-        .is_ok());
-    assert!(client2
-        .handle_transaction(tx3.clone(), Some(client_ip))
-        .await
-        .is_ok());
+    assert!(
+        client0
+            .handle_transaction(tx.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
+    assert!(
+        client1
+            .handle_transaction(tx2.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
+    assert!(
+        client2
+            .handle_transaction(tx3.clone(), Some(client_ip))
+            .await
+            .is_ok()
+    );
 
     let tx4 = make_tx(&gas, sender, &keypair, rgp);
     let res = quorum_driver
@@ -490,10 +536,12 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
 
     if let Err(QuorumDriverError::ObjectsDoubleUsed { conflicting_txes }) = res {
         assert!(conflicting_txes.len() == 3 || conflicting_txes.len() == 2);
-        assert!(conflicting_txes
-            .iter()
-            .all(|(digest, (_objs, stake))| (*stake == 2500)
-                && (digest == tx.digest() || digest == tx2.digest() || digest == tx3.digest())));
+        assert!(
+            conflicting_txes
+                .iter()
+                .all(|(digest, (_objs, stake))| (*stake == 2500)
+                    && (digest == tx.digest() || digest == tx2.digest() || digest == tx3.digest()))
+        );
     } else {
         panic!(
             "expect Err(QuorumDriverError::ObjectsDoubleUsed) but got {:?}",

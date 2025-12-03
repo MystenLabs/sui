@@ -15,15 +15,15 @@ use serde;
 use serde::de::{Deserializer, Error};
 use serde::ser::{Error as SerError, Serializer};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+use serde_with::serde_as;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
 
 use sui_protocol_config::ProtocolVersion;
 
 use crate::{
-    parse_sui_struct_tag, parse_sui_type_tag, DEEPBOOK_ADDRESS, SUI_CLOCK_ADDRESS,
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_STATE_ADDRESS,
+    DEEPBOOK_ADDRESS, SUI_CLOCK_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
+    SUI_SYSTEM_STATE_ADDRESS, parse_sui_struct_tag, parse_sui_type_tag,
 };
 
 #[inline]

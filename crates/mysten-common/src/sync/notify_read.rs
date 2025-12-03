@@ -3,25 +3,25 @@
 
 use crate::debug_fatal;
 
-use futures::future::{join_all, Either};
+use futures::future::{Either, join_all};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::DefaultHasher;
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::sync::oneshot;
-use tokio::time::interval_at;
 use tokio::time::Instant;
+use tokio::time::interval_at;
 use tracing::warn;
 
 type Registrations<V> = Vec<oneshot::Sender<V>>;
@@ -83,7 +83,7 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
         rem
     }
 
-    pub fn register_one(&self, key: &K) -> Registration<K, V> {
+    pub fn register_one(&self, key: &K) -> Registration<'_, K, V> {
         self.count_pending.fetch_add(1, Ordering::Relaxed);
         let (sender, receiver) = oneshot::channel();
         self.register(key, sender);
@@ -93,7 +93,7 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
         }
     }
 
-    pub fn register_all(&self, keys: &[K]) -> Vec<Registration<K, V>> {
+    pub fn register_all(&self, keys: &[K]) -> Vec<Registration<'_, K, V>> {
         self.count_pending.fetch_add(keys.len(), Ordering::Relaxed);
         let mut registrations = vec![];
         for key in keys.iter() {
@@ -115,7 +115,7 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
             .push(sender);
     }
 
-    fn pending(&self, key: &K) -> MutexGuard<HashMap<K, Registrations<V>>> {
+    fn pending(&self, key: &K) -> MutexGuard<'_, HashMap<K, Registrations<V>>> {
         let mut state = DefaultHasher::new();
         key.hash(&mut state);
         let hash = state.finish();

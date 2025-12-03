@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use axum::routing::get;
 use axum::Router;
+use axum::routing::get;
 use clap::Parser;
 use mysten_network::callback::CallbackLayer;
 use prometheus::Registry;
 use std::sync::Arc;
 use sui_kv_rpc::KvRpcServer;
-use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_server::LedgerServiceServer;
 use sui_rpc_api::{RpcMetrics, RpcMetricsMakeCallbackHandler, ServerVersion};
 use telemetry_subscribers::TelemetryConfig;
 use tonic::transport::{Identity, Server, ServerTlsConfig};
@@ -44,7 +43,9 @@ async fn health_check() -> &'static str {
 async fn main() -> Result<()> {
     let _guard = TelemetryConfig::new().with_env().init();
     let app = App::parse();
-    std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", app.credentials.clone());
+    unsafe {
+        std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", app.credentials.clone());
+    };
     let server_version = Some(ServerVersion::new("sui-kv-rpc", VERSION));
     let registry_service = mysten_metrics::start_prometheus_server(
         format!("{}:{}", app.metrics_host, app.metrics_port).parse()?,
@@ -73,9 +74,6 @@ async fn main() -> Result<()> {
         )
         .register_encoded_file_descriptor_set(sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET)
         .register_encoded_file_descriptor_set(sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET)
-        .register_encoded_file_descriptor_set(
-            sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
-        )
         .build_v1()?;
     let reflection_v1alpha = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(
@@ -83,9 +81,6 @@ async fn main() -> Result<()> {
         )
         .register_encoded_file_descriptor_set(sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET)
         .register_encoded_file_descriptor_set(sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET)
-        .register_encoded_file_descriptor_set(
-            sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
-        )
         .build_v1alpha()?;
     tokio::spawn(async {
         let web_server = Router::new().route("/health", get(health_check));
@@ -100,7 +95,6 @@ async fn main() -> Result<()> {
         .layer(CallbackLayer::new(RpcMetricsMakeCallbackHandler::new(
             Arc::new(RpcMetrics::new(&registry)),
         )))
-        .add_service(LedgerServiceServer::new(server.clone()))
         .add_service(
             sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer::new(server),
         )

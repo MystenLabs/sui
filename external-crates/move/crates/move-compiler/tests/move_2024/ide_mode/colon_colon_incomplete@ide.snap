@@ -18,7 +18,7 @@ note[I15006]: IDE path autocomplete
    │ ╰─^ Possible in-scope names
    │  
    = members: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'foo -> a::m::foo', 'member_complete -> a::m::member_complete', 'mod_complete -> a::m::mod_complete', 'pkg_complete -> a::m::pkg_complete', or 'variant_incomplete -> a::m::variant_incomplete'
-   = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
+   = modules: 'Self -> a::m', 'internal -> std::internal', 'option -> std::option', or 'vector -> std::vector'
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
@@ -29,7 +29,7 @@ note[I15006]: IDE path autocomplete
    │         ^ Possible in-scope names
    │
    = members: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'foo -> a::m::foo', 'member_complete -> a::m::member_complete', 'mod_complete -> a::m::mod_complete', 'pkg_complete -> a::m::pkg_complete', or 'variant_incomplete -> a::m::variant_incomplete'
-   = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
+   = modules: 'Self -> a::m', 'internal -> std::internal', 'option -> std::option', or 'vector -> std::vector'
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
@@ -46,7 +46,7 @@ note[I15006]: IDE path autocomplete
    │         ^ Possible in-scope names
    │
    = members: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'foo -> a::m::foo', 'member_complete -> a::m::member_complete', 'mod_complete -> a::m::mod_complete', 'pkg_complete -> a::m::pkg_complete', or 'variant_incomplete -> a::m::variant_incomplete'
-   = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
+   = modules: 'Self -> a::m', 'internal -> std::internal', 'option -> std::option', or 'vector -> std::vector'
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
@@ -63,7 +63,7 @@ note[I15006]: IDE path autocomplete
    │         ^ Possible in-scope names
    │
    = members: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'foo -> a::m::foo', 'member_complete -> a::m::member_complete', 'mod_complete -> a::m::mod_complete', 'pkg_complete -> a::m::pkg_complete', or 'variant_incomplete -> a::m::variant_incomplete'
-   = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
+   = modules: 'Self -> a::m', 'internal -> std::internal', 'option -> std::option', or 'vector -> std::vector'
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
@@ -80,7 +80,7 @@ note[I15006]: IDE path autocomplete
    │         ^ Possible in-scope names
    │
    = members: 'Option -> std::option::Option', 'SomeEnum -> a::m::SomeEnum', 'foo -> a::m::foo', 'member_complete -> a::m::member_complete', 'mod_complete -> a::m::mod_complete', 'pkg_complete -> a::m::pkg_complete', or 'variant_incomplete -> a::m::variant_incomplete'
-   = modules: 'Self -> a::m', 'option -> std::option', or 'vector -> std::vector'
+   = modules: 'Self -> a::m', 'internal -> std::internal', 'option -> std::option', or 'vector -> std::vector'
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
@@ -99,6 +99,6 @@ note[I15006]: IDE path autocomplete
    │ ╰─^ Possible in-scope names
    │  
    = members: 'Option -> std::option::Option' or 'foo -> a::m2::foo'
-   = modules: 'Self -> a::m2', 'option -> std::option', or 'vector -> std::vector'
+   = modules: 'Self -> a::m2', 'internal -> std::internal', 'option -> std::option', or 'vector -> std::vector'
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params:

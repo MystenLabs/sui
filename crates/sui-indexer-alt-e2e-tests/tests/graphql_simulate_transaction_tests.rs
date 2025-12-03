@@ -5,22 +5,26 @@ use anyhow::Context;
 use prometheus::Registry;
 use reqwest::Client;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
-use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
+use sui_indexer_alt_framework::{
+    IndexerArgs,
+    ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
+};
 use sui_indexer_alt_graphql::{
-    config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
+    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, config::RpcConfig as GraphQlConfig,
+    start_rpc as start_graphql,
 };
 use sui_indexer_alt_reader::{
-    bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
-    fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
+    consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs,
+    system_package_task::SystemPackageTaskArgs,
 };
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_pg_db::{
-    temp::{get_available_port, TempDb},
     DbArgs,
+    temp::{TempDb, get_available_port},
 };
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::gas_coin::GasCoin;
@@ -82,7 +86,6 @@ enum ArgumentKind {
 #[serde(rename_all = "camelCase")]
 struct SimulationResult {
     effects: Option<TransactionEffects>,
-    events: Option<Events>,
     outputs: Option<Vec<CommandResult>>,
     error: Option<String>,
 }
@@ -112,16 +115,6 @@ struct Sender {
 struct GasInput {
     #[serde(rename = "gasBudget")]
     gas_budget: String,
-}
-
-// Events is now a Vec<EventNode> directly, not wrapped in nodes
-type Events = Vec<EventNode>;
-
-#[derive(Debug, Deserialize)]
-struct EventNode {
-    #[serde(rename = "eventBcs")]
-    event_bcs: String,
-    sender: Sender,
 }
 
 #[derive(Debug, Deserialize)]
@@ -169,7 +162,12 @@ impl GraphQlTestCluster {
             fullnode_rpc_url: Some(validator_cluster.rpc_url().to_string()),
         };
         let client_args = ClientArgs {
-            rpc_api_url: Some(Url::parse(validator_cluster.rpc_url()).expect("Invalid RPC URL")),
+            ingestion: IngestionClientArgs {
+                rpc_api_url: Some(
+                    Url::parse(validator_cluster.rpc_url()).expect("Invalid RPC URL"),
+                ),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -191,10 +189,9 @@ impl GraphQlTestCluster {
 
         let graphql_handle = start_graphql(
             Some(database_url),
-            None,
             fullnode_args,
             DbArgs::default(),
-            BigtableArgs::default(),
+            GraphQlKvArgs::default(),
             ConsistentReaderArgs::default(),
             GraphQlArgs {
                 rpc_listen_address: graphql_listen_address,
@@ -311,7 +308,7 @@ async fn test_simulate_transaction_basic() {
         transaction.sender.address,
         validator_cluster.get_address_0().to_string()
     );
-    assert_eq!(transaction.gas_input.gas_budget, "10000000");
+    assert_eq!(transaction.gas_input.gas_budget, "5000000000");
 
     // For simulation, signatures should be empty since we don't provide them
     assert_eq!(transaction.signatures.len(), 0);
@@ -340,12 +337,26 @@ async fn test_simulate_transaction_with_events() {
             query($txData: JSON!) {
                 simulateTransaction(transaction: $txData) {
                     effects {
-                        digest
                         status
-                    }
-                    events {
-                        eventBcs
-                        sender { address }
+                        events {
+                            nodes {
+                                timestamp
+                                contents {
+                                    json
+                                }
+                                transactionModule {
+                                    package {
+                                        version
+                                        modules {
+                                            nodes {
+                                                name
+                                            }         
+                                        }
+                                    }
+                                    name
+                                }
+                            }
+                        }
                     }
                     error
                 }
@@ -362,19 +373,41 @@ async fn test_simulate_transaction_with_events() {
         .await
         .expect("GraphQL request failed");
 
-    let simulation_result: SimulationResult =
-        serde_json::from_value(result.pointer("/data/simulateTransaction").unwrap().clone())
-            .unwrap();
-
-    // Verify events were simulated
-    let events = simulation_result.events.unwrap();
-    assert!(!events.is_empty());
-
-    let sender_address = validator_cluster.get_address_0();
-    for event_node in &events {
-        assert!(!event_node.event_bcs.is_empty());
-        assert_eq!(event_node.sender.address, sender_address.to_string());
+    // Verify package version and digest are populated correctly from execution context
+    insta::assert_json_snapshot!(result.pointer("/data/simulateTransaction"), @r#"
+    {
+      "effects": {
+        "status": "SUCCESS",
+        "events": {
+          "nodes": [
+            {
+              "timestamp": null,
+              "contents": {
+                "json": {
+                  "message": "Package published successfully!",
+                  "value": "42"
+                }
+              },
+              "transactionModule": {
+                "package": {
+                  "version": 1,
+                  "modules": {
+                    "nodes": [
+                      {
+                        "name": "emit_event"
+                      }
+                    ]
+                  }
+                },
+                "name": "emit_event"
+              }
+            }
+          ]
+        }
+      },
+      "error": null
     }
+    "#);
 
     graphql_cluster.stopped().await;
 }
@@ -960,13 +993,15 @@ async fn test_package_resolver_finds_newly_published_package() {
 
     // Verify the 'value' field is of type NestedObject
     assert_eq!(fields[1].name, "value");
-    assert!(fields[1]
-        .layout
-        .pointer("/struct/type")
-        .unwrap()
-        .as_str()
-        .unwrap()
-        .contains("::resolver_test::NestedObject"));
+    assert!(
+        fields[1]
+            .layout
+            .pointer("/struct/type")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .contains("::resolver_test::NestedObject")
+    );
 
     graphql_cluster.stopped().await;
 }

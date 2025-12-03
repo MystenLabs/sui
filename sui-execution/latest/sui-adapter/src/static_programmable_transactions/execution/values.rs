@@ -3,7 +3,7 @@
 
 use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
 use move_binary_format::errors::PartialVMError;
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, runtime_value::MoveTypeLayout, u256::U256};
 use move_vm_types::{
     values::{
         self, Locals as VMLocals, Struct, VMValueCast, Value as VMValue, VectorSpecialization,
@@ -65,7 +65,7 @@ impl Locals {
         Ok(Self(VMLocals::new(n)))
     }
 
-    pub fn local(&mut self, index: u16) -> Result<Local, ExecutionError> {
+    pub fn local(&mut self, index: u16) -> Result<Local<'_>, ExecutionError> {
         Ok(Local(self, index))
     }
 }
@@ -154,8 +154,13 @@ impl Value {
         Ok(Value(value))
     }
 
-    pub fn serialize(&self) -> Option<Vec<u8>> {
-        self.0.serialize()
+    pub fn typed_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
+        self.0.typed_serialize(layout)
+    }
+
+    /// Used for getting access to the inner VMValue for tracing purposes.
+    pub(super) fn inner_for_tracing(&self) -> &VMValue {
+        &self.0
     }
 }
 
@@ -215,6 +220,18 @@ impl Value {
         Self(VMValue::struct_(Struct::pack([
             Self::uid(id.into()).0,
             Self::balance(amount).0,
+        ])))
+    }
+
+    /// Constructs a `sui::funds_accumulator::Withdrawal` value
+    pub fn funds_accumulator_withdrawal(owner: AccountAddress, limit: U256) -> Self {
+        // public struct Withdrawal has drop {
+        //     owner: address,
+        //     limit: u256,
+        // }
+        Self(VMValue::struct_(Struct::pack([
+            VMValue::address(owner),
+            VMValue::u256(limit),
         ])))
     }
 

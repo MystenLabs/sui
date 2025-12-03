@@ -6,9 +6,9 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 
 use crate::{
-    base_committer::base_committer_builder::BaseCommitterBuilder, block::BlockAPI,
-    commit::LeaderStatus, context::Context, dag_state::DagState, storage::mem_store::MemStore,
-    test_dag_parser::parse_dag, TestBlock, VerifiedBlock,
+    TestBlock, VerifiedBlock, base_committer::base_committer_builder::BaseCommitterBuilder,
+    block::BlockAPI, commit::LeaderStatus, context::Context, dag_state::DagState,
+    storage::mem_store::MemStore, test_dag_parser::parse_dag,
 };
 
 #[tokio::test]
@@ -221,7 +221,9 @@ async fn indirect_commit() {
     if let LeaderStatus::Undecided(direct_undecided) = leader_status_wave1 {
         tracing::info!("Direct undecided leader at wave 1: {direct_undecided}");
     } else {
-        panic!("Expected LeaderStatus::Undecided for a leader in wave 1, applying a direct decicion rule, got {leader_status_wave1}");
+        panic!(
+            "Expected LeaderStatus::Undecided for a leader in wave 1, applying a direct decicion rule, got {leader_status_wave1}"
+        );
     }
 
     let leader_round_wave2 = committer.leader_round(2);
@@ -301,7 +303,9 @@ async fn indirect_skip() {
     if let LeaderStatus::Commit(commited) = leader_status_wave1 {
         tracing::info!("Direct undecided leader at wave 1: {commited}");
     } else {
-        panic!("Expected LeaderStatus::Commit for a leader in wave 1, applying a direct decicion rule, got {leader_status_wave1}");
+        panic!(
+            "Expected LeaderStatus::Commit for a leader in wave 1, applying a direct decicion rule, got {leader_status_wave1}"
+        );
     }
 
     let leader_round_wave_2 = committer.leader_round(2);

@@ -7,14 +7,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{join, stream::FuturesUnordered, StreamExt as _};
-use mysten_common::debug_fatal;
+use futures::{StreamExt as _, join, stream::FuturesUnordered};
+use mysten_common::{backoff::ExponentialBackoff, debug_fatal};
 use sui_types::{
     base_types::{AuthorityName, ConciseableName as _},
     committee::StakeUnit,
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::TransactionEffectsAPI as _,
-    error::SuiError,
+    error::{SuiError, SuiErrorKind},
     messages_consensus::ConsensusPosition,
     messages_grpc::{
         ExecutedData, PingType, RawWaitForEffectsRequest, SubmitTxResult, TxType,
@@ -23,7 +23,6 @@ use sui_types::{
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::time::{sleep, timeout};
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::instrument;
 
 use crate::{
@@ -32,13 +31,13 @@ use crate::{
     safe_client::SafeClient,
     status_aggregator::StatusAggregator,
     transaction_driver::{
+        QuorumTransactionResponse, SubmitTransactionOptions,
         error::{
-            aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
-            TransactionRequestError,
+            AggregatedEffectsDigests, TransactionDriverError, TransactionRequestError,
+            aggregate_request_errors,
         },
         metrics::TransactionDriverMetrics,
         request_retrier::RequestRetrier,
-        QuorumTransactionResponse, SubmitTransactionOptions,
     },
     validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
@@ -49,6 +48,7 @@ mod effects_certifier_tests;
 
 const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(10);
 
+const MAX_WAIT_FOR_EFFECTS_RETRY_DELAY: Duration = Duration::from_secs(2);
 pub(crate) struct EffectsCertifier {
     metrics: Arc<TransactionDriverMetrics>,
 }
@@ -58,7 +58,7 @@ impl EffectsCertifier {
         Self { metrics }
     }
 
-    #[instrument(level = "error", skip_all, err)]
+    #[instrument(level = "error", skip_all, err(level = "debug"))]
     pub(crate) async fn get_certified_finalized_effects<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
@@ -99,8 +99,13 @@ impl EffectsCertifier {
             }
         };
 
-        let mut retrier =
-            RequestRetrier::new(authority_aggregator, client_monitor, tx_type, vec![]);
+        let mut retrier = RequestRetrier::new(
+            authority_aggregator,
+            client_monitor,
+            tx_type,
+            vec![],
+            vec![],
+        );
         let ping_type = get_ping_type(&tx_digest, tx_type);
 
         // Setting this to None at first because if the full effects are already provided,
@@ -329,7 +334,7 @@ impl EffectsCertifier {
                             ping_type,
                             result: Err(()),
                         });
-                        (name, Err(SuiError::TimeoutError))
+                        (name, Err(SuiErrorKind::TimeoutError.into()))
                     }
                 }
             };
@@ -366,7 +371,9 @@ impl EffectsCertifier {
                 }) => {
                     if fast_path {
                         if tx_type != TxType::SingleWriter {
-                            tracing::warn!("Fast path is only supported for single writer transactions, name={name}");
+                            tracing::warn!(
+                                "Fast path is only supported for single writer transactions, name={name}"
+                            );
                         } else {
                             fast_path_aggregator.insert(name, ());
                         }
@@ -382,7 +389,8 @@ impl EffectsCertifier {
                         for (other_digest, other_aggregator) in effects_digest_aggregators {
                             if other_digest != effects_digest && other_aggregator.total_votes() > 0
                             {
-                                tracing::warn!(?name,
+                                tracing::warn!(
+                                    ?name,
                                     "Effects digest inconsistency detected: quorum digest {effects_digest:?} (weight {quorum_weight}), other digest {other_digest:?} (weight {})",
                                     other_aggregator.total_votes()
                                 );
@@ -578,9 +586,8 @@ impl EffectsCertifier {
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let effects_start = Instant::now();
-        let backoff = ExponentialBackoff::from_millis(100)
-            .max_delay(Duration::from_secs(2))
-            .map(jitter);
+        let backoff =
+            ExponentialBackoff::new(Duration::from_millis(100), MAX_WAIT_FOR_EFFECTS_RETRY_DELAY);
         let ping_type = raw_request.get_ping_type();
         // This loop should only retry errors that are retriable without new submission.
         for (attempt, delay) in backoff.enumerate() {
@@ -608,7 +615,7 @@ impl EffectsCertifier {
                         ping_type,
                         result: Err(()),
                     });
-                    if !matches!(e, SuiError::RpcError(_, _)) {
+                    if !matches!(e.as_inner(), SuiErrorKind::RpcError(_, _)) {
                         return Err(e);
                     }
                     tracing::trace!(
@@ -620,7 +627,7 @@ impl EffectsCertifier {
             };
             sleep(delay).await;
         }
-        Err(SuiError::TimeoutError)
+        Err(SuiErrorKind::TimeoutError.into())
     }
 
     /// Creates the final full response.

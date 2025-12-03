@@ -4,8 +4,8 @@
 use lru::LruCache;
 use parking_lot::RwLock;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+    Histogram, IntCounter, IntGauge, Registry, register_histogram_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry,
 };
 use std::collections::BTreeSet;
 use std::net::IpAddr;
@@ -123,10 +123,10 @@ impl SubmittedTransactionCache {
 
         if let Some(metadata) = inner.transactions.get_mut(digest) {
             // Track additional client addresses for resubmissions
-            if let Some(addr) = submitter_client_addr {
-                if metadata.submitter_client_addrs.insert(addr) {
-                    debug!("Added new client address {addr} for transaction {digest}");
-                }
+            if let Some(addr) = submitter_client_addr
+                && metadata.submitter_client_addrs.insert(addr)
+            {
+                debug!("Added new client address {addr} for transaction {digest}");
             }
             debug!("Transaction {digest} already tracked in submission cache");
         } else {

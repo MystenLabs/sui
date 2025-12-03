@@ -4,9 +4,9 @@
 use std::sync::Arc;
 
 use prometheus::{
+    IntGaugeVec, Opts,
     core::{Collector, Desc},
     proto::MetricFamily,
-    IntGaugeVec, Opts,
 };
 
 pub struct ColumnFamilyStatsCollector {

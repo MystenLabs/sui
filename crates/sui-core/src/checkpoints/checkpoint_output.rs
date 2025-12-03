@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::StableSyncAuthoritySigner;
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::SubmitToConsensus;
 use crate::epoch::reconfiguration::ReconfigurationInitiator;
 use async_trait::async_trait;
@@ -33,7 +33,7 @@ pub trait CheckpointOutput: Sync + Send + 'static {
 #[async_trait]
 pub trait CertifiedCheckpointOutput: Sync + Send + 'static {
     async fn certified_checkpoint_created(&self, summary: &CertifiedCheckpointSummary)
-        -> SuiResult;
+    -> SuiResult;
 }
 
 pub struct SubmitCheckpointToConsensus<T> {
@@ -153,8 +153,7 @@ impl CheckpointOutput for LogCheckpointOutput {
     ) -> SuiResult {
         trace!(
             "Including following transactions in checkpoint {}: {:?}",
-            summary.sequence_number,
-            contents
+            summary.sequence_number, contents
         );
         info!(
             "Creating checkpoint {:?} at epoch {}, sequence {}, previous digest {:?}, transactions count {}, content digest {:?}, end_of_epoch_data {:?}",

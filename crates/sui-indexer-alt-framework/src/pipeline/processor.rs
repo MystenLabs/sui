@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::time::Duration;
 
-use sui_types::full_checkpoint_content::CheckpointData;
+use backoff::ExponentialBackoff;
+use sui_types::full_checkpoint_content::Checkpoint;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -16,11 +18,19 @@ use crate::{
 };
 
 use super::IndexedCheckpoint;
+use async_trait::async_trait;
+
+/// If the processor needs to retry processing a checkpoint, it will wait this long initially.
+const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
+
+/// If the processor needs to retry processing a checkpoint, it will wait at most this long between retries.
+const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Implementors of this trait are responsible for transforming checkpoint into rows for their
 /// table. The `FANOUT` associated value controls how many concurrent workers will be used to
 /// process checkpoint information.
-pub trait Processor {
+#[async_trait]
+pub trait Processor: Send + Sync + 'static {
     /// Used to identify the pipeline in logs and metrics.
     const NAME: &'static str;
 
@@ -31,7 +41,18 @@ pub trait Processor {
     type Value: Send + Sync + 'static;
 
     /// The processing logic for turning a checkpoint into rows of the table.
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>>;
+    ///
+    /// All errors returned from this method are treated as transient and will be retried
+    /// indefinitely with exponential backoff.
+    ///
+    /// If you encounter a permanent error that will never succeed on retry (e.g., invalid data
+    /// format, unsupported protocol version), you should panic! This stops the indexer and alerts
+    /// operators that manual intervention is required. Do not return permanent errors as they will
+    /// cause infinite retries and block the pipeline.
+    ///
+    /// For transient errors (e.g., network issues, rate limiting), simply return the error and
+    /// let the framework retry automatically.
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>>;
 }
 
 /// The processor task is responsible for taking checkpoint data and breaking it down into rows
@@ -41,11 +62,10 @@ pub trait Processor {
 /// Each worker processes a checkpoint into rows and sends them on to the committer using the `tx`
 /// channel.
 ///
-/// The task will shutdown if the `cancel` token is cancelled, or if any of the workers encounters
-/// an error -- there is no retry logic at this level.
-pub(super) fn processor<P: Processor + Send + Sync + 'static>(
+/// The task will shutdown if the `cancel` token is cancelled.
+pub(super) fn processor<P: Processor>(
     processor: Arc<P>,
-    rx: mpsc::Receiver<Arc<CheckpointData>>,
+    rx: mpsc::Receiver<Arc<Checkpoint>>,
     tx: mpsc::Sender<IndexedCheckpoint<P>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -81,13 +101,29 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
                         .with_label_values(&[P::NAME])
                         .start_timer();
 
-                    let values = processor.process(&checkpoint)?;
+                    // Retry processing with exponential backoff - treat all errors as transient
+                    let backoff = ExponentialBackoff {
+                        initial_interval: INITIAL_RETRY_INTERVAL,
+                        current_interval: INITIAL_RETRY_INTERVAL,
+                        max_interval: MAX_RETRY_INTERVAL,
+                        max_elapsed_time: None, // Retry indefinitely
+                        ..Default::default()
+                    };
+
+                    let values = backoff::future::retry(backoff, || async {
+                        processor
+                            .process(&checkpoint)
+                            .await
+                            .map_err(backoff::Error::transient)
+                    })
+                    .await?;
+
                     let elapsed = guard.stop_and_record();
 
-                    let epoch = checkpoint.checkpoint_summary.epoch;
-                    let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
-                    let tx_hi = checkpoint.checkpoint_summary.network_total_transactions;
-                    let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+                    let epoch = checkpoint.summary.epoch;
+                    let cp_sequence_number = checkpoint.summary.sequence_number;
+                    let tx_hi = checkpoint.summary.network_total_transactions;
+                    let timestamp_ms = checkpoint.summary.timestamp_ms;
 
                     debug!(
                         pipeline = P::NAME,
@@ -142,8 +178,15 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
 #[cfg(test)]
 mod tests {
     use crate::metrics::IndexerMetrics;
-    use std::{sync::Arc, time::Duration};
-    use sui_types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
+    use anyhow::ensure;
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicU32, Ordering},
+        },
+        time::Duration,
+    };
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use tokio::{sync::mpsc, time::timeout};
     use tokio_util::sync::CancellationToken;
 
@@ -155,18 +198,19 @@ mod tests {
 
     pub struct DataPipeline;
 
+    #[async_trait]
     impl Processor for DataPipeline {
         const NAME: &'static str = "data";
 
         type Value = StoredData;
 
-        fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+        async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
             Ok(vec![
                 StoredData {
-                    value: checkpoint.checkpoint_summary.sequence_number * 10 + 1,
+                    value: checkpoint.summary.sequence_number * 10 + 1,
                 },
                 StoredData {
-                    value: checkpoint.checkpoint_summary.sequence_number * 10 + 2,
+                    value: checkpoint.summary.sequence_number * 10 + 2,
                 },
             ])
         }
@@ -175,15 +219,15 @@ mod tests {
     #[tokio::test]
     async fn test_processor_process_checkpoints() {
         // Build two checkpoints using the test builder
-        let checkpoint1 = Arc::new(
-            TestCheckpointDataBuilder::new(1)
+        let checkpoint1: Arc<Checkpoint> = Arc::new(
+            TestCheckpointBuilder::new(1)
                 .with_epoch(2)
                 .with_network_total_transactions(5)
                 .with_timestamp_ms(1000000001)
                 .build_checkpoint(),
         );
-        let checkpoint2 = Arc::new(
-            TestCheckpointDataBuilder::new(2)
+        let checkpoint2: Arc<Checkpoint> = Arc::new(
+            TestCheckpointBuilder::new(2)
                 .with_epoch(2)
                 .with_network_total_transactions(10)
                 .with_timestamp_ms(1000000002)
@@ -244,8 +288,10 @@ mod tests {
     #[tokio::test]
     async fn test_processor_does_not_process_checkpoint_after_cancellation() {
         // Build two checkpoints using the test builder
-        let checkpoint1 = Arc::new(TestCheckpointDataBuilder::new(1).build_checkpoint());
-        let checkpoint2 = Arc::new(TestCheckpointDataBuilder::new(2).build_checkpoint());
+        let checkpoint1: Arc<Checkpoint> =
+            Arc::new(TestCheckpointBuilder::new(1).build_checkpoint());
+        let checkpoint2: Arc<Checkpoint> =
+            Arc::new(TestCheckpointBuilder::new(2).build_checkpoint());
 
         // Set up the processor, channels, and metrics
         let processor = Arc::new(DataPipeline);
@@ -285,39 +331,50 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_processor_error_failed_to_process_checkpoint() {
-        // Create a pipeline that succeeds for checkpoint 1 but fails for others
-        struct ErrorPipeline;
-        impl Processor for ErrorPipeline {
-            const NAME: &'static str = "error";
+    async fn test_processor_error_retry_behavior() {
+        struct RetryTestPipeline {
+            attempt_count: Arc<AtomicU32>,
+        }
+
+        #[async_trait]
+        impl Processor for RetryTestPipeline {
+            const NAME: &'static str = "retry_test";
             type Value = StoredData;
-            fn process(
+            async fn process(
                 &self,
-                checkpoint: &Arc<CheckpointData>,
+                checkpoint: &Arc<Checkpoint>,
             ) -> anyhow::Result<Vec<Self::Value>> {
-                if checkpoint.checkpoint_summary.sequence_number == 1 {
+                if checkpoint.summary.sequence_number == 1 {
                     Ok(vec![])
                 } else {
-                    anyhow::bail!("Test error");
+                    let attempt = self.attempt_count.fetch_add(1, Ordering::Relaxed) + 1;
+                    ensure!(attempt > 2, "Transient error - attempt {attempt}");
+                    Ok(vec![])
                 }
             }
         }
 
         // Set up test data
-        let checkpoint1 = Arc::new(TestCheckpointDataBuilder::new(1).build_checkpoint());
-        let checkpoint2 = Arc::new(TestCheckpointDataBuilder::new(2).build_checkpoint());
+        let checkpoint1: Arc<Checkpoint> =
+            Arc::new(TestCheckpointBuilder::new(1).build_checkpoint());
+        let checkpoint2: Arc<Checkpoint> =
+            Arc::new(TestCheckpointBuilder::new(2).build_checkpoint());
 
-        // Set up the processor, channels, and metrics
-        let processor = Arc::new(ErrorPipeline);
-        let (data_tx, data_rx) = mpsc::channel(1);
-        let (indexed_tx, mut indexed_rx) = mpsc::channel(1);
+        let attempt_count = Arc::new(AtomicU32::new(0));
+        let processor = Arc::new(RetryTestPipeline {
+            attempt_count: attempt_count.clone(),
+        });
+
+        let (data_tx, data_rx) = mpsc::channel(2);
+        let (indexed_tx, mut indexed_rx) = mpsc::channel(2);
+
         let metrics = IndexerMetrics::new(None, &Default::default());
         let cancel = CancellationToken::new();
 
         // Spawn the processor task
         let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
 
-        // Send and verify first checkpoint (should succeed)
+        // Send and verify first checkpoint (should succeed immediately)
         data_tx.send(checkpoint1.clone()).await.unwrap();
         let indexed1 = indexed_rx
             .recv()
@@ -325,17 +382,20 @@ mod tests {
             .expect("Should receive first IndexedCheckpoint");
         assert_eq!(indexed1.watermark.checkpoint_hi_inclusive, 1);
 
-        // Send second checkpoint (should fail and cause processor to stop)
+        // Send second checkpoint (should fail twice, then succeed on 3rd attempt)
         data_tx.send(checkpoint2.clone()).await.unwrap();
 
-        // Verify that the channel is closed after the error
-        let next_result = indexed_rx.recv().await;
-        assert!(
-            next_result.is_none(),
-            "Channel should be closed after processing error"
-        );
+        let indexed2 = indexed_rx
+            .recv()
+            .await
+            .expect("Should receive second IndexedCheckpoint after retries");
+        assert_eq!(indexed2.watermark.checkpoint_hi_inclusive, 2);
+
+        // Verify that exactly 3 attempts were made (2 failures + 1 success)
+        assert_eq!(attempt_count.load(Ordering::Relaxed), 3);
 
         // Clean up
+        drop(data_tx);
         let _ = handle.await;
     }
 
@@ -346,26 +406,27 @@ mod tests {
     async fn test_processor_concurrency() {
         // Create a processor that simulates work by sleeping
         struct SlowProcessor;
+        #[async_trait]
         impl Processor for SlowProcessor {
             const NAME: &'static str = "slow";
             const FANOUT: usize = 3; // Small fanout for testing
             type Value = StoredData;
 
-            fn process(
+            async fn process(
                 &self,
-                checkpoint: &Arc<CheckpointData>,
+                checkpoint: &Arc<Checkpoint>,
             ) -> anyhow::Result<Vec<Self::Value>> {
                 // Simulate work by sleeping
                 std::thread::sleep(std::time::Duration::from_millis(500));
                 Ok(vec![StoredData {
-                    value: checkpoint.checkpoint_summary.sequence_number,
+                    value: checkpoint.summary.sequence_number,
                 }])
             }
         }
 
         // Set up test data
-        let checkpoints: Vec<_> = (0..5)
-            .map(|i| Arc::new(TestCheckpointDataBuilder::new(i).build_checkpoint()))
+        let checkpoints: Vec<Arc<Checkpoint>> = (0..5)
+            .map(|i| Arc::new(TestCheckpointBuilder::new(i).build_checkpoint()))
             .collect();
 
         // Set up channels and metrics

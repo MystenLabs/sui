@@ -14,13 +14,13 @@ pub struct ShuffleCommandInputs {
 impl ShuffleCommandInputs {
     fn shuffle_command(&mut self, command: &mut Command) {
         match command {
-            Command::MakeMoveVec(_, ref mut args)
-            | Command::MergeCoins(_, ref mut args)
-            | Command::SplitCoins(_, ref mut args)
-            | Command::TransferObjects(ref mut args, _) => {
+            Command::MakeMoveVec(_, args)
+            | Command::MergeCoins(_, args)
+            | Command::SplitCoins(_, args)
+            | Command::TransferObjects(args, _) => {
                 args.shuffle(&mut self.rng);
             }
-            Command::MoveCall(ref mut pt) => pt.arguments.shuffle(&mut self.rng),
+            Command::MoveCall(pt) => pt.arguments.shuffle(&mut self.rng),
             Command::Publish(_, _) => (),
             Command::Upgrade(_, _, _, _) => (),
         }
