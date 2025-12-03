@@ -610,17 +610,6 @@ impl CommitFinalizer {
                 continue;
             }
             let curr_block_state = blocks_map.get(&curr_block_ref).unwrap_or_else(|| panic!("Block {curr_block_ref} is either incorrectly gc'ed or failed to be recovered after crash.")).read();
-            // Do not count votes, when there can be GC'ed blocks in the path from the pending block to the current block.
-            // Because the GC'ed block might have voted on the pending block and rejected some of the pending transactions,
-            // we cannot assume current block is voting to accept transactions from the pending block.
-            //
-            // This check is more conservative than necessary, because GC round at current block is decided
-            // by the leader round of the previous commit. But skipping votes unnecessarily is still correct,
-            // as long as it is deterministic. Also GC depths in most environments
-            // are large enough to not unnecessarily skip valid accept votes.
-            let skip_votes = pending_block_commit_index < curr_block_state.commit_index
-                && pending_block_ref.round + context.protocol_config.consensus_gc_depth()
-                    <= curr_block_state.leader_round;
             // Skip counting votes from the block if it has been marked to be ignored.
             if ignored.insert(curr_block_ref) {
                 // Skip collecting votes from origin descendants of current block.
@@ -632,21 +621,6 @@ impl CommitFinalizer {
                 //
                 // See append_origin_descendants_from_last_commit() for more details.
                 ignored.extend(curr_block_state.origin_descendants.iter());
-                // Skip counting votes from current block if the votes on pending block could have been
-                // casted by an earlier block from the same origin.
-                // Note: if the current block casts reject votes on transactions in the pending block,
-                // it can be assumed that accept votes are also casted to other transactions in the pending block.
-                // But we choose to skip counting the accept votes in this edge case for simplicity.
-                if context.protocol_config.consensus_skip_gced_accept_votes() && skip_votes {
-                    let hostname = &context.committee.authority(curr_block_ref.author).hostname;
-                    context
-                        .metrics
-                        .node_metrics
-                        .finalizer_skipped_voting_blocks
-                        .with_label_values(&[hostname])
-                        .inc();
-                    continue;
-                }
                 // Get reject votes from current block to the pending block.
                 let curr_block_reject_votes = curr_block_state
                     .reject_votes
