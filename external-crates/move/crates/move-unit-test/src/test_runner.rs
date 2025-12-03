@@ -344,7 +344,9 @@ impl SharedTestingConfig {
             arguments,
         );
 
-        if !self.report_stacktrace_on_abort && let Err(err) = &mut return_result {
+        if !self.report_stacktrace_on_abort
+            && let Err(err) = &mut return_result
+        {
             err.remove_exec_state();
         }
 

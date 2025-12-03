@@ -7,11 +7,13 @@ use crate::{
     execution::{dispatch_tables::VMDispatchTables, vm::MoveVM},
     jit,
     natives::{extensions::NativeExtensions, functions::NativeFunctions},
+    runtime::telemetry::{MoveRuntimeTelemetry, TelemetryContext},
     shared::{
         gas::GasMeter,
         linkage_context::LinkageContext,
         types::{OriginalId, VersionId},
     },
+    try_block,
     validation::{validate_for_publish, validate_for_vm_execution, verification::ast as verif_ast},
 };
 
@@ -21,8 +23,8 @@ use move_vm_config::runtime::VMConfig;
 
 use std::{collections::BTreeMap, sync::Arc};
 
-// FIXME(cswords): This is only public for testing...
-pub mod package_resolution;
+pub(crate) mod package_resolution;
+pub(crate) mod telemetry;
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -33,6 +35,8 @@ pub struct MoveRuntime {
     natives: Arc<NativeFunctions>,
     /// The Move VM's configuration.
     vm_config: Arc<VMConfig>,
+    /// Telemetry
+    telemetry: Arc<TelemetryContext>,
 }
 
 impl MoveRuntime {
@@ -40,22 +44,17 @@ impl MoveRuntime {
         let natives = Arc::new(natives);
         let vm_config = Arc::new(vm_config);
         let cache = Arc::new(MoveCache::new(vm_config.clone()));
+        let telemetry = Arc::new(TelemetryContext::new());
         Self {
             cache,
             natives,
             vm_config,
+            telemetry,
         }
     }
 
     pub fn new_with_default_config(natives: NativeFunctions) -> Self {
-        let natives = Arc::new(natives);
-        let vm_config = Arc::new(VMConfig::default());
-        let cache = Arc::new(MoveCache::new(vm_config.clone()));
-        Self {
-            cache,
-            natives,
-            vm_config,
-        }
+        Self::new(natives, VMConfig::default())
     }
 
     /// Retrieive the Move VM Natives associated with the Runtime
@@ -73,6 +72,12 @@ impl MoveRuntime {
         self.cache.clone()
     }
 
+    /// Retrieive the Move Telemetry associated with the Runtime
+    /// This may block if other threads are writing to the telemetry informtaion.
+    pub fn get_telemetry_report(&self) -> MoveRuntimeTelemetry {
+        self.telemetry.to_runtime_telemetry(&self.cache)
+    }
+
     /// Resolve a package, loading it if necessary. This will use the provided `ModuleResolver` to
     /// fetch the package if it is not already cached.
     /// If there is an error loading or verifying the package, an error is returned.
@@ -81,12 +86,15 @@ impl MoveRuntime {
         module_resolver: impl ModuleResolver,
         package_key: VersionId,
     ) -> VMResult<ResolvedPackageResult> {
-        package_resolution::resolve_package(
-            module_resolver,
-            &self.cache,
-            &self.natives,
-            package_key,
-        )
+        self.telemetry.with_transaction_telemetry(|txn_telemetry| {
+            package_resolution::resolve_package(
+                module_resolver,
+                txn_telemetry,
+                &self.cache,
+                &self.natives,
+                package_key,
+            )
+        })
     }
 
     /// Makes an Execution Instance for running a Move function invocation.
@@ -113,39 +121,50 @@ impl MoveRuntime {
         link_context: LinkageContext,
         native_extensions: NativeExtensions<'extensions>,
     ) -> VMResult<MoveVM<'extensions>> {
-        let all_packages = link_context.all_packages()?;
+        self.telemetry.with_transaction_telemetry(|txn_telemetry| {
+            let total_timer = txn_telemetry.make_timer(crate::runtime::telemetry::TimerKind::Total);
 
-        let packages = package_resolution::resolve_packages(
-            package_store,
-            &self.cache,
-            &self.natives,
-            all_packages,
-        )?;
-        let validation_packages = packages
-            .iter()
-            .map(|(id, pkg)| (*id, &*pkg.verified))
-            .collect();
-        validate_for_vm_execution(validation_packages)?;
-        let runtime_packages = packages
-            .into_values()
-            .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
-            .collect::<BTreeMap<OriginalId, Arc<jit::execution::ast::Package>>>();
+            let instance = try_block! {
+                let all_packages = link_context.all_packages()?;
+                let packages = package_resolution::resolve_packages(
+                    package_store,
+                    txn_telemetry,
+                    &self.cache,
+                    &self.natives,
+                    all_packages,
+                )?;
 
-        let virtual_tables = VMDispatchTables::new(
-            self.vm_config.clone(),
-            self.cache.interner.clone(),
-            runtime_packages,
-        )?;
+                let validation_packages = packages
+                    .iter()
+                    .map(|(id, pkg)| (*id, &*pkg.verified))
+                    .collect();
+                validate_for_vm_execution(validation_packages)?;
 
-        // Called and checked linkage, etc.
-        let instance = MoveVM {
-            virtual_tables,
-            vm_config: self.vm_config.clone(),
-            interner: self.cache.interner.clone(),
-            link_context,
-            native_extensions: native_extensions.clone(),
-        };
-        Ok(instance)
+                let runtime_packages = packages
+                    .into_values()
+                    .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
+                    .collect::<BTreeMap<OriginalId, Arc<jit::execution::ast::Package>>>();
+
+                let virtual_tables = VMDispatchTables::new(
+                    self.vm_config.clone(),
+                    self.cache.interner.clone(),
+                    runtime_packages,
+                )?;
+
+                // Called and checked linkage, etc.
+                let instance = MoveVM {
+                    virtual_tables,
+                    vm_config: self.vm_config.clone(),
+                    interner: self.cache.interner.clone(),
+                    link_context,
+                    native_extensions: native_extensions.clone(),
+                    telemetry: self.telemetry.clone(),
+                };
+                Ok(instance)
+            };
+            txn_telemetry.report_time(total_timer);
+            instance
+        })
     }
 
     /// Publish a package.
@@ -171,58 +190,78 @@ impl MoveRuntime {
         _gas_meter: &mut impl GasMeter,
         native_extensions: NativeExtensions<'extensions>,
     ) -> VMResult<(verif_ast::Package, MoveVM<'extensions>)> {
-        let version_id = pkg.version_id;
-        dbg_println!("\n\nPublishing module at {version_id} (=> {original_id})\n\n");
+        let vm_telemetry = self.telemetry.clone();
+        self.telemetry.with_transaction_telemetry(|txn_telemetry| {
+            let total_timer = txn_telemetry.make_timer(crate::runtime::telemetry::TimerKind::Total);
 
-        let link_context = LinkageContext::new(pkg.linkage_table.clone());
+            let result = try_block! {
+                let version_id = pkg.version_id;
+                dbg_println!("\n\nPublishing module at {version_id} (=> {original_id})\n\n");
 
-        // Verify a provided serialized package. This will validate the provided serialized
-        // package, including attempting to jit-compile the package and verify linkage with its
-        // dependencies in the provided linkage context. This returns the loaded package in the
-        // case an `init` function or similar will need to run. This will load the dependencies
-        // into the package cache.
-        let pkg_dependencies = package_resolution::resolve_packages(
-            package_store,
-            &self.cache,
-            &self.natives,
-            link_context.all_package_dependencies_except(pkg.version_id)?,
-        )?;
-        let verified_pkg = {
-            let deps = pkg_dependencies
-                .iter()
-                .map(|(id, pkg)| (*id, &*pkg.verified))
-                .collect();
-            validate_for_publish(&self.natives, &self.vm_config, original_id, pkg, deps)
-        }?;
-        dbg_println!("\n\nVerified package\n\n");
+                let link_context = LinkageContext::new(pkg.linkage_table.clone());
 
-        let published_package = package_resolution::jit_package_for_publish(
-            &self.cache,
-            &self.natives,
-            verified_pkg.clone(),
-        )?;
+                // Verify a provided serialized package. This will validate the provided serialized
+                // package, including attempting to jit-compile the package and verify linkage with
+                // its dependencies in the provided linkage context. This returns the loaded
+                // package in the case an `init` function or similar will need to run. This will
+                // load the dependencies
+                // into the package cache.
+                let pkg_dependencies = package_resolution::resolve_packages(
+                    package_store,
+                    txn_telemetry,
+                    &self.cache,
+                    &self.natives,
+                    link_context.all_package_dependencies_except(pkg.version_id)?,
+                )?;
+                let valdation_timer = txn_telemetry.make_timer_with_count(
+                    crate::runtime::telemetry::TimerKind::Validation,
+                    pkg_dependencies.len() as u64 + 1,
+                );
+                let verified_pkg = {
+                    let deps = pkg_dependencies
+                        .iter()
+                        .map(|(id, pkg)| (*id, &*pkg.verified))
+                        .collect();
+                    validate_for_publish(&self.natives, &self.vm_config, original_id, pkg, deps)
+                };
+                txn_telemetry.report_time(valdation_timer);
+                let verified_pkg = verified_pkg?;
+                dbg_println!("\n\nVerified package\n\n");
 
-        // Generates  a one-off package for executing `init` functions.
-        let runtime_packages = pkg_dependencies
-            .into_values()
-            .chain([published_package])
-            .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
-            .collect::<BTreeMap<OriginalId, Arc<jit::execution::ast::Package>>>();
+                let published_package = package_resolution::jit_package_for_publish(
+                    txn_telemetry,
+                    &self.cache,
+                    &self.natives,
+                    verified_pkg.clone(),
+                )?;
 
-        let virtual_tables = VMDispatchTables::new(
-            self.vm_config.clone(),
-            self.cache.interner.clone(),
-            runtime_packages,
-        )?;
+                // Generates  a one-off package for executing `init` functions.
+                let runtime_packages = pkg_dependencies
+                    .into_values()
+                    .chain([published_package])
+                    .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
+                    .collect::<BTreeMap<OriginalId, Arc<jit::execution::ast::Package>>>();
 
-        // Called and checked linkage, etc.
-        let instance = MoveVM {
-            virtual_tables,
-            vm_config: self.vm_config.clone(),
-            interner: self.cache.interner.clone(),
-            link_context,
-            native_extensions: native_extensions.clone(),
-        };
-        Ok((verified_pkg, instance))
+                let virtual_tables = VMDispatchTables::new(
+                    self.vm_config.clone(),
+                    self.cache.interner.clone(),
+                    runtime_packages,
+                )?;
+
+                // Called and checked linkage, etc.
+                let instance = MoveVM {
+                    virtual_tables,
+                    telemetry: vm_telemetry,
+                    vm_config: self.vm_config.clone(),
+                    interner: self.cache.interner.clone(),
+                    link_context,
+                    native_extensions: native_extensions.clone(),
+                };
+
+                Ok((verified_pkg, instance))
+            };
+            txn_telemetry.report_time(total_timer);
+            result
+        })
     }
 }

@@ -11,6 +11,7 @@ use crate::{
     cache::move_cache::{self, MoveCache, Package, ResolvedPackageResult},
     dbg_println, jit,
     natives::functions::NativeFunctions,
+    runtime::telemetry::TransactionTelemetryContext,
     shared::{logging::expect_no_verification_errors, types::VersionId},
     validation::{validate_package, verification},
 };
@@ -20,7 +21,6 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
-use tracing::error;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -29,13 +29,20 @@ use std::{
 
 // Retrieves a package from the cache, attempting to load it from the data store if
 // it is not present.
-pub fn resolve_package(
+pub(crate) fn resolve_package(
     store: impl ModuleResolver,
+    telemetry: &mut TransactionTelemetryContext,
     cache: &MoveCache,
     natives: &NativeFunctions,
     package_to_read: VersionId,
 ) -> VMResult<ResolvedPackageResult> {
-    let mut packages = resolve_packages(store, cache, natives, BTreeSet::from([package_to_read]))?;
+    let mut packages = resolve_packages(
+        store,
+        telemetry,
+        cache,
+        natives,
+        BTreeSet::from([package_to_read]),
+    )?;
 
     if packages.is_empty() {
         return Ok(ResolvedPackageResult::NotFound);
@@ -57,7 +64,9 @@ pub fn resolve_package(
         "More than one package was loaded when only one was requested"
     );
     if !packages.is_empty() {
-        error!("[VM] More than one package was loaded when only one was requested: {packages:#?}");
+        tracing::error!(
+            "[VM] More than one package was loaded when only one was requested: {packages:#?}"
+        );
         return Err(
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                 .with_message(
@@ -72,8 +81,9 @@ pub fn resolve_package(
 
 // Retrieves a set of packages from the cache, attempting to load them from the data store if
 // they are not present.
-pub fn resolve_packages(
+pub(crate) fn resolve_packages(
     store: impl ModuleResolver,
+    telemetry: &mut TransactionTelemetryContext,
     cache: &MoveCache,
     natives: &NativeFunctions,
     packages_to_read: BTreeSet<VersionId>,
@@ -99,12 +109,13 @@ pub fn resolve_packages(
     // NB: packages can be loaded out of order here (e.g., in parallel) if so desired.
     for pkg in load_and_verify_packages(
         store,
+        telemetry,
         &cache.vm_config,
         natives,
         allow_loading_failure,
         &pkgs_to_cache,
     )? {
-        let pkg = jit_and_cache_package(cache, natives, pkg)?;
+        let pkg = jit_and_cache_package(telemetry, cache, natives, pkg)?;
         cached_packages.insert(pkg.verified.version_id, pkg);
     }
 
@@ -119,28 +130,41 @@ pub fn resolve_packages(
 
 // Read the package from the data store, deserialize it, and verify it (internally).
 // NB: Does not perform cyclic dependency verification or linkage checking.
-pub fn load_and_verify_packages(
+pub(crate) fn load_and_verify_packages(
     store: impl ModuleResolver,
+    telemetry: &mut TransactionTelemetryContext,
     vm_config: &VMConfig,
     natives: &NativeFunctions,
     allow_loading_failure: bool,
     packages_to_read: &BTreeSet<VersionId>,
 ) -> VMResult<Vec<verification::ast::Package>> {
     let packages = packages_to_read.iter().cloned().collect::<Vec<_>>();
+    let load_timer = telemetry.make_timer_with_count(
+        crate::runtime::telemetry::TimerKind::Load,
+        packages.len() as u64,
+    );
     let packages = match load_packages(store, &packages) {
-        Ok(packages) => packages,
-        Err(err) if allow_loading_failure => return Err(err),
+        Ok(packages) => Ok(packages),
+        Err(err) if allow_loading_failure => Err(err),
         Err(err) => {
-            error!("[VM] Error fetching packages {packages_to_read:?}");
-            return Err(expect_no_verification_errors(err));
+            tracing::error!("[VM] Error fetching packages {packages_to_read:?}");
+            Err(expect_no_verification_errors(err))
         }
     };
+    telemetry.report_time(load_timer);
+    let packages = packages?;
     // FIXME: should all packages loaded this way be linkage-checked against their defined
     // linkages as well?
-    packages
+    let validation_timer = telemetry.make_timer_with_count(
+        crate::runtime::telemetry::TimerKind::Validation,
+        packages.len() as u64,
+    );
+    let packages = packages
         .into_iter()
         .map(|pkg| validate_package(natives, vm_config, pkg))
-        .collect()
+        .collect();
+    telemetry.report_time(validation_timer);
+    packages
 }
 
 // Loads a set of packages from the data store, converting any underlying storage errors into VM errors.
@@ -183,7 +207,8 @@ fn load_packages(
 }
 
 // Retrieve a JIT-compiled package from the cache, or compile and add it to the cache.
-pub fn jit_package_for_publish(
+pub(crate) fn jit_package_for_publish(
+    telemetry: &mut TransactionTelemetryContext,
     cache: &MoveCache,
     natives: &NativeFunctions,
     verified_pkg: verification::ast::Package,
@@ -193,22 +218,24 @@ pub fn jit_package_for_publish(
         return Ok(pkg);
     }
 
+    let timer = telemetry.make_timer_with_count(crate::runtime::telemetry::TimerKind::JIT, 1);
     let runtime_pkg = jit::translate_package(
         &cache.vm_config,
         &cache.interner,
         natives,
         verified_pkg.clone(),
     )
-    .map_err(|err| err.finish(Location::Package(version_id)))?;
-
+    .map_err(|err| err.finish(Location::Package(version_id)));
+    telemetry.report_time(timer);
     Ok(Arc::new(Package::new(
         verified_pkg.into(),
-        runtime_pkg.into(),
+        runtime_pkg?.into(),
     )))
 }
 
 // Retrieve a JIT-compiled package from the cache, or compile and add it to the cache.
-pub fn jit_and_cache_package(
+pub(crate) fn jit_and_cache_package(
+    telemetry: &mut TransactionTelemetryContext,
     cache: &MoveCache,
     natives: &NativeFunctions,
     verified_pkg: verification::ast::Package,
@@ -221,15 +248,17 @@ pub fn jit_and_cache_package(
         return Ok(pkg);
     }
 
+    let timer = telemetry.make_timer_with_count(crate::runtime::telemetry::TimerKind::JIT, 1);
     let runtime_pkg = jit::translate_package(
         &cache.vm_config,
         &cache.interner,
         natives,
         verified_pkg.clone(),
     )
-    .map_err(|err| err.finish(Location::Package(version_id)))?;
+    .map_err(|err| err.finish(Location::Package(version_id)));
+    telemetry.report_time(timer);
 
-    cache.add_to_cache(version_id, verified_pkg, runtime_pkg);
+    cache.add_to_cache(version_id, verified_pkg, runtime_pkg?);
 
     cache.cached_package_at(version_id).ok_or_else(|| {
         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)

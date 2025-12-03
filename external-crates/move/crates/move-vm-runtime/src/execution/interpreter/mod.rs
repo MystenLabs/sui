@@ -10,7 +10,9 @@ use crate::{
     },
     jit::execution::ast::{Function, Type},
     natives::extensions::NativeContextExtensions,
+    runtime::telemetry::TransactionTelemetryContext,
     shared::{gas::GasMeter, vm_pointer::VMPointer},
+    try_block,
 };
 use move_binary_format::errors::*;
 use move_vm_config::runtime::VMConfig;
@@ -25,6 +27,7 @@ pub(crate) mod state;
 /// function.
 pub(crate) fn run(
     vtables: &mut VMDispatchTables,
+    telemetry: &mut TransactionTelemetryContext,
     vm_config: Arc<VMConfig>,
     extensions: &mut NativeContextExtensions,
     tracer: &mut Option<VMTracer<'_>>,
@@ -33,6 +36,7 @@ pub(crate) fn run(
     ty_args: Vec<Type>,
     args: Vec<Value>,
 ) -> VMResult<Vec<Value>> {
+    let interpreter_timer = telemetry.make_timer(crate::runtime::telemetry::TimerKind::Interpreter);
     let fun_ref = function.to_ref();
     trace(tracer, |tracer| {
         tracer.enter_initial_frame(
@@ -44,37 +48,42 @@ pub(crate) fn run(
         )
     });
 
-    if fun_ref.is_native() {
-        let return_result = eval::call_native_with_args(
-            None,
-            vtables,
-            gas_meter,
-            &vm_config.runtime_limits_config,
-            extensions,
-            fun_ref,
-            &ty_args,
-            args.into(),
-        )
-        .map_err(|e| {
-            e.at_code_offset(fun_ref.index(), 0)
-                .finish(Location::Module(
-                    fun_ref.module_id(&vtables.interner).clone(),
-                ))
-        });
-        trace(tracer, |tracer| {
-            tracer.exit_initial_native_frame(&return_result, &gas_meter.remaining_gas().into())
-        });
-        return_result.map(|values| values.into_iter().collect())
-    } else {
-        let call_stack = CallStack::new(function, ty_args, args).map_err(|e| {
-            e.at_code_offset(fun_ref.index(), 0)
-                .finish(Location::Module(
-                    fun_ref.module_id(&vtables.interner).clone(),
-                ))
-        })?;
-        let state = MachineState::new(Arc::clone(&vtables.interner), call_stack);
-        eval::run(state, vtables, vm_config, extensions, tracer, gas_meter)
-    }
+    let result = try_block! {
+        if fun_ref.is_native() {
+            let return_result = eval::call_native_with_args(
+                None,
+                vtables,
+                gas_meter,
+                &vm_config.runtime_limits_config,
+                extensions,
+                fun_ref,
+                &ty_args,
+                args.into(),
+            )
+            .map_err(|e| {
+                e.at_code_offset(fun_ref.index(), 0)
+                    .finish(Location::Module(
+                        fun_ref.module_id(&vtables.interner).clone(),
+                    ))
+            });
+            trace(tracer, |tracer| {
+                tracer.exit_initial_native_frame(&return_result, &gas_meter.remaining_gas().into())
+            });
+            return_result.map(|values| values.into_iter().collect())
+        } else {
+            let call_stack = CallStack::new(function, ty_args, args).map_err(|e| {
+                e.at_code_offset(fun_ref.index(), 0)
+                    .finish(Location::Module(
+                        fun_ref.module_id(&vtables.interner).clone(),
+                    ))
+            })?;
+            let state = MachineState::new(Arc::clone(&vtables.interner), call_stack);
+            eval::run(state, vtables, vm_config, extensions, tracer, gas_meter)
+        }
+    };
+
+    telemetry.report_time(interpreter_timer);
+    result
 }
 
 macro_rules! set_err_info {

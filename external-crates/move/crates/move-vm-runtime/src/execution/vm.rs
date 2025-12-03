@@ -4,15 +4,22 @@
 use crate::{
     cache::identifier_interner::IdentifierInterner,
     dbg_println,
-    execution::{dispatch_tables::VMDispatchTables, interpreter, values::Value},
+    execution::{
+        dispatch_tables::{IntraPackageKey, VMDispatchTables, VirtualTableKey},
+        interpreter,
+        tracing::tracer::VMTracer,
+        values::Value,
+    },
     jit::execution::ast::{Function, Type},
     natives::extensions::NativeExtensions,
+    runtime::telemetry::{TelemetryContext, TransactionTelemetryContext},
     shared::{
         gas::GasMeter,
         linkage_context::LinkageContext,
         types::{DefiningTypeId, OriginalId},
         vm_pointer::VMPointer,
     },
+    try_block,
 };
 use move_binary_format::{
     errors::{Location, PartialVMError, VMError, VMResult},
@@ -28,11 +35,6 @@ use move_core_types::{
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::runtime::VMConfig;
 use std::sync::Arc;
-
-use super::{
-    dispatch_tables::{IntraPackageKey, VirtualTableKey},
-    tracing::tracer::VMTracer,
-};
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -55,6 +57,8 @@ pub struct MoveVM<'extensions> {
     pub(crate) vm_config: Arc<VMConfig>,
     /// The Move VM's interner.
     pub(crate) interner: Arc<IdentifierInterner>,
+    /// The Move Runtime telemetry
+    pub(crate) telemetry: Arc<TelemetryContext>,
 }
 
 pub(crate) struct MoveVMFunction {
@@ -315,28 +319,41 @@ impl<'extensions> MoveVM<'extensions> {
         gas_meter: &mut impl GasMeter,
         bypass_declared_entry_check: bool,
     ) -> VMResult<Vec<Value>> {
-        // Find the function definition
-        let MoveVMFunction {
-            function,
-            parameters: _,
-            return_type: _,
-        } = self.find_function(original_id, function_name, &type_arguments)?;
+        let telemetry = Arc::clone(&self.telemetry);
+        telemetry.with_transaction_telemetry(|txn_telemetry| {
+            let execution_timer =
+                txn_telemetry.make_timer(crate::runtime::telemetry::TimerKind::Execution);
 
-        if !bypass_declared_entry_check && !function.to_ref().is_entry {
-            return Err(PartialVMError::new(
-                StatusCode::EXECUTE_ENTRY_FUNCTION_CALLED_ON_NON_ENTRY_FUNCTION,
-            )
-            .finish(Location::Module(function.module_id(&self.interner))));
-        }
+            let result = try_block! {
+                // Find the function definition
+                let MoveVMFunction {
+                    function,
+                    parameters: _,
+                    return_type: _,
+                } = self.find_function(original_id, function_name, &type_arguments)?;
 
-        // execute the function
-        self.execute_function_impl(
-            function,
-            type_arguments,
-            args,
-            &mut tracer.map(|tracer| VMTracer::new(tracer, self.interner.clone())),
-            gas_meter,
-        )
+                if !bypass_declared_entry_check && !function.to_ref().is_entry {
+                    return Err(PartialVMError::new(
+                        StatusCode::EXECUTE_ENTRY_FUNCTION_CALLED_ON_NON_ENTRY_FUNCTION,
+                    )
+                    .finish(Location::Module(function.module_id(&self.interner))));
+                }
+
+                // execute the function
+                self.execute_function_impl(
+                    txn_telemetry,
+                    &mut tracer.map(|tracer| VMTracer::new(tracer, self.interner.clone())),
+                    gas_meter,
+                    function,
+                    type_arguments,
+                    args,
+                )
+            };
+
+            txn_telemetry.report_time(execution_timer);
+
+            result
+        })
     }
 
     /// Find the function definition int the specified module and return the information required
@@ -393,14 +410,16 @@ impl<'extensions> MoveVM<'extensions> {
     /// interpreter, and serializing the return value(s).
     fn execute_function_impl(
         &mut self,
+        txn_telemetry: &mut TransactionTelemetryContext,
+        tracer: &mut Option<VMTracer<'_>>,
+        gas_meter: &mut impl GasMeter,
         func: VMPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
-        tracer: &mut Option<VMTracer<'_>>,
-        gas_meter: &mut impl GasMeter,
     ) -> VMResult<Vec<Value>> {
         interpreter::run(
             &mut self.virtual_tables,
+            txn_telemetry,
             self.vm_config.clone(),
             &mut self.native_extensions.write(),
             tracer,
