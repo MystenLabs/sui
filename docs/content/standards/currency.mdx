@@ -1,6 +1,6 @@
 ---
 title: Currency Standard
-description: The Sui Currency Standard enables you to create a broad range of fungible tokens on the Sui network using either the legacy coin creation or the centralized coin registry system. 
+description: The Sui Currency Standard enables you to create a broad range of fungible tokens on the Sui network using either the legacy coin creation or the centralized coin registry system.
 sidebar_label: Currency
 keywords: [ sui Currency Standard, erc-20, erc-20 equivalent, creating coins, Currency Standard, fungible tokens, fungible token standard, treasury capability, regulated coins, denylist object, coin registry, create coin with SDK, use SDK to create coin, mint coin, minting coins, currency registry ]
 pagination_prev: null
@@ -8,11 +8,11 @@ pagination_prev: null
 
 :::tip
 
-The Coin and Currency standards are both used to create fungible tokens. However, they use different creation methods and store metadata in a different type of object. 
+The Coin and Currency standards are both used to create fungible tokens. However, they use different creation methods and store metadata in a different type of object.
 
-Coin creates assets using `coin::create_currency` while Currency uses `sui::coin_registry`.
+Coin creates assets using `coin::create_currency` while Currency uses `coin_registry::new_currency` and `coin_registry::new_currency_with_otw`.
 
-Coin uses `CoinMetadata` while Currency uses `Currency`. Fungible tokens created on Sui using the Coin or Currency standard are referred to as _coins_. 
+Coin uses `CoinMetadata` while Currency uses `Currency` object. Fungible tokens created on Sui using the Coin or Currency standard are referred to as _coins_.
 
 **Coin** refers to a single object wrapper for a fungible asset, while the term **currency** refers to the object that is created in `CoinRegistry`, which describes the currency properties and setup.
 
@@ -89,9 +89,10 @@ The registry supports two different coin creation flows:
 
 - **One-Time Witness (OTW) creation:**
 
-    :::caution
+    :::caution Proper creation and RPC support **requires** a second transaction to promote the currency to the registry.
 
-    OTW creation of a new coin is a two-step process. The initialization process begins with package publication. Then, a call to `finalize_registration` is needed to place the coin into the registry.
+    OTW creation of a new coin is a **two-step process**. The initialization process begins with package publication. Then, a call to `coin_registry::finalize_registration` is needed to place the coin into the registry.
+    See [Coin finalization](#coin-finalization) for more information.
 
     :::
 
@@ -111,11 +112,28 @@ Both creation methods return a `CurrencyInitializer<T>` that allows for addition
 
 ### Coin finalization
 
-A coin is not complete until after you call the `finalize` function. The function returns the `MetadataCap<T>` for metadata management. If you used an OTW to create the coin, the function sends the coin to the coin registry. Otherwise, it creates the final shared `Currency<T>` object.
+Currency created with the `new_currency` function is immediately complete after the `finalize` function is called. 
+
+:::caution OTW currencies 
+For OTW created currencies, you **must** call `finalize_registration` to promote the currency to the registry.
+:::
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize" signatureOnly />
 
-If you publish a package that uses an OTW to create a coin in the package `init` function, then a call must be made to `finalize_registration` after initialization. The function transforms the coin into a shared object.
+If you publish a package that uses an OTW to create a coin in the package `init` function, then a call must be made to `coin_registry::finalize_registration` after initialization. The function transforms the coin into a shared object.
+:::caution OTW currencies 
+For OTW created currencies, you **must** call `finalize_registration` to promote the currency to the registry.
+:::
+
+{/* Add a code sample for how to call the function */}
+
+```sh
+# Requires using the ID of the Currency object created during publishing.
+# This step is only required for OTW created currencies.
+sui client ptb
+--assign @created_currency_object_id currency_to_promote
+--move-call 0x2::coin_registry::finalize_registration @0xc currency_to_promote
+```
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize_registration" signatureOnly />
 
