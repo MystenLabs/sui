@@ -141,7 +141,7 @@ macro_rules! assert_sometimes {
     }};
 }
 
-use futures::{pin_mut, FutureExt, Stream};
+use futures::{FutureExt, Stream, pin_mut};
 use std::io::Write;
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -156,6 +156,7 @@ pub struct StructuredLog<T, W> {
 
 impl<T: std::marker::Sized + serde::Serialize, W: 'static + Write + Send> StructuredLog<T, W> {
     pub fn new(mut writer: W) -> Self {
+        #[allow(clippy::disallowed_methods)]
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
 
         let writer_handle = std::thread::spawn(move || {
@@ -208,9 +209,9 @@ impl<T: std::marker::Sized, R: AsyncRead> StructuredLogReader<T, R> {
 }
 
 impl<
-        T: serde::de::DeserializeOwned + std::marker::Sized + std::marker::Unpin,
-        R: AsyncRead + std::marker::Unpin,
-    > Stream for StructuredLogReader<T, R>
+    T: serde::de::DeserializeOwned + std::marker::Sized + std::marker::Unpin,
+    R: AsyncRead + std::marker::Unpin,
+> Stream for StructuredLogReader<T, R>
 {
     type Item = std::io::Result<T>;
 
