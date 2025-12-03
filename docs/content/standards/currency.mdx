@@ -112,7 +112,11 @@ Both creation methods return a `CurrencyInitializer<T>` that allows for addition
 
 ### Coin finalization
 
-Currency created with the `new_currency` function is immediately complete after the `finalize` function is called. However, for OTW created currencies, you must call `finalize_registration` to promote the currency to the registry.
+Currency created with the `new_currency` function is immediately complete after the `finalize` function is called. 
+
+:::caution OTW currencies 
+For OTW created currencies, you **must** call `finalize_registration` to promote the currency to the registry.
+:::
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize" signatureOnly />
 
