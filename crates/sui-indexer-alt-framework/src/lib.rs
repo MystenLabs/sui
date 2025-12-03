@@ -499,7 +499,6 @@ mod tests {
                 .await
                 .ok();
 
-            println!("Processed checkpoint {}", cp_num);
             Ok(vec![MockValue(cp_num)])
         }
     }
