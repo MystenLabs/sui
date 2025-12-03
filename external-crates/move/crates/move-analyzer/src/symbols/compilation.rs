@@ -417,8 +417,8 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
 
         let caching_result = match cached_pkg_info_opt {
             Some(cached_pkg_info) => {
-                // TODO: do we need to do anything here?
-                eprintln!("Removing cached deps: {:?}", cached_pkg_info.dep_names);
+                // remove dependencies that are already included in the cached package info to
+                // avoid recompiling them
                 dependencies.retain(|d| {
                     !cached_pkg_info
                         .dep_names
