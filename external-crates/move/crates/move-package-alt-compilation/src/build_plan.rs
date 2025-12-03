@@ -27,7 +27,7 @@ use move_package_alt::{
     errors::PackageResult,
     flavor::MoveFlavor,
     package::{RootPackage, layout::SourcePackageLayout},
-    schema::PackageName,
+    schema::{PackageID, PackageName},
 };
 use move_symbol_pool::Symbol;
 use toml_edit::{DocumentMut, value};
@@ -75,10 +75,56 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
             -> anyhow::Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
     ) -> anyhow::Result<CompiledPackage> {
         let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
+        let dependencies: BTreeSet<PackageID> = self
+            .root_pkg
+            .packages()
+            .into_iter()
+            .filter(|x| !x.is_root())
+            .map(|x| x.id().to_string())
+            .collect();
         let compiled = build_all::<W, F>(
             writer,
             self.compiler_vfs_root.clone(),
             self.root_pkg,
+            dependencies,
+            &self.build_config,
+            |compiler| {
+                let compiler = compiler.add_save_hook(&program_info_hook);
+                compiler_driver(compiler)
+            },
+        )?;
+
+        let project_root = self.root_pkg.package_path();
+        let sorted_deps: Result<BTreeSet<_>, _> = self
+            .root_pkg
+            .sorted_deps()
+            .into_iter()
+            .map(|x| PackageName::new(x))
+            .collect();
+
+        self.clean(
+            &project_root.join(CompiledPackageLayout::Root.path()),
+            sorted_deps?,
+        )?;
+
+        Ok(compiled)
+    }
+
+    pub fn compile_with_driver_and_deps<W: Write + Send>(
+        &self,
+        dependencies: BTreeSet<PackageID>,
+        writer: &mut W,
+        compiler_driver: impl FnOnce(
+            Compiler,
+        )
+            -> anyhow::Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
+    ) -> anyhow::Result<CompiledPackage> {
+        let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
+        let compiled = build_all::<W, F>(
+            writer,
+            self.compiler_vfs_root.clone(),
+            self.root_pkg,
+            dependencies,
             &self.build_config,
             |compiler| {
                 let compiler = compiler.add_save_hook(&program_info_hook);
@@ -164,11 +210,18 @@ impl<'a, F: MoveFlavor> BuildPlan<'a, F> {
     /// Migrate the package from legacy to Move 2024 edition, if possible.
     pub fn migrate<W: Write + Send>(&self, writer: &mut W) -> anyhow::Result<Option<Migration>> {
         let root_name = Symbol::from(self.root_pkg.name().to_string());
+        let dependencies: BTreeSet<_> = self
+            .root_pkg
+            .sorted_deps_ids()
+            .into_iter()
+            .cloned()
+            .collect();
         let (files, res) = build_for_driver(
             writer,
             None,
             &self.build_config,
             self.root_pkg,
+            dependencies,
             |compiler| compiler.generate_migration_patch(&root_name),
         )?;
         let migration = match res {

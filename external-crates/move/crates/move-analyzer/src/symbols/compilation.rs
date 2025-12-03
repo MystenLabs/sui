@@ -337,7 +337,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
         None
     };
 
-    let instant = std::time::Instant::now();
     let root_pkg = load_root_pkg::<F>(&build_config, pkg_path)?;
     let root_pkg_name = Symbol::from(root_pkg.name().to_string());
     // the package's transitive dependencies
@@ -348,11 +347,9 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
         .collect();
     let build_plan =
         BuildPlan::create(&root_pkg, &build_config)?.set_compiler_vfs_root(overlay_fs_root.clone());
-    eprintln!("loaded package in {:?}", instant.elapsed());
 
     // Hash dependencies so we can check if something has changed.
     // TODO: do we still need this?
-    let instant = std::time::Instant::now();
     let mapped_files_data =
         compute_mapped_files(&root_pkg, &build_config, overlay_fs_root.clone())?;
     let file_paths: Arc<BTreeMap<FileHash, PathBuf>> = Arc::new(
@@ -364,15 +361,12 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
             .collect(),
     );
 
-    eprintln!("computed mapped files in {:?}", instant.elapsed());
-
     let mut parsed_ast = None;
     let mut typed_ast = None;
     let mut diagnostics = None;
     let mut compiler_analysis_info_opt = None;
     let mut compiler_autocomplete_info_opt = None;
 
-    let instant = std::time::Instant::now();
     let compiler_flags = compiler_flags(&build_config);
     let (mut caching_result, other_diags) = if let Ok(deps_package_paths) =
         make_deps_for_compiler(&mut Vec::new(), dependencies.clone(), &build_config)
@@ -438,8 +432,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                     );
                 }
 
-                // dependencies.remove_deps(cached_pkg_info.dep_names.clone());
-
                 let deps = cached_pkg_info.deps.clone();
                 let analyzed_pkg_info = AnalyzedPkgInfo::new(
                     deps,
@@ -493,8 +485,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
         (CachingResult::empty(), vec![])
     };
 
-    eprintln!("computed/loaded cached deps in {:?}", instant.elapsed());
-
     let (full_compilation, files_to_compile) = if let Some(cached_info) = &caching_result.pkg_deps {
         if cached_info.program.is_some() {
             // we already have cached user program, consider incremental compilation
@@ -542,13 +532,11 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     // only for files that have failures/warnings so that diagnostics for all other files
     // (that no longer have failures/warnings) are reset
     let mut ide_diags = lsp_empty_diagnostics(mapped_files_data.files.file_name_mapping());
-    let instant = std::time::Instant::now();
     if full_compilation || !files_to_compile.is_empty() {
-        build_plan.compile_with_driver(
-            // dependencies,
+        build_plan.compile_with_driver_and_deps(
+            dependencies.into_iter().map(|x| x.id()).cloned().collect(),
             &mut std::io::sink(),
             |compiler| {
-                let i = std::time::Instant::now();
                 let compiler = compiler.set_ide_mode();
                 // extract expansion AST
                 let (files, compilation_result) = compiler
@@ -573,7 +561,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                         return Ok((files, vec![]));
                     }
                 };
-                eprintln!("compiled to parsed AST, time {:?}", i.elapsed());
+                eprintln!("compiled to parsed AST");
                 let (compiler, parsed_program) = compiler.into_ast();
                 parsed_ast = Some(parsed_program.clone());
 
@@ -588,7 +576,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                         return Ok((files, vec![]));
                     }
                 };
-                eprintln!("compiled to typed AST, time {:?}", i.elapsed());
+                eprintln!("compiled to typed AST");
                 let (compiler, typed_program) = compiler.into_ast();
                 typed_ast = Some(typed_program.clone());
                 let (analysis_info, autocomplete_info) =
@@ -610,7 +598,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 });
                 caching_result.edition =
                     Some(compiler.compilation_env().edition(Some(root_pkg_name)));
-                eprintln!("time before compiling to CFGIR {:?}", i.elapsed());
                 // compile to CFGIR for accurate diags
                 eprintln!("compiling to CFGIR");
                 let compilation_result = compiler.at_typing(typed_program).run::<PASS_CFGIR>();
@@ -626,7 +613,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 let failure = false;
                 diagnostics = Some((compiler.compilation_env().take_final_diags(), failure));
                 eprintln!("compiled to CFGIR");
-                eprintln!("total time {:?}", i.elapsed());
                 Ok((files, vec![]))
             },
         )?;
@@ -645,10 +631,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
             }
         }
     }
-    eprintln!(
-        "completed compilation for condition full_compilation || !files_to_compile.is_empty in {:?}",
-        instant.elapsed()
-    );
     // uwrap's are safe - this function returns earlier (during diagnostics processing)
     // when failing to produce the ASTs
     let (parsed_definitions, typed_modules, compiler_analysis_info) = if full_compilation {
