@@ -230,7 +230,7 @@ pub fn package(
         .map(|m| (m.compiled_module.self_id(), m))
         .collect::<BTreeMap<_, _>>();
 
-    for mod_id in initial_modules.keys().cloned() {
+    for mod_id in initial_modules.keys() {
         let mut work_queue = vec![mod_id.clone()];
 
         while let Some(entry) = work_queue.pop() {
