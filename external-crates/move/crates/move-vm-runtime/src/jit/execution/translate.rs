@@ -251,10 +251,10 @@ pub fn package(
         let loaded_module = module(&mut package_context, version_id, &mut input_module)?;
 
         let key = interner.intern_ident_str(loaded_module.id.name())?;
-        if !package_context
+        if package_context
             .loaded_modules
             .insert(key, loaded_module)
-            .is_none()
+            .is_some()
         {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
