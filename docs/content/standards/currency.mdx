@@ -89,7 +89,7 @@ The registry supports two different coin creation flows:
 
 - **One-Time Witness (OTW) creation:**
 
-    :::caution
+    :::caution Proper creation and RPC support **requires** a second transaction to promote the currency to the registry.
 
     OTW creation of a new coin is a **two-step process**. The initialization process begins with package publication. Then, a call to `coin_registry::finalize_registration` is needed to place the coin into the registry.
     See [Coin finalization](#coin-finalization) for more information.
