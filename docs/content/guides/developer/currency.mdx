@@ -41,7 +41,7 @@ The initialization process allows for:
 - **Supply model selection:** Choose fixed, burn-only, or flexible supply.
 - **Regulatory configuration:** Add deny list capabilities if needed.
 
-:::caution Important
+:::caution Proper creation and RPC support **requires** a second transaction to promote the currency to the registry.
 
 After initialization of a currency using the OTW method, you **must** call [`coin_registry::finalize_registration`](/standards/currency.mdx#coin-finalization) to create the shared `Currency` object that the Coin Registry can track.
 
