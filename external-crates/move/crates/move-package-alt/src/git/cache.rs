@@ -180,6 +180,7 @@ impl GitTree {
         // create repo if necessary
         if !self.path_to_repo.exists() {
             // git clone --sparse --filter=blob:none --no-checkout <url> <path>
+            info!("Downloading from {}", self.repo);
             run_git_cmd_with_args(
                 &[
                     "-c",
