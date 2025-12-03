@@ -2,35 +2,37 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(not(tidehunter))]
-use crate::db_tool::{DbToolCommand, execute_db_tool_command, print_db_all_tables};
+use crate::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 use crate::{
-    ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
     check_completed_snapshot, download_db_snapshot, download_formal_snapshot,
     get_latest_available_epoch, get_object, get_transaction_block, make_clients,
-    restore_from_db_checkpoint,
+    restore_from_db_checkpoint, ConciseObjectOutput, GroupedObjectOutput, SnapshotVerifyMode,
+    VerboseObjectOutput,
 };
 use anyhow::Result;
-use consensus_core::storage::{Store, rocksdb_store::RocksDBStore};
+use consensus_core::storage::{rocksdb_store::RocksDBStore, Store};
 use consensus_core::{BlockAPI, CommitAPI, CommitRange};
-use futures::{StreamExt, future::join_all};
+use futures::{future::join_all, StreamExt};
+use mysten_common::logging::StructuredLogReader;
 use std::path::PathBuf;
 use std::{collections::BTreeMap, env, sync::Arc};
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
 use sui_protocol_config::Chain;
-use sui_replay::{ReplayToolCommand, execute_replay_command};
-use sui_sdk::{SuiClient, SuiClientBuilder, rpc_types::SuiTransactionBlockResponseOptions};
+use sui_replay::{execute_replay_command, ReplayToolCommand};
+use sui_sdk::{rpc_types::SuiTransactionBlockResponseOptions, SuiClient, SuiClientBuilder};
 use sui_types::messages_consensus::ConsensusTransaction;
 use telemetry_subscribers::TracingHandle;
 
 use sui_types::{
-    base_types::*, crypto::AuthorityPublicKeyBytes, messages_grpc::TransactionInfoRequest,
+    base_types::*, crypto::AuthorityPublicKeyBytes, execution::ExecutionTimingLogRecord,
+    messages_grpc::TransactionInfoRequest, transaction::TransactionKind,
 };
 
 use clap::*;
 use fastcrypto::encoding::Encoding;
-use sui_config::Config;
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
+use sui_config::Config;
 use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
@@ -381,6 +383,12 @@ pub enum ToolCommand {
             help = "The Base64-encoding of the bcs bytes of SenderSignedData"
         )]
         sender_signed_data: String,
+    },
+
+    #[command(name = "logreader")]
+    LogReader {
+        #[arg(short, long)]
+        log_path: String,
     },
 }
 
@@ -995,6 +1003,33 @@ impl ToolCommand {
                     AuthorityAggregatorBuilder::from_genesis(&genesis).build_network_clients();
                 let result = agg.process_transaction(transaction, None).await;
                 println!("{:?}", result);
+            }
+            ToolCommand::LogReader { log_path } => {
+                let file = tokio::fs::File::open(log_path).await.unwrap();
+                let reader = tokio::io::BufReader::new(file);
+                let mut log: StructuredLogReader<ExecutionTimingLogRecord, _> =
+                    StructuredLogReader::new(reader);
+
+                while let Some(record) = log.next().await {
+                    let ExecutionTimingLogRecord {
+                        transaction,
+                        effects,
+                        total_time,
+                        timings,
+                    } = record.unwrap();
+
+                    if let TransactionKind::ProgrammableTransaction(tx) = transaction.into_kind() {
+                        for (command, timing) in tx.commands.into_iter().zip(timings) {
+                            println!("Command: {:?}, Timing: {:?}", command, timing);
+                        }
+                    }
+
+                    if let Ok(record) = record {
+                        println!("{:?}", record);
+                    } else {
+                        println!("Error reading record");
+                    }
+                }
             }
         };
         Ok(())

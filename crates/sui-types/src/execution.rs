@@ -7,11 +7,12 @@ use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
     error::SuiError,
+    effects::TransactionEffects,
     event::Event,
     is_system_package,
     object::{Data, Object, Owner},
     storage::{BackingPackageStore, ObjectChange},
-    transaction::{Argument, Command, SharedObjectMutability},
+    transaction::{Argument, TransactionData, Command, SharedObjectMutability},
     type_input::TypeInput,
 };
 use move_core_types::{
@@ -339,6 +340,14 @@ impl ExecutionTiming {
 }
 
 pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExecutionTimingLogRecord {
+    pub transaction: TransactionData,
+    pub effects: TransactionEffects,
+    pub total_time: Duration,
+    pub timings: Vec<ExecutionTiming>,
+}
 
 /// Captures the output of executing a transaction in the execution driver.
 pub enum ExecutionOutput<T> {

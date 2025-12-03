@@ -51,3 +51,4 @@ sui-types.workspace = true
 sui-package-dump.workspace = true
 sui-tls.workspace = true
 bin-version.workspace = true
+mysten-common.workspace = true

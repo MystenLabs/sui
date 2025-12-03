@@ -68,6 +68,7 @@ use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
+use sui_types::execution::ExecutionTimingLogRecord;
 use sui_types::execution_params::BalanceWithdrawStatus;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::execution_params::get_early_execution_error;
@@ -3622,6 +3623,9 @@ impl AuthorityState {
                 .expect("Failed to initialize fork recovery state")
         });
 
+        let log_path = config.log_path();
+        epoch_store.open_timing_log(log_path);
+
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3910,6 +3914,9 @@ impl AuthorityState {
         self.execution_scheduler
             .reconfigure(&new_epoch_store, self.get_child_object_resolver());
         *execution_lock = new_epoch;
+
+        new_epoch_store.open_timing_log(self.config.log_path());
+
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
         // on the epoch store and execution lock epoch match
