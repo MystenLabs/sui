@@ -75,6 +75,13 @@ pub struct TxProcessingArgs {
     /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
     #[arg(long)]
     pub serialize_unsigned_transaction: bool,
+    /// Set the transaction sender to this address. When not specified, the sender is inferred
+    /// by finding the owner of the gas payment. Note that when setting this field, the
+    /// transaction will fail to execute if the sender's private key is not in the keystore;
+    /// similarly, it will fail when using this with `--serialize-signed-transaction` flag if the
+    /// private key corresponding to this address is not in keystore.
+    #[arg(long, required = false, value_parser)]
+    pub sender: Option<SuiAddress>,
     /// Gas budget for this transaction
     #[clap(name = "gas-budget", long)]
     pub gas_budget: Option<u64>,
@@ -423,6 +430,7 @@ impl SuiValidatorCommand {
                     args,
                     gas_budget,
                     tx_args.serialize_unsigned_transaction,
+                    tx_args.sender,
                 )
                 .await?;
                 SuiValidatorCommandResponse::BecomeCandidate {
@@ -439,6 +447,7 @@ impl SuiValidatorCommand {
                     vec![],
                     gas_budget,
                     tx_args.serialize_unsigned_transaction,
+                    tx_args.sender,
                 )
                 .await?;
                 SuiValidatorCommandResponse::JoinCommittee {
@@ -458,6 +467,7 @@ impl SuiValidatorCommand {
                     vec![],
                     gas_budget,
                     tx_args.serialize_unsigned_transaction,
+                    tx_args.sender,
                 )
                 .await?;
                 SuiValidatorCommandResponse::LeaveCommittee {
@@ -484,6 +494,7 @@ impl SuiValidatorCommand {
                     metadata,
                     gas_budget,
                     tx_args.serialize_unsigned_transaction,
+                    tx_args.sender,
                 )
                 .await?;
                 SuiValidatorCommandResponse::UpdateMetadata {
@@ -504,6 +515,7 @@ impl SuiValidatorCommand {
                     gas_price,
                     gas_budget,
                     tx_args.serialize_unsigned_transaction,
+                    tx_args.sender,
                 )
                 .await?;
                 SuiValidatorCommandResponse::UpdateGasPrice {
@@ -527,6 +539,7 @@ impl SuiValidatorCommand {
                     undo_report,
                     gas_budget,
                     tx_args.serialize_unsigned_transaction,
+                    tx_args.sender,
                 )
                 .await?;
                 SuiValidatorCommandResponse::ReportValidator {
@@ -825,6 +838,7 @@ async fn update_gas_price(
     gas_price: u64,
     gas_budget: u64,
     serialize_unsigned_transaction: bool,
+    sender: Option<SuiAddress>,
 ) -> Result<(Option<SuiTransactionBlockResponse>, Option<String>)> {
     let (_status, _summary, cap_obj_ref) = get_cap_object_ref(context, operation_cap_id).await?;
 
@@ -840,6 +854,7 @@ async fn update_gas_price(
         args,
         gas_budget,
         serialize_unsigned_transaction,
+        sender,
     )
     .await
 }
@@ -851,6 +866,7 @@ async fn report_validator(
     undo_report: bool,
     gas_budget: u64,
     serialize_unsigned_transaction: bool,
+    sender: Option<SuiAddress>,
 ) -> Result<(Option<SuiTransactionBlockResponse>, Option<String>)> {
     let (status, summary, cap_obj_ref) = get_cap_object_ref(context, operation_cap_id).await?;
 
@@ -878,6 +894,7 @@ async fn report_validator(
         args,
         gas_budget,
         serialize_unsigned_transaction,
+        sender,
     )
     .await
 }
@@ -952,8 +969,9 @@ async fn call_0x5(
     call_args: Vec<CallArg>,
     gas_budget: u64,
     serialize_unsigned_transaction: bool,
+    sender: Option<SuiAddress>,
 ) -> anyhow::Result<(Option<SuiTransactionBlockResponse>, Option<String>)> {
-    let sender = context.active_address()?;
+    let sender = sender.unwrap_or(context.active_address()?);
     let tx_data =
         construct_unsigned_0x5_txn(context, sender, function, call_args, gas_budget).await?;
     if serialize_unsigned_transaction {
@@ -1259,6 +1277,7 @@ async fn update_metadata(
     metadata: MetadataUpdate,
     gas_budget: u64,
     serialize_unsigned_transaction: bool,
+    sender: Option<SuiAddress>,
 ) -> anyhow::Result<(Option<SuiTransactionBlockResponse>, Option<String>)> {
     use ValidatorStatus::*;
     match metadata {
@@ -1270,6 +1289,7 @@ async fn update_metadata(
                 args,
                 gas_budget,
                 serialize_unsigned_transaction,
+                sender,
             )
             .await
         }
@@ -1283,6 +1303,7 @@ async fn update_metadata(
                 args,
                 gas_budget,
                 serialize_unsigned_transaction,
+                sender,
             )
             .await
         }
@@ -1296,6 +1317,7 @@ async fn update_metadata(
                 args,
                 gas_budget,
                 serialize_unsigned_transaction,
+                sender,
             )
             .await
         }
@@ -1309,6 +1331,7 @@ async fn update_metadata(
                 args,
                 gas_budget,
                 serialize_unsigned_transaction,
+                sender,
             )
             .await
         }
@@ -1325,6 +1348,7 @@ async fn update_metadata(
                 args,
                 gas_budget,
                 serialize_unsigned_transaction,
+                sender,
             )
             .await
         }
@@ -1340,6 +1364,7 @@ async fn update_metadata(
                 args,
                 gas_budget,
                 serialize_unsigned_transaction,
+                sender,
             )
             .await
         }
@@ -1356,6 +1381,7 @@ async fn update_metadata(
                 args,
                 gas_budget,
                 serialize_unsigned_transaction,
+                sender,
             )
             .await
         }
@@ -1371,6 +1397,7 @@ async fn update_metadata(
                 args,
                 gas_budget,
                 serialize_unsigned_transaction,
+                sender,
             )
             .await
         }
@@ -1387,6 +1414,7 @@ async fn update_metadata(
                 args,
                 gas_budget,
                 serialize_unsigned_transaction,
+                sender,
             )
             .await
         }
@@ -1403,6 +1431,7 @@ async fn update_metadata(
                 args,
                 gas_budget,
                 serialize_unsigned_transaction,
+                sender,
             )
             .await
         }
@@ -1427,6 +1456,7 @@ async fn update_metadata(
                 args,
                 gas_budget,
                 serialize_unsigned_transaction,
+                sender,
             )
             .await
         }
