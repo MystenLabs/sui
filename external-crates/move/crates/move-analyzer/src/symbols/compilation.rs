@@ -515,9 +515,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
         (true, BTreeSet::new())
     };
 
-    eprintln!("Full compilation: {}", full_compilation);
-    eprintln!("Files to compile: {:?}", files_to_compile);
-
     // diagnostics converted from the compiler format
     let mut lsp_diags = BTreeMap::new();
     // for diagnostics information that we actually send to the IDE, we need to
