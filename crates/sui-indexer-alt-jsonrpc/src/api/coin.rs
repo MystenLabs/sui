@@ -27,9 +27,13 @@ use sui_sql_macro::sql;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::coin::CoinMetadata;
+use sui_types::coin::COIN_METADATA_STRUCT_NAME;
+use sui_types::coin::COIN_MODULE_NAME;
 use sui_types::coin_registry::Currency;
 use sui_types::gas_coin::GAS;
 use sui_types::object::Object;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::parse_sui_type_tag;
 
 use crate::api::rpc_module::RpcModule;
 use crate::context::Context;
@@ -397,23 +401,41 @@ async fn coin_registry_response(
     Ok(Some(currency.into()))
 }
 
+/// Given the inner coin type, i.e 0x2::sui::SUI, load the CoinMetadata object.
 async fn coin_metadata_response(
     ctx: &Context,
     coin_type: &str,
 ) -> Result<Option<SuiCoinMetadata>, RpcError<Error>> {
-    let coin_type = StructTag::from_str(coin_type)
+    let inner = parse_sui_type_tag(coin_type)
         .map_err(|e| invalid_params(Error::BadType(coin_type.to_owned(), e)))?;
 
-    let Some(stored) = ctx
-        .pg_loader()
-        .load_one(CoinMetadataKey(coin_type))
+    let coin_type = StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: COIN_MODULE_NAME.to_owned(),
+        name: COIN_METADATA_STRUCT_NAME.to_owned(),
+        type_params: vec![inner],
+    };
+
+    let Some(obj_ref) = ctx
+        .consistent_reader()
+        .list_objects_by_type(
+            None,
+            coin_type.to_canonical_string(/* with_prefix */ true),
+            Some(1),
+            None,
+            None,
+            false,
+        )
         .await
-        .context("Failed to load info for CoinMetadata")?
+        .context("Failed to load object reference for CoinMetadata")?
+        .results
+        .into_iter()
+        .next()
     else {
         return Ok(None);
     };
 
-    let id = ObjectID::from_bytes(&stored.object_id).context("Failed to parse ObjectID")?;
+    let id = obj_ref.value.0;
 
     let Some(object) = load_live(ctx, id)
         .await

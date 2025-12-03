@@ -227,7 +227,7 @@ impl ConsistentReader {
     #[instrument(skip(self), level = "debug")]
     pub async fn list_objects_by_type(
         &self,
-        checkpoint: u64,
+        checkpoint: Option<u64>,
         object_type: String,
         page_size: Option<u32>,
         after_token: Option<Vec<u8>>,
@@ -237,7 +237,7 @@ impl ConsistentReader {
         let response = self
             .request(
                 "list_objects_by_type",
-                Some(checkpoint),
+                checkpoint,
                 |mut client, request| async move { client.list_objects_by_type(request).await },
                 proto::ListObjectsByTypeRequest {
                     object_type: Some(object_type),
