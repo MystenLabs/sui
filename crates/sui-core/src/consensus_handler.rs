@@ -46,7 +46,7 @@ use sui_types::{
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedCertificate, VerifiedTransaction},
 };
-use tokio::{sync::MutexGuard, task::JoinSet};
+use tokio::task::JoinSet;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
@@ -880,7 +880,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let (schedulables, randomness_schedulables, assigned_versions) = self.process_transactions(
             &mut state,
-            execution_time_estimator.as_mut(),
+            &mut execution_time_estimator,
             &commit_info,
             authenticator_state_update_transaction,
             user_transactions,
@@ -898,7 +898,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // If this is the final round, record execution time observations for storage in the
         // end-of-epoch tx.
         if final_round {
-            self.record_end_of_epoch_execution_time_observations(execution_time_estimator);
+            self.record_end_of_epoch_execution_time_observations(&mut execution_time_estimator);
         }
 
         self.create_pending_checkpoints(
@@ -986,16 +986,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
     fn record_end_of_epoch_execution_time_observations(
         &self,
-        mut execution_time_estimator: MutexGuard<Option<ExecutionTimeEstimator>>,
+        estimator: &mut ExecutionTimeEstimator,
     ) {
-        if let Some(estimator) = execution_time_estimator.as_mut() {
-            self.epoch_store
-                .end_of_epoch_execution_time_observations
-                .set(estimator.take_observations())
-                .expect(
-                    "`stored_execution_time_observations` should only be set once at end of epoch",
-                );
-        }
+        self.epoch_store
+            .end_of_epoch_execution_time_observations
+            .set(estimator.take_observations())
+            .expect("`stored_execution_time_observations` should only be set once at end of epoch");
     }
 
     fn record_deferral_deletion(&self, state: &mut CommitHandlerState) {
@@ -1073,7 +1069,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     fn process_transactions(
         &self,
         state: &mut CommitHandlerState,
-        execution_time_estimator: Option<&mut ExecutionTimeEstimator>,
+        execution_time_estimator: &mut ExecutionTimeEstimator,
         commit_info: &ConsensusCommitInfo,
         authenticator_state_update_transaction: Option<VerifiedExecutableTransaction>,
         user_transactions: Vec<VerifiedExecutableTransaction>,
@@ -1118,7 +1114,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 transaction,
                 &mut shared_object_congestion_tracker,
                 &previously_deferred_tx_digests,
-                execution_time_estimator.as_deref(),
+                execution_time_estimator,
             );
         }
 
@@ -1145,7 +1141,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 transaction,
                 &mut shared_object_using_randomness_congestion_tracker,
                 &previously_deferred_tx_digests,
-                execution_time_estimator.as_deref(),
+                execution_time_estimator,
             );
         }
 
@@ -1332,7 +1328,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         transaction: VerifiedExecutableTransaction,
         shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
-        execution_time_estimator: Option<&ExecutionTimeEstimator>,
+        execution_time_estimator: &ExecutionTimeEstimator,
     ) {
         let tx_cost = shared_object_congestion_tracker.get_tx_cost(
             execution_time_estimator,
@@ -1341,7 +1337,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         );
 
         let deferral_info = self.epoch_store.should_defer(
-            tx_cost,
             &transaction,
             commit_info,
             state.dkg_failed,
@@ -1599,18 +1594,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             estimates,
         } in execution_time_observations
         {
-            let Some(estimator) = execution_time_estimator.as_mut() else {
-                error!(
-                    "dropping ExecutionTimeObservation from possibly-Byzantine authority {authority:?} sent when ExecutionTimeEstimate mode is not enabled"
-                );
-                continue;
-            };
             let authority_index = self
                 .epoch_store
                 .committee()
                 .authority_index(&authority)
                 .unwrap();
-            estimator.process_observations_from_consensus(
+            execution_time_estimator.process_observations_from_consensus(
                 authority_index,
                 Some(generation),
                 &estimates,

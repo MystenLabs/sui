@@ -18,7 +18,10 @@ use crate::{
 use move_core_types::ident_str;
 use std::sync::Arc;
 use sui_macros::{register_fail_point_arg, sim_test};
-use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{
+    Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
+    ProtocolVersion,
+};
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{InputConsensusObject, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -52,21 +55,22 @@ impl TestSetup {
 
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        // Use ExecutionTimeEstimate mode with parameters that will cause congestion
         protocol_config.set_per_object_congestion_control_mode_for_testing(
-            PerObjectCongestionControlMode::TotalGasBudget,
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(ExecutionTimeEstimateParams {
+                target_utilization: 0, // 0% utilization means budget of 0, so any cost will exceed it
+                allowed_txn_cost_overage_burst_limit_us: 0,
+                max_estimate_us: u64::MAX,
+                randomness_scalar: 100,
+                stored_observations_num_included_checkpoints: 10,
+                stored_observations_limit: u64::MAX,
+                stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: false,
+                observations_chunk_size: None,
+            }),
         );
 
-        // Set shared object congestion control such that it only allows 1 transaction to go through.
-        let max_accumulated_txn_cost_per_object_in_commit =
-            TEST_ONLY_GAS_PRICE * TEST_ONLY_GAS_UNIT;
-        protocol_config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(
-            max_accumulated_txn_cost_per_object_in_commit,
-        );
-        protocol_config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
-            max_accumulated_txn_cost_per_object_in_commit,
-        );
-
-        // Set max deferral rounds to 0 to testr cancellation. All deferred transactions will be cancelled.
+        // Set max deferral rounds to 0 to test cancellation. All deferred transactions will be cancelled.
         protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(0);
 
         let setup_authority_state = TestAuthorityBuilder::new()
@@ -236,20 +240,23 @@ async fn test_congestion_control_execution_cancellation() {
         .await;
 
     // Initialize shared object queue so that any transaction touches shared_object_1 should result in congestion and cancellation.
+    // Set initial cost of 10 for shared_object_1, which with 0% target_utilization and 0 burst limit
+    // will exceed the budget and cause congestion.
     register_fail_point_arg("initial_congestion_tracker", move || {
         Some(SharedObjectCongestionTracker::new(
             [(shared_object_1.0, 10)],
-            PerObjectCongestionControlMode::TotalGasBudget,
+            ExecutionTimeEstimateParams {
+                target_utilization: 0,
+                allowed_txn_cost_overage_burst_limit_us: 0,
+                max_estimate_us: u64::MAX,
+                randomness_scalar: 100,
+                stored_observations_num_included_checkpoints: 10,
+                stored_observations_limit: u64::MAX,
+                stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: false,
+                observations_chunk_size: None,
+            },
             false,
-            Some(
-                test_setup
-                    .protocol_config
-                    .max_accumulated_txn_cost_per_object_in_mysticeti_commit(),
-            ),
-            Some(1000), // Not used.
-            None,       // Not used.
-            0,          // Disable overage.
-            0,
         ))
     });
 
