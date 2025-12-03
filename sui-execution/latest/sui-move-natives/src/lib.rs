@@ -1391,15 +1391,15 @@ macro_rules! get_extension_mut {
 #[macro_export]
 macro_rules! charge_cache_or_load_gas {
     ($context:ident, $cache_info:expr) => {{
-        use sui_types::base_types::SUI_ADDRESS_LENGTH;
         use $crate::object_runtime::object_store::CacheInfo;
         match $cache_info {
             CacheInfo::CachedObject | CacheInfo::CachedValue => (),
             CacheInfo::Loaded(bytes_opt) => {
                 let config = get_extension!($context, ObjectRuntime)?.protocol_config;
                 if config.object_runtime_charge_cache_load_gas() {
-                    let bytes = bytes_opt.unwrap_or(SUI_ADDRESS_LENGTH as usize);
-                    native_charge_gas_early_exit!($context, InternalGas::new(bytes as u64));
+                    let bytes = bytes_opt.unwrap_or(0);
+                    let cost = bytes.max(128);
+                    native_charge_gas_early_exit!($context, InternalGas::new(cost as u64));
                 }
             }
         }
