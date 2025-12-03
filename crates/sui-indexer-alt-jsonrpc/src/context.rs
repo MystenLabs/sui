@@ -7,10 +7,10 @@ use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_indexer_alt_reader::{
     bigtable_reader::{BigtableArgs, BigtableReader},
+    consistent_reader::{ConsistentReader, ConsistentReaderArgs},
     kv_loader::KvLoader,
     package_resolver::{DbPackageStore, PackageCache},
-    pg_reader::PgReader,
-    pg_reader::db::DbArgs,
+    pg_reader::{PgReader, db::DbArgs},
 };
 use sui_package_resolver::Resolver;
 use tokio_util::sync::CancellationToken;
@@ -21,6 +21,9 @@ use crate::{config::RpcConfig, metrics::RpcMetrics};
 /// A bundle of different interfaces to data, for use by JSON-RPC method implementations.
 #[derive(Clone)]
 pub(crate) struct Context {
+    /// TODO consistent reader doc comment
+    consistent_reader: ConsistentReader,
+
     /// Direct access to the database, for running SQL queries.
     pg_reader: PgReader,
 
@@ -54,12 +57,14 @@ impl Context {
         bigtable_instance: Option<String>,
         db_args: DbArgs,
         bigtable_args: BigtableArgs,
+        consistent_reader_args: ConsistentReaderArgs,
         config: RpcConfig,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self, anyhow::Error> {
-        let pg_reader = PgReader::new(None, database_url, db_args, registry, cancel).await?;
+        let pg_reader =
+            PgReader::new(None, database_url, db_args, registry, cancel.child_token()).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = if let Some(instance_id) = bigtable_instance {
@@ -82,7 +87,16 @@ impl Context {
             config.package_resolver.clone(),
         ));
 
+        let consistent_reader = ConsistentReader::new(
+            Some("jsonrpc_consistent"),
+            consistent_reader_args,
+            registry,
+            cancel.child_token(),
+        )
+        .await?;
+
         Ok(Self {
+            consistent_reader,
             pg_reader,
             pg_loader,
             kv_loader,
@@ -90,6 +104,11 @@ impl Context {
             metrics,
             config: Arc::new(config),
         })
+    }
+
+    /// For performing reads against the consistent store.
+    pub(crate) fn consistent_reader(&self) -> &ConsistentReader {
+        &self.consistent_reader
     }
 
     /// For performing arbitrary SQL queries on the Postgres db.
