@@ -50,6 +50,11 @@ mod test_dag_parser;
 #[path = "tests/randomized_tests.rs"]
 mod randomized_tests;
 
+/// Equivocation double-commit prevention tests.
+#[cfg(test)]
+#[path = "tests/equivocation_commit_test.rs"]
+mod equivocation_commit_test;
+
 /// Exported Consensus API.
 pub use authority_node::{ConsensusAuthority, NetworkType};
 pub use block::{BlockAPI, CertifiedBlock, CertifiedBlocksOutput};
