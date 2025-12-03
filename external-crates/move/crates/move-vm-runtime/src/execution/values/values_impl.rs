@@ -2237,7 +2237,10 @@ impl GlobalValueImpl {
                 return Err(PartialVMError::new(StatusCode::MISSING_DATA));
             }
             Self::Filled(container) => {
-                assert!(matches!(self, Self::Empty));
+                if !matches!(self, Self::Empty) {
+                    return Err(PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("global value is not empty".to_string()));
+                }
                 container
             }
         };
