@@ -30,18 +30,15 @@ use move_package_alt::{
     compatibility::{legacy_parser::LegacyPackageMetadata, parse_legacy_package_info},
     flavor::MoveFlavor,
     package::RootPackage,
-    schema::{Environment, EnvironmentID, EnvironmentName},
+    schema::Environment,
 };
+use move_package_alt_compilation::compiled_package::CompiledPackage as MoveCompiledPackage;
 use move_package_alt_compilation::{
     build_config::BuildConfig as MoveBuildConfig, build_plan::BuildPlan,
 };
-use move_package_alt_compilation::{
-    compiled_package::CompiledPackage as MoveCompiledPackage, find_env,
-};
 use move_symbol_pool::Symbol;
 
-use anyhow::bail;
-use sui_package_alt::SuiFlavor;
+use sui_package_alt::{SuiFlavor, testnet_environment};
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     BRIDGE_ADDRESS, DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
@@ -98,9 +95,9 @@ pub struct BuildConfig {
     pub run_bytecode_verifier: bool,
     /// If true, print build diagnostics to stderr--no printing if false
     pub print_diags_to_stderr: bool,
-    /// The chain ID that compilation is with respect to (e.g., required to resolve
-    /// published dependency IDs from the `Move.lock`).
-    pub chain_id: Option<String>,
+    /// The environment that compilation is with respect to (e.g., required to resolve
+    /// published dependency IDs).
+    pub environment: Environment,
 }
 
 impl BuildConfig {
@@ -118,7 +115,7 @@ impl BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
-            chain_id: None,
+            environment: testnet_environment(),
         }
     }
 
@@ -189,9 +186,12 @@ impl BuildConfig {
     }
 
     pub async fn build_async(self, path: &Path) -> anyhow::Result<CompiledPackage> {
-        let env = find_env::<SuiFlavor>(path, &self.config)?;
-        let mut root_pkg =
-            RootPackage::<SuiFlavor>::load(path.to_path_buf(), env, self.config.mode_set()).await?;
+        let mut root_pkg = RootPackage::<SuiFlavor>::load(
+            path.to_path_buf(),
+            self.environment.clone(),
+            self.config.mode_set(),
+        )
+        .await?;
 
         self.internal_build(&mut root_pkg)
     }
@@ -206,10 +206,12 @@ impl BuildConfig {
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: &Path) -> anyhow::Result<CompiledPackage> {
-        let env = find_env::<SuiFlavor>(path, &self.config)?;
         // we need to block here to compile the package, which requires to fetch dependencies
-        let mut root_pkg =
-            RootPackage::<SuiFlavor>::load_sync(path.to_path_buf(), env, self.config.mode_set())?;
+        let mut root_pkg = RootPackage::<SuiFlavor>::load_sync(
+            path.to_path_buf(),
+            self.environment.clone(),
+            self.config.mode_set(),
+        )?;
 
         self.internal_build(&mut root_pkg)
     }
@@ -647,95 +649,4 @@ pub fn published_at_property(package_path: &Path) -> Result<ObjectID, PublishedA
 
     ObjectID::from_str(value.as_str())
         .map_err(|_| PublishedAtError::Invalid(value.as_str().to_owned()))
-}
-
-/// Determine the environment to use for building the package based on the provided chain ID, active
-/// environment name, and passed build configuration.
-pub fn find_environment(
-    chain_id: Option<&str>,
-    active_env: Option<String>,
-    build_config: &MoveBuildConfig,
-    path: &Path,
-) -> anyhow::Result<Environment, anyhow::Error> {
-    let envs = RootPackage::<SuiFlavor>::environments(path)?;
-    if let Some(ref env) = build_config.environment {
-        let Some(env_id) = envs.get(env) else {
-            bail!("Could not find an environment named {env} in this package's manifest");
-        };
-
-        if let Some(chain_id) = chain_id
-            && chain_id != env_id
-        {
-            bail!(
-                "The chain id of the active environment in the CLI does not match the chain id {env_id} for {env} environment in the manifest"
-            );
-        }
-
-        return Ok(Environment::new(env.to_string(), env_id.to_string()));
-    }
-
-    // we found the active env in the manifest's environments
-    if let Some(ref active_env) = active_env {
-        if let Some(env_chain_id) = envs.get(active_env)
-            && let Some(chain_id) = chain_id
-        {
-            if env_chain_id != chain_id {
-                bail!(
-                    "Error: Environment `{active_env}` has chain ID `{chain_id}` in your CLI \
-                environment, but `Move.toml` expects `{active_env}` to have chain ID \
-                `{env_chain_id}`; this may indicate that `{active_env}` has been wiped or that you \
-                have a misconfigured CLI environment."
-                );
-            }
-            return Ok(Environment::new(
-                active_env.to_string(),
-                chain_id.to_string(),
-            ));
-        }
-
-        if let Some(chain_id) = chain_id {
-            // no environment is passed, let's find out the current CLI environment and if it has a
-            // chain-id that is in the environments list
-            let matching_chain_ids: BTreeMap<EnvironmentName, EnvironmentID> =
-                envs.into_iter().filter(|p| p.1 == chain_id).collect();
-
-            if matching_chain_ids.len() == 1 {
-                let (env_name, chain_id) = matching_chain_ids
-                    .first_key_value()
-                    .expect("Should have a first key pair value");
-
-                eprintln!(
-                    "Note: `Move.toml` does not define an `{active_env}` environment; building for `{env_name}` instead"
-                );
-                return Ok(Environment::new(env_name.to_string(), chain_id.to_string()));
-            }
-
-            if matching_chain_ids.len() > 1 {
-                let mut s = String::new();
-                for e in matching_chain_ids.keys() {
-                    s.push_str(&format!("--build-env {e}"))
-                }
-                bail!(
-                    "Found several environments defined in Move.toml with chain-id `{chain_id}`. Please pass one of the following: \n\t{s}"
-                );
-            }
-        }
-    }
-
-    // ephemeral case, no environment found with that name, we error
-    bail!(
-        "Your active environment `{active_env:?}` is not present in `Move.toml`, so you cannot \
-        publish to `{active_env:?}`.
-
-    - If you want to create a temporary publication on `{active_env:?}` and record the addresses \
-       in a local file, use the `test-publish` command instead.
-
-        sui client test-publish --help
-
-    - If you want to publish to `{active_env:?}` and record the addresses in the shared \
-    `Publications.toml` file, you will need to add the following to `Move.toml`:
-
-        [environments]
-        {active_env:?} = \"{chain_id:?}\""
-    );
 }

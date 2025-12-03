@@ -51,7 +51,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
-use sui_move_build::{BuildConfig, CompiledPackage, PackageDependencies, find_environment};
+use sui_move_build::{BuildConfig, CompiledPackage, PackageDependencies};
 use sui_package_management::LockCommand;
 use sui_sdk::{
     SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
@@ -100,7 +100,7 @@ use move_package_alt::{
 };
 use move_symbol_pool::Symbol;
 use sui_keys::key_derive;
-use sui_package_alt::{BuildParams, SuiFlavor};
+use sui_package_alt::{BuildParams, SuiFlavor, find_environment};
 use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
 use sui_types::digests::ChainIdentifier;
 use tracing::{debug, info};
@@ -462,9 +462,9 @@ pub enum SuiClientCommands {
     /// Publish a package using ephemeral addresses for dependencies.
     #[clap(
         name = "test-publish",
-        after_long_help = "The `test-publish` command is used to publish packages ephemerally, i.e. without recording the published addresses in the main `Published.toml` file. Running `sui client test-publish <pubfile> --build-env <env>` will build the package for environment <env>, but will publish it on the current network, taking the dependency addresses from <pubfile>. It will also record the publication information for the package in <pubfile>.
-
-See https://docs.sui.io/guides/developer/sui-101/move-package-management for more information."
+        after_long_help = "The `test-publish` command is used to publish packages ephemerally, i.e. without recording the published addresses in the main `Published.toml` file. Running `sui client test-publish <pubfile> --build-env <env>` will build the package for environment <env>, but will publish it on the current network, taking the dependency addresses from <pubfile>. It will also record the publication information for the package in <pubfile>. \n\
+        \n\
+        See https://docs.sui.io/guides/developer/sui-101/move-package-management for more information."
     )]
     TestPublish(TestPublishArgs),
 
@@ -898,15 +898,10 @@ impl SuiClientCommands {
                         error: format!("Failed to canonicalize package path: {}", e),
                     }
                 })?;
-                let active_env = context.get_active_env()?.alias.clone();
 
-                let mut root_pkg = load_root_pkg_for_publish_upgrade(
-                    &chain_id,
-                    active_env,
-                    &build_config,
-                    &package_path,
-                )
-                .await?;
+                let mut root_pkg =
+                    load_root_pkg_for_publish_upgrade(context, &build_config, &package_path)
+                        .await?;
 
                 let verify =
                     check_dep_verification_flags(skip_dependency_verification, verify_deps)?;
@@ -1036,12 +1031,8 @@ impl SuiClientCommands {
 
                 let client = context.get_client().await?;
                 let _ = context.cache_chain_id(&client).await?;
-                let read_api = client.read_api();
-                let chain_id = read_api.get_chain_identifier().await?;
-                let active_env = context.get_active_env()?;
                 let mut root_package = load_root_pkg_for_publish_upgrade(
-                    &chain_id,
-                    active_env.alias.clone(),
+                    context,
                     &args.build_config,
                     args.package_path.as_path(),
                 )
@@ -1823,35 +1814,26 @@ impl SuiClientCommands {
                     (true, true, Some(at)) => ValidationMode::root_and_deps_at(*at),
                 };
 
-                let client = context.get_client().await?;
-                let chain_id = client.read_api().get_chain_identifier().await?;
-                let active_env = context.get_active_env()?;
-                let env = find_environment(
-                    Some(&chain_id),
-                    Some(active_env.alias.clone()),
-                    &build_config,
-                    &package_path,
-                )?;
+                let environment =
+                    find_environment(&package_path, build_config.environment.clone(), context)
+                        .await?;
 
-                let mut root_pkg = load_root_pkg_for_publish_upgrade(
-                    &chain_id,
-                    active_env.alias.clone(),
-                    &build_config,
-                    &package_path,
-                )
-                .await?;
+                let mut root_pkg =
+                    load_root_pkg_for_publish_upgrade(context, &build_config, &package_path)
+                        .await?;
                 let build_config = BuildConfig {
                     config: build_config,
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
-                    chain_id: Some(chain_id),
+                    environment: environment.clone(),
                 };
                 let compiled_package = build_config
                     .build_async_from_root_pkg(&mut root_pkg)
                     .await?;
 
+                let client = context.get_client().await?;
                 BytecodeSourceVerifier::new(client.read_api())
-                    .verify(&compiled_package, mode, &env)
+                    .verify(&compiled_package, mode, &environment)
                     .await?;
 
                 SuiClientCommandResult::VerifySource
@@ -3534,19 +3516,12 @@ pub(crate) async fn pkg_tree_shake(
     Ok(())
 }
 
-/// Loads a root package by determining the right environment, either the one provided by the user
-/// or determining if this is an ephemeral environment.
-///
-/// The logic around environments is as following:
-/// - if an env is passed, work against that environment
-/// - if no env is passed, determine if its an ephemeral network or not
 pub async fn load_root_pkg_for_publish_upgrade(
-    chain_id: &str,
-    active_env: String,
+    wallet: &WalletContext,
     build_config: &MoveBuildConfig,
     path: &Path,
 ) -> anyhow::Result<RootPackage<SuiFlavor>> {
-    let env = find_environment(Some(chain_id), Some(active_env), build_config, path)?;
+    let env = find_environment(path, build_config.environment.clone(), wallet).await?;
     Ok(RootPackage::<SuiFlavor>::load(path, env, build_config.mode_set()).await?)
 }
 

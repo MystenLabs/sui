@@ -69,13 +69,8 @@ async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
     let context = &test_cluster.wallet;
     let client = context.get_client().await?;
 
-    let (built_ptb, warnings) = PTB::build_ptb(
-        program,
-        BTreeMap::new(),
-        client,
-        context.get_active_env().unwrap().alias.clone(),
-    )
-    .await;
+    let (built_ptb, warnings) =
+        PTB::build_ptb(program, BTreeMap::new(), client.read_api(), context).await;
 
     if !warnings.is_empty() {
         let rendered = build_error_reports(&file_contents, warnings);

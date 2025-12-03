@@ -31,7 +31,7 @@ use sui_types::transaction::{
 };
 use tokio::time::sleep;
 
-use move_package_alt::schema::ParsedPublishedFile;
+use move_package_alt::schema::{Environment, ParsedPublishedFile};
 use mysten_common::random_util::TempDir;
 use mysten_common::tempdir;
 use std::fs::OpenOptions;
@@ -218,11 +218,13 @@ upgrade-capability = "{}""#,
     async fn publish_package_without_tree_shaking(
         &mut self,
         package_name: &str,
+        environment: &Environment,
     ) -> (ObjectID, ObjectID) {
         let package_path = self.package_path(package_name);
 
         let mut build_config = BuildConfig::new_for_testing();
-        build_config.config.environment = Some("localnet".to_string());
+        build_config.config.environment = Some(environment.name.clone());
+        build_config.environment = environment.clone();
         let compiled_package = build_config.build_async(&package_path).await.unwrap();
 
         let context = self.test_cluster.wallet_mut();
@@ -3651,34 +3653,6 @@ async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Resul
 }
 
 #[tokio::test]
-async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
-    const LINTER_MSG: &str = "Total number of linter warnings suppressed: 5 (unique lints: 3)";
-    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
-    let args = vec!["move", "test", "--path", "tests/data/linter"];
-    let output = cmd
-        .args(&args)
-        .output()
-        .expect("failed to run 'sui move test'");
-    let out_str = str::from_utf8(&output.stderr).unwrap();
-    assert!(
-        out_str.contains(LINTER_MSG),
-        "Expected to match {LINTER_MSG}, got: {out_str}"
-    );
-    // test no-lint suppresses
-    let args = vec!["move", "test", "--no-lint", "--path", "tests/data/linter"];
-    let output = cmd
-        .args(&args)
-        .output()
-        .expect("failed to run 'sui move test'");
-    let out_str = str::from_utf8(&output.stderr).unwrap();
-    assert!(
-        !out_str.contains(LINTER_MSG),
-        "Expected _not to_ match {LINTER_MSG}, got: {out_str}"
-    );
-    Ok(())
-}
-
-#[tokio::test]
 async fn key_identity_test() {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
@@ -5153,7 +5127,13 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
     let _ = update_toml_with_localnet_chain_id(&test.package_path("I"), chain_id.clone());
     let _ = update_toml_with_localnet_chain_id(&test.package_path("D_A"), chain_id.clone());
 
+    let env = Environment {
+        name: "localnet".to_string(),
+        id: chain_id.clone(),
+    };
+
     let (package_a_id, cap) = test.publish_package("A", false).await?;
+    eprintln!("package_a_id: {package_a_id}");
     // Upgrade package A (named A_v1)
     std::fs::copy(
         test.package_path("A").join("Published.toml"),
@@ -5163,8 +5143,9 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
     test.upgrade_package("A_v1", cap).await?;
 
     let (package_d_id, package_d_upgrade_cap) =
-        test.publish_package_without_tree_shaking("D_A").await;
+        test.publish_package_without_tree_shaking("D_A", &env).await;
     let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
+    eprintln!("linkage_table_d: {linkage_table_d:#?}");
     assert!(
         linkage_table_d.contains_key(&package_a_id),
         "Package D should depend on A"
@@ -5253,7 +5234,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_3() -> Result<(), anyhow:
     let _ = update_toml_with_localnet_chain_id(&test.package_path("K"), chain_id.clone());
     let _ = update_toml_with_localnet_chain_id(&test.package_path("K_v2"), chain_id.clone());
     let _ = update_toml_with_localnet_chain_id(&test.package_path("L"), chain_id.clone());
-    let _ = update_toml_with_localnet_chain_id(&test.package_path("M"), chain_id);
+    let _ = update_toml_with_localnet_chain_id(&test.package_path("M"), chain_id.clone());
 
     // This test is identic to #2, except it uses the old test-transaction-builder infrastructure
     // to publish a package without tree shaking. It is also unaware of automated address mgmt,
@@ -5268,8 +5249,13 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_3() -> Result<(), anyhow:
     )?;
     let package_k_v2_id = test.upgrade_package("K_v2", cap).await?;
 
+    let env = Environment {
+        name: "localnet".to_string(),
+        id: chain_id.clone(),
+    };
+
     let (package_l_id, package_l_upgrade_cap) =
-        test.publish_package_without_tree_shaking("L").await;
+        test.publish_package_without_tree_shaking("L", &env).await;
     let linkage_table_l = test.fetch_linkage_table(package_l_id).await;
     assert!(
         linkage_table_l.contains_key(&package_k_id),
@@ -5562,42 +5548,6 @@ async fn test_move_build_dump_bytecode_as_base64_with_unpublished_deps() -> Resu
         stdout.contains(expected_output),
         "Mismatched ouptut: \nExpected:\n{}\n\nOutput was:\n{}",
         expected_output,
-        stdout
-    );
-
-    temp_dir.close()?;
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_move_build_dump_bytecode_as_base64_no_chain_id() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let context = &mut test_cluster.wallet;
-    let client_config_path = context.config.path();
-
-    // Create temp directory with the test package
-    let (temp_dir, pkg_path) =
-        create_temp_dir_with_framework_packages("dummy_modules_publish", None)?;
-
-    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
-    cmd.arg("move")
-        .arg("--client.config")
-        .arg(client_config_path)
-        .arg("build")
-        .arg("--dump-bytecode-as-base64")
-        .arg("--path")
-        .arg(pkg_path.to_str().unwrap());
-
-    let output = cmd.output().expect("Failed to execute command");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    let expected_output = format!(
-        "No cached chain ID found for env {}. Please pass `-e env_name` to your command",
-        context.get_active_env()?.alias
-    );
-    assert!(
-        stdout.contains(&expected_output),
-        "Expected to say there's no cached chain ID. Output was:\n{}",
         stdout
     );
 

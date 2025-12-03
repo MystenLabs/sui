@@ -10,11 +10,16 @@ use sui_data_store::{
 use anyhow::{Context, Result, anyhow, bail};
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
+use move_package_alt::{
+    package::RootPackage,
+    schema::{Environment, EnvironmentName},
+};
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
 use sui_move_build::BuildConfig;
+use sui_package_alt::SuiFlavor;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::TransactionDigest,
@@ -151,6 +156,7 @@ pub struct PackageRebuilder {
     package_info: PackageInfo,
     source_path: PathBuf,
     output_path: Option<PathBuf>,
+    env: EnvironmentName,
 }
 
 /// Read chain ID from node_mapping.csv file
@@ -206,11 +212,13 @@ impl PackageRebuilder {
         package_id: ObjectID,
         source_path: PathBuf,
         output_path: Option<PathBuf>,
+        env: EnvironmentName,
     ) -> Self {
         Self {
             package_info: PackageInfo::new(node, package_id),
             source_path,
             output_path,
+            env,
         }
     }
 
@@ -291,14 +299,21 @@ impl PackageRebuilder {
         // Create build config (following build.rs pattern)
         let config = MoveBuildConfig::default();
 
+        let envs = RootPackage::<SuiFlavor>::environments(&self.source_path)?;
+        let Some(env_id) = envs.get(&self.env) else {
+            todo!()
+        };
+        let environment = Environment {
+            name: self.env.clone(),
+            id: env_id.clone(),
+        };
+
         // Create BuildConfig - simplified like in build.rs
-        // We use chain_id from node for better dependency resolution
-        let chain_id = self.get_chain_id();
         let config = BuildConfig {
             config,
             run_bytecode_verifier: false, // We don't need verification for rebuilding
             print_diags_to_stderr: true,  // Print diagnostics like build.rs does
-            chain_id,
+            environment,
         };
 
         // Build the package (same as build.rs does)
@@ -564,12 +579,6 @@ impl PackageRebuilder {
         Ok(rebuilt_package)
     }
 
-    /// Get chain ID based on the node
-    fn get_chain_id(&self) -> Option<String> {
-        // Try to get chain ID from node_mapping.csv
-        get_chain_id_from_mapping(&self.package_info.node).ok()
-    }
-
     /// Verify that the rebuilt package matches the original (when source unchanged)
     fn verify_rebuild(&self, original: &Object, rebuilt: &Object) -> Result<()> {
         let original_bytes = bcs::to_bytes(original)?;
@@ -615,8 +624,9 @@ pub fn rebuild_package(
     package_id: ObjectID,
     source_path: PathBuf,
     output_path: Option<PathBuf>,
+    env: EnvironmentName,
 ) -> Result<()> {
-    let rebuilder = PackageRebuilder::new(node, package_id, source_path, output_path);
+    let rebuilder = PackageRebuilder::new(node, package_id, source_path, output_path, env);
     rebuilder.rebuild()
 }
 

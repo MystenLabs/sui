@@ -24,7 +24,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_keys::keystore::AccountKeystore;
-use sui_sdk::{SuiClient, wallet_context::WalletContext};
+use sui_sdk::{apis::ReadApi, wallet_context::WalletContext};
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
@@ -128,7 +128,6 @@ impl PTB {
         }
 
         let client = context.get_client().await?;
-        let active_env = context.get_active_env()?.alias.clone();
 
         let mut starting_addresses: BTreeMap<String, AddressData> = context
             .config
@@ -161,7 +160,7 @@ impl PTB {
         }
 
         let (res, warnings) =
-            Self::build_ptb(program, starting_addresses, client.clone(), active_env).await;
+            Self::build_ptb(program, starting_addresses, client.read_api(), context).await;
 
         // Render warnings
         if !warnings.is_empty() {
@@ -293,13 +292,13 @@ impl PTB {
     pub async fn build_ptb(
         program: Program,
         starting_addresses: BTreeMap<String, AddressData>,
-        client: SuiClient,
-        active_env: String,
+        reader: &ReadApi,
+        wallet: &WalletContext,
     ) -> (
         Result<ProgrammableTransaction, Vec<PTBError>>,
         Vec<PTBError>,
     ) {
-        let builder = PTBBuilder::new(starting_addresses, client.read_api(), active_env);
+        let builder = PTBBuilder::new(starting_addresses, reader, wallet);
         builder.build(program).await
     }
 

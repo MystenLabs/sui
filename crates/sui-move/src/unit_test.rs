@@ -16,7 +16,9 @@ use sui_move_natives::{
     NativesCostTable, object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
     transaction_context::TransactionContext,
 };
+use sui_package_alt::find_environment;
 use sui_protocol_config::ProtocolConfig;
+use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
     base_types::{SuiAddress, TxContext},
     digests::TransactionDigest,
@@ -40,6 +42,7 @@ impl Test {
         self,
         path: Option<&Path>,
         mut build_config: BuildConfig,
+        wallet: &WalletContext,
     ) -> anyhow::Result<UnitTestResult> {
         let compute_coverage = self.test.compute_coverage;
         if !cfg!(feature = "tracing") && compute_coverage {
@@ -58,6 +61,14 @@ impl Test {
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
         let unit_test_config = self.test.unit_test_config();
+
+        // set the environment (this is a little janky: we get it from the manifest here, then pass
+        // it as the optional argument in the build-config, which then looks it up again, but it
+        // should be ok.
+        let environment =
+            find_environment(&rerooted_path, build_config.environment, wallet).await?;
+        build_config.environment = Some(environment.name);
+
         run_move_unit_tests(
             &rerooted_path,
             build_config,

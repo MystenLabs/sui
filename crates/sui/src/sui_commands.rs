@@ -77,7 +77,7 @@ use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::{self, execute_move_command};
-use sui_package_alt::SuiFlavor;
+use sui_package_alt::{SuiFlavor, find_environment};
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::{LocalDatabase, get_available_port};
 use sui_protocol_config::Chain;
@@ -552,9 +552,10 @@ impl SuiCommand {
             SuiCommand::Move {
                 package_path,
                 build_config,
-                mut cmd,
+                cmd,
                 config: client_config,
             } => {
+                let context = get_wallet_context(&client_config).await?;
                 match cmd {
                     sui_move::Command::Summary(mut s) if s.package_id.is_some() => {
                         let (_, client) = get_chain_id_and_client(
@@ -599,41 +600,24 @@ impl SuiCommand {
                             build_config,
                             sui_move::Command::Summary(s),
                             Some(sui_move::CommandMeta::Summary(package_metadata)),
+                            &context,
                         )
                         .await?;
-                        return Ok(());
+                        Ok(())
                     }
                     sui_move::Command::Build(ref build) if build.dump_bytecode_as_base64 => {
-                        // `sui move build` does not ordinarily require a network connection, but
-                        // for --dump-bytecode-as-base64 it needs one due to tree shaking
-                        let context = get_wallet_context(&client_config).await?;
-
                         let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
-                        // if an environment is specified, then we should read the manifests'
-                        // environments to get the chain id
-                        //
-                        // if an environment is not specified, and the current active env does not
-                        // have the chain id cached, we error out
-                        let (env, chain_id) = if let Some(env_name) = &build_config.environment {
-                            let envs =
-                                move_package_alt::package::RootPackage::<SuiFlavor>::environments(
-                                    &rerooted_path,
-                                )?;
-                            let id = envs.get(env_name).ok_or_else(|| {
-                                anyhow!("Environment '{}' not found in Move.toml", env_name)
-                            })?;
-                            (env_name.to_string(), id.to_string())
-                        } else {
-                            let active_env = context.get_active_env()?;
-                            let chain_id = context
-                                .try_load_chain_id_from_cache(Some(active_env.alias.clone()))
-                                .await?;
-                            (active_env.alias.clone(), chain_id)
-                        };
+
                         let with_unpublished_deps = build.with_unpublished_dependencies;
+                        let environment = find_environment(
+                            &rerooted_path,
+                            build_config.environment.clone(),
+                            &context,
+                        )
+                        .await?;
+
                         let mut root_pkg = load_root_pkg_for_publish_upgrade(
-                            &chain_id,
-                            env.to_string(),
+                            &context,
                             &build_config,
                             &rerooted_path,
                         )
@@ -652,7 +636,7 @@ impl SuiCommand {
                             config,
                             run_bytecode_verifier: true,
                             print_diags_to_stderr: true,
-                            chain_id: Some(chain_id.clone()),
+                            environment,
                         }
                         .build_async_from_root_pkg(&mut root_pkg)
                         .await?;
@@ -668,25 +652,19 @@ impl SuiCommand {
                                 "digest": pkg.get_package_digest(with_unpublished_deps),
                             })
                         );
-                        return Ok(());
+                        Ok(())
                     }
-                    _ => (),
-                };
-
-                // If a specific environment is specified for the build command we set the chain ID
-                // to the one that is specified.
-                if client_config.env.is_some() && matches!(cmd, sui_move::Command::Build(_)) {
-                    let (chain_id, _) =
-                        get_chain_id_and_client(client_config, "sui move build").await?;
-
-                    let sui_move::Command::Build(build_config) = &mut cmd else {
-                        unreachable!("We checked for Build above, so this should never happen");
-                    };
-
-                    build_config.chain_id = chain_id;
+                    _ => {
+                        execute_move_command(
+                            package_path.as_deref(),
+                            build_config,
+                            cmd,
+                            None,
+                            &context,
+                        )
+                        .await
+                    }
                 }
-
-                execute_move_command(package_path.as_deref(), build_config, cmd, None).await
             }
             SuiCommand::BridgeInitialize {
                 network_config,

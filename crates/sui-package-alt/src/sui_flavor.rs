@@ -29,6 +29,8 @@ use sui_sdk::types::{
     supported_protocol_versions::Chain,
 };
 
+use crate::{mainnet_environment, testnet_environment};
+
 const EDITION: &str = "2024";
 const FLAVOR: &str = "sui";
 
@@ -85,16 +87,9 @@ impl MoveFlavor for SuiFlavor {
     type PackageMetadata = (); // TODO
 
     fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID> {
-        IndexMap::from([
-            (
-                Chain::Testnet.as_str().to_string(),
-                get_testnet_chain_identifier().to_string(),
-            ),
-            (
-                Chain::Mainnet.as_str().to_string(),
-                get_mainnet_chain_identifier().to_string(),
-            ),
-        ])
+        let testnet = testnet_environment();
+        let mainnet = mainnet_environment();
+        IndexMap::from([(testnet.name, testnet.id), (mainnet.name, mainnet.id)])
     }
 
     fn implicit_dependencies(

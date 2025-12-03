@@ -5,7 +5,10 @@ use fs_extra::dir::CopyOptions;
 use insta_cmd::get_cargo_bin;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use sui_config::SUI_CLIENT_CONFIG;
+use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_KEYSTORE_FILENAME};
+use sui_keys::keystore::{FileBasedKeystore, Keystore};
+use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
+use tempfile::TempDir;
 use test_cluster::TestClusterBuilder;
 
 // [test_shell_snapshot] is run on every file matching [TEST_PATTERN] in [TEST_DIR].
@@ -24,7 +27,7 @@ const TEST_PATTERN: &str = r"\.sh$";
 /// of [path], with the `sui` binary on the path.
 ///
 /// If [cluster] is provided, the config file for the cluster is passed as the `CONFIG` environment
-/// variable.
+/// variable; otherwise `CONFIG` is set to a temporary file (see [make_temp_config])
 #[tokio::main]
 async fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
     // set up test cluster
@@ -59,9 +62,14 @@ async fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
         .current_dir(sandbox)
         .arg(path.file_name().unwrap());
 
-    if let Some(ref cluster) = cluster {
-        shell.env("CONFIG", cluster.swarm.dir().join(SUI_CLIENT_CONFIG));
-    }
+    // Note: we create the temporary config file even for cluster tests just so it gets dropped
+    let temp_config_dir = make_temp_config_dir();
+    let config_file = if let Some(ref cluster) = cluster {
+        cluster.swarm.dir()
+    } else {
+        temp_config_dir.path()
+    };
+    shell.env("CONFIG", config_file.join(SUI_CLIENT_CONFIG));
 
     // run it; snapshot test output
     let output = shell.output()?;
@@ -83,6 +91,33 @@ async fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
         insta::assert_snapshot!(snapshot_name, result);
     });
     Ok(())
+}
+
+/// Create a config directory containing a single environment called "testnet" with no cached
+/// chain ID and a bogus RPC URL
+fn make_temp_config_dir() -> TempDir {
+    let result = tempfile::tempdir().expect("can create temp file");
+    let config_dir = result.path();
+
+    SuiClientConfig {
+        keystore: Keystore::from(
+            FileBasedKeystore::load_or_create(&config_dir.join(SUI_KEYSTORE_FILENAME)).unwrap(),
+        ),
+        external_keys: None,
+        envs: vec![SuiEnv {
+            alias: "testnet".to_string(),
+            rpc: "bogus rpc".to_string(),
+            ws: None,
+            basic_auth: None,
+            chain_id: None,
+        }],
+        active_env: Some("testnet".to_string()),
+        active_address: None,
+    }
+    .persisted(&result.path().join(SUI_CLIENT_CONFIG))
+    .save()
+    .expect("can write to tempfile");
+    result
 }
 
 /// return the path to the `sui` binary that is currently under test

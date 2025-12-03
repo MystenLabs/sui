@@ -1,0 +1,21 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/find_env/no_match.sh
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Active environment matches nothing in the manifest
+sui move --client.config configs/name_mismatch_id_none.yaml build
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+Active environment `active_env` does not correspond to any of environments defined for the package. Specify the environment by passing one of the following:
+	-e testnet
+	-e mainnet
+	-e manifest_env
+
+----- stderr -----

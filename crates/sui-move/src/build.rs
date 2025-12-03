@@ -6,6 +6,8 @@ use move_cli::base::{self};
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use std::{fs, path::Path};
 use sui_move_build::BuildConfig;
+use sui_package_alt::find_environment;
+use sui_sdk::wallet_context::WalletContext;
 
 const LAYOUTS_DIR: &str = "layouts";
 const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
@@ -27,39 +29,38 @@ pub struct Build {
     /// and events.
     #[clap(long, global = true)]
     pub generate_struct_layouts: bool,
-    /// The chain ID, if resolved. Required when the dump_bytecode_as_base64 is true,
-    /// for automated address management, where package addresses are resolved for the
-    /// respective chain in the Move.lock file.
-    #[clap(skip)]
-    pub chain_id: Option<String>,
 }
 
 impl Build {
-    pub fn execute(
+    pub async fn execute(
         &self,
         path: Option<&Path>,
         build_config: MoveBuildConfig,
+        wallet: &WalletContext,
     ) -> anyhow::Result<()> {
         let rerooted_path = base::reroot_path(path)?;
         Self::execute_internal(
             &rerooted_path,
             build_config,
             self.generate_struct_layouts,
-            self.chain_id.clone(),
+            wallet,
         )
+        .await
     }
 
-    pub fn execute_internal(
+    pub async fn execute_internal(
         rerooted_path: &Path,
         config: MoveBuildConfig,
         generate_struct_layouts: bool,
-        chain_id: Option<String>,
+        wallet: &WalletContext,
     ) -> anyhow::Result<()> {
+        let environment =
+            find_environment(rerooted_path, config.environment.clone(), wallet).await?;
         let pkg = BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
-            chain_id,
+            environment,
         }
         .build(rerooted_path)?;
 
