@@ -20,6 +20,7 @@ use sui_json_rpc_types::Balance;
 use sui_json_rpc_types::Coin;
 use sui_json_rpc_types::Page as PageResponse;
 use sui_json_rpc_types::SuiCoinMetadata;
+use sui_indexer_alt_reader::consistent_reader::proto::owner::OwnerKind;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_sql_macro::sql;
@@ -74,12 +75,7 @@ trait CoinsApi {
         /// type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
         coin_type: String,
     ) -> RpcResult<Option<SuiCoinMetadata>>;
-}
 
-/// Delegation Coin API for endpoints that are delegated to FN RPC
-#[open_rpc(namespace = "suix", tag = "Delegation Coin API")]
-#[rpc(server, client, namespace = "suix")]
-trait DelegationCoinsApi {
     /// Return the total coin balance for all coin types, owned by the address owner.
     #[method(name = "getAllBalances")]
     async fn get_all_balances(
@@ -101,7 +97,6 @@ trait DelegationCoinsApi {
 }
 
 pub(crate) struct Coins(pub Context);
-pub(crate) struct DelegationCoins(HttpClient);
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
@@ -113,12 +108,6 @@ pub(crate) enum Error {
 }
 
 type Cursor = BcsCursor<Vec<u8>>;
-
-impl DelegationCoins {
-    pub(crate) fn new(client: HttpClient) -> Self {
-        Self(client)
-    }
-}
 
 #[async_trait::async_trait]
 impl CoinsApiServer for Coins {
@@ -220,36 +209,7 @@ impl CoinsApiServer for Coins {
 
         Ok(None)
     }
-}
 
-// TODO: consistent-store can answer these questions now
-#[async_trait::async_trait]
-impl DelegationCoinsApiServer for DelegationCoins {
-    async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
-        let Self(client) = self;
-
-        client
-            .get_all_balances(owner)
-            .await
-            .map_err(client_error_to_error_object)
-    }
-
-    async fn get_balance(
-        &self,
-        owner: SuiAddress,
-        coin_type: Option<String>,
-    ) -> RpcResult<Balance> {
-        let Self(client) = self;
-
-        client
-            .get_balance(owner, coin_type)
-            .await
-            .map_err(client_error_to_error_object)
-    }
-}
-
-#[async_trait::async_trait]
-impl DelegationCoinsApiServer for Coins {
     async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
         let Self(ctx) = self;
         let consistent_reader = ctx.consistent_reader();
@@ -328,16 +288,6 @@ impl DelegationCoinsApiServer for Coins {
 impl RpcModule for Coins {
     fn schema(&self) -> Module {
         CoinsApiOpenRpc::module_doc()
-    }
-
-    fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
-        self.into_rpc()
-    }
-}
-
-impl RpcModule for DelegationCoins {
-    fn schema(&self) -> Module {
-        DelegationCoinsApiOpenRpc::module_doc()
     }
 
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
