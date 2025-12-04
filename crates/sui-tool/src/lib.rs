@@ -653,6 +653,7 @@ fn start_summary_sync(
         )
         .await?;
         sync_progress_bar.finish_with_message("Checkpoint summary sync is complete");
+        info!("Checkpoint summary sync is complete");
 
         let checkpoint = checkpoint_store
             .get_checkpoint_by_sequence_number(*last_checkpoint)?
@@ -897,6 +898,7 @@ pub async fn download_formal_snapshot(
             .read(&perpetual_db_clone, abort_registration, Some(sender))
             .await
             .unwrap_or_else(|err| panic!("Failed during read: {}", err));
+        info!("Snapshot download complete");
         Ok::<(), anyhow::Error>(())
     });
     let mut root_global_state_hash = GlobalStateHash::default();
@@ -1117,6 +1119,11 @@ async fn backfill_epoch_transaction_digests(
         "Backfill complete: {} transactions from {} checkpoints",
         tx_count, num_checkpoints
     ));
+    info!(
+        "Backfill complete: {} transactions from {} checkpoints",
+        tx_counter.load(Ordering::Relaxed),
+        checkpoint_counter.load(Ordering::Relaxed)
+    );
 
     Ok(())
 }
