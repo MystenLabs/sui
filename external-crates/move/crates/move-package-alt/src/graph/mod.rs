@@ -26,7 +26,7 @@ use crate::{
     errors::PackageResult,
     flavor::MoveFlavor,
     package::{Package, paths::PackagePath},
-    schema::{Environment, PackageID, PackageName},
+    schema::{Environment, PackageID},
 };
 use bimap::BiBTreeMap;
 use builder::PackageGraphBuilder;
@@ -113,14 +113,10 @@ impl<F: MoveFlavor> PackageGraph<F> {
             .collect()
     }
 
-    /// Return the sorted list of dependencies' name
-    pub(crate) fn sorted_deps(&self) -> Vec<&PackageName> {
+    /// Return the list of all packages that are in the package graph, sorted in topological order.
+    pub fn sorted_packages(&self) -> Vec<PackageInfo<F>> {
         let sorted = toposort(&self.inner, None).expect("to sort the graph");
-        sorted
-            .iter()
-            .flat_map(|x| self.inner.node_weight(*x))
-            .map(|x| x.name())
-            .collect()
+        sorted.iter().map(|x| self.package_info(*x)).collect()
     }
 
     /// For each entry in `overrides`, override the package publication in `self` for the

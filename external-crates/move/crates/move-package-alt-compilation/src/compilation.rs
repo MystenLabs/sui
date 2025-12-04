@@ -32,7 +32,10 @@ use move_compiler::{
 };
 use move_docgen::DocgenFlags;
 use move_package_alt::{
-    flavor::MoveFlavor, graph::PackageInfo, package::RootPackage, schema::Environment,
+    flavor::MoveFlavor,
+    graph::PackageInfo,
+    package::RootPackage,
+    schema::{Environment, PackageID},
 };
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
@@ -76,17 +79,24 @@ pub fn build_all<W: Write + Send, F: MoveFlavor>(
     w: &mut W,
     vfs_root: Option<VfsPath>,
     root_pkg: &RootPackage<F>,
+    dependencies: BTreeSet<PackageID>,
     build_config: &BuildConfig,
     compiler_driver: impl FnOnce(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
 ) -> Result<CompiledPackage> {
     let project_root = root_pkg.package_path().to_path_buf();
     let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
     let package_name = Symbol::from(root_pkg.name().as_str());
-    let (file_map, all_compiled_units) =
-        build_for_driver(w, vfs_root, build_config, root_pkg, |compiler| {
+    let (file_map, all_compiled_units) = build_for_driver(
+        w,
+        vfs_root,
+        build_config,
+        root_pkg,
+        dependencies,
+        |compiler| {
             let compiler = compiler.add_save_hook(&program_info_hook);
             compiler_driver(compiler)
-        })?;
+        },
+    )?;
 
     let mut all_compiled_units_vec = vec![];
     let mut root_compiled_units = vec![];
@@ -195,9 +205,15 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     vfs_root: Option<VfsPath>,
     build_config: &BuildConfig,
     root_pkg: &RootPackage<F>,
+    dependencies: BTreeSet<PackageID>,
     compiler_driver: impl FnOnce(Compiler) -> Result<T>,
 ) -> Result<T> {
+    // TODO: pkg-alt this seems to add more packages for the compiler than necessary.
     let packages = root_pkg.packages();
+    let packages = packages
+        .into_iter()
+        .filter(|p| p.is_root() || dependencies.contains(p.id()))
+        .collect::<Vec<_>>();
     let package_paths = make_deps_for_compiler(w, packages, build_config)?;
 
     debug!("Package paths {:#?}", package_paths);
@@ -212,7 +228,6 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     let lint_level = build_config.lint_flag.get();
     let sui_mode = build_config.default_flavor == Some(Flavor::Sui);
     let flags = compiler_flags(build_config);
-
     let mut compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
         .unwrap()
         .set_flags(flags);
@@ -372,7 +387,7 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
             warning_filter: WarningFiltersBuilder::new_for_source(),
         };
 
-        // TODO: improve/rework this? Renaming the root pkg to have a unique name for the compiler
+        // Assign a unique name for the compiler for each package.
         let safe_name = Symbol::from(pkg.id().clone());
 
         debug!("Package name {:?} -- Safe name {:?}", name, safe_name);

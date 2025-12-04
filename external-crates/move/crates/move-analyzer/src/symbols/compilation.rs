@@ -44,7 +44,7 @@ use move_compiler::{
 };
 use move_ir_types::location::Loc;
 
-use move_package_alt::{flavor::MoveFlavor, package::RootPackage, schema::PackageName};
+use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
 use move_package_alt_compilation::{
     build_config::BuildConfig,
     build_plan::BuildPlan,
@@ -339,13 +339,19 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
 
     let root_pkg = load_root_pkg::<F>(&build_config, pkg_path)?;
     let root_pkg_name = Symbol::from(root_pkg.name().to_string());
+    // the package's transitive dependencies
+    let mut dependencies: Vec<_> = root_pkg
+        .packages()
+        .into_iter()
+        .filter(|x| !x.is_root())
+        .collect();
     let build_plan =
         BuildPlan::create(&root_pkg, &build_config)?.set_compiler_vfs_root(overlay_fs_root.clone());
 
-    let mapped_files_data =
-        compute_mapped_files(&root_pkg, &build_config, overlay_fs_root.clone())?;
     // Hash dependencies so we can check if something has changed.
     // TODO: do we still need this?
+    let mapped_files_data =
+        compute_mapped_files(&root_pkg, &build_config, overlay_fs_root.clone())?;
     let file_paths: Arc<BTreeMap<FileHash, PathBuf>> = Arc::new(
         mapped_files_data
             .files
@@ -361,12 +367,9 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     let mut compiler_analysis_info_opt = None;
     let mut compiler_autocomplete_info_opt = None;
 
-    // TODO: we need to rework on loading the root pkg only once.
-    let dependencies = root_pkg.packages();
-
     let compiler_flags = compiler_flags(&build_config);
     let (mut caching_result, other_diags) = if let Ok(deps_package_paths) =
-        make_deps_for_compiler(&mut Vec::new(), dependencies, &build_config)
+        make_deps_for_compiler(&mut Vec::new(), dependencies.clone(), &build_config)
     {
         let src_deps: BTreeMap<Symbol, PackagePaths> = deps_package_paths
             .into_iter()
@@ -414,8 +417,13 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
 
         let caching_result = match cached_pkg_info_opt {
             Some(cached_pkg_info) => {
-                // TODO: do we need to do anything here?
-                // dependencies.remove_deps(cached_pkg_info.dep_names.clone());
+                // remove dependencies that are already included in the cached package info to
+                // avoid recompiling them
+                dependencies.retain(|d| {
+                    !cached_pkg_info
+                        .dep_names
+                        .contains(&Symbol::from(d.id().to_string()))
+                });
 
                 let deps = cached_pkg_info.deps.clone();
                 let analyzed_pkg_info = AnalyzedPkgInfo::new(
@@ -435,8 +443,15 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 )
             }
             None => {
-                let sorted_deps = root_pkg.sorted_deps();
-                let sorted_deps: Vec<PackageName> = sorted_deps.into_iter().cloned().collect();
+                // get the topologically sorted dependencies, but use the package ids instead of
+                // package names. In the new pkg system, multiple packages with the same name can
+                // exist as the package system will assign unique package ids to them, before
+                // passing them to the compiler.
+                let sorted_deps: Vec<Symbol> = root_pkg
+                    .sorted_deps_ids()
+                    .into_iter()
+                    .map(|x| Symbol::from(x.to_string()))
+                    .collect();
                 if let Some((program_deps, dep_names)) = compute_pre_compiled_dep_data(
                     &mut cached_packages.compiled_dep_pkgs,
                     mapped_files_data.dep_pkg_paths,
@@ -508,8 +523,8 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     // (that no longer have failures/warnings) are reset
     let mut ide_diags = lsp_empty_diagnostics(mapped_files_data.files.file_name_mapping());
     if full_compilation || !files_to_compile.is_empty() {
-        build_plan.compile_with_driver(
-            // dependencies,
+        build_plan.compile_with_driver_and_deps(
+            dependencies.into_iter().map(|x| x.id()).cloned().collect(),
             &mut std::io::sink(),
             |compiler| {
                 let compiler = compiler.set_ide_mode();
@@ -548,7 +563,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                         let failure = true;
                         diagnostics = Some((diags, failure));
                         eprintln!("typed AST compilation failed");
-                        eprintln!("diagnostics: {:#?}", diagnostics);
                         return Ok((files, vec![]));
                     }
                 };
@@ -574,7 +588,6 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 });
                 caching_result.edition =
                     Some(compiler.compilation_env().edition(Some(root_pkg_name)));
-
                 // compile to CFGIR for accurate diags
                 eprintln!("compiling to CFGIR");
                 let compilation_result = compiler.at_typing(typed_program).run::<PASS_CFGIR>();
@@ -696,23 +709,24 @@ fn compute_pre_compiled_dep_data(
     mut dep_paths: BTreeMap<Symbol, PathBuf>,
     mut src_deps: BTreeMap<Symbol, PackagePaths>,
     root_package_name: Symbol,
-    topological_order: &[PackageName],
+    topological_order: &[Symbol],
     compiler_flags: Flags,
     vfs_root: VfsPath,
 ) -> Option<(Arc<PreCompiledProgramInfo>, BTreeSet<Symbol>)> {
     let mut pre_compiled_modules = BTreeMap::new();
     let mut pre_compiled_names = BTreeSet::new();
     for pkg_name in topological_order.iter().rev() {
-        let pkg_name = Symbol::from(pkg_name.to_string());
-        if pkg_name == root_package_name {
+        // both pkg_name and root_package_name are actually PackageIDs and generated by the pkg
+        // system
+        if pkg_name == &root_package_name {
             continue;
         }
-        let Some(dep_path) = dep_paths.remove(&pkg_name) else {
+        let Some(dep_path) = dep_paths.remove(pkg_name) else {
             eprintln!("no dep path for {pkg_name}, no caching");
             // do non-cached path
             return None;
         };
-        let Some(dep_info) = src_deps.remove(&pkg_name) else {
+        let Some(dep_info) = src_deps.remove(pkg_name) else {
             eprintln!("no dep info for {pkg_name}, no caching");
             // do non-cached path
             return None;
@@ -827,10 +841,7 @@ fn compute_mapped_files<F: MoveFlavor>(
             if is_dep {
                 hasher.update(fhash.0);
                 dep_hashes.push(fhash);
-                dep_pkg_paths.insert(
-                    rpkg.name().as_str().into(),
-                    rpkg.path().path().to_path_buf(),
-                );
+                dep_pkg_paths.insert(rpkg.id().clone().into(), rpkg.path().path().to_path_buf());
             }
             // write to top layer of the overlay file system so that the content
             // is immutable for the duration of compilation and symbolication
