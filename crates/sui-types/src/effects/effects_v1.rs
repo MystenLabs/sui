@@ -295,6 +295,10 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             .collect()
     }
 
+    fn published_packages(&self) -> Vec<ObjectID> {
+        unimplemented!("not supported in v1");
+    }
+
     fn written(&self) -> Vec<ObjectRef> {
         unimplemented!("TransactionEffectsV1::written() never called in V1");
     }

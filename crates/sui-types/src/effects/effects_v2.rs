@@ -409,6 +409,19 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             .collect()
     }
 
+    fn published_packages(&self) -> Vec<ObjectID> {
+        self.changed_objects
+            .iter()
+            .filter_map(|(id, change)| {
+                if matches!(&change.output_state, ObjectOut::PackageWrite(_)) {
+                    Some(*id)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     fn accumulator_events(&self) -> Vec<AccumulatorEvent> {
         self.changed_objects
             .iter()

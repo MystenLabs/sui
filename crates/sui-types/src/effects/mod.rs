@@ -346,6 +346,7 @@ pub trait TransactionEffectsAPI {
     fn consensus_owner_changed(&self) -> Vec<ObjectRef>;
 
     fn object_changes(&self) -> Vec<ObjectChange>;
+    fn published_packages(&self) -> Vec<ObjectID>;
 
     /// The set of object refs written by this transaction, including deleted and wrapped objects.
     /// Unlike object_changes(), returns no information about the starting state of the object.
