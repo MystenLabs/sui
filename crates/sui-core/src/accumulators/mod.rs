@@ -30,7 +30,10 @@ use sui_types::{
 
 use crate::execution_cache::TransactionCacheRead;
 
+// provides balance read functionality for the scheduler
 pub mod balance_read;
+// provides balance read functionality for RPC
+pub mod balances;
 
 /// Merged value is the value stored inside accumulator objects.
 /// Each mergeable Move type will map to a single variant as its representation.
