@@ -39,7 +39,7 @@ use sui_types::{
     gas::SuiGasStatusAPI,
     transaction::{InputObjectKind, ObjectReadResult, ObjectReadResultKind},
 };
-use tracing::{debug, error, info, info_span, trace};
+use tracing::{debug, error, info_span, trace, warn};
 
 pub type ObjectVersion = u64;
 pub type PackageVersion = u64;
@@ -148,7 +148,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     }
 
     // Save results
-    info!(
+    debug!(
         tx_digest = %tx_digest,
         result = ?result,
         output_dir = %artifact_manager.base_path.display(),
@@ -191,7 +191,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     if let sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb) =
         context_and_effects.txn_data.kind()
     {
-        info!(tx_digest = %tx_digest, "Extracting move call info for {} commands", ptb.commands.len());
+        debug!(tx_digest = %tx_digest, "Extracting move call info for {} commands", ptb.commands.len());
         match MoveCallInfo::from_transaction(ptb, &context_and_effects.object_cache) {
             Ok(move_call_info) => {
                 let successful_extractions = move_call_info
@@ -199,7 +199,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
                     .iter()
                     .filter(|s| s.is_some())
                     .count();
-                info!(tx_digest = %tx_digest, "Successfully extracted {} function signatures out of {} commands",
+                debug!(tx_digest = %tx_digest, "Successfully extracted {} function signatures out of {} commands",
                     successful_extractions, move_call_info.command_signatures.len());
 
                 artifact_manager
@@ -209,7 +209,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
                     .unwrap();
             }
             Err(e) => {
-                info!(tx_digest = %tx_digest, "Failed to extract move call info: {}", e);
+                warn!(tx_digest = %tx_digest, "Failed to extract move call info: {}", e);
             }
         }
     }

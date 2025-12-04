@@ -16177,6 +16177,7 @@ dependencies = [
  "csv",
  "fastcrypto",
  "futures",
+ "indicatif",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-cli",
