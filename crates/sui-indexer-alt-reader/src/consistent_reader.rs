@@ -170,14 +170,14 @@ impl ConsistentReader {
     #[instrument(skip(self), level = "debug")]
     pub async fn get_balance(
         &self,
-        checkpoint: u64,
+        checkpoint: Option<u64>,
         address: String,
         coin_type: String,
     ) -> Result<(TypeTag, u64), Error> {
         let response = self
             .request(
                 "get_balance",
-                Some(checkpoint),
+                checkpoint,
                 |mut client, request| async move { client.get_balance(request).await },
                 proto::GetBalanceRequest {
                     owner: Some(address),
@@ -194,7 +194,7 @@ impl ConsistentReader {
     #[instrument(skip(self), level = "debug")]
     pub async fn list_balances(
         &self,
-        checkpoint: u64,
+        checkpoint: Option<u64>,
         address: String,
         page_size: Option<u32>,
         after_token: Option<Vec<u8>>,
@@ -204,7 +204,7 @@ impl ConsistentReader {
         let response = self
             .request(
                 "list_balances",
-                Some(checkpoint),
+                checkpoint,
                 |mut client, request| async move { client.list_balances(request).await },
                 proto::ListBalancesRequest {
                     owner: Some(address),
