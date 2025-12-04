@@ -110,6 +110,14 @@ pub enum PackageError {
 
     #[error("Multiple entries with `source = {{ {dep} }}` exist in the publication file")]
     MultipleEphemeralEntries { dep: String },
+
+    #[error(
+        "Cannot override default environments. Environment `{name}` is a system environment and cannot be overridden. System environments: {valid}"
+    )]
+    CannotOverrideDefaultEnvironments {
+        name: EnvironmentName,
+        valid: String,
+    },
 }
 
 /// Truncate `s` to the first `head` characters and the last `tail` characters of `s`, separated by

@@ -238,6 +238,21 @@ pub fn basic_manifest(name: &str, version: &str) -> String {
     )
 }
 
+/// Generate a basic manifest without envs (using system default envs)
+pub fn basic_manifest_with_default_envs(name: &str, version: &str) -> String {
+    formatdoc!(
+        r#"
+        [package]
+        name = "{}"
+        version = "{}"
+        authors = []
+        edition = "2024"
+    "#,
+        name,
+        version,
+    )
+}
+
 /// Generate a basic manifest with specific environment info
 pub fn basic_manifest_with_env(name: &str, version: &str, env: &str, chain_id: &str) -> String {
     formatdoc!(
