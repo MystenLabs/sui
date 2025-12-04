@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use anyhow::Context as _;
@@ -244,6 +245,83 @@ impl DelegationCoinsApiServer for DelegationCoins {
             .get_balance(owner, coin_type)
             .await
             .map_err(client_error_to_error_object)
+    }
+}
+
+#[async_trait::async_trait]
+impl DelegationCoinsApiServer for Coins {
+    async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
+        let Self(ctx) = self;
+        let consistent_reader = ctx.consistent_reader();
+        let config = &ctx.config().coins;
+
+        let mut all_balances = Vec::new();
+        let mut after_token: Option<Vec<u8>> = None;
+
+        loop {
+            let page = consistent_reader
+                .list_balances(
+                    None,
+                    owner.to_string(),
+                    Some(config.max_page_size as u32),
+                    after_token.clone(),
+                    None,
+                    true,
+                )
+                .await
+                .context("Failed to get all balances")
+                .map_err(RpcError::<Error>::from)?;
+
+            for edge in &page.results {
+                all_balances.push(Balance {
+                    coin_type: edge.value.0.to_canonical_string(/* with_prefix */ true),
+                    total_balance: edge.value.1 as u128,
+                    coin_object_count: 1,
+                    locked_balance: HashMap::new(),
+                });
+            }
+
+            if page.has_next_page {
+                after_token = page.results.last().map(|edge| edge.token.clone());
+            } else {
+                break;
+            }
+        }
+
+        Ok(all_balances)
+    }
+
+    async fn get_balance(
+        &self,
+        owner: SuiAddress,
+        coin_type: Option<String>,
+    ) -> RpcResult<Balance> {
+        let Self(ctx) = self;
+        let consistent_reader = ctx.consistent_reader();
+
+        let inner_coin_type = if let Some(coin_type) = coin_type {
+            parse_sui_type_tag(&coin_type)
+                .map_err(|e| invalid_params(Error::BadType(coin_type, e)))?
+        } else {
+            GAS::type_tag()
+        };
+
+        let (type_tag, total_balance) = consistent_reader
+            .get_balance(
+                None,
+                owner.to_string(),
+                inner_coin_type.to_canonical_string(/* with_prefix */ true),
+            )
+            .await
+            .context("Failed to get balance")
+            .map_err(RpcError::<Error>::from)?;
+
+        Ok(Balance {
+            coin_type: type_tag.to_canonical_string(/* with_prefix */ true),
+            total_balance: total_balance as u128,
+            coin_object_count: 0,
+            locked_balance: HashMap::new(),
+        })
     }
 }
 
