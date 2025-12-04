@@ -16659,6 +16659,7 @@ dependencies = [
  "move-package-alt",
  "move-package-alt-compilation",
  "move-symbol-pool",
+ "msim",
  "rand 0.8.5",
  "serde",
  "sui-config",
