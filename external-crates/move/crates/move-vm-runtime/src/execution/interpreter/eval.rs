@@ -134,11 +134,18 @@ fn step(
     let fun_ref = state.call_stack.current_frame.function();
     let instructions = fun_ref.code();
     let pc = state.call_stack.current_frame.pc as usize;
-    assert!(
-        pc <= instructions.len(),
-        "PC beyond instruction count for {}",
-        fun_ref.name(&run_context.vtables.interner)
-    );
+    if pc >= instructions.len() {
+        return Err(
+            state.set_location(
+                PartialVMError::new(StatusCode::PC_OVERFLOW).with_message(format!(
+                    "PC {} out of bounds for function {} with {} instructions",
+                    pc,
+                    fun_ref.name(&run_context.vtables.interner),
+                    instructions.len()
+                )),
+            ),
+        );
+    }
     let instruction = &instructions[pc];
     fail_point!("move_vm::interpreter_loop", |_| {
         Err(state.set_location(

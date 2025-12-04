@@ -251,12 +251,20 @@ pub fn package(
         let loaded_module = module(&mut package_context, version_id, &mut input_module)?;
 
         let key = interner.intern_ident_str(loaded_module.id.name())?;
-        assert!(
-            package_context
-                .loaded_modules
-                .insert(key, loaded_module)
-                .is_none()
-        );
+        if package_context
+            .loaded_modules
+            .insert(key, loaded_module)
+            .is_some()
+        {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!(
+                        "Duplicate module loaded in package {}",
+                        package_context.version_id
+                    ),
+                ),
+            );
+        }
     }
 
     let PackageContext {
