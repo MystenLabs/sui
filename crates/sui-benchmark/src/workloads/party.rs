@@ -5,7 +5,6 @@ use super::{
     WorkloadBuilderInfo, WorkloadParams,
     workload::{MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder},
 };
-use crate::ProgrammableTransactionBuilder;
 use crate::drivers::Interval;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::{SystemState, SystemStateObserver};
@@ -100,44 +99,45 @@ impl PartyTestPayload {
         // of the current version.
         let next_recipient = self.sender;
 
-        let mut builder = ProgrammableTransactionBuilder::new();
-        let args = vec![
-            builder
-                .obj(match &self.object_ref.0 {
-                    FullObjectID::Fastpath(_) => {
-                        ObjectArg::ImmOrOwnedObject(self.object_ref.as_object_ref())
-                    }
-                    FullObjectID::Consensus((id, initial_shared_version)) => {
-                        ObjectArg::SharedObject {
-                            id: *id,
-                            initial_shared_version: *initial_shared_version,
-                            mutability: SharedObjectMutability::Mutable,
-                        }
-                    }
-                })
-                .unwrap(),
-            builder.pure(next_recipient).unwrap(),
-        ];
-        builder.programmable_move_call(
-            self.package_id,
-            Identifier::new("party").unwrap(),
-            // Randomly transfer object to either ConsensusV2 or AddressOwner.
-            [
-                Identifier::new("transfer_party").unwrap(),
-                Identifier::new("transfer_fastpath").unwrap(),
-            ]
-            .into_iter()
-            .choose(&mut rand::thread_rng())
-            .unwrap(),
-            vec![],
-            args,
-        );
-
         let state = self.state.lock().unwrap();
         let account = state.account(&self.sender).unwrap();
-        TestTransactionBuilder::new(self.sender, account.gas, gas_price)
-            .programmable(builder.finish())
-            .build_and_sign(account.key())
+        let mut tx_builder = TestTransactionBuilder::new(self.sender, account.gas, gas_price);
+        {
+            let builder = tx_builder.ptb_builder_mut();
+            let args = vec![
+                builder
+                    .obj(match &self.object_ref.0 {
+                        FullObjectID::Fastpath(_) => {
+                            ObjectArg::ImmOrOwnedObject(self.object_ref.as_object_ref())
+                        }
+                        FullObjectID::Consensus((id, initial_shared_version)) => {
+                            ObjectArg::SharedObject {
+                                id: *id,
+                                initial_shared_version: *initial_shared_version,
+                                mutability: SharedObjectMutability::Mutable,
+                            }
+                        }
+                    })
+                    .unwrap(),
+                builder.pure(next_recipient).unwrap(),
+            ];
+            builder.programmable_move_call(
+                self.package_id,
+                Identifier::new("party").unwrap(),
+                // Randomly transfer object to either ConsensusV2 or AddressOwner.
+                [
+                    Identifier::new("transfer_party").unwrap(),
+                    Identifier::new("transfer_fastpath").unwrap(),
+                ]
+                .into_iter()
+                .choose(&mut rand::thread_rng())
+                .unwrap(),
+                vec![],
+                args,
+            );
+        }
+
+        tx_builder.build_and_sign(account.key())
     }
 }
 

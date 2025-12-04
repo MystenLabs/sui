@@ -739,23 +739,39 @@ pub async fn check_completed_snapshot(
     epoch: EpochId,
 ) -> Result<(), anyhow::Error> {
     let success_marker = format!("epoch_{}/_SUCCESS", epoch);
+    let archive_success_marker = format!("archive/epoch_{}/_SUCCESS", epoch);
     let remote_object_store = if snapshot_store_config.no_sign_request {
         snapshot_store_config.make_http()?
     } else {
         snapshot_store_config.make().map(Arc::new)?
     };
-    if exists(&remote_object_store, &get_path(success_marker.as_str())).await {
+
+    // Check regular location first, then archive location
+    if exists(&remote_object_store, &get_path(success_marker.as_str())).await
+        || exists(
+            &remote_object_store,
+            &get_path(archive_success_marker.as_str()),
+        )
+        .await
+    {
         Ok(())
     } else {
         Err(anyhow!(
-            "missing success marker at {}/{}",
+            "missing success marker at {}/{} or {}/{}",
             snapshot_store_config.bucket.as_ref().unwrap_or(
                 &snapshot_store_config
                     .clone()
                     .aws_endpoint
                     .unwrap_or("unknown_bucket".to_string())
             ),
-            success_marker
+            success_marker,
+            snapshot_store_config.bucket.as_ref().unwrap_or(
+                &snapshot_store_config
+                    .clone()
+                    .aws_endpoint
+                    .unwrap_or("unknown_bucket".to_string())
+            ),
+            archive_success_marker
         ))
     }
 }

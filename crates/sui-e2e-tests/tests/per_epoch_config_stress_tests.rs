@@ -12,7 +12,6 @@ use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SuiAddress};
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability, TransactionData};
 use sui_types::{SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -118,7 +117,7 @@ async fn create_deny_tx(test_env: Arc<TestEnv>, gas: ObjectRef) -> TransactionDa
         .test_cluster
         .test_transaction_builder_with_gas_object(test_env.regulated_coin_owner, gas)
         .await
-        .move_call(
+        .move_call_with_type_args(
             SUI_FRAMEWORK_PACKAGE_ID,
             "coin",
             if deny {
@@ -126,6 +125,7 @@ async fn create_deny_tx(test_env: Arc<TestEnv>, gas: ObjectRef) -> TransactionDa
             } else {
                 "deny_list_v2_remove"
             },
+            vec![test_env.regulated_coin_type.clone()],
             vec![
                 CallArg::Object(ObjectArg::SharedObject {
                     id: SUI_DENY_LIST_OBJECT_ID,
@@ -138,7 +138,6 @@ async fn create_deny_tx(test_env: Arc<TestEnv>, gas: ObjectRef) -> TransactionDa
                 CallArg::Pure(bcs::to_bytes(&DENY_ADDRESS).unwrap()),
             ],
         )
-        .with_type_args(vec![test_env.regulated_coin_type.clone()])
         .build()
 }
 
@@ -156,10 +155,11 @@ async fn create_move_transfer_tx(test_env: Arc<TestEnv>, gas: ObjectRef) -> Tran
         .test_cluster
         .test_transaction_builder_with_gas_object(test_env.regulated_coin_owner, gas)
         .await
-        .move_call(
+        .move_call_with_type_args(
             SUI_FRAMEWORK_PACKAGE_ID,
             "pay",
             "split_and_transfer",
+            vec![test_env.regulated_coin_type.clone()],
             vec![
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(
                     test_env
@@ -170,35 +170,34 @@ async fn create_move_transfer_tx(test_env: Arc<TestEnv>, gas: ObjectRef) -> Tran
                 CallArg::Pure(bcs::to_bytes(&DENY_ADDRESS).unwrap()),
             ],
         )
-        .with_type_args(vec![test_env.regulated_coin_type.clone()])
         .build()
 }
 
 async fn create_native_transfer_tx(test_env: Arc<TestEnv>, gas: ObjectRef) -> TransactionData {
-    let mut pt_builder = ProgrammableTransactionBuilder::new();
-    let coin_input = pt_builder
-        .obj(ObjectArg::ImmOrOwnedObject(
-            test_env
-                .get_latest_object_ref(&test_env.regulated_coin_id)
-                .await,
-        ))
-        .unwrap();
-    let amount_input = pt_builder.pure(1u64).unwrap();
-    let split_coin = pt_builder.programmable_move_call(
-        SUI_FRAMEWORK_PACKAGE_ID,
-        ident_str!("coin").to_owned(),
-        ident_str!("split").to_owned(),
-        vec![test_env.regulated_coin_type.clone()],
-        vec![coin_input, amount_input],
-    );
-    pt_builder.transfer_arg(DENY_ADDRESS, split_coin);
-    let pt = pt_builder.finish();
-    test_env
+    let mut tx_builder = test_env
         .test_cluster
         .test_transaction_builder_with_gas_object(test_env.regulated_coin_owner, gas)
-        .await
-        .programmable(pt)
-        .build()
+        .await;
+    {
+        let pt_builder = tx_builder.ptb_builder_mut();
+        let coin_input = pt_builder
+            .obj(ObjectArg::ImmOrOwnedObject(
+                test_env
+                    .get_latest_object_ref(&test_env.regulated_coin_id)
+                    .await,
+            ))
+            .unwrap();
+        let amount_input = pt_builder.pure(1u64).unwrap();
+        let split_coin = pt_builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            ident_str!("coin").to_owned(),
+            ident_str!("split").to_owned(),
+            vec![test_env.regulated_coin_type.clone()],
+            vec![coin_input, amount_input],
+        );
+        pt_builder.transfer_arg(DENY_ADDRESS, split_coin);
+    }
+    tx_builder.build()
 }
 
 struct TestEnv {

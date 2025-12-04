@@ -25,7 +25,6 @@ use sui_types::error::SuiErrorKind;
 use sui_types::governance::{
     VALIDATOR_LOW_POWER_PHASE_1, VALIDATOR_MIN_POWER_PHASE_1, VALIDATOR_VERY_LOW_POWER_PHASE_1,
 };
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{
     SuiSystemStateTrait, get_validator_from_table,
     sui_system_state_summary::get_validator_by_pool_id,
@@ -1214,26 +1213,27 @@ async fn execute_add_stake_transaction(
         .unwrap();
 
     let rgp = test_cluster.get_reference_gas_price().await;
-    let mut ptb = ProgrammableTransactionBuilder::new();
-    let system_arg = ptb.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+    let mut tx_builder = TestTransactionBuilder::new(address, gas, rgp);
+    let tx = {
+        let ptb = tx_builder.ptb_builder_mut();
+        let system_arg = ptb.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
 
-    stakes.into_iter().for_each(|(stake_for, stake_amount)| {
-        let amt_arg = ptb.pure(stake_amount).unwrap();
-        let stake_arg = ptb.command(Command::SplitCoins(Argument::GasCoin, vec![amt_arg]));
-        let stake_for_arg = ptb.pure(stake_for).unwrap();
+        stakes.into_iter().for_each(|(stake_for, stake_amount)| {
+            let amt_arg = ptb.pure(stake_amount).unwrap();
+            let stake_arg = ptb.command(Command::SplitCoins(Argument::GasCoin, vec![amt_arg]));
+            let stake_for_arg = ptb.pure(stake_for).unwrap();
 
-        ptb.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
-            package: SUI_SYSTEM_PACKAGE_ID,
-            module: "sui_system".to_string(),
-            function: "request_add_stake".to_string(),
-            arguments: vec![system_arg, stake_arg, stake_for_arg],
-            type_arguments: vec![],
-        })));
-    });
+            ptb.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package: SUI_SYSTEM_PACKAGE_ID,
+                module: "sui_system".to_string(),
+                function: "request_add_stake".to_string(),
+                arguments: vec![system_arg, stake_arg, stake_for_arg],
+                type_arguments: vec![],
+            })));
+        });
 
-    let tx = TestTransactionBuilder::new(address, gas, rgp)
-        .programmable(ptb.finish())
-        .build();
+        tx_builder.build()
+    };
 
     let response = test_cluster
         .execute_transaction(test_cluster.wallet.sign_transaction(&tx).await)

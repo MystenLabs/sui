@@ -929,7 +929,7 @@ dependencies = [
 [[package]]
 name = "async-graphql"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#accb23623380994ae8a02218858e23eb6ec66187"
+source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#7be9351958ef7ebcbb7fed2f45dd3e9c92398df1"
 dependencies = [
  "async-graphql-derive",
  "async-graphql-parser",
@@ -968,7 +968,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-axum"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#accb23623380994ae8a02218858e23eb6ec66187"
+source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#7be9351958ef7ebcbb7fed2f45dd3e9c92398df1"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -985,7 +985,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-derive"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#accb23623380994ae8a02218858e23eb6ec66187"
+source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#7be9351958ef7ebcbb7fed2f45dd3e9c92398df1"
 dependencies = [
  "Inflector",
  "async-graphql-parser",
@@ -1001,7 +1001,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-parser"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#accb23623380994ae8a02218858e23eb6ec66187"
+source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#7be9351958ef7ebcbb7fed2f45dd3e9c92398df1"
 dependencies = [
  "async-graphql-value",
  "pest",
@@ -1012,7 +1012,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-value"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#accb23623380994ae8a02218858e23eb6ec66187"
+source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#7be9351958ef7ebcbb7fed2f45dd3e9c92398df1"
 dependencies = [
  "bytes",
  "indexmap 2.8.0",
@@ -18599,7 +18599,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

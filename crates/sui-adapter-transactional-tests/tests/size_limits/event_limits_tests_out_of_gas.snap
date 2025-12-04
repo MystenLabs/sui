@@ -22,9 +22,9 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 4, lines 73-75:
 //# run Test::M1::emit_event_with_size --args 259000 --gas-budget 1000000000
 Error: Transaction Effects Status: Insufficient Gas.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: Some(VMError { major_status: OUT_OF_GAS, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: Test, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 37)] }), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: Some(VMError { major_status: OUT_OF_GAS, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: Test, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 27)] }), command: Some(0) } }
 
 task 5, line 76:
 //# run Test::M1::emit_n_events_with_size --args 3 256000 --gas-budget 1000000000 --summarize
 Error: Transaction Effects Status: Insufficient Gas.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: Some(VMError { major_status: OUT_OF_GAS, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: Test, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 27)] }), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: Some(VMError { major_status: OUT_OF_GAS, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: Test, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 26)] }), command: Some(0) } }

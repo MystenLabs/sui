@@ -24,10 +24,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
-use sui_types::{
-    base_types::SuiAddress, programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::ObjectArg,
-};
+use sui_types::{base_types::SuiAddress, transaction::ObjectArg};
 use test_cluster::{TestCluster, TestClusterBuilder};
 
 // Unified struct for all GraphQL transaction effects parsing
@@ -262,7 +259,7 @@ async fn test_execute_transaction_mutation_schema() {
         transaction.sender.address,
         validator_cluster.get_address_0().to_string()
     );
-    assert_eq!(transaction.gas_input.gas_budget, "10000000");
+    assert_eq!(transaction.gas_input.gas_budget, "5000000000");
     assert_eq!(transaction.signatures.len(), signatures.len());
     for (returned, original) in transaction.signatures.iter().zip(signatures.iter()) {
         assert_eq!(returned.signature_bytes, original.encoded());
@@ -448,28 +445,27 @@ async fn test_execute_transaction_unchanged_consensus_objects() {
     let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
 
     // Create a read-only transaction that accesses the Clock object
-    let mut ptb = ProgrammableTransactionBuilder::new();
-    let clock_arg = ptb
-        .obj(ObjectArg::SharedObject {
-            id: sui_types::SUI_CLOCK_OBJECT_ID,
-            initial_shared_version: sui_types::base_types::SequenceNumber::from_u64(1),
-            mutability: SharedObjectMutability::Immutable,
-        })
-        .unwrap();
+    let mut tx_builder = validator_cluster.test_transaction_builder().await;
+    let tx_data = {
+        let ptb = tx_builder.ptb_builder_mut();
+        let clock_arg = ptb
+            .obj(ObjectArg::SharedObject {
+                id: sui_types::SUI_CLOCK_OBJECT_ID,
+                initial_shared_version: sui_types::base_types::SequenceNumber::from_u64(1),
+                mutability: SharedObjectMutability::Immutable,
+            })
+            .unwrap();
 
-    ptb.programmable_move_call(
-        sui_types::SUI_FRAMEWORK_PACKAGE_ID,
-        "clock".parse().unwrap(),
-        "timestamp_ms".parse().unwrap(),
-        vec![],
-        vec![clock_arg],
-    );
+        ptb.programmable_move_call(
+            sui_types::SUI_FRAMEWORK_PACKAGE_ID,
+            "clock".parse().unwrap(),
+            "timestamp_ms".parse().unwrap(),
+            vec![],
+            vec![clock_arg],
+        );
 
-    let tx_data = validator_cluster
-        .test_transaction_builder()
-        .await
-        .programmable(ptb.finish())
-        .build();
+        tx_builder.build()
+    };
     let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
     let (tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
 
