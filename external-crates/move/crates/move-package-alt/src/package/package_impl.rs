@@ -75,18 +75,6 @@ pub struct Package<F: MoveFlavor> {
 }
 
 impl<F: MoveFlavor> Package<F> {
-    /// Load a package from the directory given by `path`.
-    /// Makes a best effort to translate old-style packages into the current format
-    pub async fn load_root(
-        path: PackagePath,
-        env: &Environment,
-        mtx: &PackageSystemLock,
-    ) -> PackageResult<Self> {
-        let source = Pinned::Root(path);
-
-        Self::load(source, env, mtx).await
-    }
-
     /// Fetch [dep] (relative to [self]) and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
     pub async fn load(
@@ -99,7 +87,7 @@ impl<F: MoveFlavor> Package<F> {
 
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
-        let legacy_manifest = path.read_legacy_manifest(env, mtx)?;
+        let legacy_manifest = path.read_legacy_manifest(env, dep.is_root(), mtx)?;
         let (file_handle, manifest) = if let Some(result) = legacy_manifest {
             result
         } else {
@@ -535,7 +523,11 @@ mod tests {
                 .await
                 .unwrap_err();
 
-        assert_snapshot!(err.to_string(), @"The `foo` dependency is implicitly provided and should not be defined in your manifest.");
+        let message = err
+            .to_string()
+            .replace(scenario.path_for("a").to_string_lossy().as_ref(), "<DIR>");
+
+        assert_snapshot!(message, @"Error while loading dependency <DIR>: The `foo` dependency is implicitly provided and should not be defined in your manifest.");
     }
 
     /// Loading a package with an explicit dep with the same name as an implicit succeeds if
