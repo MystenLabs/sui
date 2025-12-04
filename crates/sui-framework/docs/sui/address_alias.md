@@ -9,10 +9,10 @@ title: Module `sui::address_alias`
 -  [Struct `AliasKey`](#sui_address_alias_AliasKey)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#sui_address_alias_create)
--  [Function `init_aliases`](#sui_address_alias_init_aliases)
--  [Function `add_alias`](#sui_address_alias_add_alias)
--  [Function `set_aliases`](#sui_address_alias_set_aliases)
--  [Function `remove_alias`](#sui_address_alias_remove_alias)
+-  [Function `initialize`](#sui_address_alias_initialize)
+-  [Function `add`](#sui_address_alias_add)
+-  [Function `replace_all`](#sui_address_alias_replace_all)
+-  [Function `remove`](#sui_address_alias_remove)
 
 
 <pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
@@ -171,7 +171,7 @@ Internal key used for derivation of AddressAliases object addresses.
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/address_alias.md#sui_address_alias_ECannotRemoveLastAlias">ECannotRemoveLastAlias</a>: vector&lt;u8&gt; = b"Cannot remove the last alias.";
+<b>const</b> <a href="../sui/address_alias.md#sui_address_alias_ECannotRemoveLastAlias">ECannotRemoveLastAlias</a>: vector&lt;u8&gt; = b"Cannot <a href="../sui/address_alias.md#sui_address_alias_remove">remove</a> the last alias.";
 </code></pre>
 
 
@@ -236,9 +236,9 @@ Can only be called by genesis or change_epoch transactions.
 
 </details>
 
-<a name="sui_address_alias_init_aliases"></a>
+<a name="sui_address_alias_initialize"></a>
 
-## Function `init_aliases`
+## Function `initialize`
 
 Provides the initial set of address aliases for the sender address.
 
@@ -246,7 +246,7 @@ By default, an address is its own alias. However, the original address can
 be removed from the set of allowed aliases after initialization.
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_init_aliases">init_aliases</a>(address_alias_state: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliasState">sui::address_alias::AddressAliasState</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_initialize">initialize</a>(address_alias_state: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliasState">sui::address_alias::AddressAliasState</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -255,8 +255,11 @@ be removed from the set of allowed aliases after initialization.
 <summary>Implementation</summary>
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_init_aliases">init_aliases</a>(address_alias_state: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliasState">AddressAliasState</a>, ctx: &TxContext) {
-    <b>assert</b>!(!<a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&address_alias_state.id, <a href="../sui/address_alias.md#sui_address_alias_AliasKey">AliasKey</a>(ctx.sender())), <a href="../sui/address_alias.md#sui_address_alias_EAliasAlreadyExists">EAliasAlreadyExists</a>);
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_initialize">initialize</a>(address_alias_state: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliasState">AddressAliasState</a>, ctx: &TxContext) {
+    <b>assert</b>!(
+        !<a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&address_alias_state.id, <a href="../sui/address_alias.md#sui_address_alias_AliasKey">AliasKey</a>(ctx.sender())),
+        <a href="../sui/address_alias.md#sui_address_alias_EAliasAlreadyExists">EAliasAlreadyExists</a>,
+    );
     <a href="../sui/transfer.md#sui_transfer_party_transfer">transfer::party_transfer</a>(
         <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">AddressAliases</a> {
             id: <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>(&<b>mut</b> address_alias_state.id, <a href="../sui/address_alias.md#sui_address_alias_AliasKey">AliasKey</a>(ctx.sender())),
@@ -271,14 +274,14 @@ be removed from the set of allowed aliases after initialization.
 
 </details>
 
-<a name="sui_address_alias_add_alias"></a>
+<a name="sui_address_alias_add"></a>
 
-## Function `add_alias`
+## Function `add`
 
 Adds the provided address to the set of aliases for the sender.
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_add_alias">add_alias</a>(aliases: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">sui::address_alias::AddressAliases</a>, alias: <b>address</b>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_add">add</a>(aliases: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">sui::address_alias::AddressAliases</a>, alias: <b>address</b>)
 </code></pre>
 
 
@@ -287,7 +290,7 @@ Adds the provided address to the set of aliases for the sender.
 <summary>Implementation</summary>
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_add_alias">add_alias</a>(aliases: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">AddressAliases</a>, alias: <b>address</b>) {
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_add">add</a>(aliases: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">AddressAliases</a>, alias: <b>address</b>) {
     <b>assert</b>!(!aliases.aliases.contains(&alias), <a href="../sui/address_alias.md#sui_address_alias_EAliasAlreadyExists">EAliasAlreadyExists</a>);
     aliases.aliases.insert(alias);
     <b>assert</b>!(aliases.aliases.length() &lt;= <a href="../sui/address_alias.md#sui_address_alias_MAX_ALIASES">MAX_ALIASES</a>, <a href="../sui/address_alias.md#sui_address_alias_ETooManyAliases">ETooManyAliases</a>);
@@ -298,14 +301,14 @@ Adds the provided address to the set of aliases for the sender.
 
 </details>
 
-<a name="sui_address_alias_set_aliases"></a>
+<a name="sui_address_alias_replace_all"></a>
 
-## Function `set_aliases`
+## Function `replace_all`
 
 Overwrites the aliases for the sender's address with the given set.
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_set_aliases">set_aliases</a>(aliases: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">sui::address_alias::AddressAliases</a>, new_aliases: vector&lt;<b>address</b>&gt;)
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_replace_all">replace_all</a>(aliases: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">sui::address_alias::AddressAliases</a>, new_aliases: vector&lt;<b>address</b>&gt;)
 </code></pre>
 
 
@@ -314,7 +317,7 @@ Overwrites the aliases for the sender's address with the given set.
 <summary>Implementation</summary>
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_set_aliases">set_aliases</a>(aliases: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">AddressAliases</a>, new_aliases: vector&lt;<b>address</b>&gt;) {
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_replace_all">replace_all</a>(aliases: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">AddressAliases</a>, new_aliases: vector&lt;<b>address</b>&gt;) {
     <b>let</b> new_aliases = <a href="../sui/vec_set.md#sui_vec_set_from_keys">vec_set::from_keys</a>(new_aliases);
     <b>assert</b>!(new_aliases.length() &gt; 0, <a href="../sui/address_alias.md#sui_address_alias_ECannotRemoveLastAlias">ECannotRemoveLastAlias</a>);
     <b>assert</b>!(new_aliases.length() &lt;= <a href="../sui/address_alias.md#sui_address_alias_MAX_ALIASES">MAX_ALIASES</a>, <a href="../sui/address_alias.md#sui_address_alias_ETooManyAliases">ETooManyAliases</a>);
@@ -326,14 +329,14 @@ Overwrites the aliases for the sender's address with the given set.
 
 </details>
 
-<a name="sui_address_alias_remove_alias"></a>
+<a name="sui_address_alias_remove"></a>
 
-## Function `remove_alias`
+## Function `remove`
 
 Removes the given alias from the set of aliases for the sender's address.
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_remove_alias">remove_alias</a>(aliases: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">sui::address_alias::AddressAliases</a>, alias: <b>address</b>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_remove">remove</a>(aliases: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">sui::address_alias::AddressAliases</a>, alias: <b>address</b>)
 </code></pre>
 
 
@@ -342,10 +345,10 @@ Removes the given alias from the set of aliases for the sender's address.
 <summary>Implementation</summary>
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_remove_alias">remove_alias</a>(aliases: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">AddressAliases</a>, alias: <b>address</b>) {
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_remove">remove</a>(aliases: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliases">AddressAliases</a>, alias: <b>address</b>) {
     <b>assert</b>!(aliases.aliases.contains(&alias), <a href="../sui/address_alias.md#sui_address_alias_ENoSuchAlias">ENoSuchAlias</a>);
     <b>assert</b>!(aliases.aliases.length() &gt; 1, <a href="../sui/address_alias.md#sui_address_alias_ECannotRemoveLastAlias">ECannotRemoveLastAlias</a>);
-    aliases.aliases.remove(&alias);
+    aliases.aliases.<a href="../sui/address_alias.md#sui_address_alias_remove">remove</a>(&alias);
 }
 </code></pre>
 

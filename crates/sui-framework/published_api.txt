@@ -1816,16 +1816,16 @@ AliasKey
 create
 	fun
 	0x2::address_alias
-init_aliases
+initialize
 	entry fun
 	0x2::address_alias
-add_alias
+add
 	entry fun
 	0x2::address_alias
-set_aliases
+replace_all
 	entry fun
 	0x2::address_alias
-remove_alias
+remove
 	entry fun
 	0x2::address_alias
 AuthenticatorState

@@ -14,7 +14,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::address_alias::get_address_alias_state_obj_initial_shared_version;
 use sui_types::base_types::AuthorityName;
-use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, ProgrammableTransaction};
+use sui_types::transaction::{Argument, CallArg, Command, ObjectArg};
 use sui_types::{SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
@@ -291,28 +291,20 @@ async fn test_checkpoint_contents_v2_alias_versions() {
         )
         .await;
     let initialize_digest = *initialize_tx.digest();
-    let transfer_tx = test_cluster
-        .wallet
-        .sign_transaction(
-            &TestTransactionBuilder::new(account, gas_objects[1], gas_price)
-                .programmable(ProgrammableTransaction {
-                    inputs: vec![
-                        // Add dependency on shared object to force consensus.
-                        CallArg::Object(ObjectArg::SharedObject {
-                            id: SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
-                            initial_shared_version: address_alias_state_initial_shared_version,
-                            mutability: sui_types::transaction::SharedObjectMutability::Immutable,
-                        }),
-                        CallArg::Pure(bcs::to_bytes(&account).unwrap()),
-                    ],
-                    commands: vec![Command::TransferObjects(
-                        vec![Argument::GasCoin],
-                        Argument::Input(1),
-                    )],
-                })
-                .build(),
-        )
-        .await;
+    let transfer_tx = {
+        let mut builder = TestTransactionBuilder::new(account, gas_objects[1], gas_price);
+        let ptb = builder.ptb_builder_mut();
+        // Add dependency on shared object to force consensus.
+        ptb.input(CallArg::Object(ObjectArg::SharedObject {
+            id: SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
+            initial_shared_version: address_alias_state_initial_shared_version,
+            mutability: sui_types::transaction::SharedObjectMutability::Immutable,
+        }))
+        .unwrap();
+        let recipient = ptb.input(CallArg::Pure(bcs::to_bytes(&account).unwrap())).unwrap();
+        ptb.command(Command::TransferObjects(vec![Argument::GasCoin], recipient));
+        test_cluster.wallet.sign_transaction(&builder.build()).await
+    };
     let transfer_digest = *transfer_tx.digest();
 
     let mut client = test_cluster
