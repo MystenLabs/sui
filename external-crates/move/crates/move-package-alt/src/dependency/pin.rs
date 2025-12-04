@@ -5,6 +5,7 @@
 use std::{fmt, path::PathBuf};
 
 use path_clean::PathClean;
+use tracing::debug;
 
 use crate::{
     dependency::{ResolvedDependency, combine::Combined, resolve::Resolved},
@@ -64,6 +65,7 @@ impl PinnedDependencyInfo {
         deps: Vec<CombinedDependency>,
         environment_id: &EnvironmentID,
     ) -> PackageResult<Vec<PinnedDependencyInfo>> {
+        debug!("pinning dependencies");
         // replace all system dependencies using the flavor
         let (non_system_deps, mut result) = Self::replace_system_deps::<F>(deps, environment_id)?;
 
@@ -83,6 +85,12 @@ impl PinnedDependencyInfo {
         }
 
         Ok(result)
+    }
+
+    /// Transform a combined dependency into a pinned dependency using the provided pinned
+    /// information
+    pub fn from_combined(dep: CombinedDependency, pinned: Pinned) -> Self {
+        Self(dep.0.map(|_| pinned))
     }
 
     /// partition `deps` into the system dependencies and the non-system dependencies; replace all

@@ -152,4 +152,9 @@ impl CombinedDependency {
             modes: dep.modes,
         }))
     }
+
+    /// Return the name for this dependency
+    pub fn name(&self) -> &PackageName {
+        &self.0.name
+    }
 }
