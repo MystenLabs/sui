@@ -2884,10 +2884,7 @@ mod tests {
     use consensus_types::block::TransactionIndex;
     use futures::pin_mut;
     use prometheus::Registry;
-    use sui_protocol_config::{
-        Chain, ConsensusTransactionOrdering, PerObjectCongestionControlMode, ProtocolConfig,
-        ProtocolVersion,
-    };
+    use sui_protocol_config::{ConsensusTransactionOrdering, ProtocolConfig};
     use sui_types::{
         base_types::ExecutionDigests,
         base_types::{AuthorityName, FullObjectRef, ObjectID, SuiAddress, random_object_ref},
@@ -2948,15 +2945,8 @@ mod tests {
                 .with_objects(all_objects.clone())
                 .build();
 
-        let mut protocol_config =
-            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_per_object_congestion_control_mode_for_testing(
-            PerObjectCongestionControlMode::None,
-        );
-
         let state = TestAuthorityBuilder::new()
             .with_network_config(&network_config, 0)
-            .with_protocol_config(protocol_config)
             .build()
             .await;
 
