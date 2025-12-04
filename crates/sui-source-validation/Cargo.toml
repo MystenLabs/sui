@@ -42,6 +42,11 @@ ureq.workspace = true
 
 [dev-dependencies]
 
+sui-config.workspace = true
+insta-cmd.workspace = true
+fs_extra.workspace = true
+insta.workspace = true
+datatest-stable.workspace = true
 expect-test.workspace = true
 rand.workspace = true
 tempfile.workspace = true
@@ -50,3 +55,9 @@ tracing.workspace = true
 
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
+
+[[test]]
+name = "shell_tests"
+harness = false
+
+

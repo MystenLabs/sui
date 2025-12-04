@@ -22,7 +22,9 @@ use crate::toolchain::CURRENT_COMPILER_VERSION;
 use crate::{BytecodeSourceVerifier, ValidationMode};
 use move_package_alt::package::RootPackage;
 use move_package_alt::schema::{Environment, OriginalID, PublishAddresses, PublishedID};
-use sui_package_alt::{PublishedMetadata, SuiFlavor};
+use sui_package_alt::{BuildParams, PublishedMetadata, SuiFlavor};
+use sui_types::digests::get_testnet_chain_identifier;
+use sui_types::supported_protocol_versions::Chain;
 
 #[tokio::test]
 async fn successful_verification() -> anyhow::Result<()> {
@@ -185,7 +187,7 @@ async fn successful_verification_upgrades() -> anyhow::Result<()> {
         let b_src =
             copy_upgraded_package(&b_fixtures, "b-v2", b_v2.0.into(), b_v1.0.into()).await?;
 
-        write_published_toml(&b_src.clone(), b_v2.0.into(), b_v1.0.into()).await?;
+        write_published_toml(&b_src.clone(), b_v2.0.into(), b_v1.0.into(), 2).await?;
         let e_src = copy_published_package(&b_fixtures, "e", SuiAddress::ZERO).await?;
         (compile_package(b_src), compile_package(e_src))
     };
@@ -607,6 +609,7 @@ async fn linkage_differs() -> anyhow::Result<()> {
             &e_v1_fixtures.path().join("b-v2"),
             b_v2.0.into(),
             b_v1.0.into(),
+            2,
         )
         .await?;
 
@@ -623,6 +626,7 @@ async fn linkage_differs() -> anyhow::Result<()> {
             &e_v2_fixtures.path().join("b-v2"),
             b_v3.0.into(),
             b_v1.0.into(),
+            3,
         )
         .await?;
         let e_src = copy_published_package(&e_v2_fixtures, "e", e_v1.0.into()).await?;
@@ -946,6 +950,9 @@ async fn copy_upgraded_package(
     Ok(dst)
 }
 
+/// Upgrade the package by creating a transaction with the given parameters using the provided
+/// wallet context. It will execute the transaction and return the new package object reference and
+/// the transaction digest.
 pub async fn upgrade_package_with_wallet(
     context: &WalletContext,
     package_id: ObjectID,
@@ -982,23 +989,29 @@ pub async fn upgrade_package_with_wallet(
     (resp.get_new_package_obj().unwrap(), resp.digest)
 }
 
+///
 async fn write_published_toml(
     pkg_path: impl AsRef<Path>,
     published_at: SuiAddress,
     original_id: SuiAddress,
+    version: u64,
 ) -> anyhow::Result<()> {
     // we need testnet here because BuildConfig::build will use the first env in the list
-    let env = Environment::new("testnet".to_string(), "_test_env_id".to_string());
+    let env_name = Chain::Testnet.as_str().to_string();
+    let chain_id = get_testnet_chain_identifier().to_string();
+    let env = Environment::new(env_name, chain_id.clone());
     let mut root_pkg = RootPackage::<SuiFlavor>::load(pkg_path, env.clone(), vec![]).await?;
     root_pkg.write_publish_data(move_package_alt::schema::Publication {
-        chain_id: "_test_env_id".to_string(),
+        chain_id,
         addresses: PublishAddresses {
             published_at: PublishedID(published_at.into()),
             original_id: OriginalID(original_id.into()),
         },
-        version: 1,
+        version,
         metadata: PublishedMetadata {
-            ..Default::default()
+            toolchain_version: Some(CURRENT_COMPILER_VERSION.to_string()),
+            build_config: Some(BuildParams::default()),
+            upgrade_capability: None,
         },
     })?;
     Ok(())
