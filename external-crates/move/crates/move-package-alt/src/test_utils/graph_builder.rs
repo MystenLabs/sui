@@ -60,7 +60,7 @@ use crate::{
         EnvironmentID, EnvironmentName, RootPackage, package_lock::PackageSystemLock,
         paths::PackagePath,
     },
-    schema::{ModeName, OriginalID, PublishAddresses, PublishedID},
+    schema::{Environment, ModeName, OriginalID, PublishAddresses, PublishedID},
     test_utils::{Project, project},
 };
 
@@ -110,6 +110,10 @@ pub struct PackageSpec {
 
     /// Are implicit deps included?
     implicit_deps: bool,
+
+    /// The environments to be applied to the package's manifest.
+    /// IF empty, no environments will be written to the manifest.
+    environments: BTreeMap<EnvironmentName, EnvironmentID>,
 }
 
 struct GitSpec {
@@ -322,6 +326,23 @@ impl TestPackageGraph {
             "implicit-dependencies = false\n"
         };
 
+        let environments = if self.inner[node].environments.is_empty() {
+            "".to_string()
+        } else {
+            format!(
+                r#"
+                [environments]
+                {}
+                "#,
+                self.inner[node]
+                    .environments
+                    .iter()
+                    .map(|(name, id)| format!("{name} = \"{id}\""))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        };
+
         let mut move_toml = formatdoc!(
             r#"
                 [package]
@@ -329,8 +350,7 @@ impl TestPackageGraph {
                 edition = "2024"
                 {version_str}
                 {implicits}
-                [environments]
-                {DEFAULT_ENV_NAME} = "{DEFAULT_ENV_ID}"
+                {environments}
 
                 "#,
             self.inner[node].name
@@ -558,6 +578,7 @@ impl PackageSpec {
             version: None,
             files: BTreeMap::new(),
             implicit_deps: true,
+            environments: BTreeMap::new(),
         }
     }
 
@@ -755,14 +776,13 @@ mod tests {
             .add_deps([("a", "b"), ("a", "c")])
             .build();
 
-        assert_snapshot!(graph.read_file("a/Move.toml"), @r###"
+        assert_snapshot!(graph.read_file("a/Move.toml"), @r#"
         [package]
         name = "a"
         edition = "2024"
 
 
-        [environments]
-        _test_env = "_test_env_id"
+
 
 
         [dependencies]
@@ -770,7 +790,7 @@ mod tests {
         b = { local = "../b" }
 
         [dep-replacements]
-        "###);
+        "#);
     }
 
     /// Ensure that using all the features of [TestPackageGraph] gives the correct manifests and
@@ -797,39 +817,37 @@ mod tests {
             })
             .build();
 
-        assert_snapshot!(graph.read_file("a/Move.toml"), @r###"
+        assert_snapshot!(graph.read_file("a/Move.toml"), @r#"
         [package]
         name = "a"
         edition = "2024"
 
 
-        [environments]
-        _test_env = "_test_env_id"
+
 
 
         [dependencies]
 
         [dep-replacements]
         foo.a_name_for_b = { local = "../b", override = true, rename-from = "b", use-environment = "bar", modes = ["test", "spec"] }
-        "###);
+        "#);
 
-        assert_snapshot!(graph.read_file("b/Move.toml"), @r###"
+        assert_snapshot!(graph.read_file("b/Move.toml"), @r#"
         [package]
         name = "b"
         edition = "2024"
 
 
-        [environments]
-        _test_env = "_test_env_id"
+
 
 
         [dependencies]
         c = { local = "../c" }
 
         [dep-replacements]
-        "###);
+        "#);
 
-        assert_snapshot!(graph.read_file("c/Move.toml"), @r###"
+        assert_snapshot!(graph.read_file("c/Move.toml"), @r#"
         [package]
         name = "c_name"
         edition = "2024"
@@ -837,14 +855,13 @@ mod tests {
 
         implicit-dependencies = false
 
-        [environments]
-        _test_env = "_test_env_id"
+
 
 
         [dependencies]
 
         [dep-replacements]
-        "###);
+        "#);
 
         assert_snapshot!(graph.read_file("c/Published.toml"), @r###"
         [published._test_env]
@@ -919,20 +936,19 @@ mod tests {
         let manifest = graph.read_file("root/Move.toml");
         let path = git_repo.repo_path().to_string_lossy().to_string();
 
-        assert_snapshot!(manifest.replace(&path, "REPO"), @r###"
+        assert_snapshot!(manifest.replace(&path, "REPO"), @r#"
         [package]
         name = "root"
         edition = "2024"
 
 
-        [environments]
-        _test_env = "_test_env_id"
+
 
 
         [dependencies]
         git_dep = { git = "REPO", subdir = "git_dep", rev = "main" }
 
         [dep-replacements]
-        "###);
+        "#);
     }
 }

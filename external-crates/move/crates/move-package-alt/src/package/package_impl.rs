@@ -354,12 +354,18 @@ fn check_for_environment<F: MoveFlavor>(
     let mut known_environments = F::default_environments();
     let manifest_envs = manifest.environments();
 
-    if let Some((name, _)) = manifest_envs.iter().find(|(name, chain_id)| {
-        known_environments
-            .get(*name)
-            .is_some_and(|default| default != *chain_id)
-    }) {
-        return Err(PackageError::CannotOverrideDefaultEnvironments { name: name.clone() });
+    if let Some((name, _)) = manifest_envs
+        .iter()
+        .find(|(name, _)| known_environments.get(*name).is_some())
+    {
+        return Err(PackageError::CannotOverrideDefaultEnvironments {
+            name: name.clone(),
+            valid: known_environments
+                .into_iter()
+                .map(|(name, _)| name)
+                .collect::<Vec<_>>()
+                .join(", "),
+        });
     };
 
     known_environments.extend(manifest_envs);
