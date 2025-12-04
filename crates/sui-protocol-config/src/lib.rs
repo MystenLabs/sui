@@ -4287,6 +4287,10 @@ impl ProtocolConfig {
 
                     cfg.poseidon_bn254_cost_base = Some(260);
 
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.consensus_skip_gced_accept_votes = true;
+                    }
+
                     if chain != Chain::Mainnet {
                         cfg.feature_flags
                             .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;

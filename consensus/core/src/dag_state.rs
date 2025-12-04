@@ -799,7 +799,8 @@ impl DagState {
         let mut targets = VecDeque::new();
         targets.push_back(root_block);
         while let Some(block_ref) = targets.pop_front() {
-            // This is only correct with GC enabled.
+            // No need to collect and mark blocks at or below GC round. These blocks will not be included in new commits
+            // and do not need their transactions to be voted on.
             if block_ref.round <= gc_round {
                 continue;
             }
