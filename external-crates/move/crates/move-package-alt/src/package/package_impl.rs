@@ -523,10 +523,9 @@ mod tests {
                 .await
                 .unwrap_err();
 
-        let message = err.to_string().replace(
-            scenario.path_for("a").to_string_lossy().as_ref(),
-            "<DIR>",
-        );
+        let message = err
+            .to_string()
+            .replace(scenario.path_for("a").to_string_lossy().as_ref(), "<DIR>");
 
         assert_snapshot!(message, @"Error while loading dependency <DIR>: The `foo` dependency is implicitly provided and should not be defined in your manifest.");
     }
