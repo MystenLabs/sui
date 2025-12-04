@@ -23,10 +23,10 @@ Source code locations for the smart contracts and frontend:
 
 ## What the guide teaches
 
-- **Shared objects:** The guide teaches you how to use [shared objects](concepts/object-ownership/shared.mdx), in this case to create a globally accessible `HouseData` object.
+- **Shared objects:** The guide teaches you how to use [shared objects](/guides/developer/objects/object-ownership/shared), in this case to create a globally accessible `HouseData` object.
 - **One-time witnesses:** The guide teaches you how to use [one-time witnesses](concepts/sui-move-concepts.mdx#one-time-witness) to ensure only a single instance of the `HouseData` object ever exists.
 - **Asserts:** The guide teaches you how to use [asserts](https://move-book.com/move-basics/assert-and-abort.html?highlight=asserts#assert) to abort functions due to certain conditions not being met.
-- **Address-owned objects:** The guide teaches you how to use [address-owned objects](concepts/object-ownership/address-owned.mdx) when necessary.
+- **Address-owned objects:** The guide teaches you how to use [address-owned objects](/guides/developer/objects/object-ownership/address-owned) when necessary.
 - **Events:** The guide teaches you how to emit events in your contracts, which can be used to track on-chain activity. For more information on events, see [Using Events](../sui-101/using-events.mdx) for practical usage of events on Sui or [Events in The Move Book](https://move-book.com/programmability/events.html) to learn about event structure and how to emit them in Move.
 - **Storage rebates:** The guide shows you best practices regarding [storage fee rebates](concepts/tokenomics.mdx#storage-fund-rewards).
 - **MEV attack protection:** The guide introduces you to [MEV attacks](https://github.com/MystenLabs/satoshi-coin-flip?tab=readme-ov-file#mev-attack-resistant-single-player-satoshi-smart-contract-flow), how to make your contracts MEV-resistant, and the trade-offs between protection and user experience.
@@ -44,7 +44,7 @@ To follow along with this guide, set your new Move package to `satoshi_flip`.
 
 ### `house_data` module
 
-This example uses several modules to create a package for the Satoshi Coin Flip game. The first module is `house_data.move`. You need to store the game's data somewhere, and in this module you create a [shared object](concepts/object-ownership/shared.mdx) for all house data.
+This example uses several modules to create a package for the Satoshi Coin Flip game. The first module is `house_data.move`. You need to store the game's data somewhere, and in this module you create a [shared object](/guides/developer/objects/object-ownership/shared) for all house data.
 
 Create a new file in the `sources` directory with the name `house_data.move` and populate the file with the following code:
 
@@ -318,7 +318,7 @@ This code also adds a `count` function that returns the current count, and a tes
 
 ### `single_player_satoshi` module
 
-Lastly, you need a game module and object that can create a new game, distribute funds after the game, and potentially cancel games. Because this is a one-player game, create an [address-owned object](concepts/object-ownership/address-owned.mdx) rather than a [shared object](/concepts/object-ownership/shared.mdx).
+Lastly, you need a game module and object that can create a new game, distribute funds after the game, and potentially cancel games. Because this is a one-player game, create an [address-owned object](/guides/developer/objects/object-ownership/address-owned) rather than a [shared object](/guides/developer/objects/object-ownership/shared.mdx).
 
 Create the game module. In the `sources` directory, create a new file called `single_player_satoshi.move` and populate with the following:
 

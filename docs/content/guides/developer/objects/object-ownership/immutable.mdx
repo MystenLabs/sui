@@ -8,7 +8,7 @@ Objects on Sui can either be immutable or mutable. An immutable object cannot be
 
 ## Create immutable objects
 
-To make an object immutable, call the `public_freeze_object` function from the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
+To make an object immutable, call the [`sui::transfer::public_freeze_object`](/references/framework/sui_sui/transfer#sui_transfer_public_freeze_object) function from the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
 
 ```move
 public native fun public_freeze_object<T: key>(obj: T);
@@ -18,11 +18,11 @@ This call permanently makes the object immutable. The operation cannot be revers
 
 You can see this function used in the [`color_object` example module](https://github.com/MystenLabs/sui/blob/main/examples/move/color_object/sources/example.move) tests. The test creates a new address-owned `ColorObject` object, then calls `public_freeze_object` to turn it into an immutable object.
 
-<ImportContent source="examples/move/color_object/sources/example.move" mode="code" func="test_immutable" />
+<ImportContent source="examples/move/color_object/sources/example.move" mode="code" fun="test_immutable" noComments />
 
 In this test, you must own a `ColorObject` initially. After freezing, the object becomes immutable and ownerless.
 
-The `transfer::public_freeze_object` function requires that you pass the object by value. If you are allowed to pass the object by a mutable reference, you could still mutate the object after the `public_freeze_object` call. This contradicts the fact that it should have become immutable.
+The [`sui::transfer::public_freeze_object`](/references/framework/sui_sui/transfer#sui_transfer_public_freeze_object) function requires that you pass the object by value. If you are allowed to pass the object by a mutable reference, you could still mutate the object after the [`sui::transfer::public_freeze_object`](/references/framework/sui_sui/transfer#sui_transfer_public_freeze_object) call. This contradicts the fact that it should have become immutable.
 
 Alternatively, you can also provide an API that creates an immutable object at creation:
 
@@ -43,7 +43,7 @@ After an object becomes immutable, the rules of who can use this object in Sui M
 
 2. All network participants can access immutable objects.
 
-Consider a function that copies the value of 1 object to another:
+Consider a function that copies the value of one object to another:
 
 ```move
 public fun copy_into(from: &ColorObject, into: &mut ColorObject);
