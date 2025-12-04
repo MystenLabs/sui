@@ -297,7 +297,6 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
 
         // Step 3: Recursively process dependencies
         for (_, dep) in self.direct_deps() {
-            // eprintln!("child_assignments for package {:?}: {:?}", self.package().name(), child_assignments);
             let transitive_result = dep.legacy_named_addresses(&child_assignments)?;
 
             // Step 4: Merge child's results into our result
@@ -314,8 +313,6 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
                 result.insert(name, addr);
             }
         }
-
-        // eprintln!("result for package {:?}: {:?}", self.package().name(), result);
 
         Ok(result)
     }
