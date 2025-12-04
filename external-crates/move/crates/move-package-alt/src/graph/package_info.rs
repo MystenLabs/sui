@@ -749,4 +749,66 @@ mod tests {
             &NamedAddress::Defined(OriginalID(AccountAddress::from_hex_literal("0x5").unwrap()))
         );
     }
+
+    #[test(tokio::test)]
+    /// Test that we can define the same address TWICE in the graph without erroring out, as long as
+    /// we do not define the same address twice with different IDs.
+    async fn test_duplicate_addresses_cases() {
+        let scenario = TestPackageGraph::new(vec!["root"])
+            .add_package("bar", |pkg| {
+                pkg.set_legacy().add_address("bar", Some("0x0"))
+            })
+            .add_package("a", |pkg| {
+                pkg.set_legacy()
+                    .add_address("a", Some("0x0"))
+                    .add_address("foo", Some("0x123"))
+            })
+            .add_package("b", |pkg| {
+                pkg.set_legacy()
+                    .add_address("b", Some("0x0"))
+                    .add_address("foo", Some("0x123"))
+            })
+            .add_deps([("root", "bar"), ("bar", "a"), ("a", "b"), ("bar", "b")])
+            .build();
+
+        // Starting from a modern package
+        let graph = scenario.graph_for("root").await;
+
+        graph
+            .packages()
+            .iter()
+            .all(|pkg| pkg.named_addresses().is_ok());
+
+        // Starting from a legacy package
+        let graph = scenario.graph_for("bar").await;
+
+        graph
+            .packages()
+            .iter()
+            .all(|pkg| pkg.named_addresses().is_ok());
+
+        // Now let's create a failure case (duplicate address definition)
+        let scenario = TestPackageGraph::new(vec!["root"])
+            .add_package("bar", |pkg| {
+                pkg.set_legacy()
+                    .add_address("bar", Some("0x0"))
+                    .add_address("foo", Some("0x12"))
+            })
+            .add_package("a", |pkg| {
+                pkg.set_legacy()
+                    .add_address("a", Some("0x0"))
+                    .add_address("foo", Some("0x123"))
+            })
+            .add_package("b", |pkg| {
+                pkg.set_legacy()
+                    .add_address("b", Some("0x0"))
+                    .add_address("foo", Some("0x123"))
+            })
+            .add_deps([("root", "bar"), ("bar", "a"), ("a", "b"), ("bar", "b")])
+            .build();
+
+        let graph = scenario.graph_for("bar").await;
+        let err = graph.root_package_info().named_addresses().unwrap_err();
+        assert_snapshot!(err, @"Address `foo` is defined more than once in package `A` (or its dependencies)");
+    }
 }
