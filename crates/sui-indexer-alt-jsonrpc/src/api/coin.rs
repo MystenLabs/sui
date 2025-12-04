@@ -4,8 +4,6 @@
 use std::str::FromStr;
 
 use anyhow::Context as _;
-use diesel::prelude::*;
-use diesel::sql_types::Bool;
 use futures::future;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
@@ -29,6 +27,8 @@ use sui_types::base_types::SuiAddress;
 use sui_types::coin::CoinMetadata;
 use sui_types::coin::COIN_METADATA_STRUCT_NAME;
 use sui_types::coin::COIN_MODULE_NAME;
+use sui_types::coin::COIN_STRUCT_NAME;
+use sui_indexer_alt_reader::consistent_reader::proto::owner::OwnerKind;
 use sui_types::coin_registry::Currency;
 use sui_types::gas_coin::GAS;
 use sui_types::object::Object;
@@ -111,15 +111,7 @@ pub(crate) enum Error {
     BadType(String, anyhow::Error),
 }
 
-#[derive(Queryable, Debug, Serialize, Deserialize)]
-#[diesel(table_name = coin_balance_buckets)]
-struct BalanceCursor {
-    object_id: Vec<u8>,
-    cp_sequence_number: u64,
-    coin_balance_bucket: u64,
-}
-
-type Cursor = BcsCursor<BalanceCursor>;
+type Cursor = BcsCursor<Vec<u8>>;
 
 impl DelegationCoins {
     pub(crate) fn new(client: HttpClient) -> Self {
@@ -136,11 +128,18 @@ impl CoinsApiServer for Coins {
         cursor: Option<String>,
         limit: Option<usize>,
     ) -> RpcResult<PageResponse<Coin, String>> {
-        let coin_type_tag = if let Some(coin_type) = coin_type {
-            sui_types::parse_sui_type_tag(&coin_type)
+        let inner = if let Some(coin_type) = coin_type {
+            parse_sui_type_tag(&coin_type)
                 .map_err(|e| invalid_params(Error::BadType(coin_type, e)))?
         } else {
             GAS::type_tag()
+        };
+
+        let object_type = StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: COIN_MODULE_NAME.to_owned(),
+            name: COIN_STRUCT_NAME.to_owned(),
+            type_params: vec![inner],
         };
 
         let Self(ctx) = self;
@@ -154,22 +153,50 @@ impl CoinsApiServer for Coins {
             None,
         )?;
 
-        // We get all the qualified coin ids first.
-        let coin_id_page = filter_coins(ctx, owner, Some(coin_type_tag), Some(page)).await?;
+        let consistent_reader = ctx.consistent_reader();
 
-        let coin_futures = coin_id_page.data.iter().map(|id| coin_response(ctx, *id));
+        let results = consistent_reader
+            .list_owned_objects(
+                None, /* checkpoint */
+                OwnerKind::Address,
+                Some(owner.to_string()),
+                Some(object_type.to_canonical_string(/* with_prefix */ true)),
+                Some(page.limit as u32),
+                page.cursor.as_ref().map(|c| c.0.clone()),
+                None,
+                true,
+            )
+            .await
+            .context("Failed to list owned coin objects")
+            .map_err(RpcError::<Error>::from)?;
+
+        let coin_ids = results
+            .results
+            .iter()
+            .map(|obj_ref| obj_ref.value.0)
+            .collect::<Vec<_>>();
+
+        let next_cursor = results
+            .results
+            .last()
+            .map(|edge| BcsCursor(edge.token.clone()).encode())
+            .transpose()
+            .context("Failed to encode cursor")
+            .map_err(RpcError::<Error>::from)?;
+
+        let coin_futures = coin_ids.iter().map(|id| coin_response(ctx, *id));
 
         let coins = future::join_all(coin_futures)
             .await
             .into_iter()
-            .zip(coin_id_page.data)
+            .zip(coin_ids)
             .map(|(r, id)| r.with_internal_context(|| format!("Failed to get object {id}")))
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(PageResponse {
             data: coins,
-            next_cursor: coin_id_page.next_cursor,
-            has_next_page: coin_id_page.has_next_page,
+            next_cursor,
+            has_next_page: results.has_next_page,
         })
     }
 
@@ -194,6 +221,7 @@ impl CoinsApiServer for Coins {
     }
 }
 
+// TODO: consistent-store can answer these questions now
 #[async_trait::async_trait]
 impl DelegationCoinsApiServer for DelegationCoins {
     async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
@@ -237,123 +265,6 @@ impl RpcModule for DelegationCoins {
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
     }
-}
-
-async fn filter_coins(
-    ctx: &Context,
-    owner: SuiAddress,
-    coin_type_tag: Option<TypeTag>,
-    page: Option<Page<Cursor>>,
-) -> Result<PageResponse<ObjectID, String>, RpcError<Error>> {
-    use coin_balance_buckets::dsl as cb;
-
-    let mut conn = ctx
-        .pg_reader()
-        .connect()
-        .await
-        .context("Failed to connect to database")?;
-
-    // We use two aliases of coin_balance_buckets to make the query more readable.
-    let (candidates, newer) = diesel::alias!(
-        coin_balance_buckets as candidates,
-        coin_balance_buckets as newer
-    );
-
-    // Macros to make the query more readable.
-    macro_rules! candidates {
-        ($field:ident) => {
-            candidates.field(cb::$field)
-        };
-    }
-
-    macro_rules! newer {
-        ($field:ident) => {
-            newer.field(cb::$field)
-        };
-    }
-
-    // Construct the basic query first to filter by owner, not deleted and newest rows.
-    let mut query = candidates
-        .select((
-            candidates!(object_id),
-            candidates!(cp_sequence_number),
-            candidates!(coin_balance_bucket).assume_not_null(),
-        ))
-        .left_join(
-            newer.on(candidates!(object_id)
-                .eq(newer!(object_id))
-                .and(candidates!(cp_sequence_number).lt(newer!(cp_sequence_number)))),
-        )
-        .filter(newer!(object_id).is_null())
-        .filter(candidates!(owner_kind).eq(StoredCoinOwnerKind::Fastpath))
-        .filter(candidates!(owner_id).eq(owner.to_vec()))
-        .into_boxed();
-
-    if let Some(coin_type_tag) = coin_type_tag {
-        let serialized_coin_type =
-            bcs::to_bytes(&coin_type_tag).context("Failed to serialize coin type tag")?;
-        query = query.filter(candidates!(coin_type).eq(serialized_coin_type));
-    }
-
-    let (cursor, limit) = page.map_or((None, None), |p| (p.cursor, Some(p.limit)));
-
-    // If the cursor is specified, we filter by it.
-    if let Some(c) = cursor {
-        query = query.filter(sql!(as Bool,
-            "(candidates.coin_balance_bucket, candidates.cp_sequence_number, candidates.object_id) < ({SmallInt}, {BigInt}, {Bytea})",
-            c.coin_balance_bucket as i16,
-            c.cp_sequence_number as i64,
-            c.object_id.clone(),
-        ));
-    }
-
-    // Finally we order by coin_balance_bucket, then by cp_sequence_number, and then by object_id.
-    query = query
-        .order_by(candidates!(coin_balance_bucket).desc())
-        .then_order_by(candidates!(cp_sequence_number).desc())
-        .then_order_by(candidates!(object_id).desc());
-
-    if let Some(limit) = limit {
-        query = query.limit(limit + 1);
-    }
-
-    let mut buckets: Vec<(Vec<u8>, i64, i16)> =
-        conn.results(query).await.context("Failed to query coins")?;
-
-    let mut has_next_page = false;
-
-    if let Some(limit) = limit {
-        // Now gather pagination info.
-        has_next_page = buckets.len() > limit as usize;
-        if has_next_page {
-            buckets.truncate(limit as usize);
-        }
-    }
-
-    let next_cursor = buckets
-        .last()
-        .map(|(object_id, cp_sequence_number, coin_balance_bucket)| {
-            BcsCursor(BalanceCursor {
-                object_id: object_id.clone(),
-                cp_sequence_number: *cp_sequence_number as u64,
-                coin_balance_bucket: *coin_balance_bucket as u64,
-            })
-            .encode()
-        })
-        .transpose()
-        .context("Failed to encode cursor")?;
-
-    let ids = buckets
-        .iter()
-        .map(|(object_id, _, _)| ObjectID::from_bytes(object_id))
-        .collect::<Result<Vec<_>, _>>()
-        .context("Failed to parse object id")?;
-
-    Ok(PageResponse {
-        data: ids,
-        next_cursor,
-        has_next_page,
-    })
 }
 
 async fn coin_response(ctx: &Context, id: ObjectID) -> Result<Coin, RpcError<Error>> {
@@ -409,7 +320,7 @@ async fn coin_metadata_response(
     let inner = parse_sui_type_tag(coin_type)
         .map_err(|e| invalid_params(Error::BadType(coin_type.to_owned(), e)))?;
 
-    let coin_type = StructTag {
+    let object_type = StructTag {
         address: SUI_FRAMEWORK_ADDRESS,
         module: COIN_MODULE_NAME.to_owned(),
         name: COIN_METADATA_STRUCT_NAME.to_owned(),
@@ -420,7 +331,7 @@ async fn coin_metadata_response(
         .consistent_reader()
         .list_objects_by_type(
             None,
-            coin_type.to_canonical_string(/* with_prefix */ true),
+            object_type.to_canonical_string(/* with_prefix */ true),
             Some(1),
             None,
             None,
