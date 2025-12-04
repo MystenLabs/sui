@@ -65,7 +65,10 @@ public struct AliasKey(address) has copy, drop, store;
 /// By default, an address is its own alias. However, the original address can
 /// be removed from the set of allowed aliases after initialization.
 entry fun initialize(address_alias_state: &mut AddressAliasState, ctx: &TxContext) {
-    assert!(!derived_object::exists(&address_alias_state.id, AliasKey(ctx.sender())), EAliasAlreadyExists);
+    assert!(
+        !derived_object::exists(&address_alias_state.id, AliasKey(ctx.sender())),
+        EAliasAlreadyExists,
+    );
     transfer::party_transfer(
         AddressAliases {
             id: derived_object::claim(&mut address_alias_state.id, AliasKey(ctx.sender())),
