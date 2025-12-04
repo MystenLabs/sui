@@ -28,7 +28,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Type 'InvalidType' not found in schema registry.",
+      "message": "Type 'InvalidType' not found in schema.",
       "locations": [
         {
           "line": 3,
@@ -76,7 +76,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Type 'InvalidType' not found in schema registry.",
+      "message": "Type 'InvalidType' not found in schema.",
       "locations": [
         {
           "line": 3,
