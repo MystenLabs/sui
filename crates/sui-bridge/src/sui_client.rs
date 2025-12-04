@@ -12,13 +12,15 @@ use std::time::Duration;
 use sui_json_rpc_types::BcsEvent;
 use sui_json_rpc_types::{EventFilter, Page, SuiEvent};
 use sui_json_rpc_types::{
-    EventPage, SuiObjectDataOptions, SuiTransactionBlockResponse,
+    EventPage, SuiExecutionStatus, SuiObjectDataOptions, SuiObjectRef, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsV1, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
 use sui_rpc::field::{FieldMask, FieldMaskUtil};
 use sui_rpc::proto::sui::rpc::v2::{
-    Checkpoint, ExecutedTransaction, GetCheckpointRequest, GetObjectRequest, GetServiceInfoRequest,
-    GetTransactionRequest, Object,
+    Checkpoint, ExecuteTransactionRequest, ExecutedTransaction, GetCheckpointRequest,
+    GetObjectRequest, GetServiceInfoRequest, GetTransactionRequest, Object,
+    Transaction as ProtoTransaction, UserSignature as ProtoUserSignature,
 };
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_sdk_types::Address;
@@ -780,9 +782,158 @@ impl SuiClientInner for sui_rpc::Client {
 
     async fn execute_transaction_block_with_effects(
         &self,
-        _tx: Transaction,
+        tx: Transaction,
     ) -> Result<SuiTransactionBlockResponse, BridgeError> {
-        todo!()
+        use move_core_types::language_storage::StructTag;
+        use sui_json_rpc_types::OwnedObjectRef;
+        use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction as ProtoExecutedTransaction;
+        use sui_sdk_types::SignedTransaction;
+
+        let signed_tx: SignedTransaction = tx.try_into().map_err(|e| {
+            BridgeError::SuiTxFailureGeneric(format!("Failed to convert transaction: {:?}", e))
+        })?;
+
+        let proto_tx: ProtoTransaction = signed_tx.transaction.into();
+        let proto_sigs: Vec<ProtoUserSignature> =
+            signed_tx.signatures.into_iter().map(Into::into).collect();
+
+        let request = ExecuteTransactionRequest::default()
+            .with_transaction(proto_tx)
+            .with_signatures(proto_sigs)
+            .with_read_mask(FieldMask::from_paths([
+                ProtoExecutedTransaction::path_builder()
+                    .effects()
+                    .status()
+                    .finish(),
+                ProtoExecutedTransaction::path_builder()
+                    .effects()
+                    .gas_object()
+                    .finish(),
+                ProtoExecutedTransaction::path_builder()
+                    .events()
+                    .events()
+                    .finish(),
+            ]));
+
+        let response = self
+            .clone()
+            .execution_client()
+            .execute_transaction(request)
+            .await
+            .map_err(|e| BridgeError::SuiTxFailureGeneric(format!("gRPC execute failed: {:?}", e)))?
+            .into_inner();
+
+        let executed_tx = response.transaction();
+
+        let effects = executed_tx.effects();
+        let status = effects.status();
+
+        let sui_status = if status.success() {
+            SuiExecutionStatus::Success
+        } else {
+            let error = status.error();
+            let description = error.description().to_string();
+
+            let failure_msg = if !description.is_empty() {
+                description
+            } else {
+                format!("{:?}", error.kind())
+            };
+
+            SuiExecutionStatus::Failure { error: failure_msg }
+        };
+
+        let sui_events: Vec<SuiEvent> = executed_tx
+            .events()
+            .events()
+            .iter()
+            .filter_map(|event| {
+                let package_id: ObjectID = event.package_id().parse().ok()?;
+                let module = event.module().to_string();
+                let sender: sui_types::base_types::SuiAddress = event.sender().parse().ok()?;
+
+                let event_type_tag: sui_types::TypeTag =
+                    parse_sui_type_tag(event.event_type()).ok()?;
+                let struct_tag: StructTag = match event_type_tag {
+                    sui_types::TypeTag::Struct(s) => *s,
+                    _ => return None,
+                };
+                let contents = event.contents();
+                let bcs_bytes = contents.value().to_vec();
+
+                Some(SuiEvent {
+                    id: EventID {
+                        tx_digest: TransactionDigest::default(),
+                        event_seq: 0,
+                    },
+                    package_id,
+                    transaction_module: Identifier::new(module).ok()?,
+                    sender,
+                    type_: struct_tag,
+                    parsed_json: serde_json::Value::Null,
+                    bcs: BcsEvent::new(bcs_bytes),
+                    timestamp_ms: None,
+                })
+            })
+            .collect();
+
+        // Parse gas object from effects
+        let proto_gas_object = effects.gas_object();
+        let gas_object_id: ObjectID = proto_gas_object
+            .object_id()
+            .parse()
+            .map_err(|e| BridgeError::Generic(format!("Failed to parse gas object_id: {e}")))?;
+        let gas_version = SequenceNumber::from_u64(proto_gas_object.output_version());
+        let gas_digest: sui_types::digests::ObjectDigest = proto_gas_object
+            .output_digest()
+            .parse()
+            .map_err(|e| BridgeError::Generic(format!("Failed to parse gas digest: {e}")))?;
+
+        let proto_gas_owner = proto_gas_object.output_owner().to_owned();
+        let sdk_gas_owner: sui_sdk_types::Owner = (&proto_gas_owner)
+            .try_into()
+            .map_err(|e| BridgeError::Generic(format!("Failed to parse gas owner: {e}")))?;
+        let gas_owner: Owner = sdk_gas_owner.into();
+
+        let gas_object = OwnedObjectRef {
+            owner: gas_owner,
+            reference: SuiObjectRef::from((gas_object_id, gas_version, gas_digest)),
+        };
+
+        Ok(SuiTransactionBlockResponse {
+            digest: TransactionDigest::default(),
+            transaction: None,
+            raw_transaction: vec![],
+            effects: Some(SuiTransactionBlockEffects::V1(
+                SuiTransactionBlockEffectsV1 {
+                    status: sui_status,
+                    executed_epoch: 0,
+                    gas_used: Default::default(),
+                    modified_at_versions: vec![],
+                    shared_objects: vec![],
+                    transaction_digest: TransactionDigest::default(),
+                    created: vec![],
+                    mutated: vec![],
+                    unwrapped: vec![],
+                    deleted: vec![],
+                    unwrapped_then_deleted: vec![],
+                    wrapped: vec![],
+                    gas_object,
+                    events_digest: None,
+                    dependencies: vec![],
+                    accumulator_events: vec![],
+                    abort_error: None,
+                },
+            )),
+            events: Some(SuiTransactionBlockEvents { data: sui_events }),
+            object_changes: None,
+            balance_changes: None,
+            timestamp_ms: None,
+            confirmed_local_execution: None,
+            checkpoint: None,
+            errors: vec![],
+            raw_effects: vec![],
+        })
     }
 
     async fn get_parsed_token_transfer_message(
@@ -882,9 +1033,63 @@ impl SuiClientInner for sui_rpc::Client {
 
     async fn get_gas_data_panic_if_not_gas(
         &self,
-        _gas_object_id: ObjectID,
+        gas_object_id: ObjectID,
     ) -> (GasCoin, ObjectRef, Owner) {
-        todo!()
+        loop {
+            let result = async {
+                let resp = self
+                    .clone()
+                    .ledger_client()
+                    .get_object(
+                        GetObjectRequest::new(&(gas_object_id.into())).with_read_mask(
+                            FieldMask::from_paths([
+                                Object::path_builder().object_id(),
+                                Object::path_builder().version(),
+                                Object::path_builder().digest(),
+                                Object::path_builder().owner().finish(),
+                                Object::path_builder().contents().finish(),
+                            ]),
+                        ),
+                    )
+                    .await?
+                    .into_inner();
+
+                let obj = resp.object();
+
+                let object_id_parsed: ObjectID = obj
+                    .object_id()
+                    .parse()
+                    .map_err(|e| BridgeError::Generic(format!("Failed to parse object_id: {e}")))?;
+                let version = SequenceNumber::from_u64(obj.version());
+                let digest: sui_types::digests::ObjectDigest = obj
+                    .digest()
+                    .parse()
+                    .map_err(|e| BridgeError::Generic(format!("Failed to parse digest: {e}")))?;
+                let object_ref: ObjectRef = (object_id_parsed, version, digest);
+
+                let proto_owner = obj.owner().to_owned();
+                let sdk_owner: sui_sdk_types::Owner = (&proto_owner)
+                    .try_into()
+                    .map_err(|e| BridgeError::Generic(format!("Failed to parse owner: {e}")))?;
+                let owner: Owner = sdk_owner.into();
+
+                let contents = obj.contents();
+                let gas_coin: GasCoin = bcs::from_bytes(contents.value()).map_err(|e| {
+                    BridgeError::Generic(format!("Failed to deserialize gas coin: {e}"))
+                })?;
+
+                Ok::<_, BridgeError>((gas_coin, object_ref, owner))
+            }
+            .await;
+
+            match result {
+                Ok(data) => return data,
+                Err(e) => {
+                    warn!("Can't get gas object: {:?}: {:?}", gas_object_id, e);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+            }
+        }
     }
 }
 
@@ -961,7 +1166,7 @@ impl SuiClientInner for SuiClientInternal {
         &self,
         tx: Transaction,
     ) -> Result<SuiTransactionBlockResponse, BridgeError> {
-        self.jsonrpc_client
+        self.grpc_client
             .execute_transaction_block_with_effects(tx)
             .await
     }
