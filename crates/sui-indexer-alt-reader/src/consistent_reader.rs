@@ -102,10 +102,7 @@ impl ConsistentReader {
                 endpoint = endpoint.timeout(timeout);
             }
 
-            let channel = endpoint
-                .connect()
-                .await
-                .context("Failed to connect to gRPC endpoint")?;
+            let channel = endpoint.connect_lazy();
 
             Some(ConsistentServiceClient::new(channel))
         } else {

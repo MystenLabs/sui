@@ -42,15 +42,18 @@ message AuthenticatedEvent {
   // The checkpoint sequence number where this event was recorded.
   optional uint64 checkpoint = 1;
 
+  // The accumulator version that this event is settled into.
+  optional uint64 accumulator_version = 2;
+
   // Index of the transaction within the checkpoint where the event was emitted.
-  optional uint32 transaction_idx = 2;
+  optional uint32 transaction_idx = 3;
 
   // Index of the event within the transaction's event list.
-  optional uint32 event_idx = 3;
+  optional uint32 event_idx = 4;
 
   // The event payload.
-  optional sui.rpc.v2.Event event = 4;
+  optional sui.rpc.v2.Event event = 5;
 
   // The stream identifier (owner address) for which this event is authenticated.
-  optional string stream_id = 5;
+  optional string stream_id = 6;
 }

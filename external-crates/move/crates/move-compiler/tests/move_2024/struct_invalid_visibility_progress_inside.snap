@@ -13,8 +13,13 @@ error[E01003]: invalid modifier
   │
   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
 
-error[E03004]: unbound type
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/struct_invalid_visibility_progress_inside.move:3:12
   │
+2 │     struct Foo {
+  │            --- Similarly named defintion found here
 3 │         x: Bar<foo>,
-  │            ^^^ Unbound type 'Bar' in current scope
+  │            ^^^
+  │            │
+  │            Could not resolve the name 'Bar'
+  │            Did you mean: 'Foo'

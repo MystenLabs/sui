@@ -217,7 +217,7 @@ async fn ingest_and_broadcast_range(
                 // we treat an error returned here as cancellation too.
                 if tokio::select! {
                     result = ingest_hi_rx.wait_for(|hi| hi.is_none_or(|h| cp < h)) => result.is_err(),
-                    _ = cancel.cancelled() => true,
+                    _ = cancel.cancelled() => true
                 } {
                     return Err(Error::Cancelled);
                 }
@@ -238,8 +238,8 @@ async fn ingest_and_broadcast_range(
                             debug!(checkpoint = cp, "Broadcasted checkpoint");
                             Ok(())
                         } else {
-                            // An error is returned meaning some subscriber channel has closed, which we consider
-                            // a cancellation signal for the entire ingestion.
+                            // An error is returned meaning some subscriber channel has closed,
+                            // which we consider a cancellation signal for the entire ingestion.
                             cancel.cancel();
                             Err(Error::Cancelled)
                         }

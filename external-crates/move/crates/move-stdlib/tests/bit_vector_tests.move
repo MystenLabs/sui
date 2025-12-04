@@ -9,7 +9,7 @@ module std::bit_vector_tests;
 use std::bit_vector;
 
 #[test_only]
-fun test_bitvector_set_unset_of_size(k: u64) {
+fun bitvector_set_unset_of_size(k: u64) {
     let mut bitvector = bit_vector::new(k);
     let mut index = 0;
     while (index < k) {
@@ -37,35 +37,32 @@ fun test_bitvector_set_unset_of_size(k: u64) {
     };
 }
 
-#[test]
-#[expected_failure(abort_code = bit_vector::EINDEX)]
+#[test, expected_failure(abort_code = bit_vector::EINDEX)]
 fun set_bit_out_of_bounds() {
     let mut bitvector = bit_vector::new(bit_vector::word_size());
     bitvector.set(bit_vector::word_size());
 }
 
-#[test]
-#[expected_failure(abort_code = bit_vector::EINDEX)]
+#[test, expected_failure(abort_code = bit_vector::EINDEX)]
 fun unset_bit_out_of_bounds() {
     let mut bitvector = bit_vector::new(bit_vector::word_size());
     bitvector.unset(bit_vector::word_size());
 }
 
-#[test]
-#[expected_failure(abort_code = bit_vector::EINDEX)]
+#[test, expected_failure(abort_code = bit_vector::EINDEX)]
 fun index_bit_out_of_bounds() {
     let bitvector = bit_vector::new(bit_vector::word_size());
     bitvector.is_index_set(bit_vector::word_size());
 }
 
 #[test]
-fun test_set_bit_and_index_basic() {
-    test_bitvector_set_unset_of_size(8)
+fun set_bit_and_index_basic() {
+    bitvector_set_unset_of_size(8)
 }
 
 #[test]
-fun test_set_bit_and_index_odd_size() {
-    test_bitvector_set_unset_of_size(140)
+fun set_bit_and_index_odd_size() {
+    bitvector_set_unset_of_size(140)
 }
 
 #[test]
@@ -115,7 +112,7 @@ fun longest_sequence_with_break() {
 }
 
 #[test]
-fun test_shift_left() {
+fun shift_left() {
     let bitlen = 97;
     let mut bitvector = bit_vector::new(bitlen);
 
@@ -135,7 +132,7 @@ fun test_shift_left() {
 }
 
 #[test]
-fun test_shift_left_specific_amount() {
+fun shift_left_specific_amount() {
     let bitlen = 300;
     let shift_amount = 133;
     let mut bitvector = bit_vector::new(bitlen);
@@ -158,7 +155,7 @@ fun test_shift_left_specific_amount() {
 }
 
 #[test]
-fun test_shift_left_specific_amount_to_unset_bit() {
+fun shift_left_specific_amount_to_unset_bit() {
     let bitlen = 50;
     let chosen_index = 24;
     let shift_amount = 3;
@@ -215,8 +212,7 @@ fun shift_left_more_than_size() {
     bitvector.shift_left(bitlen);
 }
 
-#[test]
-#[expected_failure(abort_code = bit_vector::ELENGTH)]
+#[test, expected_failure(abort_code = bit_vector::ELENGTH)]
 fun empty_bitvector() {
     bit_vector::new(0);
 }

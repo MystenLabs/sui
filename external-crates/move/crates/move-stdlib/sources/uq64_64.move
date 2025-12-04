@@ -46,16 +46,18 @@ public struct UQ64_64(u128) has copy, drop, store;
 /// than 2^{-64}.
 /// Aborts if the input is too large, e.g. larger than or equal to 2^64.
 public fun from_quotient(numerator: u128, denominator: u128): UQ64_64 {
-    UQ64_64(std::macros::uq_from_quotient!<u128, u256>(
-        numerator,
-        denominator,
-        std::u128::max_value!(),
-        TOTAL_BITS,
-        FRACTIONAL_BITS,
-        abort EDenominator,
-        abort EQuotientTooSmall,
-        abort EQuotientTooLarge,
-    ))
+    UQ64_64(
+        std::macros::uq_from_quotient!<u128, u256>(
+            numerator,
+            denominator,
+            std::u128::max_value!(),
+            TOTAL_BITS,
+            FRACTIONAL_BITS,
+            abort EDenominator,
+            abort EQuotientTooSmall,
+            abort EQuotientTooLarge,
+        ),
+    )
 }
 
 /// Create a fixed-point value from an integer.
@@ -67,12 +69,7 @@ public fun from_int(integer: u64): UQ64_64 {
 /// Add two fixed-point numbers, `a + b`.
 /// Aborts if the sum overflows.
 public fun add(a: UQ64_64, b: UQ64_64): UQ64_64 {
-    UQ64_64(std::macros::uq_add!<u128, u256>(
-        a.0,
-        b.0,
-        std::u128::max_value!(),
-        abort EOverflow,
-    ))
+    UQ64_64(std::macros::uq_add!<u128, u256>(a.0, b.0, std::u128::max_value!(), abort EOverflow))
 }
 
 /// Subtract two fixed-point numbers, `a - b`.

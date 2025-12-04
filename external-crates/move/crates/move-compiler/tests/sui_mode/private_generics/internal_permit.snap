@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02011]: invalid internal permit call
+   ┌─ tests/sui_mode/private_generics/internal_permit.move:18:9
+   │
+18 │         internal::permit<NonInternalType>();
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                │
+   │         │                The type 'a::other::NonInternalType' is not declared in the current module
+   │         Invalid call to an internal function. The function 'std::internal::permit' is restricted to being called in the module that defines the type, 'a::other'
+
+error[Sui E02011]: invalid internal permit call
+   ┌─ tests/sui_mode/private_generics/internal_permit.move:28:9
+   │
+28 │         internal::permit<Permit<Internal>>();
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                │
+   │         │                The type 'std::internal::Permit<a::m::Internal>' is not declared in the current module
+   │         Invalid call to an internal function. The function 'std::internal::permit' is restricted to being called in the module that defines the type, 'std::internal'
+
+error[Sui E02011]: invalid internal permit call
+   ┌─ tests/sui_mode/private_generics/internal_permit.move:33:9
+   │
+33 │         internal::permit<u64>();
+   │         ^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                │
+   │         │                The type 'u64' is not declared in the current module
+   │         Invalid call to an internal function. The function 'std::internal::permit' is restricted to being called in the module that defines the type
+
+error[Sui E02011]: invalid internal permit call
+   ┌─ tests/sui_mode/private_generics/internal_permit.move:38:9
+   │
+38 │         internal::permit<vector<Internal>>();
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                │
+   │         │                The type 'vector<a::m::Internal>' is not declared in the current module
+   │         Invalid call to an internal function. The function 'std::internal::permit' is restricted to being called in the module that defines the type

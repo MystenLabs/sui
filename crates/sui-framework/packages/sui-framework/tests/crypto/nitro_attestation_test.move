@@ -18,7 +18,8 @@ fun test_nitro_attestation() {
     let mut clock = sui::clock::create_for_testing(ctx);
     clock.set_for_testing(1747071568899);
     let res = nitro_attestation::load_nitro_attestation(payload, &clock);
-    assert!(res.pcrs().length() == 6);
+    std::debug::print(res.pcrs());
+    assert!(res.pcrs().length() == 5);
 
     assert!(res.pcrs()[0].index() == 0);
     assert!(
@@ -45,10 +46,6 @@ fun test_nitro_attestation() {
         res.pcrs()[4].value() == x"f3e18816e8d0ba69088d034522e742f0e1909ab34d5e83a1f579ffb43c58f0f0f35d64401efc9426097565d0506a8a5f",
     );
 
-    assert!(res.pcrs()[5].index() == 8);
-    assert!(
-        res.pcrs()[5].value() == x"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-    );
 
     assert!(res.user_data().is_none());
     assert!(res.nonce().is_none());

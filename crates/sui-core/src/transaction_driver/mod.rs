@@ -95,6 +95,12 @@ where
         node_config: Option<&NodeConfig>,
         client_metrics: Arc<ValidatorClientMetrics>,
     ) -> Arc<Self> {
+        if std::env::var("TRANSACTION_DRIVER").is_ok() {
+            tracing::warn!(
+                "Transaction Driver is the only supported driver for transaction submission. Setting TRANSACTION_DRIVER is a no-op."
+            );
+        }
+
         let shared_swap = Arc::new(ArcSwap::new(authority_aggregator));
 
         // Extract validator client monitor config from NodeConfig or use default
@@ -178,7 +184,10 @@ where
             .with_label_values(&[tx_type.as_str(), ping_label])
             .inc();
 
-        let mut backoff = ExponentialBackoff::new(MAX_DRIVE_TRANSACTION_RETRY_DELAY);
+        let mut backoff = ExponentialBackoff::new(
+            Duration::from_millis(100),
+            MAX_DRIVE_TRANSACTION_RETRY_DELAY,
+        );
         let mut attempts = 0;
         let mut latest_retriable_error = None;
 
@@ -219,7 +228,7 @@ where
                                 .observe(attempts as f64);
                             if request.transaction.is_some() {
                                 tracing::info!(
-                                    "Failed to finalize transaction with non-retriable error after {} attempts: {}",
+                                    "User transaction failed to finalize (attempt {}), with non-retriable error: {}",
                                     attempts,
                                     e
                                 );
@@ -228,7 +237,7 @@ where
                         }
                         if request.transaction.is_some() {
                             tracing::info!(
-                                "Failed to finalize transaction (attempt {}): {}. Retrying ...",
+                                "User transaction failed to finalize (attempt {}): {}. Retrying ...",
                                 attempts,
                                 e
                             );
@@ -269,7 +278,7 @@ where
                         };
                         if request.transaction.is_some() {
                             tracing::info!(
-                                "Transaction timed out after {} attempts. Last error: {}",
+                                "User transaction timed out after {} attempts. Last error: {}",
                                 attempts,
                                 e
                             );
@@ -481,28 +490,6 @@ where
 
         self.authority_aggregator.store(new_authorities);
     }
-}
-
-// Chooses the percentage of transactions to be driven by TransactionDriver.
-pub fn choose_transaction_driver_percentage(
-    chain_id: Option<sui_types::digests::ChainIdentifier>,
-) -> u8 {
-    if let Ok(v) = std::env::var("TRANSACTION_DRIVER")
-        && let Ok(tx_driver_percentage) = v.parse::<u8>()
-        && (0..=100).contains(&tx_driver_percentage)
-    {
-        return tx_driver_percentage;
-    }
-
-    if let Some(chain_identifier) = chain_id
-        && chain_identifier.chain() == sui_protocol_config::Chain::Unknown
-    {
-        // Kep test coverage for QD.
-        return 50;
-    }
-
-    // Default to 100% everywhere
-    100
 }
 
 // Inner state of TransactionDriver.

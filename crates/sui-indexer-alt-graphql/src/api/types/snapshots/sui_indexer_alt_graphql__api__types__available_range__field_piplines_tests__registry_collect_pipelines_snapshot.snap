@@ -1436,9 +1436,6 @@ SharedInput.mutable
 SimulationResult.effects
   => {}
 
-SimulationResult.events
-  => {}
-
 SimulationResult.outputs
   => {}
 

@@ -18,7 +18,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_checkpoint_blob_handler_uncompressed() {
-        let store = ObjectStore::new(Arc::new(InMemory::new()), None);
+        let store = ObjectStore::new(Arc::new(InMemory::new()));
         let mut conn = store.connect().await.unwrap();
 
         let blob = CheckpointBlob {
@@ -40,7 +40,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_checkpoint_blob_handler_compressed() {
-        let store = ObjectStore::new(Arc::new(InMemory::new()), None);
+        let store = ObjectStore::new(Arc::new(InMemory::new()));
         let mut conn = store.connect().await.unwrap();
 
         let test_data = vec![0u8; 1000];
@@ -66,7 +66,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_epochs_handler() {
-        let store = ObjectStore::new(Arc::new(InMemory::new()), None);
+        let store = ObjectStore::new(Arc::new(InMemory::new()));
         let path = ObjectPath::from("epochs.json");
 
         // Test 1: Create new file with first epoch

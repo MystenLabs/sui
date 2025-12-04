@@ -23,7 +23,6 @@ use std::sync::{Mutex, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
-use sui_types::base_types::SequenceNumber;
 use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
@@ -32,7 +31,7 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointDigest, CheckpointSequenceNumber,
 };
 use sui_types::{
-    base_types::{ObjectID, VersionNumber},
+    base_types::{ObjectID, SequenceNumber, TransactionDigest, VersionNumber},
     storage::ObjectKey,
 };
 use tokio::sync::oneshot::{self, Sender};
@@ -587,7 +586,6 @@ impl AuthorityStorePruner {
 
         let target_epoch = current_epoch - 1;
 
-        use sui_types::base_types::TransactionDigest;
         let start_key = (0u64, TransactionDigest::ZERO);
         let end_key = (target_epoch, TransactionDigest::ZERO);
 

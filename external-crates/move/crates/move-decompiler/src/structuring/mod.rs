@@ -82,6 +82,7 @@ fn structure_nodes(
     }
 }
 
+#[allow(clippy::expect_fun_call)]
 fn structure_loop(
     config: &config::Config,
     graph: &mut Graph,

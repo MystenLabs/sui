@@ -10,7 +10,7 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use std::sync::Arc;
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
-use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr};
 use sui_types::crypto::{AccountKeyPair, get_account_key_pair};
 use sui_types::deny_list_v1::{CoinDenyCap, RegulatedCoinMetadata};
@@ -96,10 +96,11 @@ async fn test_regulated_coin_v2_types() {
         env.get_latest_object_ref(&env.gas_object_id).await,
         env.authority.reference_gas_price_for_testing().unwrap(),
     )
-    .move_call(
+    .move_call_with_type_args(
         SUI_FRAMEWORK_PACKAGE_ID,
         "coin",
         "deny_list_v2_add",
+        vec![regulated_coin_type.clone()],
         vec![
             CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_DENY_LIST_OBJECT_ID,
@@ -112,7 +113,6 @@ async fn test_regulated_coin_v2_types() {
             CallArg::Pure(bcs::to_bytes(&deny_address).unwrap()),
         ],
     )
-    .with_type_args(vec![regulated_coin_type.clone()])
     .build_and_sign(&env.keypair);
     let (_, effects) = send_and_confirm_transaction_(&env.authority, None, tx, true)
         .await
@@ -170,10 +170,11 @@ async fn test_regulated_coin_v2_types() {
         env.get_latest_object_ref(&env.gas_object_id).await,
         env.authority.reference_gas_price_for_testing().unwrap(),
     )
-    .move_call(
+    .move_call_with_type_args(
         SUI_FRAMEWORK_PACKAGE_ID,
         "coin",
         "deny_list_v2_enable_global_pause",
+        vec![regulated_coin_type.clone()],
         vec![
             CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_DENY_LIST_OBJECT_ID,
@@ -185,7 +186,6 @@ async fn test_regulated_coin_v2_types() {
             )),
         ],
     )
-    .with_type_args(vec![regulated_coin_type.clone()])
     .build_and_sign(&env.keypair);
     let (_, effects) = send_and_confirm_transaction_(&env.authority, None, tx, true)
         .await
@@ -238,7 +238,11 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
             env_gas_ref,
             env.authority.reference_gas_price_for_testing().unwrap(),
         )
-        .transfer_funds_to_address_balance(100_000_000, regulated_coin_type.clone(), denied_address)
+        .transfer_funds_to_address_balance(
+            FundSource::address_fund(),
+            vec![(100_000_000, denied_address)],
+            regulated_coin_type.clone(),
+        )
         .build_and_sign(&env.keypair);
         let effects = send_and_confirm_transaction_(&env.authority, None, tx, true)
             .await
@@ -258,10 +262,11 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
         env_gas_ref,
         env.authority.reference_gas_price_for_testing().unwrap(),
     )
-    .move_call(
+    .move_call_with_type_args(
         SUI_FRAMEWORK_PACKAGE_ID,
         "coin",
         "deny_list_v2_add",
+        vec![regulated_coin_type.clone()],
         vec![
             CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_DENY_LIST_OBJECT_ID,
@@ -272,7 +277,6 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
             CallArg::Pure(bcs::to_bytes(&denied_address).unwrap()),
         ],
     )
-    .with_type_args(vec![regulated_coin_type.clone()])
     .build_and_sign(&env.keypair);
     send_and_confirm_transaction_(&env.authority, None, add_tx, true)
         .await

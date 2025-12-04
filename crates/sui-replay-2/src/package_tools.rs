@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    Node,
-    data_stores::file_system_store::{FileSystemStore, NODE_MAPPING_FILE, OBJECTS_DIR},
-    replay_interface::{ObjectKey, ObjectStore, VersionQuery},
+use crate::Node;
+use sui_data_store::{
+    ObjectKey, ObjectStore, VersionQuery,
+    stores::{FileSystemStore, NODE_MAPPING_FILE, OBJECTS_DIR},
 };
 
 use anyhow::{Context, Result, anyhow, bail};

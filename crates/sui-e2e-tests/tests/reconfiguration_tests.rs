@@ -11,7 +11,6 @@ use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
-use sui_protocol_config::ProtocolVersion;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_swarm_config::genesis_config::{
     AccountConfig, DEFAULT_GAS_AMOUNT, ValidatorGenesisConfig, ValidatorGenesisConfigBuilder,
@@ -26,7 +25,6 @@ use sui_types::error::SuiErrorKind;
 use sui_types::governance::{
     VALIDATOR_LOW_POWER_PHASE_1, VALIDATOR_MIN_POWER_PHASE_1, VALIDATOR_VERY_LOW_POWER_PHASE_1,
 };
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{
     SuiSystemStateTrait, get_validator_from_table,
     sui_system_state_summary::get_validator_by_pool_id,
@@ -40,8 +38,6 @@ use tokio::time::sleep;
 use sui_types::transaction::Argument;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::ProgrammableMoveCall;
-
-const PRE_SIP_39_PROTOCOL_VERSION: u64 = 78;
 
 #[sim_test]
 async fn basic_reconfig_end_to_end_test() {
@@ -667,98 +663,6 @@ async fn test_reconfig_with_committee_change_basic() {
 }
 
 #[sim_test]
-async fn test_protocol_upgrade_to_sip_39_enabled_version() {
-    let _guard =
-        sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            // The new consensus handler requires these flags, and they are irrelevant to the test
-            config.set_ignore_execution_time_observations_after_certs_closed_for_testing(true);
-            config.set_record_time_estimate_processed_for_testing(true);
-            config.set_prepend_prologue_tx_in_consensus_commit_in_checkpoints_for_testing(true);
-            config.set_consensus_checkpoint_signature_key_includes_digest_for_testing(true);
-            config.set_cancel_for_failed_dkg_early_for_testing(true);
-            config.set_use_mfp_txns_in_load_initial_object_debts_for_testing(true);
-            config.set_authority_capabilities_v2_for_testing(true);
-            config
-        });
-
-    let initial_num_validators = 10;
-    let new_validator = ValidatorGenesisConfigBuilder::new().build(&mut OsRng);
-
-    let address = (&new_validator.account_key_pair.public()).into();
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_protocol_version(PRE_SIP_39_PROTOCOL_VERSION.into())
-        .with_epoch_duration_ms(20000)
-        .with_accounts(vec![
-            AccountConfig {
-                gas_amounts: vec![DEFAULT_GAS_AMOUNT],
-                address: None,
-            },
-            AccountConfig {
-                gas_amounts: vec![DEFAULT_GAS_AMOUNT],
-                address: Some(address),
-            },
-        ])
-        .with_num_validators(initial_num_validators)
-        .build()
-        .await;
-
-    // add a stake which is insufficient for validators to join pre SIP-39
-    // the stake will be smaller than minimum stake required to join the committee.
-    // however, this is enough post SIP-39, since the amount will be .2% of the total stake.
-    let stake = (DEFAULT_GAS_AMOUNT * (initial_num_validators as u64)) / 10_000 * 20;
-
-    add_validator_candidate(&test_cluster, &new_validator).await;
-    execute_add_stake_transaction(&mut test_cluster, vec![(address, stake)]).await;
-
-    // try adding the validator candidate to the committee
-    // stake is not enough, transaction will abort
-    let (effects, _) = try_request_add_validator(&mut test_cluster, &new_validator)
-        .await
-        .unwrap();
-
-    assert!(effects.status().is_err());
-
-    // check that the validator candidate is in the system state
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let system_state = node
-            .state()
-            .get_sui_system_state_object_for_testing()
-            .unwrap()
-            .into_sui_system_state_summary();
-        assert_eq!(system_state.validator_candidates_size, 1);
-    });
-
-    // switch to new protocol version
-    test_cluster
-        .wait_for_protocol_version(ProtocolVersion::MAX)
-        .await;
-
-    // try adding the validator candidate to the committee again
-    // this time, the transaction will succeed
-    let (effects, _) = try_request_add_validator(&mut test_cluster, &new_validator)
-        .await
-        .unwrap();
-
-    assert!(effects.status().is_ok());
-
-    // wait one more epoch, validator will make it
-    test_cluster.trigger_reconfiguration().await;
-
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let system_state = node
-            .state()
-            .get_sui_system_state_object_for_testing()
-            .unwrap()
-            .into_sui_system_state_summary();
-
-        assert_eq!(
-            system_state.active_validators.len(),
-            initial_num_validators + 1
-        );
-    })
-}
-
-#[sim_test]
 async fn test_reconfig_with_voting_power_decrease() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.
     // Validator starts with .12% of the total voting power and then decreases to below the threshold.
@@ -1309,26 +1213,27 @@ async fn execute_add_stake_transaction(
         .unwrap();
 
     let rgp = test_cluster.get_reference_gas_price().await;
-    let mut ptb = ProgrammableTransactionBuilder::new();
-    let system_arg = ptb.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+    let mut tx_builder = TestTransactionBuilder::new(address, gas, rgp);
+    let tx = {
+        let ptb = tx_builder.ptb_builder_mut();
+        let system_arg = ptb.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
 
-    stakes.into_iter().for_each(|(stake_for, stake_amount)| {
-        let amt_arg = ptb.pure(stake_amount).unwrap();
-        let stake_arg = ptb.command(Command::SplitCoins(Argument::GasCoin, vec![amt_arg]));
-        let stake_for_arg = ptb.pure(stake_for).unwrap();
+        stakes.into_iter().for_each(|(stake_for, stake_amount)| {
+            let amt_arg = ptb.pure(stake_amount).unwrap();
+            let stake_arg = ptb.command(Command::SplitCoins(Argument::GasCoin, vec![amt_arg]));
+            let stake_for_arg = ptb.pure(stake_for).unwrap();
 
-        ptb.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
-            package: SUI_SYSTEM_PACKAGE_ID,
-            module: "sui_system".to_string(),
-            function: "request_add_stake".to_string(),
-            arguments: vec![system_arg, stake_arg, stake_for_arg],
-            type_arguments: vec![],
-        })));
-    });
+            ptb.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package: SUI_SYSTEM_PACKAGE_ID,
+                module: "sui_system".to_string(),
+                function: "request_add_stake".to_string(),
+                arguments: vec![system_arg, stake_arg, stake_for_arg],
+                type_arguments: vec![],
+            })));
+        });
 
-    let tx = TestTransactionBuilder::new(address, gas, rgp)
-        .programmable(ptb.finish())
-        .build();
+        tx_builder.build()
+    };
 
     let response = test_cluster
         .execute_transaction(test_cluster.wallet.sign_transaction(&tx).await)

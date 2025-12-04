@@ -1,5 +1,36 @@
 [limits]
+mutation-timeout-ms = 74000
+query-timeout-ms = 40000
+max-query-depth = 20
+max-query-nodes = 300
+max-output-nodes = 1000000
+max-tx-payload-size = 174763
+max-query-payload-size = 5000
+default-page-size = 20
+max-page-size = 50
+max-multi-get-size = 200
+page-size-override-fx-object-changes = 1024
+page-size-override-packages = 200
+max-type-argument-depth = 16
+max-type-argument-width = 32
+max-type-nodes = 256
+max-move-value-depth = 128
+max-move-value-bound = 1048576
+max-display-field-depth = 10
+max-display-output-size = 1048576
+max-disassembled-module-size = 1048576
 
 [health]
+max-checkpoint-lag-ms = 300000
+
+[name-service]
+package-address = "0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0"
+registry-id = "0xe64cd9db9f829c6cc405d9790bd71567ae07259855f4fba6f02c84f52298c106"
+reverse-registry-id = "0x2fd099e17a292d2bc541df474f9fafa595653848cbabb2d7a4656ec786a1969f"
 
 [watermark]
+watermark-polling-interval-ms = 500
+
+[zklogin]
+env = "Prod"
+max-epoch-upper-bound-delta = 30

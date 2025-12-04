@@ -105,6 +105,8 @@ static_symbols!(
     "test",
     "utf8",
     "display_registry",
+    "internal",
+    "permit",
     "address_alias",
 );
 
