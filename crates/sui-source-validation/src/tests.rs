@@ -989,7 +989,8 @@ pub async fn upgrade_package_with_wallet(
     (resp.get_new_package_obj().unwrap(), resp.digest)
 }
 
-///
+/// Write a Published.toml file into the package at `pkg_path`. It will set the environment to
+/// testnet because that's what's being used to build the packages in the tests.
 async fn write_published_toml(
     pkg_path: impl AsRef<Path>,
     published_at: SuiAddress,
