@@ -171,7 +171,7 @@
       { "source": "/concepts/object-ownership/:path*", "destination": "/guides/developer/objects/object-ownership/:path*"},
       { "source": "/concepts/transfers", "destination": "/guides/developer/objects/transfers"},
       { "source": "/concepts/transfers/:path*", "destination": "/guides/developer/objects/transfers/:path*"},
-      { "source": "/concepts/versioning", "destination": "/guides/developer/objects/versioning"}
+      { "source": "/concepts/versioning", "destination": "/guides/developer/objects/versioning"},
       { "source": "/concepts/tokenomics/vesting-strategies", "destination": "/guides/developer/coin/vesting-strategies"}
     ]
   }
