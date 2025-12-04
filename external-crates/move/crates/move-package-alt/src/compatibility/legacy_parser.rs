@@ -77,6 +77,7 @@ pub struct LegacyPackageMetadata {
 pub fn try_load_legacy_manifest(
     path: &PackagePath,
     default_env: &Environment,
+    is_root: bool,
 ) -> anyhow::Result<Option<(FileHandle, ParsedManifest)>> {
     let Ok(file_handle) = FileHandle::new(path.path().join("Move.toml")) else {
         debug!("failed to load legacy file");
@@ -103,7 +104,7 @@ pub fn try_load_legacy_manifest(
     }
 
     debug!("parsing legacy manifest");
-    let manifest = parse_source_manifest(parsed, path, default_env)?;
+    let manifest = parse_source_manifest(parsed, is_root, path, default_env)?;
     debug!("successfully parsed");
     Ok(Some((file_handle, manifest)))
 }
@@ -114,6 +115,7 @@ fn parse_move_manifest_string(manifest_string: &str) -> Result<TV> {
 
 fn parse_source_manifest(
     tval: TV,
+    is_root: bool,
     path: &PackagePath,
     env: &Environment,
 ) -> Result<ParsedManifest> {
@@ -194,6 +196,7 @@ fn parse_source_manifest(
 
             let implicit_dependencies = check_implicits(
                 metadata.legacy_name.as_str(),
+                is_root,
                 &dependencies,
                 metadata.implicit_deps,
             );
@@ -250,6 +253,7 @@ fn parse_source_manifest(
 ///  - deps or contains a system dep name
 fn check_implicits(
     name: &str,
+    is_root: bool,
     deps: &BTreeMap<Identifier, DefaultDependency>,
     implicit_deps_flag: bool,
 ) -> bool {
@@ -271,14 +275,16 @@ fn check_implicits(
         return true;
     }
 
-    warn!(
-        "[{}] Dependencies on {} are automatically added, but this feature is \
-            disabled for your package because you have explicitly included dependencies on {}. Consider \
-            removing these dependencies from `Move.toml`.",
-        "NOTE".yellow().bold(),
-        move_compiler::format_oxford_list!("and", "{}", LEGACY_SYSTEM_DEPS_NAMES),
-        move_compiler::format_oxford_list!("and", "{}", explicit_implicits),
-    );
+    if is_root {
+        warn!(
+            "[{}] Dependencies on {} are automatically added, but this feature is \
+                disabled for your package because you have explicitly included dependencies on {}. Consider \
+                removing these dependencies from `Move.toml`.",
+            "NOTE".yellow().bold(),
+            move_compiler::format_oxford_list!("and", "{}", LEGACY_SYSTEM_DEPS_NAMES),
+            move_compiler::format_oxford_list!("and", "{}", explicit_implicits),
+        );
+    }
 
     false
 }
@@ -287,7 +293,7 @@ pub fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
     match tval {
         TV::Table(mut table) => {
             check_for_required_field_names(&table, &["name"])?;
-            let known_names = ["name", "edition", "published-at"];
+            let known_names = ["name", "edition", "published-at", "authors", "license"];
 
             warn_if_unknown_field_names(&table, known_names.as_slice());
 

@@ -178,7 +178,11 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         mtx: &PackageSystemLock,
     ) -> PackageResult<PackageGraph<F>> {
         let graph = Arc::new(Mutex::new(DiGraph::new()));
-        let root = Arc::new(Package::<F>::load_root(path.clone(), env, mtx).await?);
+
+        let root = self
+            .cache
+            .fetch(&Pinned::Root(path.clone()), env, mtx)
+            .await?;
 
         // TODO: should we add `root` to `visited`? we may have a problem if there is a cyclic
         // dependency involving the root

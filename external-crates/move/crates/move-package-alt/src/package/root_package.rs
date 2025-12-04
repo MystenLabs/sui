@@ -656,9 +656,14 @@ pkg_b = { local = "../pkg_b" }"#,
         let load_err = RootPackage::<Vanilla>::load(&project.root(), environment, vec![])
             .await
             .unwrap_err();
+
+        let message = load_err
+            .to_string()
+            .replace(project.root_path_str(), "<DIR>");
+
         assert_snapshot!(
-            load_err.to_string(),
-            @"Cannot override default environments. Environment `_test_env` is a system environment and cannot be overridden. System environments: _test_env"
+            message,
+            @"Error while loading dependency <DIR>: Cannot override default environments. Environment `_test_env` is a system environment and cannot be overridden. System environments: _test_env"
         );
     }
 
@@ -1572,12 +1577,12 @@ pkg_b = { local = "../pkg_b" }"#,
         )
         .await;
 
-        let message = root
-            .unwrap_err()
-            .to_string()
-            .replace(ephemeral.to_string_lossy().as_ref(), "<FILE>");
+        let message = root.unwrap_err().to_string().replace(
+            scenario.path_for("root").to_string_lossy().as_ref(),
+            "<DIR>",
+        );
 
-        assert_snapshot!(message, @r###"Package `root` does not declare a `unknown environment` environment. The available environments are ["_test_env"]. Consider running with `--build-env _test_env`"###);
+        assert_snapshot!(message, @r#"Error while loading dependency <DIR>: Package `root` does not declare a `unknown environment` environment. The available environments are ["_test_env"]. Consider running with `--build-env _test_env`"#);
     }
 
     /// ```mermaid
