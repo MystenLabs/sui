@@ -77,7 +77,7 @@ pub struct Package<F: MoveFlavor> {
 impl<F: MoveFlavor> Package<F> {
     /// Load a package from the directory given by `path`.
     /// Makes a best effort to translate old-style packages into the current format
-    pub async fn load_root(
+    pub(crate) async fn load_root(
         path: PackagePath,
         env: &Environment,
         mtx: &PackageSystemLock,
@@ -89,7 +89,7 @@ impl<F: MoveFlavor> Package<F> {
 
     /// Fetch [dep] (relative to [self]) and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
-    pub async fn load(
+    pub(crate) async fn load(
         dep: Pinned,
         env: &Environment,
         mtx: &PackageSystemLock,
@@ -161,15 +161,15 @@ impl<F: MoveFlavor> Package<F> {
 
     /// The path to the root directory of this package. This path is guaranteed to exist
     /// and contain a manifest file.
-    pub fn path(&self) -> &PackagePath {
+    pub(crate) fn path(&self) -> &PackagePath {
         &self.path
     }
 
-    pub fn name(&self) -> &PackageName {
+    pub(crate) fn name(&self) -> &PackageName {
         self.metadata.name.as_ref()
     }
 
-    pub fn display_name(&self) -> &str {
+    pub(crate) fn display_name(&self) -> &str {
         if let Some(legacy_data) = self.legacy_data.as_ref() {
             &legacy_data.legacy_name
         } else {
@@ -177,60 +177,61 @@ impl<F: MoveFlavor> Package<F> {
         }
     }
 
-    pub fn digest(&self) -> &Digest {
+    pub(crate) fn digest(&self) -> &Digest {
         &self.digest
     }
 
-    pub fn environment_name(&self) -> &EnvironmentName {
+    pub(crate) fn environment_name(&self) -> &EnvironmentName {
         &self.env
     }
 
     /// The way this package should be serialized to the root package's lockfile. Note that this is
     /// a dependency relative to the root package (in particular, the root package is the only
     /// package where `dep_for_self()` returns `{local = "."}`
-    pub fn dep_for_self(&self) -> &Pinned {
+    pub(crate) fn dep_for_self(&self) -> &Pinned {
         &self.dep_for_self
     }
 
-    pub fn is_legacy(&self) -> bool {
+    pub(crate) fn is_legacy(&self) -> bool {
         self.legacy_data.is_some()
     }
 
     /// This returns true if the `source` for the package is `{ local = "." }`. This is guaranteed
     /// to hold for exactly one package for a valid package graph (see [Self::dep_for_self] for
     /// more information)
-    pub fn is_root(&self) -> bool {
+    pub(crate) fn is_root(&self) -> bool {
         matches!(self.dep_for_self(), Pinned::Root(_))
     }
 
     /// The resolved and pinned dependencies from the manifest for environment `env`
     /// Returns an error if `env` is not declared in the manifest (TODO: remove this restriction?)
-    pub fn direct_deps(&self) -> &Vec<PinnedDependencyInfo> {
+    pub(crate) fn direct_deps(&self) -> &Vec<PinnedDependencyInfo> {
         &self.deps
     }
 
     /// Additional flavor-specific information that was recorded when this package was published
     /// (in the `Move.published` file or the ephemeral publication file if this was created with
     /// [Self::override_publish]).
-    pub fn publication(&self) -> Option<&Publication<F>> {
+    pub(crate) fn publication(&self) -> Option<&Publication<F>> {
         self.publication.as_ref()
     }
 
     /// Tries to get the `published-at` entry for the given package,
     /// including support for backwards compatibility (legacy packages)
-    pub fn published_at(&self) -> Option<&PublishedID> {
+    #[allow(dead_code)]
+    pub(crate) fn published_at(&self) -> Option<&PublishedID> {
         self.publication()
             .map(|publication| &publication.addresses.published_at)
     }
 
     /// Tries to get the `original-id` entry for the given package,
     /// including support for backwards compatibility (legacy packages)
-    pub fn original_id(&self) -> Option<&OriginalID> {
+    pub(crate) fn original_id(&self) -> Option<&OriginalID> {
         self.publication()
             .map(|publication| &publication.addresses.original_id)
     }
 
-    pub fn metadata(&self) -> &PackageMetadata {
+    pub(crate) fn metadata(&self) -> &PackageMetadata {
         &self.metadata
     }
 

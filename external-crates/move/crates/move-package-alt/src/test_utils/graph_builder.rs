@@ -110,6 +110,10 @@ pub struct PackageSpec {
 
     /// Are implicit deps included?
     implicit_deps: bool,
+
+    /// Custom addresses for legacy packages (name -> Option<address>)
+    /// If None is provided, the address is unresolved and must come from parent
+    legacy_addresses: BTreeMap<String, Option<String>>,
 }
 
 struct GitSpec {
@@ -415,18 +419,32 @@ impl TestPackageGraph {
         move_toml.push_str(&deps);
         move_toml.push('\n');
 
-        // TODO: it would be good to split up `PackageSpec` and `LegacyPackageSpec`, so that we can
-        // add things like additional `[addresses]`
-        move_toml.push_str(&formatdoc!(
-            r#"
-            [addresses]
-            {} = "{}"
-            "#,
-            package.name,
-            publication
-                .map(|it| it.addresses.original_id.to_string())
-                .unwrap_or("0x0".to_string())
-        ));
+        // Generate [addresses] section
+        move_toml.push_str("[addresses]\n");
+
+        // If custom addresses are provided, use them
+        if !package.legacy_addresses.is_empty() {
+            for (name, addr) in &package.legacy_addresses {
+                match addr {
+                    Some(addr_val) => {
+                        move_toml.push_str(&format!("{} = \"{}\"\n", name, addr_val));
+                    }
+                    None => {
+                        // Unresolved address - omit the value to make it Option<>
+                        move_toml.push_str(&format!("{} = \"_\"\n", name));
+                    }
+                }
+            }
+        } else {
+            // Default behavior: single address for the package name
+            move_toml.push_str(&format!(
+                "{} = \"{}\"\n",
+                package.name,
+                publication
+                    .map(|it| it.addresses.original_id.to_string())
+                    .unwrap_or("0x0".to_string())
+            ));
+        }
 
         move_toml
     }
@@ -558,6 +576,7 @@ impl PackageSpec {
             version: None,
             files: BTreeMap::new(),
             implicit_deps: true,
+            legacy_addresses: BTreeMap::new(),
         }
     }
 
@@ -609,6 +628,21 @@ impl PackageSpec {
     pub fn set_legacy_name(mut self, name: impl AsRef<str>) -> Self {
         assert!(self.is_legacy);
         self.legacy_name = Some(name.as_ref().to_string());
+        self
+    }
+
+    /// Add a custom address for a legacy package.
+    /// Use `None` for the address value to create an unresolved address that must come from parent.
+    pub fn add_address(mut self, name: impl AsRef<str>, addr: Option<impl AsRef<str>>) -> Self {
+        assert!(
+            self.is_legacy,
+            "Only legacy packages can have custom addresses"
+        );
+        self.legacy_addresses.insert(
+            name.as_ref().to_string(),
+            addr.map(|a| a.as_ref().to_string())
+                .or(Some("_".to_string())),
+        );
         self
     }
 

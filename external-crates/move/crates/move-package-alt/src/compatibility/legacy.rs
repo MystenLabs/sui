@@ -31,7 +31,7 @@ pub struct LegacyData {
     pub normalized_legacy_name: Identifier,
 
     /// These addresses should store all addresses that were part of the package.
-    pub named_addresses: BTreeMap<Identifier, AccountAddress>,
+    pub named_addresses: BTreeMap<Identifier, Option<AccountAddress>>,
 
     /// The legacy publication information stored in a legacy `Move.lock` file.
     pub legacy_publications: BTreeMap<EnvironmentName, LegacyEnvironment>,
@@ -42,6 +42,10 @@ pub struct LegacyData {
     ///
     /// When we're doing `try_get_published_at()` or `try_get_original_id` on `Package`, we fallback to these.
     pub manifest_address_info: Option<PublishAddresses>,
+
+    /// Whether the modern name address is an underscore address (`root = "_"`)
+    /// This is used to simplify legacy named addresses construction.
+    pub modern_name_address_is_underscore: bool,
 }
 
 impl LegacyData {

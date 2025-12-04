@@ -174,20 +174,17 @@ fn parse_source_manifest(
             // remove the "modern" name (address) from the addresses table to avoid duplications
             // Validate that we no longer support `_` addresses for legacy [addresses] sections!
             let mut programmatic_addresses = BTreeMap::new();
+            let mut modern_name_address_is_underscore = false;
 
             for (name, addr) in addresses {
                 // We skip the package base address from the addresses we want to expose
                 // as it is now exposed by default.
                 if name == modern_name {
+                    if addr.is_none() {
+                        modern_name_address_is_underscore = true;
+                    }
                     continue;
                 }
-
-                let Some(addr) = addr else {
-                    bail!(
-                        "Found uninstantiated named address `{}` (declared as `_`). All addresses in the `addresses` field must be instantiated.",
-                        name
-                    );
-                };
 
                 programmatic_addresses.insert(name, addr);
             }
@@ -230,6 +227,7 @@ fn parse_source_manifest(
                     named_addresses: programmatic_addresses,
                     manifest_address_info,
                     legacy_publications,
+                    modern_name_address_is_underscore,
                 }),
                 dep_replacements: BTreeMap::new(),
             })
@@ -786,9 +784,7 @@ fn derive_modern_name(
     // Find all the addresses with 0x0.
     let zero_addresses = addresses
         .iter()
-        .filter(|(_, address)| {
-            address.is_some_and(|address| address == AccountAddress::ZERO) || address.is_none()
-        })
+        .filter(|(_, address)| address.is_some_and(|address| address == AccountAddress::ZERO))
         .map(|(name, _)| name)
         .collect::<Vec<_>>();
 
