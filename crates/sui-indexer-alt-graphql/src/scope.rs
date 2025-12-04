@@ -58,9 +58,6 @@ pub(crate) struct Scope {
     /// This enables any Object GraphQL type to access fresh data without database queries.
     execution_objects: ExecutionObjectMap,
 
-    /// Balance changes from the executed transaction, only available in execution context.
-    balance_changes: Option<Vec<grpc::BalanceChange>>,
-
     /// Access to packages for type resolution.
     package_store: Arc<dyn PackageStore>,
 
@@ -80,7 +77,6 @@ impl Scope {
             checkpoint_viewed_at: Some(watermark.high_watermark().checkpoint()),
             root_version: None,
             execution_objects: Arc::new(BTreeMap::new()),
-            balance_changes: None,
             package_store: package_store.clone(),
             resolver_limits: limits.package_resolver(),
         })
@@ -94,7 +90,6 @@ impl Scope {
             checkpoint_viewed_at: Some(checkpoint_viewed_at),
             root_version: self.root_version,
             execution_objects: Arc::clone(&self.execution_objects),
-            balance_changes: self.balance_changes.clone(),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
@@ -106,7 +101,6 @@ impl Scope {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
             root_version: Some(root_version),
             execution_objects: Arc::clone(&self.execution_objects),
-            balance_changes: self.balance_changes.clone(),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -118,7 +112,6 @@ impl Scope {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
             root_version: None,
             execution_objects: Arc::clone(&self.execution_objects),
-            balance_changes: self.balance_changes.clone(),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -170,12 +163,7 @@ impl Scope {
             .and_then(|(_, opt)| opt.as_ref())
     }
 
-    /// Get balance changes from execution context, if available.
-    pub(crate) fn balance_changes(&self) -> Option<&[grpc::BalanceChange]> {
-        self.balance_changes.as_deref()
-    }
-
-    /// Create a nested scope with execution objects and balance changes extracted from an ExecutedTransaction.
+    /// Create a nested scope with execution objects extracted from an ExecutedTransaction.
     pub(crate) fn with_executed_transaction(
         &self,
         executed_transaction: &grpc::ExecutedTransaction,
@@ -186,7 +174,6 @@ impl Scope {
             checkpoint_viewed_at: None,
             root_version: self.root_version,
             execution_objects,
-            balance_changes: Some(executed_transaction.balance_changes.clone()),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
