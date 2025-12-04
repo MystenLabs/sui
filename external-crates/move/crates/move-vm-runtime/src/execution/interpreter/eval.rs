@@ -112,9 +112,16 @@ pub(super) fn run(
     } = call_stack;
     heap.free_stack_frame(current_frame.stack_frame)
         .map_err(|e| e.finish(Location::Undefined))?;
-    for frame in frames.into_iter().rev() {
-        heap.free_stack_frame(frame.stack_frame)
-            .map_err(|e| e.finish(Location::Undefined))?;
+    debug_assert!(
+        frames.is_empty(),
+        "Call stack should be empty after execution"
+    );
+    if !frames.is_empty() {
+        return Err(
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("Call stack should be empty after execution".to_owned())
+                .finish(Location::Undefined),
+        );
     }
     Ok(operand_stack.value)
 }
