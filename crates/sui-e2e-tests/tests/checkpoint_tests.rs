@@ -268,19 +268,19 @@ async fn test_checkpoint_contents_v2_alias_versions() {
             .expect("alias state object should exist")
         });
 
-    // Submit two tx in a soft bundle. First one calls `init_aliases`.
+    // Submit two tx in a soft bundle. First one calls `initialize`.
     // The soft bundle forces checkpoint output to contain out-of-order alias
-    // versions: even though `init_aliases` changes the alias config version,
+    // versions: even though `initialize` changes the alias config version,
     // the second tx (just a dummy transfer) should still report that it was
     // verified using the old `None` version of the alias config.
-    let init_aliases_tx = test_cluster
+    let initialize_tx = test_cluster
         .wallet
         .sign_transaction(
             &TestTransactionBuilder::new(account, gas_objects[0], gas_price)
                 .move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
                     "address_alias",
-                    "init_aliases",
+                    "initialize",
                     vec![CallArg::Object(ObjectArg::SharedObject {
                         id: SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
                         initial_shared_version: address_alias_state_initial_shared_version,
@@ -290,7 +290,7 @@ async fn test_checkpoint_contents_v2_alias_versions() {
                 .build(),
         )
         .await;
-    let init_aliases_digest = *init_aliases_tx.digest();
+    let initialize_digest = *initialize_tx.digest();
     let transfer_tx = test_cluster
         .wallet
         .sign_transaction(
@@ -327,7 +327,7 @@ async fn test_checkpoint_contents_v2_alias_versions() {
         .unwrap();
     let request = sui_types::messages_grpc::RawSubmitTxRequest {
         transactions: vec![
-            bcs::to_bytes(&init_aliases_tx).unwrap().into(),
+            bcs::to_bytes(&initialize_tx).unwrap().into(),
             bcs::to_bytes(&transfer_tx).unwrap().into(),
         ],
         submit_type: sui_types::messages_grpc::SubmitTxType::SoftBundle.into(),
@@ -359,7 +359,7 @@ async fn test_checkpoint_contents_v2_alias_versions() {
         checkpoint_seq = validator_handle.with(|node| {
             node.state()
                 .epoch_store_for_testing()
-                .get_transaction_checkpoint(&init_aliases_digest)
+                .get_transaction_checkpoint(&initialize_digest)
                 .unwrap()
         });
         if checkpoint_seq.is_some() {
@@ -390,7 +390,7 @@ async fn test_checkpoint_contents_v2_alias_versions() {
         let (init_idx, transfer_idx) = contents_view.digests_iter().enumerate().fold(
             (None, None),
             |(init, transfer), (idx, digest)| {
-                let new_init = if digest.transaction == init_aliases_digest {
+                let new_init = if digest.transaction == initialize_digest {
                     Some(idx)
                 } else {
                     init
@@ -404,14 +404,14 @@ async fn test_checkpoint_contents_v2_alias_versions() {
             },
         );
 
-        let init_idx = init_idx.expect("init_aliases transaction not found in checkpoint contents");
+        let init_idx = init_idx.expect("initialize transaction not found in checkpoint contents");
         let transfer_idx =
             transfer_idx.expect("transfer transaction not found in checkpoint contents");
-        assert!(init_idx < transfer_idx, "init_aliases transaction must appear before transfer transaction in checkpoint contents, got init_idx: {}, transfer_idx: {}", init_idx, transfer_idx);
+        assert!(init_idx < transfer_idx, "initialize transaction must appear before transfer transaction in checkpoint contents, got init_idx: {}, transfer_idx: {}", init_idx, transfer_idx);
 
         let init_signatures = contents_view
             .user_signatures(init_idx)
-            .expect("init_aliases transaction signatures not found");
+            .expect("initialize transaction signatures not found");
         let transfer_signatures = contents_view
             .user_signatures(transfer_idx)
             .expect("transfer transaction signatures not found");
@@ -437,7 +437,7 @@ async fn test_checkpoint_contents_v2_alias_versions() {
         init_signatures.iter().map(|(_, v)| *v).collect::<Vec<_>>()
     });
 
-    // Submit a new transaction after init_aliases has been executed.
+    // Submit a new transaction after initialize has been executed.
     // This should use the new alias version (different from the soft bundle transactions).
     let post_init_tx = test_cluster
         .wallet

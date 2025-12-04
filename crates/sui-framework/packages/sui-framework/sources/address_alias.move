@@ -64,7 +64,7 @@ public struct AliasKey(address) has copy, drop, store;
 ///
 /// By default, an address is its own alias. However, the original address can
 /// be removed from the set of allowed aliases after initialization.
-entry fun init_aliases(address_alias_state: &mut AddressAliasState, ctx: &TxContext) {
+entry fun initialize(address_alias_state: &mut AddressAliasState, ctx: &TxContext) {
     assert!(!derived_object::exists(&address_alias_state.id, AliasKey(ctx.sender())), EAliasAlreadyExists);
     transfer::party_transfer(
         AddressAliases {
@@ -76,14 +76,14 @@ entry fun init_aliases(address_alias_state: &mut AddressAliasState, ctx: &TxCont
 }
 
 /// Adds the provided address to the set of aliases for the sender.
-entry fun add_alias(aliases: &mut AddressAliases, alias: address) {
+entry fun add(aliases: &mut AddressAliases, alias: address) {
     assert!(!aliases.aliases.contains(&alias), EAliasAlreadyExists);
     aliases.aliases.insert(alias);
     assert!(aliases.aliases.length() <= MAX_ALIASES, ETooManyAliases);
 }
 
 /// Overwrites the aliases for the sender's address with the given set.
-entry fun set_aliases(aliases: &mut AddressAliases, new_aliases: vector<address>) {
+entry fun replace_all(aliases: &mut AddressAliases, new_aliases: vector<address>) {
     let new_aliases = vec_set::from_keys(new_aliases);
     assert!(new_aliases.length() > 0, ECannotRemoveLastAlias);
     assert!(new_aliases.length() <= MAX_ALIASES, ETooManyAliases);
@@ -91,7 +91,7 @@ entry fun set_aliases(aliases: &mut AddressAliases, new_aliases: vector<address>
 }
 
 /// Removes the given alias from the set of aliases for the sender's address.
-entry fun remove_alias(aliases: &mut AddressAliases, alias: address) {
+entry fun remove(aliases: &mut AddressAliases, alias: address) {
     assert!(aliases.aliases.contains(&alias), ENoSuchAlias);
     assert!(aliases.aliases.length() > 1, ECannotRemoveLastAlias);
     aliases.aliases.remove(&alias);

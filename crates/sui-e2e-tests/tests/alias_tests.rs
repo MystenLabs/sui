@@ -134,30 +134,30 @@ async fn test_alias_changes() {
         .1
         .clone();
 
-    // Submit transaction to call init_aliases
-    let init_aliases_tx = test_cluster
+    // Submit transaction to call initialize
+    let initialize_tx = test_cluster
         .wallet
         .sign_transaction(
             &TestTransactionBuilder::new(account1, gas_objects1[0], gas_price)
                 .move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
                     "address_alias",
-                    "init_aliases",
+                    "initialize",
                     vec![CallArg::Object(ObjectArg::SharedObject {
                         id: SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
                         initial_shared_version: address_alias_state_initial_shared_version,
-                        mutability: sui_types::transaction::SharedOre bjectMutability::Mutable,
+                        mutability: sui_types::transaction::SharedObjectMutability::Mutable,
                     })],
                 )
                 .build(),
         )
         .await;
 
-    let init_effects = submit_and_wait_for_effects(&client, init_aliases_tx).await;
-    assert!(init_effects.status().is_ok());
+    let initialize_effects = submit_and_wait_for_effects(&client, initialize_tx).await;
+    assert!(initialize_effects.status().is_ok());
 
-    // Get the AddressAliases object created by init_aliases
-    let address_aliases_ref = init_effects
+    // Get the AddressAliases object created by initialize
+    let address_aliases_ref = initialize_effects
         .created()
         .iter()
         .find(|(_, owner)| {
@@ -169,8 +169,8 @@ async fn test_alias_changes() {
         .expect("AddressAliases object should be created")
         .0;
 
-    // Submit a dummy transaction after init_aliases to verify sender can still transact.
-    let post_init_tx = test_cluster
+    // Submit a dummy transaction after initialize to verify sender can still transact.
+    let post_initialize_tx = test_cluster
         .wallet
         .sign_transaction(
             &TestTransactionBuilder::new(account1, gas_objects1[1], gas_price)
@@ -179,18 +179,18 @@ async fn test_alias_changes() {
         )
         .await;
 
-    let effects = submit_and_wait_for_effects(&client, post_init_tx).await;
+    let effects = submit_and_wait_for_effects(&client, post_initialize_tx).await;
     assert!(effects.status().is_ok());
 
-    // Call add_alias to add account2 as an alias for account1
-    let add_alias_tx = test_cluster
+    // Call add to add account2 as an alias for account1
+    let add_tx = test_cluster
         .wallet
         .sign_transaction(
             &TestTransactionBuilder::new(account1, gas_objects1[2], gas_price)
                 .move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
                     "address_alias",
-                    "add_alias",
+                    "add",
                     vec![
                         CallArg::Object(ObjectArg::SharedObject {
                             id: address_aliases_ref.0,
@@ -204,7 +204,7 @@ async fn test_alias_changes() {
         )
         .await;
 
-    let effects = submit_and_wait_for_effects(&client, add_alias_tx).await;
+    let effects = submit_and_wait_for_effects(&client, add_tx).await;
     assert!(effects.status().is_ok());
 
     // Submit a transaction with account1 as sender and account2 as signer

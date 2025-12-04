@@ -355,7 +355,9 @@ impl EndOfEpochTransactionKind {
             N::DisplayRegistryCreate => {
                 K::DisplayRegistryCreate(DisplayRegistryCreateTransaction { dummy: None })
             }
-            N::AddressAliasStateCreate => K::AddressAliasStateCreate(AddressAliasStateCreateTransaction { dummy: None }),
+            N::AddressAliasStateCreate => {
+                K::AddressAliasStateCreate(AddressAliasStateCreateTransaction { dummy: None })
+            }
         }
     }
 }
