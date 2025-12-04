@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
+    AddPipelineResult,
     metrics::IndexerMetrics,
     pipeline::logging::{LoggerWatermark, WatermarkLogger},
     store::{Connection, Store},
@@ -95,6 +96,10 @@ impl PendingRanges {
 /// The task will shutdown if the `cancel` token is signalled. If the `config` is `None`, the task
 /// will shutdown immediately.
 pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
+    AddPipelineResult {
+        next_checkpoint,
+        has_watermark_record,
+    }: AddPipelineResult,
     handler: Arc<H>,
     config: Option<PrunerConfig>,
     store: H::Store,
@@ -109,8 +114,35 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 
         info!(
             pipeline = H::NAME,
-            "Starting pruner with config: {:?}", config
+            "Starting pruner with has_watermark_record: {has_watermark_record}, config: {:?}",
+            config
         );
+
+        if !has_watermark_record {
+            loop {
+                let Ok(mut conn) = store.connect().await else {
+                    error!(
+                        pipeline = H::NAME,
+                        "Pruner failed to connect, while setting watermark"
+                    );
+                    return;
+                };
+
+                match conn.set_pruner_watermark(H::NAME, next_checkpoint).await {
+                    Ok(_) => {
+                        info!(
+                            pipeline = H::NAME,
+                            "Set pruner watermark: {next_checkpoint}"
+                        );
+                        break
+                    }
+
+                    Err(e) => {
+                        warn!(pipeline = H::NAME, "Failed to set watermark: {e}");
+                    }
+                }
+            }
+        }
 
         // The pruner can pause for a while, waiting for the delay imposed by the
         // `pruner_timestamp` to expire. In that case, the period between ticks should not be
@@ -573,6 +605,7 @@ mod tests {
         let cancel_clone = cancel.clone();
         let pruner_handle = tokio::spawn(async move {
             pruner(
+                AddPipelineResult::default(),
                 handler,
                 Some(pruner_config),
                 store_clone,
@@ -667,6 +700,7 @@ mod tests {
         let cancel_clone = cancel.clone();
         let pruner_handle = tokio::spawn(async move {
             pruner(
+                AddPipelineResult::default(),
                 handler,
                 Some(pruner_config),
                 store_clone,
@@ -751,6 +785,7 @@ mod tests {
         let cancel_clone = cancel.clone();
         let pruner_handle = tokio::spawn(async move {
             pruner(
+                AddPipelineResult::default(),
                 handler,
                 Some(pruner_config),
                 store_clone,

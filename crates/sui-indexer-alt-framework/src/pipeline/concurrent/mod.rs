@@ -13,10 +13,11 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
-    Task, metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::Checkpoint,
+    AddPipelineResult, Task, metrics::IndexerMetrics, store::Store,
+    types::full_checkpoint_content::Checkpoint,
 };
 
 use super::{CommitterConfig, PIPELINE_BUFFER, Processor, WatermarkPart, processor::processor};
@@ -211,7 +212,7 @@ impl Default for PrunerConfig {
 /// reports an issue.
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
-    next_checkpoint: u64,
+    add_pipeline_result: AddPipelineResult,
     config: ConcurrentConfig,
     store: H::Store,
     task: Option<Task>,
@@ -281,7 +282,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let commit_watermark = commit_watermark::<H>(
-        next_checkpoint,
+        add_pipeline_result.next_checkpoint,
         committer_config,
         watermark_rx,
         store.clone(),
@@ -298,6 +299,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     let pruner = pruner(
+        add_pipeline_result,
         handler,
         pruner_config,
         store,
@@ -431,7 +433,10 @@ mod tests {
 
             let pipeline_handle = pipeline(
                 DataPipeline,
-                next_checkpoint,
+                AddPipelineResult {
+                    next_checkpoint,
+                    has_watermark_record: false,
+                },
                 config,
                 store.clone(),
                 None,
