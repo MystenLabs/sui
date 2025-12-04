@@ -67,7 +67,7 @@ pub struct Package<F: MoveFlavor> {
 
     /// The pinned direct dependencies for this package
     /// Note: for legacy packages, this information will be stored in `legacy_data`.
-    deps: Vec<PinnedDependencyInfo>,
+    deps: Vec<CombinedDependency>,
 
     /// Dummy address that is set during package graph initialization for unpublished addresses
     // TODO: probably we want to refactor this and have it in published
@@ -115,7 +115,7 @@ impl<F: MoveFlavor> Package<F> {
         //   - if it fails (no lockfile / out of date lockfile), compute them from the manifest
         //     (adding system deps)
 
-        let deps = Self::deps_from_manifest(&dep, &file_handle, &manifest, env).await?;
+        let deps = Self::deps_from_manifest(&file_handle, &manifest, env).await?;
 
         // compute the digest (TODO: this should only compute over the environment specific data)
         let digest = compute_digest(file_handle.source());
@@ -193,7 +193,7 @@ impl<F: MoveFlavor> Package<F> {
 
     /// The resolved and pinned dependencies from the manifest for environment `env`
     /// Returns an error if `env` is not declared in the manifest (TODO: remove this restriction?)
-    pub fn direct_deps(&self) -> &Vec<PinnedDependencyInfo> {
+    pub fn direct_deps(&self) -> &Vec<CombinedDependency> {
         &self.deps
     }
 
@@ -244,11 +244,10 @@ impl<F: MoveFlavor> Package<F> {
     /// dependencies, system dependencies, and dep-replacements from the manifest and then pinning
     /// the results
     async fn deps_from_manifest(
-        parent: &Pinned,
         file_handle: &FileHandle,
         manifest: &ParsedManifest,
         env: &Environment,
-    ) -> PackageResult<Vec<PinnedDependencyInfo>> {
+    ) -> PackageResult<Vec<CombinedDependency>> {
         let implicits = F::implicit_dependencies(env.id());
         let is_implicit = implicits.contains_key(manifest.package.name.as_ref());
 
@@ -261,7 +260,7 @@ impl<F: MoveFlavor> Package<F> {
         };
 
         debug!("combining [dependencies] with [dep-replacements] for {env:?}");
-        let combined_deps = CombinedDependency::combine_deps(
+        Ok(CombinedDependency::combine_deps(
             file_handle,
             env,
             manifest
@@ -274,10 +273,7 @@ impl<F: MoveFlavor> Package<F> {
                 .map(|(k, v)| (k.as_ref().clone(), v.clone()))
                 .collect(),
             &system_dependencies,
-        )?;
-
-        debug!("pinning dependencies");
-        PinnedDependencyInfo::pin::<F>(parent, combined_deps, env.id()).await
+        )?)
     }
 }
 

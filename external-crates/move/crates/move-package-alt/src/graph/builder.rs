@@ -20,10 +20,11 @@ use std::{
 };
 
 use bimap::BiBTreeMap;
+use colored::Colorize;
 use petgraph::graph::{DiGraph, NodeIndex};
 use thiserror::Error;
 use tokio::sync::OnceCell;
-use tracing::debug;
+use tracing::{debug, info};
 
 use super::PackageGraph;
 
@@ -98,6 +99,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         check_digests: bool,
         mtx: &PackageSystemLock,
     ) -> PackageResult<Option<PackageGraph<F>>> {
+        // TODO: this function is too long
         let Some(lockfile) = Lockfiles::read_from_dir::<F>(path, mtx)? else {
             return Ok(None);
         };
@@ -116,6 +118,12 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             let package = self.cache.fetch(&dep, env, mtx).await?;
             let package_manifest_digest = package.digest();
             if check_digests && package_manifest_digest != &pin.manifest_digest {
+                info!(
+                    "[{}] Updating dependencies for `{}` environment because {:?} has been changed since the last update.",
+                    "NOTE".yellow(),
+                    env.name(),
+                    package.path().path().join("Move.toml")
+                );
                 return Ok(None);
             }
             let index = inner.add_node(package.clone());
@@ -156,6 +164,14 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
                         .ok_or(LockfileError::UndefinedDep {
                             target_id: target_id.clone(),
                         })?;
+
+                let pin = inner
+                    .node_weight(*target_index)
+                    .expect("node exists")
+                    .dep_for_self()
+                    .clone();
+
+                let dep = PinnedDependencyInfo::from_combined(dep.clone(), pin);
 
                 inner.add_edge(*source_index, *target_index, dep.clone());
             }
@@ -272,9 +288,25 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             Entry::Vacant(entry) => *entry.insert(graph.lock().expect("unpoisoned").add_node(None)),
         };
 
+        // pin dependencies
+        let pinned = PinnedDependencyInfo::pin::<F>(
+            package.dep_for_self(),
+            package.direct_deps().clone(),
+            env.id(),
+        )
+        .await
+        .map_err(|err| PackageError::DepError {
+            dep: package
+                .dep_for_self()
+                .unfetched_path()
+                .to_string_lossy()
+                .to_string(),
+            err: Box::new(err),
+        })?;
+
         // add outgoing edges for dependencies
         // Note: this loop could be parallel if we want parallel fetching:
-        for dep in package.direct_deps().iter() {
+        for dep in pinned {
             let fetched = self.cache.fetch(dep.as_ref(), env, mtx).await?;
 
             // We retain the defined environment name, but we assign a consistent chain id (environmentID).
