@@ -533,8 +533,7 @@ mod tests {
             RenderToml,
         },
         test_utils::{
-            self, basic_manifest_with_env,
-            basic_manifest_with_default_envs,
+            self, basic_manifest_with_default_envs, basic_manifest_with_env,
             git::{self},
             graph_builder::TestPackageGraph,
         },
@@ -657,9 +656,9 @@ pkg_b = { local = "../pkg_b" }"#,
         let load_err = RootPackage::<Vanilla>::load(&project.root(), environment, vec![])
             .await
             .unwrap_err();
-        assert_eq!(
+        assert_snapshot!(
             load_err.to_string(),
-            "Cannot override default environments. Environment `_test_env` is a system environment and cannot be overridden. System environments: _test_env"
+            @"Cannot override default environments. Environment `_test_env` is a system environment and cannot be overridden. System environments: _test_env"
         );
     }
 
