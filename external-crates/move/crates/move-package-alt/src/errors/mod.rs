@@ -111,11 +111,10 @@ pub enum PackageError {
     #[error("Multiple entries with `source = {{ {dep} }}` exist in the publication file")]
     MultipleEphemeralEntries { dep: String },
 
-    #[error("Named address `{name}` on package `{package}` has an underscore `(_)` assignment, but no address was found for it.")]
-    NameNotDefined {
-        name: Identifier,
-        package: String,
-    },
+    #[error(
+        "Named address `{name}` on package `{package}` has an underscore `(_)` assignment, but no address was found for it."
+    )]
+    NameNotDefined { name: Identifier, package: String },
 }
 
 /// Truncate `s` to the first `head` characters and the last `tail` characters of `s`, separated by
