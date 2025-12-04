@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use itertools::Itertools;
 use move_core_types::language_storage::StructTag;
-use std::collections::BTreeMap;
 use std::str::FromStr;
 use sui_keys::keystore::AccountKeystore;
 use sui_light_client::mmr::apply_stream_updates;
@@ -297,24 +297,24 @@ async fn verify_events_with_stream_head(
         expected_event_count
     );
 
-    let events_by_checkpoint: BTreeMap<u64, Vec<EventCommitment>> =
-        events.iter().fold(BTreeMap::new(), |mut map, event| {
+    let events_by_accum_version: Vec<Vec<EventCommitment>> = events
+        .iter()
+        .filter(|event| event.checkpoint.unwrap() > first_event_checkpoint)
+        .map(|event| {
             let commitment = convert_grpc_event_to_commitment(event)
                 .expect("should convert event to commitment");
-            map.entry(commitment.checkpoint_seq)
-                .or_default()
-                .push(commitment);
-            map
-        });
-
-    let checkpoints_with_events: Vec<Vec<EventCommitment>> = events_by_checkpoint
-        .iter()
-        .filter(|(cp, _)| **cp > first_event_checkpoint)
-        .map(|(_cp, events)| events.clone())
+            let accumulator_version = event
+                .accumulator_version
+                .expect("Missing accumulator_version");
+            (accumulator_version, commitment)
+        })
+        .chunk_by(|(version, _)| *version)
+        .into_iter()
+        .map(|(_, group)| group.map(|(_, commitment)| commitment).collect())
         .collect();
 
     let calculated_stream_head =
-        apply_stream_updates(&first_stream_head.value, checkpoints_with_events);
+        apply_stream_updates(&first_stream_head.value, events_by_accum_version);
 
     assert_eq!(
         calculated_stream_head.num_events, last_stream_head.value.num_events,
@@ -1163,4 +1163,157 @@ async fn test_size_based_pagination() {
     );
 
     verify_events_with_stream_head(&test_cluster, package_id, &all_events, 4).await;
+}
+
+#[sim_test]
+async fn authenticated_events_multiple_commits_per_checkpoint() {
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::{Argument, Command};
+
+    let _guard: sui_protocol_config::OverrideGuard =
+        ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+            cfg.enable_authenticated_event_streams_for_testing();
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg.set_min_checkpoint_interval_ms_for_testing(1000);
+            cfg
+        });
+
+    let rpc_config = create_rpc_config_with_authenticated_events();
+
+    let test_cluster = TestClusterBuilder::new()
+        .disable_fullnode_pruning()
+        .with_rpc_config(rpc_config)
+        .build()
+        .await;
+
+    let package_id = publish_test_package(&test_cluster).await;
+    let sender = test_cluster.wallet.config.keystore.addresses()[0];
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let chain_id = test_cluster.get_chain_identifier();
+
+    let gas_for_deposit = test_cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(sender)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let mut deposit_builder = ProgrammableTransactionBuilder::new();
+    let deposit_amount = deposit_builder.pure(6_000_000_000_000u64).unwrap();
+    let recipient_arg = deposit_builder.pure(sender).unwrap();
+    let coin =
+        deposit_builder.command(Command::SplitCoins(Argument::GasCoin, vec![deposit_amount]));
+    let Argument::Result(coin_idx) = coin else {
+        panic!("coin is not a result");
+    };
+    let coin = Argument::NestedResult(coin_idx, 0);
+    deposit_builder.programmable_move_call(
+        sui_types::SUI_FRAMEWORK_PACKAGE_ID,
+        move_core_types::identifier::Identifier::new("coin").unwrap(),
+        move_core_types::identifier::Identifier::new("send_funds").unwrap(),
+        vec!["0x2::sui::SUI".parse().unwrap()],
+        vec![coin, recipient_arg],
+    );
+    let deposit_tx = TransactionData::new(
+        sui_types::transaction::TransactionKind::ProgrammableTransaction(deposit_builder.finish()),
+        sender,
+        gas_for_deposit,
+        10_000_000,
+        rgp,
+    );
+    test_cluster.sign_and_execute_transaction(&deposit_tx).await;
+
+    let event_count = 100;
+
+    let tx_data_vec: Vec<_> = (0..event_count)
+        .map(|i| {
+            let mut ptb = ProgrammableTransactionBuilder::new();
+            let val = ptb.pure(i as u64).unwrap();
+            ptb.programmable_move_call(
+                package_id,
+                move_core_types::identifier::Identifier::new("events").unwrap(),
+                move_core_types::identifier::Identifier::new("emit").unwrap(),
+                vec![],
+                vec![val],
+            );
+
+            sui_types::transaction::TransactionData::V1(sui_types::transaction::TransactionDataV1 {
+                kind: sui_types::transaction::TransactionKind::ProgrammableTransaction(
+                    ptb.finish(),
+                ),
+                sender,
+                gas_data: sui_types::transaction::GasData {
+                    payment: vec![],
+                    owner: sender,
+                    price: rgp,
+                    budget: 50_000_000_000,
+                },
+                expiration: sui_types::transaction::TransactionExpiration::ValidDuring {
+                    min_epoch: Some(0),
+                    max_epoch: Some(0),
+                    min_timestamp_seconds: None,
+                    max_timestamp_seconds: None,
+                    chain: chain_id,
+                    nonce: i,
+                },
+            })
+        })
+        .collect();
+
+    let tx_digests: Vec<_> = tx_data_vec.iter().map(|tx| tx.digest()).collect();
+    let unique_digests: std::collections::HashSet<_> = tx_digests.iter().collect();
+    assert_eq!(
+        tx_digests.len(),
+        unique_digests.len(),
+        "Expected all transaction digests to be unique, but found {} total and {} unique",
+        tx_digests.len(),
+        unique_digests.len()
+    );
+
+    let bundle_tasks: Vec<_> = tx_data_vec
+        .chunks(5)
+        .map(|bundle| test_cluster.sign_and_execute_txns_in_soft_bundle(bundle))
+        .collect();
+    futures::future::try_join_all(bundle_tasks).await.unwrap();
+
+    let all_events =
+        list_authenticated_events(test_cluster.rpc_url(), &package_id.to_string(), 0, None).await;
+
+    assert_eq!(
+        all_events.len(),
+        event_count as usize,
+        "expected all events, got {}",
+        all_events.len()
+    );
+
+    let mut events_by_checkpoint: std::collections::HashMap<u64, std::collections::HashSet<u64>> =
+        std::collections::HashMap::new();
+    for event in &all_events {
+        if let (Some(checkpoint), Some(accumulator_version)) =
+            (event.checkpoint, event.accumulator_version)
+        {
+            events_by_checkpoint
+                .entry(checkpoint)
+                .or_default()
+                .insert(accumulator_version);
+        }
+    }
+
+    let checkpoint_with_multiple_versions = events_by_checkpoint
+        .iter()
+        .find(|(_, versions)| versions.len() > 1);
+
+    assert!(
+        checkpoint_with_multiple_versions.is_some(),
+        "Expected at least one checkpoint with multiple accumulator versions (multiple commits), but found none. Events by checkpoint: {:?}",
+        events_by_checkpoint
+    );
+
+    verify_events_with_stream_head(
+        &test_cluster,
+        package_id,
+        &all_events,
+        all_events.len() as u64,
+    )
+    .await;
 }

@@ -22,6 +22,7 @@ const MAX_PAGE_SIZE_BYTES: usize = 512 * 1024; // 512KiB
 struct PageToken {
     stream_id: SuiAddress,
     next_checkpoint: u64,
+    next_accumulator_version: u64,
     next_transaction_idx: u32,
     next_event_idx: u32,
 }
@@ -42,12 +43,14 @@ fn to_grpc_event(ev: &sui_types::event::Event) -> Event {
 fn to_authenticated_event(
     stream_id: &str,
     cp: u64,
+    accumulator_version: u64,
     transaction_idx: u32,
     idx: u32,
     ev: &sui_types::event::Event,
 ) -> AuthenticatedEvent {
     let mut authenticated_event = AuthenticatedEvent::default();
     authenticated_event.checkpoint = Some(cp);
+    authenticated_event.accumulator_version = Some(accumulator_version);
     authenticated_event.transaction_idx = Some(transaction_idx);
     authenticated_event.event_idx = Some(idx);
     authenticated_event.event = Some(to_grpc_event(ev));
@@ -152,20 +155,23 @@ pub fn list_authenticated_events(
         return Ok(response);
     }
 
-    let (actual_start, start_transaction_idx, start_event_idx) = if let Some(token) = &page_token {
-        (
-            token.next_checkpoint,
-            Some(token.next_transaction_idx),
-            Some(token.next_event_idx),
-        )
-    } else {
-        (start, None, None)
-    };
+    let (actual_start, start_accumulator_version, start_transaction_idx, start_event_idx) =
+        if let Some(token) = &page_token {
+            (
+                token.next_checkpoint,
+                Some(token.next_accumulator_version),
+                Some(token.next_transaction_idx),
+                Some(token.next_event_idx),
+            )
+        } else {
+            (start, None, None, None)
+        };
 
     let iter = indexes
         .authenticated_event_iter(
             stream_addr,
             actual_start,
+            start_accumulator_version,
             start_transaction_idx,
             start_event_idx,
             highest_indexed,
@@ -178,27 +184,35 @@ pub fn list_authenticated_events(
     let mut next_page_token = None;
 
     for (i, event_result) in iter.enumerate() {
-        let (cp, transaction_idx, event_idx, ev) =
+        let (cp, accumulator_version, transaction_idx, event_idx, ev) =
             event_result.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
         if i >= page_size as usize {
             next_page_token = Some(encode_page_token(PageToken {
                 stream_id: stream_addr,
                 next_checkpoint: cp,
+                next_accumulator_version: accumulator_version,
                 next_transaction_idx: transaction_idx,
                 next_event_idx: event_idx,
             }));
             break;
         }
 
-        let authenticated_event =
-            to_authenticated_event(&stream_id, cp, transaction_idx, event_idx, &ev);
+        let authenticated_event = to_authenticated_event(
+            &stream_id,
+            cp,
+            accumulator_version,
+            transaction_idx,
+            event_idx,
+            &ev,
+        );
         let event_size = authenticated_event.encoded_len();
 
         if i > 0 && size_bytes + event_size > MAX_PAGE_SIZE_BYTES {
             next_page_token = Some(encode_page_token(PageToken {
                 stream_id: stream_addr,
                 next_checkpoint: cp,
+                next_accumulator_version: accumulator_version,
                 next_transaction_idx: transaction_idx,
                 next_event_idx: event_idx,
             }));
