@@ -22,7 +22,7 @@ Sui object identifiers
 -  [Function `sui_coin_registry_object_id`](#sui_object_sui_coin_registry_object_id)
 -  [Function `sui_coin_registry_address`](#sui_object_sui_coin_registry_address)
 -  [Function `bridge`](#sui_object_bridge)
--  [Function `alias_state`](#sui_object_alias_state)
+-  [Function `address_alias_state`](#sui_object_address_alias_state)
 -  [Function `uid_as_inner`](#sui_object_uid_as_inner)
 -  [Function `uid_to_inner`](#sui_object_uid_to_inner)
 -  [Function `uid_to_bytes`](#sui_object_uid_to_bytes)
@@ -200,12 +200,12 @@ The hardcoded ID for the Coin Registry Object.
 
 
 
-<a name="sui_object_SUI_ALIAS_STATE_ID"></a>
+<a name="sui_object_SUI_ADDRESS_ALIAS_STATE_ID"></a>
 
-The hardcoded ID for the AliasState Object.
+The hardcoded ID for the AddressAliasState Object.
 
 
-<pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_ALIAS_STATE_ID">SUI_ALIAS_STATE_ID</a>: <b>address</b> = 0xa;
+<pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_ADDRESS_ALIAS_STATE_ID">SUI_ADDRESS_ALIAS_STATE_ID</a>: <b>address</b> = 0xa;
 </code></pre>
 
 
@@ -591,15 +591,15 @@ This should only be called once from <code><a href="../sui/object.md#sui_object_
 
 </details>
 
-<a name="sui_object_alias_state"></a>
+<a name="sui_object_address_alias_state"></a>
 
-## Function `alias_state`
+## Function `address_alias_state`
 
-Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>AliasState</code> object.
-This should only be called once from <code><a href="../sui/alias.md#sui_alias">alias</a></code>.
+Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>AddressAliasState</code> object.
+This should only be called once from <code><a href="../sui/address_alias.md#sui_address_alias">address_alias</a></code>.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_alias_state">alias_state</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_address_alias_state">address_alias_state</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
 </code></pre>
 
 
@@ -608,9 +608,9 @@ This should only be called once from <code><a href="../sui/alias.md#sui_alias">a
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_alias_state">alias_state</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_address_alias_state">address_alias_state</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_UID">UID</a> {
-        <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_ALIAS_STATE_ID">SUI_ALIAS_STATE_ID</a> },
+        <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_ADDRESS_ALIAS_STATE_ID">SUI_ADDRESS_ALIAS_STATE_ID</a> },
     }
 }
 </code></pre>

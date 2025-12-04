@@ -1300,10 +1300,10 @@
                 "abstract_size_in_object_runtime": false,
                 "accept_passkey_in_multisig": false,
                 "accept_zklogin_in_multisig": false,
-                "account_aliases": false,
                 "additional_borrow_checks": false,
                 "additional_consensus_digest_indirect_state": false,
                 "additional_multisig_checks": false,
+                "address_aliases": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_private_accumulator_entrypoints": false,
@@ -9020,7 +9020,7 @@
               "AccumulatorRootCreate",
               "CoinRegistryCreate",
               "DisplayRegistryCreate",
-              "AliasStateCreate"
+              "AddressAliasStateCreate"
             ]
           },
           {

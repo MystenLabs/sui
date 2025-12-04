@@ -12,10 +12,10 @@ use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
-use sui_types::alias::get_alias_state_obj_initial_shared_version;
+use sui_types::address_alias::get_address_alias_state_obj_initial_shared_version;
 use sui_types::base_types::AuthorityName;
 use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, ProgrammableTransaction};
-use sui_types::{SUI_ALIAS_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
+use sui_types::{SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
 use tracing::info;
@@ -234,7 +234,7 @@ async fn test_checkpoint_fork_detection_storage() {
 #[sim_test]
 async fn test_checkpoint_contents_v2_alias_versions() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_account_aliases_for_testing(true);
+        config.set_address_aliases_for_testing(true);
         config
     });
 
@@ -254,16 +254,18 @@ async fn test_checkpoint_contents_v2_alias_versions() {
         "require at least three gas objects for this test"
     );
 
-    let alias_state_initial_shared_version = test_cluster
+    let address_alias_state_initial_shared_version = test_cluster
         .swarm
         .validator_node_handles()
         .into_iter()
         .next()
         .unwrap()
         .with(|node| {
-            get_alias_state_obj_initial_shared_version(node.state().get_object_store().as_ref())
-                .expect("failed to get alias state object")
-                .expect("alias state object should exist")
+            get_address_alias_state_obj_initial_shared_version(
+                node.state().get_object_store().as_ref(),
+            )
+            .expect("failed to get alias state object")
+            .expect("alias state object should exist")
         });
 
     // Submit two tx in a soft bundle. First one calls `init_aliases`.
@@ -277,11 +279,11 @@ async fn test_checkpoint_contents_v2_alias_versions() {
             &TestTransactionBuilder::new(account, gas_objects[0], gas_price)
                 .move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
-                    "alias",
+                    "address_alias",
                     "init_aliases",
                     vec![CallArg::Object(ObjectArg::SharedObject {
-                        id: SUI_ALIAS_STATE_OBJECT_ID,
-                        initial_shared_version: alias_state_initial_shared_version,
+                        id: SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
+                        initial_shared_version: address_alias_state_initial_shared_version,
                         mutability: sui_types::transaction::SharedObjectMutability::Mutable,
                     })],
                 )
@@ -297,8 +299,8 @@ async fn test_checkpoint_contents_v2_alias_versions() {
                     inputs: vec![
                         // Add dependency on shared object to force consensus.
                         CallArg::Object(ObjectArg::SharedObject {
-                            id: SUI_ALIAS_STATE_OBJECT_ID,
-                            initial_shared_version: alias_state_initial_shared_version,
+                            id: SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
+                            initial_shared_version: address_alias_state_initial_shared_version,
                             mutability: sui_types::transaction::SharedObjectMutability::Immutable,
                         }),
                         CallArg::Pure(bcs::to_bytes(&account).unwrap()),

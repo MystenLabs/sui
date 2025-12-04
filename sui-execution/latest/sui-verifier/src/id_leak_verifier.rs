@@ -108,7 +108,7 @@ const SUI_COIN_REGISTRY_CREATE: FunctionIdent = (
 );
 const SUI_ALIAS_CREATE: FunctionIdent = (
     SUI_FRAMEWORK_ADDRESS,
-    ident_str!("alias"),
+    ident_str!("address_alias"),
     ident_str!("create"),
 );
 const FRESH_ID_FUNCTIONS: &[FunctionIdent] = &[

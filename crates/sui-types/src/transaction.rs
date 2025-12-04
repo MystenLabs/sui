@@ -491,7 +491,7 @@ pub enum EndOfEpochTransactionKind {
     AccumulatorRootCreate,
     CoinRegistryCreate,
     DisplayRegistryCreate,
-    AliasStateCreate,
+    AddressAliasStateCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -551,8 +551,8 @@ impl EndOfEpochTransactionKind {
         Self::DenyListStateCreate
     }
 
-    pub fn new_alias_state_create() -> Self {
-        Self::AliasStateCreate
+    pub fn new_address_alias_state_create() -> Self {
+        Self::AddressAliasStateCreate
     }
 
     pub fn new_bridge_create(chain_identifier: ChainIdentifier) -> Self {
@@ -611,7 +611,7 @@ impl EndOfEpochTransactionKind {
             Self::AccumulatorRootCreate => vec![],
             Self::CoinRegistryCreate => vec![],
             Self::DisplayRegistryCreate => vec![],
-            Self::AliasStateCreate => vec![],
+            Self::AddressAliasStateCreate => vec![],
         }
     }
 
@@ -649,7 +649,7 @@ impl EndOfEpochTransactionKind {
             Self::AccumulatorRootCreate => Either::Right(iter::empty()),
             Self::CoinRegistryCreate => Either::Right(iter::empty()),
             Self::DisplayRegistryCreate => Either::Right(iter::empty()),
-            Self::AliasStateCreate => Either::Right(iter::empty()),
+            Self::AddressAliasStateCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -727,10 +727,10 @@ impl EndOfEpochTransactionKind {
                     ));
                 }
             }
-            Self::AliasStateCreate => {
-                if !config.account_aliases() {
+            Self::AddressAliasStateCreate => {
+                if !config.address_aliases() {
                     return Err(UserInputError::Unsupported(
-                        "account aliases not enabled".to_string(),
+                        "address aliases not enabled".to_string(),
                     ));
                 }
             }

@@ -1846,7 +1846,7 @@ impl CheckpointBuilder {
             // The size calculation here is intended to estimate the size of the
             // FullCheckpointContents struct. If this code is modified, that struct
             // should also be updated accordingly.
-            let signatures_size = if self.epoch_store.protocol_config().account_aliases() {
+            let signatures_size = if self.epoch_store.protocol_config().address_aliases() {
                 bcs::serialized_size(&signatures)?
             } else {
                 let signatures: Vec<&GenericSignature> =
@@ -2155,7 +2155,7 @@ impl CheckpointBuilder {
 
                 None
             };
-            let contents = if self.epoch_store.protocol_config().account_aliases() {
+            let contents = if self.epoch_store.protocol_config().address_aliases() {
                 CheckpointContents::new_v2(&effects, signatures)
             } else {
                 CheckpointContents::new_with_digests_and_signatures(

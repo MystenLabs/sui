@@ -724,7 +724,7 @@ impl ValidatorService {
             // Ok to fail the request when any signature is invalid.
             let verified_transaction = {
                 let _metrics_guard = metrics.tx_verification_latency.start_timer();
-                if epoch_store.protocol_config().account_aliases() {
+                if epoch_store.protocol_config().address_aliases() {
                     match epoch_store.verify_transaction_with_current_aliases(transaction) {
                         Ok(tx) => tx,
                         Err(e) => {
@@ -822,7 +822,7 @@ impl ValidatorService {
                 }
             }
 
-            if epoch_store.protocol_config().account_aliases() {
+            if epoch_store.protocol_config().address_aliases() {
                 consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
                     &self.state.name,
                     verified_transaction.into(),

@@ -1351,7 +1351,7 @@ sui_coin_registry_address
 bridge
 	fun
 	0x2::object
-alias_state
+address_alias_state
 	public(package) fun
 	0x2::object
 uid_as_inner
@@ -1804,30 +1804,30 @@ exists
 derive_address
 	public fun
 	0x2::derived_object
-AliasState
+AddressAliasState
 	public struct
-	0x2::alias
+	0x2::address_alias
 AddressAliases
 	public struct
-	0x2::alias
+	0x2::address_alias
 AliasKey
 	public struct
-	0x2::alias
+	0x2::address_alias
 create
 	fun
-	0x2::alias
+	0x2::address_alias
 init_aliases
 	entry fun
-	0x2::alias
+	0x2::address_alias
 add_alias
 	entry fun
-	0x2::alias
+	0x2::address_alias
 set_aliases
 	entry fun
-	0x2::alias
+	0x2::address_alias
 remove_alias
 	entry fun
-	0x2::alias
+	0x2::address_alias
 AuthenticatorState
 	public struct
 	0x2::authenticator_state

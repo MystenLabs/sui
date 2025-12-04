@@ -6,7 +6,7 @@ use mysten_common::in_test_configuration;
 use serde::{Deserialize, Serialize};
 use sui_config::NodeConfig;
 use sui_types::accumulator_root::get_accumulator_root_obj_initial_shared_version;
-use sui_types::alias::get_alias_state_obj_initial_shared_version;
+use sui_types::address_alias::get_address_alias_state_obj_initial_shared_version;
 use sui_types::display_registry::get_display_registry_obj_initial_shared_version;
 
 use std::fmt;
@@ -37,7 +37,7 @@ pub trait EpochStartConfigTrait {
     fn accumulator_root_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn coin_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
-    fn alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
+    fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
 
     fn is_data_quarantine_active_from_beginning_of_epoch(&self) -> bool {
         self.flags()
@@ -201,8 +201,8 @@ impl EpochStartConfiguration {
             get_coin_registry_obj_initial_shared_version(object_store)?;
         let display_registry_obj_initial_shared_version =
             get_display_registry_obj_initial_shared_version(object_store)?;
-        let alias_state_obj_initial_shared_version =
-            get_alias_state_obj_initial_shared_version(object_store)?;
+        let address_alias_state_obj_initial_shared_version =
+            get_address_alias_state_obj_initial_shared_version(object_store)?;
         let bridge_committee_initiated = is_bridge_committee_initiated(object_store)?;
         Ok(Self::V10(EpochStartConfigurationV10 {
             system_state,
@@ -216,7 +216,7 @@ impl EpochStartConfiguration {
             accumulator_root_obj_initial_shared_version,
             coin_registry_obj_initial_shared_version,
             display_registry_obj_initial_shared_version,
-            alias_state_obj_initial_shared_version,
+            address_alias_state_obj_initial_shared_version,
         }))
     }
 
@@ -241,8 +241,8 @@ impl EpochStartConfiguration {
                     .coin_registry_obj_initial_shared_version,
                 display_registry_obj_initial_shared_version: config
                     .display_registry_obj_initial_shared_version,
-                alias_state_obj_initial_shared_version: config
-                    .alias_state_obj_initial_shared_version,
+                address_alias_state_obj_initial_shared_version: config
+                    .address_alias_state_obj_initial_shared_version,
             }),
             _ => panic!(
                 "This function is only implemented for the latest version of EpochStartConfiguration"
@@ -382,7 +382,7 @@ pub struct EpochStartConfigurationV10 {
     accumulator_root_obj_initial_shared_version: Option<SequenceNumber>,
     coin_registry_obj_initial_shared_version: Option<SequenceNumber>,
     display_registry_obj_initial_shared_version: Option<SequenceNumber>,
-    alias_state_obj_initial_shared_version: Option<SequenceNumber>,
+    address_alias_state_obj_initial_shared_version: Option<SequenceNumber>,
 }
 
 impl EpochStartConfigurationV1 {
@@ -439,7 +439,7 @@ impl EpochStartConfigTrait for EpochStartConfigurationV1 {
         None
     }
 
-    fn alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+    fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -489,7 +489,7 @@ impl EpochStartConfigTrait for EpochStartConfigurationV2 {
         None
     }
 
-    fn alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+    fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -538,7 +538,7 @@ impl EpochStartConfigTrait for EpochStartConfigurationV3 {
         None
     }
 
-    fn alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+    fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -588,7 +588,7 @@ impl EpochStartConfigTrait for EpochStartConfigurationV4 {
         None
     }
 
-    fn alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+    fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -637,7 +637,7 @@ impl EpochStartConfigTrait for EpochStartConfigurationV5 {
         None
     }
 
-    fn alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+    fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -687,7 +687,7 @@ impl EpochStartConfigTrait for EpochStartConfigurationV6 {
         None
     }
 
-    fn alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+    fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -737,7 +737,7 @@ impl EpochStartConfigTrait for EpochStartConfigurationV7 {
         None
     }
 
-    fn alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+    fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -787,7 +787,7 @@ impl EpochStartConfigTrait for EpochStartConfigurationV8 {
         None
     }
 
-    fn alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+    fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -837,7 +837,7 @@ impl EpochStartConfigTrait for EpochStartConfigurationV9 {
         self.display_registry_obj_initial_shared_version
     }
 
-    fn alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+    fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -887,7 +887,7 @@ impl EpochStartConfigTrait for EpochStartConfigurationV10 {
         self.display_registry_obj_initial_shared_version
     }
 
-    fn alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
-        self.alias_state_obj_initial_shared_version
+    fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.address_alias_state_obj_initial_shared_version
     }
 }

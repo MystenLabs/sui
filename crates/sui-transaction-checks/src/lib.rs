@@ -532,8 +532,7 @@ mod checked {
                 id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                 ..
             } => {
-                if system_transaction || protocol_config.account_aliases() {
-                    // Access to authenticator state object allowed with account aliases feature.
+                if system_transaction {
                     return Ok(());
                 } else {
                     return Err(UserInputError::InaccessibleSystemObject {

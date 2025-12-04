@@ -15,7 +15,7 @@ use parking_lot::{Mutex, MutexGuard, RwLock};
 use prometheus::{IntCounter, Registry, register_int_counter_with_registry};
 use shared_crypto::intent::Intent;
 use std::sync::Arc;
-use sui_types::alias;
+use sui_types::address_alias;
 use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::digests::SenderSignedDataDigest;
 use sui_types::digests::ZKLoginInputsDigest;
@@ -113,8 +113,8 @@ pub struct SignatureVerifier {
     /// Params that contains a list of supported providers for ZKLogin and the environment (prod/test) the code runs in.
     zk_login_params: ZkLoginParams,
 
-    /// If true, uses account aliases during signature verification.
-    enable_account_aliases: bool,
+    /// If true, uses address aliases during signature verification.
+    enable_address_aliases: bool,
 
     queue: Mutex<CertBuffer>,
     pub metrics: Arc<SignatureVerifierMetrics>,
@@ -152,7 +152,7 @@ impl SignatureVerifier {
         accept_passkey_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
         additional_multisig_checks: bool,
-        enable_account_aliases: bool,
+        enable_address_aliases: bool,
     ) -> Self {
         Self {
             committee,
@@ -173,7 +173,7 @@ impl SignatureVerifier {
                 metrics.zklogin_inputs_cache_evictions.clone(),
             )),
             jwks: Default::default(),
-            enable_account_aliases,
+            enable_address_aliases,
             queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
             zk_login_params: ZkLoginParams {
@@ -199,7 +199,7 @@ impl SignatureVerifier {
         accept_passkey_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
         additional_multisig_checks: bool,
-        enable_account_aliases: bool,
+        enable_address_aliases: bool,
     ) -> Self {
         Self::new_with_batch_size(
             committee,
@@ -213,7 +213,7 @@ impl SignatureVerifier {
             accept_passkey_in_multisig,
             zklogin_max_epoch_upper_bound_delta,
             additional_multisig_checks,
-            enable_account_aliases,
+            enable_address_aliases,
         )
     }
 
@@ -421,13 +421,13 @@ impl SignatureVerifier {
         // Look up aliases for each address at the current version.
         let signers = signed_tx.intent_message().value.required_signers();
         for signer in signers {
-            if !self.enable_account_aliases {
+            if !self.enable_address_aliases {
                 versions.push((signer, None));
                 aliases.push((signer, NonEmpty::singleton(signer)));
             } else {
                 // Look up aliases for the signer using the derived object address.
                 let address_aliases =
-                    alias::get_address_aliases_from_store(&self.object_store, signer)?;
+                    address_alias::get_address_aliases_from_store(&self.object_store, signer)?;
 
                 versions.push((signer, address_aliases.as_ref().map(|(_, v)| *v)));
                 aliases.push((

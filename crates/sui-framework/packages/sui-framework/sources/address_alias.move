@@ -3,7 +3,7 @@
 
 #[allow(unused_use)]
 // Module for managing address alias configurations.
-module sui::alias;
+module sui::address_alias;
 
 use sui::derived_object;
 use sui::party;
@@ -27,21 +27,21 @@ const MAX_ALIASES: u64 = 8;
 /// Singleton shared object which manages creation of AddressAliases state.
 /// The actual alias configs are created as derived objects with this object
 /// as the parent.
-public struct AliasState has key {
+public struct AddressAliasState has key {
     id: UID,
     // versioned to allow for future changes
     version: u64,
 }
 
 #[allow(unused_function)]
-/// Create and share the AliasState object. This function is called exactly once, when
-/// the alias state object is first created.
+/// Create and share the AddressAliasState object. This function is called exactly once, when
+/// the address alias state object is first created.
 /// Can only be called by genesis or change_epoch transactions.
 fun create(ctx: &TxContext) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
-    let self = AliasState {
-        id: object::alias_state(),
+    let self = AddressAliasState {
+        id: object::address_alias_state(),
         version: CURRENT_VERSION,
     };
     transfer::share_object(self);
@@ -64,11 +64,11 @@ public struct AliasKey(address) has copy, drop, store;
 ///
 /// By default, an address is its own alias. However, the original address can
 /// be removed from the set of allowed aliases after initialization.
-entry fun init_aliases(alias_state: &mut AliasState, ctx: &TxContext) {
-    assert!(!derived_object::exists(&alias_state.id, AliasKey(ctx.sender())), EAliasAlreadyExists);
+entry fun init_aliases(address_alias_state: &mut AddressAliasState, ctx: &TxContext) {
+    assert!(!derived_object::exists(&address_alias_state.id, AliasKey(ctx.sender())), EAliasAlreadyExists);
     transfer::party_transfer(
         AddressAliases {
-            id: derived_object::claim(&mut alias_state.id, AliasKey(ctx.sender())),
+            id: derived_object::claim(&mut address_alias_state.id, AliasKey(ctx.sender())),
             aliases: vec_set::singleton(ctx.sender()),
         },
         party::single_owner(ctx.sender()),

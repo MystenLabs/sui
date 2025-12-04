@@ -887,9 +887,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     deprecate_global_storage_ops: bool,
 
-    // Enables account aliases.
+    // Enables address aliases.
     #[serde(skip_serializing_if = "is_false")]
-    account_aliases: bool,
+    address_aliases: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2399,16 +2399,16 @@ impl ProtocolConfig {
         self.feature_flags.deprecate_global_storage_ops
     }
 
-    pub fn account_aliases(&self) -> bool {
-        let account_aliases = self.feature_flags.account_aliases;
+    pub fn address_aliases(&self) -> bool {
+        let address_aliases = self.feature_flags.address_aliases;
         assert!(
-            !account_aliases || self.mysticeti_fastpath(),
-            "Account aliases requires Mysticeti fastpath to be enabled"
+            !address_aliases || self.mysticeti_fastpath(),
+            "Address aliases requires Mysticeti fastpath to be enabled"
         );
-        if account_aliases {
+        if address_aliases {
             // TODO: when flag for disabling CertifiedTransaction is added, add assertion for it here.
         }
-        account_aliases
+        address_aliases
     }
 }
 
@@ -4546,8 +4546,8 @@ impl ProtocolConfig {
         self.feature_flags.correct_gas_payment_limit_check = val;
     }
 
-    pub fn set_account_aliases_for_testing(&mut self, val: bool) {
-        self.feature_flags.account_aliases = val;
+    pub fn set_address_aliases_for_testing(&mut self, val: bool) {
+        self.feature_flags.address_aliases = val;
     }
 
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {

@@ -1186,10 +1186,10 @@ pub fn generate_genesis_system_object(
             );
         }
 
-        if protocol_config.account_aliases() {
+        if protocol_config.address_aliases() {
             builder.move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),
-                ident_str!("alias").to_owned(),
+                ident_str!("address_alias").to_owned(),
                 ident_str!("create").to_owned(),
                 vec![],
                 vec![],

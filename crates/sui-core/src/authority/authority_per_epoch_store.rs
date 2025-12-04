@@ -1083,7 +1083,7 @@ impl AuthorityPerEpochStore {
             protocol_config.accept_passkey_in_multisig(),
             protocol_config.zklogin_max_epoch_upper_bound_delta(),
             protocol_config.additional_multisig_checks(),
-            protocol_config.account_aliases(),
+            protocol_config.address_aliases(),
         );
 
         let authenticator_state_exists = epoch_start_configuration
@@ -1327,9 +1327,9 @@ impl AuthorityPerEpochStore {
         self.epoch_start_configuration.bridge_committee_initiated()
     }
 
-    pub fn alias_state_exists(&self) -> bool {
+    pub fn address_alias_state_exists(&self) -> bool {
         self.epoch_start_configuration
-            .alias_state_obj_initial_shared_version()
+            .address_alias_state_obj_initial_shared_version()
             .is_some()
     }
 

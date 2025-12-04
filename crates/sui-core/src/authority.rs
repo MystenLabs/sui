@@ -5725,21 +5725,21 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all)]
-    fn create_alias_state_tx(
+    fn create_address_alias_state_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Option<EndOfEpochTransactionKind> {
-        if !epoch_store.protocol_config().account_aliases() {
-            info!("account aliases not enabled");
+        if !epoch_store.protocol_config().address_aliases() {
+            info!("address aliases not enabled");
             return None;
         }
 
-        if epoch_store.alias_state_exists() {
+        if epoch_store.address_alias_state_exists() {
             return None;
         }
 
-        let tx = EndOfEpochTransactionKind::new_alias_state_create();
-        info!("Creating AliasStateCreate tx");
+        let tx = EndOfEpochTransactionKind::new_address_alias_state_create();
+        info!("Creating AddressAliasStateCreate tx");
         Some(tx)
     }
 
@@ -5913,7 +5913,7 @@ impl AuthorityState {
             txns.push(tx);
         }
 
-        if let Some(tx) = self.create_alias_state_tx(epoch_store) {
+        if let Some(tx) = self.create_address_alias_state_tx(epoch_store) {
             txns.push(tx);
         }
 

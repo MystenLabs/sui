@@ -9,14 +9,14 @@ use sui_macros::{register_fail_point_arg, sim_test};
 use sui_protocol_config::ProtocolConfig;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::alias::get_alias_state_obj_initial_shared_version;
+use sui_types::address_alias::get_address_alias_state_obj_initial_shared_version;
 use sui_types::base_types::AuthorityName;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::{
     SubmitTxRequest, SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
 };
 use sui_types::transaction::{CallArg, ObjectArg, Transaction};
-use sui_types::{SUI_ALIAS_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
+use sui_types::{SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::TestClusterBuilder;
 
 async fn submit_and_wait_for_effects(
@@ -64,7 +64,7 @@ async fn test_alias_changes() {
     telemetry_subscribers::init_for_testing();
 
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_account_aliases_for_testing(true);
+        config.set_address_aliases_for_testing(true);
         config
     });
 
@@ -97,10 +97,10 @@ async fn test_alias_changes() {
         .next()
         .expect("No validator found");
 
-    let alias_state_initial_shared_version = validator_handle.with(|node| {
-        get_alias_state_obj_initial_shared_version(node.state().get_object_store().as_ref())
-            .expect("failed to get alias state object")
-            .expect("alias state object should exist")
+    let address_alias_state_initial_shared_version = validator_handle.with(|node| {
+        get_address_alias_state_obj_initial_shared_version(node.state().get_object_store().as_ref())
+            .expect("failed to get address alias state object")
+            .expect("address alias state object should exist")
     });
 
     let accounts = test_cluster
@@ -141,12 +141,12 @@ async fn test_alias_changes() {
             &TestTransactionBuilder::new(account1, gas_objects1[0], gas_price)
                 .move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
-                    "alias",
+                    "address_alias",
                     "init_aliases",
                     vec![CallArg::Object(ObjectArg::SharedObject {
-                        id: SUI_ALIAS_STATE_OBJECT_ID,
-                        initial_shared_version: alias_state_initial_shared_version,
-                        mutability: sui_types::transaction::SharedObjectMutability::Mutable,
+                        id: SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
+                        initial_shared_version: address_alias_state_initial_shared_version,
+                        mutability: sui_types::transaction::SharedOre bjectMutability::Mutable,
                     })],
                 )
                 .build(),
@@ -189,7 +189,7 @@ async fn test_alias_changes() {
             &TestTransactionBuilder::new(account1, gas_objects1[2], gas_price)
                 .move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
-                    "alias",
+                    "address_alias",
                     "add_alias",
                     vec![
                         CallArg::Object(ObjectArg::SharedObject {
@@ -230,7 +230,7 @@ async fn test_alias_changes() {
             &TestTransactionBuilder::new(account1, gas_objects1[4], gas_price)
                 .move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
-                    "alias",
+                    "address_alias",
                     "remove_alias",
                     vec![
                         CallArg::Object(ObjectArg::SharedObject {
@@ -294,7 +294,7 @@ async fn test_alias_race() {
     telemetry_subscribers::init_for_testing();
 
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_account_aliases_for_testing(true);
+        config.set_address_aliases_for_testing(true);
         config
     });
 

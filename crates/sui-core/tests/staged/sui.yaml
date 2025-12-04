@@ -496,7 +496,7 @@ EndOfEpochTransactionKind:
     10:
       DisplayRegistryCreate: UNIT
     11:
-      AliasStateCreate: UNIT
+      AddressAliasStateCreate: UNIT
 Event:
   STRUCT:
     - package_id:

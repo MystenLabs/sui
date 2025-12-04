@@ -11,7 +11,7 @@ use crate::collection_types::VecSet;
 use crate::error::{SuiErrorKind, SuiResult};
 use crate::object::Owner;
 use crate::storage::ObjectStore;
-use crate::{SUI_ALIAS_STATE_OBJECT_ID, derived_object};
+use crate::{SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, derived_object};
 use crate::{SUI_FRAMEWORK_ADDRESS, id::UID};
 
 // Rust version of the Move sui::authenticator_state::AddressAliases type
@@ -21,16 +21,16 @@ pub struct AddressAliases {
     pub aliases: VecSet<SuiAddress>,
 }
 
-pub fn get_alias_state_obj_initial_shared_version(
+pub fn get_address_alias_state_obj_initial_shared_version(
     object_store: &dyn ObjectStore,
 ) -> SuiResult<Option<SequenceNumber>> {
     Ok(object_store
-        .get_object(&SUI_ALIAS_STATE_OBJECT_ID)
+        .get_object(&SUI_ADDRESS_ALIAS_STATE_OBJECT_ID)
         .map(|obj| match obj.owner {
             Owner::Shared {
                 initial_shared_version,
             } => initial_shared_version,
-            _ => unreachable!("Alias state object must be shared"),
+            _ => unreachable!("Address alias state object must be shared"),
         }))
 }
 
@@ -40,14 +40,14 @@ pub fn get_address_aliases_from_store(
 ) -> SuiResult<Option<(AddressAliases, SequenceNumber)>> {
     let alias_key_type = TypeTag::Struct(Box::new(StructTag {
         address: SUI_FRAMEWORK_ADDRESS,
-        module: Identifier::new("alias").unwrap(),
+        module: Identifier::new("address_alias").unwrap(),
         name: Identifier::new("AliasKey").unwrap(),
         type_params: vec![],
     }));
 
     let key_bytes = bcs::to_bytes(&address).unwrap();
     let Ok(address_aliases_id) = derived_object::derive_object_id(
-        SuiAddress::from(SUI_ALIAS_STATE_OBJECT_ID),
+        SuiAddress::from(SUI_ADDRESS_ALIAS_STATE_OBJECT_ID),
         &alias_key_type,
         &key_bytes,
     ) else {
