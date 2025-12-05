@@ -339,9 +339,9 @@ impl CommitFinalizer {
                 }
             }
             // Initialize the block state.
-            blocks_map
-                .entry(block_ref)
-                .or_insert_with(|| RwLock::new(BlockState::new(block)));
+            blocks_map.entry(block_ref).or_insert_with(|| {
+                RwLock::new(BlockState::new(block, commit_state.commit.commit_ref.index))
+            });
         }
     }
 
@@ -477,6 +477,19 @@ impl CommitFinalizer {
             .map(|(k, v)| (*k, v.clone()))
             .collect();
 
+        let gc_rounds = self
+            .pending_commits
+            .iter()
+            .map(|c| {
+                (
+                    c.commit.commit_ref.index,
+                    self.dag_state
+                        .read()
+                        .calculate_gc_round(c.commit.leader.round),
+                )
+            })
+            .collect::<Vec<_>>();
+
         // Number of blocks to process in each task.
         const BLOCKS_PER_INDIRECT_COMMIT_TASK: usize = 8;
 
@@ -488,6 +501,7 @@ impl CommitFinalizer {
         for chunk in pending_blocks.chunks(BLOCKS_PER_INDIRECT_COMMIT_TASK) {
             let context = self.context.clone();
             let blocks = self.blocks.clone();
+            let gc_rounds = gc_rounds.clone();
             let chunk: Vec<(BlockRef, BTreeSet<TransactionIndex>)> = chunk.to_vec();
 
             join_set.spawn(tokio::task::spawn_blocking(move || {
@@ -497,6 +511,7 @@ impl CommitFinalizer {
                     let finalized = Self::try_indirect_finalize_pending_transactions_in_block(
                         &context,
                         &blocks,
+                        &gc_rounds,
                         block_ref,
                         pending_transactions,
                     );
@@ -578,6 +593,7 @@ impl CommitFinalizer {
     fn try_indirect_finalize_pending_transactions_in_block(
         context: &Arc<Context>,
         blocks: &Arc<RwLock<BTreeMap<BlockRef, RwLock<BlockState>>>>,
+        gc_rounds: &[(CommitIndex, Round)],
         pending_block_ref: BlockRef,
         pending_transactions: BTreeSet<TransactionIndex>,
     ) -> Vec<TransactionIndex> {
@@ -591,13 +607,11 @@ impl CommitFinalizer {
                 .collect();
         let mut finalized_transactions = vec![];
         let blocks_map = blocks.read();
-        // Use BTreeSet to ensure always visit blocks in the earliest round.
-        let mut to_visit_blocks = blocks_map
-            .get(&pending_block_ref)
-            .unwrap()
-            .read()
-            .children
-            .clone();
+        // Use BTreeSet for to_visit_blocks, to visit blocks in the earliest round first.
+        let (pending_commit_index, mut to_visit_blocks) = {
+            let block_state = blocks_map.get(&pending_block_ref).unwrap().read();
+            (block_state.commit_index, block_state.children.clone())
+        };
         // Blocks that have been visited.
         let mut visited = BTreeSet::new();
         // Blocks where votes and origin descendants should be ignored for processing.
@@ -608,15 +622,18 @@ impl CommitFinalizer {
                 continue;
             }
             let curr_block_state = blocks_map.get(&curr_block_ref).unwrap_or_else(|| panic!("Block {curr_block_ref} is either incorrectly gc'ed or failed to be recovered after crash.")).read();
-            // The first ancestor of current block should have the same origin / author as the current block.
-            // If it is not found in the blocks map but have round higher than the pending block, it might have
-            // voted on the pending block but have been GC'ed.
-            // Because the GC'ed block might have voted on the pending block and rejected some of the pending transactions,
-            // we cannot assume current block is voting to accept transactions from the pending block.
-            let curr_origin_ancestor_ref = curr_block_state.block.ancestors().first().unwrap();
-            let skip_votes = curr_block_ref.author == curr_origin_ancestor_ref.author
-                && pending_block_ref.round < curr_origin_ancestor_ref.round
-                && !blocks_map.contains_key(curr_origin_ancestor_ref);
+            // Check if transaction votes for the pending block are potentially not carried by the
+            // current block, because of GC at the current block's proposer.
+            // See comment above gced_transaction_votes_for_pending_block() for more details.
+            //
+            // Implicit transaction votes should only be considered in commit finalizer if they are definitely
+            // part of the transactions votes from the current block when it is proposed.
+            let votes_gced = Self::gced_transaction_votes_for_pending_block(
+                gc_rounds,
+                pending_block_ref.round,
+                pending_commit_index,
+                curr_block_state.commit_index,
+            );
             // Skip counting votes from the block if it has been marked to be ignored.
             if ignored.insert(curr_block_ref) {
                 // Skip collecting votes from origin descendants of current block.
@@ -633,7 +650,7 @@ impl CommitFinalizer {
                 // Note: if the current block casts reject votes on transactions in the pending block,
                 // it can be assumed that accept votes are also casted to other transactions in the pending block.
                 // But we choose to skip counting the accept votes in this edge case for simplicity.
-                if context.protocol_config.consensus_skip_gced_accept_votes() && skip_votes {
+                if context.protocol_config.consensus_skip_gced_accept_votes() && votes_gced {
                     let hostname = &context.committee.authority(curr_block_ref.author).hostname;
                     context
                         .metrics
@@ -681,6 +698,50 @@ impl CommitFinalizer {
             );
         }
         finalized_transactions
+    }
+
+    /// Returns true if transaction votes from the current block to the pending block
+    /// could have been be GC'ed. If this is the case, the current block cannot be assumed
+    /// to have implicitly voted to accept transactions in the pending block.
+    ///
+    /// When collecting transaction votes during proposal of the current block
+    /// (via DagState::link_causal_history()), votes against blocks in the DAG
+    /// below the proposer's GC round are skipped. Implicit accept votes cannot be assumed
+    /// for these GC'ed blocks. However, blocks do not carry the GC round when they are proposed.
+    /// So this function computes the highest possible GC round when proposing the current block,
+    /// and use it as the minimum round threshold for implicit accept votes. Even if the computed
+    /// GC round here is higher than the actual GC round used by the current block, it is still
+    /// correct although less efficient.
+    ///
+    /// gc_rounds is a list of cached commit indices and the GC rounds resulting from the commits.
+    /// It must be a superset of commits in the range [pending_commit_index, current_commit_index].
+    /// The first element should have pending_commit_index, because pending commit should be the
+    /// first commit buffered in CommitFinalizer.
+    fn gced_transaction_votes_for_pending_block(
+        gc_rounds: &[(CommitIndex, Round)],
+        pending_block_round: Round,
+        pending_commit_index: CommitIndex,
+        current_commit_index: CommitIndex,
+    ) -> bool {
+        assert!(
+            pending_commit_index <= current_commit_index,
+            "Pending {pending_commit_index} should be <= current {current_commit_index}"
+        );
+        if pending_commit_index == current_commit_index {
+            return false;
+        }
+        // current_commit_index is the commit index which includes the current / voting block.
+        // When proposing the current block, the latest possible GC round is the GC round computed
+        // from the leader of of the previous commit (current_commit_index - 1).
+        let (commit_index, gc_round) = *gc_rounds
+            .get((current_commit_index - 1 - pending_commit_index) as usize)
+            .unwrap();
+        assert_eq!(
+            commit_index,
+            current_commit_index - 1,
+            "Commit index mismatch {commit_index} != {current_commit_index}"
+        );
+        pending_block_round <= gc_round
     }
 
     fn pop_finalized_commits(&mut self) -> Vec<CommittedSubDag> {
@@ -800,10 +861,12 @@ struct BlockState {
     // Other committed blocks that are origin descendants of this block.
     // See the comment above append_origin_descendants_from_last_commit() for more details.
     origin_descendants: Vec<BlockRef>,
+    // Commit which contains this block.
+    commit_index: CommitIndex,
 }
 
 impl BlockState {
-    fn new(block: VerifiedBlock) -> Self {
+    fn new(block: VerifiedBlock, commit_index: CommitIndex) -> Self {
         let reject_votes: BTreeMap<_, _> = block
             .transaction_votes()
             .iter()
@@ -817,6 +880,7 @@ impl BlockState {
             children: BTreeSet::new(),
             reject_votes,
             origin_descendants,
+            commit_index,
         }
     }
 }

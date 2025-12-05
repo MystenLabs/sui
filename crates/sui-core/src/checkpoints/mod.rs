@@ -22,6 +22,7 @@ use crate::execution_cache::TransactionCacheRead;
 use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
+use consensus_core::CommitRef;
 use diffy::create_patch;
 use itertools::Itertools;
 use mysten_common::random::get_rng;
@@ -61,7 +62,9 @@ use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
-use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest, TransactionEffectsDigest};
+use sui_types::digests::{
+    CheckpointContentsDigest, CheckpointDigest, Digest, TransactionEffectsDigest,
+};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::gas::GasCostSummary;
@@ -105,6 +108,9 @@ pub struct PendingCheckpointInfo {
     // Computed in calculate_pending_checkpoint_height() from consensus round,
     // there is no guarantee that this is increasing per checkpoint, because of checkpoint splitting.
     pub checkpoint_height: CheckpointHeight,
+    // Consensus commit ref and rejected transactions digest which corresponds to this checkpoint.
+    pub consensus_commit_ref: CommitRef,
+    pub rejected_transactions_digest: Digest,
 }
 
 #[derive(Clone, Debug)]
@@ -1392,6 +1398,18 @@ impl CheckpointBuilder {
         pendings: Vec<PendingCheckpoint>,
     ) -> CheckpointBuilderResult<CheckpointSequenceNumber> {
         let _scope = monitored_scope("CheckpointBuilder::make_checkpoint");
+
+        let pending_ckpt_str = pendings
+            .iter()
+            .map(|p| {
+                format!(
+                    "height={}, commit={}",
+                    p.details().checkpoint_height,
+                    p.details().consensus_commit_ref
+                )
+            })
+            .join("; ");
+
         let last_details = pendings.last().unwrap().details().clone();
 
         // Stores the transactions that should be included in the checkpoint. Transactions will be recorded in the checkpoint
@@ -1419,8 +1437,18 @@ impl CheckpointBuilder {
             );
         }
 
+        let new_ckpt_str = new_checkpoints
+            .iter()
+            .map(|(ckpt, _)| format!("seq={}, digest={}", ckpt.sequence_number(), ckpt.digest()))
+            .join("; ");
+
         self.write_checkpoints(last_details.checkpoint_height, new_checkpoints)
             .await?;
+        info!(
+            "Made new checkpoint {} from pending checkpoint {}",
+            new_ckpt_str, pending_ckpt_str
+        );
+
         Ok(highest_sequence)
     }
 
@@ -3795,6 +3823,8 @@ mod tests {
                 timestamp_ms,
                 last_of_epoch: false,
                 checkpoint_height: i,
+                consensus_commit_ref: CommitRef::default(),
+                rejected_transactions_digest: Digest::default(),
             },
         }
     }
