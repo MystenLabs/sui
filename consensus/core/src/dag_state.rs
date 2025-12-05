@@ -793,13 +793,21 @@ impl DagState {
     /// Recursively sets blocks in the causal history of the root block as hard linked, including the root block itself.
     /// Returns the list of blocks that are newly linked.
     /// The returned blocks are guaranteed to be above the GC round.
+    /// Transaction votes for the returned blocks are retrieved and carried by the upcoming
+    /// proposed block.
     pub(crate) fn link_causal_history(&mut self, root_block: BlockRef) -> Vec<BlockRef> {
         let gc_round = self.gc_round();
         let mut linked_blocks = vec![];
         let mut targets = VecDeque::new();
         targets.push_back(root_block);
         while let Some(block_ref) = targets.pop_front() {
-            // This is only correct with GC enabled.
+            // No need to collect or mark blocks at or below GC round.
+            // These blocks and their causal history will not be included in new commits.
+            // And their transactions do not need votes to finalize or skip.
+            //
+            // CommitFinalizer::gced_transaction_votes_for_pending_block() is the counterpart
+            // to this logic, when deciding if block A in the causal history of block B gets
+            // implicit accept transaction votes from block B.
             if block_ref.round <= gc_round {
                 continue;
             }
