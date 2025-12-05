@@ -69,7 +69,7 @@ pub struct GasProfiler {
     #[serde(skip)]
     pub config: ProfilerConfig,
     #[serde(skip)]
-    pub frames: BTreeMap<usize, Frame>,
+    pub frames: Vec<(usize, Frame)>,
 }
 
 impl GasProfiler {
@@ -97,7 +97,7 @@ impl GasProfiler {
             }],
             current_gas: None,
             config: config.clone(),
-            frames: BTreeMap::new(),
+            frames: Vec::new(),
         }
     }
 
@@ -172,44 +172,54 @@ impl GasProfiler {
     }
 
     pub fn generate_from_trace<R: std::io::Read>(&mut self, trace: MoveTraceReader<R>) {
+        let mut last_gas_left = 0u64;
         for event in trace {
             let event = event.expect("Failed to read trace event");
             match event {
-                TraceEvent::Instruction { .. }
-                | TraceEvent::Effect(..)
-                | TraceEvent::External(..) => (),
+                TraceEvent::Instruction { gas_left, .. } => {
+                    last_gas_left = gas_left;
+                }
+                TraceEvent::Effect(..) | TraceEvent::External(..) => (),
                 TraceEvent::OpenFrame { frame, gas_left } => {
-                    self.open_frame(
-                        format!(
-                            "{}::{}::{}",
-                            frame.version_id.to_canonical_display(true),
-                            frame.module.name(),
-                            frame.function_name
-                        ),
-                        "".to_string(),
-                        gas_left,
-                    );
-                    self.frames.insert(frame.frame_id, *frame);
+                    self.open_frame(Self::trace_name(&frame), "".to_string(), gas_left);
+                    self.frames.push((frame.frame_id, *frame));
+                    last_gas_left = gas_left;
                 }
                 TraceEvent::CloseFrame {
                     frame_id,
                     return_: _,
                     gas_left,
                 } => {
-                    let frame = self.frames.remove(&frame_id).expect("Frame not found");
-                    self.close_frame(
-                        format!(
-                            "{}::{}::{}",
-                            frame.version_id.to_canonical_display(true),
-                            frame.module.name(),
-                            frame.function_name
-                        ),
-                        "".to_string(),
-                        gas_left,
+                    let (open_frame_id, frame) = self.frames.pop().expect("Frame stack underflow");
+                    assert_eq!(
+                        frame_id, open_frame_id,
+                        "Mismatched frame IDs, this shouldn't be possible"
                     );
+                    self.close_frame(Self::trace_name(&frame), "".to_string(), gas_left);
+                    last_gas_left = gas_left;
                 }
             }
         }
+
+        // If we have any dangling frames in the trace (because execution aborted for some reason),
+        // close them now so the profile is well-formed. All the closing frames will have the same
+        // gas left as the last event.
+        self.close_dangling_frames(last_gas_left);
+    }
+
+    fn close_dangling_frames(&mut self, last_gas_left: u64) {
+        while let Some((_, frame)) = self.frames.pop() {
+            self.close_frame(Self::trace_name(&frame), "".to_string(), last_gas_left);
+        }
+    }
+
+    fn trace_name(frame: &Frame) -> String {
+        format!(
+            "{}::{}::{}",
+            frame.version_id.to_canonical_display(true),
+            frame.module.name(),
+            frame.function_name
+        )
     }
 
     fn filename_trim_all_extensions(path: &Path) -> Option<String> {
