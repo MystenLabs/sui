@@ -225,57 +225,6 @@ pub fn package(
         type_origin_table,
     };
 
-    let initial_modules = package_modules
-        .iter()
-        .map(|m| (m.compiled_module.self_id(), m))
-        .collect::<BTreeMap<_, _>>();
-
-    for mod_id in initial_modules.keys() {
-        let mut work_queue = vec![mod_id.clone()];
-
-        while let Some(entry) = work_queue.pop() {
-            let input_module = initial_modules.get(&entry).ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Module {} not found in initial modules", entry))
-            })?;
-
-            let key = interner.intern_ident_str(entry.name())?;
-            // If we are already loaded, continue on our merry way.
-            if package_context.loaded_modules.contains_key(&key) {
-                continue;
-            }
-
-            let mut unloaded_deps = vec![];
-            for imm_dep in input_module.compiled_module.immediate_dependencies() {
-                if module_ids_in_pkg.contains(&imm_dep)
-                    && imm_dep != input_module.compiled_module.self_id()
-                {
-                    let key = interner.intern_ident_str(imm_dep.name())?;
-                    if !package_context.loaded_modules.contains_key(&key) {
-                        unloaded_deps.push(imm_dep.clone());
-                    }
-                }
-            }
-            if unloaded_deps.is_empty() {
-                // All dependencies are loaded, we can load this module.
-                let loaded_module = module(&mut package_context, version_id, input_module)?;
-
-                let key = interner.intern_ident_str(loaded_module.id.name())?;
-                assert!(
-                    package_context
-                        .loaded_modules
-                        .insert(key, loaded_module)
-                        .is_none()
-                );
-            } else {
-                // Push the current module back on, then its unloaded dependencies.
-                work_queue.push(entry.clone());
-                work_queue.extend(unloaded_deps);
-                continue;
-            }
-        }
-    }
-
     modules(&mut package_context, &module_ids_in_pkg, &package_modules)?;
 
     let PackageContext {
@@ -357,12 +306,16 @@ fn modules(
                         })?;
                         let loaded_module =
                             module(package_context, package_context.version_id, input_module)?;
-                        assert!(
-                            package_context
-                                .loaded_modules
-                                .insert(key, loaded_module)
-                                .is_none()
-                        );
+                        if package_context
+                            .loaded_modules
+                            .insert(key, loaded_module)
+                            .is_some()
+                        {
+                            return Err(make_invariant_violation!(format!(
+                                "Module {} already loaded in package context",
+                                cur_id
+                            )));
+                        }
                     }
                     state.insert(cur_id, State::Visited);
                 }
@@ -460,12 +413,12 @@ fn modules(
         let key = package_context
             .interner
             .intern_ident_str(loaded_module.id.name())?;
-        assert!(
-            package_context
-                .loaded_modules
-                .insert(key, loaded_module)
-                .is_none()
-        );
+        if package_context.loaded_modules.insert(key, loaded_module).is_some() {
+            return Err(make_invariant_violation!(format!(
+                "Module {} already loaded in package context",
+                cur_id
+            )));
+        }
 
         seen.pop();
 
