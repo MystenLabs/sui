@@ -1819,7 +1819,7 @@ AliasKey
 create
 	fun
 	0x2::address_alias
-initialize
+enable
 	entry fun
 	0x2::address_alias
 add

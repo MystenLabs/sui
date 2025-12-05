@@ -134,15 +134,15 @@ async fn test_alias_changes() {
         .1
         .clone();
 
-    // Submit transaction to call initialize
-    let initialize_tx = test_cluster
+    // Submit transaction to call enable
+    let enable_tx = test_cluster
         .wallet
         .sign_transaction(
             &TestTransactionBuilder::new(account1, gas_objects1[0], gas_price)
                 .move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
                     "address_alias",
-                    "initialize",
+                    "enable",
                     vec![CallArg::Object(ObjectArg::SharedObject {
                         id: SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
                         initial_shared_version: address_alias_state_initial_shared_version,
@@ -153,11 +153,11 @@ async fn test_alias_changes() {
         )
         .await;
 
-    let initialize_effects = submit_and_wait_for_effects(&client, initialize_tx).await;
-    assert!(initialize_effects.status().is_ok());
+    let enable_effects = submit_and_wait_for_effects(&client, enable_tx).await;
+    assert!(enable_effects.status().is_ok());
 
-    // Get the AddressAliases object created by initialize
-    let address_aliases_ref = initialize_effects
+    // Get the AddressAliases object created by enable
+    let address_aliases_ref = enable_effects
         .created()
         .iter()
         .find(|(_, owner)| {
@@ -169,8 +169,8 @@ async fn test_alias_changes() {
         .expect("AddressAliases object should be created")
         .0;
 
-    // Submit a dummy transaction after initialize to verify sender can still transact.
-    let post_initialize_tx = test_cluster
+    // Submit a dummy transaction after enable to verify sender can still transact.
+    let post_enable_tx = test_cluster
         .wallet
         .sign_transaction(
             &TestTransactionBuilder::new(account1, gas_objects1[1], gas_price)
@@ -179,7 +179,7 @@ async fn test_alias_changes() {
         )
         .await;
 
-    let effects = submit_and_wait_for_effects(&client, post_initialize_tx).await;
+    let effects = submit_and_wait_for_effects(&client, post_enable_tx).await;
     assert!(effects.status().is_ok());
 
     // Call add to add account2 as an alias for account1

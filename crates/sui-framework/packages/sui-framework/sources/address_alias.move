@@ -60,11 +60,11 @@ public struct AddressAliases has key {
 /// Internal key used for derivation of AddressAliases object addresses.
 public struct AliasKey(address) has copy, drop, store;
 
-/// Provides the initial set of address aliases for the sender address.
+/// Enables address alias configuration for the sender address.
 ///
-/// By default, an address is its own alias. However, the original address can
-/// be removed from the set of allowed aliases after initialization.
-entry fun initialize(address_alias_state: &mut AddressAliasState, ctx: &TxContext) {
+/// By default, an address is its own alias. The provided `AddressAliases`
+/// object can be used to change the set of allowed aliases after enabling.
+entry fun enable(address_alias_state: &mut AddressAliasState, ctx: &TxContext) {
     assert!(
         !derived_object::exists(&address_alias_state.id, AliasKey(ctx.sender())),
         EAliasAlreadyExists,

@@ -268,19 +268,19 @@ async fn test_checkpoint_contents_v2_alias_versions() {
             .expect("alias state object should exist")
         });
 
-    // Submit two tx in a soft bundle. First one calls `initialize`.
+    // Submit two tx in a soft bundle. First one calls `enable`.
     // The soft bundle forces checkpoint output to contain out-of-order alias
-    // versions: even though `initialize` changes the alias config version,
+    // versions: even though `enable` changes the alias config version,
     // the second tx (just a dummy transfer) should still report that it was
     // verified using the old `None` version of the alias config.
-    let initialize_tx = test_cluster
+    let enable_tx = test_cluster
         .wallet
         .sign_transaction(
             &TestTransactionBuilder::new(account, gas_objects[0], gas_price)
                 .move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
                     "address_alias",
-                    "initialize",
+                    "enable",
                     vec![CallArg::Object(ObjectArg::SharedObject {
                         id: SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
                         initial_shared_version: address_alias_state_initial_shared_version,
@@ -290,7 +290,7 @@ async fn test_checkpoint_contents_v2_alias_versions() {
                 .build(),
         )
         .await;
-    let initialize_digest = *initialize_tx.digest();
+    let enable_digest = *enable_tx.digest();
     let transfer_tx = {
         let mut builder = TestTransactionBuilder::new(account, gas_objects[1], gas_price);
         let ptb = builder.ptb_builder_mut();
@@ -321,7 +321,7 @@ async fn test_checkpoint_contents_v2_alias_versions() {
         .unwrap();
     let request = sui_types::messages_grpc::RawSubmitTxRequest {
         transactions: vec![
-            bcs::to_bytes(&initialize_tx).unwrap().into(),
+            bcs::to_bytes(&enable_tx).unwrap().into(),
             bcs::to_bytes(&transfer_tx).unwrap().into(),
         ],
         submit_type: sui_types::messages_grpc::SubmitTxType::SoftBundle.into(),
@@ -353,7 +353,7 @@ async fn test_checkpoint_contents_v2_alias_versions() {
         checkpoint_seq = validator_handle.with(|node| {
             node.state()
                 .epoch_store_for_testing()
-                .get_transaction_checkpoint(&initialize_digest)
+                .get_transaction_checkpoint(&enable_digest)
                 .unwrap()
         });
         if checkpoint_seq.is_some() {
@@ -381,31 +381,31 @@ async fn test_checkpoint_contents_v2_alias_versions() {
         let contents_view = checkpoint_contents.inner();
 
         // Find both of the tx. They must appear in the same checkpoint.
-        let (init_idx, transfer_idx) = contents_view.digests_iter().enumerate().fold(
+        let (enable_idx, transfer_idx) = contents_view.digests_iter().enumerate().fold(
             (None, None),
-            |(init, transfer), (idx, digest)| {
-                let new_init = if digest.transaction == initialize_digest {
+            |(enable, transfer), (idx, digest)| {
+                let new_enable = if digest.transaction == enable_digest {
                     Some(idx)
                 } else {
-                    init
+                    enable
                 };
                 let new_transfer = if digest.transaction == transfer_digest {
                     Some(idx)
                 } else {
                     transfer
                 };
-                (new_init, new_transfer)
+                (new_enable, new_transfer)
             },
         );
 
-        let init_idx = init_idx.expect("initialize transaction not found in checkpoint contents");
+        let enable_idx = enable_idx.expect("enable transaction not found in checkpoint contents");
         let transfer_idx =
             transfer_idx.expect("transfer transaction not found in checkpoint contents");
-        assert!(init_idx < transfer_idx, "initialize transaction must appear before transfer transaction in checkpoint contents, got init_idx: {}, transfer_idx: {}", init_idx, transfer_idx);
+        assert!(enable_idx < transfer_idx, "enable transaction must appear before transfer transaction in checkpoint contents, got enable_idx: {}, transfer_idx: {}", enable_idx, transfer_idx);
 
-        let init_signatures = contents_view
-            .user_signatures(init_idx)
-            .expect("initialize transaction signatures not found");
+        let enable_signatures = contents_view
+            .user_signatures(enable_idx)
+            .expect("enable transaction signatures not found");
         let transfer_signatures = contents_view
             .user_signatures(transfer_idx)
             .expect("transfer transaction signatures not found");
@@ -413,27 +413,27 @@ async fn test_checkpoint_contents_v2_alias_versions() {
         // Make sure they both were verified using the same alias config versions, even though
         // the first tx changed the alias config.
         assert_eq!(
-            init_signatures.len(),
+            enable_signatures.len(),
             transfer_signatures.len(),
             "Both transactions should have the same number of signatures"
         );
-        for ((_, init_version), (_, transfer_version)) in
-            init_signatures.iter().zip(transfer_signatures.iter())
+        for ((_, enable_version), (_, transfer_version)) in
+            enable_signatures.iter().zip(transfer_signatures.iter())
         {
             assert_eq!(
-                init_version, transfer_version,
-                "Alias version mismatch: init {:?}, transfer {:?}",
-                init_version, transfer_version
+                enable_version, transfer_version,
+                "Alias version mismatch: enable {:?}, transfer {:?}",
+                enable_version, transfer_version
             );
         }
 
         // Return the original alias versions for later comparison
-        init_signatures.iter().map(|(_, v)| *v).collect::<Vec<_>>()
+        enable_signatures.iter().map(|(_, v)| *v).collect::<Vec<_>>()
     });
 
-    // Submit a new transaction after initialize has been executed.
+    // Submit a new transaction after enable has been executed.
     // This should use the new alias version (different from the soft bundle transactions).
-    let post_init_tx = test_cluster
+    let post_enable_tx = test_cluster
         .wallet
         .sign_transaction(
             &TestTransactionBuilder::new(account, gas_objects[2], gas_price)
@@ -441,10 +441,10 @@ async fn test_checkpoint_contents_v2_alias_versions() {
                 .build(),
         )
         .await;
-    let post_init_digest = *post_init_tx.digest();
+    let post_enable_digest = *post_enable_tx.digest();
     let result = client
         .submit_transaction(sui_types::messages_grpc::RawSubmitTxRequest {
-            transactions: vec![bcs::to_bytes(&post_init_tx).unwrap().into()],
+            transactions: vec![bcs::to_bytes(&post_enable_tx).unwrap().into()],
             submit_type: sui_types::messages_grpc::SubmitTxType::Default.into(),
         })
         .await
@@ -457,28 +457,28 @@ async fn test_checkpoint_contents_v2_alias_versions() {
     ));
 
     // Wait for the transaction to be included in a checkpoint
-    let mut post_init_checkpoint_seq = None;
+    let mut post_enable_checkpoint_seq = None;
     for _ in 0..600 {
-        post_init_checkpoint_seq = validator_handle.with(|node| {
+        post_enable_checkpoint_seq = validator_handle.with(|node| {
             node.state()
                 .epoch_store_for_testing()
-                .get_transaction_checkpoint(&post_init_digest)
+                .get_transaction_checkpoint(&post_enable_digest)
                 .unwrap()
         });
-        if post_init_checkpoint_seq.is_some() {
+        if post_enable_checkpoint_seq.is_some() {
             break;
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
-    let post_init_checkpoint_seq = post_init_checkpoint_seq
-        .expect("Did not include post-init transaction in checkpoint in 60 seconds");
+    let post_enable_checkpoint_seq = post_enable_checkpoint_seq
+        .expect("Did not include post-enable transaction in checkpoint in 60 seconds");
 
     validator_handle.with(|node| {
         let checkpoint_store = node.state().checkpoint_store.clone();
 
         let checkpoint = checkpoint_store
-            .get_checkpoint_by_sequence_number(post_init_checkpoint_seq)
+            .get_checkpoint_by_sequence_number(post_enable_checkpoint_seq)
             .unwrap()
             .expect("Checkpoint not found");
 
@@ -489,30 +489,30 @@ async fn test_checkpoint_contents_v2_alias_versions() {
 
         let contents_view = checkpoint_contents.inner();
 
-        let post_init_idx = contents_view
+        let post_enable_idx = contents_view
             .digests_iter()
             .enumerate()
-            .find(|(_, digest)| digest.transaction == post_init_digest)
+            .find(|(_, digest)| digest.transaction == post_enable_digest)
             .map(|(idx, _)| idx)
-            .expect("post-init transaction not found in checkpoint contents");
+            .expect("post-enable transaction not found in checkpoint contents");
 
-        let post_init_signatures = contents_view
-            .user_signatures(post_init_idx)
-            .expect("post-init transaction signatures not found");
+        let post_enable_signatures = contents_view
+            .user_signatures(post_enable_idx)
+            .expect("post-enable transaction signatures not found");
 
-        // Verify that the post-init transaction uses a different alias version
+        // Verify that the post-enable transaction uses a different alias version
         assert_eq!(
-            post_init_signatures.len(),
+            post_enable_signatures.len(),
             original_alias_versions.len(),
             "Both transactions should have the same number of signatures"
         );
-        for ((_, post_init_version), original_version) in
-            post_init_signatures.iter().zip(original_alias_versions.iter())
+        for ((_, post_enable_version), original_version) in
+            post_enable_signatures.iter().zip(original_alias_versions.iter())
         {
             assert_ne!(
-                post_init_version, original_version,
-                "Post-init transaction should use different alias version than soft bundle. post_init: {:?}, original: {:?}",
-                post_init_version, original_version
+                post_enable_version, original_version,
+                "Post-enable transaction should use different alias version than soft bundle. post_enable: {:?}, original: {:?}",
+                post_enable_version, original_version
             );
         }
     });

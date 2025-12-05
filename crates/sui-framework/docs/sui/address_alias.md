@@ -9,7 +9,7 @@ title: Module `sui::address_alias`
 -  [Struct `AliasKey`](#sui_address_alias_AliasKey)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#sui_address_alias_create)
--  [Function `initialize`](#sui_address_alias_initialize)
+-  [Function `enable`](#sui_address_alias_enable)
 -  [Function `add`](#sui_address_alias_add)
 -  [Function `replace_all`](#sui_address_alias_replace_all)
 -  [Function `remove`](#sui_address_alias_remove)
@@ -236,17 +236,17 @@ Can only be called by genesis or change_epoch transactions.
 
 </details>
 
-<a name="sui_address_alias_initialize"></a>
+<a name="sui_address_alias_enable"></a>
 
-## Function `initialize`
+## Function `enable`
 
-Provides the initial set of address aliases for the sender address.
+Enables address alias configuration for the sender address.
 
-By default, an address is its own alias. However, the original address can
-be removed from the set of allowed aliases after initialization.
+By default, an address is its own alias. The provided <code><a href="../sui/address_alias.md#sui_address_alias_AddressAliases">AddressAliases</a></code>
+object can be used to change the set of allowed aliases after enabling.
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_initialize">initialize</a>(address_alias_state: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliasState">sui::address_alias::AddressAliasState</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_enable">enable</a>(address_alias_state: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliasState">sui::address_alias::AddressAliasState</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -255,7 +255,7 @@ be removed from the set of allowed aliases after initialization.
 <summary>Implementation</summary>
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_initialize">initialize</a>(address_alias_state: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliasState">AddressAliasState</a>, ctx: &TxContext) {
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/address_alias.md#sui_address_alias_enable">enable</a>(address_alias_state: &<b>mut</b> <a href="../sui/address_alias.md#sui_address_alias_AddressAliasState">AddressAliasState</a>, ctx: &TxContext) {
     <b>assert</b>!(
         !<a href="../sui/derived_object.md#sui_derived_object_exists">derived_object::exists</a>(&address_alias_state.id, <a href="../sui/address_alias.md#sui_address_alias_AliasKey">AliasKey</a>(ctx.sender())),
         <a href="../sui/address_alias.md#sui_address_alias_EAliasAlreadyExists">EAliasAlreadyExists</a>,
