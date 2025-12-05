@@ -8883,6 +8883,7 @@ version = "0.1.0"
 dependencies = [
  "antithesis_sdk",
  "anyhow",
+ "bcs",
  "either",
  "fastcrypto",
  "futures",
@@ -8891,6 +8892,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "rand 0.8.5",
  "reqwest 0.12.9",
+ "serde",
  "serde_json",
  "snap",
  "sui-macros",
@@ -16840,6 +16842,7 @@ dependencies = [
  "indicatif",
  "itertools 0.13.0",
  "move-core-types",
+ "mysten-common",
  "mysten-metrics",
  "num_cpus",
  "object_store",

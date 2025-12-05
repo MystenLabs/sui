@@ -3283,6 +3283,9 @@ impl AuthorityState {
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
+        // Do not merge: disable indexing for now
+        return Ok(());
+
         if self.indexes.is_none() {
             return Ok(());
         }
@@ -3622,6 +3625,9 @@ impl AuthorityState {
                 .expect("Failed to initialize fork recovery state")
         });
 
+        let log_path = config.log_path();
+        epoch_store.open_timing_log(log_path);
+
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3910,6 +3916,9 @@ impl AuthorityState {
         self.execution_scheduler
             .reconfigure(&new_epoch_store, self.get_child_object_resolver());
         *execution_lock = new_epoch;
+
+        new_epoch_store.open_timing_log(self.config.log_path());
+
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
         // on the epoch store and execution lock epoch match

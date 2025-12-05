@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::fs::{File, OpenOptions};
 use std::future::Future;
+use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -20,6 +22,7 @@ use futures::future::{Either, join_all, select};
 use itertools::{Itertools, izip};
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_common::assert_reachable;
+use mysten_common::logging::StructuredLog;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_common::{debug_fatal, fatal};
@@ -49,6 +52,7 @@ use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::executable_transaction::{
     TrustedExecutableTransaction, VerifiedExecutableTransaction,
 };
+use sui_types::execution::ExecutionTimingLogRecord;
 use sui_types::execution::{ExecutionTimeObservationKey, ExecutionTiming};
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::TrustedEnvelope;
@@ -431,6 +435,8 @@ pub struct AuthorityPerEpochStore {
     /// settlement transaction keys to resolve to transactions.
     /// Stored in AuthorityPerEpochStore so that it is automatically cleaned up at the end of the epoch.
     settlement_registrations: Arc<Mutex<HashMap<TransactionKey, SettlementRegistration>>>,
+
+    pub(crate) timing_log: Mutex<Option<StructuredLog<ExecutionTimingLogRecord, BufWriter<File>>>>,
 }
 enum SettlementRegistration {
     Ready(Vec<VerifiedExecutableTransaction>),
@@ -1184,10 +1190,34 @@ impl AuthorityPerEpochStore {
             tx_reject_reason_cache,
             submitted_transaction_cache,
             settlement_registrations: Default::default(),
+            timing_log: Mutex::new(None),
         });
 
         s.update_buffer_stake_metric();
         Ok(s)
+    }
+
+    pub fn open_timing_log(&self, log_path: impl AsRef<Path>) {
+        let mut log_path = log_path.as_ref().to_path_buf();
+        log_path.set_file_name(format!(
+            "{}_{}_{}",
+            log_path.file_name().unwrap().to_string_lossy(),
+            self.epoch(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        ));
+
+        let mut log = self.timing_log.lock();
+        assert!(log.is_none());
+        *log = Some(StructuredLog::new(BufWriter::new(
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(log_path)
+                .unwrap(),
+        )));
     }
 
     pub fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
@@ -1566,6 +1596,16 @@ impl AuthorityPerEpochStore {
         timings: Vec<ExecutionTiming>,
         total_duration: Duration,
     ) {
+        if let Some(log) = self.timing_log.lock().as_mut() {
+            let timing_record = ExecutionTimingLogRecord {
+                transaction: tx.clone(),
+                effects: effects.clone(),
+                total_time: total_duration,
+                timings: timings.clone(),
+            };
+            log.write(&timing_record).unwrap();
+        }
+
         let Some(tx_local_execution_time) = self.tx_local_execution_time.get() else {
             // Drop observations if no ExecutionTimeObserver has been configured.
             return;
