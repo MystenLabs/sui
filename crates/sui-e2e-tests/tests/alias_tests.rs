@@ -53,7 +53,7 @@ async fn submit_and_wait_for_effects(
         fast_path: _,
     } = effects
     else {
-        panic!("Expected Executed response");
+        panic!("Expected Executed response, got {effects:?}");
     };
 
     details.effects
@@ -206,6 +206,10 @@ async fn test_alias_changes() {
 
     let effects = submit_and_wait_for_effects(&client, add_tx).await;
     assert!(effects.status().is_ok());
+    // Wait for all validators to execute the `add` tx.
+    test_cluster
+        .wait_for_tx_settlement(&[*effects.transaction_digest()])
+        .await;
 
     // Submit a transaction with account1 as sender and account2 as signer
     // Since account2 is now an alias for account1, account2 can sign transactions on behalf of account1
@@ -247,6 +251,10 @@ async fn test_alias_changes() {
 
     let effects = submit_and_wait_for_effects(&client, remove_alias_tx).await;
     assert!(effects.status().is_ok());
+    // Wait for all validators to execute the `remove` tx.
+    test_cluster
+        .wait_for_tx_settlement(&[*effects.transaction_digest()])
+        .await;
 
     // Try to submit a transaction signed by account1 itself - this should fail
     // because account1 has been removed from its own alias list
