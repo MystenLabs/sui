@@ -2545,6 +2545,14 @@ pub enum TransactionFilter {
     TransactionKind(String),
     /// Query transactions of any given kind in the input.
     TransactionKindIn(Vec<String>),
+    /// Query by transaction execution status (success or failure)
+    TransactionStatus(String),
+    /// Query transactions with computation cost greater than or equal to the specified value
+    MinGasCost(
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "Readable<BigInt<u64>, _>")]
+        u64,
+    ),
 }
 
 impl Filter<EffectsWithInput> for TransactionFilter {
@@ -2596,6 +2604,17 @@ impl Filter<EffectsWithInput> for TransactionFilter {
             TransactionFilter::TransactionKind(kind) => item.input.kind().to_string() == *kind,
             TransactionFilter::TransactionKindIn(kinds) => {
                 kinds.contains(&item.input.kind().to_string())
+            }
+            TransactionFilter::TransactionStatus(status) => {
+                let status_str = if item.effects.status().is_ok() {
+                    "success"
+                } else {
+                    "failure"
+                };
+                status_str == status.as_str()
+            }
+            TransactionFilter::MinGasCost(min_gas) => {
+                item.effects.gas_cost_summary().computation_cost >= *min_gas
             }
             // these filters are not supported, rpc will reject these filters on subscription
             TransactionFilter::Checkpoint(_) => false,
