@@ -740,6 +740,7 @@ impl Scenario {
     pub(crate) async fn graph_for(&self, package: impl AsRef<str>) -> PackageGraph<Vanilla> {
         self.try_graph_for(package)
             .await
+            .map_err(|e| e.emit())
             .expect("could load package")
     }
 
