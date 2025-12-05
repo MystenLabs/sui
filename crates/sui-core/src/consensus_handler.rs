@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
+    SUI_RANDOMNESS_STATE_OBJECT_ID,
     authenticator_state::ActiveJwk,
     base_types::{
         AuthorityName, ConciseableName, ConsensusObjectSequenceKey, SequenceNumber,
@@ -44,7 +45,7 @@ use sui_types::{
         ExecutionTimeObservation,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
-    transaction::{SenderSignedData, VerifiedCertificate, VerifiedTransaction},
+    transaction::{SenderSignedData, TransactionKey, VerifiedCertificate, VerifiedTransaction},
 };
 use tokio::{sync::MutexGuard, task::JoinSet};
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -62,7 +63,7 @@ use crate::{
         epoch_start_configuration::EpochStartConfigTrait,
         execution_time_estimator::ExecutionTimeEstimator,
         shared_object_congestion_tracker::SharedObjectCongestionTracker,
-        shared_object_version_manager::{AssignedTxAndVersions, Schedulable, SharedObjVerManager},
+        shared_object_version_manager::{AssignedTxAndVersions, Schedulable},
         transaction_deferral::{DeferralKey, DeferralReason, transaction_deferral_within_limit},
     },
     checkpoints::{
@@ -1230,22 +1231,23 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        let consensus_commit_prologue = self.add_consensus_commit_prologue_transaction(
-            state,
-            commit_info,
-            transactions_to_schedule
-                .iter()
-                .map(Schedulable::Transaction),
-            &cancelled_txns,
-        );
+        let consensus_commit_prologue = (!commit_info.skip_consensus_commit_prologue_in_test)
+            .then_some(Schedulable::ConsensusCommitPrologue(
+                epoch,
+                commit_info.round,
+                commit_info.consensus_commit_ref.index,
+            ));
 
         let schedulables: Vec<_> = itertools::chain!(
             consensus_commit_prologue.into_iter(),
-            authenticator_state_update_transaction.into_iter(),
-            transactions_to_schedule.into_iter(),
+            authenticator_state_update_transaction
+                .into_iter()
+                .map(Schedulable::Transaction),
+            transactions_to_schedule
+                .into_iter()
+                .map(Schedulable::Transaction),
+            settlement,
         )
-        .map(Schedulable::Transaction)
-        .chain(settlement)
         .collect();
 
         let randomness_schedulables: Vec<_> = randomness_state_update_transaction
@@ -1269,6 +1271,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             )
             .expect("failed to assign shared object versions");
 
+        let consensus_commit_prologue =
+            self.add_consensus_commit_prologue_transaction(state, commit_info, &assigned_versions);
+
+        let mut schedulables = schedulables;
+        let mut assigned_versions = assigned_versions;
+        if let Some(consensus_commit_prologue) = consensus_commit_prologue {
+            assert!(matches!(
+                schedulables[0],
+                Schedulable::ConsensusCommitPrologue(..)
+            ));
+            assert!(matches!(
+                assigned_versions.0[0].0,
+                TransactionKey::ConsensusCommitPrologue(..)
+            ));
+            assigned_versions.0[0].0 = TransactionKey::Digest(*consensus_commit_prologue.digest());
+            schedulables[0] = Schedulable::Transaction(consensus_commit_prologue);
+        }
+
         self.epoch_store
             .process_user_signatures(schedulables.iter().chain(randomness_schedulables.iter()));
 
@@ -1282,8 +1302,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &'a self,
         state: &'a mut CommitHandlerState,
         commit_info: &'a ConsensusCommitInfo,
-        schedulables: impl Iterator<Item = Schedulable<&'a VerifiedExecutableTransaction>>,
-        cancelled_txns: &'a BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+        assigned_versions: &AssignedTxAndVersions,
     ) -> Option<VerifiedExecutableTransaction> {
         {
             if commit_info.skip_consensus_commit_prologue_in_test {
@@ -1291,26 +1310,32 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        let mut version_assignment = Vec::new();
-        let mut shared_input_next_version = HashMap::new();
-        for txn in schedulables {
-            let key = txn.key();
-            match key.as_digest().and_then(|d| cancelled_txns.get(d)) {
-                Some(CancelConsensusCertificateReason::CongestionOnObjects(_))
-                | Some(CancelConsensusCertificateReason::DkgFailed) => {
-                    assert_reachable!("cancelled transactions");
-                    let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
-                        &self.epoch_store,
-                        &txn,
-                        &mut shared_input_next_version,
-                        cancelled_txns,
-                    );
-                    version_assignment.push((
-                        *key.unwrap_digest(),
-                        assigned_versions.shared_object_versions,
-                    ));
-                }
-                None => {}
+        let mut cancelled_txn_version_assignment = Vec::new();
+
+        let protocol_config = self.epoch_store.protocol_config();
+
+        for (txn_key, assigned_versions) in assigned_versions.0.iter() {
+            let Some(d) = txn_key.as_digest() else {
+                continue;
+            };
+
+            if !protocol_config.include_cancelled_randomness_txns_in_prologue()
+                && assigned_versions
+                    .shared_object_versions
+                    .iter()
+                    .any(|((id, _), _)| *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
+            {
+                continue;
+            }
+
+            if assigned_versions
+                .shared_object_versions
+                .iter()
+                .any(|(_, version)| version.is_cancelled())
+            {
+                assert_reachable!("cancelled transactions");
+                cancelled_txn_version_assignment
+                    .push((*d, assigned_versions.shared_object_versions.clone()));
             }
         }
 
@@ -1320,14 +1345,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 TransactionDigest,
                 Vec<(ConsensusObjectSequenceKey, SequenceNumber)>
             )>| {
-                version_assignment.extend(additional_cancelled_txns);
+                cancelled_txn_version_assignment.extend(additional_cancelled_txns);
             }
         );
 
         let transaction = commit_info.create_consensus_commit_prologue_transaction(
             self.epoch_store.epoch(),
             self.epoch_store.protocol_config(),
-            version_assignment,
+            cancelled_txn_version_assignment,
             commit_info,
             state.indirect_state_observer.take().unwrap(),
         );

@@ -4250,6 +4250,7 @@ pub enum TransactionKey {
     Digest(TransactionDigest),
     RandomnessRound(EpochId, RandomnessRound),
     AccumulatorSettlement(EpochId, u64 /* checkpoint height */),
+    ConsensusCommitPrologue(EpochId, u64 /* round */, u32 /* sub_dag_index */),
 }
 
 impl TransactionKey {

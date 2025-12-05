@@ -2965,6 +2965,7 @@ impl AuthorityPerEpochStore {
                 }
                 Schedulable::RandomnessStateUpdate(_, _) => None,
                 Schedulable::AccumulatorSettlement(_, _) => None,
+                Schedulable::ConsensusCommitPrologue(_, _, _) => None,
             })
             .collect();
 

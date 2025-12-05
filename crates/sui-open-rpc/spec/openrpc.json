@@ -1365,6 +1365,7 @@
                 "generate_df_type_layouts": false,
                 "hardened_otw_check": false,
                 "ignore_execution_time_observations_after_certs_closed": false,
+                "include_cancelled_randomness_txns_in_prologue": false,
                 "include_checkpoint_artifacts_digest_in_summary": false,
                 "include_consensus_digest_in_prologue": false,
                 "loaded_child_object_format": false,

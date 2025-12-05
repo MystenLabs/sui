@@ -519,6 +519,12 @@ impl ExecutionScheduler {
                 Schedulable::AccumulatorSettlement(_, _) => {
                     settlement_txns.push((schedulable.key(), env));
                 }
+                Schedulable::ConsensusCommitPrologue(_, _, _) => {
+                    // we only use Schedulable::ConsensusCommitPrologue as a temporary placeholder
+                    // during version assignment, by the time we schedule transactions it should be
+                    // converted to Schedulable::Transaction
+                    unreachable!("Schedulable::ConsensusCommitPrologue should not be enqueued");
+                }
             }
         }
 
