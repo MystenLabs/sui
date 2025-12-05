@@ -1,10 +1,7 @@
 [package]
 name = "a"
-version = "0.0.1"
+edition = "2024"
 implicit-dependencies = false
 
 [dependencies]
 b = { local = "../b" }
-
-[addresses]
-a = "$RUNTIME_ID"

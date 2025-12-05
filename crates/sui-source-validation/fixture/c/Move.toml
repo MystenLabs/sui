@@ -1,7 +1,7 @@
 [package]
 name = "c"
 version = "0.0.1"
-published-at = "$STORAGE_ID"
+implicit-dependencies = false
 
 [addresses]
 c = "$RUNTIME_ID"

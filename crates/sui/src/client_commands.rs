@@ -51,7 +51,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
-use sui_move_build::{CompiledPackage, PackageDependencies, find_environment};
+use sui_move_build::{BuildConfig, CompiledPackage, PackageDependencies, find_environment};
 use sui_package_management::LockCommand;
 use sui_sdk::{
     SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_LOCAL_NETWORK_URL_0, SUI_TESTNET_URL,
@@ -101,6 +101,7 @@ use move_package_alt::{
 use move_symbol_pool::Symbol;
 use sui_keys::key_derive;
 use sui_package_alt::{BuildParams, SuiFlavor};
+use sui_source_validation::{BytecodeSourceVerifier, ValidationMode};
 use sui_types::digests::ChainIdentifier;
 use tracing::{debug, info};
 
@@ -1828,39 +1829,54 @@ impl SuiClientCommands {
                 context.get_active_env().ok().map(|e| e.alias.clone()),
             ),
             SuiClientCommands::VerifySource {
-                package_path: _,
-                build_config: _,
-                verify_deps: _,
-                skip_source: _,
-                address_override: _,
+                package_path,
+                build_config,
+                verify_deps,
+                skip_source,
+                address_override,
             } => {
-                // let mode = match (!skip_source, verify_deps, address_override) {
-                //     (false, false, _) => {
-                //         bail!("Source skipped and not verifying deps: Nothing to verify.")
-                //     }
-                //
-                //     (false, true, _) => ValidationMode::deps(),
-                //     (true, false, None) => ValidationMode::root(),
-                //     (true, true, None) => ValidationMode::root_and_deps(),
-                //     (true, false, Some(at)) => ValidationMode::root_at(*at),
-                //     (true, true, Some(at)) => ValidationMode::root_and_deps_at(*at),
-                // };
-                //
-                // build_config.implicit_dependencies = implicit_deps(latest_system_packages());
-                // let build_config = resolve_lock_file_path(build_config, Some(&package_path))?;
-                // let chain_id = context.cache_chain_id(&context.get_client().await?).await?;
-                // let compiled_package = BuildConfig {
-                //     config: build_config,
-                //     run_bytecode_verifier: true,
-                //     print_diags_to_stderr: true,
-                //     chain_id: Some(chain_id),
-                // }
-                // .build(&package_path)?;
-                //
-                // let client = context.get_client().await?;
-                // BytecodeSourceVerifier::new(client.read_api())
-                //     .verify(&compiled_package, mode)
-                //     .await?;
+                let mode = match (!skip_source, verify_deps, address_override) {
+                    (false, false, _) => {
+                        bail!("Source skipped and not verifying deps: Nothing to verify.")
+                    }
+
+                    (false, true, _) => ValidationMode::deps(),
+                    (true, false, None) => ValidationMode::root(),
+                    (true, true, None) => ValidationMode::root_and_deps(),
+                    (true, false, Some(at)) => ValidationMode::root_at(*at),
+                    (true, true, Some(at)) => ValidationMode::root_and_deps_at(*at),
+                };
+
+                let client = context.get_client().await?;
+                let chain_id = client.read_api().get_chain_identifier().await?;
+                let active_env = context.get_active_env()?;
+                let env = find_environment(
+                    Some(&chain_id),
+                    Some(active_env.alias.clone()),
+                    &build_config,
+                    &package_path,
+                )?;
+
+                let mut root_pkg = load_root_pkg_for_publish_upgrade(
+                    &chain_id,
+                    active_env.alias.clone(),
+                    &build_config,
+                    &package_path,
+                )
+                .await?;
+                let build_config = BuildConfig {
+                    config: build_config,
+                    run_bytecode_verifier: true,
+                    print_diags_to_stderr: true,
+                    chain_id: Some(chain_id),
+                };
+                let compiled_package = build_config
+                    .build_async_from_root_pkg(&mut root_pkg)
+                    .await?;
+
+                BytecodeSourceVerifier::new(client.read_api())
+                    .verify(&compiled_package, mode, &env)
+                    .await?;
 
                 SuiClientCommandResult::VerifySource
             }
