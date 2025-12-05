@@ -4303,8 +4303,8 @@ impl ProtocolConfig {
                             .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
                     }
 
-                    //cfg.feature_flags
-                    //    .include_cancelled_randomness_txns_in_prologue = true;
+                    cfg.feature_flags
+                        .include_cancelled_randomness_txns_in_prologue = true;
                 }
                 // Use this template when making changes:
                 //
