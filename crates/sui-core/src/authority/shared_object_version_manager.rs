@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
+use sui_types::SUI_CLOCK_OBJECT_ID;
+use sui_types::SUI_CLOCK_OBJECT_SHARED_VERSION;
 use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
@@ -79,6 +81,7 @@ pub enum Schedulable<T = VerifiedExecutableTransaction> {
     Transaction(T),
     RandomnessStateUpdate(EpochId, RandomnessRound),
     AccumulatorSettlement(EpochId, u64 /* checkpoint height */),
+    ConsensusCommitPrologue(EpochId, u64 /* round */, u32 /* sub_dag_index */),
 }
 
 impl From<VerifiedExecutableTransaction> for Schedulable<VerifiedExecutableTransaction> {
@@ -116,6 +119,9 @@ impl Schedulable<&'_ VerifiedExecutableTransaction> {
             Schedulable::AccumulatorSettlement(epoch, checkpoint_height) => {
                 Schedulable::AccumulatorSettlement(*epoch, *checkpoint_height)
             }
+            Schedulable::ConsensusCommitPrologue(epoch, round, sub_dag_index) => {
+                Schedulable::ConsensusCommitPrologue(*epoch, *round, *sub_dag_index)
+            }
         }
     }
 }
@@ -129,6 +135,7 @@ impl<T> Schedulable<T> {
             Schedulable::Transaction(tx) => Some(tx.as_tx()),
             Schedulable::RandomnessStateUpdate(_, _) => None,
             Schedulable::AccumulatorSettlement(_, _) => None,
+            Schedulable::ConsensusCommitPrologue(_, _, _) => None,
         }
     }
 
@@ -161,6 +168,13 @@ impl<T> Schedulable<T> {
                     mutability: SharedObjectMutability::Mutable,
                 }))
             }
+            Schedulable::ConsensusCommitPrologue(_, _, _) => {
+                Either::Right(std::iter::once(SharedInputObject {
+                    id: SUI_CLOCK_OBJECT_ID,
+                    initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                    mutability: SharedObjectMutability::Mutable,
+                }))
+            }
         }
     }
 
@@ -173,6 +187,7 @@ impl<T> Schedulable<T> {
                 .expect("Transaction input should have been verified"),
             Schedulable::RandomnessStateUpdate(_, _) => vec![],
             Schedulable::AccumulatorSettlement(_, _) => vec![],
+            Schedulable::ConsensusCommitPrologue(_, _, _) => vec![],
         }
     }
 
@@ -184,6 +199,7 @@ impl<T> Schedulable<T> {
             Schedulable::Transaction(tx) => transaction_receiving_object_keys(tx.as_tx()),
             Schedulable::RandomnessStateUpdate(_, _) => vec![],
             Schedulable::AccumulatorSettlement(_, _) => vec![],
+            Schedulable::ConsensusCommitPrologue(_, _, _) => vec![],
         }
     }
 
@@ -198,6 +214,9 @@ impl<T> Schedulable<T> {
             }
             Schedulable::AccumulatorSettlement(epoch, checkpoint_height) => {
                 TransactionKey::AccumulatorSettlement(*epoch, *checkpoint_height)
+            }
+            Schedulable::ConsensusCommitPrologue(epoch, round, sub_dag_index) => {
+                TransactionKey::ConsensusCommitPrologue(*epoch, *round, *sub_dag_index)
             }
         }
     }
