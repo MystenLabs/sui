@@ -132,6 +132,13 @@ type Address implements IOwner {
 	transactionBlocks(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
 }
 
+type AddressAliasStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
 type AddressConnection {
 	"""
 	Information to aid in pagination.
@@ -183,13 +190,6 @@ enum AddressTransactionBlockRelationship {
 	owner of some object that was created, modified or transfered.
 	"""
 	AFFECTED
-}
-
-type AddressAliasStateCreateTransaction {
-	"""
-	A workaround to define an empty variant of a GraphQL union.
-	"""
-	_: Boolean
 }
 
 """

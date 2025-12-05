@@ -146,6 +146,16 @@ type Address implements IAddressable {
 }
 
 """
+System transaction for creating the alias state.
+"""
+type AddressAliasStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
 Object is exclusively owned by a single address, and is mutable.
 """
 type AddressOwner {
@@ -167,16 +177,6 @@ enum AddressTransactionRelationship {
 	Transactions that this address was involved in, either as the sender, sponsor, or as the owner of some object that was created, modified or transferred.
 	"""
 	AFFECTED
-}
-
-"""
-System transaction for creating the alias state.
-"""
-type AddressAliasStateCreateTransaction {
-	"""
-	A workaround to define an empty variant of a GraphQL union.
-	"""
-	_: Boolean
 }
 
 """
