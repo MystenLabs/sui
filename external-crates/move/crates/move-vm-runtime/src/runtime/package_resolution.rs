@@ -258,7 +258,13 @@ pub(crate) fn jit_and_cache_package(
     .map_err(|err| err.finish(Location::Package(version_id)));
     telemetry.report_time(timer);
 
-    cache.add_to_cache(version_id, verified_pkg, runtime_pkg?);
+    let fresh_insert_to_cache = cache.add_to_cache(version_id, verified_pkg, runtime_pkg?);
+
+    // If we compiled the package, but another thread already inserted it during compilation,
+    // record that this was a redundant compilation for telemetry and move on.
+    if !fresh_insert_to_cache {
+        telemetry.record_redundant_compilation();
+    }
 
     cache.cached_package_at(version_id).ok_or_else(|| {
         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)

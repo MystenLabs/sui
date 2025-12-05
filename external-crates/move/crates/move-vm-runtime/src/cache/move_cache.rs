@@ -68,22 +68,27 @@ impl MoveCache {
     /// with `cached_package_at`, and then both proceed to independenctly load and verify the
     /// package. As the write lock is not held between the `cached_package_at` call and the call to
     /// `add_to_cache` the package could be inserted by another thread in the meantime.
+    ///
+    /// Returns `true` if the package was newly inserted, `false` if it was already present.
+    /// NB: in a parallel scenario the result of this function is not guaranteed to be
+    /// deterministic.
     pub fn add_to_cache(
         &self,
         package_key: VersionId,
         verified: verification::ast::Package,
         runtime: jit::execution::ast::Package,
-    ) {
+    ) -> bool {
         // NB: We grab a write lock here to ensure that we don't double-insert a package.
         let mut package_cache = self.package_cache.write();
 
         if package_cache.contains_key(&package_key) {
-            return;
+            return false;
         }
         let verified = Arc::new(verified);
         let runtime = Arc::new(runtime);
         let package = Package { verified, runtime };
         package_cache.insert(package_key, Arc::new(package));
+        true
     }
 
     /// Get a package from the cache, if it is present.
