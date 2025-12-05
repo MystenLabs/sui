@@ -6,13 +6,13 @@ keywords: [ placeholder ]
 
 [Sagat](https://github.com/MystenLabs/sagat/tree/main) is a full-stack multisig management platform for Sui multisig wallets. It is built using Bun and a TypeScript API for the backend and React for the frontend.
 
-Use the [Sagat web interface](https://sagat.mystenlabs.com/) for [signing transactions](#transaction-signer) and [analyzing signatures](#signature-analyzer). Use the [Sagat SDK](https://github.com/MystenLabs/sagat/tree/main/sdk) for creating and managing multisigs, accepting or rejecting multisig invitations, and creating, voting on, and executing proposals. 
+Use the [Sagat web interface](https://sagat.mystenlabs.com/) for [signing transactions](#transaction-signer), [analyzing signatures](#signature-analyzer), creating and managing multisigs, accepting or rejecting multisig invitations, and creating, voting on, and executing proposals. Alternatively, yse the [Sagat SDK](https://github.com/MystenLabs/sagat/tree/main/sdk) to execute these tasks programmatically. 
 
 ## What is multisig?
 
 [Multisig](/guides/developer/cryptography/multisig) is a type of authentication that requires multiple signatures from different parties before a transaction can be executed. Several addresses can be invited to a multisig group, and all invited parties must accept for the multisig to be created.
 
-Each multisig can have a different voting threshold. For example, in a multisig that contains 3 users, only 2 of the users might need to sign the proposed transaction for it to be approved. In other scenarios, all users might be required to sign the transaction, and if one rejects it, the proposed transaction is cancelled. 
+Each multisig can have a different voting threshold. For example, in a multisig that contains 3 users, only 2 of the users might need to sign the proposed transaction for it to be approved. In other scenarios, all users might be required to sign the transaction, and if one rejects it, the proposed transaction is cancelled. Each threshold can configure different weights per user, enabling endless combinations, such as 5 out of 6 with just 2 addresses.
 
 Learn how to use the [TypeScript SDK for multisig](https://sdk.mystenlabs.com/typescript/cryptography/multisig).
 
@@ -22,7 +22,7 @@ Learn how to use the [TypeScript SDK for multisig](https://sdk.mystenlabs.com/ty
 
 ### Self hosting Sagat
 
-To mitigate the risks, you can self host Sagat. To do so, first download the Github repository:
+To takea control and use Sagat in a trustless manner, you can self host it. To do so, first download the Github repository:
 
 ```
 $ git clone https://github.com/MystenLabs/sagat/tree/main
@@ -36,46 +36,25 @@ $ bun run dev
 
 This runs the bun server in dev mode, so all changes made are reflected as you are developing.
 
-### Running self hosted tests 
-
-To run the prewritten tests stored at `/api/test`, first navigate to that directory and install the necessary dependencies:
-
-```
-$ cd api/test
-$ bun install
-```
-
-Then start the bun server again:
-
-```
-$ bun run dev
-```
-
-To test proposals, you need a Sui Localnet instance running. To run a Localnet instance, you must have the [Sui CLI] installed, then run:
-
-```
-$ sui client switch --env localnet
-$ sui start --force-regenesis --with-faucet
-```
-
-To run a test:
-
-```
-# Run all tests
-$ bun test
-
-# Run specific test suite
-$ bun test test/multisig-api.test.ts
-
-# Run with network check
-$ bun test test/sui-network.test.ts
-```
-
-Then, open `http://localhost:3000`.
-
 ## Using the Sagat web interface 
 
-Through the Sagat [web interface](https://sagat.mystenlabs.com/) you can use the signature analyzer and transaction signer tools.
+Through the Sagat [web interface](https://sagat.mystenlabs.com/) you can use the signature analyzer and transaction signer tools to:
+
+- Create multisigs within the browser. The browser validates each multisig and displays a real-time preview. 
+
+- Accept or reject invitations to participate in multisig compositions/
+
+- Propose new transactions.
+
+- Preview and sign transactions.
+
+- Share transactions through links. 
+
+- Add external proposers outside of the existing multisig group.
+
+- Execute transactions once the voting threshold has been reached.
+
+Each of these tasks can be executed [programmatically](#using-sagat-programmatically) as well.
 
 ### Connecting Slush 
 
