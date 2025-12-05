@@ -81,7 +81,7 @@ pub enum Schedulable<T = VerifiedExecutableTransaction> {
     Transaction(T),
     RandomnessStateUpdate(EpochId, RandomnessRound),
     AccumulatorSettlement(EpochId, u64 /* checkpoint height */),
-    ConsensusCommitPrologue(EpochId, u64 /* round */, u64 /* sub_dag_index */),
+    ConsensusCommitPrologue(EpochId, u64 /* round */, u32 /* sub_dag_index */),
 }
 
 impl From<VerifiedExecutableTransaction> for Schedulable<VerifiedExecutableTransaction> {

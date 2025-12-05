@@ -1235,7 +1235,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .then_some(Schedulable::ConsensusCommitPrologue(
                 epoch,
                 commit_info.round,
-                commit_info.sub_dag_index,
+                commit_info.consensus_commit_ref.index,
             ));
 
         let schedulables: Vec<_> = itertools::chain!(
@@ -1310,7 +1310,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        let mut version_assignment = Vec::new();
+        let mut cancelled_txn_version_assignment = Vec::new();
 
         let protocol_config = self.epoch_store.protocol_config();
 
@@ -1334,7 +1334,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .any(|(_, version)| version.is_cancelled())
             {
                 assert_reachable!("cancelled transactions");
-                version_assignment.push((*d, assigned_versions.shared_object_versions.clone()));
+                cancelled_txn_version_assignment
+                    .push((*d, assigned_versions.shared_object_versions.clone()));
             }
         }
 
@@ -1344,14 +1345,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 TransactionDigest,
                 Vec<(ConsensusObjectSequenceKey, SequenceNumber)>
             )>| {
-                version_assignment.extend(additional_cancelled_txns);
+                cancelled_txn_version_assignment.extend(additional_cancelled_txns);
             }
         );
 
         let transaction = commit_info.create_consensus_commit_prologue_transaction(
             self.epoch_store.epoch(),
             self.epoch_store.protocol_config(),
-            version_assignment,
+            cancelled_txn_version_assignment,
             commit_info,
             state.indirect_state_observer.take().unwrap(),
         );
