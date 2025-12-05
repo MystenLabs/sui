@@ -186,7 +186,7 @@ fn parse_source_manifest(
 
                 let Some(addr) = addr else {
                     bail!(
-                        "Found uninstantiated named address `{}` (declared as `_`). All addresses in the `addresses` field must be instantiated.",
+                        "Found non instantiated named address `{}` (declared as `_`). All addresses in the `addresses` field must be instantiated.",
                         name
                     );
                 };
