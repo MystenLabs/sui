@@ -301,7 +301,9 @@ async fn test_checkpoint_contents_v2_alias_versions() {
             mutability: sui_types::transaction::SharedObjectMutability::Immutable,
         }))
         .unwrap();
-        let recipient = ptb.input(CallArg::Pure(bcs::to_bytes(&account).unwrap())).unwrap();
+        let recipient = ptb
+            .input(CallArg::Pure(bcs::to_bytes(&account).unwrap()))
+            .unwrap();
         ptb.command(Command::TransferObjects(vec![Argument::GasCoin], recipient));
         test_cluster.wallet.sign_transaction(&builder.build()).await
     };
