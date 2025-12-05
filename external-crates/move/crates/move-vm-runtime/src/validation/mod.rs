@@ -13,10 +13,7 @@ use crate::{
 
 use std::collections::BTreeMap;
 
-use move_binary_format::{
-    IndexKind,
-    errors::{Location, PartialVMError, VMResult, verification_error},
-};
+use move_binary_format::errors::{Location, PartialVMError, VMResult};
 use move_core_types::{resolver::SerializedPackage, vm_status::StatusCode};
 use move_vm_config::runtime::VMConfig;
 
@@ -43,16 +40,15 @@ pub fn validate_for_publish(
 
     let validated_package = validate_package(natives, vm_config, package)?;
 
-    // Make sure all modules' self addresses match the `runtime_package_id`.
-    for module in validated_package.as_modules().into_iter() {
-        if module.value.address() != &original_id {
-            return Err(verification_error(
-                StatusCode::MISMATCHED_MODULE_IDS_IN_PACKAGE,
-                IndexKind::AddressIdentifier,
-                module.value.self_handle_idx().0,
-            )
-            .finish(Location::Package(validated_package.version_id)));
-        }
+    if validated_package.original_id != original_id {
+        return Err(
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message(format!(
+                    "Mismatched original package IDs: given '{}', found '{}'",
+                    original_id, validated_package.original_id
+                ))
+                .finish(Location::Package(validated_package.version_id)),
+        );
     }
 
     // Now verify linking on-the-spot to make sure that the current package links correctly in
@@ -76,12 +72,7 @@ pub fn validate_package(
     package: SerializedPackage,
 ) -> VMResult<verification::ast::Package> {
     let pkg = deserialization::translate::package(vm_config, package)?;
-    // Packages must be non-empty
-    if pkg.modules.is_empty() {
-        return Err(PartialVMError::new(StatusCode::EMPTY_PACKAGE)
-            .with_message("Empty packages are not allowed.".to_string())
-            .finish(Location::Package(pkg.version_id)));
-    }
+
     // NB: We don't check for cycles inside of the package just yet since we may need to load
     // further packages.
     let pkg = verification::translate::package(natives, vm_config, pkg)?;

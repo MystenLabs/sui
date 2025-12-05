@@ -1,14 +1,19 @@
 use crate::validation::deserialization::ast::Package;
 
 use move_binary_format::{
-    CompiledModule,
-    errors::{Location, PartialVMError, VMResult},
+    CompiledModule, IndexKind,
+    errors::{Location, PartialVMError, VMResult, verification_error},
 };
 use move_core_types::{resolver::SerializedPackage, vm_status::StatusCode};
 use move_vm_config::runtime::VMConfig;
 
 use std::collections::BTreeMap;
 
+/// Deserialize a serialized package into a `Package` structure, performing basic validation.
+/// 1. The module name in the mapping matches the module's self name.
+/// 2. Every module's address matches the package's original ID.
+/// 3. No duplicate module names exist.
+/// 4. The package is non-empty (has at least one module).
 pub(crate) fn package(vm_config: &VMConfig, pkg: SerializedPackage) -> VMResult<Package> {
     let original_id = pkg.original_id;
 
@@ -30,17 +35,13 @@ pub(crate) fn package(vm_config: &VMConfig, pkg: SerializedPackage) -> VMResult<
             );
         }
 
-        // The address of the module must match the original package ID
-        if module.address() != &original_id {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!(
-                        "Module address mismatch: expected '{}', found '{}'",
-                        original_id,
-                        module.address()
-                    ))
-                    .finish(Location::Package(pkg.version_id)),
-            );
+        if module.address() != &pkg.original_id {
+            return Err(verification_error(
+                StatusCode::MISMATCHED_MODULE_IDS_IN_PACKAGE,
+                IndexKind::AddressIdentifier,
+                module.self_handle_idx().0,
+            )
+            .finish(Location::Package(pkg.version_id)));
         }
 
         // Impossible for a package to have two modules with the same name at this point.
