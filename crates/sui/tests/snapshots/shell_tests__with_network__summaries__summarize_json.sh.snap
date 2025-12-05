@@ -29,7 +29,7 @@ accumulator.json
 accumulator_metadata.json
 accumulator_settlement.json
 address.json
-alias.json
+address_alias.json
 authenticator_state.json
 bag.json
 balance.json

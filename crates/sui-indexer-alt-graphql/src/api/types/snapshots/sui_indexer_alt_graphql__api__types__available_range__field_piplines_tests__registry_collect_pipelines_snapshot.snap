@@ -65,10 +65,10 @@ Address.objects
 Address.transactions
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
-AddressOwner.address
+AddressAliasStateCreateTransaction._
   => {}
 
-AddressAliasStateCreateTransaction._
+AddressOwner.address
   => {}
 
 AuthenticatorStateCreateTransaction._
