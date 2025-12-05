@@ -1,0 +1,4 @@
+0 = &mut local_0
+1 = &mut call(0)
+2 = &mut 1.a
+writable: 2

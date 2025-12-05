@@ -1,0 +1,5 @@
+0 = &mut local_0
+1 = &mut local_1
+2 = &local_2
+3 = &call(0,1,2)
+writable: 3

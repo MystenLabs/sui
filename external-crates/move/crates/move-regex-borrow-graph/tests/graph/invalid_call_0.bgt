@@ -1,0 +1,7 @@
+0 = &mut local_0
+1 = &local_1
+2 = &mut 0.a
+// Invalid because 0 is extended
+// This means 3 will not be writable, even though it is mutable
+3 = &mut call(0,1)
+writable: 3

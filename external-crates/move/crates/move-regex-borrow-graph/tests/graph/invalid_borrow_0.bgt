@@ -1,0 +1,4 @@
+0 = &mut local_0
+1 = alias 0
+// This is the wrong writable set; it should include 1
+writable: 0
