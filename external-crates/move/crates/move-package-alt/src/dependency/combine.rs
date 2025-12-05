@@ -158,3 +158,19 @@ impl CombinedDependency {
         &self.0.name
     }
 }
+
+impl From<CombinedDependency> for ReplacementDependency {
+    fn from(combined: CombinedDependency) -> Self {
+        // note: if this changes, you may change the manifest digest format and cause repinning
+        ReplacementDependency {
+            dependency: Some(DefaultDependency {
+                dependency_info: combined.0.dep_info,
+                is_override: combined.0.is_override,
+                rename_from: combined.0.rename_from,
+                modes: combined.0.modes,
+            }),
+            addresses: combined.0.addresses,
+            use_environment: Some(combined.0.use_environment),
+        }
+    }
+}

@@ -9,7 +9,6 @@ use crate::compatibility::legacy::LegacyData;
 
 use super::{
     EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, PublishAddresses, ResolverName,
-    toml_format::RenderToml,
 };
 
 /// The on-chain identifier for an environment (such as a chain ID); these are bound to environment
@@ -168,12 +167,6 @@ impl ReplacementDependency {
             addresses: None,
             use_environment: None,
         }
-    }
-}
-
-impl RenderToml for ParsedManifest {
-    fn render_as_toml(&self) -> String {
-        todo!()
     }
 }
 
