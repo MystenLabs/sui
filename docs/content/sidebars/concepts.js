@@ -37,14 +37,12 @@ const concepts = [
 				label: 'Transaction Authentication',
 				link: {
 					type: 'doc',
-					id: 'concepts/cryptography/transaction-auth',
+					id: 'concepts/transactions/transaction-auth',
 				},
 				items: [
-					'concepts/cryptography/transaction-auth/keys-addresses',
-					'concepts/cryptography/transaction-auth/signatures',
-					'concepts/cryptography/transaction-auth/multisig',
-					'concepts/cryptography/transaction-auth/offline-signing',
-					'concepts/cryptography/transaction-auth/intent-signing',
+					'concepts/transactions/transaction-auth/multisig',
+					'concepts/transactions/transaction-auth/offline-signing',
+					'concepts/transactions/transaction-auth/intent-signing',
 				],
 			},
 		],

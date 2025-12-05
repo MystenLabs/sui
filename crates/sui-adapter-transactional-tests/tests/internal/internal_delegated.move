@@ -7,8 +7,6 @@
 
 //# publish
 module test::custom_type {
-    use std::internal;
-
     public struct CustomType {}
 
     public fun create_internal(): internal::Permit<CustomType> {

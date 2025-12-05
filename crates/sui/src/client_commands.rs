@@ -560,9 +560,9 @@ pub enum SuiClientCommands {
         #[clap(flatten)]
         build_config: MoveBuildConfig,
 
-        /// Verify package compatibility locally before publishing.
+        /// Skip verifying package compatibility locally before publishing.
         #[clap(long)]
-        verify_compatibility: bool,
+        skip_verify_compatibility: bool,
 
         /// Upgrade the package without checking whether dependency source code compiles to the on-chain
         /// bytecode
@@ -855,7 +855,7 @@ impl SuiClientCommands {
                 build_config,
                 skip_dependency_verification,
                 verify_deps,
-                verify_compatibility,
+                skip_verify_compatibility,
                 with_unpublished_dependencies,
                 payment,
                 gas_data,
@@ -919,18 +919,9 @@ impl SuiClientCommands {
                     compiled_package.get_package_digest(with_unpublished_dependencies);
                 let dep_ids = compiled_package.get_published_dependencies_ids();
 
-                if verify_compatibility {
+                if !skip_verify_compatibility {
                     let protocol_version =
                         read_api.get_protocol_config(None).await?.protocol_version;
-
-                    ensure!(
-                        ProtocolVersion::MAX >= protocol_version,
-                        "On-chain protocol version ({}) is ahead of the latest \
-                        known version ({}) in the CLI. Please update the CLI to the latest version \
-                        if you want to use --verify-compatibility flag",
-                        protocol_version.as_u64(),
-                        ProtocolVersion::MAX.as_u64()
-                    );
 
                     let protocol_config = ProtocolConfig::get_for_version(
                         protocol_version,
@@ -1586,23 +1577,8 @@ impl SuiClientCommands {
                     url
                 } else {
                     let active_env = context.get_active_env();
-
                     if let Ok(env) = active_env {
-                        let network = match env.rpc.as_str() {
-                            SUI_DEVNET_URL => "https://faucet.devnet.sui.io/v2/gas",
-                            SUI_TESTNET_URL => {
-                                bail!(
-                                    "For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}"
-                                );
-                            }
-                            SUI_LOCAL_NETWORK_URL | SUI_LOCAL_NETWORK_URL_0 => {
-                                "http://127.0.0.1:9123/v2/gas"
-                            }
-                            _ => bail!(
-                                "Cannot recognize the active network. Please provide the gas faucet full URL."
-                            ),
-                        };
-                        network.to_string()
+                        find_faucet_url(address, &env.rpc)?
                     } else {
                         bail!("No URL for faucet was provided and there is no active network.")
                     }
@@ -3553,4 +3529,38 @@ pub(crate) async fn pkg_tree_shake(
     });
 
     Ok(())
+}
+
+/// Extract the host from a URL string
+fn url_to_host(url: &str) -> anyhow::Result<String> {
+    url::Url::parse(url)?
+        .host_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| anyhow!("Cannot extract host from url: {}", url))
+}
+
+/// Find the faucet URL based on the RPC URL. It maps the public networks to their faucet URLs, for
+/// devnet and localnet. For testnet, it instructs the user to use the web UI.
+fn find_faucet_url(address: SuiAddress, rpc: &str) -> anyhow::Result<String> {
+    let host = url_to_host(rpc)?;
+    let devnet_host = url_to_host(SUI_DEVNET_URL)?;
+    let testnet_host = url_to_host(SUI_TESTNET_URL)?;
+    let localhost = url_to_host(SUI_LOCAL_NETWORK_URL)?;
+    let localhost_0 = url_to_host(SUI_LOCAL_NETWORK_URL_0)?;
+
+    if host == devnet_host {
+        return Ok("https://faucet.devnet.sui.io/v2/gas".to_string());
+    }
+
+    if host == testnet_host {
+        bail!(
+            "For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}"
+        );
+    }
+
+    if host == localhost || host == localhost_0 {
+        Ok("http://127.0.0.1:9123/v2/gas".to_string())
+    } else {
+        bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
+    }
 }

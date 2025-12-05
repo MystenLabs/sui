@@ -4,10 +4,12 @@ description: Offline signing can be used to sign a Sui transaction when a device
 keywords: [ offline signing, sign offline, sign transaction offline, offline transaction, serialize data, sign data, sign serialized data, sign with Sui Keystore, Sui Keystore, Keystore ]
 ---
 
-Sui supports offline signing, which is signing transactions using a device not connected to a Sui network, or in a wallet implemented in a different programming language without relying on the Sui key store. The steps to implement offline signing include:
+Offline signing is signing transactions using a device not connected to a Sui network, or in a wallet implemented in a different programming language without relying on the Sui key store. The steps to implement offline signing include:
 
 1. Serialize the data for signing.
+
 1. Sign the serialized data. Put the serialized data in a location to sign (such as the wallet of your choice, or tools in other programming languages) and to produce a signature with the corresponding public key.
+
 1. Execute the signed transaction.
 
 ## Serializing data for transfer
@@ -33,7 +35,7 @@ All other CLI commands that craft a transaction (such as `sui client publish` an
 
 ## Sign the serialized data {#sign}
 
-You can sign the data using the device and programming language you choose. Sui accepts signatures for pure Ed25519, ECDSA secp256k1, ECDSA secp256r1, and native multisig. To learn more about the requirements of the signatures, see [Sui Signatures](/concepts/cryptography/transaction-auth/signatures.mdx).
+You can sign the data using the device and programming language you choose. Sui accepts signatures for pure Ed25519, ECDSA secp256k1, ECDSA secp256r1, and native multisig. To learn more about the requirements of the signatures, see [Sui Signatures](/concepts/transactions/transaction-auth.mdx).
 
 This example uses the `sui keytool` command to sign, using the Ed25519 key corresponding to the provided address stored in `sui.keystore`. This command outputs the signature, the public key, and the flag encoded in Base64. This command is backed by fastcrypto.
 `sui keytool sign --address <SUI-ADDRESS> --data <TX_BYTES>`

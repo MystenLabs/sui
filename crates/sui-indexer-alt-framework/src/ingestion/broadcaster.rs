@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use futures::{Stream, StreamExt, future::try_join_all, stream};
+use futures::{Stream, future::try_join_all, stream};
 use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
 };
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
@@ -288,14 +289,29 @@ where
         (noop_streaming_task(ingestion_end), ingestion_end)
     };
 
-    let Ok(stream) = streaming_client.connect().await else {
-        return handle_streaming_fallback("Streaming connection failed");
+    let stream = match streaming_client.connect().await {
+        Ok(stream) => stream,
+        Err(e) => {
+            return handle_streaming_fallback(&format!("Streaming connection failed: {}", e));
+        }
     };
 
-    let mut peekable_stream = Box::pin(stream).peekable();
+    // Wrap the stream with a statement timeout to prevent hanging indefinitely.
+    let timeout_stream = stream
+        .timeout(config.streaming_statement_timeout())
+        .map(|result| match result {
+            Ok(inner) => inner,
+            Err(_) => Err(Error::StreamingError(anyhow::anyhow!("Stream timeout"))),
+        });
 
-    let Some(Ok(peeked_checkpoint)) = Pin::new(&mut peekable_stream).peek().await else {
-        return handle_streaming_fallback("Failed to peek latest checkpoint");
+    let mut peekable_stream = Box::pin(timeout_stream).peekable();
+
+    let peeked_checkpoint = match peekable_stream.peek().await {
+        Some(Ok(checkpoint)) => checkpoint,
+        Some(Err(e)) => {
+            return handle_streaming_fallback(&format!("Failed to peek latest checkpoint: {}", e));
+        }
+        None => return handle_streaming_fallback("Stream ended during peek"),
     };
 
     // We have successfully connected and peeked, reset backoff batch size.
@@ -464,6 +480,8 @@ mod tests {
             retry_interval_ms: 100,
             streaming_backoff_initial_batch_size: 2,
             streaming_backoff_max_batch_size: 16,
+            streaming_connection_timeout_ms: 100,
+            streaming_statement_timeout_ms: 100,
         }
     }
 
@@ -856,7 +874,7 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Create a mock streaming service with checkpoints 0..5
-        let streaming_client = MockStreamingClient::new(0..5);
+        let streaming_client = MockStreamingClient::new(0..5, None);
 
         let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster(
@@ -891,7 +909,7 @@ mod tests {
 
         // Create a mock streaming service that starts at checkpoint 50
         // This simulates streaming being ahead of ingestion
-        let streaming_client = MockStreamingClient::new(49..60);
+        let streaming_client = MockStreamingClient::new(49..60, None);
 
         let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster(
@@ -930,7 +948,7 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Streaming starts at checkpoint 100, but we only want 0..30.
-        let streaming_client = MockStreamingClient::new(100..110);
+        let streaming_client = MockStreamingClient::new(100..110, None);
 
         let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster(
@@ -967,7 +985,7 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Streaming starts at checkpoint 0 but indexing starts at 30.
-        let streaming_client = MockStreamingClient::new(0..100);
+        let streaming_client = MockStreamingClient::new(0..100, None);
 
         let metrics = test_ingestion_metrics();
         let h_broadcaster = broadcaster(
@@ -1005,7 +1023,7 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Create streaming client that returns some checkpoints behind the watermark
-        let mut streaming_client = MockStreamingClient::new(0..15);
+        let mut streaming_client = MockStreamingClient::new(0..15, None);
         // Insert duplicate/old checkpoints that should be skipped
         streaming_client.insert_checkpoint(3); // Behind watermark
         streaming_client.insert_checkpoint(4); // Behind watermark
@@ -1047,7 +1065,7 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Create streaming client that has a gap (checkpoint ahead of expected watermark)
-        let mut streaming_client = MockStreamingClient::new(0..3);
+        let mut streaming_client = MockStreamingClient::new(0..3, None);
         streaming_client.insert_checkpoint_range(6..10); // Gap: skips checkpoints 3 - 5
 
         let metrics = test_ingestion_metrics();
@@ -1089,7 +1107,7 @@ mod tests {
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(30);
         let cancel = CancellationToken::new();
 
-        let streaming_client = MockStreamingClient::new(0..20);
+        let streaming_client = MockStreamingClient::new(0..20, None);
 
         let config = IngestionConfig {
             checkpoint_buffer_size: 5,
@@ -1144,7 +1162,7 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Create streaming client with error injected mid-stream
-        let mut streaming_client = MockStreamingClient::new(0..5);
+        let mut streaming_client = MockStreamingClient::new(0..5, None);
         streaming_client.insert_error(); // Error after 5 checkpoints
         streaming_client.insert_checkpoint_range(10..15);
 
@@ -1188,7 +1206,7 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Create streaming client with multiple errors injected
-        let mut streaming_client = MockStreamingClient::new(0..5);
+        let mut streaming_client = MockStreamingClient::new(0..5, None);
         streaming_client.insert_error(); // Error at checkpoint 5
         streaming_client.insert_checkpoint_range(5..10);
         streaming_client.insert_error(); // Error at checkpoint 10
@@ -1229,7 +1247,7 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Streaming service that fails to start
-        let streaming_service = MockStreamingClient::new(0..20).fail_connection_times(1);
+        let streaming_service = MockStreamingClient::new(0..20, None).fail_connection_times(1);
 
         let metrics = test_ingestion_metrics();
         let config = IngestionConfig {
@@ -1274,7 +1292,7 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Streaming service where peek fails on first attempt
-        let mut streaming_client = MockStreamingClient::new(vec![]);
+        let mut streaming_client = MockStreamingClient::new(vec![], None);
         streaming_client.insert_error(); // Fail peek
         streaming_client.insert_checkpoint_range(0..20);
 
@@ -1322,7 +1340,8 @@ mod tests {
         let cancel = CancellationToken::new();
 
         // Streaming client where connection always fails (never recovers)
-        let streaming_client = MockStreamingClient::new(0..50).fail_connection_times(usize::MAX);
+        let streaming_client =
+            MockStreamingClient::new(0..50, None).fail_connection_times(usize::MAX);
 
         let metrics = test_ingestion_metrics();
 
@@ -1363,7 +1382,7 @@ mod tests {
         let (subscriber_tx, mut subscriber_rx) = mpsc::channel(50);
         let cancel = CancellationToken::new();
 
-        let mut streaming_client = MockStreamingClient::new(0..40).fail_connection_times(4);
+        let mut streaming_client = MockStreamingClient::new(0..40, None).fail_connection_times(4);
         streaming_client.insert_error(); // First error to get back to main loop
         streaming_client.insert_error(); // Then fail peek
         streaming_client.insert_checkpoint_range(40..50); // Complete the rest
@@ -1412,6 +1431,148 @@ mod tests {
         // Ingestion was used for 2 + 4 + 8 + 16 + 2 = 32 checkpoints
         assert_eq!(metrics.total_ingested_checkpoints.get(), 32);
         assert_eq!(metrics.total_streamed_checkpoints.get(), 18);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    // =============== Part 4: Streaming timeouts ==================
+
+    #[tokio::test]
+    async fn streaming_connection_timeout_fallback_to_ingestion() {
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
+        let cancel = CancellationToken::new();
+
+        // Streaming service that times out on connection
+        let streaming_service = MockStreamingClient::new(0..20, Some(Duration::from_millis(150)))
+            .fail_connection_with_timeout(1);
+
+        let metrics = test_ingestion_metrics();
+        let config = IngestionConfig {
+            streaming_backoff_initial_batch_size: 5,
+            ..test_config()
+        };
+        let h_broadcaster = broadcaster(
+            0..20,
+            None,
+            Some(streaming_service),
+            config,
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        // Should fallback to ingestion for initial batch size checkpoints
+        assert_eq!(
+            recv_set(&mut subscriber_rx, 5).await,
+            BTreeSet::from_iter(0..5)
+        );
+
+        // After the timeout, it should complete the remaining checkpoints from streaming
+        assert_eq!(
+            recv_vec(&mut subscriber_rx, 15).await,
+            Vec::from_iter(5..20)
+        );
+
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 5);
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 15);
+        assert_eq!(metrics.total_streaming_connection_failures.get(), 1);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_peek_timeout_fallback_to_ingestion() {
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
+        let cancel = CancellationToken::new();
+
+        // Streaming service where peek times out on first attempt
+        let mut streaming_client =
+            MockStreamingClient::new(vec![], Some(Duration::from_millis(150)));
+        streaming_client.insert_timeout(); // Timeout during peek
+        streaming_client.insert_checkpoint_range(0..20);
+
+        let metrics = test_ingestion_metrics();
+        let config = IngestionConfig {
+            streaming_backoff_initial_batch_size: 5,
+            ..test_config()
+        };
+        let h_broadcaster = broadcaster(
+            0..20,
+            None,
+            Some(streaming_client),
+            config,
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        // Should fallback to ingestion for first batch
+        assert_eq!(
+            recv_set(&mut subscriber_rx, 5).await,
+            BTreeSet::from_iter(0..5)
+        );
+
+        // Then stream the remaining
+        assert_eq!(
+            recv_vec(&mut subscriber_rx, 15).await,
+            Vec::from_iter(5..20)
+        );
+
+        // Verify both were used
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 5);
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 15);
+
+        cancel.cancel();
+        h_broadcaster.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_timeout_during_streaming() {
+        let (_, hi_rx) = mpsc::unbounded_channel();
+        let (subscriber_tx, mut subscriber_rx) = mpsc::channel(20);
+        let cancel = CancellationToken::new();
+
+        // Create streaming client with timeout injected mid-stream
+        let mut streaming_client = MockStreamingClient::new(0..5, Some(Duration::from_millis(150)));
+        streaming_client.insert_timeout(); // Timeout after 5 checkpoints
+        streaming_client.insert_checkpoint_range(10..15);
+
+        let metrics = test_ingestion_metrics();
+        let h_broadcaster = broadcaster(
+            0..15,
+            None,
+            Some(streaming_client),
+            test_config(),
+            mock_client(metrics.clone()),
+            hi_rx,
+            vec![subscriber_tx],
+            metrics.clone(),
+            cancel.clone(),
+        );
+
+        // Should receive first 5 checkpoints from streaming in order
+        assert_eq!(recv_vec(&mut subscriber_rx, 5).await, Vec::from_iter(0..5));
+
+        // After timeout, should fallback and complete via ingestion/retry (order not guaranteed)
+        assert_eq!(
+            recv_set(&mut subscriber_rx, 10).await,
+            BTreeSet::from_iter(5..15)
+        );
+
+        // Verify streaming was used initially and later recovered
+        assert_eq!(metrics.total_streamed_checkpoints.get(), 10);
+        // Then ingestion was used to recover the missing checkpoints
+        assert_eq!(metrics.total_ingested_checkpoints.get(), 5);
+        // The last checkpoint should come from streaming after recovery
+        assert_eq!(metrics.latest_streamed_checkpoint.get(), 14);
 
         cancel.cancel();
         h_broadcaster.await.unwrap();

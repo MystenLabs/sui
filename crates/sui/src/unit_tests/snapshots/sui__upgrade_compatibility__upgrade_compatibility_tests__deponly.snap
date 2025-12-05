@@ -30,4 +30,4 @@ error[Compatibility E01010]: new declaration
   = Remove the struct 'NewStruct' from its module.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'dependency only'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'dependency only'. Use --skip-verify-compatibility to bypass this check locally.

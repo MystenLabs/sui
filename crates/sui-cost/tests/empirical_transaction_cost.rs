@@ -80,16 +80,16 @@ async fn split_n_tx(
     let type_args = vec![GAS::type_tag()];
 
     TestTransactionBuilder::new(sender, gas, gas_price)
-        .move_call(
+        .move_call_with_type_args(
             SUI_FRAMEWORK_PACKAGE_ID,
             PAY_MODULE_NAME.as_str(),
             PAY_SPLIT_VEC_FUNC_NAME.as_str(),
+            type_args,
             vec![
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(coin)),
                 CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
             ],
         )
-        .with_type_args(type_args)
         .build()
 }
 
@@ -156,16 +156,16 @@ async fn create_txes(
     let type_args = vec![GAS::type_tag()];
 
     let merge_tx = TestTransactionBuilder::new(sender, gas_objects.pop().unwrap(), gas_price)
-        .move_call(
+        .move_call_with_type_args(
             SUI_FRAMEWORK_PACKAGE_ID,
             PAY_MODULE_NAME.as_str(),
             PAY_JOIN_FUNC_NAME.as_str(),
+            type_args,
             vec![
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(c1)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(gas_objects.pop().unwrap())),
             ],
         )
-        .with_type_args(type_args)
         .build();
     ret.insert(CommonTransactionCosts::MergeCoin, merge_tx);
 

@@ -2,16 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use async_graphql::{Context, Object};
+use async_graphql::{
+    Context, Object,
+    registry::{MetaType, Registry},
+};
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
-    error::{RpcError, feature_unavailable},
+    error::{RpcError, bad_user_input, feature_unavailable, upcast},
     scope::Scope,
     task::watermark::Watermarks,
 };
 
 use super::checkpoint::Checkpoint;
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("'{0}' is not an Object or Interface.")]
+    NotAnObjectOrInterface(String),
+
+    #[error("Type '{0}' not found in schema.")]
+    TypeNotFound(String),
+
+    #[error("Field '{1}' not found in type '{0}'.")]
+    FieldNotFound(String, String),
+}
 
 /// Identifies a GraphQL query component that is used to determine the range of checkpoints for which data is available (for data that can be tied to a particular checkpoint).
 ///
@@ -60,9 +75,10 @@ impl AvailableRange {
         ctx: &Context<'_>,
         scope: &Scope,
         available_range_key: AvailableRangeKey,
-    ) -> Result<Self, RpcError> {
+    ) -> Result<Self, RpcError<Error>> {
+        available_range_key.validate(&ctx.schema_env.registry)?;
         let watermarks: &Arc<Watermarks> = ctx.data()?;
-        let first = available_range_key.reader_lo(watermarks)?;
+        let first = available_range_key.reader_lo(watermarks).map_err(upcast)?;
 
         Ok(Self {
             scope: scope.clone(),
@@ -83,6 +99,32 @@ impl AvailableRangeKey {
                 .pipeline_lo_watermark(pipeline)
                 .map(|wm| acc.max(wm.checkpoint()))
         })
+    }
+
+    /// Validates that this key references valid types and fields in the GraphQL schema.
+    fn validate(&self, registry: &Registry) -> Result<(), RpcError<Error>> {
+        let fields = match registry.types.get(&self.type_) {
+            Some(MetaType::Object { fields, .. } | MetaType::Interface { fields, .. }) => fields,
+            Some(_) => {
+                return Err(bad_user_input(Error::NotAnObjectOrInterface(
+                    self.type_.to_string(),
+                )));
+            }
+            None => {
+                return Err(bad_user_input(Error::TypeNotFound(self.type_.to_string())));
+            }
+        };
+
+        if let Some(field_name) = &self.field {
+            fields.get(field_name).ok_or_else(|| {
+                bad_user_input(Error::FieldNotFound(
+                    self.type_.to_string(),
+                    field_name.to_string(),
+                ))
+            })?;
+        }
+
+        Ok(())
     }
 }
 

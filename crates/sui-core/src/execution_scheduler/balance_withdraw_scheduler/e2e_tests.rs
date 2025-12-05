@@ -22,7 +22,6 @@ use sui_types::{
     executable_transaction::VerifiedExecutableTransaction,
     gas_coin::GAS,
     object::Object,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::FundsWithdrawalArg,
 };
 use tokio::sync::mpsc::{self, unbounded_channel};
@@ -95,16 +94,17 @@ impl TestEnv {
             .map(|(idx, amount)| {
                 let withdraw =
                     FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag().into());
-                let mut ptb = ProgrammableTransactionBuilder::new();
-                ptb.funds_withdrawal(withdraw).unwrap();
-                let tx_data = TestTransactionBuilder::new(
+                let mut tx_builder = TestTransactionBuilder::new(
                     self.sender,
                     self.gas_object.compute_object_reference(),
                     // Use a unique index to make the transaction digests unique.
                     idx as u64 + 1,
-                )
-                .programmable(ptb.finish())
-                .build();
+                );
+                let tx_data = {
+                    let ptb = tx_builder.ptb_builder_mut();
+                    ptb.funds_withdrawal(withdraw).unwrap();
+                    tx_builder.build()
+                };
                 VerifiedExecutableTransaction::new_for_testing(tx_data, &self.sender_key)
             })
             .collect()

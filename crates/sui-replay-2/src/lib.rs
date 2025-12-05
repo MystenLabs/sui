@@ -9,12 +9,14 @@ use crate::{
 };
 use anyhow::{Result, anyhow, bail};
 use clap::{Parser, ValueEnum};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use serde::Deserialize;
 use similar::{ChangeTag, TextDiff};
 use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
+    time::Duration,
 };
 use sui_config::sui_config_dir;
 use sui_data_store::{
@@ -24,7 +26,7 @@ use sui_data_store::{
 use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_types::effects::TransactionEffects;
 // Disambiguate external tracing crate from local `crate::tracing` module using absolute path.
-use ::tracing::{Instrument, debug, error, info, info_span, warn};
+use ::tracing::{Instrument, debug, error, info_span, warn};
 
 pub mod artifacts;
 pub mod displays;
@@ -505,10 +507,19 @@ where
     let mut total_metrics = TotalMetrics::new();
     let mut executor_provider = ExecutorProvider::new(cache_executor);
 
+    let mp = MultiProgress::new();
+    let tx_spinner = mp.add(ProgressBar::new_spinner());
+    let progress_bar = mp.add(ProgressBar::new(digests.len() as u64));
+
+    tx_spinner.set_style(ProgressStyle::with_template("{spinner}: {msg}").unwrap());
+    tx_spinner.enable_steady_tick(Duration::from_millis(80));
+
     for tx_digest in digests {
         let tx_dir = output_root_dir.join(tx_digest);
         let artifact_manager = ArtifactManager::new(&tx_dir, overwrite_existing)?;
         let span = info_span!("replay", tx_digest = %tx_digest);
+
+        tx_spinner.set_message(format!("Executing transaction {}", tx_digest));
 
         let tx_start = Instant::now();
         let result = replay_transaction(
@@ -530,14 +541,17 @@ where
 
         // Print per-transaction result
         let status = if success { "OK" } else { "FAILED" };
-        if track_time {
-            println!(
-                "> Replayed txn {} ({}): exec_ms={}, total_ms={}",
-                tx_digest, status, exec_ms, tx_total_ms
-            );
+
+        let time_info = if track_time {
+            format!(
+                " ({}): exec_ms={}, total_ms={}",
+                status, exec_ms, tx_total_ms
+            )
         } else {
-            println!("> Replayed txn {} ({})", tx_digest, status);
-        }
+            "".to_owned()
+        };
+
+        tx_spinner.println(format!("Executed transaction {}{}", tx_digest, time_info));
 
         match result {
             Err(e) if terminate_early => {
@@ -547,11 +561,12 @@ where
             Err(e) => {
                 error!(tx_digest = %tx_digest, error = ?e, "Replay failed");
             }
-            Ok(_) => {
-                info!(tx_digest = %tx_digest, "Replay succeeded");
-            }
+            Ok(_) => {}
         }
+        progress_bar.inc(1);
     }
+
+    tx_spinner.finish_and_clear();
 
     if verbose {
         let mut out = std::io::stdout().lock();
