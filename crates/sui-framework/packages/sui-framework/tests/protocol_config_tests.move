@@ -14,6 +14,8 @@ fun test_is_feature_enabled_true() {
 
 #[test]
 fun test_is_feature_enabled_false() {
-    let is_enabled = protocol_config::is_feature_enabled(b"per_command_shared_object_transfer_rules");
+    let is_enabled = protocol_config::is_feature_enabled(
+        b"per_command_shared_object_transfer_rules",
+    );
     assert!(!is_enabled, 1);
 }
