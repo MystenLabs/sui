@@ -23,10 +23,11 @@ public fun case_3() {
 }
 
 public fun case_5<T: copy + drop>(s: S<T>) {
-    let _value: T = *&((&s).value); // Complex field expression
+    // Complex field expression
     // Could be removed in favor of the implicit copy, but path
     // processing makes it unclear what to do after typing rewrites
     // it. See note in lint analysis.
+    let _value: T = *&((&s).value); 
 }
 
 // Flagged Cases
