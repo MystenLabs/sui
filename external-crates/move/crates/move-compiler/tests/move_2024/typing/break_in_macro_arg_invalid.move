@@ -7,10 +7,10 @@ module a::m {
         // mostly making sure the error doesn't say this is a lambda
         foo!('a: {
             if (cond) return'a vector[];
-            0
+            0u64
         });
         foo!('a: {
-            if (cond) return'a 0;
+            if (cond) return'a 0u64;
             vector[]
         });
     }

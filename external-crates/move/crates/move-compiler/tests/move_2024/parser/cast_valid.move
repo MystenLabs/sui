@@ -1,11 +1,11 @@
 module a::m {
 
     fun simple(x: u32) {
-        0 as u32;
+        0u64 as u32;
         0u32 as u64;
         x as u64;
         foo() as u64;
-        id(1 << 63) as u32;
+        id(1u64 << 63) as u32;
         { x + 1 } as u64;
         (x + 1) as u64;
         (x: u32) as u64;

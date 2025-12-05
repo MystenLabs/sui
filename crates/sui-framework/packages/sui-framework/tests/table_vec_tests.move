@@ -38,7 +38,7 @@ fun simple_all_functions() {
 #[expected_failure(abort_code = sui::table_vec::ETableNonEmpty)]
 fun destroy_non_empty_aborts() {
     let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
-    let table_vec = table_vec::singleton(1, scenario.ctx());
+    let table_vec = table_vec::singleton(1u64, scenario.ctx());
     table_vec.destroy_empty();
     scenario.end();
 }
@@ -57,7 +57,7 @@ fun pop_back_empty_aborts() {
 #[expected_failure(abort_code = sui::table_vec::EIndexOutOfBound)]
 fun borrow_out_of_bounds_aborts() {
     let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
-    let table_vec = table_vec::singleton(1, scenario.ctx());
+    let table_vec = table_vec::singleton(1u64, scenario.ctx());
     let _ = &table_vec[77];
     table_vec.destroy_empty();
     scenario.end();
@@ -67,7 +67,7 @@ fun borrow_out_of_bounds_aborts() {
 #[expected_failure(abort_code = sui::table_vec::EIndexOutOfBound)]
 fun borrow_mut_out_of_bounds_aborts() {
     let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
-    let mut table_vec = table_vec::singleton(1, scenario.ctx());
+    let mut table_vec = table_vec::singleton(1u64, scenario.ctx());
     let _ = &mut table_vec[77];
     table_vec.destroy_empty();
     scenario.end();
@@ -77,7 +77,7 @@ fun borrow_mut_out_of_bounds_aborts() {
 #[expected_failure(abort_code = sui::table_vec::EIndexOutOfBound)]
 fun swap_out_of_bounds_aborts() {
     let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
-    let mut table_vec = table_vec::singleton(1, scenario.ctx());
+    let mut table_vec = table_vec::singleton(1u64, scenario.ctx());
     table_vec.swap(0, 77);
     table_vec.destroy_empty();
     scenario.end();
@@ -86,7 +86,7 @@ fun swap_out_of_bounds_aborts() {
 #[test]
 fun swap_same_index_succeeds() {
     let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
-    let mut table_vec = table_vec::singleton(1, scenario.ctx());
+    let mut table_vec = table_vec::singleton(1u64, scenario.ctx());
     table_vec.swap(0, 0);
     table_vec.pop_back();
     table_vec.destroy_empty();
@@ -97,7 +97,7 @@ fun swap_same_index_succeeds() {
 #[expected_failure(abort_code = sui::table_vec::EIndexOutOfBound)]
 fun swap_same_index_out_of_bounds_aborts() {
     let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
-    let mut table_vec = table_vec::singleton(1, scenario.ctx());
+    let mut table_vec = table_vec::singleton(1u64, scenario.ctx());
     table_vec.swap(77, 77);
     table_vec.destroy_empty();
     scenario.end();

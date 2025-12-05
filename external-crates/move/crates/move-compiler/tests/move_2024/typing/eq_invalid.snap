@@ -15,13 +15,13 @@ error[E04007]: incompatible types
    │             Found: 'u8'. It is not compatible with the other type.
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/typing/eq_invalid.move:13:11
+   ┌─ tests/move_2024/typing/eq_invalid.move:13:14
    │
-13 │         0 == false;
-   │         - ^^ ----- Found: 'bool'. It is not compatible with the other type.
-   │         │ │   
-   │         │ Incompatible arguments to '=='
-   │         Found: integer. It is not compatible with the other type.
+13 │         0u64 == false;
+   │         ---- ^^ ----- Found: 'bool'. It is not compatible with the other type.
+   │         │    │   
+   │         │    Incompatible arguments to '=='
+   │         Found: 'u64'. It is not compatible with the other type.
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_invalid.move:21:9
@@ -113,26 +113,26 @@ error[E04005]: expected a single type
 error[E04005]: expected a single type
    ┌─ tests/move_2024/typing/eq_invalid.move:33:9
    │
-33 │         (0, 1) == (0, 1);
-   │         ^^^^^^^^^^^^^^^^
-   │         │         │
-   │         │         Expected a single type, but found expression list type: '({integer}, {integer})'
+33 │         (0u64, 1) == (0, 1u64);
+   │         ^^^^^^^^^^^^^^^^^^^^^^
+   │         │            │
+   │         │            Expected a single type, but found expression list type: '(u64, u64)'
    │         Incompatible arguments to '=='
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/typing/eq_invalid.move:34:19
+   ┌─ tests/move_2024/typing/eq_invalid.move:34:28
    │
-34 │         (1, 2, 3) == (0, 1);
-   │         --------- ^^ ------ Found expression list of length 2: '({integer}, {integer})'. It is not compatible with the other type of length 3.
-   │         │         │   
-   │         │         Incompatible arguments to '=='
-   │         Found expression list of length 3: '({integer}, {integer}, {integer})'. It is not compatible with the other type of length 2.
+34 │         (1u64, 2u64, 3u64) == (0u64, 1u64);
+   │         ------------------ ^^ ------------ Found expression list of length 2: '(u64, u64)'. It is not compatible with the other type of length 3.
+   │         │                  │   
+   │         │                  Incompatible arguments to '=='
+   │         Found expression list of length 3: '(u64, u64, u64)'. It is not compatible with the other type of length 2.
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/typing/eq_invalid.move:35:16
+   ┌─ tests/move_2024/typing/eq_invalid.move:35:22
    │
-35 │         (0, 1) == (1, 2, 3);
-   │         ------ ^^ --------- Found expression list of length 3: '({integer}, {integer}, {integer})'. It is not compatible with the other type of length 2.
-   │         │      │   
-   │         │      Incompatible arguments to '=='
-   │         Found expression list of length 2: '({integer}, {integer})'. It is not compatible with the other type of length 3.
+35 │         (0u64, 1u64) == (1u64, 2u64, 3u64);
+   │         ------------ ^^ ------------------ Found expression list of length 3: '(u64, u64, u64)'. It is not compatible with the other type of length 2.
+   │         │            │   
+   │         │            Incompatible arguments to '=='
+   │         Found expression list of length 2: '(u64, u64)'. It is not compatible with the other type of length 3.

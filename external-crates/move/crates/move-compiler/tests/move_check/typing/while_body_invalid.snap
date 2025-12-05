@@ -8,12 +8,12 @@ info:
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/while_body_invalid.move:3:22
   │
-3 │         while (cond) 0;
-  │                      ^
+3 │         while (cond) 0u64;
+  │                      ^^^^
   │                      │
   │                      Invalid loop body
   │                      Expected: '()'
-  │                      Given: integer
+  │                      Given: 'u64'
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/while_body_invalid.move:4:22
@@ -38,19 +38,19 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/while_body_invalid.move:6:22
   │
-6 │         while (cond) { let x = 0; x };
-  │                      ^^^^^^^^^^^^^^^^
-  │                      │     │
-  │                      │     Given: integer
+6 │         while (cond) { let x = 0u64; x };
+  │                      ^^^^^^^^^^^^^^^^^^^
+  │                      │         │
+  │                      │         Given: 'u64'
   │                      Invalid loop body
   │                      Expected: '()'
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/while_body_invalid.move:7:22
   │
-7 │         while (cond) { if (cond) 1 else 0 };
-  │                      ^^^^^^^^^^^^^^^^^^^^^^
-  │                      │                  │
-  │                      │                  Given: integer
+7 │         while (cond) { if (cond) 1u64 else 0 };
+  │                      ^^^^^^^^^^^^^^^^^^^^^^^^^
+  │                      │           │
+  │                      │           Given: 'u64'
   │                      Invalid loop body
   │                      Expected: '()'

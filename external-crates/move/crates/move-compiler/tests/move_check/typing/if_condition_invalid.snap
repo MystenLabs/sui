@@ -49,12 +49,12 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/if_condition_invalid.move:10:13
    │
-10 │         if (0) () else ();
-   │             ^
+10 │         if (0u64) () else ();
+   │             ^^^^
    │             │
    │             Invalid if condition
    │             Expected: 'bool'
-   │             Given: integer
+   │             Given: 'u64'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/if_condition_invalid.move:11:13
@@ -79,9 +79,9 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/if_condition_invalid.move:16:13
    │
-16 │         if ((0, false)) () else ()
-   │             ^^^^^^^^^^
+16 │         if ((0u64, false)) () else ()
+   │             ^^^^^^^^^^^^^
    │             │
    │             Invalid if condition
    │             Expected: 'bool'
-   │             Given: '({integer}, bool)'
+   │             Given: '(u64, bool)'

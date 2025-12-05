@@ -11,16 +11,16 @@ module 0x8675309::M {
         let x = 0;
         let f = &x;
         *f;
-        x = 0;
+        x = 0u64;
         x;
 
-        let x = 0;
+        let x = 0u64;
         let f = &mut x;
         *f;
         x = 0;
         x;
 
-        let x = 0;
+        let x = 0u64;
         let f = id(&x);
         *f;
         x = 0;
@@ -29,7 +29,7 @@ module 0x8675309::M {
         let x = 0;
         let f = id_mut(&mut x);
         *f;
-        x = 0;
+        x = 0u64;
         x;
     }
 

@@ -20,7 +20,7 @@ module a::m {
         };
         vector [] .length();
         (X{}, Y{}).xval();
-        0.next();
+        0u64.next();
         while (cond) { }.xeat();
         return { X{} }.xval();
         return.xval();

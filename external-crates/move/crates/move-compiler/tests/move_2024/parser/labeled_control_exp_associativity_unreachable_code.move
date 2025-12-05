@@ -8,10 +8,10 @@ module 0x42::M {
 
     fun t(): u64 { 'r: {
         // loop
-        1 + 'a: loop { foo() } + 2;
-        1 + 'a: loop foo();
-        1 + loop 'a: { foo() } + 2;
-        'a: loop { foo() } + 1;
+        1 + 'a: loop { foo() } + 2u64;
+        1u64 + 'a: loop foo();
+        1 + loop 'a: { foo() } + 2u64;
+        'a: loop { foo() } + 1u64;
 
         // return
         return 'r 1 + 2;

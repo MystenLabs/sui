@@ -10,25 +10,25 @@ module a::m {
 
     fun t() {
         let mut x;
-        let P<_>(_) = P<_>(0);
-        P<_>(x) = P<_>(0);
+        let P<_>(_) = P<_>(0u64);
+        P<_>(x) = P<_>(0u64);
         x;
-        let S<_> { x: _ } = S<_> { x: 0 };
+        let S<_> { x: _ } = S<_> { x: 0u64 };
         S<_> { x } = S<_> { x: 0 };
         x;
 
         let y: _;
-        y = 0;
+        y = 0u64;
         y;
         let v: vector<_>;
-        v = vector[0];
+        v = vector[0u64];
         v;
-        (0: _);
-        (vector[0]: vector<_>);
-        id<_>(0);
-        id<vector<_>>(vector<_>[0]);
-        X().xid<_>(0);
-        X().xid<vector<_>>(vector<_>[0]);
+        (0u64: _);
+        (vector[0u64]: vector<_>);
+        id<_>(0u64);
+        id<vector<_>>(vector<_>[0u64]);
+        X().xid<_>(0u64);
+        X().xid<vector<_>>(vector<_>[0u64]);
     }
 
     public struct X() has copy, drop;

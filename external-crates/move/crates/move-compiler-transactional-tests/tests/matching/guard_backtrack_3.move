@@ -21,7 +21,7 @@ module 0x42::m {
     }
 
     fun test(o: Option<u64>): u64 {
-        let _y = &10;
+        let _y = &10u64;
         match (o) {
             Option::Some(n) if (_y == 5) => n,
             Option::None => 1,

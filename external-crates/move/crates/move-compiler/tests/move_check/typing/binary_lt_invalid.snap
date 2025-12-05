@@ -23,18 +23,18 @@ error[E04003]: built-in operation not supported
   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/binary_lt_invalid.move:9:11
+  ┌─ tests/move_check/typing/binary_lt_invalid.move:9:14
   │
-9 │         1 < false;
-  │         - ^ ----- Found: 'bool'. It is not compatible with the other type.
-  │         │ │  
-  │         │ Incompatible arguments to '<'
-  │         Found: integer. It is not compatible with the other type.
+9 │         1u64 < false;
+  │         ---- ^ ----- Found: 'bool'. It is not compatible with the other type.
+  │         │    │  
+  │         │    Incompatible arguments to '<'
+  │         Found: 'u64'. It is not compatible with the other type.
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_lt_invalid.move:10:9
    │
-10 │         false < 1;
+10 │         false < 1u64;
    │         ^^^^^
    │         │
    │         Invalid argument to '<'
@@ -43,8 +43,8 @@ error[E04003]: built-in operation not supported
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/binary_lt_invalid.move:10:15
    │
-10 │         false < 1;
-   │         ----- ^ - Found: integer. It is not compatible with the other type.
+10 │         false < 1u64;
+   │         ----- ^ ---- Found: 'u64'. It is not compatible with the other type.
    │         │     │  
    │         │     Incompatible arguments to '<'
    │         Found: 'bool'. It is not compatible with the other type.
@@ -52,8 +52,8 @@ error[E04007]: incompatible types
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_lt_invalid.move:10:17
    │
-10 │         false < 1;
-   │         -----   ^ Invalid argument to '<'
+10 │         false < 1u64;
+   │         -----   ^^^^ Invalid argument to '<'
    │         │        
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
@@ -122,63 +122,63 @@ error[E04003]: built-in operation not supported
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_lt_invalid.move:15:9
    │
-15 │         0 < 1 < 2;
-   │         ^^^^^
+15 │         0u64 < 1 < 2u64;
+   │         ^^^^^^^^
    │         │
    │         Invalid argument to '<'
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_check/typing/binary_lt_invalid.move:15:15
+   ┌─ tests/move_check/typing/binary_lt_invalid.move:15:18
    │
-15 │         0 < 1 < 2;
-   │         ----- ^ - Found: integer. It is not compatible with the other type.
-   │         │     │  
-   │         │     Incompatible arguments to '<'
+15 │         0u64 < 1 < 2u64;
+   │         -------- ^ ---- Found: 'u64'. It is not compatible with the other type.
+   │         │        │  
+   │         │        Incompatible arguments to '<'
    │         Found: 'bool'. It is not compatible with the other type.
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/binary_lt_invalid.move:15:17
+   ┌─ tests/move_check/typing/binary_lt_invalid.move:15:20
    │
-15 │         0 < 1 < 2;
-   │         -----   ^ Invalid argument to '<'
-   │         │        
+15 │         0u64 < 1 < 2u64;
+   │         --------   ^^^^ Invalid argument to '<'
+   │         │           
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_check/typing/binary_lt_invalid.move:16:12
+   ┌─ tests/move_check/typing/binary_lt_invalid.move:16:15
    │
-16 │         (1 < false) && (@0x0 < 0);
-   │          - ^ ----- Found: 'bool'. It is not compatible with the other type.
-   │          │ │  
-   │          │ Incompatible arguments to '<'
-   │          Found: integer. It is not compatible with the other type.
+16 │         (1u64 < false) && (@0x0 < 0u64);
+   │          ---- ^ ----- Found: 'bool'. It is not compatible with the other type.
+   │          │    │  
+   │          │    Incompatible arguments to '<'
+   │          Found: 'u64'. It is not compatible with the other type.
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/binary_lt_invalid.move:16:25
+   ┌─ tests/move_check/typing/binary_lt_invalid.move:16:28
    │
-16 │         (1 < false) && (@0x0 < 0);
-   │                         ^^^^
-   │                         │
-   │                         Invalid argument to '<'
-   │                         Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+16 │         (1u64 < false) && (@0x0 < 0u64);
+   │                            ^^^^
+   │                            │
+   │                            Invalid argument to '<'
+   │                            Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_check/typing/binary_lt_invalid.move:16:30
+   ┌─ tests/move_check/typing/binary_lt_invalid.move:16:33
    │
-16 │         (1 < false) && (@0x0 < 0);
-   │                         ---- ^ - Found: integer. It is not compatible with the other type.
-   │                         │    │  
-   │                         │    Incompatible arguments to '<'
-   │                         Found: 'address'. It is not compatible with the other type.
+16 │         (1u64 < false) && (@0x0 < 0u64);
+   │                            ---- ^ ---- Found: 'u64'. It is not compatible with the other type.
+   │                            │    │  
+   │                            │    Incompatible arguments to '<'
+   │                            Found: 'address'. It is not compatible with the other type.
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/binary_lt_invalid.move:16:32
+   ┌─ tests/move_check/typing/binary_lt_invalid.move:16:35
    │
-16 │         (1 < false) && (@0x0 < 0);
-   │                         ----   ^ Invalid argument to '<'
-   │                         │       
-   │                         Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+16 │         (1u64 < false) && (@0x0 < 0u64);
+   │                            ----   ^^^^ Invalid argument to '<'
+   │                            │       
+   │                            Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_lt_invalid.move:17:9
@@ -198,53 +198,53 @@ error[E04003]: built-in operation not supported
    │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_check/typing/binary_lt_invalid.move:18:11
+   ┌─ tests/move_check/typing/binary_lt_invalid.move:18:14
    │
-18 │         1 < ();
-   │         - ^ -- Found: '()'. It is not compatible with the other type.
-   │         │ │  
-   │         │ Incompatible arguments to '<'
-   │         Found: integer. It is not compatible with the other type.
+18 │         1u64 < ();
+   │         ---- ^ -- Found: '()'. It is not compatible with the other type.
+   │         │    │  
+   │         │    Incompatible arguments to '<'
+   │         Found: 'u64'. It is not compatible with the other type.
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_lt_invalid.move:19:9
    │
-19 │         (0, 1) < (0, 1, 2);
-   │         ^^^^^^
+19 │         (0u64, 1u64) < (0u64, 1u64, 2u64);
+   │         ^^^^^^^^^^^^
    │         │
    │         Invalid argument to '<'
-   │         Found: '({integer}, {integer})'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_check/typing/binary_lt_invalid.move:19:16
+   ┌─ tests/move_check/typing/binary_lt_invalid.move:19:22
    │
-19 │         (0, 1) < (0, 1, 2);
-   │         ------ ^ --------- Found expression list of length 3: '({integer}, {integer}, {integer})'. It is not compatible with the other type of length 2.
-   │         │      │  
-   │         │      Incompatible arguments to '<'
-   │         Found expression list of length 2: '({integer}, {integer})'. It is not compatible with the other type of length 3.
+19 │         (0u64, 1u64) < (0u64, 1u64, 2u64);
+   │         ------------ ^ ------------------ Found expression list of length 3: '(u64, u64, u64)'. It is not compatible with the other type of length 2.
+   │         │            │  
+   │         │            Incompatible arguments to '<'
+   │         Found expression list of length 2: '(u64, u64)'. It is not compatible with the other type of length 3.
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/binary_lt_invalid.move:19:18
+   ┌─ tests/move_check/typing/binary_lt_invalid.move:19:24
    │
-19 │         (0, 1) < (0, 1, 2);
-   │         ------   ^^^^^^^^^ Invalid argument to '<'
-   │         │         
-   │         Found: '({integer}, {integer})'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+19 │         (0u64, 1u64) < (0u64, 1u64, 2u64);
+   │         ------------   ^^^^^^^^^^^^^^^^^^ Invalid argument to '<'
+   │         │               
+   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_lt_invalid.move:20:9
    │
-20 │         (1, 2) < (0, 1);
-   │         ^^^^^^
+20 │         (1u64, 2) < (0, 1u64);
+   │         ^^^^^^^^^
    │         │
    │         Invalid argument to '<'
-   │         Found: '({integer}, {integer})'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/binary_lt_invalid.move:20:18
+   ┌─ tests/move_check/typing/binary_lt_invalid.move:20:21
    │
-20 │         (1, 2) < (0, 1);
-   │         ------   ^^^^^^ Invalid argument to '<'
-   │         │         
-   │         Found: '({integer}, {integer})'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+20 │         (1u64, 2) < (0, 1u64);
+   │         ---------   ^^^^^^^^^ Invalid argument to '<'
+   │         │            
+   │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'

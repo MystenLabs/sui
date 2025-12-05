@@ -10,14 +10,14 @@ use sui::vec_set;
 #[test, expected_failure(abort_code = vec_set::EKeyAlreadyExists)]
 fun duplicate_key_abort() {
     let mut m = vec_set::empty();
-    m.insert(1);
+    m.insert(1u64);
     m.insert(1);
 }
 
 #[test, expected_failure(abort_code = vec_set::EKeyDoesNotExist)]
 fun nonexistent_key_remove() {
     let mut m = vec_set::empty();
-    m.insert(1);
+    m.insert(1u64);
     let k = 2;
     m.remove(&k);
 }
@@ -48,7 +48,7 @@ fun smoke() {
 #[test]
 fun test_keys() {
     let mut m = vec_set::empty();
-    m.insert(1);
+    m.insert(1u64);
     m.insert(2);
     m.insert(3);
 

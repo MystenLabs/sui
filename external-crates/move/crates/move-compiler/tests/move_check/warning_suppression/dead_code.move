@@ -2,7 +2,7 @@
 module 0x42::m {
     fun foo() {
         loop {};
-        assert!(1 == 0, 0)
+        assert!(1 == 0u64, 0)
     }
 }
 
@@ -10,6 +10,6 @@ module 0x42::n {
     #[allow(dead_code)]
     fun foo() {
         let x = abort 0;
-        x + 1;
+        x + 1u64;
     }
 }

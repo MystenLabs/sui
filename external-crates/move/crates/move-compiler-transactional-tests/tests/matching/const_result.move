@@ -67,31 +67,31 @@ module 0x43::main {
     use 0x42::m;
 
     fun main() {
-        let name_query = m::create_query_result(m::invalid_name_error(), 0);
+        let name_query = m::create_query_result(m::invalid_name_error(), 0u64);
         assert!(!m::valid(&name_query), 0);
         let name_query = m::test(name_query);
         assert!(m::valid(&name_query), 1);
         let _ = m::destroy_query(name_query);
 
-        let info_query = m::create_query_result(m::invalid_info_error(), 0);
+        let info_query = m::create_query_result(m::invalid_info_error(), 0u64);
         assert!(!m::valid(&info_query), 2);
         let info_query = m::test(info_query);
         assert!(m::valid(&info_query), 3);
         let _ = m::destroy_query(info_query);
 
-        let coin_query = m::create_query_result(m::invalid_coin_error(), 0);
+        let coin_query = m::create_query_result(m::invalid_coin_error(), 0u64);
         assert!(!m::valid(&coin_query), 4);
         let coin_query = m::test(coin_query);
         assert!(m::valid(&coin_query), 5);
         let _ = m::destroy_query(coin_query);
 
-        let some_query = m::create_query_result(40, 0);
+        let some_query = m::create_query_result(40, 0u64);
         assert!(!m::valid(&some_query), 6);
         let some_query = m::test(some_query);
         assert!(!m::valid(&some_query), 7);
         let _ = m::destroy_query(some_query);
 
-        let okay_query = m::create_query_result(0, 0);
+        let okay_query = m::create_query_result(0, 0u64);
         assert!(m::valid(&okay_query), 8);
         let _ = m::destroy_query(okay_query);
     }

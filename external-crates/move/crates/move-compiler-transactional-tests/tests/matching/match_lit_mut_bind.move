@@ -7,7 +7,7 @@ module 0x42::m {
         let y = match (x) {
             0 => 10,
             mut x => {
-                x = x + 10;
+                x = x + 10u64;
                 x
             }
         };

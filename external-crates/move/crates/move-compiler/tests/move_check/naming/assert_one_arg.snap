@@ -16,7 +16,7 @@ error[E13001]: feature is not supported in specified edition
 error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/naming/assert_one_arg.move:4:9
   │
-4 │         assert!(0 != 1);
+4 │         assert!(0 != 1u64);
   │         ^^^^^^ Clever `assert!`, `abort`, and `#[error]` are not supported by current edition 'legacy'; the '2024' edition supports this feature
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.

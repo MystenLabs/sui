@@ -23,7 +23,7 @@ module 0x6::LeakInternalRefs {
     }
 
     fun leak_in_loop(x: &mut u64, s: &mut S): &mut u64 {
-        let mut i = 0;
+        let mut i = 0u64;
         while (i < 10) {
             if (i == 7) {
                 return &mut s.f

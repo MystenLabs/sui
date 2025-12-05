@@ -1,7 +1,7 @@
 module a::m {
     // this will give a type error when it is called
     macro fun bad() {
-        1 + b"2"
+        1u64 + b"2"
     }
 
     fun t() {

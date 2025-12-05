@@ -4,7 +4,7 @@
 module 0x42::m {
 
     public fun t(): u64 {
-        match (10 as u64) {
+        match (10u64 as u64) {
             x @ 5 => x,
             _ => 10
         }

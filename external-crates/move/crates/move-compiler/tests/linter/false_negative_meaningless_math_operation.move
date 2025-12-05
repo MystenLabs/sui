@@ -6,8 +6,8 @@ module 0x42::M {
 
     public fun ast_fold() {
         // we do not lint on these because they are folded to a single value
-        let x = 0;
+        let x = 0u64;
         x * 1;
-        1 * 0;
+        1u64 * 0;
     }
 }

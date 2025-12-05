@@ -7,11 +7,11 @@ module 0x8675309::M {
 
     fun t2() {
         let No;
-        No = 100;
+        No = 100u64;
     }
 
     fun t3() {
-        let No = 100;
+        let No = 100u64;
         F { No };
     }
 

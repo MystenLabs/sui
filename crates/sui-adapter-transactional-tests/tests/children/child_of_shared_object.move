@@ -39,7 +39,7 @@ module t2::o2 {
 
     fun new(child: Obj3, ctx: &mut TxContext): Obj2 {
         let mut id = object::new(ctx);
-        sui::dynamic_object_field::add(&mut id, 0, child);
+        sui::dynamic_object_field::add(&mut id, 0u64, child);
         Obj2 { id }
     }
 }
@@ -66,7 +66,7 @@ module t1::o1 {
 
     fun new(child: Obj2, ctx: &mut TxContext): Obj1 {
         let mut id = object::new(ctx);
-        sui::dynamic_object_field::add(&mut id, 0, child);
+        sui::dynamic_object_field::add(&mut id, 0u64, child);
         Obj1 { id }
     }
 }

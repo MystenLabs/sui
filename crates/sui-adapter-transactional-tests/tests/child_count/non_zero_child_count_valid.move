@@ -23,14 +23,14 @@ module test::m {
     public entry fun mint(ctx: &mut TxContext) {
         let mut id = sui::object::new(ctx);
         let child = S { id: sui::object::new(ctx) };
-        ofield::add(&mut id, 0, child);
+        ofield::add(&mut id, 0u64, child);
         sui::transfer::public_transfer(S { id }, tx_context::sender(ctx))
     }
 
     public entry fun mint_and_share(ctx: &mut TxContext) {
         let mut id = sui::object::new(ctx);
         let child = S { id: sui::object::new(ctx) };
-        ofield::add(&mut id, 0, child);
+        ofield::add(&mut id, 0u64, child);
         sui::transfer::public_share_object(S { id })
     }
 

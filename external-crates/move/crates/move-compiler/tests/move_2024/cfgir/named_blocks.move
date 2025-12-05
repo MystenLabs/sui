@@ -28,14 +28,14 @@ module 0x42::a {
         if ('block: { false }) {
             20
         } else {
-            while (false) { 'block: { 20 }; };
+            while (false) { 'block: { 20u64 }; };
             'block: { 10 }
         }
     }
 
     fun t4(): u64 {
         let mut count = 0;
-        let mut x = 0;
+        let mut x = 0u64;
         while (x < 10) {
             'inner: {
                 count = count + 1;

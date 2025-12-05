@@ -2,7 +2,7 @@ module 0x8675309::M {
     struct S {f: u64, b: bool}
 
     fun t0() {
-        let x = 0;
+        let x = 0u64;
 
         { let x = false; x; };
         (x: bool);
@@ -15,7 +15,7 @@ module 0x8675309::M {
     }
 
     fun t1(cond: bool) {
-        let x = 0;
+        let x = 0u64;
         if (cond) {
             let (a, x) = (false, false);
             (x: u64);
@@ -28,7 +28,7 @@ module 0x8675309::M {
     }
 
     fun t2() {
-        let x = 0;
+        let x = 0u64;
         loop {
             let S { f: _, b: x } = S { f: 0, b: false};
             (x: u64);

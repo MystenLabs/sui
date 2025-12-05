@@ -17,7 +17,7 @@ module P0::m {
     }
 
     fun weight(): vector<u8> {
-        let mut i = 0;
+        let mut i = 0u64;
         let mut v = vector[];
         while (i < 248 * 1024) {
             vector::push_back(&mut v, 42);

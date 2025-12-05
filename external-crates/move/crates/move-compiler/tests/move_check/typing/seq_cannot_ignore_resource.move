@@ -11,11 +11,11 @@ module 0x8675309::M {
     }
 
     fun t2() {
-        (0, false, R{});
+        (0u64, false, R{});
     }
 
     fun t3() {
         let r = R{};
-        if (true) (0, false, R{}) else (0, false, r);
+        if (true) (0u64, false, R{}) else (0, false, r);
     }
 }

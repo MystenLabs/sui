@@ -17,8 +17,8 @@ error[E03008]: too few type arguments
 error[E03007]: too many type arguments
   ┌─ tests/move_check/naming/vector_literal_type_arity.move:5:18
   │
-5 │         let v2 = vector<u64, bool>[0, false]; v2;
-  │                  ^^^^^^---------------------
+5 │         let v2 = vector<u64, bool>[0u64, false]; v2;
+  │                  ^^^^^^------------------------
   │                  │
   │                  Expected 1 type argument(s) but got 2
   │                  Invalid 'vector' instantation
@@ -26,9 +26,9 @@ error[E03007]: too many type arguments
 error[E04007]: incompatible types
   ┌─ tests/move_check/naming/vector_literal_type_arity.move:5:18
   │
-5 │         let v2 = vector<u64, bool>[0, false]; v2;
-  │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  │                  │                 │  │
-  │                  │                 │  Found: 'bool'. It is not compatible with the other type.
-  │                  │                 Found: integer. It is not compatible with the other type.
+5 │         let v2 = vector<u64, bool>[0u64, false]; v2;
+  │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │                  │                 │     │
+  │                  │                 │     Found: 'bool'. It is not compatible with the other type.
+  │                  │                 Found: 'u64'. It is not compatible with the other type.
   │                  Invalid 'vector' instantiation. Incompatible argument

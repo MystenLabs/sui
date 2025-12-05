@@ -8,8 +8,8 @@ info:
 error[E04007]: incompatible types
   ┌─ tests/move_2024/typing/lambda_return_mismatched.move:9:23
   │
-8 │             if (cond) return 0;
-  │                       -------- Found: integer. It is not compatible with the other type.
+8 │             if (cond) return 0u64;
+  │                              ---- Found: 'u64'. It is not compatible with the other type.
 9 │             if (cond) return false;
   │                       ^^^^^^^^^^^^
   │                       │      │
@@ -19,39 +19,39 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_return_mismatched.move:15:13
    │
-13 │             if (cond) return &0;
-   │                              -- Found: '&{integer}'. It is not compatible with the other type.
+13 │             if (cond) return &0u64;
+   │                              ----- Found: '&u64'. It is not compatible with the other type.
 14 │             if (cond) return &mut 0;
-15 │             return 0
-   │             ^^^^^^^^
+15 │             return 0u64
+   │             ^^^^^^^^^^^
    │             │      │
-   │             │      Found: integer. It is not compatible with the other type.
+   │             │      Found: 'u64'. It is not compatible with the other type.
    │             Invalid return
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_return_mismatched.move:19:23
    │
-18 │             if (cond) return (&0, vector[0]);
-   │                                          - Found: integer. It is not compatible with the other type.
-19 │             if (cond) return (&mut 0, vector[false]);
-   │                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │                       │                      │
-   │                       │                      Found: 'bool'. It is not compatible with the other type.
+18 │             if (cond) return (&0u64, vector[0u64]);
+   │                                             ---- Found: 'u64'. It is not compatible with the other type.
+19 │             if (cond) return (&mut 0u64, vector[false]);
+   │                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                       │                         │
+   │                       │                         Found: 'bool'. It is not compatible with the other type.
    │                       Invalid return
 
 error[E04010]: cannot infer type
-   ┌─ tests/move_2024/typing/lambda_return_mismatched.move:20:25
+   ┌─ tests/move_2024/typing/lambda_return_mismatched.move:20:28
    │
-20 │             return (&0, vector[])
-   │                         ^^^^^^^^ Could not infer this type. Try adding an annotation
+20 │             return (&0u64, vector[])
+   │                            ^^^^^^^^ Could not infer this type. Try adding an annotation
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_return_mismatched.move:24:23
    │
-23 │             if (cond) return (&0, vector[0]);
-   │                              --------------- Found expression list of length 2: '(&{integer}, vector<{integer}>)'. It is not compatible with the other type of length 3.
-24 │             if (cond) return (&0, vector[0], 1);
-   │                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+23 │             if (cond) return (&0u64, vector[0u64]);
+   │                              --------------------- Found expression list of length 2: '(&u64, vector<u64>)'. It is not compatible with the other type of length 3.
+24 │             if (cond) return (&0u64, vector[0u64], 1u64);
+   │                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │                       │      │
-   │                       │      Found expression list of length 3: '(&{integer}, vector<{integer}>, {integer})'. It is not compatible with the other type of length 2.
+   │                       │      Found expression list of length 3: '(&u64, vector<u64>, u64)'. It is not compatible with the other type of length 2.
    │                       Invalid return

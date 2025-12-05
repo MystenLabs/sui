@@ -45,7 +45,7 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:20:21
    │
-20 │     do!((|x| { x }: u8), 42);
+20 │     do!((|x| { x }: u8), 42u64);
    │          ---------  ^^
    │          │          │
    │          │          Invalid annotation for lambda
@@ -65,7 +65,7 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:25:21
    │
-25 │     do!((|x| { x }: |u8, u8| -> u8), 42);
+25 │     do!((|x| { x }: |u8, u8| -> u8), 42u64);
    │          ---------  ^^^^^^^^^^^^^^
    │          │          │
    │          │          Invalid annotation for lambda
@@ -75,7 +75,7 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_expression_annotation_invalid.move:26:29
    │
-26 │     do2!((|x, y| { x + y }: |u8| -> u8), 42);
+26 │     do2!((|x, y| { x + y }: |u8| -> u8), 42u64);
    │           ----------------  ^^^^^^^^^^
    │           │                 │
    │           │                 Invalid annotation for lambda

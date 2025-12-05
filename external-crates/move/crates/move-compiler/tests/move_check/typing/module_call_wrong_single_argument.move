@@ -21,14 +21,14 @@ module M {
     }
 
     fun t0() {
-        foo(0);
+        foo(0u64);
         bar(S{});
         bar(@0x0);
     }
 
     fun t1() {
         X::foo(S{});
-        X::foo(0);
+        X::foo(0u64);
         X::bar(S{});
         X::bar(false);
     }

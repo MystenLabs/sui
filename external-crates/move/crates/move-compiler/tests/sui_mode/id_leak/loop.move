@@ -14,7 +14,7 @@ module a::m {
         while (i <= 10) {
             object::delete(id);
             id = object::new(ctx);
-            i = i + 1;
+            i = i + 1u64;
         };
         let obj = Obj { id };
         transfer(obj, tx_context::sender(ctx))

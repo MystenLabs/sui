@@ -8,7 +8,7 @@ info:
 warning[W09003]: unused assignment
   ┌─ tests/move_check/typing/assign_duplicate_assigning.move:6:10
   │
-6 │         (x, x) = (0, 0);
+6 │         (x, x) = (0u64, 0);
   │          ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
   │
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
@@ -16,7 +16,7 @@ warning[W09003]: unused assignment
 warning[W09003]: unused assignment
   ┌─ tests/move_check/typing/assign_duplicate_assigning.move:6:13
   │
-6 │         (x, x) = (0, 0);
+6 │         (x, x) = (0u64, 0);
   │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
   │
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
@@ -24,7 +24,7 @@ warning[W09003]: unused assignment
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/typing/assign_duplicate_assigning.move:6:13
   │
-6 │         (x, x) = (0, 0);
+6 │         (x, x) = (0u64, 0);
   │          -  ^ Duplicate usage of local 'x' in a given assignment
   │          │   
   │          Previously assigned here

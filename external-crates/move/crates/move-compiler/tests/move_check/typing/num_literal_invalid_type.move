@@ -1,3 +1,3 @@
 module a::m {
-    fun test(): vector<u8> { 0 }
+    fun test(): vector<u8> { 0u64 }
 }

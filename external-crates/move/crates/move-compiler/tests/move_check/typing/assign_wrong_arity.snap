@@ -24,8 +24,8 @@ error[E04005]: expected a single type
 error[E04005]: expected a single type
   ┌─ tests/move_check/typing/assign_wrong_arity.move:7:9
   │
-7 │         x = (0, 1, 2);
-  │         ^   --------- Expected a single type, but found expression list type: '({integer}, {integer}, {integer})'
+7 │         x = (0u64, 1u64, 2u64);
+  │         ^   ------------------ Expected a single type, but found expression list type: '(u64, u64, u64)'
   │         │    
   │         Invalid type for local
 
@@ -34,16 +34,16 @@ error[E04007]: incompatible types
   │
 6 │         x = ();
   │             -- Expected: '()'
-7 │         x = (0, 1, 2);
-  │         ^   --------- Given: '({integer}, {integer}, {integer})'
+7 │         x = (0u64, 1u64, 2u64);
+  │         ^   ------------------ Given: '(u64, u64, u64)'
   │         │    
   │         Invalid assignment to variable 'x'
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/assign_wrong_arity.move:8:9
   │
-8 │         () = 0;
-  │         ^^   - Given: integer
+8 │         () = 0u64;
+  │         ^^   ---- Given: 'u64'
   │         │     
   │         Invalid value for assignment
   │         Expected: '()'
@@ -51,8 +51,8 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/assign_wrong_arity.move:11:9
    │
-11 │         (x, b, R{f}) = (0, false, R{f: 0}, R{f: 0});
-   │         ^^^^^^^^^^^^   ---------------------------- Given expression list of length 4: '({integer}, bool, 0x8675309::M::R, 0x8675309::M::R)'
+11 │         (x, b, R{f}) = (0u64, false, R{f: 0}, R{f: 0});
+   │         ^^^^^^^^^^^^   ------------------------------- Given expression list of length 4: '(u64, bool, 0x8675309::M::R, 0x8675309::M::R)'
    │         │               
    │         Invalid value for assignment
    │         Expected expression list of length 3: '(_, _, _)'
@@ -60,8 +60,8 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/assign_wrong_arity.move:12:9
    │
-12 │         (x, b, R{f}) = (0, false);
-   │         ^^^^^^^^^^^^   ---------- Given expression list of length 2: '({integer}, bool)'
+12 │         (x, b, R{f}) = (0u64, false);
+   │         ^^^^^^^^^^^^   ------------- Given expression list of length 2: '(u64, bool)'
    │         │               
    │         Invalid value for assignment
    │         Expected expression list of length 3: '(_, _, _)'

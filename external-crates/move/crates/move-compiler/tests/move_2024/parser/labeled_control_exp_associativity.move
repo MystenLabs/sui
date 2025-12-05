@@ -3,8 +3,8 @@
 module 0x42::M {
     fun t(cond: bool) {
         let _: u64 = 1 + if (cond) 0 else 10 + 10;
-        let _: bool = true || if (cond) false else 11 == 10;
-        let _: bool = if (cond) 10 else 'a: { 11 } == 10;
+        let _: bool = true || if (cond) false else 11u64 == 10;
+        let _: bool = if (cond) 10 else 'a: { 11 } == 10u64;
         let _: u64 = if (cond) 0 else 'a: { 10 } + 1;
     }
 }

@@ -1,7 +1,7 @@
 module 0x8675309::M {
     struct S has copy, drop { f: u64 }
     fun t0() {
-        *&mut 0 = 1;
+        *&mut 0u64 = 1;
         *&mut S{f:0}.f = 1;
         *foo(&mut 0) = 1;
         bar(&mut S{f:0}).f = 1;

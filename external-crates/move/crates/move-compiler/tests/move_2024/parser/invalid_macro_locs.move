@@ -43,7 +43,7 @@ module 0x42::m {
 module 0x42::n {
 
     fun test00(): 0x42::m::S<u64> {
-        0x42!::m::make_s<u64>(0u64)
+        0x42u64!::m::make_s<u64>(0u64)
     }
 
     fun test01(): 0x42::m::S<u64> {
@@ -51,7 +51,7 @@ module 0x42::n {
     }
 
     fun test02(): 0x42::m::S<u64> {
-        0x42!::m!::make_s<u64>(0u64)
+        0x42u64!::m!::make_s<u64>(0u64)
     }
 
     fun test03(): 0x42::m::S<u64> {
@@ -59,7 +59,7 @@ module 0x42::n {
     }
 
     fun test04(): 0x42::m::S<u64> {
-        0x42!::m!::make_s!<u64>(0u64)
+        0x42u64!::m!::make_s!<u64>(0u64)
     }
 
 }

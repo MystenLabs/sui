@@ -14,7 +14,7 @@ module 0x42::m {
             Option::Some(n) => foo(n),
             Option::None => (),
         };
-        let _o = Option::Some(0);
+        let _o = Option::Some(0u64);
         0
     }
 }

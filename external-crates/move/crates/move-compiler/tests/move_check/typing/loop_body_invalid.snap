@@ -8,12 +8,12 @@ info:
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/loop_body_invalid.move:3:14
   │
-3 │         loop 0
-  │              ^
+3 │         loop 0u64
+  │              ^^^^
   │              │
   │              Invalid loop body
   │              Expected: '()'
-  │              Given: integer
+  │              Given: 'u64'
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/loop_body_invalid.move:7:14
@@ -38,19 +38,19 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/loop_body_invalid.move:15:14
    │
-15 │         loop { let x = 0; x }
-   │              ^^^^^^^^^^^^^^^^
-   │              │     │
-   │              │     Given: integer
+15 │         loop { let x = 0u64; x }
+   │              ^^^^^^^^^^^^^^^^^^^
+   │              │         │
+   │              │         Given: 'u64'
    │              Invalid loop body
    │              Expected: '()'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/loop_body_invalid.move:19:14
    │
-19 │         loop { if (true) 1 else 0 }
-   │              ^^^^^^^^^^^^^^^^^^^^^^
+19 │         loop { if (true) 1 else 0u64 }
+   │              ^^^^^^^^^^^^^^^^^^^^^^^^^
    │              │                  │
-   │              │                  Given: integer
+   │              │                  Given: 'u64'
    │              Invalid loop body
    │              Expected: '()'

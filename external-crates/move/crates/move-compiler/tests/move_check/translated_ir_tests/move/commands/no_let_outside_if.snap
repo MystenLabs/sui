@@ -8,13 +8,13 @@ info:
 error[E03009]: unbound variable
   ┌─ tests/move_check/translated_ir_tests/move/commands/no_let_outside_if.move:4:9
   │
-4 │         y = 5;
+4 │         y = 5u64;
   │         ^ Invalid assignment. Unbound variable 'y'
 
 error[E03009]: unbound variable
   ┌─ tests/move_check/translated_ir_tests/move/commands/no_let_outside_if.move:6:9
   │
-6 │         y = 0;
+6 │         y = 0u64;
   │         ^ Invalid assignment. Unbound variable 'y'
 
 error[E03009]: unbound variable

@@ -16,8 +16,8 @@ module a::m {
     }
 
     fun t() {
-        apply!(1, |x| vector[x]);
-        apply!(P(1), |P(x)| vector[x]);
+        apply!(1u64, |x| vector[x]);
+        apply!(P(1u64), |P(x)| vector[x]);
         apply_either!(true, S1 { f: 0 }, S2 { f: 0 }, |s| vector[s.f]);
         apply_either2!(true, S1 { f: 0 }, S2 { f: 0 }, |s| vector[s.f]);
     }

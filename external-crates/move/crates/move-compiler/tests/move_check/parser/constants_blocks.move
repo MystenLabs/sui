@@ -10,12 +10,12 @@ module M {
     const C6: u128 = { 0 };
     const C7: () = {
         let x = 0;
-        let y = 1;
+        let y = 1u64;
         x + y;
     };
     const C8: address = {
-        0;
-        1 + 1;
+        0u64;
+        1 + 1u64;
         u();
         @0x0
     };

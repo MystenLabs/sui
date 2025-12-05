@@ -16,9 +16,9 @@ module 0x42::m {
     }
 
     public fun maybe_macro_call_2() {
-        let m = maybe!(10, |x| { x }, Maybe::Just(5));
+        let m = maybe!(10u64, |x| { x }, Maybe::Just(5));
         assert!(m == 5, 1);
-        let n = maybe!(10, |x| { x }, Maybe::Nothing);
+        let n = maybe!(10u64, |x| { x }, Maybe::Nothing);
         assert!(n == 10, 2);
     }
 }

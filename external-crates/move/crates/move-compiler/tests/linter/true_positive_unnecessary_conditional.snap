@@ -36,10 +36,10 @@ warning[Lint W01007]: 'if' expression can be removed
 warning[Lint W01007]: 'if' expression can be removed
    ┌─ tests/linter/true_positive_unnecessary_conditional.move:10:9
    │
-10 │         if (foo()) 0 else 0;
-   │         ^^^^^^^^^^^^^^^^^^^
-   │         │          │      │
-   │         │          │      is the same as this value
+10 │         if (foo()) 0u64 else 0;
+   │         ^^^^^^^^^^^^^^^^^^^^^^
+   │         │          │         │
+   │         │          │         is the same as this value
    │         │          This value
    │         Detected a redundant conditional expression 'if (..) v else v', where each branch results in the same value 'v'. Consider using the value directly
    │

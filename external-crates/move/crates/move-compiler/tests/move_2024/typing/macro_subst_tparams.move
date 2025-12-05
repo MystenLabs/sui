@@ -16,7 +16,7 @@ module a::m {
         X<$U>() = x;
         let _: X<$U> = x;
         let X<$U>() = x;
-        (0 as $U);
+        (0u64 as $U);
         (x: X<$U>);
         x
     }

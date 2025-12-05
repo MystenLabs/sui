@@ -4,8 +4,8 @@ module a::m {
     }
 
     fun t() {
-        call!<_>(|_| -> _ { 0 }, 1);
-        call!<_>(|_: _| -> _ { 0 }, 1);
-        call!<vector<_>>(|_: vector<_>| -> vector<_> { vector<_>[] }, vector[0]);
+        call!<_>(|_| -> _ { 0u64 }, 1);
+        call!<_>(|_: _| -> _ { 0 }, 1u64);
+        call!<vector<_>>(|_: vector<_>| -> vector<_> { vector<_>[] }, vector[0u64]);
     }
 }

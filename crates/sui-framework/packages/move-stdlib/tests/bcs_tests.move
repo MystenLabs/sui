@@ -51,7 +51,7 @@ fun bcs_u32() {
 #[test]
 fun bcs_u64() {
     let expected_output = x"0100000000000000";
-    assert_eq!(bcs::to_bytes(&1), expected_output);
+    assert_eq!(bcs::to_bytes(&1u64), expected_output);
 }
 
 #[test]

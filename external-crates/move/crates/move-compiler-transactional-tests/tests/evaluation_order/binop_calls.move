@@ -29,7 +29,7 @@ module 0x42::m {
     }
 
     public fun test01(): bool {
-        let x = 1;
+        let x = 1u64;
         and({x = x - 1; x == 0}, {x = x + 3; x == 3}) && {x = x * 2; x == 6}
     }
 
@@ -46,7 +46,7 @@ module 0x42::m {
 
     public fun test04(): u64 {
         let x = 1;
-        add({x = x - 1; x + 8}, {x = x + 3; x - 3}) + add({x = x * 2; x * 2}, {x = x + 1; x})
+        add({x = x - 1u64; x + 8}, {x = x + 3; x - 3}) + add({x = x * 2; x * 2}, {x = x + 1; x})
     }
 
     public fun test05(): u64 {
@@ -57,7 +57,7 @@ module 0x42::m {
     }
 
     public fun test06(): u64 {
-        let x = 1;
+        let x = 1u64;
         inc_by(&mut x, 5) + inc_by(&mut x, 6) + inc_by(&mut x, 7)
     }
 
@@ -139,7 +139,7 @@ module 0x42::m {
     }
 
     public fun test21(): bool {
-        let x = 1;
+        let x = 1u64;
         {x = x << 1; x} < {x = x << 1; x}
     }
 

@@ -96,7 +96,7 @@ fun destroy_non_empty() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut table = object_table::new(scenario.ctx());
-    table.add(0, new(&mut scenario));
+    table.add(0u64, new(&mut scenario));
     table.destroy_empty();
     scenario.end();
 }
@@ -106,7 +106,7 @@ fun sanity_check_contains() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut table = object_table::new(scenario.ctx());
-    assert!(!table.contains(0));
+    assert!(!table.contains(0u64));
     table.add(0, new(&mut scenario));
     assert!(table.contains(0));
     assert!(!table.contains(1));
@@ -130,7 +130,7 @@ fun sanity_check_size() {
     assert!(table.length() == 2);
     scenario.end();
     table.remove(0).destroy();
-    table.remove(1).destroy();
+    table.remove(1u64).destroy();
     table.destroy_empty();
 }
 

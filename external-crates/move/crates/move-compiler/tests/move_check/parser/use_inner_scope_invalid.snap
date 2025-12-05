@@ -8,7 +8,7 @@ info:
 warning[W09002]: unused variable
   ┌─ tests/move_check/parser/use_inner_scope_invalid.move:4:13
   │
-4 │         let x = 0;
+4 │         let x = 0u64;
   │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

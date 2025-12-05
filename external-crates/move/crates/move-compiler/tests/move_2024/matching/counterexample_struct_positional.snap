@@ -8,16 +8,16 @@ info:
 error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/matching/counterexample_struct_positional.move:6:16
   │
-6 │         match (PTuple2(0, 1)) {
-  │                ^^^^^^^^^^^^^ Pattern 'PTuple2(_0, _)' not covered
+6 │         match (PTuple2(0, 1u64)) {
+  │                ^^^^^^^^^^^^^^^^ Pattern 'PTuple2(_0, _)' not covered
   │
   = When '_0' is not 0
 
 error[E04036]: non-exhaustive pattern
    ┌─ tests/move_2024/matching/counterexample_struct_positional.move:12:16
    │
-12 │         match (PTuple2(0, 1)) {
-   │                ^^^^^^^^^^^^^ Pattern 'PTuple2(_0, _)' not covered
+12 │         match (PTuple2(0u64, 1u64)) {
+   │                ^^^^^^^^^^^^^^^^^^^ Pattern 'PTuple2(_0, _)' not covered
    │
    = When '_0' is not 0 or 3
 
@@ -44,7 +44,7 @@ error[E04036]: non-exhaustive pattern
 error[E04036]: non-exhaustive pattern
    ┌─ tests/move_2024/matching/counterexample_struct_positional.move:38:16
    │
-38 │         match (PTuple2(0, 1)) {
-   │                ^^^^^^^^^^^^^ Pattern 'PTuple2(_0, _)' not covered
+38 │         match (PTuple2(0, 1u64)) {
+   │                ^^^^^^^^^^^^^^^^ Pattern 'PTuple2(_0, _)' not covered
    │
    = When '_0' is not 0, 3, 4, or 7

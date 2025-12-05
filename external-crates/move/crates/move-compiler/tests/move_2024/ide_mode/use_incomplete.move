@@ -2,7 +2,7 @@ module a::m {
 
     public fun test1() {
         use a::m2::
-        let _tmp = 42; // reset parser to see if the next line compiles
+        let _tmp = 42u64; // reset parser to see if the next line compiles
         m2::foo();
     }
 

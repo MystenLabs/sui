@@ -1,6 +1,6 @@
 module 0x42::m {
     fun t0(): bool {
-        loop { break 0 };
+        loop { break 0u64 };
     }
 
     fun t1(): u64 {
@@ -9,7 +9,7 @@ module 0x42::m {
 
     fun t2(cond: bool): bool {
         if (cond) {
-            loop { break 0 }
+            loop { break 0u64 }
         } else {
             loop { break false }
         }
@@ -29,7 +29,7 @@ module 0x42::m {
             if (cond) {
                break true
             } else {
-                x = x + 1;
+                x = x + 1u64;
             }
         } 
     }
@@ -47,7 +47,7 @@ module 0x42::m {
             } else {
                 x = x + 1;
             }
-        } == 0) {
+        } == 0u64) {
             x
         } else {
             0
@@ -56,7 +56,7 @@ module 0x42::m {
 
     fun t8(): u64 {
         loop {
-            break 15
+            break 15u64
         };
         10
     }
