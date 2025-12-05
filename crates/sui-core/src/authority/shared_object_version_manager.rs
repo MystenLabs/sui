@@ -609,13 +609,16 @@ mod tests {
         // Check that the final version of the shared object is the lamport version of the last
         // transaction.
         assert_eq!(
-            shared_input_next_versions,
-            HashMap::from([((id, init_shared_version), SequenceNumber::from_u64(12))])
+            *shared_input_next_versions
+                .get(&(id, init_shared_version))
+                .unwrap(),
+            SequenceNumber::from_u64(12)
         );
         // Check that the version assignment for each transaction is correct.
         // For a transaction that uses the shared object with mutable=false, it won't update the version
         // using lamport version, hence the next transaction will use the same version number.
         // In the following case, certs[2] has the same assignment as certs[1] for this reason.
+        let expected_accumulator_version = SequenceNumber::from_u64(1);
         assert_eq!(
             assigned_versions.0,
             vec![
@@ -623,28 +626,28 @@ mod tests {
                     certs[0].key(),
                     AssignedVersions::new(
                         vec![((id, init_shared_version), init_shared_version)],
-                        None
+                        Some(expected_accumulator_version)
                     )
                 ),
                 (
                     certs[1].key(),
                     AssignedVersions::new(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
-                        None
+                        Some(expected_accumulator_version)
                     )
                 ),
                 (
                     certs[2].key(),
                     AssignedVersions::new(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
-                        None
+                        Some(expected_accumulator_version)
                     )
                 ),
                 (
                     certs[3].key(),
                     AssignedVersions::new(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(10))],
-                        None
+                        Some(expected_accumulator_version)
                     )
                 ),
             ]
@@ -710,13 +713,13 @@ mod tests {
         );
         let next_randomness_obj_version = randomness_obj_version.next();
         assert_eq!(
-            shared_input_next_versions,
+            *shared_input_next_versions
+                .get(&(SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version))
+                .unwrap(),
             // Randomness object's version is only incremented by 1 regardless of lamport version.
-            HashMap::from([(
-                (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
-                next_randomness_obj_version
-            )])
+            next_randomness_obj_version
         );
+        let expected_accumulator_version = SequenceNumber::from_u64(1);
         assert_eq!(
             assigned_versions.0,
             vec![
@@ -727,7 +730,7 @@ mod tests {
                             (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
                             randomness_obj_version
                         )],
-                        None
+                        Some(expected_accumulator_version)
                     )
                 ),
                 (
@@ -738,7 +741,7 @@ mod tests {
                             (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
                             next_randomness_obj_version
                         )],
-                        None
+                        Some(expected_accumulator_version)
                     )
                 ),
                 (
@@ -749,7 +752,7 @@ mod tests {
                             (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
                             next_randomness_obj_version
                         )],
-                        None
+                        Some(expected_accumulator_version)
                     )
                 ),
             ]
@@ -851,7 +854,7 @@ mod tests {
 
         // Run version assignment logic.
         let ConsensusSharedObjVerAssignment {
-            shared_input_next_versions,
+            mut shared_input_next_versions,
             assigned_versions,
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
@@ -863,6 +866,8 @@ mod tests {
 
         // Check that the final version of the shared object is the lamport version of the last
         // transaction.
+        shared_input_next_versions
+            .remove(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, SequenceNumber::from_u64(1)));
         assert_eq!(
             shared_input_next_versions,
             HashMap::from([
@@ -876,6 +881,7 @@ mod tests {
         );
 
         // Check that the version assignment for each transaction is correct.
+        let expected_accumulator_version = SequenceNumber::from_u64(1);
         assert_eq!(
             assigned_versions.0,
             vec![
@@ -886,7 +892,7 @@ mod tests {
                             ((id1, init_shared_version_1), init_shared_version_1),
                             ((id2, init_shared_version_2), init_shared_version_2)
                         ],
-                        None
+                        Some(expected_accumulator_version)
                     )
                 ),
                 (
@@ -896,14 +902,14 @@ mod tests {
                             ((id1, init_shared_version_1), SequenceNumber::CONGESTED),
                             ((id2, init_shared_version_2), SequenceNumber::CANCELLED_READ),
                         ],
-                        None
+                        Some(expected_accumulator_version)
                     )
                 ),
                 (
                     certs[2].key(),
                     AssignedVersions::new(
                         vec![((id1, init_shared_version_1), SequenceNumber::from_u64(4))],
-                        None
+                        Some(expected_accumulator_version)
                     )
                 ),
                 (
@@ -913,7 +919,7 @@ mod tests {
                             ((id1, init_shared_version_1), SequenceNumber::CANCELLED_READ),
                             ((id2, init_shared_version_2), SequenceNumber::CONGESTED)
                         ],
-                        None
+                        Some(expected_accumulator_version)
                     )
                 ),
                 (
@@ -926,7 +932,7 @@ mod tests {
                             ),
                             ((id2, init_shared_version_2), SequenceNumber::CANCELLED_READ)
                         ],
-                        None
+                        Some(expected_accumulator_version)
                     )
                 ),
             ]
