@@ -2688,7 +2688,9 @@ impl TransactionDataAPI for TransactionDataV1 {
         {
             match self.expiration() {
                 TransactionExpiration::None => {
-                    return Err(UserInputError::MissingTransactionExpiration);
+                    // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error
+                    // instead of a missing expiration error.
+                    return Err(UserInputError::MissingGasPayment);
                 }
                 TransactionExpiration::Epoch(_) => {
                     return Err(UserInputError::InvalidExpiration {

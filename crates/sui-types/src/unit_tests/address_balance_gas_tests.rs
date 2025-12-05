@@ -122,8 +122,8 @@ fn test_address_balance_payment_requires_valid_during_expiration() {
     let result = tx_data.validity_check(&config);
     assert!(result.is_err());
     match result.unwrap_err() {
-        UserInputError::MissingTransactionExpiration => {}
-        _ => panic!("Expected MissingTransactionExpiration error"),
+        UserInputError::MissingGasPayment => {}
+        _ => panic!("Expected MissingGasPayment error"),
     }
 
     let tx_data = create_test_transaction_data(vec![], TransactionExpiration::Epoch(1));
