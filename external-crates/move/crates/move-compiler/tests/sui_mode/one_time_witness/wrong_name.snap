@@ -8,7 +8,7 @@ info:
 error[Sui E02003]: invalid 'init' function
   ┌─ tests/sui_mode/one_time_witness/wrong_name.move:8:9
   │
-8 │     fun init(_otw: OneTimeWitness, _ctx: &mut tx_context::TxContext) {
+8 │     fun init(_otw: OneTimeWitness, _ctx: &mut tx_context::TxContext) {}
   │         ^^^^       -------------- Invalid parameter '_otw' of type 'a::m::OneTimeWitness'. Expected a one-time witness type, 'a::m::M
   │         │           
   │         Invalid 'init' function declaration

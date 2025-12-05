@@ -3,11 +3,9 @@
 module a::m1 {
     use sui::tx_context;
 
-    struct M1 has drop, copy { dummy: bool }
+    struct M1 has copy, drop { dummy: bool }
 
-    fun init(_otw: M1, _ctx: &mut tx_context::TxContext) {
-    }
-
+    fun init(_otw: M1, _ctx: &mut tx_context::TxContext) {}
 }
 
 module a::m2 {
@@ -15,19 +13,15 @@ module a::m2 {
 
     struct M2 has drop, store { dummy: bool }
 
-    fun init(_otw: M2, _ctx: &mut tx_context::TxContext) {
-    }
-
+    fun init(_otw: M2, _ctx: &mut tx_context::TxContext) {}
 }
 
 module a::m3 {
     use sui::tx_context;
 
-    struct M3 has drop, copy, store { dummy: bool }
+    struct M3 has copy, drop, store { dummy: bool }
 
-    fun init(_otw: M3, _ctx: &mut tx_context::TxContext) {
-    }
-
+    fun init(_otw: M3, _ctx: &mut tx_context::TxContext) {}
 }
 
 module sui::tx_context {

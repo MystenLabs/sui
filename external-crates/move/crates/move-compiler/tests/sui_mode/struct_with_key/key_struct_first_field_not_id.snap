@@ -10,5 +10,5 @@ error[Sui E02007]: invalid object declaration
   │
 3 │     struct S has key {
   │                  --- The 'key' ability is used to declare objects in Sui
-4 │         flag: bool
+4 │         flag: bool,
   │         ^^^^ Invalid object 'S'. Structs with the 'key' ability must have 'id: sui::object::UID' as their first field

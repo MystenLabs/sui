@@ -2,9 +2,10 @@
 
 module a::m {
     use sui::object;
+
     struct S has key, drop {
         id: object::UID,
-        flag: bool
+        flag: bool,
     }
 }
 

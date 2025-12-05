@@ -10,7 +10,6 @@ module a::m {
         let Foo { id } = f;
         *ref = id;
     }
-
 }
 
 module sui::object {

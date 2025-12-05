@@ -14,6 +14,7 @@ module a::m {
     }
 
     struct Droppable has drop { flag: bool }
+
     public entry fun t3(): Droppable {
         abort 0
     }

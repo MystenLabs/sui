@@ -51,12 +51,12 @@ module sui::object {
 
 module sui::coin {
     use sui::object::UID;
+
     struct Coin<phantom T> has key, store {
-        id: UID
+        id: UID,
     }
 
     struct TreasuryCap<phantom T> has key, store {
-        id: UID
+        id: UID,
     }
-
 }
