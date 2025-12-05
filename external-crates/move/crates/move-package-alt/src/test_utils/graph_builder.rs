@@ -114,6 +114,10 @@ pub struct PackageSpec {
     /// The environments to be applied to the package's manifest.
     /// IF empty, no environments will be written to the manifest.
     environments: BTreeMap<EnvironmentName, EnvironmentID>,
+
+    /// Custom addresses for legacy packages (name -> Option<address>)
+    /// If None is provided, the address is considered to be the legacy `_`.
+    legacy_addresses: BTreeMap<String, Option<String>>,
 }
 
 struct GitSpec {
@@ -435,18 +439,32 @@ impl TestPackageGraph {
         move_toml.push_str(&deps);
         move_toml.push('\n');
 
-        // TODO: it would be good to split up `PackageSpec` and `LegacyPackageSpec`, so that we can
-        // add things like additional `[addresses]`
-        move_toml.push_str(&formatdoc!(
-            r#"
-            [addresses]
-            {} = "{}"
-            "#,
-            package.name,
-            publication
-                .map(|it| it.addresses.original_id.to_string())
-                .unwrap_or("0x0".to_string())
-        ));
+        // Generate [addresses] section
+        move_toml.push_str("[addresses]\n");
+
+        // If custom addresses are provided, use them
+        if !package.legacy_addresses.is_empty() {
+            for (name, addr) in &package.legacy_addresses {
+                match addr {
+                    Some(addr_val) => {
+                        move_toml.push_str(&format!("{} = \"{}\"\n", name, addr_val));
+                    }
+                    None => {
+                        // Unresolved address - omit the value to make it Option<>
+                        move_toml.push_str(&format!("{} = \"_\"\n", name));
+                    }
+                }
+            }
+        } else {
+            // Default behavior: single address for the package name
+            move_toml.push_str(&format!(
+                "{} = \"{}\"\n",
+                package.name,
+                publication
+                    .map(|it| it.addresses.original_id.to_string())
+                    .unwrap_or("0x0".to_string())
+            ));
+        }
 
         move_toml
     }
@@ -579,6 +597,7 @@ impl PackageSpec {
             files: BTreeMap::new(),
             implicit_deps: true,
             environments: BTreeMap::new(),
+            legacy_addresses: BTreeMap::new(),
         }
     }
 
@@ -640,6 +659,21 @@ impl PackageSpec {
 
     pub fn implicit_deps(mut self, implicits: bool) -> Self {
         self.implicit_deps = implicits;
+        self
+    }
+
+    pub fn set_legacy_addresses(
+        mut self,
+        addresses: impl IntoIterator<Item = (impl AsRef<str>, Option<impl AsRef<str>>)>,
+    ) -> Self {
+        assert!(
+            self.is_legacy,
+            "Setting addresses is only supported for legacy packages"
+        );
+        self.legacy_addresses = addresses
+            .into_iter()
+            .map(|(k, v)| (k.as_ref().to_string(), v.map(|v| v.as_ref().to_string())))
+            .collect();
         self
     }
 }
@@ -704,13 +738,20 @@ impl Scenario {
     }
 
     pub(crate) async fn graph_for(&self, package: impl AsRef<str>) -> PackageGraph<Vanilla> {
+        self.try_graph_for(package)
+            .await
+            .expect("could load package")
+    }
+
+    pub(crate) async fn try_graph_for(
+        &self,
+        package: impl AsRef<str>,
+    ) -> PackageResult<PackageGraph<Vanilla>> {
         let path = PackagePath::new(self.path_for(package)).unwrap();
         let mtx = path.lock().unwrap();
 
         PackageGraph::<Vanilla>::load_from_manifests(&path, &vanilla::default_environment(), &mtx)
             .await
-            .map_err(|e| e.emit())
-            .expect("could load package")
     }
 
     /// Loads the root package for `package` in the default environment and with no modes
