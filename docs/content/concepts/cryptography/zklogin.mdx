@@ -12,7 +12,7 @@ zkLogin is designed with the following goals:
 - **Security:** zkLogin is a two-factor authentication scheme. Sending a transaction requires both a credential from a recent OAuth login and a salt not managed by the OAuth provider. An attacker who compromises an OAuth account cannot transact from the user Sui address unless they also compromise the salt.  
 - **Privacy:** Zero-knowledge proofs prevent third parties from linking a Sui address with its corresponding OAuth identifier.  
 - **Optional verified identity:** A user can opt in to verify the OAuth identifier used to derive a particular Sui address. This creates the foundation for a verifiable on-chain identity layer.  
-- **Accessibility:** zkLogin is one of several native Sui signature schemes thanks to [Sui cryptography agility](/concepts/cryptography/transaction-auth/signatures.mdx). It integrates with other Sui primitives, such as sponsored transactions and multisig.  
+- **Accessibility:** zkLogin is one of several native Sui signature schemes thanks to [Sui cryptography agility](/concepts/transactions/transaction-auth.mdx). It integrates with other Sui primitives, such as sponsored transactions and multisig.  
 - **Rigor:** The code for zkLogin has been independently [audited](https://github.com/sui-foundation/security-audits/blob/main/docs/zksecurity_zklogin-circuits.pdf) by 2 firms specializing in zero knowledge. The public zkLogin ceremony for creating the common reference string included contributions from more than 100 participants.  
 
 If you are a builder who wants to integrate zkLogin into your application or wallet, see the [zkLogin integration guide](/guides/developer/cryptography/zklogin-integration.mdx).  
@@ -76,7 +76,7 @@ After Step 10, Sui authorities verify the ZK proof against the provider's JWKs (
 
 The address is computed on the following inputs:
 
-1. The address flag: `zk_login_flag = 0x05` for zkLogin address. This serves as a domain separator as a signature scheme defined in [crypto agility](./transaction-auth/signatures.mdx).
+1. The address flag: `zk_login_flag = 0x05` for zkLogin address. This serves as a domain separator as a signature scheme defined in [crypto agility](/concepts/transactions/transaction-auth.mdx).
 
 1. `kc_name_F = hashBytesToField(kc_name, maxKCNameLen)`: Name of the key claim, ex. `sub`. The sequence of bytes is mapped to a field element in BN254 using `hashBytesToField` (defined below).
 
@@ -140,7 +140,7 @@ The claim used to derive a users' address is termed the _key claim_, such as sub
 
 1. `(eph_sk, eph_pk)`: Ephemeral key pair refers to the private and public key pair used to produce ephemeral signatures. The signing mechanism is the same as traditional transaction signing, but it is ephemeral because it is only stored for a short session and can be refreshed upon new OAuth sessions. The ephemeral public key is used to compute nonce.
 2. `nonce`: An application-defined field embedded in the JWT payload, computed as the hash of the ephemeral public key, JWT randomness, and the maximum epoch (Sui's defined expiry epoch). Specifically, a zkLogin compatible nonce is required to passed in as `nonce = ToBase64URL(Poseidon_BN254([ext_eph_pk_bigint / 2^128, ext_eph_pk_bigint % 2^128, max_epoch, jwt_randomness]).to_bytes()[len - 20..])` where `ext_eph_pk_bigint` is the BigInt representation of `ext_eph_pk`.
-3. `ext_eph_pk`: The byte representation of an ephemeral public key (`flag || eph_pk`). Size varies depending on the choice of the signature scheme (denoted by the flag, defined in [Signatures](./transaction-auth/signatures.mdx)).
+3. `ext_eph_pk`: The byte representation of an ephemeral public key (`flag || eph_pk`). Size varies depending on the choice of the signature scheme (denoted by the flag, defined in [Signatures](/concepts/transactions/transaction-auth.mdx)).
 4. `user_salt`: A value introduced to unlink the OAuth identifier with the on-chain address.
 5. `max_epoch`: The epoch at which the JWT expires. This is u64 used in Sui.
 6. `kc_name`: The key claim name, e.g. `sub`.

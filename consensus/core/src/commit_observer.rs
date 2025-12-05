@@ -215,7 +215,7 @@ impl CommitObserver {
                 .recover_commits_to_write(unsent_commits.clone());
 
             info!(
-                "Recovered {} unsent commits in range [{start_index}..={end_index}]",
+                "Recovering {} unsent commits in range [{start_index}..={end_index}]",
                 unsent_commits.len()
             );
 
@@ -245,9 +245,13 @@ impl CommitObserver {
                     reputation_scores,
                 );
 
-                if !committed_sub_dag.recovered_rejected_transactions {
+                if !committed_sub_dag.recovered_rejected_transactions && !seen_unfinalized_commit {
+                    info!(
+                        "Starting to recover unfinalized commit from {}",
+                        committed_sub_dag.commit_ref
+                    );
                     // When the commit has no associated storage entry for rejected transactions,
-                    // even if an empty set, the commit is unfinalized.
+                    // not even an empty set, the commit is unfinalized.
                     seen_unfinalized_commit = true;
                 }
 

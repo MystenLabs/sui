@@ -16,6 +16,10 @@ The registry system supports two currency creation methods:
 1. **Standard creation:** Call `new_currency<T>()` when creating the coin outside of the `init` function of your package.
 1. **OTW creation:** Use `new_currency_with_otw<T>()` with a One-Time Witness for uniqueness proof.
 
+:::caution
+Proper creation and RPC support **requires** a second transaction to promote the currency to the registry.
+:::
+
 Both methods return a `CurrencyInitializer<T>` that allows configuration before finalization:
 
 <details>
@@ -37,15 +41,15 @@ The initialization process allows for:
 - **Supply model selection:** Choose fixed, burn-only, or flexible supply.
 - **Regulatory configuration:** Add deny list capabilities if needed.
 
-:::caution Important
+:::caution Proper creation and RPC support **requires** a second transaction to promote the currency to the registry.
 
-After initialization of a currency using the OTW method, you must call `finalize_registration` to create the shared `Currency` object that the Coin Registry can track.
+After initialization of a currency using the OTW method, you **must** call [`coin_registry::finalize_registration`](/standards/currency.mdx#coin-finalization) to create the shared `Currency` object that the Coin Registry can track.
 
 :::
 
 ## `DenyList`
 
-The Sui framework provides a `DenyList` singleton, shared object that the bearer of a `DenyCapV2` can access to specify a list of addresses that are unable to use a Sui core type. The initial use case for `DenyList`, however, focuses on limiting access to coins of a specified type. This is useful, for example, when creating a regulated coin on Sui that requires the ability to block certain addresses from using it as inputs to transactions. Regulated coins on Sui satisfy any regulations that require the ability to prevent known bad actors from having access to those coins. 
+The Sui framework provides a `DenyList` singleton, shared object that the bearer of a `DenyCapV2` can access to specify a list of addresses that are unable to use a Sui core type. The initial use case for `DenyList`, however, focuses on limiting access to coins of a specified type. This is useful, for example, when creating a regulated coin on Sui that requires the ability to block certain addresses from using it as inputs to transactions. Regulated coins on Sui satisfy any regulations that require the ability to prevent known bad actors from having access to those coins.
 
 :::info
 

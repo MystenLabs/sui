@@ -51,11 +51,7 @@ impl LedgerGrpcReader {
         if let Some(timeout) = args.statement_timeout() {
             endpoint = endpoint.timeout(timeout);
         }
-        let channel = endpoint
-            .tls_config(tls_config)?
-            .connect()
-            .await
-            .context("Failed to connect to gRPC endpoint")?;
+        let channel = endpoint.tls_config(tls_config)?.connect_lazy();
 
         let client = LedgerServiceClient::new(channel.clone());
         Ok(Self(client))

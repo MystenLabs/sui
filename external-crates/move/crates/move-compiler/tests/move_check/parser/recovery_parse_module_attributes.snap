@@ -38,4 +38,7 @@ error[E03002]: unbound module
    ┌─ tests/move_check/parser/recovery_parse_module_attributes.move:27:9
    │
 27 │         0x42::M4::foo()
-   │         ^^^^^^^^ Unbound module '0x42::M4'
+   │         ^^^^^^^^
+   │         │
+   │         Unbound module '0x42::M4'
+   │         Did you mean: '0x42::M1'

@@ -3,47 +3,40 @@
 
 use crate::{
     artifacts::{Artifact, ArtifactManager},
-    data_stores::{
-        data_store::DataStore, file_system_store::FileSystemStore, in_memory_store::InMemoryStore,
-        read_through_store::ReadThroughStore,
-    },
     displays::Pretty,
-    replay_interface::{ReadDataStore, SetupStore, StoreSummary},
     replay_txn::replay_transaction,
     summary_metrics::TotalMetrics,
 };
 use anyhow::{Result, anyhow, bail};
 use clap::{Parser, ValueEnum};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use serde::Deserialize;
 use similar::{ChangeTag, TextDiff};
 use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
-    str::FromStr,
+    time::Duration,
 };
 use sui_config::sui_config_dir;
+use sui_data_store::{
+    Node, ReadDataStore, SetupStore, StoreSummary,
+    stores::{DataStore, FileSystemStore, InMemoryStore, ReadThroughStore},
+};
 use sui_json_rpc_types::SuiTransactionBlockEffects;
-use sui_types::{effects::TransactionEffects, supported_protocol_versions::Chain};
+use sui_types::effects::TransactionEffects;
 // Disambiguate external tracing crate from local `crate::tracing` module using absolute path.
-use ::tracing::{Instrument, debug, error, info, info_span, warn};
+use ::tracing::{Instrument, debug, error, info_span, warn};
 
 pub mod artifacts;
-#[path = "data-stores/mod.rs"]
-pub mod data_stores;
 pub mod displays;
 pub mod execution;
 pub mod package_tools;
-pub mod replay_interface;
 pub mod replay_txn;
 pub mod summary_metrics;
 pub mod tracing;
 
 const DEFAULT_OUTPUT_DIR: &str = ".replay";
-const MAINNET_GQL_URL: &str = "https://graphql.mainnet.sui.io/graphql";
-const TESTNET_GQL_URL: &str = "https://graphql.testnet.sui.io/graphql";
-const MAINNET_RPC_URL: &str = "https://fullnode.mainnet.sui.io:443";
-const TESTNET_RPC_URL: &str = "https://fullnode.testnet.sui.io:443";
 const CONFIG_FILE_NAME: &str = "replay.toml";
 
 // Arguments to the replay tool.
@@ -245,68 +238,6 @@ pub enum StoreMode {
     InmemFs,
     #[value(name = "inmem-fs-gql")]
     InmemFsGql,
-}
-
-/// Enum around rpc gql endpoints.
-#[derive(Clone, Debug)]
-pub enum Node {
-    Mainnet,
-    Testnet,
-    // TODO: define once we have stable end points.
-    //       Use `Custom` for now.
-    // Devnet,
-    Custom(String),
-}
-
-impl Node {
-    pub fn chain(&self) -> Chain {
-        match self {
-            Node::Mainnet => Chain::Mainnet,
-            Node::Testnet => Chain::Testnet,
-            // Node::Devnet => Chain::Unknown,
-            Node::Custom(_) => Chain::Unknown,
-        }
-    }
-
-    pub fn network_name(&self) -> String {
-        match self {
-            Node::Mainnet => "mainnet".to_string(),
-            Node::Testnet => "testnet".to_string(),
-            // Node::Devnet => "devnet".to_string(),
-            Node::Custom(url) => url.clone(),
-        }
-    }
-
-    pub fn gql_url(&self) -> &str {
-        match self {
-            Node::Mainnet => MAINNET_GQL_URL,
-            Node::Testnet => TESTNET_GQL_URL,
-            // Node::Devnet => "",
-            Node::Custom(_url) => todo!("custom gql url not implemented"),
-        }
-    }
-
-    pub fn node_url(&self) -> &str {
-        match self {
-            Node::Mainnet => MAINNET_RPC_URL,
-            Node::Testnet => TESTNET_RPC_URL,
-            // For custom, assume it's already an RPC URL
-            Node::Custom(url) => url.as_str(),
-        }
-    }
-}
-
-impl FromStr for Node {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "mainnet" => Ok(Node::Mainnet),
-            "testnet" => Ok(Node::Testnet),
-            // "devnet" => Ok(Node::Devnet),
-            _ => Ok(Node::Custom(s.to_string())),
-        }
-    }
 }
 
 /// Load replay configuration from ~/.sui/sui_config/replay.toml file.
@@ -576,10 +507,19 @@ where
     let mut total_metrics = TotalMetrics::new();
     let mut executor_provider = ExecutorProvider::new(cache_executor);
 
+    let mp = MultiProgress::new();
+    let tx_spinner = mp.add(ProgressBar::new_spinner());
+    let progress_bar = mp.add(ProgressBar::new(digests.len() as u64));
+
+    tx_spinner.set_style(ProgressStyle::with_template("{spinner}: {msg}").unwrap());
+    tx_spinner.enable_steady_tick(Duration::from_millis(80));
+
     for tx_digest in digests {
         let tx_dir = output_root_dir.join(tx_digest);
         let artifact_manager = ArtifactManager::new(&tx_dir, overwrite_existing)?;
         let span = info_span!("replay", tx_digest = %tx_digest);
+
+        tx_spinner.set_message(format!("Executing transaction {}", tx_digest));
 
         let tx_start = Instant::now();
         let result = replay_transaction(
@@ -601,14 +541,17 @@ where
 
         // Print per-transaction result
         let status = if success { "OK" } else { "FAILED" };
-        if track_time {
-            println!(
-                "> Replayed txn {} ({}): exec_ms={}, total_ms={}",
-                tx_digest, status, exec_ms, tx_total_ms
-            );
+
+        let time_info = if track_time {
+            format!(
+                " ({}): exec_ms={}, total_ms={}",
+                status, exec_ms, tx_total_ms
+            )
         } else {
-            println!("> Replayed txn {} ({})", tx_digest, status);
-        }
+            "".to_owned()
+        };
+
+        tx_spinner.println(format!("Executed transaction {}{}", tx_digest, time_info));
 
         match result {
             Err(e) if terminate_early => {
@@ -618,11 +561,12 @@ where
             Err(e) => {
                 error!(tx_digest = %tx_digest, error = ?e, "Replay failed");
             }
-            Ok(_) => {
-                info!(tx_digest = %tx_digest, "Replay succeeded");
-            }
+            Ok(_) => {}
         }
+        progress_bar.inc(1);
     }
+
+    tx_spinner.finish_and_clear();
 
     if verbose {
         let mut out = std::io::stdout().lock();

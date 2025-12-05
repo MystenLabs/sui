@@ -56,8 +56,8 @@ pub(crate) struct Event {
     pub(crate) transaction_digest: TransactionDigest,
     /// Position of this event within the transaction's events list (0-indexed)
     pub(crate) sequence_number: u64,
-    /// Timestamp when the transaction containing this event was finalized (checkpoint time)
-    pub(crate) timestamp_ms: u64,
+    /// Timestamp of the checkpoint that includes the transaction containing this event.
+    pub(crate) timestamp_ms: Option<u64>,
 }
 
 #[Object]
@@ -94,8 +94,12 @@ impl Event {
 
     /// Timestamp corresponding to the checkpoint this event's transaction was finalized in.
     /// All events from the same transaction share the same timestamp.
+    ///
+    /// `null` for simulated/executed transactions as they are not included in a checkpoint.
     async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        Ok(Some(DateTime::from_ms(self.timestamp_ms as i64)?))
+        self.timestamp_ms
+            .map(|ms| DateTime::from_ms(ms as i64))
+            .transpose()
     }
 
     /// The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.

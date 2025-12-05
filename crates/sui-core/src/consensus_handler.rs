@@ -169,8 +169,9 @@ impl ConsensusHandlerInitializer {
 mod additional_consensus_state {
     use std::marker::PhantomData;
 
+    use consensus_core::CommitRef;
     use fastcrypto::hash::HashFunction as _;
-    use sui_types::crypto::DefaultHash;
+    use sui_types::{crypto::DefaultHash, digests::Digest};
 
     use super::*;
     /// AdditionalConsensusState tracks any in-memory state that is retained by ConsensusHandler
@@ -216,7 +217,6 @@ mod additional_consensus_state {
 
             self.commit_info_impl(
                 epoch_start_time,
-                protocol_config,
                 consensus_commit,
                 Some(estimated_commit_period),
             )
@@ -225,7 +225,6 @@ mod additional_consensus_state {
         fn commit_info_impl(
             &self,
             epoch_start_time: u64,
-            protocol_config: &ProtocolConfig,
             consensus_commit: &impl ConsensusCommitAPI,
             estimated_commit_period: Option<Duration>,
         ) -> ConsensusCommitInfo {
@@ -246,8 +245,8 @@ mod additional_consensus_state {
                 round: consensus_commit.leader_round(),
                 timestamp,
                 leader_author,
-                sub_dag_index: consensus_commit.commit_sub_dag_index(),
-                consensus_commit_digest: consensus_commit.consensus_digest(protocol_config),
+                consensus_commit_ref: consensus_commit.commit_ref(),
+                rejected_transactions_digest: consensus_commit.rejected_transactions_digest(),
                 additional_state_digest: Some(self.digest()),
                 estimated_commit_period,
                 skip_consensus_commit_prologue_in_test: false,
@@ -269,8 +268,8 @@ mod additional_consensus_state {
         pub round: u64,
         pub timestamp: u64,
         pub leader_author: AuthorityIndex,
-        pub sub_dag_index: u64,
-        pub consensus_commit_digest: ConsensusCommitDigest,
+        pub consensus_commit_ref: CommitRef,
+        pub rejected_transactions_digest: Digest,
 
         additional_state_digest: Option<AdditionalConsensusStateDigest>,
         estimated_commit_period: Option<Duration>,
@@ -290,8 +289,8 @@ mod additional_consensus_state {
                 round: commit_round,
                 timestamp: commit_timestamp,
                 leader_author: 0,
-                sub_dag_index: 0,
-                consensus_commit_digest: ConsensusCommitDigest::default(),
+                consensus_commit_ref: CommitRef::default(),
+                rejected_transactions_digest: Digest::default(),
                 additional_state_digest: Some(AdditionalConsensusStateDigest::ZERO),
                 estimated_commit_period,
                 skip_consensus_commit_prologue_in_test,
@@ -323,6 +322,10 @@ mod additional_consensus_state {
                 .expect("estimated commit period is not available")
         }
 
+        fn consensus_commit_digest(&self) -> ConsensusCommitDigest {
+            ConsensusCommitDigest::new(self.consensus_commit_ref.digest.into_inner())
+        }
+
         fn consensus_commit_prologue_transaction(
             &self,
             epoch: u64,
@@ -343,7 +346,7 @@ mod additional_consensus_state {
                 epoch,
                 self.round,
                 self.timestamp,
-                self.consensus_commit_digest,
+                self.consensus_commit_digest(),
             );
             VerifiedExecutableTransaction::new_system(transaction, epoch)
         }
@@ -357,7 +360,7 @@ mod additional_consensus_state {
                 epoch,
                 self.round,
                 self.timestamp,
-                self.consensus_commit_digest,
+                self.consensus_commit_digest(),
                 consensus_determined_version_assignments,
             );
             VerifiedExecutableTransaction::new_system(transaction, epoch)
@@ -373,7 +376,7 @@ mod additional_consensus_state {
                 epoch,
                 self.round,
                 self.timestamp,
-                self.consensus_commit_digest,
+                self.consensus_commit_digest(),
                 consensus_determined_version_assignments,
                 additional_state_digest,
             );
@@ -801,7 +804,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         info!(
             %consensus_commit,
-            "Received consensus output"
+            "Received consensus output. Rejected transactions: {}",
+            consensus_commit.rejected_transactions_debug_string(),
         );
 
         self.last_consensus_stats.index = ExecutionIndices {
@@ -1049,11 +1053,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 timestamp_ms: commit_info.timestamp,
                 last_of_epoch: final_round && !should_write_random_checkpoint,
                 checkpoint_height,
+                consensus_commit_ref: commit_info.consensus_commit_ref,
+                rejected_transactions_digest: commit_info.rejected_transactions_digest,
             },
         };
         self.epoch_store
             .write_pending_checkpoint(&mut state.output, &pending_checkpoint)
             .expect("failed to write pending checkpoint");
+
+        info!(
+            "Written pending checkpoint: {:?}",
+            pending_checkpoint.details,
+        );
 
         if should_write_random_checkpoint {
             let pending_checkpoint = PendingCheckpoint {
@@ -1062,6 +1073,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     timestamp_ms: commit_info.timestamp,
                     last_of_epoch: final_round,
                     checkpoint_height: checkpoint_height + 1,
+                    consensus_commit_ref: commit_info.consensus_commit_ref,
+                    rejected_transactions_digest: commit_info.rejected_transactions_digest,
                 },
             };
             self.epoch_store
@@ -2147,7 +2160,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             // Therefore, the transaction sequence number starts from 1 here.
             let current_tx_index = ExecutionIndices {
                 last_committed_round: commit_info.round,
-                sub_dag_index: commit_info.sub_dag_index,
+                sub_dag_index: commit_info.consensus_commit_ref.index.into(),
                 transaction_index: (seq + 1) as u64,
             };
 

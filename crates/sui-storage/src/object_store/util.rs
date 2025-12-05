@@ -275,6 +275,21 @@ pub async fn list_all_epochs(object_store: Arc<DynObjectStore>) -> Result<Vec<u6
             }
         }
     }
+
+    // Also check for archived epochs in the archive/ directory
+    let archive_prefix = Path::from("archive");
+    if let Ok(archive_epoch_dirs) =
+        find_all_dirs_with_epoch_prefix(&object_store, Some(&archive_prefix)).await
+    {
+        for (epoch, path) in archive_epoch_dirs.iter().sorted() {
+            let success_marker = path.child("_SUCCESS");
+            let get_result = object_store.get(&success_marker).await;
+            if get_result.is_ok() && !out.contains(epoch) {
+                out.push(*epoch);
+            }
+        }
+    }
+
     Ok(out)
 }
 

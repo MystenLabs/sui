@@ -5,7 +5,7 @@ source: crates/move-analyzer/tests/ide_testsuite.rs
 -- test 0 -------------------
 use line: 3, use_ndx: 0
 Use: 'Self', start: 19, end: 23
-Def: 'M1', line: 0, def char: 17
+Def: 'Move2024', line: 0, def char: 7
 TypeDef: no info
 On Hover:
 module Move2024::M1
@@ -43,7 +43,7 @@ public fun Move2024::M1::foo(
 -- test 4 -------------------
 use line: 4, use_ndx: 0
 Use: 'M1', start: 29, end: 31
-Def: 'M1', line: 0, def char: 17
+Def: 'Move2024', line: 0, def char: 7
 TypeDef: no info
 On Hover:
 module Move2024::M1
@@ -81,7 +81,7 @@ public fun Move2024::M1::foo(
 -- test 8 -------------------
 use line: 27, use_ndx: 0
 Use: 'M1_ALIAS', start: 12, end: 20
-Def: 'M1', line: 0, def char: 17
+Def: 'Move2024', line: 0, def char: 7
 TypeDef: no info
 On Hover:
 module Move2024::M1
@@ -100,7 +100,7 @@ public fun Move2024::M1::bar(
 -- test 10 -------------------
 use line: 27, use_ndx: 2
 Use: 'M1', start: 39, end: 41
-Def: 'M1', line: 0, def char: 17
+Def: 'Move2024', line: 0, def char: 7
 TypeDef: no info
 On Hover:
 module Move2024::M1
@@ -129,7 +129,7 @@ public fun Move2024::M1::bar(
 -- test 13 -------------------
 use line: 30, use_ndx: 0
 Use: 'M1', start: 16, end: 18
-Def: 'M1', line: 0, def char: 17
+Def: 'Move2024', line: 0, def char: 7
 TypeDef: no info
 On Hover:
 module Move2024::M1

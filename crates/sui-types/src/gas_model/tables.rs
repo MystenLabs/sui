@@ -115,7 +115,7 @@ impl GasStatus {
     /// code that does not have to charge the user.
     pub fn new_unmetered() -> Self {
         Self {
-            gas_model_version: 4,
+            gas_model_version: 11,
             gas_left: InternalGas::new(0),
             gas_price: 1,
             initial_budget: InternalGas::new(0),
@@ -336,6 +336,14 @@ impl GasStatus {
 
     pub fn instructions_executed(&self) -> u64 {
         self.instructions_executed
+    }
+
+    pub fn stack_height_current(&self) -> u64 {
+        self.stack_height_current
+    }
+
+    pub fn stack_size_current(&self) -> u64 {
+        self.stack_size_current
     }
 }
 

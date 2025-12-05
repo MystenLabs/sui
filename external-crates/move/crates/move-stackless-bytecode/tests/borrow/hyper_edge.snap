@@ -548,6 +548,100 @@ public fun vector::singleton<#0>($t0|e: #0): vector<#0> {
 
 
 [variant baseline]
+public fun vector::skip<#0>($t0|v: vector<#0>, $t1|n: u64): vector<#0> {
+     var $t2|$stop#0#4: u64
+     var $t3|tmp#$3: #0
+     var $t4|tmp#$4: &mut vector<#0>
+     var $t5|i#1#10: u64
+     var $t6|i#1#7: u64
+     var $t7|len#1#0: u64
+     var $t8|r#1#0: vector<#0>
+     var $t9|stop#1#7: u64
+     var $t10|v#1#1: vector<#0>
+     var $t11: &vector<#0>
+     var $t12: u64
+     var $t13: u64
+     var $t14: u64
+     var $t15: bool
+     var $t16: vector<#0>
+     var $t17: vector<#0>
+     var $t18: u64
+     var $t19: u64
+     var $t20: u64
+     var $t21: u64
+     var $t22: u64
+     var $t23: u64
+     var $t24: u64
+     var $t25: bool
+     var $t26: u64
+     var $t27: &mut vector<#0>
+     var $t28: u64
+     var $t29: &mut vector<#0>
+     var $t30: #0
+     var $t31: &mut vector<#0>
+     var $t32: #0
+     var $t33: u64
+     var $t34: u64
+     var $t35: u64
+     var $t36: vector<#0>
+     var $t37: &mut vector<#0>
+     var $t38: vector<#0>
+  0: $t11 := borrow_local($t0)
+  1: $t12 := vector::length<#0>($t11)
+  2: $t7 := $t12
+  3: $t13 := copy($t1)
+  4: $t14 := copy($t7)
+  5: $t15 := >=($t13, $t14)
+  6: if ($t15) goto 7 else goto 10
+  7: label L1
+  8: $t16 := vector::empty<#0>()
+  9: return $t16
+ 10: label L0
+ 11: $t17 := vector::empty<#0>()
+ 12: $t10 := $t17
+ 13: $t18 := move($t7)
+ 14: $t19 := move($t1)
+ 15: $t20 := -($t18, $t19)
+ 16: $t2 := $t20
+ 17: $t21 := 0
+ 18: $t6 := $t21
+ 19: $t22 := move($t2)
+ 20: $t9 := $t22
+ 21: goto 22
+ 22: label L4
+ 23: $t23 := copy($t6)
+ 24: $t24 := copy($t9)
+ 25: $t25 := <($t23, $t24)
+ 26: if ($t25) goto 27 else goto 45
+ 27: label L3
+ 28: $t26 := copy($t6)
+ 29: $t5 := $t26
+ 30: $t27 := borrow_local($t10)
+ 31: $t4 := $t27
+ 32: $t28 := move($t5)
+ 33: destroy($t28)
+ 34: $t29 := borrow_local($t0)
+ 35: $t30 := vector::pop_back<#0>($t29)
+ 36: $t3 := $t30
+ 37: $t31 := move($t4)
+ 38: $t32 := move($t3)
+ 39: vector::push_back<#0>($t31, $t32)
+ 40: $t33 := move($t6)
+ 41: $t34 := 1
+ 42: $t35 := +($t33, $t34)
+ 43: $t6 := $t35
+ 44: goto 22
+ 45: label L2
+ 46: $t36 := move($t10)
+ 47: $t8 := $t36
+ 48: $t37 := borrow_local($t8)
+ 49: vector::reverse<#0>($t37)
+ 50: $t38 := move($t8)
+ 51: return $t38
+}
+
+
+[variant baseline]
 public native fun vector::swap<#0>($t0|v: &mut vector<#0>, $t1|i: u64, $t2|j: u64);
 
 
@@ -598,6 +692,104 @@ public fun vector::swap_remove<#0>($t0|v: &mut vector<#0>, $t1|i: u64): #0 {
  24: $t18 := move($t0)
  25: $t19 := vector::pop_back<#0>($t18)
  26: return $t19
+}
+
+
+[variant baseline]
+public fun vector::take<#0>($t0|v: vector<#0>, $t1|n: u64): vector<#0> {
+     var $t2|$stop#0#4: u64
+     var $t3|tmp#$3: #0
+     var $t4|tmp#$4: &mut vector<#0>
+     var $t5|i#1#10: u64
+     var $t6|i#1#7: u64
+     var $t7|stop#1#7: u64
+     var $t8|v#1#1: vector<#0>
+     var $t9: u64
+     var $t10: &vector<#0>
+     var $t11: u64
+     var $t12: bool
+     var $t13: u64
+     var $t14: u64
+     var $t15: &vector<#0>
+     var $t16: u64
+     var $t17: bool
+     var $t18: vector<#0>
+     var $t19: &mut vector<#0>
+     var $t20: vector<#0>
+     var $t21: u64
+     var $t22: u64
+     var $t23: u64
+     var $t24: u64
+     var $t25: u64
+     var $t26: bool
+     var $t27: u64
+     var $t28: &mut vector<#0>
+     var $t29: u64
+     var $t30: &mut vector<#0>
+     var $t31: #0
+     var $t32: &mut vector<#0>
+     var $t33: #0
+     var $t34: u64
+     var $t35: u64
+     var $t36: u64
+     var $t37: vector<#0>
+  0: $t9 := copy($t1)
+  1: $t10 := borrow_local($t0)
+  2: $t11 := vector::length<#0>($t10)
+  3: $t12 := <=($t9, $t11)
+  4: if ($t12) goto 5 else goto 7
+  5: label L1
+  6: goto 10
+  7: label L0
+  8: $t13 := 13906834930257625087
+  9: abort($t13)
+ 10: label L2
+ 11: $t14 := copy($t1)
+ 12: $t15 := borrow_local($t0)
+ 13: $t16 := vector::length<#0>($t15)
+ 14: $t17 := ==($t14, $t16)
+ 15: if ($t17) goto 16 else goto 19
+ 16: label L4
+ 17: $t18 := move($t0)
+ 18: return $t18
+ 19: label L3
+ 20: $t19 := borrow_local($t0)
+ 21: vector::reverse<#0>($t19)
+ 22: $t20 := vector::empty<#0>()
+ 23: $t8 := $t20
+ 24: $t21 := move($t1)
+ 25: $t2 := $t21
+ 26: $t22 := 0
+ 27: $t6 := $t22
+ 28: $t23 := move($t2)
+ 29: $t7 := $t23
+ 30: goto 31
+ 31: label L7
+ 32: $t24 := copy($t6)
+ 33: $t25 := copy($t7)
+ 34: $t26 := <($t24, $t25)
+ 35: if ($t26) goto 36 else goto 54
+ 36: label L6
+ 37: $t27 := copy($t6)
+ 38: $t5 := $t27
+ 39: $t28 := borrow_local($t8)
+ 40: $t4 := $t28
+ 41: $t29 := move($t5)
+ 42: destroy($t29)
+ 43: $t30 := borrow_local($t0)
+ 44: $t31 := vector::pop_back<#0>($t30)
+ 45: $t3 := $t31
+ 46: $t32 := move($t4)
+ 47: $t33 := move($t3)
+ 48: vector::push_back<#0>($t32, $t33)
+ 49: $t34 := move($t6)
+ 50: $t35 := 1
+ 51: $t36 := +($t34, $t35)
+ 52: $t6 := $t36
+ 53: goto 31
+ 54: label L5
+ 55: $t37 := move($t8)
+ 56: return $t37
 }
 
 
@@ -3363,6 +3555,65 @@ public fun vector::singleton<#0>($t0|e: #0): vector<#0> {
 
 
 [variant baseline]
+public fun vector::skip<#0>($t0|v: vector<#0>, $t1|n: u64): vector<#0> {
+     var $t2|$stop#0#4: u64
+     var $t3|tmp#$3: #0
+     var $t4|tmp#$4: &mut vector<#0>
+     var $t5|i#1#10: u64
+     var $t6|i#1#7: u64
+     var $t7|len#1#0: u64
+     var $t8|r#1#0: vector<#0>
+     var $t9|stop#1#7: u64
+     var $t10|v#1#1: vector<#0>
+     var $t11: vector<#0>
+     var $t12: u64
+     var $t13: bool
+     var $t14: vector<#0>
+     var $t15: u64
+     var $t16: u64
+     var $t17: bool
+     var $t18: &mut vector<#0>
+     var $t19: &mut vector<#0>
+     var $t20: #0
+     var $t21: u64
+     var $t22: vector<#0>
+     var $t23: &mut vector<#0>
+     var $t24: vector<#0>
+  0: $t11 := copy($t0)
+  1: $t12 := vector::length<#0>($t11)
+  2: $t13 := >=($t1, $t12)
+  3: if ($t13) goto 4 else goto 7
+  4: label L1
+  5: $t14 := vector::empty<#0>()
+  6: return $t14
+  7: label L0
+  8: $t10 := vector::empty<#0>()
+  9: $t15 := -($t12, $t1)
+ 10: $t16 := 0
+ 11: $t6 := $t16
+ 12: label L4
+ 13: $t17 := <($t6, $t15)
+ 14: if ($t17) goto 15 else goto 24
+ 15: label L3
+ 16: $t18 := borrow_local($t10)
+ 17: destroy($t6)
+ 18: $t19 := borrow_local($t0)
+ 19: $t20 := vector::pop_back<#0>($t19)
+ 20: vector::push_back<#0>($t18, $t20)
+ 21: $t21 := 1
+ 22: $t6 := +($t6, $t21)
+ 23: goto 12
+ 24: label L2
+ 25: $t22 := move($t10)
+ 26: $t8 := $t22
+ 27: $t23 := borrow_local($t8)
+ 28: vector::reverse<#0>($t23)
+ 29: $t24 := move($t8)
+ 30: return $t24
+}
+
+
+[variant baseline]
 public native fun vector::swap<#0>($t0|v: &mut vector<#0>, $t1|i: u64, $t2|j: u64);
 
 
@@ -3399,6 +3650,72 @@ public fun vector::swap_remove<#0>($t0|v: &mut vector<#0>, $t1|i: u64): #0 {
  17: $t12 := vector::pop_back<#0>($t0)
  18: trace_local[v]($t0)
  19: return $t12
+}
+
+
+[variant baseline]
+public fun vector::take<#0>($t0|v: vector<#0>, $t1|n: u64): vector<#0> {
+     var $t2|$stop#0#4: u64
+     var $t3|tmp#$3: #0
+     var $t4|tmp#$4: &mut vector<#0>
+     var $t5|i#1#10: u64
+     var $t6|i#1#7: u64
+     var $t7|stop#1#7: u64
+     var $t8|v#1#1: vector<#0>
+     var $t9: vector<#0>
+     var $t10: u64
+     var $t11: bool
+     var $t12: u64
+     var $t13: vector<#0>
+     var $t14: u64
+     var $t15: bool
+     var $t16: vector<#0>
+     var $t17: &mut vector<#0>
+     var $t18: u64
+     var $t19: bool
+     var $t20: &mut vector<#0>
+     var $t21: &mut vector<#0>
+     var $t22: #0
+     var $t23: u64
+     var $t24: vector<#0>
+  0: $t9 := copy($t0)
+  1: $t10 := vector::length<#0>($t9)
+  2: $t11 := <=($t1, $t10)
+  3: if ($t11) goto 4 else goto 6
+  4: label L1
+  5: goto 9
+  6: label L0
+  7: $t12 := 13906834930257625087
+  8: abort($t12)
+  9: label L2
+ 10: $t13 := copy($t0)
+ 11: $t14 := vector::length<#0>($t13)
+ 12: $t15 := ==($t1, $t14)
+ 13: if ($t15) goto 14 else goto 17
+ 14: label L4
+ 15: $t16 := move($t0)
+ 16: return $t16
+ 17: label L3
+ 18: $t17 := borrow_local($t0)
+ 19: vector::reverse<#0>($t17)
+ 20: $t8 := vector::empty<#0>()
+ 21: $t18 := 0
+ 22: $t6 := $t18
+ 23: label L7
+ 24: $t19 := <($t6, $t1)
+ 25: if ($t19) goto 26 else goto 35
+ 26: label L6
+ 27: $t20 := borrow_local($t8)
+ 28: destroy($t6)
+ 29: $t21 := borrow_local($t0)
+ 30: $t22 := vector::pop_back<#0>($t21)
+ 31: vector::push_back<#0>($t20, $t22)
+ 32: $t23 := 1
+ 33: $t6 := +($t6, $t23)
+ 34: goto 23
+ 35: label L5
+ 36: $t24 := move($t8)
+ 37: return $t24
 }
 
 

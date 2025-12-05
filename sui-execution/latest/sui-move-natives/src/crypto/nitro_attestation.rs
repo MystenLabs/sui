@@ -56,6 +56,12 @@ fn is_upgraded(context: &NativeContext) -> PartialVMResult<bool> {
         .enable_nitro_attestation_upgraded_parsing())
 }
 
+fn is_all_nonzero_pcrs_included(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .enable_nitro_attestation_all_nonzero_pcrs_parsing())
+}
+
 pub fn load_nitro_attestation_internal(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -84,7 +90,11 @@ pub fn load_nitro_attestation_internal(
             .map(|per_byte| base_cost + per_byte * (attestation_bytes.len() as u64).into()))
     );
 
-    match parse_nitro_attestation(&attestation_bytes, is_upgraded(context)?) {
+    match parse_nitro_attestation(
+        &attestation_bytes,
+        is_upgraded(context)?,
+        is_all_nonzero_pcrs_included(context)?,
+    ) {
         Ok((signature, signed_message, payload)) => {
             let cert_chain_length = payload.get_cert_chain_length();
             native_charge_gas_early_exit_option!(

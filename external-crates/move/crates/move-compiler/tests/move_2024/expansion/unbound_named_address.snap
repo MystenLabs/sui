@@ -15,13 +15,19 @@ error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/expansion/unbound_named_address.move:5:12
   │
 5 │     friend C::M;
-  │            ^ Could not resolve the name 'C'
+  │            ^
+  │            │
+  │            Could not resolve the name 'C'
+  │            Did you mean: 'A'
 
 error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/expansion/unbound_named_address.move:6:12
   │
 6 │     friend D::M::foo;
-  │            ^ Could not resolve the name 'D'
+  │            ^
+  │            │
+  │            Could not resolve the name 'D'
+  │            Did you mean: 'A'
 
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/expansion/unbound_named_address.move:8:5
@@ -35,25 +41,37 @@ error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/expansion/unbound_named_address.move:9:12
   │
 9 │         x: E::M::S,
-  │            ^ Could not resolve the name 'E'
+  │            ^
+  │            │
+  │            Could not resolve the name 'E'
+  │            Did you mean: 'A'
 
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/expansion/unbound_named_address.move:13:17
    │
 13 │         let x = F::M::S {}; x;
-   │                 ^ Could not resolve the name 'F'
+   │                 ^
+   │                 │
+   │                 Could not resolve the name 'F'
+   │                 Did you mean: 'A'
 
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/expansion/unbound_named_address.move:14:9
    │
 14 │         G::M::foo();
-   │         ^ Could not resolve the name 'G'
+   │         ^
+   │         │
+   │         Could not resolve the name 'G'
+   │         Did you mean: 'A'
 
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/expansion/unbound_named_address.move:15:17
    │
 15 │         let c = H::M::C; c;
-   │                 ^ Could not resolve the name 'H'
+   │                 ^
+   │                 │
+   │                 Could not resolve the name 'H'
+   │                 Did you mean: 'A'
 
 error[E03001]: address with no value
    ┌─ tests/move_2024/expansion/unbound_named_address.move:16:18

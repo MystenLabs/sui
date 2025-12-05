@@ -259,10 +259,15 @@ impl GasMeter for SuiGasMeter<'_> {
         // TODO(tzakian): We should account for this elsewhere as the owner of data the
         // reference points to won't be on the stack. For now though, we treat it as adding to the
         // stack size.
+        let (pushes, pops) = if reduce_stack_size(self.0.gas_model_version) {
+            (0, 2)
+        } else {
+            (1, 2)
+        };
         self.0.charge(
             1,
-            1,
-            2,
+            pushes,
+            pops,
             abstract_memory_size(self.0, new_val).into(),
             abstract_memory_size(self.0, old_val).into(),
         )
@@ -355,7 +360,12 @@ impl GasMeter for SuiGasMeter<'_> {
 
     fn charge_vec_swap(&mut self, _ty: impl TypeView) -> PartialVMResult<()> {
         let size_decrease = REFERENCE_SIZE + Type::U64.size() + Type::U64.size();
-        self.0.charge(1, 1, 1, 0, size_decrease.into())
+        let (pushes, pops) = if reduce_stack_size(self.0.gas_model_version) {
+            (0, 3)
+        } else {
+            (1, 1)
+        };
+        self.0.charge(1, pushes, pops, 0, size_decrease.into())
     }
 
     fn charge_drop_frame(
@@ -400,6 +410,15 @@ fn reweight_move_loc(gas_model_version: u64) -> bool {
     gas_model_version > 10
 }
 
+fn reduce_stack_size(gas_model_version: u64) -> bool {
+    // Reducing stack size is only done in gas model versions 10 and above.
+    gas_model_version > 10
+}
+
+fn enable_fine_grained_value_size(gas_model_version: u64) -> bool {
+    gas_model_version > 10
+}
+
 fn size_config_for_gas_model_version(
     gas_model_version: u64,
     should_traverse_refs: bool,
@@ -408,16 +427,19 @@ fn size_config_for_gas_model_version(
         SizeConfig {
             traverse_references: false,
             include_vector_size: false,
+            fine_grained_value_size: false,
         }
     } else if should_traverse_refs {
         SizeConfig {
             traverse_references: enable_traverse_refs(gas_model_version),
             include_vector_size: true,
+            fine_grained_value_size: enable_fine_grained_value_size(gas_model_version),
         }
     } else {
         SizeConfig {
             traverse_references: false,
             include_vector_size: true,
+            fine_grained_value_size: enable_fine_grained_value_size(gas_model_version),
         }
     }
 }

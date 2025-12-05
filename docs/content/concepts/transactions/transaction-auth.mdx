@@ -1,0 +1,173 @@
+---
+title: Transaction Authentication
+description: Understanding cryptographic keys, addresses, and signatures on Sui. Sui supports multiple cryptography algorithms and primitives with rapid switching between them.
+keywords: [ authentication, keys, addresses, signatures, Ed25519, ECDSA, multisig, zkLogin, passkey, BIP-32, BIP-44, BIP-39, key derivation, signature requirements ]
+---
+
+Transaction authentication on Sui involves three core concepts: cryptographic keys that you control, addresses that identify accounts on-chain, and signatures that prove ownership. Sui implements these concepts using widely accepted wallet specifications and multiple signature schemes.
+
+## Keys and addresses
+
+Sui adheres to widely accepted wallet specifications in the cryptocurrency industry, including [BIP-32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and its variation [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010), [BIP-44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki), and [BIP-39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki), to facilitate key management for users. Sui supports pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1, and multisig for signed transactions.
+
+### Key derivation schemes
+
+For managing wallets that support the Ed25519 (EdDSA) signing scheme, Sui follows [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010), which enforces wallets to always derive child private keys from parent private keys using the hardened key path.
+
+Sui follows BIP-32 for managing wallets that support the ECDSA Secp256k1 and ECDSA Secp256r1 signing schemes.
+
+BIP-32 defines the hierarchical deterministic wallet structure to logically associate a set of keys. Grouping keys in this manner reduces the overhead of keeping track of a large number of private keys. This method also allows custodians to issue distinct managed addresses for each user account under one source of control. Using BIP-32 decouples the private key derivation from the public key derivation, enabling the watch-only wallet use case, where a chain of public keys and its addresses can be derived, while the private key can be kept offline for signing.
+
+### Key derivation paths
+
+BIP-44 further defines the 5 levels of the derivation path with their exact meanings:
+
+$$
+m / purpose' / coin_type' / account' / change / address_index
+$$
+
+In this structure, the slashes indicate levels in the hierarchy.
+
+The `purpose` level distinguishes different signing schemes: 
+
+- `44` for Ed25519
+
+- `54` for ECDSA Secp256k1
+
+- `74` for Secp256r1
+
+BIP-49 and BIP-84, for example, are used to identify script types in Bitcoin. Sui chose `54` to indicate ECDSA Secp256k1 because there is no existing BIP under `54`, avoiding confusion with any Bitcoin standard.
+
+The `coin_type` value is managed with a repository of all other cryptocurrencies. Both signature schemes use Sui's registered `coin_type`: `784`.
+
+The `account` level is used for logically separating user accounts and creating specific account categories.
+
+Account-based currencies define only the first 3 levels, while UTXO-based currencies add `change` and `address` level definitions. Because Sui's object-oriented data model is neither UTXO or account-based (it combines both), it employs all 5 levels for maximum compatibility.
+
+| Scheme          | Path                                         | Comments                                       |
+| --------------- | -------------------------------------------- | ---------------------------------------------- |
+| Ed25519         | `m/44'/784'/{account}'/{change}'/{address}'` | Each level of the derivation path is hardened. |
+| ECDSA Secp256k1 | `m/54'/784'/{account}'/{change}/{address}`   | The first 3 levels are hardened.           |
+| ECDSA Secp256r1 | `m/74'/784'/{account}'/{change}/{address}`   | The first 3 levels are hardened.           |
+
+### Mnemonics support
+
+After Sui defines the deterministic way to derive the master key from a seed, BIP-39 is introduced to make the seed more human-readable and memorable using mnemonics. Sui accepts 12, 15, 18, 21, and 24 words from the BIP-39 word list that is properly checksummed, corresponding to 128, 160, 192, 224, and 256 bits of entropy.
+
+### Address format
+
+For deriving a 32-byte Sui address, Sui hashes the signature scheme flag 1-byte concatenated with public key bytes using the [BLAKE2b](https://www.blake2.net/) (256 bits output) hashing function. Sui addresses currently support pure Ed25519, Secp256k1, Secp256r1, and [multisig](/concepts/transactions/transaction-auth/multisig.mdx) with corresponding flag bytes of 0x00, 0x01, 0x02, and 0x03, respectively.
+
+## Signatures
+
+When a user submits a signed transaction, a serialized signature and serialized transaction data is submitted. The serialized transaction data is the [Binary Canonical Serialization](https://crates.io/crates/bcs) serialized bytes of the struct `TransactionData` and the serialized signature is defined as a concatenation of bytes of `flag || sig || pk`.
+
+### Signature structure
+
+A Sui signature consists of three components concatenated together:
+
+- `flag`: A 1-byte representation corresponding to the signature scheme.
+
+- `sig`: The compressed bytes representation of the signature (not DER encoding).
+
+- `pk`: The bytes representation of the public key corresponding to the signature.
+
+### Supported signature schemes
+
+The following table lists each signing scheme and its corresponding flag, signature format, and public key format:
+
+| Scheme          | Flag | Signature Format | Public Key Format |
+| --------------- | ---- | ---------------- | ----------------- |
+| Pure Ed25519    | 0x00 | Compressed, 64 bytes | Compressed, 32 bytes |
+| ECDSA Secp256k1 | 0x01 | Non-recoverable, compressed, 64 bytes | Compressed, 33 bytes |
+| ECDSA Secp256r1 | 0x02 | Non-recoverable, compressed, 64 bytes | Compressed, 33 bytes |
+| multisig        | 0x03 | BCS serialized all signatures, size varies | BCS serialized all participating public keys, size varies |
+| zkLogin         | 0x05 | BCS serialized zkLogin inputs, max epoch and ephemeral signature, size varies | Concatenation of iss length, iss bytes, address seed padded to 32-bytes, size varies |
+| passkey         | 0x06 | BCS serialized passkey inputs (`authenticatorData`, `clientDataJson`, `userSignature`), size varies | Compressed, 33 bytes |
+
+### Signature requirements {#signature-requirements}
+
+The signature must commit to the hash of the intent message of the transaction data, which you can construct by appending the 3-byte intent before the BCS serialized transaction data. To learn more on what an intent is and how to construct an intent message, see [Intent Signing](/concepts/transactions/transaction-auth/intent-signing.mdx).
+
+When invoking the signing API, you must first hash the intent message of the transaction data to 32 bytes using Blake2b. This external hashing is distinct from the hashing performed inside the signing API. To be compatible with existing standards and hardware secure modules (HSMs), the signing algorithms perform additional hashing internally. For ECDSA Secp256k1 and Secp256r1, you must use SHA-2 SHA256 as the internal hash function. For pure Ed25519, you must use SHA-512.
+
+### ECDSA signature requirements
+
+An accepted ECDSA Secp256k1 and Secp256r1 signature must follow:
+
+1. The internal hash used by ECDSA must be SHA256 [SHA-2](https://en.wikipedia.org/wiki/SHA-2) hash of the transaction data. Sui uses SHA256 because it is supported by [Apple](https://developer.apple.com/forums/thread/89619), HSMs, and it is widely adopted by [Bitcoin](https://en.bitcoin.it/wiki/Elliptic_Curve_Digital_Signature_Algorithm).
+
+1. The signature must be of length 64 bytes in the form of `[r, s]` where the first 32 bytes are `r`, the second 32 bytes are `s`.
+
+1. The `r` value can be between `0x1` and `0xFFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFE BAAEDCE6 AF48A03B BFD25E8C D0364140` (inclusive).
+
+1. The `s` value must be in the lower half of the curve order. If the signature is too high, convert it to a lower `s` according to [BIP-0062](https://github.com/bitcoin/bips/blob/master/bip-0062.mediawiki#low-s-values-in-signatures) with the corresponding curve orders using `order - s`. For Secp256k1, the curve order is `0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141`. For Secp256r1, the curve order is `0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551` defined in [Standards for Efficient Cryptography](https://secg.org/SEC2-Ver-1.0.pdf).
+
+1. Ideally, the signature must be generated with deterministic nonce according to [RFC6979](https://www.rfc-editor.org/rfc/rfc6979).
+
+### Ed25519 signature requirements
+
+An accepted pure Ed25519 signature must follow:
+
+1. The signature must be produced according to [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032.html#section-5.1.6). The internal hash used is SHA-512.
+
+1. The signature must be valid according to [ZIP215](https://github.com/zcash/zips/blob/main/zips/zip-0215.rst).
+
+### Special signature schemes
+
+For more information on advanced signature schemes:
+
+- **zkLogin**: See [zkLogin](/concepts/cryptography/zklogin.mdx) for details on zero-knowledge login signatures.
+
+- **Passkey**: See [SIP-8](https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md) for passkey implementation details.
+
+- **Multisig**: See [Multisig](/concepts/transactions/transaction-auth/multisig.mdx) for multi-signature transactions.
+
+- **Offline Signing**: See [Offline Signing](/concepts/transactions/transaction-auth/offline-signing.mdx) for concrete examples of signing transactions offline.
+
+## Authority signatures
+
+Sui's [collection of validators](/guides/operator/validator-index.mdx) holds 3 distinctive key pairs for different purposes.
+
+### Protocol key pair {#protocol-pair}
+
+The protocol key pair provides authority signatures on user-signed transactions if they are verified. When a stake of the authorities that provide signatures on user transactions passes the required 2/3 threshold, Sui executes the transaction. Sui uses the BLS12381 scheme for its fast verification on aggregated signatures for a given number of authorities. In particular, Sui uses the minSig BLS mode, where each individual public key is 96 bytes, while the signature is 48 bytes. The latter is important as typically validators register their keys once at the beginning of each epoch and then they continuously sign transactions; thus, Sui optimizes on minimum signature size.
+
+As with the BLS scheme, you can aggregate independent signatures resulting in a single BLS signature payload. Sui also accompanies the aggregated signature with a bitmap to denote which of the validators signed. This effectively reduces the authorities signature size from (2f + 1) × `BLS_sig` size to just 1 `BLS_sig` payload. This has significant network cost benefits resulting in compressed transaction certificates independently on the validators set size.
+
+To counter potential rogue key attacks on BLS12381 aggregated signatures, proof of knowledge of the secret key (KOSK) is used during authority registration. When an authority requests to be added to the validator set, a proof of possession is submitted and verified. See [Intent Signing](/concepts/transactions/transaction-auth/intent-signing.mdx) on how to create a proof of possession. Unlike most standards, the Sui proof of knowledge scheme commits to the address as well, which offers an extra protection against adversarial reuse of a validator BLS key from another malicious validator.
+
+### Account key pair {#account-pair}
+
+The account that the authority uses to receive payments on staking rewards is secured by the account key pair. Sui uses pure Ed25519 as the signing scheme.
+
+### Network key pair {#network-pair}
+
+The private key is used to perform the TLS handshake required for [consensus](/concepts/sui-architecture/consensus.mdx) networking. The public key is used for validator identity. Pure Ed25519 is used as the scheme.
+
+See more authority key toolings in [Validator Tool](https://github.com/MystenLabs/sui/blob/f8b5ad9aaecc3c4b30a060ec5e00bdad9ba75a93/nre/validator_tool.md).
+
+## Examples
+
+The [Sui CLI tool](/guides/developer/getting-started/sui-install.mdx) and the [Sui SDKs](https://sdk.mystenlabs.com/typescript) provide a flexible interface to sign transactions with various signing schemes.
+
+<Tabs>
+<TabItem value="cli" label="CLI">
+```sh
+$ sui keytool import "TEST_MNEMONIC" ed25519 "m/44'/784'/0'/0'/0'"
+```
+```sh
+$ sui client new-address ed25519 "m/44'/784'/0'/0'/0'"
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+```typescript
+const keypair = Ed25519Keypair.deriveKeypair(TEST_MNEMONIC, `m/44'/784'/0'/0'/0'`);
+const address = keypair.getPublicKey().toSuiAddress();
+```
+
+</TabItem>
+</Tabs>
+
+See more test vectors for [pure Ed25519](https://github.com/MystenLabs/sui/blob/f3b5fdd73da64a0df65fb4323471512b0f57ec4d/sdk/typescript/test/unit/cryptography/ed25519-keypair.test.ts) or [ECDSA Secp256k1](https://github.com/MystenLabs/sui/blob/199f06d25ce85f0270a1a5a0396156bb2b83122c/sdk/typescript/test/unit/cryptography/secp256k1-keypair.test.ts).

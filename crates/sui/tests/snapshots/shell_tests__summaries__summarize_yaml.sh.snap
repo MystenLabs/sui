@@ -76,6 +76,7 @@ party.yaml
 pay.yaml
 poseidon.yaml
 priority_queue.yaml
+protocol_config.yaml
 prover.yaml
 random.yaml
 sui.yaml
@@ -101,6 +102,7 @@ bool.yaml
 debug.yaml
 fixed_point32.yaml
 hash.yaml
+internal.yaml
 macros.yaml
 option.yaml
 string.yaml

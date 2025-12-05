@@ -1,18 +1,18 @@
 ---
-title: SUI Bridging
+title: Bridging Tokens
 description: Moving tokens from one blockchain to another is called bridging. To bridge tokens from another blockchain to Sui, you can use the Sui Bridge, Wormhole Connect, Wormhole Portal Bridge, or ZetaChain.
 keywords: [ bridge, sui bridge, wormhole connect, wormhole portal bridge, zetachain, bridging tokens to sui, how to bridge tokens, can you bridge tokens, how to bring token to sui, move token to sui, move tokens between blockchains, move tokens between chains, omnichain, cross-chain messaging ]
 ---
 
-Bridging is the process of moving tokens from one blockchain to another. When you use a bridge to move tokens between blockchains that are incompatible, the tokens are wrapped and converted to a derivative token for the target blockchain. You can transfer tokens from other blockchains to Sui, or transfer SUI tokens to other blockchains.
+Bridging is the process of moving tokens from one blockchain to another. When you use a bridge to move tokens between incompatible blockchains, the tokens are wrapped and converted to a derivative token for the target blockchain. You can transfer tokens from other blockchains to Sui, or transfer SUI tokens to other blockchains.
 
-Sui supports bridging through [Sui Bridge](#sui-bridge), [Wormhole Connect](#wormhole-connect), [Wormhole Portal Bridge](#wormhole-portal-bridge), and [ZetaChain](#zetachain).
+Sui supports bridging through Sui Bridge, Wormhole Connect, Wormhole Portal Bridge, and ZetaChain. Each bridge offers different features and capabilities to suit various use cases.
 
 ## Sui Bridge
 
-Sui Bridge is the native bridge for the Sui network. It is built into the core architecture of Sui, providing optimal integration and operation. Sui Bridge enables the movement of digital assets between Sui and other blockchains, preserving security and maintaining interoperability. It supports secure and efficient transfer of native and wrapped ETH to and from Sui. Sui Bridge leverages Sui’s capabilities to offer fast transactions, lower costs, and a decentralized architecture.
+Sui Bridge is the native bridge for the Sui network, built into the core architecture. It provides optimal integration and operation, enabling the movement of digital assets between Sui and other blockchains while preserving security and maintaining interoperability. Sui Bridge supports secure and efficient transfer of native and wrapped ETH to and from Sui, leveraging Sui's capabilities to offer fast transactions, lower costs, and a decentralized architecture.
 
-You can bridge tokens at [bridge.sui.io](https://bridge.sui.io/).
+Bridge tokens at [bridge.sui.io](https://bridge.sui.io/).
 
 ### Operation and governance
 
@@ -20,13 +20,13 @@ Sui Bridge is operated and governed by Sui validators, the same set that secures
 
 To learn how to set up a Sui Bridge full node, see [Sui Bridge Validator Node Configuration](../../guides/operator/bridge-node-configuration.mdx).
 
-### Supported chains and tokens
+### Supported assets
 
 Sui Bridge supports bridging between Sui and other networks with the following assets:
 
 | Asset | Description |
 | --- | --- |
-| Wrapped Bitcoin | Tokenized representation of Bitcoin. |
+| Wrapped Bitcoin (WBTC) | Tokenized representation of Bitcoin. |
 | Lightning Bitcoin (LBTC) | Decentralized Internet-of-value protocol for global payments. |
 | Ethereum (ETH) | Native cryptocurrency of the Ethereum network. |
 | Wrapped Ethereum (WETH) | Tokenized representation of native ETH. |
@@ -50,34 +50,36 @@ The following package IDs and addresses are reserved for Sui Bridge:
 Sui Bridge is open source:
 
 - [Move](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/bridge)  
+
 - [Solidity](https://github.com/MystenLabs/sui/tree/main/bridge/evm)  
+
 - [Bridged ETH (Move)](https://github.com/MystenLabs/sui/tree/main/bridge/move/tokens/eth)  
+
 - [Bridge node](https://github.com/MystenLabs/sui/tree/main/crates/sui-bridge)  
+
 - [Bridge indexer](https://github.com/MystenLabs/sui/tree/main/crates/sui-bridge-indexer)  
 
 ### Audits
 
 Audit reports:  
+
 - [OtterSec](https://github.com/sui-foundation/security-audits/blob/main/docs/Sui_bridge_v1_OtterSec.pdf)  
+
 - [Zellic](https://github.com/sui-foundation/security-audits/blob/main/docs/Sui_Bridge_v1_Zellic.pdf)  
 
 ### Global limiter {#global-limiter}
 
-A limiter protects funds by constraining the total value of assets leaving Sui Bridge in a 24-hour window. It tracks value hourly and aggregates from the last 24 hours, refreshing every hour.  
+A limiter protects funds by constraining the total value of assets leaving Sui Bridge in a 24-hour window. It tracks value hourly and aggregates from the last 24 hours, refreshing every hour. The limit applies globally and varies by direction (Ethereum → Sui versus Sui → Ethereum). It also caps the maximum single transfer.
 
-The limit applies globally and varies by direction (Ethereum → Sui vs. Sui → Ethereum). It also caps the maximum single transfer.  
+Limits are set by validator committee vote and announced in the [mn-validator-announcements channel](https://discord.com/channels/916379725201563759/1093852827627040768) on Discord. The global limit is currently $16 million from Ethereum to Sui and $7 million from Sui to Ethereum per 24 hours.
 
-Limits are set by validator committee vote and announced in the [mn-validator-announcements channel](https://discord.com/channels/916379725201563759/1093852827627040768) on Discord.  
-
-The global limit is currently $16 million from Ethereum to Sui and $7 million from Sui to Ethereum per 24 hours.
-
-### Asset price
+### Asset pricing
 
 Sui Bridge v1 uses static pricing to calculate limits. ETH is priced at $2,600. One ETH consumes $2,600 of the limit. The validator committee governs pricing through voting.
 
-### Transfer limit
+### Minimum and maximum transfers
 
-There is no minimum transfer, but very small fractions can be rounded down. For ETH and WETH, reduced precision of eight decimals rounds 10.0000000000000001 down to 10.  
+There is no minimum transfer, but very small fractions can be rounded down. For ETH and WETH, reduced precision of eight decimals rounds 10.0000000000000001 down to 10.
 
 | Token | Minimal value | 
 | --- | --- |
@@ -91,20 +93,20 @@ The maximum transfer equals the global USD limit. See [Global limiter](#global-l
 Wormhole Connect lets you bridge tokens from any supported Wormhole chain into Sui, with an extra drop of SUI for gas fees. Developers can also embed Connect in their own websites and dApps.
 
 :::tip
+
 See [Cross-Chain Token Transfers with Wormhole Connect](https://wormhole.com/docs/tutorials/messaging/sui-connect/) on the Wormhole website for a tutorial.
+
 :::
 
-### Wormhole Connect asset support {#asset-support}
+### Supported assets
 
 Wormhole Connect supports lock-and-mint bridging for ETH, WETH, USDC, MATIC, WMATIC, BNB, WBNB, AVAX, WAVAX, FTM, WFTM, CELO, GLMR, WGLRM, and SOL across Ethereum, Polygon, BSC, Avalanche, Celo, Moonbeam, Solana, and Sui. Bridged tokens are received as Wormhole-minted tokens on the destination chain. See the [Wormhole token list](https://github.com/wormhole-foundation/wormhole-token-list). Some tokens support swapping on destination DEXs.
 
-### Wormhole Connect automatic relay {#automatic-relay}
+### Features
 
-On EVM chains and Sui, Wormhole Connect can pay destination-chain gas automatically. Users only pay gas on the source chain.
+**Automatic relay**: On EVM chains and Sui, Wormhole Connect can pay destination-chain gas automatically. Users only pay gas on the source chain.
 
-### Wormhole Connect gas drop-off {#gas-drop-off}
-
-Users can pay an extra fee on the source chain to receive a small amount of native gas on the destination chain. For example, bridging USDC from Ethereum to Sui can include a fee in USDC to receive SUI for gas. This feature is supported on EVM chains and Sui.  
+**Gas drop-off**: Users can pay an extra fee on the source chain to receive a small amount of native gas on the destination chain. For example, bridging USDC from Ethereum to Sui can include a fee in USDC to receive SUI for gas. This feature is supported on EVM chains and Sui.
 
 See the [Wormhole FAQ](https://wormhole.com/docs/products/connect/overview/) for details.
 
@@ -118,13 +120,18 @@ The [Portal Bridge](https://www.portalbridge.com/sui), powered by Wormhole, supp
 
 ### Supported assets
 
-ZetaChain supports native cross-chain transfers tokens such as:
+ZetaChain supports native cross-chain transfers for tokens such as:
 
-- **Bitcoin (BTC)**: Native Bitcoin transfers via HTLC
+- **Bitcoin (BTC)**: Native Bitcoin transfers through HTLC
+
 - **Ethereum (ETH)**: Native ETH and ERC-20 tokens including USDC, USDT, WBTC
+
 - **Polygon (MATIC)**: Native MATIC and Polygon tokens
+
 - **BSC (BNB)**: Native BNB and BEP-20 tokens
+
 - **Avalanche (AVAX)**: Native AVAX and Avalanche C-Chain tokens
+
 - **Layer 2 chains**: Arbitrum, Optimism, Base
 
 Assets bridged through ZetaChain are represented as ZRC-20 tokens on the ZetaChain network and can be transferred to any connected chain.
@@ -133,16 +140,25 @@ See the [ZetaChain supported networks](https://www.zetachain.com/docs/developers
 
 ### Omnichain messaging
 
-Beyond asset transfers, ZetaChain's Universal App framework enables smart contracts to communicate across all connected chains. Developers can build applications that call functions on contracts across multiple blockchains, read and write state across chains through ZetaChain's validators, and execute complex multi-chain workflows in a single transaction.
+Beyond asset transfers, ZetaChain's Universal App framework enables smart contracts to communicate across all connected chains. Developers can build applications that:
+
+- Call functions on contracts across multiple blockchains.
+
+- Read and write state across chains through ZetaChain's validators.
+
+- Execute complex multi-chain workflows in a single transaction.
 
 ### How it works
 
 ZetaChain uses a proof-of-stake validator network to observe transactions on external chains and relay messages between them. When you initiate a cross-chain transaction:
 
 1. You interact with a gateway contract on the source chain (Sui or any supported chain).
-2. ZetaChain validators observe and verify the transaction.
-3. The validators execute any omnichain contract logic on ZetaChain.
-4. The validators trigger the corresponding action on the destination chain.
+
+1. ZetaChain validators observe and verify the transaction.
+
+1. The validators execute any omnichain contract logic on ZetaChain.
+
+1. The validators trigger the corresponding action on the destination chain.
 
 All cross-chain operations are handled automatically without manual intervention.
 
@@ -151,7 +167,9 @@ All cross-chain operations are handled automatically without manual intervention
 ZetaChain provides flexible gas payment options:
 
 - **Pay on source chain**: Pay all fees upfront on the source chain in ZETA, USDC, or USDT.
+
 - **Automatic gas drop**: Receive native tokens on the destination chain for transaction fees.
+
 - **Custom gas logic**: Implement application-specific gas payment models.
 
 ### Gateway contracts
@@ -159,9 +177,13 @@ ZetaChain provides flexible gas payment options:
 Interact with ZetaChain through gateway contracts deployed on each supported chain:
 
 **Athens Testnet**
+
 - Sepolia (Ethereum): `0x0c487a766110c85d301d96e33579c5b317fa4995`
+
 - Base Sepolia: `0x0c487a766110c85d301d96e33579c5b317fa4995`
+
 - Amoy (Polygon): `0x0c487a766110c85d301d96e33579c5b317fa4995`
+
 - BSC Testnet: `0x0c487a766110c85d301d96e33579c5b317fa4995`
 
 Always verify gateway addresses from the [official ZetaChain documentation](https://www.zetachain.com/docs/reference/network/contracts) before integrating.
@@ -175,12 +197,17 @@ npm install -g zetachain
 ```
 
 Explore example contracts and tutorials:
+
 - [Universal Apps Tutorial](https://www.zetachain.com/docs/developers/tutorials/intro)
+
 - [Cross-Chain Messaging Guide](https://www.zetachain.com/docs/developers/tutorials/messaging)
+
 - [Example Contracts](https://github.com/zeta-chain/example-contracts)
 
 View transactions on the ZetaChain explorers:
+
 - [Testnet Explorer](https://testnet.zetascan.com/)
+
 - [Mainnet Explorer](https://zetascan.com/)
 
 ## Token address list {#token-address-list}
@@ -201,6 +228,3 @@ The following table lists the address for each token type. Confirm token legitim
 | WGLMR   | 0x66f87084e49c38f76502d17f87d17f943f183bb94117561eb573e075fdc5ff75 |
 | WSOL    | 0xb7844e289a8410e50fb3ca48d69eb9cf29e27d223ef90353fe1bd8e27ff8f3f8 |
 | USDCsol | 0xb231fcda8bbddb31f2ef02e6161444aec64a514e2c89279584ac9806ce9cf037 |
-
-
-

@@ -9,7 +9,7 @@ use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::{
     TransactionData as KVTransactionData, TransactionEventsData as KVTransactionEventsData,
 };
-use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_types::{
     base_types::ObjectID,
     crypto::AuthorityQuorumSignInfo,
@@ -58,6 +58,7 @@ pub enum TransactionContents {
         events: Option<Vec<Event>>,
         transaction_data: Box<TransactionData>,
         signatures: Vec<GenericSignature>,
+        balance_changes: Vec<grpc::BalanceChange>,
     },
 }
 
@@ -244,7 +245,7 @@ impl KvLoader {
 
 impl TransactionContents {
     pub fn from_executed_transaction(
-        executed_transaction: &ExecutedTransaction,
+        executed_transaction: &grpc::ExecutedTransaction,
         transaction_data: TransactionData,
         signatures: Vec<GenericSignature>,
     ) -> anyhow::Result<Self> {
@@ -266,11 +267,14 @@ impl TransactionContents {
             .transpose()?
             .map(|events: TransactionEvents| events.data);
 
+        let balance_changes = executed_transaction.balance_changes.clone();
+
         Ok(Self::ExecutedTransaction {
             effects: Box::new(effects),
             events,
             transaction_data: Box::new(transaction_data),
             signatures,
+            balance_changes,
         })
     }
 
@@ -343,6 +347,15 @@ impl TransactionContents {
         }
     }
 
+    pub fn balance_changes(&self) -> Option<&[grpc::BalanceChange]> {
+        match self {
+            Self::ExecutedTransaction {
+                balance_changes, ..
+            } => Some(balance_changes),
+            _ => None,
+        }
+    }
+
     pub fn raw_transaction(&self) -> anyhow::Result<Vec<u8>> {
         match self {
             Self::Pg(stored) => Ok(stored.raw_transaction.clone()),
@@ -371,12 +384,12 @@ impl TransactionContents {
         }
     }
 
-    pub fn timestamp_ms(&self) -> u64 {
+    pub fn timestamp_ms(&self) -> Option<u64> {
         match self {
-            Self::Pg(stored) => stored.timestamp_ms as u64,
-            Self::Bigtable(kv) => kv.timestamp,
-            Self::LedgerGrpc(txn) => txn.timestamp_ms.unwrap_or_default(),
-            Self::ExecutedTransaction { .. } => 0,
+            Self::Pg(stored) => Some(stored.timestamp_ms as u64),
+            Self::Bigtable(kv) => Some(kv.timestamp),
+            Self::LedgerGrpc(txn) => txn.timestamp_ms,
+            Self::ExecutedTransaction { .. } => None, // No timestamp until checkpointed
         }
     }
 
@@ -400,10 +413,10 @@ impl TransactionEventsContents {
         }
     }
 
-    pub fn timestamp_ms(&self) -> u64 {
+    pub fn timestamp_ms(&self) -> Option<u64> {
         match self {
-            Self::Serialized(stored) => stored.timestamp_ms as u64,
-            Self::Deserialized(kv) => kv.timestamp_ms,
+            Self::Serialized(stored) => Some(stored.timestamp_ms as u64),
+            Self::Deserialized(kv) => Some(kv.timestamp_ms),
         }
     }
 }

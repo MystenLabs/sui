@@ -66,6 +66,7 @@ party.yaml
 pay.yaml
 poseidon.yaml
 priority_queue.yaml
+protocol_config.yaml
 prover.yaml
 random.yaml
 sui.yaml
@@ -91,6 +92,7 @@ bool.yaml
 debug.yaml
 fixed_point32.yaml
 hash.yaml
+internal.yaml
 macros.yaml
 option.yaml
 string.yaml
@@ -118,6 +120,9 @@ type_origins:
   "0x0000000000000000000000000000000000000000000000000000000000000001":
     - module_name: fixed_point32
       datatype_name: FixedPoint32
+      package: "0x0000000000000000000000000000000000000000000000000000000000000001"
+    - module_name: internal
+      datatype_name: Permit
       package: "0x0000000000000000000000000000000000000000000000000000000000000001"
     - module_name: uq32_32
       datatype_name: UQ32_32

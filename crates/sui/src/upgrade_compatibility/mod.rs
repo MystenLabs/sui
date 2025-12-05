@@ -813,7 +813,7 @@ fn compare_packages(
 
         Err(anyhow!(
             "{}\nUpgrade failed, this package requires changes to be compatible with the existing package. \
-            Its upgrade policy is set to '{}'.",
+            Its upgrade policy is set to '{}'. Use --skip-verify-compatibility to bypass this check locally.",
             String::from_utf8(report_diagnostics_to_buffer(
                 &new_package.package.file_map,
                 sorted_diags,

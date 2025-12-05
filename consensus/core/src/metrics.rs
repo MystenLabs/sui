@@ -219,6 +219,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) finalizer_transaction_status: IntCounterVec,
     pub(crate) finalizer_reject_votes: IntCounterVec,
     pub(crate) finalizer_output_commits: IntCounterVec,
+    pub(crate) finalizer_skipped_voting_blocks: IntCounterVec,
     pub(crate) uptime: Histogram,
 }
 
@@ -908,6 +909,12 @@ impl NodeMetrics {
                 "finalizer_output_commits",
                 "Number of output commits finalized by the finalizer, grouped by type.",
                 &["type"],
+                registry
+            ).unwrap(),
+            finalizer_skipped_voting_blocks: register_int_counter_vec_with_registry!(
+                "finalizer_skipped_voting_blocks",
+                "Number of blocks skipped from voting due to potentially not being an immediate descendant.",
+                &["authority"],
                 registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(

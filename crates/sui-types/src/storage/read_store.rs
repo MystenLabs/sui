@@ -30,7 +30,7 @@ use typed_store_error::TypedStoreError;
 pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
 pub type PackageVersionsIterator<'a> =
     Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
-pub type AuthenticatedEventRecord = (u64, u32, u32, crate::event::Event);
+pub type AuthenticatedEventRecord = (u64, u64, u32, u32, crate::event::Event);
 
 pub trait ReadStore: ObjectStore {
     //
@@ -697,6 +697,7 @@ pub trait RpcIndexes: Send + Sync {
         &self,
         stream_id: SuiAddress,
         start_checkpoint: u64,
+        start_accumulator_version: Option<u64>,
         start_transaction_idx: Option<u32>,
         start_event_idx: Option<u32>,
         end_checkpoint: u64,

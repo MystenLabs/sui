@@ -57,10 +57,6 @@ struct Args {
     #[arg(long)]
     compression_level: Option<i32>,
 
-    /// Optional watermark task name to override the watermark path
-    #[arg(long)]
-    watermark_task: Option<String>,
-
     #[command(flatten)]
     metrics_args: MetricsArgs,
 

@@ -59,6 +59,12 @@ pub struct IngestionConfig {
 
     /// Maximum number of checkpoints to process using ingestion after repeated streaming connection failures.
     pub streaming_backoff_max_batch_size: usize,
+
+    /// Timeout for streaming connection in milliseconds.
+    pub streaming_connection_timeout_ms: u64,
+
+    /// Timeout for streaming statement (peek/next) operations in milliseconds.
+    pub streaming_statement_timeout_ms: u64,
 }
 
 pub struct IngestionService {
@@ -75,6 +81,14 @@ pub struct IngestionService {
 impl IngestionConfig {
     pub fn retry_interval(&self) -> Duration {
         Duration::from_millis(self.retry_interval_ms)
+    }
+
+    pub fn streaming_connection_timeout(&self) -> Duration {
+        Duration::from_millis(self.streaming_connection_timeout_ms)
+    }
+
+    pub fn streaming_statement_timeout(&self) -> Duration {
+        Duration::from_millis(self.streaming_statement_timeout_ms)
     }
 }
 
@@ -97,7 +111,10 @@ impl IngestionService {
     ) -> Result<Self> {
         let metrics = IngestionMetrics::new(metrics_prefix, registry);
         let ingestion_client = IngestionClient::new(args.ingestion, metrics.clone())?;
-        let streaming_client = args.streaming.streaming_url.map(GrpcStreamingClient::new);
+        let streaming_client = args
+            .streaming
+            .streaming_url
+            .map(|uri| GrpcStreamingClient::new(uri, config.streaming_connection_timeout()));
 
         let subscribers = Vec::new();
         let (commit_hi_tx, commit_hi_rx) = mpsc::unbounded_channel();
@@ -204,6 +221,8 @@ impl Default for IngestionConfig {
             retry_interval_ms: 200,
             streaming_backoff_initial_batch_size: 10, // 10 checkpoints, ~ 2 seconds
             streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
+            streaming_connection_timeout_ms: 5000,    // 5 seconds
+            streaming_statement_timeout_ms: 5000,     // 5 seconds
         }
     }
 }
