@@ -231,7 +231,7 @@ async fn test_alias_changes() {
                 .move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
                     "address_alias",
-                    "remove_alias",
+                    "remove",
                     vec![
                         CallArg::Object(ObjectArg::SharedObject {
                             id: address_aliases_ref.0,
