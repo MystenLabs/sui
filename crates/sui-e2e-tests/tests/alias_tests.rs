@@ -30,15 +30,15 @@ async fn submit_and_wait_for_effects(
         .await
         .expect("Failed to submit transaction");
     assert_eq!(results.results.len(), 1);
-    if !matches!(results.results[0], SubmitTxResult::Submitted { .. }) {
+    let SubmitTxResult::Submitted { consensus_position } = results.results[0] else {
         panic!("Expected Submitted result, got: {:?}", results.results[0]);
-    }
+    };
 
     let effects = client
         .wait_for_effects(
             WaitForEffectsRequest {
                 transaction_digest: Some(digest),
-                consensus_position: None,
+                consensus_position: Some(consensus_position),
                 include_details: true,
                 ping_type: None,
             },
