@@ -173,8 +173,10 @@ impl GitTree {
     ///
     /// Fails if `allow_dirty` is false and a dirty checkout of the directory already exists
     async fn checkout_repo(&self, allow_dirty: bool) -> GitResult<PathBuf> {
-        // All git checkouts are sequentialized
-        let _lock = PackageSystemLock::new_for_git().map_err(GitError::LockingError)?;
+        // Checking out at `<repo>_<sha>` is sequential to prevent corruptions.
+        let _lock =
+            PackageSystemLock::new_for_git(&self.repo_id()).map_err(GitError::LockingError)?;
+
         let tree_path = self.path_to_tree();
 
         // create repo if necessary
@@ -268,6 +270,12 @@ impl GitTree {
         }
 
         false
+    }
+
+    /// Returns `<REPO_URL>_<SHA>` in a filename format.
+    /// Used to lock the repository for per-repo/hash (in a hash) access.
+    fn repo_id(&self) -> String {
+        url_to_file_name(&format!("{}_{}", self.repo_url(), self.sha()))
     }
 
     /// The path to the folder containing the cached repo (without the addition of the path within
