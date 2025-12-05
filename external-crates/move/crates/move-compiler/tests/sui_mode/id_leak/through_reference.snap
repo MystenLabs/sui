@@ -14,5 +14,5 @@ error[E05001]: ability constraint not satisfied
 11 │         *ref = id;
    │          ^^^ Invalid mutation. Mutation requires the 'drop' ability as the old value is destroyed
    ·
-17 │     struct UID has store {
+16 │     struct UID has store {
    │            --- To satisfy the constraint, the 'drop' ability would need to be added here

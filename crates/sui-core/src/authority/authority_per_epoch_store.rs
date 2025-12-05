@@ -102,7 +102,7 @@ use crate::authority::execution_time_estimator::{
     EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY, EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY,
 };
 use crate::authority::shared_object_version_manager::{
-    AssignedTxAndVersions, ConsensusSharedObjVerAssignment, Schedulable, SharedObjVerManager,
+    AsTx, AssignedTxAndVersions, ConsensusSharedObjVerAssignment, Schedulable, SharedObjVerManager,
 };
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointHeight, EpochStats, PendingCheckpoint,
@@ -2978,11 +2978,11 @@ impl AuthorityPerEpochStore {
 
     pub(crate) fn process_user_signatures<'a>(
         &self,
-        txs: impl Iterator<Item = &'a VerifiedExecutableTransactionWithAliases>,
+        txs: impl Iterator<Item = &'a Schedulable<VerifiedExecutableTransactionWithAliases>>,
     ) {
         let sigs: Vec<_> = txs
-            .map(|tx| {
-                (
+            .filter_map(|s| match s {
+                Schedulable::Transaction(tx) => Some((
                     *tx.tx().digest(),
                     tx.tx()
                         .tx_signatures()
@@ -2990,7 +2990,10 @@ impl AuthorityPerEpochStore {
                         .cloned()
                         .zip(tx.aliases().iter().map(|(_, seq)| *seq))
                         .collect(),
-                )
+                )),
+                Schedulable::RandomnessStateUpdate(_, _) => None,
+                Schedulable::AccumulatorSettlement(_, _) => None,
+                Schedulable::ConsensusCommitPrologue(_, _, _) => None,
             })
             .collect();
 
@@ -3266,14 +3269,17 @@ impl AuthorityPerEpochStore {
     // Assigns shared object versions to transactions and updates the next shared object version state.
     // Shared object versions in cancelled transactions are assigned to special versions that will
     // cause the transactions to be cancelled in execution engine.
-    pub(crate) fn process_consensus_transaction_shared_object_versions<'a>(
+    pub(crate) fn process_consensus_transaction_shared_object_versions<'a, T>(
         &'a self,
         cache_reader: &dyn ObjectCacheRead,
-        non_randomness_transactions: impl Iterator<Item = &'a Schedulable> + Clone,
-        randomness_transactions: impl Iterator<Item = &'a Schedulable> + Clone,
+        non_randomness_transactions: impl Iterator<Item = &'a Schedulable<T>> + Clone,
+        randomness_transactions: impl Iterator<Item = &'a Schedulable<T>> + Clone,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         output: &mut ConsensusCommitOutput,
-    ) -> SuiResult<AssignedTxAndVersions> {
+    ) -> SuiResult<AssignedTxAndVersions>
+    where
+        T: 'a + AsTx,
+    {
         let all_certs = non_randomness_transactions.chain(randomness_transactions);
 
         let ConsensusSharedObjVerAssignment {

@@ -4,7 +4,7 @@ module a::trigger_lint_cases {
     // 4. Suppress warning
     #[allow(lint(missing_key))]
     struct SuppressWarning {
-       id: UID,
+        id: UID,
     }
 }
 

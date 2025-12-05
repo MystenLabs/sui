@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
+    SUI_RANDOMNESS_STATE_OBJECT_ID,
     authenticator_state::ActiveJwk,
     base_types::{
         AuthorityName, ConciseableName, ConsensusObjectSequenceKey, SequenceNumber,
@@ -47,7 +48,9 @@ use sui_types::{
         ExecutionTimeObservation,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
-    transaction::{SenderSignedData, VerifiedCertificate, VerifiedTransaction, WithAliases},
+    transaction::{
+        SenderSignedData, TransactionKey, VerifiedCertificate, VerifiedTransaction, WithAliases,
+    },
 };
 use tokio::{sync::MutexGuard, task::JoinSet};
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -65,7 +68,7 @@ use crate::{
         epoch_start_configuration::EpochStartConfigTrait,
         execution_time_estimator::ExecutionTimeEstimator,
         shared_object_congestion_tracker::SharedObjectCongestionTracker,
-        shared_object_version_manager::{AssignedTxAndVersions, Schedulable, SharedObjVerManager},
+        shared_object_version_manager::{AssignedTxAndVersions, Schedulable},
         transaction_deferral::{DeferralKey, DeferralReason, transaction_deferral_within_limit},
     },
     checkpoints::{
@@ -172,8 +175,9 @@ impl ConsensusHandlerInitializer {
 mod additional_consensus_state {
     use std::marker::PhantomData;
 
+    use consensus_core::CommitRef;
     use fastcrypto::hash::HashFunction as _;
-    use sui_types::crypto::DefaultHash;
+    use sui_types::{crypto::DefaultHash, digests::Digest};
 
     use super::*;
     /// AdditionalConsensusState tracks any in-memory state that is retained by ConsensusHandler
@@ -219,7 +223,6 @@ mod additional_consensus_state {
 
             self.commit_info_impl(
                 epoch_start_time,
-                protocol_config,
                 consensus_commit,
                 Some(estimated_commit_period),
             )
@@ -228,7 +231,6 @@ mod additional_consensus_state {
         fn commit_info_impl(
             &self,
             epoch_start_time: u64,
-            protocol_config: &ProtocolConfig,
             consensus_commit: &impl ConsensusCommitAPI,
             estimated_commit_period: Option<Duration>,
         ) -> ConsensusCommitInfo {
@@ -249,8 +251,8 @@ mod additional_consensus_state {
                 round: consensus_commit.leader_round(),
                 timestamp,
                 leader_author,
-                sub_dag_index: consensus_commit.commit_sub_dag_index(),
-                consensus_commit_digest: consensus_commit.consensus_digest(protocol_config),
+                consensus_commit_ref: consensus_commit.commit_ref(),
+                rejected_transactions_digest: consensus_commit.rejected_transactions_digest(),
                 additional_state_digest: Some(self.digest()),
                 estimated_commit_period,
                 skip_consensus_commit_prologue_in_test: false,
@@ -272,8 +274,8 @@ mod additional_consensus_state {
         pub round: u64,
         pub timestamp: u64,
         pub leader_author: AuthorityIndex,
-        pub sub_dag_index: u64,
-        pub consensus_commit_digest: ConsensusCommitDigest,
+        pub consensus_commit_ref: CommitRef,
+        pub rejected_transactions_digest: Digest,
 
         additional_state_digest: Option<AdditionalConsensusStateDigest>,
         estimated_commit_period: Option<Duration>,
@@ -293,8 +295,8 @@ mod additional_consensus_state {
                 round: commit_round,
                 timestamp: commit_timestamp,
                 leader_author: 0,
-                sub_dag_index: 0,
-                consensus_commit_digest: ConsensusCommitDigest::default(),
+                consensus_commit_ref: CommitRef::default(),
+                rejected_transactions_digest: Digest::default(),
                 additional_state_digest: Some(AdditionalConsensusStateDigest::ZERO),
                 estimated_commit_period,
                 skip_consensus_commit_prologue_in_test,
@@ -326,6 +328,10 @@ mod additional_consensus_state {
                 .expect("estimated commit period is not available")
         }
 
+        fn consensus_commit_digest(&self) -> ConsensusCommitDigest {
+            ConsensusCommitDigest::new(self.consensus_commit_ref.digest.into_inner())
+        }
+
         fn consensus_commit_prologue_transaction(
             &self,
             epoch: u64,
@@ -346,7 +352,7 @@ mod additional_consensus_state {
                 epoch,
                 self.round,
                 self.timestamp,
-                self.consensus_commit_digest,
+                self.consensus_commit_digest(),
             );
             VerifiedExecutableTransaction::new_system(transaction, epoch)
         }
@@ -360,7 +366,7 @@ mod additional_consensus_state {
                 epoch,
                 self.round,
                 self.timestamp,
-                self.consensus_commit_digest,
+                self.consensus_commit_digest(),
                 consensus_determined_version_assignments,
             );
             VerifiedExecutableTransaction::new_system(transaction, epoch)
@@ -376,7 +382,7 @@ mod additional_consensus_state {
                 epoch,
                 self.round,
                 self.timestamp,
-                self.consensus_commit_digest,
+                self.consensus_commit_digest(),
                 consensus_determined_version_assignments,
                 additional_state_digest,
             );
@@ -804,7 +810,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         info!(
             %consensus_commit,
-            "Received consensus output"
+            "Received consensus output. Rejected transactions: {}",
+            consensus_commit.rejected_transactions_debug_string(),
         );
 
         self.last_consensus_stats.index = ExecutionIndices {
@@ -1052,11 +1059,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 timestamp_ms: commit_info.timestamp,
                 last_of_epoch: final_round && !should_write_random_checkpoint,
                 checkpoint_height,
+                consensus_commit_ref: commit_info.consensus_commit_ref,
+                rejected_transactions_digest: commit_info.rejected_transactions_digest,
             },
         };
         self.epoch_store
             .write_pending_checkpoint(&mut state.output, &pending_checkpoint)
             .expect("failed to write pending checkpoint");
+
+        info!(
+            "Written pending checkpoint: {:?}",
+            pending_checkpoint.details,
+        );
 
         if should_write_random_checkpoint {
             let pending_checkpoint = PendingCheckpoint {
@@ -1065,6 +1079,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     timestamp_ms: commit_info.timestamp,
                     last_of_epoch: final_round,
                     checkpoint_height: checkpoint_height + 1,
+                    consensus_commit_ref: commit_info.consensus_commit_ref,
+                    rejected_transactions_digest: commit_info.rejected_transactions_digest,
                 },
             };
             self.epoch_store
@@ -1220,38 +1236,31 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        let consensus_commit_prologue = self.add_consensus_commit_prologue_transaction(
-            state,
-            commit_info,
-            transactions_to_schedule
-                .iter()
-                .map(|tx| Schedulable::Transaction(tx.tx())),
-            &cancelled_txns,
-        );
-        let transactions_to_schedule: Vec<_> = itertools::chain!(
+        let consensus_commit_prologue = (!commit_info.skip_consensus_commit_prologue_in_test)
+            .then_some(Schedulable::ConsensusCommitPrologue(
+                epoch,
+                commit_info.round,
+                commit_info.consensus_commit_ref.index,
+            ));
+
+        let schedulables: Vec<_> = itertools::chain!(
             consensus_commit_prologue.into_iter(),
-            authenticator_state_update_transaction.into_iter(),
-            transactions_to_schedule.into_iter(),
+            authenticator_state_update_transaction
+                .into_iter()
+                .map(Schedulable::Transaction),
+            transactions_to_schedule
+                .into_iter()
+                .map(Schedulable::Transaction),
+            settlement,
         )
         .collect();
 
-        self.epoch_store.process_user_signatures(
-            transactions_to_schedule
-                .iter()
-                .chain(randomness_transactions_to_schedule.iter()),
-        );
-
-        let schedulables: Vec<_> = transactions_to_schedule
-            .into_iter()
-            .map(|tx| Schedulable::Transaction(tx.into_tx()))
-            .chain(settlement)
-            .collect();
         let randomness_schedulables: Vec<_> = randomness_state_update_transaction
             .into_iter()
             .chain(
                 randomness_transactions_to_schedule
                     .into_iter()
-                    .map(|tx| Schedulable::Transaction(tx.into_tx())),
+                    .map(Schedulable::Transaction),
             )
             .chain(randomness_settlement)
             .collect();
@@ -1267,6 +1276,35 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             )
             .expect("failed to assign shared object versions");
 
+        let consensus_commit_prologue =
+            self.add_consensus_commit_prologue_transaction(state, commit_info, &assigned_versions);
+
+        let mut schedulables = schedulables;
+        let mut assigned_versions = assigned_versions;
+        if let Some(consensus_commit_prologue) = consensus_commit_prologue {
+            assert!(matches!(
+                schedulables[0],
+                Schedulable::ConsensusCommitPrologue(..)
+            ));
+            assert!(matches!(
+                assigned_versions.0[0].0,
+                TransactionKey::ConsensusCommitPrologue(..)
+            ));
+            assigned_versions.0[0].0 =
+                TransactionKey::Digest(*consensus_commit_prologue.tx().digest());
+            schedulables[0] = Schedulable::Transaction(consensus_commit_prologue);
+        }
+
+        self.epoch_store
+            .process_user_signatures(schedulables.iter().chain(randomness_schedulables.iter()));
+
+        // After this point we can throw away alias version information.
+        let schedulables: Vec<Schedulable> = schedulables.into_iter().map(|s| s.into()).collect();
+        let randomness_schedulables: Vec<Schedulable> = randomness_schedulables
+            .into_iter()
+            .map(|s| s.into())
+            .collect();
+
         (schedulables, randomness_schedulables, assigned_versions)
     }
 
@@ -1277,8 +1315,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &'a self,
         state: &'a mut CommitHandlerState,
         commit_info: &'a ConsensusCommitInfo,
-        schedulables: impl Iterator<Item = Schedulable<&'a VerifiedExecutableTransaction>>,
-        cancelled_txns: &'a BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+        assigned_versions: &AssignedTxAndVersions,
     ) -> Option<VerifiedExecutableTransactionWithAliases> {
         {
             if commit_info.skip_consensus_commit_prologue_in_test {
@@ -1286,26 +1323,32 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        let mut version_assignment = Vec::new();
-        let mut shared_input_next_version = HashMap::new();
-        for txn in schedulables {
-            let key = txn.key();
-            match key.as_digest().and_then(|d| cancelled_txns.get(d)) {
-                Some(CancelConsensusCertificateReason::CongestionOnObjects(_))
-                | Some(CancelConsensusCertificateReason::DkgFailed) => {
-                    assert_reachable!("cancelled transactions");
-                    let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
-                        &self.epoch_store,
-                        &txn,
-                        &mut shared_input_next_version,
-                        cancelled_txns,
-                    );
-                    version_assignment.push((
-                        *key.unwrap_digest(),
-                        assigned_versions.shared_object_versions,
-                    ));
-                }
-                None => {}
+        let mut cancelled_txn_version_assignment = Vec::new();
+
+        let protocol_config = self.epoch_store.protocol_config();
+
+        for (txn_key, assigned_versions) in assigned_versions.0.iter() {
+            let Some(d) = txn_key.as_digest() else {
+                continue;
+            };
+
+            if !protocol_config.include_cancelled_randomness_txns_in_prologue()
+                && assigned_versions
+                    .shared_object_versions
+                    .iter()
+                    .any(|((id, _), _)| *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
+            {
+                continue;
+            }
+
+            if assigned_versions
+                .shared_object_versions
+                .iter()
+                .any(|(_, version)| version.is_cancelled())
+            {
+                assert_reachable!("cancelled transactions");
+                cancelled_txn_version_assignment
+                    .push((*d, assigned_versions.shared_object_versions.clone()));
             }
         }
 
@@ -1315,14 +1358,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 TransactionDigest,
                 Vec<(ConsensusObjectSequenceKey, SequenceNumber)>
             )>| {
-                version_assignment.extend(additional_cancelled_txns);
+                cancelled_txn_version_assignment.extend(additional_cancelled_txns);
             }
         );
 
         let transaction = commit_info.create_consensus_commit_prologue_transaction(
             self.epoch_store.epoch(),
             self.epoch_store.protocol_config(),
-            version_assignment,
+            cancelled_txn_version_assignment,
             commit_info,
             state.indirect_state_observer.take().unwrap(),
         );
@@ -2164,7 +2207,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             // Therefore, the transaction sequence number starts from 1 here.
             let current_tx_index = ExecutionIndices {
                 last_committed_round: commit_info.round,
-                sub_dag_index: commit_info.sub_dag_index,
+                sub_dag_index: commit_info.consensus_commit_ref.index.into(),
                 transaction_index: (seq + 1) as u64,
             };
 

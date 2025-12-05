@@ -34,4 +34,4 @@ error[Compatibility E03001]: function signature mismatch
    = Restore the original function's parameter for function 'func_with_generic_struct_param'.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'. Use --skip-verify-compatibility to bypass this check locally.
