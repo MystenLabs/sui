@@ -45,7 +45,7 @@ native public fun div(x: Integer, y: Integer): Integer;
 #[spec_only]
 native public fun mod(x: Integer, y: Integer): Integer;
 #[spec_only]
-native public fun sqrt(x: Integer, y: Integer): Integer;
+native public fun sqrt(x: Integer): Integer;
 #[spec_only]
 native public fun pow(x: Integer, y: Integer): Integer;
 
