@@ -622,10 +622,13 @@ impl CommitFinalizer {
                 continue;
             }
             let curr_block_state = blocks_map.get(&curr_block_ref).unwrap_or_else(|| panic!("Block {curr_block_ref} is either incorrectly gc'ed or failed to be recovered after crash.")).read();
-            // When proposing the current block, if it is possible that the pending block has already been GC'ed,
-            // then it is possible that the current block does not carry votes for the pending block.
-            // In this case, skip counting votes from the current block.
-            let skip_votes = Self::check_gc_at_current_commit(
+            // Check if transaction votes for the pending block are potentially not carried by the
+            // current block, because of GC at the current block's proposer.
+            // See comment above gced_transaction_votes_for_pending_block() for more details.
+            //
+            // Implicit transaction votes should only be considered in commit finalizer if they are definitely
+            // part of the transactions votes from the current block when it is proposed.
+            let votes_gced = Self::gced_transaction_votes_for_pending_block(
                 gc_rounds,
                 pending_block_ref.round,
                 pending_commit_index,
@@ -647,7 +650,7 @@ impl CommitFinalizer {
                 // Note: if the current block casts reject votes on transactions in the pending block,
                 // it can be assumed that accept votes are also casted to other transactions in the pending block.
                 // But we choose to skip counting the accept votes in this edge case for simplicity.
-                if context.protocol_config.consensus_skip_gced_accept_votes() && skip_votes {
+                if context.protocol_config.consensus_skip_gced_accept_votes() && votes_gced {
                     let hostname = &context.committee.authority(curr_block_ref.author).hostname;
                     context
                         .metrics
@@ -697,8 +700,24 @@ impl CommitFinalizer {
         finalized_transactions
     }
 
-    // Returns true if the pending block round can be GC'ed when proposing blocks in current commit.
-    fn check_gc_at_current_commit(
+    /// Returns true if transaction votes from the current block to the pending block
+    /// could have been be GC'ed. If this is the case, the current block cannot be assumed
+    /// to have implicitly voted to accept transactions in the pending block.
+    ///
+    /// When collecting transaction votes during proposal of the current block
+    /// (via DagState::link_causal_history()), votes against blocks in the DAG
+    /// below the proposer's GC round are skipped. Implicit accept votes cannot be assumed
+    /// for these GC'ed blocks. However, blocks do not carry the GC round when they are proposed.
+    /// So this function computes the highest possible GC round when proposing the current block,
+    /// and use it as the minimum round threshold for implicit accept votes. Even if the computed
+    /// GC round here is higher than the actual GC round used by the current block, it is still
+    /// correct although less efficient.
+    ///
+    /// gc_rounds is a list of cached commit indices and the GC rounds resulting from the commits.
+    /// It must be a superset of commits in the range [pending_commit_index, current_commit_index].
+    /// The first element should have pending_commit_index, because pending commit should be the
+    /// first commit buffered in CommitFinalizer.
+    fn gced_transaction_votes_for_pending_block(
         gc_rounds: &[(CommitIndex, Round)],
         pending_block_round: Round,
         pending_commit_index: CommitIndex,
@@ -711,8 +730,9 @@ impl CommitFinalizer {
         if pending_commit_index == current_commit_index {
             return false;
         }
-        // Since GC round only advances after a commit, when proposing blocks for the current commit,
-        // the GC round is determined by the commit previous to the current commit.
+        // current_commit_index is the commit index which includes the current / voting block.
+        // When proposing the current block, the latest possible GC round is the GC round computed
+        // from the leader of of the previous commit (current_commit_index - 1).
         let (commit_index, gc_round) = *gc_rounds
             .get((current_commit_index - 1 - pending_commit_index) as usize)
             .unwrap();
