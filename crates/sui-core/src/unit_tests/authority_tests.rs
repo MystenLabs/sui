@@ -5114,7 +5114,8 @@ async fn test_consensus_commit_prologue_generation() {
     );
 
     // Tests that new consensus commit prologue transaction is added to the batch, and it is the first transaction.
-    assert_eq!(processed_consensus_transactions.len(), 3);
+    // 4 = 1 commit prologue + 2 user transactions + 1 settlement
+    assert_eq!(processed_consensus_transactions.len(), 4);
     assert!(matches!(
         processed_consensus_transactions[0]
             .as_tx()
@@ -6513,6 +6514,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
 
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config.disable_accumulators_for_testing();
     protocol_config.set_per_object_congestion_control_mode_for_testing(
         PerObjectCongestionControlMode::ExecutionTimeEstimate(execution_time_params),
     );
