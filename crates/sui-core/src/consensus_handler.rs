@@ -1228,7 +1228,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
             settlement = Some(Schedulable::AccumulatorSettlement(epoch, checkpoint_height));
 
-            if state.randomness_round.is_some() {
+            if state.randomness_round.is_some() || !randomness_transactions_to_schedule.is_empty() {
                 randomness_settlement = Some(Schedulable::AccumulatorSettlement(
                     epoch,
                     checkpoint_height + 1,
