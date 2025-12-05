@@ -35,10 +35,10 @@ pub struct PackageSystemLock {
 
 impl PackageSystemLock {
     /// Acquire a lock for doing git operations sequentially
-    pub fn new_for_git() -> LockResult<Self> {
-        let path = cache_path_for("git")?;
+    pub fn new_for_git(repo_id: &str) -> LockResult<Self> {
+        let path = cache_path_for(repo_id)?;
         Self::new_for_path(&path, true).map_err(|source| LockError::CacheLockError {
-            name: "git".to_string(),
+            name: repo_id.to_string(),
             path,
             source,
         })
