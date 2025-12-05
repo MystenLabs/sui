@@ -95,6 +95,10 @@ fn input(
             )
         }
         CallArg::FundsWithdrawal(f) => {
+            assert_invariant!(
+                env.protocol_config.enable_accumulators(),
+                "Withdrawals should be rejected at signing if accumulators are not enabled"
+            );
             let FundsWithdrawalArg {
                 reservation,
                 type_arg,

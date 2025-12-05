@@ -1,13 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::rc::Rc;
+
 use crate::{
     data_store::PackageStore,
     execution_mode::ExecutionMode,
-    static_programmable_transactions::linkage::{
-        config::{LinkageConfig, ResolutionConfig},
-        resolution::{ResolutionTable, VersionConstraint, add_and_unify, get_package},
-        resolved_linkage::ResolvedLinkage,
+    static_programmable_transactions::{
+        linkage::{
+            config::{LinkageConfig, ResolutionConfig},
+            resolution::{ResolutionTable, VersionConstraint, add_and_unify, get_package},
+            resolved_linkage::{ResolvedLinkage, RootedLinkage},
+        },
+        loading::ast::Type,
     },
 };
 use sui_protocol_config::ProtocolConfig;
@@ -55,6 +60,22 @@ impl LinkageAnalyzer {
 
     pub fn config(&self) -> &ResolutionConfig {
         &self.internal
+    }
+
+    pub fn framework_call_linkage(
+        &self,
+        // Type arguments do not need to be included in the linkage in the current VM.
+        _type_args: &[Type],
+        store: &dyn PackageStore,
+    ) -> Result<RootedLinkage, ExecutionError> {
+        Ok(RootedLinkage {
+            link_context: *sui_types::SUI_FRAMEWORK_PACKAGE_ID,
+            resolved_linkage: Rc::new(ResolvedLinkage::from_resolution_table(
+                self.internal
+                    .linkage_config
+                    .resolution_table_with_native_packages(store)?,
+            )),
+        })
     }
 
     fn compute_call_linkage_(

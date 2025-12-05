@@ -824,53 +824,53 @@ impl AbilitySet {
             | (Ability::Key as u8),
     );
 
-    pub fn singleton(ability: Ability) -> Self {
+    pub const fn singleton(ability: Ability) -> Self {
         Self(ability as u8)
     }
 
-    pub fn has_ability(self, ability: Ability) -> bool {
+    pub const fn has_ability(self, ability: Ability) -> bool {
         let a = ability as u8;
         (a & self.0) == a
     }
 
-    pub fn has_copy(self) -> bool {
+    pub const fn has_copy(self) -> bool {
         self.has_ability(Ability::Copy)
     }
 
-    pub fn has_drop(self) -> bool {
+    pub const fn has_drop(self) -> bool {
         self.has_ability(Ability::Drop)
     }
 
-    pub fn has_store(self) -> bool {
+    pub const fn has_store(self) -> bool {
         self.has_ability(Ability::Store)
     }
 
-    pub fn has_key(self) -> bool {
+    pub const fn has_key(self) -> bool {
         self.has_ability(Ability::Key)
     }
 
-    pub fn remove(self, ability: Ability) -> Self {
+    pub const fn remove(self, ability: Ability) -> Self {
         self.difference(Self::singleton(ability))
     }
 
-    pub fn intersect(self, other: Self) -> Self {
+    pub const fn intersect(self, other: Self) -> Self {
         Self(self.0 & other.0)
     }
 
-    pub fn union(self, other: Self) -> Self {
+    pub const fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
 
-    pub fn difference(self, other: Self) -> Self {
+    pub const fn difference(self, other: Self) -> Self {
         Self(self.0 & !other.0)
     }
 
     #[inline]
-    fn is_subset_bits(sub: u8, sup: u8) -> bool {
+    const fn is_subset_bits(sub: u8, sup: u8) -> bool {
         (sub & sup) == sub
     }
 
-    pub fn is_subset(self, other: Self) -> bool {
+    pub const fn is_subset(self, other: Self) -> bool {
         Self::is_subset_bits(self.0, other.0)
     }
 
@@ -922,7 +922,7 @@ impl AbilitySet {
         Ok(abs)
     }
 
-    pub fn from_u8(byte: u8) -> Option<Self> {
+    pub const fn from_u8(byte: u8) -> Option<Self> {
         // If there is a bit set in the read `byte`, that bit must be set in the
         // `AbilitySet` containing all `Ability`s
         // This corresponds the byte being a bit set subset of ALL
@@ -934,7 +934,7 @@ impl AbilitySet {
         }
     }
 
-    pub fn into_u8(self) -> u8 {
+    pub const fn into_u8(self) -> u8 {
         self.0
     }
 }
