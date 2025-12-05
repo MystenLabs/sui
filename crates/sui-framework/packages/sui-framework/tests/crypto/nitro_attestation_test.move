@@ -46,7 +46,6 @@ fun test_nitro_attestation() {
         res.pcrs()[4].value() == x"f3e18816e8d0ba69088d034522e742f0e1909ab34d5e83a1f579ffb43c58f0f0f35d64401efc9426097565d0506a8a5f",
     );
 
-
     assert!(res.user_data().is_none());
     assert!(res.nonce().is_none());
     assert_eq!(

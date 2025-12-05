@@ -78,6 +78,7 @@ party.json
 pay.json
 poseidon.json
 priority_queue.json
+protocol_config.json
 prover.json
 random.json
 sui.json
