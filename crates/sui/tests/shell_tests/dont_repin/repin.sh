@@ -3,5 +3,5 @@
 
 # This should fail - the manifest has a broken dep, and although the lockfile
 # has it pinned to the correct location, we've edited the manifest so it should cause repinning
-echo "# comment" >> Move.toml
+echo 'another_dep = { local = "another_dep" }' >> Move.toml
 sui move build

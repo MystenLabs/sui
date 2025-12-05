@@ -8,13 +8,13 @@ use std::{
 };
 
 use derive_where::derive_where;
+use sha2::{Digest as _, Sha256};
 use tempfile::tempdir;
 use tracing::debug;
 
 use super::manifest::Manifest;
+use super::package_lock::PackageSystemLock;
 use super::paths::PackagePath;
-use super::{compute_digest, package_lock::PackageSystemLock};
-use crate::dependency::FetchedDependency;
 use crate::errors::FileHandle;
 use crate::{
     compatibility::legacy::LegacyData,
@@ -24,6 +24,7 @@ use crate::{
         CachedPackageInfo, DefaultDependency, ManifestDependencyInfo, ParsedManifest, Publication,
     },
 };
+use crate::{dependency::FetchedDependency, schema::ReplacementDependency};
 use crate::{
     dependency::{CombinedDependency, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
@@ -118,7 +119,7 @@ impl<F: MoveFlavor> Package<F> {
         let deps = Self::deps_from_manifest(&file_handle, &manifest, env).await?;
 
         // compute the digest (TODO: this should only compute over the environment specific data)
-        let digest = compute_digest(file_handle.source());
+        let digest = Self::compute_digest(&deps);
 
         let result = Self {
             env: env.name().clone(),
@@ -274,6 +275,30 @@ impl<F: MoveFlavor> Package<F> {
                 .collect(),
             &system_dependencies,
         )?)
+    }
+
+    /// Compute a digest for a set of dependencies that, if changed, should trigger a repin.
+    fn compute_digest(deps: &[CombinedDependency]) -> String {
+        // WARNING: if you change this function, you will force all existing packages to be
+        // repinned.
+        use serde::Serialize;
+
+        // the fields that, if changed, should trigger a repin
+        #[derive(Serialize)]
+        struct RepinTriggers {
+            deps: BTreeMap<PackageName, ReplacementDependency>,
+        }
+
+        let unserialized = RepinTriggers {
+            deps: deps
+                .iter()
+                .map(|combined| (combined.name().clone(), combined.clone().into()))
+                .collect(),
+        };
+
+        let serialized = toml_edit::ser::to_string(&unserialized).expect("serialization succeeds");
+
+        format!("{:X}", Sha256::digest(serialized.as_bytes()))
     }
 }
 

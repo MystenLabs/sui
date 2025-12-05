@@ -11,13 +11,6 @@ pub mod root_package;
 pub use package_impl::*;
 pub use root_package::RootPackage;
 
-use sha2::{Digest, Sha256};
-
-/// Computes the SHA-256 digest of the input string
-fn compute_digest(input: &str) -> String {
-    format!("{:X}", Sha256::digest(input.as_bytes()))
-}
-
 /// Convert an async task into a single-threaded task. Copied from `sui-replay-2`
 macro_rules! block_on {
     ($expr:expr) => {{

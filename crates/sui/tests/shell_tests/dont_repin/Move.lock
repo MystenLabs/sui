@@ -5,15 +5,13 @@
 version = 4
 
 [pinned.testnet.dep]
-# Note: this was manually edited to point to the real directory (locked_dep_path); building with this
-# pinned dependency should succeed, whereas repinning should fail because the manifest has broken_dep_path
 source = { local = "locked_dep_path" }
 use_environment = "testnet"
-manifest_digest = "76C8810CAD8AF606946B35DC51E4B438C2704EBBE69BA46410DBB9B629E4B67A"
+manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
 deps = {}
 
 [pinned.testnet.example]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "64A96546375A92E0E131E19EBBED40349B62B0ED8C088284CDA7B26DEDB3826A"
+manifest_digest = "83F63B447BFCA297A62E4DBC1249BA02B7627B1DFEFA46F1AF8C87CF42622F1D"
 deps = { dep = "dep" }
