@@ -833,7 +833,7 @@ pub async fn download_formal_snapshot(
             .take((epoch + 1) as usize)
             .collect();
 
-    let summaries_handle = start_summary_sync(
+    let mut summaries_handle = start_summary_sync(
         perpetual_db.clone(),
         committee_store.clone(),
         checkpoint_store.clone(),
@@ -846,7 +846,7 @@ pub async fn download_formal_snapshot(
     );
 
     // Start transaction backfill in parallel with summary sync
-    let backfill_handle = {
+    let mut backfill_handle = {
         let perpetual_db = perpetual_db.clone();
         let ingestion_url = ingestion_url.to_string();
         let m = m.clone();
@@ -877,7 +877,7 @@ pub async fn download_formal_snapshot(
     let (sender, mut receiver) = mpsc::channel(num_parallel_downloads);
     let m_clone = m.clone();
 
-    let snapshot_handle = tokio::spawn(async move {
+    let mut snapshot_handle = tokio::spawn(async move {
         let local_store_config = ObjectStoreConfig {
             object_store: Some(ObjectStoreType::File),
             directory: Some(snapshot_dir_clone.to_path_buf()),
@@ -903,14 +903,42 @@ pub async fn download_formal_snapshot(
     });
     let mut root_global_state_hash = GlobalStateHash::default();
     let mut num_live_objects = 0;
-    while let Some((partial_hash, num_objects)) = receiver.recv().await {
-        num_live_objects += num_objects;
-        root_global_state_hash.union(&partial_hash);
+    let mut summaries_done = false;
+    let mut backfill_done = false;
+    let mut snapshot_done = false;
+
+    loop {
+        tokio::select! {
+            res = receiver.recv() => {
+                match res {
+                    Some((partial_hash, num_objects)) => {
+                        num_live_objects += num_objects;
+                        root_global_state_hash.union(&partial_hash);
+                    }
+                    None => break,
+                }
+            }
+            res = &mut summaries_handle, if !summaries_done => {
+                res.expect("Task join failed").expect("Summaries task failed");
+                summaries_done = true;
+            }
+            res = &mut backfill_handle, if !backfill_done => {
+                res.expect("Task join failed").expect("Backfill task failed");
+                backfill_done = true;
+            }
+            res = &mut snapshot_handle, if !snapshot_done => {
+                res.expect("Task join failed").expect("Snapshot restore task failed");
+                snapshot_done = true;
+            }
+        }
     }
-    summaries_handle
-        .await
-        .expect("Task join failed")
-        .expect("Summaries task failed");
+
+    if !summaries_done {
+        summaries_handle
+            .await
+            .expect("Task join failed")
+            .expect("Summaries task failed");
+    }
 
     let last_checkpoint = checkpoint_store
         .get_highest_verified_checkpoint()?
@@ -967,10 +995,12 @@ pub async fn download_formal_snapshot(
         )?;
     }
 
-    snapshot_handle
-        .await
-        .expect("Task join failed")
-        .expect("Snapshot restore task failed");
+    if !snapshot_done {
+        snapshot_handle
+            .await
+            .expect("Task join failed")
+            .expect("Snapshot restore task failed");
+    }
 
     // TODO we should ensure this map is being updated for all end of epoch
     // checkpoints during summary sync. This happens in `insert_{verified|certified}_checkpoint`
@@ -991,7 +1021,9 @@ pub async fn download_formal_snapshot(
     .await?;
 
     // Wait for backfill to complete
-    backfill_handle.await.expect("Task join failed")?;
+    if !backfill_done {
+        backfill_handle.await.expect("Task join failed")?;
+    }
 
     let new_path = path.parent().unwrap().join("live");
     if new_path.exists() {
