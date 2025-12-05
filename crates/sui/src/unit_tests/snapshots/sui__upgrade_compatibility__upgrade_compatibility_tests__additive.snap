@@ -50,4 +50,4 @@ error[Compatibility E03001]: function signature mismatch
    = Restore the original function's return type for function 'function_to_change'.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'additive'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'additive'. Use --skip-verify-compatibility to bypass this check locally.
