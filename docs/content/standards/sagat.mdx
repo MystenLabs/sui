@@ -1,35 +1,35 @@
 ---
 title: Sagat 
 description: Sagat is a multisig management platform designed for managing Sui multisig wallets.
-keywords: [ placeholder ] 
+keywords: [multisig, multi-signature, wallet management, transaction signing, Sagat SDK, Sagat API, signature analyzer, transaction signer, proposal voting, multisig threshold, external proposers, Slush wallet, Suilet wallet, TypeScript SDK, Testnet, Mainnet] 
 ---
 
 [Sagat](https://github.com/MystenLabs/sagat/tree/main) is a full-stack multisig management platform for Sui multisig wallets. It is built using Bun and a TypeScript API for the backend and React for the frontend.
 
-Use the [Sagat web interface](https://sagat.mystenlabs.com/) for [signing transactions](#transaction-signer), [analyzing signatures](#signature-analyzer), creating and managing multisigs, accepting or rejecting multisig invitations, and creating, voting on, and executing proposals. Alternatively, yse the [Sagat SDK](https://github.com/MystenLabs/sagat/tree/main/sdk) to execute these tasks programmatically. 
+Use the [Sagat web interface](https://sagat.mystenlabs.com/) for [signing transactions](#transaction-signer), [analyzing signatures](#signature-analyzer), creating and managing multisigs, accepting or rejecting multisig invitations, and creating, voting on, and executing proposals. Alternatively, use the [Sagat SDK](https://github.com/MystenLabs/sagat/tree/main/sdk) to execute these tasks programmatically. 
 
 ## What is multisig?
 
 [Multisig](/guides/developer/cryptography/multisig) is a type of authentication that requires multiple signatures from different parties before a transaction can be executed. Several addresses can be invited to a multisig group, and all invited parties must accept for the multisig to be created.
 
-Each multisig can have a different voting threshold. For example, in a multisig that contains 3 users, only 2 of the users might need to sign the proposed transaction for it to be approved. In other scenarios, all users might be required to sign the transaction, and if one rejects it, the proposed transaction is cancelled. Each threshold can configure different weights per user, enabling endless combinations, such as 5 out of 6 with just 2 addresses.
+Each multisig can have a different voting threshold. For example, in a multisig that contains 3 users, only 2 of the users might need to sign the proposed transaction for it to be approved. In other scenarios, all users might be required to sign the transaction, and if one rejects it, the proposed transaction is canceled. Each threshold can configure different weights per user, enabling endless combinations, such as 5 out of 6 with just 2 addresses.
 
 Learn how to use the [TypeScript SDK for multisig](https://sdk.mystenlabs.com/typescript/cryptography/multisig).
 
 ## Risks 
 
-[awaiting response]
+Sagat relies on the Sui infrastructure for its API layer, meaning you do not have full confidentiality of what you are signing. 
 
-### Self hosting Sagat
+The application's frontend is also hosted through Sui services, which you must rely on to be secure. Always validate a transaction's preview in a secondary location, such as through your wallet, not just from the web interface.
 
-To takea control and use Sagat in a trustless manner, you can self host it. To do so, first download the Github repository:
+### Mitigate risks by self-hosting Sagat
 
+To take control and use Sagat in a trustless manner, you can self-host it. To do so, first download the GitHub repository:
 ```
 $ git clone https://github.com/MystenLabs/sagat/tree/main
 ```
 
 Then, build the SDK and spin up the frontend and the API using the command:
-
 ```
 $ bun run dev
 ```
@@ -42,7 +42,7 @@ Through the Sagat [web interface](https://sagat.mystenlabs.com/) you can use the
 
 - Create multisigs within the browser. The browser validates each multisig and displays a real-time preview. 
 
-- Accept or reject invitations to participate in multisig compositions/
+- Accept or reject invitations to participate in multisig compositions.
 
 - Propose new transactions.
 
@@ -56,15 +56,17 @@ Through the Sagat [web interface](https://sagat.mystenlabs.com/) you can use the
 
 Each of these tasks can be executed [programmatically](#using-sagat-programmatically) as well.
 
-### Connecting Slush 
+### Connecting a wallet 
 
-First, connect your [Slush](https://slush.app/) wallet to the Sagat web interface:
+First, connect your [Slush](https://slush.app/) or [Suilet](https://suiet.app/) wallet to the Sagat web interface:
 
 ![Sagat connect Slush](./images/sagat-1.png "Screenshot showing how to connect Slush wallet to Sagat.")
 
+Connecting a wallet to the Sagat web interface registers the wallet's keys with the service. Multisigs can only contain keys that have been registered with Sagat. Keys can also be registered [programmatically](#register-public-keys).
+
 :::tip 
 
-The message "No wallets found. Install a wallet (e.g. Slush Wallet) to continue." indicates that you must [install the Slush extension](https://chromewebstore.google.com/detail/slush-%E2%80%94-a-sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil) before continuing. 
+The message "No wallets found. Install a wallet (ex. Slush Wallet) to continue." indicates that you must [install the Slush extension](https://chromewebstore.google.com/detail/slush-%E2%80%94-a-sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil) before continuing. 
 
 :::
 
@@ -72,31 +74,91 @@ Unlock your wallet and approve the initial transaction. The Sagat web interface 
 
 ![Sagat authenticate Slush](./images/sagat-2.png "Screenshot showing how to authenticate transaction in Slush.")
 
-Follow the steps in your Slush wallet to sign and approve the transaction, then verify account ownership.
+Follow the steps in your wallet to sign and approve the transaction, then verify account ownership.
 
-### Testnet versus Mainnet
+#### Testnet versus Mainnet
 
 In the account drop-down menu, there is a toggle option for **Test Mode**. Test mode toggles connection to Testnet when turned on and connection to Mainnet when turned off. 
 
 Using Testnet is recommended for testing and debugging, as signing and submitting transactions use Testnet SUI tokens that have no fiat equivalent value. Signing and submitting transactions to Mainnet costs real SUI tokens that have a fiat equivalent value.
 
-### Signature analyzer 
+### Creating and managing multisig 
 
-The [signature analyzer tool](https://sagat.mystenlabs.com/tools/signature-analyzer) is used to analyze and decode 64-base encoded signatures. It supports both multisig and single signature schemes.
+A multisig is a group of users who must vote on and approve transactions before execution. To create and execute multisig transactions, you must first create a multisig. 
+
+Click **Create Your First Multisig**
+
+![Sagat Create Your First Multisig](./images/sagat-3.png "Screenshot showing 'Create Your First Multisig' option.")
+
+You must add at least 2 addresses to create a multisig and set the approval threshold before the multisig can be created.
+
+![Sagat create multisig](./images/sagat-4.png "Screenshot showing multisig creation form.")
+
+To add another member, click **Add Another Member**, then add their public key and configure their approval weight.
+
+If you do not know a user's public key, you can click the magnifying glass:
+
+![Sagat lookup public key](./images/sagat-5.png "Screenshot showing how to look up a public key.")
+
+Then enter their Sui address. The address's public key is returned.
+
+![Sagat lookup public key](./images/sagat-6.png "Screenshot showing how to look up a public key.")
+
+:::caution 
+
+Addresses must be registered with Sagat before they can be invited to a multisig.
+
+:::
+
+The multisig preview is displayed before you create it. 
+
+![Sagat multisig preview](./images/sagat-7.png "Screenshot showing a multisig preview.")
+
+### Multisig invitations 
+
+Once a multisig has been created, the added addresses receive an invitation to join the multisig. Pending invitations can be seen in the **Invitations** tab.
+
+![Sagat multisig invitations](./images/sagat-8.png "Screenshot showing multisig invitations tab.")
+
+### Create and submit proposals 
+
+From the Sagat dashboard, you can see several details and options regarding proposals, including:
+
+- A button to create a new proposal.
+
+- All proposals that have been submitted, are pending, or have been executed. Proposals are sorted by status. 
+
+- An overview of the multisig, its members, and any external proposers that have been added.
+
+- An overview of the assets owned by the multisig. 
+
+![Sagat dashboard](./images/sagat-9.png "Screenshot showing Sagat dashboard.")
+
+### Add external proposers 
+
+External proposers can create proposals for a multisig without being added as part of the multisig. External proposers cannot approve or execute transactions on behalf of the multisig. 
+
+To add external proposers, click on the **Overview** tab and scroll down to **Proposers** and click **Add Proposer**.
+
+![Sagat external proposers](./images/sagat-10.png "Screenshot showing how to add external proposers.")
+
+### Analyze signatures
+
+The [signature analyzer tool](https://sagat.mystenlabs.com/tools/signature-analyzer) is used to analyze and decode base64-encoded signatures. It supports both multisig and single signature schemes.
 
 Insert the signature into the input box. The decoded signature and its details are returned:
 
-![Sagat signature analyzer](./images/sagat-3.png "Screenshot showing signature analysis details using Sagat signature analyzer tool.")
+![Sagat signature analyzer](./images/sagat-11.png "Screenshot showing signature analysis details using Sagat signature analyzer tool.")
 
 You can get a transaction's signature through network explorers like [SuiScan](https://suiscan.xyz/testnet/) by viewing a [transaction's details](https://suiscan.xyz/testnet/tx/GPtGkR2F7wN1TAqDJmUE3wKTBeL7e9sVuv7UTGvp9E99) and looking at the **User signature** metadata field.
 
 :::caution 
 
-If the Sagat web interface is set to **Test Mode**, you can only use signatures for transactions deployed on Testnet. For Mainnet transactions, disable **Test mode** in the account drop down menu on Sagat. 
+If the Sagat web interface is set to **Test Mode**, you can only use signatures for transactions deployed on Testnet. For Mainnet transactions, disable **Test mode** in the account drop-down menu on Sagat. 
 
 :::
 
-### Transaction signer 
+### Sign and share transactions 
 
 The [transaction signer tool](https://sagat.mystenlabs.com/tools/sign) can be used to preview and sign transactions using the Slush wallet you connected to the web interface.
 
@@ -104,13 +166,15 @@ Insert the transaction data as raw JSON or base64. The tool returns a preview of
 
 :::caution 
 
-If the Sagat web interface is set to **Test Mode**, you can preview or sign transactions for Testnet. For Mainnet transactions, disable **Test mode** in the account drop down menu on Sagat. 
+If the Sagat web interface is set to **Test Mode**, you can preview or sign transactions for Testnet. For Mainnet transactions, disable **Test mode** in the account drop-down menu on Sagat. 
 
 :::
 
+Once a transaction has been signed, you can share a link to the transaction to others who can view and sign it. 
+
 ## Using Sagat programmatically
 
-Sagat can be used through a [TypeScript SDK](https://github.com/MystenLabs/sagat/tree/main/sdk) or the [Sagat API](https://github.com/MystenLabs/sagat/tree/main/api). The examples below demonstrate test scenarios for using the Sagat API. 
+Sagat can be used through a [TypeScript SDK](https://github.com/MystenLabs/sagat/tree/main/sdk) or the [Sagat API](https://github.com/MystenLabs/sagat/tree/main/api) to execute the same tasks supported through the web browser. The examples below demonstrate test scenarios for using the Sagat API. 
 
 ### Register public keys
 
@@ -140,7 +204,7 @@ Learn how to execute this task using the [Sagat TypeScript SDK](https://github.c
 
 ### Creating and managing multisig 
 
-To create and execute multisig transactions, first a multisig must be created. Multisigs are groups of users who must vote and approve of transactions before they can be executed. If a proposed transaction does not receive majority approval by the members of the multisig, the transaction is cancelled. 
+A multisig is a group of users who must vote on and approve transactions before execution. To create and execute multisig transactions, you must first create a multisig. If a proposed transaction does not receive majority approval from multisig members, the transaction is canceled. 
 
 For example, create and verify a 2-of-2 multisig: 
 
@@ -207,13 +271,13 @@ View and accept pending multisig invitations for a public key:
 	noComments
 />
 
-Learn how view invitations using the [Sagat TypeScript SDK](https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L234-L251), or learn how to [accept invitations with the SDK](https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L102-L113). You can also [reject an invitation](https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L115-L126).
+Learn how to view invitations using the [Sagat TypeScript SDK](https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L234-L251), or learn how to [accept invitations with the SDK](https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L102-L113). You can also [reject an invitation](https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L115-L126).
 
 ### Proposal creation
 
 For a multisig transaction to be executed, it must first be proposed. The members of that multisig must vote on the proposed transaction and the configured majority must agree to execute the transaction. 
 
-Only verified multisig members can create and vote on proposals. Each multisig member can vote once. A proposal must reach a certain voting threshold to be executed. Before a proposal has been executed, it can be [cancelled by the user](https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L197-L208) that created the proposal. 
+Only verified multisig members can create and vote on proposals. Each multisig member can vote once. A proposal must reach a certain voting threshold to be executed. Before a proposal has been executed, it can be [canceled by the user](https://github.com/MystenLabs/sagat/blob/313624a9d3b4b971b81b80be851b49e055067250/sdk/src/client.ts#L197-L208) that created the proposal. 
 
 <ImportContent
 	source="/api/test/proposal-business-logic.test.ts"
