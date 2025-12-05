@@ -1,0 +1,119 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 1, lines 6-20:
+//# run-graphql
+Response: {
+  "data": {
+    "happyPath": {
+      "availableRange": {
+        "first": {
+          "digest": "ZQawQqeikA4pRqKnkcuHuMnGZuKJTSt3V3EVmMjG56k",
+          "sequenceNumber": 0
+        },
+        "last": {
+          "digest": "ZQawQqeikA4pRqKnkcuHuMnGZuKJTSt3V3EVmMjG56k",
+          "sequenceNumber": 0
+        }
+      }
+    }
+  }
+}
+
+task 2, lines 22-32:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Type 'InvalidType' not found in schema.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "typeNotFound",
+        "availableRange"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 3, lines 34-44:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Field 'invalidField' not found in type 'Query'.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "fieldNotFound",
+        "availableRange"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 4, lines 46-56:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Type 'InvalidType' not found in schema.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "invalidTypeAndField",
+        "availableRange"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 5, lines 58-68:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "'ZkLoginIntentScope' is not an Object or Interface.",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "notAnObjectOrInterface",
+        "availableRange"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
