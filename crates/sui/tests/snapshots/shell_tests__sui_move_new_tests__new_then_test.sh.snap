@@ -7,17 +7,15 @@ description: tests/shell_tests/sui_move_new_tests/new_then_test.sh
 # SPDX-License-Identifier: Apache-2.0
 
 # check that sui move new followed by sui move test succeeds
-sui move new example
-cd example && sui move test
+sui move --client.config $CONFIG new example
+cd example && sui move --client.config $CONFIG test
 
 ----- results -----
 success: true
 exit_code: 0
 ----- stdout -----
-INCLUDING DEPENDENCY Bridge
-INCLUDING DEPENDENCY SuiSystem
-INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
 BUILDING example
 Running Move unit tests
 Test result: OK. Total tests: 0; passed: 0; failed: 0

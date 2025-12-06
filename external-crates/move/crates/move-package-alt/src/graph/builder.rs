@@ -3,10 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    dependency::PinnedDependencyInfo,
+    dependency::{Pinned, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
-    package::{EnvironmentName, Package, lockfile::Lockfiles, paths::PackagePath},
+    package::{
+        EnvironmentName, Package, lockfile::Lockfiles, package_lock::PackageSystemLock,
+        paths::PackagePath,
+    },
     schema::{Environment, PackageID, PackageName},
 };
 
@@ -17,11 +20,33 @@ use std::{
 };
 
 use bimap::BiBTreeMap;
+use colored::Colorize;
 use petgraph::graph::{DiGraph, NodeIndex};
+use thiserror::Error;
 use tokio::sync::OnceCell;
-use tracing::debug;
+use tracing::{debug, info};
 
-use super::{PackageGraph, PackageGraphEdge};
+use super::PackageGraph;
+
+#[derive(Error, Debug)]
+pub enum LockfileError {
+    #[error("Invalid lockfile: there are multiple root nodes in environment {env}")]
+    MultipleRootNodes { env: EnvironmentName },
+
+    #[error("Invalid lockfile: there is no root node")]
+    NoRootNode,
+
+    #[error(
+        "Invalid lockfile: package `{source_id}` has a dependency named `{dep_name}` in its manifest, but that dependency is not pinned in the lockfile"
+    )]
+    MissingDep {
+        source_id: PackageID,
+        dep_name: PackageName,
+    },
+
+    #[error("Invalid lockfile: package depends on a package with undefined ID `{target_id}`")]
+    UndefinedDep { target_id: PackageID },
+}
 
 struct PackageCache<F: MoveFlavor> {
     // TODO: better errors; I'm using Option for now because PackageResult doesn't have clone, but
@@ -50,8 +75,9 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &Environment,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<PackageGraph<F>>> {
-        self.load_from_lockfile_impl(path, env, true).await
+        self.load_from_lockfile_impl(path, env, true, mtx).await
     }
 
     /// Load a [PackageGraph] from the lockfile at `path`. Returns [None] if there is no lockfile
@@ -59,8 +85,9 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &Environment,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<PackageGraph<F>>> {
-        self.load_from_lockfile_impl(path, env, false).await
+        self.load_from_lockfile_impl(path, env, false, mtx).await
     }
 
     /// Load a [PackageGraph] from the lockfile at `path`. Returns [None] if there is no lockfile.
@@ -70,8 +97,10 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         path: &PackagePath,
         env: &Environment,
         check_digests: bool,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Option<PackageGraph<F>>> {
-        let Some(lockfile) = Lockfiles::read_from_dir(path)? else {
+        // TODO: this function is too long
+        let Some(lockfile) = Lockfiles::read_from_dir::<F>(path, mtx)? else {
             return Ok(None);
         };
 
@@ -85,10 +114,16 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         // First pass: create nodes for all packages
         for (pkg_id, pin) in pins.iter() {
-            let dep = PinnedDependencyInfo::from_lockfile(lockfile.file(), env.name(), pin)?;
-            let package = self.cache.fetch(&dep, env).await?;
+            let dep = Pinned::from_lockfile(lockfile.file(), &pin.source)?;
+            let package = self.cache.fetch(&dep, env, mtx).await?;
             let package_manifest_digest = package.digest();
             if check_digests && package_manifest_digest != &pin.manifest_digest {
+                info!(
+                    "[{}] Updating dependencies for `{}` environment because {:?} has been changed since the last update.",
+                    "NOTE".yellow(),
+                    env.name(),
+                    package.path().path().join("Move.toml")
+                );
                 return Ok(None);
             }
             let index = inner.add_node(package.clone());
@@ -96,17 +131,15 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             if dep.is_root() {
                 let old_root = root_index.replace(index);
                 if old_root.is_some() {
-                    return Err(PackageError::Generic(format!(
-                        "Invalid lockfile: there are multiple root nodes in environment {}",
-                        env.name()
-                    )));
+                    return Err(LockfileError::MultipleRootNodes {
+                        env: env.name().clone(),
+                    }
+                    .into());
                 }
             }
         }
 
-        let root_index = root_index.ok_or(PackageError::Generic(
-            "Invalid lockfile: there is no root node".into(),
-        ))?;
+        let root_index = root_index.ok_or(LockfileError::NoRootNode)?;
 
         debug!("loaded packages from lockfile: {package_ids:?}");
 
@@ -115,28 +148,32 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             let source_index = package_ids.get_by_left(source_id).unwrap();
             let source_package = inner[*source_index].clone();
 
-            for (dep_name, dep) in source_package.direct_deps() {
+            for dep in source_package.direct_deps() {
+                let dep_name = dep.name();
                 let target_id = source_pin
                     .deps
                     .get(dep_name)
-                    .ok_or(PackageError::Generic(format!(
-                        "Invalid lockfile: package `{source_id}` has a dependency named `{dep_name}` in its manifest, but that dependency is not pinned in the lockfile",
-                    )))?;
+                    .ok_or(LockfileError::MissingDep {
+                        source_id: source_id.clone(),
+                        dep_name: dep_name.clone(),
+                    })?;
 
-                let target_index = package_ids
-                    .get_by_left(target_id)
-                    .ok_or(PackageError::Generic(format!(
-                        "Invalid lockfile: package depends on a package with undefined ID `{target_id}`"
-                    )))?;
+                let target_index =
+                    package_ids
+                        .get_by_left(target_id)
+                        .ok_or(LockfileError::UndefinedDep {
+                            target_id: target_id.clone(),
+                        })?;
 
-                inner.add_edge(
-                    *source_index,
-                    *target_index,
-                    PackageGraphEdge {
-                        name: dep_name.clone(),
-                        dep: dep.clone(),
-                    },
-                );
+                let pin = inner
+                    .node_weight(*target_index)
+                    .expect("node exists")
+                    .dep_for_self()
+                    .clone();
+
+                let dep = PinnedDependencyInfo::from_combined(dep.clone(), pin);
+
+                inner.add_edge(*source_index, *target_index, dep.clone());
             }
         }
 
@@ -154,9 +191,14 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &Environment,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<PackageGraph<F>> {
         let graph = Arc::new(Mutex::new(DiGraph::new()));
-        let root = Arc::new(Package::<F>::load_root(path, env).await?);
+
+        let root = self
+            .cache
+            .fetch(&Pinned::Root(path.clone()), env, mtx)
+            .await?;
 
         // TODO: should we add `root` to `visited`? we may have a problem if there is a cyclic
         // dependency involving the root
@@ -164,10 +206,10 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         let visited = Arc::new(Mutex::new(BTreeMap::new()));
 
         let root_index = self
-            .add_transitive_manifest_deps(root, env, graph.clone(), visited)
+            .add_transitive_manifest_deps(root, env, graph.clone(), visited, mtx)
             .await?;
 
-        let inner: DiGraph<Arc<Package<F>>, PackageGraphEdge> =
+        let inner: DiGraph<Arc<Package<F>>, PinnedDependencyInfo> =
             graph.lock().expect("unpoisoned").map(
                 |_, node| {
                     node.clone()
@@ -187,7 +229,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     /// Assign unique identifiers to each node. In the case that there is no overlap, the
     /// identifier should be the same as the package's name.
     fn create_ids(
-        graph: &DiGraph<Arc<Package<F>>, PackageGraphEdge>,
+        graph: &DiGraph<Arc<Package<F>>, PinnedDependencyInfo>,
     ) -> BiBTreeMap<PackageID, NodeIndex> {
         let mut name_to_suffix: BTreeMap<PackageName, u8> = BTreeMap::new();
         let mut node_to_id: BiBTreeMap<PackageID, NodeIndex> = BiBTreeMap::new();
@@ -232,23 +274,40 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         package: Arc<Package<F>>,
         env: &Environment,
-        graph: Arc<Mutex<DiGraph<Option<Arc<Package<F>>>, PackageGraphEdge>>>,
-        visited: Arc<Mutex<BTreeMap<(EnvironmentName, PathBuf), NodeIndex>>>,
+        graph: Arc<Mutex<DiGraph<Option<Arc<Package<F>>>, PinnedDependencyInfo>>>,
+        visited: Arc<Mutex<BTreeMap<(EnvironmentName, PackagePath), NodeIndex>>>,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<NodeIndex> {
         // return early if node is cached; add empty node to graph and visited list otherwise
         let index = match visited
             .lock()
             .expect("unpoisoned")
-            .entry((env.name().clone(), package.path().as_ref().to_path_buf()))
+            .entry((env.name().clone(), package.path().clone()))
         {
             Entry::Occupied(entry) => return Ok(*entry.get()),
             Entry::Vacant(entry) => *entry.insert(graph.lock().expect("unpoisoned").add_node(None)),
         };
 
+        // pin dependencies
+        let pinned = PinnedDependencyInfo::pin::<F>(
+            package.dep_for_self(),
+            package.direct_deps().clone(),
+            env.id(),
+        )
+        .await
+        .map_err(|err| PackageError::DepError {
+            dep: package
+                .dep_for_self()
+                .unfetched_path()
+                .to_string_lossy()
+                .to_string(),
+            err: Box::new(err),
+        })?;
+
         // add outgoing edges for dependencies
         // Note: this loop could be parallel if we want parallel fetching:
-        for (name, dep) in package.direct_deps().iter() {
-            let fetched = self.cache.fetch(dep, env).await?;
+        for dep in pinned {
+            let fetched = self.cache.fetch(dep.as_ref(), env, mtx).await?;
 
             // We retain the defined environment name, but we assign a consistent chain id (environmentID).
             let new_env = Environment::new(dep.use_environment().clone(), env.id().clone());
@@ -258,17 +317,14 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
                 &new_env,
                 graph.clone(),
                 visited.clone(),
+                mtx,
             );
             let dep_index = Box::pin(future).await?;
 
-            graph.lock().expect("unpoisoned").add_edge(
-                index,
-                dep_index,
-                PackageGraphEdge {
-                    name: name.clone(),
-                    dep: dep.clone(),
-                },
-            );
+            graph
+                .lock()
+                .expect("unpoisoned")
+                .add_edge(index, dep_index, dep.clone());
         }
 
         graph
@@ -293,8 +349,9 @@ impl<F: MoveFlavor> PackageCache<F> {
     /// Return a reference to a cached [Package], loading it if necessary
     pub async fn fetch(
         &self,
-        dep: &PinnedDependencyInfo,
+        dep: &Pinned,
         env: &Environment,
+        mtx: &PackageSystemLock,
     ) -> PackageResult<Arc<Package<F>>> {
         let cell = self
             .cache
@@ -312,17 +369,16 @@ impl<F: MoveFlavor> PackageCache<F> {
         }
 
         // If not cached, load and cache
-        match Package::load(dep.clone(), env).await {
+        match Package::load(dep.clone(), env, mtx).await {
             Ok(package) => {
                 let node = Arc::new(package);
                 cell.get_or_init(async || Some(node.clone())).await;
                 Ok(node)
             }
-            Err(e) => Err(PackageError::Generic(format!(
-                "Failed to load package from {}: {}",
-                dep.unfetched_path().display(),
-                e
-            ))),
+            Err(e) => Err(PackageError::DepError {
+                dep: dep.unfetched_path().display().to_string(),
+                err: Box::new(e),
+            }),
         }
     }
 }

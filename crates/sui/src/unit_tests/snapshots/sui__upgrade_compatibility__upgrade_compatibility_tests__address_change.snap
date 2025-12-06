@@ -8,7 +8,7 @@ error[Compatibility E01002]: type mismatch
 10 │     public enum MyEnum {
    │                 ------ Enum definition
 11 │         A(MyStruct),
-   │         ^^^^^^^^^^^ Mismatched field type '0x2::upgrades::MyStruct', expected '0x1::upgrades::MyStruct'.
+   │         ^^^^^^^^^^^ Mismatched field type '0x2::upgrades::MyStruct', expected '0xabc::upgrades::MyStruct'.
    │
    = Enums are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Restore the original enum's variant for enum 'MyEnum' including the ordering.
@@ -19,7 +19,7 @@ error[Compatibility E01002]: type mismatch
 15 │     public struct MyNestedStruct has drop {
    │                   -------------- Struct definition
 16 │         a: MyStruct,
-   │         ^ Mismatched field type '0x2::upgrades::MyStruct', expected '0x1::upgrades::MyStruct'.
+   │         ^ Mismatched field type '0x2::upgrades::MyStruct', expected '0xabc::upgrades::MyStruct'.
    │
    = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
    = Restore the original struct's field for struct 'MyNestedStruct' including the ordering.
@@ -28,7 +28,7 @@ error[Compatibility E03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/address_change_v2/sources/UpgradeErrors.move:23:47
    │
 23 │     public fun func_with_generic_struct_param(a: MyStructWithGeneric<MyStruct>): u64 {
-   │                                               ^ Unexpected parameter '0x2::upgrades::MyStructWithGeneric<0x2::upgrades::MyStruct>', expected '0x1::upgrades::MyStructWithGeneric<0x1::upgrades::MyStruct>'
+   │                                               ^ Unexpected parameter '0x2::upgrades::MyStructWithGeneric<0x2::upgrades::MyStruct>', expected '0xabc::upgrades::MyStructWithGeneric<0xabc::upgrades::MyStruct>'
    │
    = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
    = Restore the original function's parameter for function 'func_with_generic_struct_param'.

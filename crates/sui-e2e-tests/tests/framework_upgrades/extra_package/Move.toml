@@ -3,9 +3,9 @@ name = "SuiExtra"
 edition = "2024.beta"
 
 [dependencies]
-SuiSystem = { local = "../../../../sui-framework/packages/sui-system" }
-Sui = { local = "../../../../sui-framework/packages/sui-framework" }
-MoveStdlib = { local = "../../../../sui-framework/packages/move-stdlib" }
+SuiSystem = { local = "../system-packages/sui-system" }
+Sui = { local = "../system-packages/sui-framework" }
+MoveStdlib = { local = "../system-packages/move-stdlib" }
 
 [addresses]
 sui_extra = "0x42"

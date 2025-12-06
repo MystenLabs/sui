@@ -23,7 +23,8 @@ move-command-line-common.workspace = true
 move-core-types.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
-move-package.workspace = true
+move-package-alt.workspace = true
+move-package-alt-compilation.workspace = true
 move-trace-format.workspace = true
 prometheus.workspace = true
 serde.workspace = true
@@ -39,6 +40,7 @@ sui-package-management.workspace = true
 sui-types.workspace = true
 serde_json.workspace = true
 tabled.workspace = true
+sui-package-alt.workspace = true
 telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }

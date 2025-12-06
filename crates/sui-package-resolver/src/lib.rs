@@ -3117,7 +3117,7 @@ mod tests {
     }
 
     fn package_storage_id(package: &CompiledPackage) -> AccountAddress {
-        AccountAddress::from(*package.published_at.as_ref().unwrap_or_else(|_| {
+        AccountAddress::from(*package.published_at.as_ref().unwrap_or_else(|| {
             panic!(
                 "Package {} doesn't have published-at set",
                 package.package.compiled_package_info.package_name,

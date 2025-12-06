@@ -26,6 +26,8 @@ tempfile.workspace = true
 
 move-binary-format.workspace = true
 move-compiler.workspace = true
-move-package.workspace = true
+move-package-alt-compilation.workspace = true
 sui-move-build.workspace = true
+sui-package-alt.workspace = true
 sui-config.workspace = true
+tokio.workspace = true

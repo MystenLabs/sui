@@ -2,7 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use petgraph::visit::{EdgeRef, IntoNodeReferences};
+
 use crate::{
+    errors::PackageResult,
     flavor::MoveFlavor,
     schema::{PackageID, Pin},
 };
@@ -10,29 +13,52 @@ use std::collections::BTreeMap;
 
 use super::PackageGraph;
 
-impl<F: MoveFlavor> From<&PackageGraph<F>> for BTreeMap<PackageID, Pin> {
-    /// Convert a PackageGraph into an entry in the lockfile's `[pinned]` section.
-    fn from(value: &PackageGraph<F>) -> Self {
-        let mut result = Self::new();
+#[allow(unused)]
+impl<F: MoveFlavor> PackageGraph<F> {
+    /// Output the pins corresponding to this package graph. Fails if some package has multiple
+    /// dependencies with the same name (this is unsupported right now, but will be enabled with
+    /// modes).
+    pub fn to_pins(&self) -> PackageResult<BTreeMap<PackageID, Pin>> {
+        let mut result = BTreeMap::new();
 
-        for (id, pkg) in value.all_packages() {
-            let deps = pkg
-                .direct_deps()
-                .iter()
-                .map(|(name, pkg)| (name.clone(), pkg.id().clone()))
-                .collect();
+        for (node, pkg) in self.inner.node_references() {
+            let mut deps = BTreeMap::new();
+
+            for edge in self.inner.edges(node) {
+                let dep_name = edge.weight().name().clone();
+                let target_id = self
+                    .package_ids
+                    .get_by_right(&edge.target())
+                    .expect("all nodes are in package_ids")
+                    .clone();
+
+                let old = deps.insert(dep_name, target_id);
+
+                if old.is_some() {
+                    // this indicates that there are multiple dependencies with the same name in a
+                    // package. This is currently impossible but may become possible when modes are
+                    // implemented
+                    todo!()
+                }
+            }
 
             let pin = Pin {
                 source: pkg.dep_for_self().clone().into(),
                 address_override: None, // TODO: this needs to be stored in the package node
-                use_environment: Some(pkg.package().environment_name().clone()),
-                manifest_digest: pkg.package().digest().to_string(),
+                use_environment: Some(pkg.environment_name().clone()),
+                manifest_digest: pkg.digest().to_string(),
                 deps,
             };
 
-            result.insert(id.clone(), pin);
+            let id = self
+                .package_ids
+                .get_by_right(&node)
+                .expect("all nodes are in package_ids")
+                .clone();
+
+            result.insert(id, pin);
         }
 
-        result
+        Ok(result)
     }
 }

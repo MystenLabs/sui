@@ -2,6 +2,4 @@
 name = "base"
 version = "0.0.1"
 edition = "2024.beta"
-
-[addresses]
-base =  "0x0"
+implicit-dependencies = false

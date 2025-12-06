@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::BTreeMap,
     io::{BufRead, Write},
     path::{Path, PathBuf},
 };
@@ -11,17 +12,25 @@ use clap::ArgAction;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 
-use move_compiler::editions::{Edition, Flavor};
+use move_compiler::{
+    editions::{Edition, Flavor},
+    shared::NumericalAddress,
+};
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_model_2::source_model;
-use move_package_alt::schema::EnvironmentName;
+use move_package_alt::{
+    graph::NamedAddress,
+    schema::{EnvironmentName, ModeName, OriginalID},
+};
 use move_symbol_pool::Symbol;
 
-use move_package_alt::{
-    errors::PackageResult, flavor::MoveFlavor, package::RootPackage, schema::Environment,
-};
+use move_package_alt::{flavor::MoveFlavor, package::RootPackage, schema::Environment};
 
 use crate::{
-    build_plan::BuildPlan, compiled_package::CompiledPackage, migrate::migrate, model_builder,
+    build_plan::BuildPlan,
+    compiled_package::{BuildNamedAddresses, CompiledPackage},
+    migrate::migrate,
+    model_builder,
 };
 
 use super::lint_flag::LintFlag;
@@ -74,6 +83,10 @@ pub struct BuildConfig {
     #[clap(long = move_compiler::command_line::JSON_ERRORS, global = true)]
     pub json_errors: bool,
 
+    /// Additional named address mapping. Useful for tools in rust
+    #[clap(skip)]
+    pub additional_named_addresses: BTreeMap<String, AccountAddress>,
+
     #[clap(flatten)]
     pub lint_flag: LintFlag,
 
@@ -93,6 +106,11 @@ pub struct BuildConfig {
     #[clap(skip)]
     pub force_lock_file: bool,
 
+    /// Forces the `root` package to have `0x0` as its address, instead of the published
+    /// address (if it exists). Useful for `upgrade` operations (or any other cases we might want to..)
+    #[clap(skip)]
+    pub root_as_zero: bool,
+
     #[clap(
         long = "environment",
         short = 'e',
@@ -107,49 +125,104 @@ pub struct BuildConfig {
 }
 
 impl BuildConfig {
-    pub async fn compile<F: MoveFlavor, W: Write>(
+    pub async fn compile_package<F: MoveFlavor, W: Write + Send>(
         &self,
         path: &Path,
         env: &Environment,
         writer: &mut W,
-    ) -> PackageResult<CompiledPackage> {
-        let root_pkg = RootPackage::<F>::load(path, env.clone()).await?;
+    ) -> anyhow::Result<CompiledPackage> {
+        let root_pkg = RootPackage::<F>::load(path, env.clone(), self.mode_set()).await?;
         BuildPlan::create(&root_pkg, self)?.compile(writer, |compiler| compiler)
     }
 
     /// Migrate the package at `path`.
-    pub async fn migrate_package<F: MoveFlavor, W: Write, R: BufRead>(
+    pub async fn migrate_package<F: MoveFlavor, W: Write + Send, R: BufRead>(
         mut self,
         path: &Path,
         env: Environment,
         writer: &mut W,
         reader: &mut R,
-    ) -> PackageResult<()> {
+    ) -> anyhow::Result<()> {
         // we set test to migrate all the code
         self.test_mode = true;
-        let root_pkg = RootPackage::<F>::load(path, env).await?;
+        let root_pkg = RootPackage::<F>::load(path, env, self.mode_set()).await?;
         let build_plan = BuildPlan::create(&root_pkg, &self)?;
 
         migrate(build_plan, writer, reader)?;
         Ok(())
     }
 
-    pub async fn move_model_from_path<F: MoveFlavor, W: Write>(
+    pub async fn move_model_from_path<F: MoveFlavor, W: Write + Send>(
         &self,
         path: &Path,
         env: Environment,
         writer: &mut W,
-    ) -> PackageResult<source_model::Model> {
-        let root_pkg = RootPackage::<F>::load(path, env).await?;
+    ) -> anyhow::Result<source_model::Model> {
+        let root_pkg = RootPackage::<F>::load(path, env, self.mode_set()).await?;
         self.move_model_from_root_pkg(&root_pkg, writer).await
     }
 
-    pub async fn move_model_from_root_pkg<F: MoveFlavor, W: Write>(
+    pub async fn move_model_from_root_pkg<F: MoveFlavor, W: Write + Send>(
         &self,
         root_pkg: &RootPackage<F>,
         writer: &mut W,
-    ) -> PackageResult<source_model::Model> {
+    ) -> anyhow::Result<source_model::Model> {
         model_builder::build(writer, root_pkg, self)
+    }
+
+    /// Build the addresse for the supplied config, so we can inject 0x0s etc.
+    pub fn addresses_for_config(
+        &self,
+        named_addresses: BTreeMap<Identifier, NamedAddress>,
+    ) -> BuildNamedAddresses {
+        // Make unpublished deps `0x0` if the config says so.
+        let fixed_named_addresses = named_addresses
+            .into_iter()
+            .map(|(id, addr)| {
+                (
+                    id,
+                    match addr {
+                        NamedAddress::Unpublished { dummy_addr: _ }
+                            if self.set_unpublished_deps_to_zero =>
+                        {
+                            NamedAddress::Defined(OriginalID(AccountAddress::ZERO))
+                        }
+                        addr => addr,
+                    },
+                )
+            })
+            .collect();
+
+        // Force root as zero for upgrade operations.
+        let mut addresses: BuildNamedAddresses = if self.root_as_zero {
+            BuildNamedAddresses::root_as_zero(fixed_named_addresses)
+        } else {
+            fixed_named_addresses.into()
+        };
+
+        // Inject additional named addresses.
+        for (pkg, address) in self.additional_named_addresses.clone() {
+            addresses.inner.insert(
+                pkg.clone().into(),
+                NumericalAddress::new(
+                    address.into_bytes(),
+                    move_compiler::shared::NumberFormat::Hex,
+                ),
+            );
+        }
+
+        addresses
+    }
+
+    /// Produce the set of mode names to hand to the package system.
+    pub fn mode_set(&self) -> Vec<ModeName> {
+        let mut result: Vec<ModeName> = self.modes.iter().map(|mode| mode.to_string()).collect();
+
+        if self.test_mode {
+            result.push("test".to_string());
+        }
+
+        result
     }
 }
 

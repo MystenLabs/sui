@@ -65,6 +65,7 @@ pub async fn publish_basics_package(
     for retry in 1..=max_retries {
         let transaction = TestTransactionBuilder::new(sender, current_gas, gas_price)
             .publish_examples("basics")
+            .await
             .build_and_sign(keypair);
         tracing::info!(
             "Publishing basics package with tx digest {:?} (attempt {})",

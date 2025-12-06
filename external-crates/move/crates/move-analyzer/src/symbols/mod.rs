@@ -96,7 +96,7 @@ use move_compiler::{
     typing::ast::ModuleDefinition,
 };
 use move_ir_types::location::*;
-use move_package::source_package::parsed_manifest::Dependencies;
+use move_package_alt::flavor::MoveFlavor;
 use move_symbol_pool::Symbol;
 
 pub mod compilation;
@@ -149,13 +149,18 @@ pub type FileModules = BTreeMap<PathBuf, BTreeSet<ModuleDefs>>;
 /// correctly computed symbols should be a replacement for the old set - if symbols are not
 /// actually (re)computed and the diagnostics are returned, the old symbolic information should
 /// be retained even if it's getting out-of-date.
-pub fn get_symbols(
+///
+/// Takes `modified_files` as an argument to indicate if we can retain (portion of) the cached
+/// user code. If `modified_files` is `None`, we can't retain any cached user code (need to recompute)
+/// everything. If `modified_files` is `Some`, we can retain cached user code for all Move files other than
+/// the ones in `modified_files` (if `modified_paths` contains a path not representing
+/// a Move file but rather a directory, then we conservatively do not re-use any cached info).
+pub fn get_symbols<F: MoveFlavor>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
     lint: LintLevel,
     cursor_info: Option<(&PathBuf, Position)>,
-    implicit_deps: Dependencies,
     flavor: Option<Flavor>,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     // helper function to avoid holding the lock for too long
@@ -180,12 +185,11 @@ pub fn get_symbols(
 
     loop {
         let compilation_start = Instant::now();
-        let (compiled_pkg_info_opt, ide_diagnostics) = get_compiled_pkg(
+        let (compiled_pkg_info_opt, ide_diagnostics) = get_compiled_pkg::<F>(
             packages_info.clone(),
             ide_files_root.clone(),
             pkg_path,
             lint,
-            implicit_deps.clone(),
             flavor,
             cursor_info.map(|(path, _)| path),
         )?;

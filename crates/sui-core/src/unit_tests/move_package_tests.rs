@@ -44,11 +44,11 @@ macro_rules! linkage_table {
     }}
 }
 
-#[test]
-fn test_new_initial() {
+#[tokio::test]
+async fn test_new_initial() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
     let c_pkg = MovePackage::new_initial(
-        &build_test_modules("Cv1"),
+        &build_test_modules("Cv1").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [],
     )
@@ -56,14 +56,14 @@ fn test_new_initial() {
 
     let b_id1 = ObjectID::from_single_byte(0xb1);
     let b_pkg = MovePackage::new_initial(
-        &build_test_modules("B"),
+        &build_test_modules("B").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&c_pkg],
     )
     .unwrap();
 
     let a_pkg = MovePackage::new_initial(
-        &build_test_modules("A"),
+        &build_test_modules("A").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&b_pkg, &c_pkg],
     )
@@ -109,11 +109,11 @@ fn test_new_initial() {
     );
 }
 
-#[test]
-fn test_upgraded() {
+#[tokio::test]
+async fn test_upgraded() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
     let c_pkg = MovePackage::new_initial(
-        &build_test_modules("Cv1"),
+        &build_test_modules("Cv1").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [],
     )
@@ -123,7 +123,7 @@ fn test_upgraded() {
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
-            &build_test_modules("Cv2"),
+            &build_test_modules("Cv2").await,
             &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
@@ -142,11 +142,11 @@ fn test_upgraded() {
     );
 }
 
-#[test]
-fn test_depending_on_upgrade() {
+#[tokio::test]
+async fn test_depending_on_upgrade() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
     let c_pkg = MovePackage::new_initial(
-        &build_test_modules("Cv1"),
+        &build_test_modules("Cv1").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [],
     )
@@ -156,14 +156,14 @@ fn test_depending_on_upgrade() {
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
-            &build_test_modules("Cv2"),
+            &build_test_modules("Cv2").await,
             &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(
-        &build_test_modules("B"),
+        &build_test_modules("B").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&c_new],
     )
@@ -177,11 +177,11 @@ fn test_depending_on_upgrade() {
     );
 }
 
-#[test]
-fn test_upgrade_upgrades_linkage() {
+#[tokio::test]
+async fn test_upgrade_upgrades_linkage() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
     let c_pkg = MovePackage::new_initial(
-        &build_test_modules("Cv1"),
+        &build_test_modules("Cv1").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [],
     )
@@ -191,14 +191,14 @@ fn test_upgrade_upgrades_linkage() {
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
-            &build_test_modules("Cv2"),
+            &build_test_modules("Cv2").await,
             &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(
-        &build_test_modules("B"),
+        &build_test_modules("B").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&c_pkg],
     )
@@ -208,7 +208,7 @@ fn test_upgrade_upgrades_linkage() {
     let b_new = b_pkg
         .new_upgraded(
             b_id2,
-            &build_test_modules("B"),
+            &build_test_modules("B").await,
             &ProtocolConfig::get_for_max_version_UNSAFE(),
             [&c_new],
         )
@@ -229,11 +229,11 @@ fn test_upgrade_upgrades_linkage() {
     );
 }
 
-#[test]
-fn test_upgrade_linkage_digest_to_new_dep() {
+#[tokio::test]
+async fn test_upgrade_linkage_digest_to_new_dep() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
     let c_pkg = MovePackage::new_initial(
-        &build_test_modules("Cv1"),
+        &build_test_modules("Cv1").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [],
     )
@@ -243,14 +243,14 @@ fn test_upgrade_linkage_digest_to_new_dep() {
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
-            &build_test_modules("Cv2"),
+            &build_test_modules("Cv2").await,
             &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(
-        &build_test_modules("B"),
+        &build_test_modules("B").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&c_pkg],
     )
@@ -260,7 +260,7 @@ fn test_upgrade_linkage_digest_to_new_dep() {
     let b_new = b_pkg
         .new_upgraded(
             b_id2,
-            &build_test_modules("B"),
+            &build_test_modules("B").await,
             &ProtocolConfig::get_for_max_version_UNSAFE(),
             [&c_new],
         )
@@ -280,6 +280,7 @@ fn test_upgrade_linkage_digest_to_new_dep() {
         b_new.digest(hash_modules),
         MovePackage::compute_digest_for_modules_and_deps(
             &build_test_modules("B")
+                .await
                 .iter()
                 .map(|module| {
                     let mut bytes = Vec::new();
@@ -295,8 +296,8 @@ fn test_upgrade_linkage_digest_to_new_dep() {
     )
 }
 
-#[test]
-fn test_duplicate_transitive_deps() {
+#[tokio::test]
+async fn test_duplicate_transitive_deps() {
     use move_binary_format::file_format::basic_test_module;
 
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
@@ -315,8 +316,8 @@ fn test_duplicate_transitive_deps() {
     assert!(pkg.is_ok());
 }
 
-#[test]
-fn test_duplicate_transitive_deps_publish() {
+#[tokio::test]
+async fn test_duplicate_transitive_deps_publish() {
     use move_binary_format::file_format::basic_test_module;
 
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
@@ -335,8 +336,8 @@ fn test_duplicate_transitive_deps_publish() {
     assert!(pkg.is_ok());
 }
 
-#[test]
-fn test_transitive_dep_downgrade() {
+#[tokio::test]
+async fn test_transitive_dep_downgrade() {
     use move_binary_format::file_format::basic_test_module;
 
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
@@ -387,32 +388,32 @@ fn test_transitive_dep_downgrade() {
     assert_eq!(pkg.unwrap_err().kind(), &ExecutionErrorKind::InvalidLinkage);
 }
 
-#[test]
-fn test_upgrade_downgrade_transitive() {
+#[tokio::test]
+async fn test_upgrade_downgrade_transitive() {
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
 
     let c_id1 = ObjectID::from_single_byte(0xc1);
-    let c_v1 = MovePackage::new_initial(&build_test_modules("Cv1"), &config, []).unwrap();
+    let c_v1 = MovePackage::new_initial(&build_test_modules("Cv1").await, &config, []).unwrap();
 
     let c_id2 = ObjectID::from_single_byte(0xc2);
     let c_v2 = c_v1
-        .new_upgraded(c_id2, &build_test_modules("Cv2"), &config, [])
+        .new_upgraded(c_id2, &build_test_modules("Cv2").await, &config, [])
         .unwrap();
 
     let b_id1 = ObjectID::from_single_byte(0xb1);
-    let b_v1 = MovePackage::new_initial(&build_test_modules("B"), &config, [&c_v1]).unwrap();
+    let b_v1 = MovePackage::new_initial(&build_test_modules("B").await, &config, [&c_v1]).unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
     let b_v2 = b_v1
-        .new_upgraded(b_id2, &build_test_modules("Bv2"), &config, [&c_v2])
+        .new_upgraded(b_id2, &build_test_modules("Bv2").await, &config, [&c_v2])
         .unwrap();
 
     let f_id = ObjectID::from_single_byte(0xf1);
     let f_pkg =
-        MovePackage::new_initial(&build_test_modules("F"), &config, [&b_v1, &c_v1]).unwrap();
+        MovePackage::new_initial(&build_test_modules("F").await, &config, [&b_v1, &c_v1]).unwrap();
 
     let h_pkg = MovePackage::new_initial(
-        &build_test_modules("H"),
+        &build_test_modules("H").await,
         &ProtocolConfig::get_for_version(88.into(), Chain::Unknown),
         [&f_pkg, &b_v2, &c_v1],
     )
@@ -428,16 +429,20 @@ fn test_upgrade_downgrade_transitive() {
     );
 
     assert!(
-        MovePackage::new_initial(&build_test_modules("H"), &config, [&f_pkg, &b_v2, &c_v1])
-            .is_err()
+        MovePackage::new_initial(
+            &build_test_modules("H").await,
+            &config,
+            [&f_pkg, &b_v2, &c_v1]
+        )
+        .is_err()
     );
 }
 
-#[test]
-fn test_upgrade_downngrades_linkage() {
+#[tokio::test]
+async fn test_upgrade_downngrades_linkage() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
     let c_pkg = MovePackage::new_initial(
-        &build_test_modules("Cv1"),
+        &build_test_modules("Cv1").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [],
     )
@@ -447,14 +452,14 @@ fn test_upgrade_downngrades_linkage() {
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
-            &build_test_modules("Cv2"),
+            &build_test_modules("Cv2").await,
             &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(
-        &build_test_modules("B"),
+        &build_test_modules("B").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&c_new],
     )
@@ -464,7 +469,7 @@ fn test_upgrade_downngrades_linkage() {
     let b_new = b_pkg
         .new_upgraded(
             b_id2,
-            &build_test_modules("B"),
+            &build_test_modules("B").await,
             &ProtocolConfig::get_for_max_version_UNSAFE(),
             [&c_pkg],
         )
@@ -485,11 +490,11 @@ fn test_upgrade_downngrades_linkage() {
     );
 }
 
-#[test]
-fn test_transitively_depending_on_upgrade() {
+#[tokio::test]
+async fn test_transitively_depending_on_upgrade() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
     let c_pkg = MovePackage::new_initial(
-        &build_test_modules("Cv1"),
+        &build_test_modules("Cv1").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [],
     )
@@ -499,7 +504,7 @@ fn test_transitively_depending_on_upgrade() {
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
-            &build_test_modules("Cv2"),
+            &build_test_modules("Cv2").await,
             &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
@@ -507,14 +512,14 @@ fn test_transitively_depending_on_upgrade() {
 
     let b_id1 = ObjectID::from_single_byte(0xb1);
     let b_pkg = MovePackage::new_initial(
-        &build_test_modules("B"),
+        &build_test_modules("B").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&c_pkg],
     )
     .unwrap();
 
     let a_pkg = MovePackage::new_initial(
-        &build_test_modules("A"),
+        &build_test_modules("A").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&b_pkg, &c_new],
     )
@@ -529,10 +534,10 @@ fn test_transitively_depending_on_upgrade() {
     );
 }
 
-#[test]
-fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest() {
+#[tokio::test]
+async fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest() {
     let c_v1 = MovePackage::new_initial(
-        &build_test_modules("Cv1"),
+        &build_test_modules("Cv1").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [],
     )
@@ -542,28 +547,32 @@ fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest
     let c_v2 = c_v1
         .new_upgraded(
             c_id2,
-            &build_test_modules("Cv2"),
+            &build_test_modules("Cv2").await,
             &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(
-        &build_test_modules("B"),
+        &build_test_modules("B").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&c_v1],
     )
     .unwrap();
     let b_v2 = MovePackage::new_initial(
-        &build_test_modules("Bv2"),
+        &build_test_modules("Bv2").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&c_v2],
     )
     .unwrap();
 
     let with_unpublished_deps = false;
-    let local_v1 = build_test_package("B").get_package_digest(with_unpublished_deps);
-    let local_v2 = build_test_package("Bv2").get_package_digest(with_unpublished_deps);
+    let local_v1 = build_test_package("B")
+        .await
+        .get_package_digest(with_unpublished_deps);
+    let local_v2 = build_test_package("Bv2")
+        .await
+        .get_package_digest(with_unpublished_deps);
 
     let hash_modules = true;
     assert_ne!(b_pkg.digest(hash_modules), b_v2.digest(hash_modules));
@@ -572,16 +581,16 @@ fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest
     assert_ne!(local_v1, local_v2);
 }
 
-#[test]
+#[tokio::test]
 #[should_panic]
-fn test_panic_on_empty_package() {
+async fn test_panic_on_empty_package() {
     let _ = MovePackage::new_initial(&[], &ProtocolConfig::get_for_max_version_UNSAFE(), []);
 }
 
-#[test]
-fn test_fail_on_missing_dep() {
+#[tokio::test]
+async fn test_fail_on_missing_dep() {
     let err = MovePackage::new_initial(
-        &build_test_modules("B"),
+        &build_test_modules("B").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [],
     )
@@ -593,24 +602,24 @@ fn test_fail_on_missing_dep() {
     );
 }
 
-#[test]
-fn test_fail_on_missing_transitive_dep() {
+#[tokio::test]
+async fn test_fail_on_missing_transitive_dep() {
     let c_pkg = MovePackage::new_initial(
-        &build_test_modules("Cv1"),
+        &build_test_modules("Cv1").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [],
     )
     .unwrap();
 
     let b_pkg = MovePackage::new_initial(
-        &build_test_modules("B"),
+        &build_test_modules("B").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&c_pkg],
     )
     .unwrap();
 
     let err = MovePackage::new_initial(
-        &build_test_modules("A"),
+        &build_test_modules("A").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&b_pkg],
     )
@@ -622,10 +631,10 @@ fn test_fail_on_missing_transitive_dep() {
     );
 }
 
-#[test]
-fn test_fail_on_transitive_dependency_downgrade() {
+#[tokio::test]
+async fn test_fail_on_transitive_dependency_downgrade() {
     let c_pkg = MovePackage::new_initial(
-        &build_test_modules("Cv1"),
+        &build_test_modules("Cv1").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [],
     )
@@ -635,21 +644,21 @@ fn test_fail_on_transitive_dependency_downgrade() {
     let c_new = c_pkg
         .new_upgraded(
             c_id2,
-            &build_test_modules("Cv2"),
+            &build_test_modules("Cv2").await,
             &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(
-        &build_test_modules("B"),
+        &build_test_modules("B").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&c_new],
     )
     .unwrap();
 
     let err = MovePackage::new_initial(
-        &build_test_modules("A"),
+        &build_test_modules("A").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [&b_pkg, &c_pkg],
     )
@@ -661,10 +670,10 @@ fn test_fail_on_transitive_dependency_downgrade() {
     );
 }
 
-#[test]
-fn test_fail_on_upgrade_missing_type() {
+#[tokio::test]
+async fn test_fail_on_upgrade_missing_type() {
     let c_pkg = MovePackage::new_initial(
-        &build_test_modules("Cv2"),
+        &build_test_modules("Cv2").await,
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         [],
     )
@@ -674,7 +683,7 @@ fn test_fail_on_upgrade_missing_type() {
     let err = c_pkg
         .new_upgraded(
             c_id2,
-            &build_test_modules("Cv1"),
+            &build_test_modules("Cv1").await,
             &ProtocolConfig::get_for_max_version_UNSAFE(),
             [],
         )
@@ -691,7 +700,7 @@ fn test_fail_on_upgrade_missing_type() {
     let err = c_pkg
         .new_upgraded(
             c_id2,
-            &build_test_modules("Cv1"),
+            &build_test_modules("Cv1").await,
             &ProtocolConfig::get_for_version(4.into(), Chain::Unknown),
             [],
         )
@@ -699,14 +708,18 @@ fn test_fail_on_upgrade_missing_type() {
     assert_eq!(err.kind(), &ExecutionErrorKind::InvariantViolation);
 }
 
-pub fn build_test_package(test_dir: &str) -> CompiledPackage {
+pub async fn build_test_package(test_dir: &str) -> CompiledPackage {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_package", test_dir]);
-    BuildConfig::new_for_testing().build(&path).unwrap()
+    BuildConfig::new_for_testing()
+        .build_async(&path)
+        .await
+        .unwrap()
 }
 
-pub fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {
+pub async fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {
     build_test_package(test_dir)
+        .await
         .get_modules()
         .cloned()
         .collect()

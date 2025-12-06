@@ -428,6 +428,11 @@ impl TestTransactionBuilder {
         self.publish_with_data(PublishData::Source(path, false))
     }
 
+    pub async fn publish_async(self, path: PathBuf) -> Self {
+        self.publish_with_data_async(PublishData::Source(path, false))
+            .await
+    }
+
     pub fn publish_with_deps(self, path: PathBuf) -> Self {
         self.publish_with_data(PublishData::Source(path, true))
     }
@@ -435,7 +440,9 @@ impl TestTransactionBuilder {
     pub fn publish_with_data(mut self, data: PublishData) -> Self {
         let (all_module_bytes, dependencies) = match data {
             PublishData::Source(path, with_unpublished_deps) => {
-                let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
+                let mut config = BuildConfig::new_for_testing();
+                config.config.set_unpublished_deps_to_zero = with_unpublished_deps;
+                let compiled_package = config.build(&path).unwrap();
                 let all_module_bytes = compiled_package.get_package_bytes(with_unpublished_deps);
                 let dependencies = compiled_package.get_dependency_storage_package_ids();
                 (all_module_bytes, dependencies)
@@ -456,8 +463,35 @@ impl TestTransactionBuilder {
         self
     }
 
-    pub fn publish_examples(self, subpath: &'static str) -> Self {
-        let path = if let Ok(p) = std::env::var("MOVE_EXAMPLES_DIR") {
+    pub async fn publish_with_data_async(mut self, data: PublishData) -> Self {
+        let (all_module_bytes, dependencies) = match data {
+            PublishData::Source(path, with_unpublished_deps) => {
+                let compiled_package = BuildConfig::new_for_testing()
+                    .build_async(&path)
+                    .await
+                    .unwrap();
+                let all_module_bytes = compiled_package.get_package_bytes(with_unpublished_deps);
+                let dependencies = compiled_package.get_dependency_storage_package_ids();
+                (all_module_bytes, dependencies)
+            }
+            PublishData::ModuleBytes(bytecode) => (bytecode, vec![]),
+            PublishData::CompiledPackage(compiled_package) => {
+                let all_module_bytes = compiled_package.get_package_bytes(false);
+                let dependencies = compiled_package.get_dependency_storage_package_ids();
+                (all_module_bytes, dependencies)
+            }
+        };
+
+        let upgrade_cap = self
+            .ptb_builder
+            .publish_upgradeable(all_module_bytes, dependencies);
+        self.ptb_builder.transfer_arg(self.sender, upgrade_cap);
+
+        self
+    }
+
+    pub async fn publish_examples(self, subpath: &'static str) -> Self {
+        let path: PathBuf = if let Ok(p) = std::env::var("MOVE_EXAMPLES_DIR") {
             let mut path = PathBuf::from(p);
             path.extend([subpath]);
             path
@@ -466,7 +500,7 @@ impl TestTransactionBuilder {
             path.extend(["..", "..", "examples", "move", subpath]);
             path
         };
-        self.publish(path)
+        self.publish_async(path).await
     }
 
     pub fn build(self) -> TransactionData {
@@ -621,7 +655,8 @@ pub async fn make_publish_transaction(context: &WalletContext, path: PathBuf) ->
     context
         .sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
-                .publish(path)
+                .publish_async(path)
+                .await
                 .build(),
         )
         .await
@@ -648,7 +683,8 @@ pub async fn publish_package(context: &WalletContext, path: PathBuf) -> ObjectRe
     let txn = context
         .sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
-                .publish(path)
+                .publish_async(path)
+                .await
                 .build(),
         )
         .await;
@@ -664,6 +700,7 @@ pub async fn publish_basics_package(context: &WalletContext) -> ObjectRef {
         .sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
                 .publish_examples("basics")
+                .await
                 .build(),
         )
         .await;
@@ -818,6 +855,7 @@ pub async fn publish_nfts_package(
         .sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
                 .publish_examples("nft")
+                .await
                 .build(),
         )
         .await;

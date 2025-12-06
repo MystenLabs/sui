@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # test that `sui move new` works as expected with `<NAME>` containing uppercase letter(s)
-sui move new _Example_A
+sui move --client.config $CONFIG new _Example_A
 echo ==== files in project ====
 ls -A _Example_A
 echo ==== files in sources ====

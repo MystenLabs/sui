@@ -1,3 +1,3 @@
 [package]
-name = "two-runs-same-module"
+name = "two_runs_same_module"
 edition = "2024.beta"

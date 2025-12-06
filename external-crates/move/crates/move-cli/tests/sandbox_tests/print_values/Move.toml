@@ -2,8 +2,8 @@
 name = "print_values"
 edition = "2024.beta"
 
-[addresses]
-std = "0x1"
-
 [dependencies]
 MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+print_values = "0x0"

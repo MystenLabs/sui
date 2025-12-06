@@ -21,7 +21,7 @@ pub enum ShaError {
 }
 
 /// A git commit hash
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(try_from = "String", into = "String")]
 pub struct GitSha {
     inner: String,

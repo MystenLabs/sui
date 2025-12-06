@@ -2,9 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
+use indoc::formatdoc;
 use move_cli::base::new;
-use move_package::source_package::layout::SourcePackageLayout;
-use std::{fs::create_dir_all, io::Write, path::Path};
+use move_package_alt::package::layout::SourcePackageLayout;
+use std::{
+    fs::create_dir_all,
+    path::{Path, PathBuf},
+};
 
 #[derive(Parser)]
 #[group(id = "sui-move-new")]
@@ -15,58 +19,62 @@ pub struct New {
 
 impl New {
     pub fn execute(self, path: Option<&Path>) -> anyhow::Result<()> {
-        let name = &self.new.name.to_lowercase();
-        let provided_name = &self.new.name.to_string();
+        let name = self.new.name_var()?;
+        self.new.execute(path)?;
+        std::fs::write(
+            self.new.source_file_path(&path)?,
+            formatdoc!(
+                r#"
+                /*
+                /// Module: {name}
+                module {name}::{name};
+                */
 
-        self.new
-            .execute(path, [] as [(&str, &str); 0], [(name, "0x0")], "")?;
-        let p = path.unwrap_or_else(|| Path::new(&provided_name));
-        let mut w = std::fs::File::create(
-            p.join(SourcePackageLayout::Sources.path())
-                .join(format!("{name}.move")),
-        )?;
-        writeln!(
-            w,
-            r#"/*
-/// Module: {name}
-module {name}::{name};
-*/
+                // For Move coding conventions, see
+                // https://docs.sui.io/concepts/sui-move-concepts/conventions
 
-// For Move coding conventions, see
-// https://docs.sui.io/concepts/sui-move-concepts/conventions
-
-"#,
-            name = name
+                "#,
+            ),
         )?;
 
-        create_dir_all(p.join(SourcePackageLayout::Tests.path()))?;
-        let mut w = std::fs::File::create(
-            p.join(SourcePackageLayout::Tests.path())
-                .join(format!("{name}_tests.move")),
-        )?;
-        writeln!(
-            w,
-            r#"/*
-#[test_only]
-module {name}::{name}_tests;
-// uncomment this line to import the module
-// use {name}::{name};
+        std::fs::write(
+            self.test_file_path(&path)?,
+            formatdoc!(
+                r#"
+                /*
+                #[test_only]
+                module {name}::{name}_tests;
+                // uncomment this line to import the module
+                // use {name}::{name};
 
-const ENotImplemented: u64 = 0;
+                #[error(code = 0)]
+                const ENotImplemented: vector<u8> = b"Not Implemented";
 
-#[test]
-fun test_{name}() {{
-    // pass
-}}
+                #[test]
+                fun test_{name}() {{
+                    // pass
+                }}
 
-#[test, expected_failure(abort_code = ::{name}::{name}_tests::ENotImplemented)]
-fun test_{name}_fail() {{
-    abort ENotImplemented
-}}
-*/"#,
-            name = name
+                #[test, expected_failure(abort_code = ::{name}::{name}_tests::ENotImplemented)]
+                fun test_{name}_fail() {{
+                    abort ENotImplemented
+                }}
+                */
+                "#,
+            ),
         )?;
 
         Ok(())
+    }
+
+    pub fn test_file_path(&self, path: &Option<&Path>) -> anyhow::Result<PathBuf> {
+        let dir = self
+            .new
+            .root_dir(path)?
+            .join(SourcePackageLayout::Tests.path());
+
+        create_dir_all(&dir)?;
+
+        Ok(dir.join(format!("{}_tests.move", self.new.name_var()?)))
     }
 }

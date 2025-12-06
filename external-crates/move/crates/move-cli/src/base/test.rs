@@ -5,25 +5,34 @@ use super::reroot_path;
 use crate::NativeFunctionRecord;
 use anyhow::Result;
 use clap::*;
-use move_binary_format::{CompiledModule, binary_config::BinaryConfig};
+
 use move_command_line_common::files::MOVE_COVERAGE_MAP_EXTENSION;
 use move_compiler::{
     PASS_CFGIR,
     diagnostics::{self, Diagnostics},
-    shared::{NumberFormat, NumericalAddress},
+    shared::NumericalAddress,
     unit_test::{TestPlan, plan_builder::construct_test_plan},
 };
 use move_coverage::coverage_map::{CoverageMap, output_map_to_file};
-use move_package::{BuildConfig, compilation::build_plan::BuildPlan};
+use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
+use move_package_alt_compilation::{
+    build_config::BuildConfig, build_plan::BuildPlan, compiled_package::BuildNamedAddresses,
+    find_env,
+};
+use move_symbol_pool::Symbol;
 use move_unit_test::UnitTestingConfig;
 use move_vm_test_utils::gas_schedule::CostTable;
-use std::{io::Write, path::Path, process::ExitStatus};
 // if windows
 #[cfg(target_family = "windows")]
 use std::os::windows::process::ExitStatusExt;
 // if unix
 #[cfg(target_family = "unix")]
 use std::os::unix::prelude::ExitStatusExt;
+use std::{
+    io::{Stdout, Write},
+    path::Path,
+    process::ExitStatus,
+};
 // if not windows nor unix
 #[cfg(not(any(target_family = "windows", target_family = "unix")))]
 compile_error!("Unsupported OS, currently we only support windows and unix family");
@@ -75,7 +84,7 @@ pub struct Test {
 }
 
 impl Test {
-    pub fn execute(
+    pub async fn execute<F: MoveFlavor>(
         self,
         path: Option<&Path>,
         config: BuildConfig,
@@ -86,7 +95,7 @@ impl Test {
         let compute_coverage = self.compute_coverage;
         // save disassembly if trace execution is enabled
         let save_disassembly = self.trace;
-        let result = run_move_unit_tests(
+        let result = run_move_unit_tests::<F, Stdout>(
             &rerooted_path,
             config,
             self.unit_test_config(),
@@ -95,7 +104,8 @@ impl Test {
             compute_coverage,
             save_disassembly,
             &mut std::io::stdout(),
-        )?;
+        )
+        .await?;
 
         // Return a non-zero exit code if any test failed
         if let (UnitTestResult::Failure, _) = result {
@@ -139,9 +149,9 @@ pub enum UnitTestResult {
     Failure,
 }
 
-pub fn run_move_unit_tests<W: Write + Send>(
+pub async fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     pkg_path: &Path,
-    mut build_config: move_package::BuildConfig,
+    mut build_config: move_package_alt_compilation::build_config::BuildConfig,
     mut unit_test_config: UnitTestingConfig,
     natives: Vec<NativeFunctionRecord>,
     cost_table: Option<CostTable>,
@@ -151,61 +161,39 @@ pub fn run_move_unit_tests<W: Write + Send>(
 ) -> Result<(UnitTestResult, Option<Diagnostics>)> {
     let mut test_plan = None;
     build_config.test_mode = true;
-    build_config.dev_mode = true;
     build_config.save_disassembly = save_disassembly;
 
-    // Build the resolution graph (resolution graph diagnostics are only needed for CLI commands so
+    // Load the package (package graph diagnostics are only needed for CLI commands so
     // ignore them by passing a vector as the writer)
-    let resolution_graph =
-        build_config.resolution_graph_for_package(pkg_path, None, &mut Vec::new())?;
+    let env = find_env::<F>(pkg_path, &build_config)?;
+    let root_pkg =
+        RootPackage::<F>::load(pkg_path.to_path_buf(), env, build_config.mode_set()).await?;
+    let root_pkg_name = Symbol::from(root_pkg.name().as_str());
+
+    let mut addresses: Vec<(String, NumericalAddress)> = vec![];
+    let named_address_values: BuildNamedAddresses =
+        root_pkg.package_info().named_addresses()?.into();
+    for (name, addr) in named_address_values.inner.into_iter() {
+        addresses.push((name.to_string(), addr));
+    }
 
     // Note: unit_test_config.named_address_values is always set to vec![] (the default value) before
     // being passed in.
-    unit_test_config.named_address_values = resolution_graph
-        .extract_named_address_mapping()
-        .map(|(name, addr)| {
-            (
-                name.to_string(),
-                NumericalAddress::new(addr.into_bytes(), NumberFormat::Hex),
-            )
-        })
-        .collect();
-
-    let binary_config = BinaryConfig::new_unpublishable();
-
-    // Collect all the bytecode modules that are dependencies of the package. We need to do this
-    // because they're not returned by the compilation result, but we need to add them in the
-    // VM storage.
-    let mut bytecode_deps_modules = vec![];
-    for pkg in resolution_graph.package_table.values() {
-        let source_available = !pkg
-            .get_sources(&resolution_graph.build_options)
-            .unwrap()
-            .is_empty();
-        if source_available {
-            continue;
-        }
-        for bytes in pkg.get_bytecodes_bytes()? {
-            let module = CompiledModule::deserialize_with_config(&bytes, &binary_config)?;
-            bytecode_deps_modules.push(module);
-        }
-    }
-
-    let root_package = resolution_graph.root_package();
-    let build_plan = BuildPlan::create(&resolution_graph)?;
+    unit_test_config.named_address_values = addresses;
 
     // Compile the package. We need to intercede in the compilation, process being performed by the
     // Move package system, to first grab the compilation env, construct the test plan from it, and
     // then save it, before resuming the rest of the compilation and returning the results and
     // control back to the Move package system.
     let mut warning_diags = None;
+    let build_plan = BuildPlan::create(&root_pkg, &build_config)?;
     build_plan.compile_with_driver(writer, |compiler| {
         let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
         let compiler =
             diagnostics::unwrap_or_report_pass_diagnostics(&files, comments_and_compiler_res);
         let (compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
-        let built_test_plan = construct_test_plan(compilation_env, Some(root_package), &cfgir);
+        let built_test_plan = construct_test_plan(compilation_env, Some(root_pkg_name), &cfgir);
         let mapped_files = compilation_env.mapped_files().clone();
 
         let compilation_result = compiler.at_cfgir(cfgir).build();
@@ -225,7 +213,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     let (test_plan, mapped_files, units) = test_plan.unwrap();
     let test_plan = test_plan.unwrap();
     let no_tests = test_plan.is_empty();
-    let test_plan = TestPlan::new(test_plan, mapped_files, units, bytecode_deps_modules);
+    let test_plan = TestPlan::new(test_plan, mapped_files, units, vec![]);
 
     let trace_path = pkg_path.join(".trace");
     let coverage_map_path = pkg_path

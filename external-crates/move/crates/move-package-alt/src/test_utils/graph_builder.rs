@@ -47,19 +47,26 @@ use petgraph::{
     graph::{DiGraph, NodeIndex},
     visit::EdgeRef,
 };
+use tempfile::TempDir;
 use tracing::debug;
 
 use crate::{
+    errors::PackageResult,
     flavor::{
         Vanilla,
-        vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME},
+        vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME, default_environment},
     },
-    package::{EnvironmentID, EnvironmentName, RootPackage, paths::PackagePath},
-    schema::{OriginalID, PackageName, PublishAddresses, PublishedID},
+    package::{
+        EnvironmentID, EnvironmentName, RootPackage, package_lock::PackageSystemLock,
+        paths::PackagePath,
+    },
+    schema::{Environment, ModeName, OriginalID, PublishAddresses, PublishedID},
     test_utils::{Project, project},
 };
 
 use crate::graph::PackageGraph;
+
+use super::git::RepoProject;
 
 pub struct TestPackageGraph {
     // invariant: for all `node` and `id`, `inner[node].id = id` if and only if `nodes[id] = node`
@@ -67,12 +74,13 @@ pub struct TestPackageGraph {
     // is the same as the node's id
     inner: DiGraph<PackageSpec, DepSpec>,
     nodes: BTreeMap<String, NodeIndex>,
+    root: Option<PathBuf>,
 }
 
 /// Information used to build a node in the package graph
 pub struct PackageSpec {
     /// The `package.name` field.
-    name: PackageName,
+    name: String,
 
     /// The identifier used to refer to the package in tests and on the filesystem
     id: String,
@@ -90,24 +98,54 @@ pub struct PackageSpec {
     /// std = "0x1" <-- `name`
     /// ```
     legacy_name: Option<String>,
+
+    /// The version field in the manifest
+    version: Option<String>,
+
+    /// Any git deps
+    git_deps: Vec<GitSpec>,
+
+    /// Additional files
+    files: BTreeMap<PathBuf, String>,
+
+    /// Are implicit deps included?
+    implicit_deps: bool,
+
+    /// The environments to be applied to the package's manifest.
+    /// IF empty, no environments will be written to the manifest.
+    environments: BTreeMap<EnvironmentName, EnvironmentID>,
+
+    /// Custom addresses for legacy packages (name -> Option<address>)
+    /// If None is provided, the address is considered to be the legacy `_`.
+    legacy_addresses: BTreeMap<String, Option<String>>,
+}
+
+struct GitSpec {
+    repo: String,
+    path: String,
+    rev: String,
+    spec: DepSpec,
 }
 
 /// Information used to build an edge in the package graph
 pub struct DepSpec {
     /// The name that the containing package gives to the dependency
-    name: PackageName,
+    name: String,
 
     /// whether to include `override = true`
     is_override: bool,
 
     /// the `rename-from` field for the dep
-    rename_from: Option<PackageName>,
+    rename_from: Option<String>,
 
     /// the `[dep-replacements]` environment to include the dep in (or `None` for the default section)
     in_env: Option<EnvironmentName>,
 
     /// the `use-environment` field for the dep
     use_env: Option<EnvironmentName>,
+
+    /// the `modes` field for the dep
+    modes: Option<Vec<ModeName>>,
 }
 
 /// Information about a publication
@@ -118,7 +156,8 @@ pub struct PubSpec {
 }
 
 pub struct Scenario {
-    project: Project,
+    root_path: PathBuf,
+    tempdir: Option<TempDir>,
 }
 
 impl TestPackageGraph {
@@ -126,23 +165,30 @@ impl TestPackageGraph {
     pub fn new(node_names: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
         let mut inner = DiGraph::new();
         let mut nodes = BTreeMap::new();
-        for node in node_names {
-            let index = inner.add_node(PackageSpec::new(node.as_ref()));
-            let old = nodes.insert(node.as_ref().to_string(), index);
-            assert!(old.is_none());
-        }
-        Self { inner, nodes }
+        let result = Self {
+            inner,
+            nodes,
+            root: None,
+        };
+        result.add_packages(node_names)
     }
 
     /// Add a dependency to the graph from `a` to `b` for each pair `("a", "b")` in `edges`. The
     /// dependencies will be local dependencies in the `[dependencies]` sections.
     pub fn add_deps(
-        self,
+        mut self,
         edges: impl IntoIterator<Item = (impl AsRef<str>, impl AsRef<str>)>,
     ) -> Self {
         edges.into_iter().fold(self, |graph, (source, target)| {
             graph.add_dep(source, target, identity)
         })
+    }
+
+    /// Add a list of packages with no additional configuration
+    pub fn add_packages(self, node_names: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
+        node_names
+            .into_iter()
+            .fold(self, |graph, node| graph.add_package(node, |pkg| pkg))
     }
 
     /// Add and configure a package named
@@ -197,33 +243,74 @@ impl TestPackageGraph {
         self
     }
 
+    /// Add a git dependency from `source` to package `target` inside the git repository `repo`
+    /// with revision `rev`
+    pub fn add_git_dep(
+        mut self,
+        source: impl AsRef<str>,
+        repo: &RepoProject,
+        target: impl AsRef<str>,
+        rev: impl AsRef<str>,
+        build: impl FnOnce(DepSpec) -> DepSpec,
+    ) -> Self {
+        let source_idx = self.nodes[source.as_ref()];
+        let dep_spec = build(DepSpec::new(&target));
+        self.inner[self.nodes[source.as_ref()]]
+            .git_deps
+            .push(GitSpec {
+                repo: repo.repo_path_str(),
+                path: target.as_ref().to_string(),
+                rev: rev.as_ref().to_string(),
+                spec: dep_spec,
+            });
+        self
+    }
+
+    pub fn at(mut self, path: impl AsRef<Path>) -> Self {
+        self.root = Some(path.as_ref().to_path_buf());
+        self
+    }
+
     /// Generate a project containing subdirectories for each package; each subdirectory will have
     /// a manifest and a lockfile. The manifests will contain all of the dependency information, and
     /// the lockfiles will contain all of the publication information, but the pinned sections of
     /// the lockfiles will be empty (so that the package graph will be built from the manifest).
     /// All dependencies are local
-    ///
-    /// TODO: we should perhaps add more flexible ways to generate the lockfiles/manifests so that
-    /// we can more easily test different aspects of repinning
     pub fn build(self) -> Scenario {
-        let mut project = project();
+        let (tempdir, root_path) = match &self.root {
+            Some(file) => (None, file.to_path_buf()),
+            None => {
+                let tmp = TempDir::new().unwrap();
+                let path = tmp.path().to_path_buf();
+                (Some(tmp), path)
+            }
+        };
+
         for (package_id, node) in self.nodes.iter() {
-            let dir = PathBuf::from(package_id.as_str());
+            let dir = root_path.join(package_id.as_str());
+            std::fs::create_dir_all(&dir).unwrap();
 
             let manifest = &self.format_manifest(*node);
+            debug!(
+                "Generated test manifest for {package_id} ({:?}):\n\n{manifest}",
+                dir.join("Move.toml")
+            );
+            std::fs::write(dir.join("Move.toml"), manifest).unwrap();
+
             let pubfile = &self.format_pubfile(*node);
+            if !pubfile.is_empty() {
+                debug!("Generated test pubfile for {package_id}:\n\n{pubfile}");
+                std::fs::write(dir.join("Published.toml"), pubfile).unwrap();
+            }
 
-            debug!("Generated test manifest for {package_id}:\n\n{manifest}");
-            debug!("Generated test pubfile for {package_id}:\n\n{pubfile}");
-
-            project = project
-                .file(dir.join("Move.toml"), manifest)
-                .file(dir.join("Published.toml"), pubfile);
+            // add extra files
+            for (path, contents) in self.inner[*node].files.iter() {
+                std::fs::create_dir_all(dir.join(path).parent().unwrap()).unwrap();
+                std::fs::write(dir.join(path), contents).unwrap();
+            }
         }
 
-        Scenario {
-            project: project.build(),
-        }
+        Scenario { tempdir, root_path }
     }
 
     /// Return the contents of a `Move.toml` file for the package represented by `node`
@@ -232,14 +319,42 @@ impl TestPackageGraph {
             return self.format_legacy_manifest(node);
         }
 
+        let version_str = match &self.inner[node].version {
+            Some(v) => format!("version = \"{v}\"\n"),
+            None => "".into(),
+        };
+
+        let implicits = if self.inner[node].implicit_deps {
+            ""
+        } else {
+            "implicit-dependencies = false\n"
+        };
+
+        let environments = if self.inner[node].environments.is_empty() {
+            "".to_string()
+        } else {
+            format!(
+                r#"
+                [environments]
+                {}
+                "#,
+                self.inner[node]
+                    .environments
+                    .iter()
+                    .map(|(name, id)| format!("{name} = \"{id}\""))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        };
+
         let mut move_toml = formatdoc!(
             r#"
                 [package]
                 name = "{}"
                 edition = "2024"
-
-                [environments]
-                {DEFAULT_ENV_NAME} = "{DEFAULT_ENV_ID}"
+                {version_str}
+                {implicits}
+                {environments}
 
                 "#,
             self.inner[node].name
@@ -251,6 +366,17 @@ impl TestPackageGraph {
             let dep_spec = edge.weight();
             let dep_str = self.format_dep(edge.weight(), &self.inner[edge.target()]);
             if let Some(env) = &dep_spec.use_env {
+                dep_replacements.push_str(&dep_str);
+                dep_replacements.push('\n');
+            } else {
+                deps.push_str(&dep_str);
+                deps.push('\n');
+            }
+        }
+
+        for git_dep in &self.inner[node].git_deps {
+            let dep_str = self.format_git_dep(git_dep);
+            if let Some(env) = &git_dep.spec.use_env {
                 dep_replacements.push_str(&dep_str);
                 dep_replacements.push('\n');
             } else {
@@ -283,12 +409,19 @@ impl TestPackageGraph {
             .map(|it| format!("published-at = {}", it.addresses.published_at))
             .unwrap_or_default();
 
+        let implicits = if package.implicit_deps {
+            ""
+        } else {
+            "implicit-dependencies = false\n"
+        };
+
         let mut move_toml = formatdoc!(
             r#"
             [package]
             name = "{}"
             edition = "2024"
             {published_at}
+            {implicits}
             "#,
             package
                 .legacy_name
@@ -306,18 +439,32 @@ impl TestPackageGraph {
         move_toml.push_str(&deps);
         move_toml.push('\n');
 
-        // TODO: it would be good to split up `PackageSpec` and `LegacyPackageSpec`, so that we can
-        // add things like additional `[addresses]`
-        move_toml.push_str(&formatdoc!(
-            r#"
-            [addresses]
-            {} = "{}"
-            "#,
-            package.name,
-            publication
-                .map(|it| it.addresses.original_id.to_string())
-                .unwrap_or("0x0".to_string())
-        ));
+        // Generate [addresses] section
+        move_toml.push_str("[addresses]\n");
+
+        // If custom addresses are provided, use them
+        if !package.legacy_addresses.is_empty() {
+            for (name, addr) in &package.legacy_addresses {
+                match addr {
+                    Some(addr_val) => {
+                        move_toml.push_str(&format!("{} = \"{}\"\n", name, addr_val));
+                    }
+                    None => {
+                        // Unresolved address - omit the value to make it Option<>
+                        move_toml.push_str(&format!("{} = \"_\"\n", name));
+                    }
+                }
+            }
+        } else {
+            // Default behavior: single address for the package name
+            move_toml.push_str(&format!(
+                "{} = \"{}\"\n",
+                package.name,
+                publication
+                    .map(|it| it.addresses.original_id.to_string())
+                    .unwrap_or("0x0".to_string())
+            ));
+        }
 
         move_toml
     }
@@ -325,7 +472,7 @@ impl TestPackageGraph {
     /// Return the contents of a `Move.lock` file for the package represented by
     /// `node`.
     fn format_pubfile(&self, node: NodeIndex) -> String {
-        let mut move_lock = String::new();
+        let mut pubfile = String::new();
 
         for (env, publication) in self.inner[node].pubs.iter() {
             let PubSpec {
@@ -338,7 +485,7 @@ impl TestPackageGraph {
                 ..
             } = publication;
 
-            move_lock.push_str(&formatdoc!(
+            pubfile.push_str(&formatdoc!(
                 r#"
                     [published.{env}]
                     chain-id = "{DEFAULT_ENV_ID}"
@@ -349,21 +496,39 @@ impl TestPackageGraph {
             ));
         }
 
-        move_lock
+        pubfile
     }
 
     /// Output the dependency in the form
     /// `<env>.<name> = { local = "...", rename_from = "...", ... }`
     /// (or just `<name> = { ... }` if the environment is `None`)
     fn format_dep(&self, dep: &DepSpec, target: &PackageSpec) -> String {
+        let path = &target.id;
+        Self::decorate_dep(&format!(r#"local = "../{path}""#), dep)
+    }
+
+    fn format_git_dep(&self, dep: &GitSpec) -> String {
+        let GitSpec {
+            repo,
+            path,
+            rev,
+            spec: dep,
+        } = dep;
+
+        let git = format!(r#"git = "{repo}", subdir = "{path}", rev = "{rev}""#);
+        Self::decorate_dep(&git, dep)
+    }
+
+    /// Returns `{{ {location} {additional_fields} }}` where `additional_fields` are generated from
+    /// `spec`
+    fn decorate_dep(location: &str, dep: &DepSpec) -> String {
         let env = dep
             .in_env
             .as_ref()
             .map(|env| format!("{env}."))
             .unwrap_or("".to_string());
 
-        let name = dep.name.as_ref().as_str();
-        let path = &target.id;
+        let name = &dep.name;
 
         let is_override = if dep.is_override {
             ", override = true"
@@ -383,14 +548,19 @@ impl TestPackageGraph {
             .map(|env| format!(r#", use-environment = "{env}""#))
             .unwrap_or("".to_string());
 
-        format!(r#"{env}{name} = {{ local = "../{path}"{is_override}{rename_from}{use_env} }}"#)
+        let modes = dep
+            .modes
+            .as_ref()
+            .map(|modes| format!(r#", modes = {modes:?}"#))
+            .unwrap_or("".to_string());
+        format!(r#"{env}{name} = {{ {location}{is_override}{rename_from}{use_env}{modes} }}"#)
     }
 
     /// Output the dependency in the form
     /// `<capitalized-name> = { ... }`, failing if the dependency uses non-legacy features
     fn format_legacy_dep(&self, dep: &DepSpec, target: &PackageSpec) -> String {
         // TODO: we could share more code with the non-legacy stuff I think
-        let name = dep.name.as_ref().as_str().to_camel_case();
+        let name = &dep.name;
         let path = &target.id;
 
         let is_override = if dep.is_override {
@@ -417,11 +587,17 @@ impl PackageSpec {
     /// Create a new empty package spec
     fn new(name: impl AsRef<str>) -> Self {
         Self {
-            name: PackageName::new(name.as_ref()).expect("valid package name"),
+            name: name.as_ref().to_string(),
             pubs: BTreeMap::new(),
             id: name.as_ref().to_string(),
             is_legacy: false,
             legacy_name: None,
+            git_deps: vec![],
+            version: None,
+            files: BTreeMap::new(),
+            implicit_deps: true,
+            environments: BTreeMap::new(),
+            legacy_addresses: BTreeMap::new(),
         }
     }
 
@@ -447,13 +623,13 @@ impl PackageSpec {
 
     /// Update that `name` field in the `[package]` section of the manifest
     pub fn package_name(mut self, name: impl AsRef<str>) -> Self {
-        self.name = PackageName::new(name.as_ref()).expect("valid package name");
+        self.name = name.as_ref().to_string();
         self
     }
 
-    /// Change this to a git dependency (in its own temporary directory)
-    pub fn make_git(mut self) -> Self {
-        todo!();
+    pub fn add_file(mut self, path: impl AsRef<Path>, contents: impl AsRef<str>) -> Self {
+        self.files
+            .insert(path.as_ref().to_path_buf(), contents.as_ref().to_string());
         self
     }
 
@@ -475,16 +651,42 @@ impl PackageSpec {
         self.legacy_name = Some(name.as_ref().to_string());
         self
     }
+
+    pub fn version(mut self, version: impl AsRef<str>) -> Self {
+        self.version = Some(version.as_ref().to_string());
+        self
+    }
+
+    pub fn implicit_deps(mut self, implicits: bool) -> Self {
+        self.implicit_deps = implicits;
+        self
+    }
+
+    pub fn set_legacy_addresses(
+        mut self,
+        addresses: impl IntoIterator<Item = (impl AsRef<str>, Option<impl AsRef<str>>)>,
+    ) -> Self {
+        assert!(
+            self.is_legacy,
+            "Setting addresses is only supported for legacy packages"
+        );
+        self.legacy_addresses = addresses
+            .into_iter()
+            .map(|(k, v)| (k.as_ref().to_string(), v.map(|v| v.as_ref().to_string())))
+            .collect();
+        self
+    }
 }
 
 impl DepSpec {
     fn new(name: impl AsRef<str>) -> Self {
         Self {
-            name: PackageName::new(name.as_ref()).expect("valid package name"),
+            name: name.as_ref().to_string(),
             is_override: false,
             rename_from: None,
             in_env: None,
             use_env: None,
+            modes: None,
         }
     }
 
@@ -496,13 +698,13 @@ impl DepSpec {
 
     /// Set the name used for the dependency in the containing package
     pub fn name(mut self, name: impl AsRef<str>) -> Self {
-        self.name = PackageName::new(name.as_ref()).expect("valid package name");
+        self.name = name.as_ref().to_string();
         self
     }
 
     /// Set the `rename-from` field of the dependency
     pub fn rename_from(mut self, original: impl AsRef<str>) -> Self {
-        self.rename_from = Some(PackageName::new(original.as_ref()).expect("valid package name"));
+        self.rename_from = Some(original.as_ref().to_string());
         self
     }
 
@@ -518,37 +720,93 @@ impl DepSpec {
         self
     }
 
-    /// Change this to an external dependency using the mock resolver
-    pub fn make_external(mut self) -> Self {
-        todo!();
+    /// Add a `modes` field
+    pub fn modes(mut self, modes: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
+        self.modes = Some(
+            modes
+                .into_iter()
+                .map(|s| ModeName::from(s.as_ref()))
+                .collect(),
+        );
         self
     }
 }
 
 impl Scenario {
-    pub fn path_for(&self, package: impl AsRef<str>) -> PackagePath {
-        PackagePath::new(self.project.root().join(package.as_ref())).unwrap()
+    pub fn path_for(&self, package: impl AsRef<str>) -> PathBuf {
+        self.root_path.join(package.as_ref())
     }
 
-    pub async fn graph_for(&self, package: impl AsRef<str>) -> PackageGraph<Vanilla> {
-        let path = self.path_for(package);
-
-        PackageGraph::<Vanilla>::load_from_manifests(&path, &vanilla::default_environment())
+    pub(crate) async fn graph_for(&self, package: impl AsRef<str>) -> PackageGraph<Vanilla> {
+        self.try_graph_for(package)
             .await
             .map_err(|e| e.emit())
             .expect("could load package")
     }
 
+    pub(crate) async fn try_graph_for(
+        &self,
+        package: impl AsRef<str>,
+    ) -> PackageResult<PackageGraph<Vanilla>> {
+        let path = PackagePath::new(self.path_for(package)).unwrap();
+        let mtx = path.lock().unwrap();
+
+        PackageGraph::<Vanilla>::load_from_manifests(&path, &vanilla::default_environment(), &mtx)
+            .await
+    }
+
+    /// Loads the root package for `package` in the default environment and with no modes
+    pub async fn root_package(&self, package: impl AsRef<str>) -> RootPackage<Vanilla> {
+        self.try_root_package(package)
+            .await
+            .map_err(|e| e.emit())
+            .expect("could load package")
+    }
+
+    /// Loads the root package for `package` and expects an error; returns the (redacted) contents
+    /// of the error
+    pub async fn root_package_err(&self, package: impl AsRef<str>) -> String {
+        match self.try_root_package(package).await {
+            Ok(_) => panic!("expected root package to fail to load"),
+            Err(err) => err
+                .to_string()
+                .replace(self.root_path.to_string_lossy().as_ref(), "<ROOT>"),
+        }
+    }
+
+    /// Loads the root package for `package` in the default environment and with no modes
+    pub async fn try_root_package(
+        &self,
+        package: impl AsRef<str>,
+    ) -> PackageResult<RootPackage<Vanilla>> {
+        RootPackage::<Vanilla>::load(self.path_for(package), default_environment(), vec![]).await
+    }
+
     pub fn read_file(&self, file: impl AsRef<Path>) -> String {
-        self.project.read_file(file)
+        let path = self.root_path.join(&file);
+        debug!("reading file at {path:?}");
+        std::fs::read_to_string(self.root_path.join(file.as_ref())).unwrap()
+    }
+
+    pub fn extend_file(&self, file: impl AsRef<Path>, contents: impl AsRef<str>) {
+        let path = self.root_path.join(&file);
+        debug!("adding to file at {path:?}");
+        let mut file_contents = std::fs::read_to_string(&path).unwrap();
+        file_contents.push_str(contents.as_ref());
+        std::fs::write(&path, &file_contents).unwrap();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
+    use test_log::test;
+    use tracing::debug;
 
-    use crate::schema::{OriginalID, PublishedID};
+    use crate::{
+        schema::{OriginalID, PublishedID},
+        test_utils::git,
+    };
 
     use super::TestPackageGraph;
 
@@ -560,13 +818,13 @@ mod tests {
             .add_deps([("a", "b"), ("a", "c")])
             .build();
 
-        assert_snapshot!(graph.read_file("a/Move.toml"), @r###"
+        assert_snapshot!(graph.read_file("a/Move.toml"), @r#"
         [package]
         name = "a"
         edition = "2024"
 
-        [environments]
-        _test_env = "_test_env_id"
+
+
 
 
         [dependencies]
@@ -574,11 +832,7 @@ mod tests {
         b = { local = "../b" }
 
         [dep-replacements]
-        "###);
-
-        assert_snapshot!(graph.read_file("a/Published.toml"), @"");
-
-        assert_snapshot!(graph.read_file("b/Published.toml"), @"");
+        "#);
     }
 
     /// Ensure that using all the features of [TestPackageGraph] gives the correct manifests and
@@ -588,11 +842,11 @@ mod tests {
         // TODO: break this into separate tests
         let graph = TestPackageGraph::new(["a", "b"])
             .add_package("c", |c| {
-                c.package_name("c_name").publish(
-                    OriginalID::from(0xcc00),
-                    PublishedID::from(0xcccc),
-                    None,
-                )
+                c.package_name("c_name")
+                    .publish(OriginalID::from(0xcc00), PublishedID::from(0xcccc), None)
+                    .version("v1.2.3")
+                    .add_file("sources/extra.move", "// comment")
+                    .implicit_deps(false)
             })
             .add_deps([("b", "c")])
             .add_dep("a", "b", |dep| {
@@ -601,52 +855,55 @@ mod tests {
                     .rename_from("b")
                     .in_env("foo")
                     .use_env("bar")
+                    .modes(vec!["test", "spec"])
             })
             .build();
 
-        assert_snapshot!(graph.read_file("a/Move.toml"), @r###"
+        assert_snapshot!(graph.read_file("a/Move.toml"), @r#"
         [package]
         name = "a"
         edition = "2024"
 
-        [environments]
-        _test_env = "_test_env_id"
+
+
 
 
         [dependencies]
 
         [dep-replacements]
-        foo.a_name_for_b = { local = "../b", override = true, rename-from = "b", use-environment = "bar" }
-        "###);
+        foo.a_name_for_b = { local = "../b", override = true, rename-from = "b", use-environment = "bar", modes = ["test", "spec"] }
+        "#);
 
-        assert_snapshot!(graph.read_file("b/Move.toml"), @r###"
+        assert_snapshot!(graph.read_file("b/Move.toml"), @r#"
         [package]
         name = "b"
         edition = "2024"
 
-        [environments]
-        _test_env = "_test_env_id"
+
+
 
 
         [dependencies]
         c = { local = "../c" }
 
         [dep-replacements]
-        "###);
+        "#);
 
-        assert_snapshot!(graph.read_file("c/Move.toml"), @r###"
+        assert_snapshot!(graph.read_file("c/Move.toml"), @r#"
         [package]
         name = "c_name"
         edition = "2024"
+        version = "v1.2.3"
 
-        [environments]
-        _test_env = "_test_env_id"
+        implicit-dependencies = false
+
+
 
 
         [dependencies]
 
         [dep-replacements]
-        "###);
+        "#);
 
         assert_snapshot!(graph.read_file("c/Published.toml"), @r###"
         [published._test_env]
@@ -654,6 +911,10 @@ mod tests {
         published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
         original-id = "0x000000000000000000000000000000000000000000000000000000000000cc00"
         version = 1
+        "###);
+
+        assert_snapshot!(graph.read_file("c/sources/extra.move"), @r###"
+        // comment
         "###);
     }
 
@@ -663,11 +924,10 @@ mod tests {
         let graph = TestPackageGraph::new(["a", "c"])
             .add_legacy_packages(["b"])
             .add_package("d", |d| {
-                d.set_legacy().set_legacy_name("Any").publish(
-                    OriginalID::from(0x4444),
-                    PublishedID::from(0x5555),
-                    None,
-                )
+                d.set_legacy()
+                    .set_legacy_name("Any")
+                    .publish(OriginalID::from(0x4444), PublishedID::from(0x5555), None)
+                    .implicit_deps(false)
             })
             .add_deps([("a", "b"), ("b", "c"), ("c", "d")])
             .build();
@@ -678,8 +938,9 @@ mod tests {
         edition = "2024"
 
 
+
         [dependencies]
-        C = { local = "../c" }
+        c = { local = "../c" }
 
         [addresses]
         b = "0x0"
@@ -690,11 +951,46 @@ mod tests {
         name = "Any"
         edition = "2024"
         published-at = 0x0000000000000000000000000000000000000000000000000000000000005555
+        implicit-dependencies = false
+
 
         [dependencies]
 
         [addresses]
         d = "0x0000000000000000000000000000000000000000000000000000000000004444"
         "###);
+    }
+
+    /// Snapshot test for a repo with a git dependency
+    #[test(tokio::test)]
+    async fn git() {
+        let git_repo = git::new().await;
+        let commit = git_repo
+            .commit(|project| project.add_packages(["git_dep"]))
+            .await;
+        let branch = commit.branch("main").await;
+
+        let graph = TestPackageGraph::new(["root"])
+            .add_git_dep("root", &git_repo, "git_dep", "main", |dep| dep)
+            .build();
+
+        // redact tempdir
+        let manifest = graph.read_file("root/Move.toml");
+        let path = git_repo.repo_path().to_string_lossy().to_string();
+
+        assert_snapshot!(manifest.replace(&path, "REPO"), @r#"
+        [package]
+        name = "root"
+        edition = "2024"
+
+
+
+
+
+        [dependencies]
+        git_dep = { git = "REPO", subdir = "git_dep", rev = "main" }
+
+        [dep-replacements]
+        "#);
     }
 }

@@ -1,0 +1,10 @@
+[package]
+name = "SuiExtraChangePublicFunctionSignature"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../system-packages/sui-framework" }
+MoveStdlib = { local = "../system-packages/move-stdlib" }
+
+[addresses]
+sui_system = "0x3"

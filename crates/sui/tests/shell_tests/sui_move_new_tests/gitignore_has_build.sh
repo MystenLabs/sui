@@ -6,7 +6,7 @@ mkdir example
 echo "ignore1" >> example/.gitignore
 echo "build/*" >> example/.gitignore
 echo "ignore2" >> example/.gitignore
-sui move new example
+sui move --client.config $CONFIG new example
 cat example/.gitignore
 echo
 echo ==== files in example/ ====

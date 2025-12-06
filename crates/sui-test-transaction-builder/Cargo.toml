@@ -16,3 +16,8 @@ sui-sdk.workspace = true
 sui-types.workspace = true
 
 move-core-types.workspace = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(msim)',
+] }

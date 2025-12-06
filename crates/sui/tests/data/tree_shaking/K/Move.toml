@@ -1,7 +1,11 @@
 [package]
-name = "K"
-edition = "2024.beta"
+name = "k"
+edition = "2024"
+implicit-dependencies = false
 
-[addresses]
-k = "0x0"
-
+[dependencies]
+sui = { local = "../../system-packages/sui-framework" }
+std = { local = "../../system-packages/move-stdlib" }
+bridge = { local = "../../system-packages/bridge" }
+deepbook = { local = "../../system-packages/deepbook" }
+sui_system = { local = "../../system-packages/sui-system" }

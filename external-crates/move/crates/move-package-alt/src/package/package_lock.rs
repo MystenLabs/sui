@@ -1,38 +1,109 @@
-// Copyright (c) The Diem Core Contributors
-// Copyright (c) The Move Contributors
-// SPDX-License-Identifier: Apache-2.0
+use fs4::fs_std::FileExt;
+use sha2::{Digest, Sha256};
+use std::fs::{File, OpenOptions};
+use std::path::{Path, PathBuf};
+use thiserror::Error;
+use tracing::{debug, error};
 
-use named_lock::{NamedLock, NamedLockGuard};
-use once_cell::sync::Lazy;
-use std::sync::{Mutex, MutexGuard};
-use whoami::username;
+use crate::git::get_cache_path;
 
-const PACKAGE_LOCK_NAME: &str = "move_pkg_lock";
-static PACKAGE_THREAD_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
-static PACKAGE_PROCESS_MUTEX: Lazy<NamedLock> = Lazy::new(|| {
-    let user_lock_file = format!("{}_{}", PACKAGE_LOCK_NAME, username());
-    NamedLock::create(user_lock_file.as_str()).unwrap()
-});
+#[derive(Debug, Error)]
+pub enum LockError {
+    #[error(
+        "Unexpected error acquiring lock for package at {package} (lock file: `{lock}`): {source}"
+    )]
+    PackageLockError {
+        package: PathBuf,
+        lock: PathBuf,
+        source: std::io::Error,
+    },
 
-/// The package lock is a lock held across threads and processes. This lock is held to ensure that
-/// the Move package manager has a consistent (read: serial) view of the file system. Without this
-/// lock we can easily get into race conditions around caching and overwriting of packages (e.g.,
-/// thread 1 and thread 2 compete to build package P in the same location), as well as downloading
-/// of git dependencies (thread 1 starts downloading git dependency, meanwhile thread 2 sees the
-/// git directory before it has been fully populated but assumes it has been fully downloaded and
-/// starts building the package before the git dependency has been fully downloaded by thread 1.
-/// This will then lead to file not found errors). These same issues could occur across processes,
-/// this is why we grab both a thread lock and process lock.
-pub(crate) struct PackageLock {
-    _thread_lock: MutexGuard<'static, ()>,
-    _process_lock: NamedLockGuard<'static>,
+    #[error("Unexpected error acquiring lock for {name} cache (path: `{path}`): {source}")]
+    CacheLockError {
+        name: String,
+        path: PathBuf,
+        source: std::io::Error,
+    },
 }
 
-impl PackageLock {
-    pub(crate) fn lock() -> PackageLock {
-        Self {
-            _thread_lock: PACKAGE_THREAD_MUTEX.lock().unwrap(),
-            _process_lock: PACKAGE_PROCESS_MUTEX.lock().unwrap(),
+pub type LockResult<T> = Result<T, LockError>;
+
+#[derive(Debug)]
+pub struct PackageSystemLock {
+    file: File,
+}
+
+impl PackageSystemLock {
+    /// Acquire a lock for doing git operations sequentially
+    pub fn new_for_git(repo_id: &str) -> LockResult<Self> {
+        let path = cache_path_for(repo_id)?;
+        Self::new_for_path(&path, true).map_err(|source| LockError::CacheLockError {
+            name: repo_id.to_string(),
+            path,
+            source,
+        })
+    }
+
+    /// Acquire a lock corresponding to the package contained in the directory `path`
+    /// We do sequential operations per package (we acquire lock per package path).
+    pub fn new_for_project(path: &Path) -> LockResult<Self> {
+        let project_lock_path = cache_path_for(digest_path(path).as_str())
+            .expect("failed to get git cache folder lock");
+        Self::new_for_path(&project_lock_path, true).map_err(|source| LockError::PackageLockError {
+            package: path.to_path_buf(),
+            lock: project_lock_path,
+            source,
+        })
+    }
+
+    pub fn file_mut(&mut self) -> &mut File {
+        &mut self.file
+    }
+
+    fn new_for_path(path: &Path, should_truncate: bool) -> std::io::Result<Self> {
+        debug!("acquiring lock for {path:?}");
+        let lock = OpenOptions::new()
+            .truncate(should_truncate)
+            .write(true)
+            .read(true)
+            .create(true)
+            .open(&path)?;
+
+        lock.lock_exclusive()?;
+        Ok(Self { file: lock })
+    }
+}
+
+impl Drop for PackageSystemLock {
+    fn drop(&mut self) {
+        if let Err(err) = fs4::fs_std::FileExt::unlock(&self.file) {
+            error!(
+                "Failed to release filesystem lock at {:?}: {err:?}",
+                self.file
+            );
         }
     }
+}
+
+fn cache_path_for(name: &str) -> LockResult<PathBuf> {
+    let cache_path = PathBuf::from(get_cache_path());
+    let project_lock_path = cache_path.join(format!(".{name}.lock"));
+
+    // create dir if not exists.
+    std::fs::create_dir_all(&cache_path).map_err(|source| LockError::CacheLockError {
+        name: name.to_string(),
+        path: project_lock_path.clone(),
+        source,
+    })?;
+
+    Ok(project_lock_path)
+}
+
+fn digest_path(path: &Path) -> String {
+    let mut hasher = Sha256::new();
+    // Convert the path to a string safely
+    hasher.update(path.to_string_lossy().as_bytes());
+    let result = hasher.finalize();
+    // Return hex representation
+    format!("{:x}", result)
 }

@@ -33,8 +33,7 @@ type EnvironmentID = String;
 
 #[derive(Deserialize)]
 struct ResolveRequest {
-    #[serde(default)]
-    env: Option<EnvironmentID>,
+    env: EnvironmentID,
     data: RequestData,
 }
 
@@ -113,12 +112,7 @@ fn parse_input() -> BTreeMap<RequestID, ResolveRequest> {
 /// Process [request], creating a [Response] with the given [id]
 /// Ends the process if an [Exit] variant is discovered
 fn process_request(id: RequestID, request: ResolveRequest) -> Response<serde_json::Value> {
-    let env_str = match &request.env {
-        Some(e) => format!("for environment {}", e),
-        None => "for default environment".to_string(),
-    };
-
-    debug!("Resolving request `{id}` {env_str}.");
+    debug!("Resolving request `{id}` for environment {}.", request.env);
     match request.data {
         RequestData::Stdio(exit) => {
             if let Some(line) = exit.stderr {
@@ -134,7 +128,7 @@ fn process_request(id: RequestID, request: ResolveRequest) -> Response<serde_jso
                 eprintln!("{line}");
             };
 
-            let env_key: String = request.env.unwrap_or("default".to_string());
+            let env_key: String = request.env;
             let result = process
                 .output
                 .get(&env_key)

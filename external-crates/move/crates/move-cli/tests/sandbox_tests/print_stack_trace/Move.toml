@@ -2,8 +2,8 @@
 name = "print_stack_trace"
 edition = "2024.beta"
 
-[addresses]
-std = "0x1"
-
 [dependencies]
 MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+print_stack_trace = "0x0"

@@ -631,7 +631,7 @@ impl TestCaseImpl for CoinIndexTest {
 async fn publish_managed_coin_package(
     ctx: &mut TestContext,
 ) -> Result<(ObjectRef, ObjectRef, ObjectRef), anyhow::Error> {
-    let compiled_package = compile_managed_coin_package();
+    let compiled_package = compile_managed_coin_package().await;
     let all_module_bytes =
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_storage_package_ids();

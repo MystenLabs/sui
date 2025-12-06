@@ -1,104 +1,143 @@
-use indoc::formatdoc;
 use petgraph::visit::EdgeRef;
 use thiserror::Error;
+use tracing::debug;
 
-use crate::{
-    compatibility::legacy::LegacyData, dependency::PinnedDependencyInfo, flavor::MoveFlavor,
-    package::Package, schema::PackageName,
-};
+use crate::flavor::MoveFlavor;
 
 use super::PackageGraph;
 
+// TODO: these could/should be manifest errors with locations
 #[derive(Debug, Error)]
 pub enum RenameError {
     #[error("{0}")]
     RenameFromError(String),
+
+    #[error(
+        "In Move.toml, the dependency `{local_dep_name}` has `rename-from = \"{specified_rename_from}\"`, but the referred package is named `{actual_dep_name}`. Change the `rename-from` field to `{actual_dep_name}`."
+    )]
+    RenameFromMismatch {
+        local_dep_name: String,
+        specified_rename_from: String,
+        actual_dep_name: String,
+    },
+
+    #[error(
+        "In Move.toml, the dependency `{actual_dep_name}` has a `rename-from` field, but the referred package is already named `{actual_dep_name}`. Remove the unnecessary `rename-from` field."
+    )]
+    RenameFromUnneccessary { actual_dep_name: String },
+
+    #[error(
+"In Move.toml, the dependency `{local_dep_name}` refers to a package named `{actual_dep_name}`. Consider renaming the dependency to `{actual_dep_name}`:
+
+    {actual_dep_name} = {{ {dep_location}, ... }}
+
+Alternatively, if you want to refer to `{actual_dep_name}` as `{local_dep_name}` in your source code, add a `rename-from` field to the dependency:
+
+    {local_dep_name} = {{ {dep_location}, rename-from = \"{actual_dep_name}\", ... }}
+
+"
+    )]
+    MismatchedNames {
+        local_dep_name: String,
+        dep_location: String,
+        actual_dep_name: String,
+    },
+
+    #[error(
+        "In Move.toml, the dependency `{local_dep_name}` refers to a package named `{actual_dep_name}`. Consider renaming the dependency to `{actual_dep_name}`:
+
+            {actual_dep_name} = {{ {dep_location}, ... }}
+
+        "
+    )]
+    LegacyMismatchedNames {
+        local_dep_name: String,
+        dep_location: String,
+        actual_dep_name: String,
+    },
 }
 
 type RenameResult<T> = Result<T, RenameError>;
 
 impl<F: MoveFlavor> PackageGraph<F> {
-    /// Ensures that the `name` fields in all (transitive) dependencies is the same as the name
+    /// Ensures that each `name` fields in all (direct) dependencies is the same as the name
     /// given to it in the depending package, unless `rename-from` is specified.
     pub fn check_rename_from(&self) -> RenameResult<()> {
-        for edge in self.inner.edge_references() {
-            let dep = &edge.weight().dep;
+        if self.root_package().is_legacy() {
+            self.check_legacy_rename_from()
+        } else {
+            self.check_modern_rename_from()
+        }
+    }
 
-            let expected_name = dep.rename_from().as_ref().unwrap_or(&edge.weight().name);
-            let origin_pkg = self.inner[edge.source()].clone();
+    /// For each dep `dep = { ..., rename-from = "..." }` ensure that the rename-from field (if
+    /// present) and the dependency's target name are consistent
+    fn check_modern_rename_from(&self) -> RenameResult<()> {
+        for edge in self.inner.edges(self.root_index) {
+            let dep = &edge.weight();
+
             let target_pkg = self.inner[edge.target()].clone();
+            let local_dep_name = dep.name().to_string();
+            let actual_dep_name = target_pkg.name().to_string();
 
-            // Modern packages: If there's a name missmatch, we error
-            // Legacy packages: If there's a name missmatch and there's also a missmatch with the
-            // legacy name, we fail again.
-            if expected_name != target_pkg.name()
-                && (!origin_pkg.is_legacy()
-                    || !is_legacy_match(&target_pkg.legacy_data, expected_name))
-            {
-                return Err(RenameError::new(
-                    &self.inner[edge.source()],
-                    &self.inner[edge.target()],
-                    &edge.weight().name,
-                    dep,
-                ));
+            if let Some(rename) = dep.rename_from() {
+                if local_dep_name == actual_dep_name {
+                    return Err(RenameError::RenameFromUnneccessary { actual_dep_name });
+                }
+
+                if rename.to_string() != actual_dep_name {
+                    return Err(RenameError::RenameFromMismatch {
+                        local_dep_name,
+                        specified_rename_from: rename.to_string(),
+                        actual_dep_name,
+                    });
+                }
+            } else if local_dep_name != actual_dep_name {
+                return Err(RenameError::MismatchedNames {
+                    local_dep_name,
+                    dep_location: dep.as_ref().abbreviated(),
+                    actual_dep_name,
+                });
             }
         }
 
         Ok(())
     }
-}
 
-/// Checks that for a given package `pkg`, if it's legacy, the expected name
-/// matches the normalized legacy name.
-fn is_legacy_match(legacy_data: &Option<LegacyData>, expected_name: &PackageName) -> bool {
-    if let Some(legacy_data) = legacy_data {
-        &legacy_data.normalized_legacy_name == expected_name
-    } else {
-        false
-    }
-}
+    /// For each dep `Dep = { ... }`, ensure that referred package either has variable name `Dep`
+    /// or legacy package name `Dep`. This allows a transitional state where a legacy package uses
+    /// the modern name for a legacy dependency.
+    fn check_legacy_rename_from(&self) -> RenameResult<()> {
+        for edge in self.inner.edges(self.root_index) {
+            let target_pkg = self.inner[edge.target()].clone();
+            let local_dep_name = edge.weight().name().to_string();
 
-impl RenameError {
-    /// Construct a `RenameError` with a descriptive message
-    fn new<F: MoveFlavor>(
-        source: &Package<F>,
-        target: &Package<F>,
-        dep_name: &PackageName,
-        dep: &PinnedDependencyInfo,
-    ) -> Self {
-        // example: a contains `dep_name = { local = "b_path", rename=from = "b_name" }`
+            let actual_dep_name = target_pkg.name().to_string();
+            if local_dep_name == actual_dep_name {
+                continue;
+            }
 
-        // in example: path is "root -> a"
-        let path = "<TODO>";
+            if let Some(legacy) = &target_pkg.legacy_data
+                && legacy.normalized_legacy_name.to_string() == local_dep_name
+            {
+                continue;
+            }
 
-        // in example: source_name is "a"
-        let source_name = source.name();
+            let dep_location = edge.weight().as_ref().abbreviated();
 
-        // in example: target_name is "b"
-        let target_name = target.name();
+            debug!("local name: {local_dep_name}");
+            debug!("actual name: {actual_dep_name}");
+            if let Some(legacy) = &target_pkg.legacy_data {
+                debug!("legacy name: {}", legacy.normalized_legacy_name);
+            }
+            return Err(RenameError::LegacyMismatchedNames {
+                local_dep_name,
+                dep_location,
+                actual_dep_name,
+            });
+        }
 
-        // in example: expected_target_name is "b_name"
-        let _expected_target_name = dep.rename_from().as_ref().unwrap_or(dep_name);
-
-        // in example: dep_location is `local = "b_path"`
-        let dep_location = "<TODO>";
-
-        // in example: rendered_dep is `dep = { local = "b_path", rename-from = "b_name" }`
-        // TODO: use spans / diagnostics here instead; without that, `mvr` diagnostics will show
-        //       the resolved dep rather than the original dep
-        let rendered_dep = if let Some(rename_from) = dep.rename_from() {
-            format!(r#"{dep_name} = {{ {dep_location}, rename-from = "{rename_from}", ... }}"#)
-        } else {
-            format!("{dep_name} = {{ {dep_location}, ... }}")
-        };
-
-        Self::RenameFromError(formatdoc!(
-            "Package `{source_name}` (included from {path}) has a dependency `{rendered_dep}`, but the package at \
-            `{dep_location}` has `name = \"{target_name}\"`. If you intend to rename `{target_name}` to `{dep_name}` in `{source_name}`, add \
-            `rename-from = \"{target_name}\"` to the dependency in the `Move.toml` for `a`:
-
-                {dep_name} = {{ {dep_location}, rename-from = \"{target_name}\", ... }}\n"
-        ))
+        Ok(())
     }
 }
 
@@ -131,7 +170,8 @@ mod tests {
     /// `root` depends on `a` which depends on `b`; the dependency from `a` to `b` is named `c`,
     /// but there is no rename-from field.
     ///
-    /// rename-from check should fail, indicating that `a.c` should have `rename-from = "b"`
+    /// rename-from check should fail on a, indicating that `a.c` should have `rename-from = "b"`
+    /// rename-from check on root should succeed, since we only check the root package
     #[test(tokio::test)]
     async fn test_no_rename_from() {
         let scenario = TestPackageGraph::new(["root", "a", "b"])
@@ -139,39 +179,46 @@ mod tests {
             .add_dep("a", "b", |dep| dep.name("c"))
             .build();
 
-        assert_snapshot!(scenario.graph_for("root").await.check_rename_from().unwrap_err().to_string(), @r###"
-        Package `a` (included from <TODO>) has a dependency `c = { <TODO>, ... }`, but the package at `<TODO>` has `name = "b"`. If you intend to rename `b` to `c` in `a`, add `rename-from = "b"` to the dependency in the `Move.toml` for `a`:
+        scenario
+            .graph_for("root")
+            .await
+            .check_rename_from()
+            .unwrap();
 
-            c = { <TODO>, rename-from = "b", ... }
-        "###);
         assert_snapshot!(scenario.graph_for("a").await.check_rename_from().unwrap_err().to_string(), @r###"
-        Package `a` (included from <TODO>) has a dependency `c = { <TODO>, ... }`, but the package at `<TODO>` has `name = "b"`. If you intend to rename `b` to `c` in `a`, add `rename-from = "b"` to the dependency in the `Move.toml` for `a`:
+        In Move.toml, the dependency `c` refers to a package named `b`. Consider renaming the dependency to `b`:
 
-            c = { <TODO>, rename-from = "b", ... }
+            b = { local = "../b", ... }
+
+        Alternatively, if you want to refer to `b` as `c` in your source code, add a `rename-from` field to the dependency:
+
+            c = { local = "../b", rename-from = "b", ... }
         "###);
     }
 
-    /// `root` depends on `a` which depends on `b`; the dependency from `a` to `b` is named `c`,
+    /// `a` depends on `b`; the dependency from `a` to `b` is named `c`,
     /// but the rename-from field says `rename-from = "d"`.
     ///
     /// rename-from check should fail, indicating that `a.c` should have `rename-from = "b"`
     #[test(tokio::test)]
     async fn test_wrong_rename_from() {
-        let scenario = TestPackageGraph::new(["root", "a", "b"])
-            .add_deps([("root", "a")])
+        let scenario = TestPackageGraph::new(["a", "b"])
             .add_dep("a", "b", |dep| dep.name("c").rename_from("d"))
             .build();
 
-        assert_snapshot!(scenario.graph_for("root").await.check_rename_from().unwrap_err().to_string(), @r###"
-        Package `a` (included from <TODO>) has a dependency `c = { <TODO>, rename-from = "d", ... }`, but the package at `<TODO>` has `name = "b"`. If you intend to rename `b` to `c` in `a`, add `rename-from = "b"` to the dependency in the `Move.toml` for `a`:
+        assert_snapshot!(scenario.graph_for("a").await.check_rename_from().unwrap_err().to_string(), @r###"In Move.toml, the dependency `c` has `rename-from = "d"`, but the referred package is named `b`. Change the `rename-from` field to `b`."###);
+    }
 
-            c = { <TODO>, rename-from = "b", ... }
-        "###);
-        assert_snapshot!(scenario.graph_for("a").await.check_rename_from().unwrap_err().to_string(), @r###"
-        Package `a` (included from <TODO>) has a dependency `c = { <TODO>, rename-from = "d", ... }`, but the package at `<TODO>` has `name = "b"`. If you intend to rename `b` to `c` in `a`, add `rename-from = "b"` to the dependency in the `Move.toml` for `a`:
+    /// `a` depends on `b`; the dependency from `a` to `b` has `rename-from = "b"`
+    ///
+    /// rename-from check should fail, indicating that the rename-from is unnecessary
+    #[test(tokio::test)]
+    async fn test_unnecessary_rename_from() {
+        let scenario = TestPackageGraph::new(["a", "b"])
+            .add_dep("a", "b", |dep| dep.rename_from("b"))
+            .build();
 
-            c = { <TODO>, rename-from = "b", ... }
-        "###);
+        assert_snapshot!(scenario.graph_for("a").await.check_rename_from().unwrap_err().to_string(), @"In Move.toml, the dependency `b` has a `rename-from` field, but the referred package is already named `b`. Remove the unnecessary `rename-from` field.");
     }
 
     /// `root` depends on `a` which has an external dependency on `b`; the dependency from `a` to
@@ -182,12 +229,14 @@ mod tests {
     #[test(tokio::test)]
     #[ignore] // TODO
     async fn test_external_rename_error() {
-        let scenario = TestPackageGraph::new(["root", "a", "b"])
-            .add_deps([("root", "a")])
-            .add_dep("a", "b", |dep| dep.name("c").make_external())
+        let scenario = TestPackageGraph::new(["a", "b"])
+            .add_dep(
+                "a",
+                "b",
+                |dep| dep.name("c"), /* TODO .make_external()*/
+            )
             .build();
 
-        assert_snapshot!(scenario.graph_for("root").await.check_rename_from().unwrap_err().to_string(), @"TODO");
         assert_snapshot!(scenario.graph_for("a").await.check_rename_from().unwrap_err().to_string(), @"TODO");
     }
 
@@ -224,59 +273,130 @@ mod tests {
             .unwrap();
     }
 
+    /// modern package `bat` depends on legacy package `sui` which has legacy name `Sui` (capital S).
+    ///
+    /// The dependency is named `Sui`. This should be disallowed, since the legacy name shouldn't
+    /// appear in a modern manifest
     #[test(tokio::test)]
-    async fn test_modern_to_legacy_not_allowed_behaviours() {
-        let scenario = TestPackageGraph::new(["foo", "bat", "bar", "baz"])
-            .add_package("legacy", |pkg| pkg.set_legacy().set_legacy_name("Legacy"))
-            .add_package("legacy2", |pkg| pkg.set_legacy().set_legacy_name("Legacy2"))
-            .add_package("legacy3", |pkg| pkg.set_legacy().set_legacy_name("Legacy3"))
+    async fn modern_uses_legacy_name() {
+        let scenario = TestPackageGraph::new(["bat"])
             .add_package("sui", |pkg| pkg.set_legacy().set_legacy_name("Sui"))
-            .add_package("std", |pkg| pkg.set_legacy().set_legacy_name("MoveStdLib"))
-            .add_package("malformed", |pkg| {
-                pkg.set_legacy().set_legacy_name("weird-input")
-            })
-            // 1. (FAIL) Cannot use the legacy name in the left side assignment
             .add_dep("bat", "sui", |dep| dep.name("Sui"))
-            // 2. (OK) Can use the "modern" name in the rename-from (even if we name it as the legacy name)
-            .add_dep("foo", "std", |dep| {
-                dep.name("MoveStdLib").rename_from("std")
-            })
-            // 3. (FAIL) Cannot use the legacy name in the rename-from
-            .add_dep("bar", "std", |dep| {
-                dep.name("foo").rename_from("MoveStdLib")
-            })
-            // 4. (OK) Legacy packages CAN use legacy names freely!
-            .add_dep("legacy", "std", |dep| dep.name("MoveStdLib"))
-            // 5. (OK) Can use a malformed legacy name (as the system normalizes)
-            .add_dep("baz", "malformed", |dep| dep.name("malformed"))
-            // 6. (FAIL) Cannot accept wrong names for deps
-            .add_dep("legacy2", "std", |dep| dep.name("Wrong"))
             .build();
 
-        // 1.
-        let _ = scenario.graph_for("bat").await.check_rename_from().is_err();
+        assert_snapshot!(scenario.graph_for("bat").await.check_rename_from().unwrap_err(), @r###"
+        In Move.toml, the dependency `Sui` refers to a package named `sui`. Consider renaming the dependency to `sui`:
 
-        // 2.
+            sui = { local = "../sui", ... }
+
+        Alternatively, if you want to refer to `sui` as `Sui` in your source code, add a `rename-from` field to the dependency:
+
+            Sui = { local = "../sui", rename-from = "sui", ... }
+        "###);
+    }
+
+    /// modern package `foo` depends on legacy package `std` which has legacy name `MoveStdlib`.
+    ///
+    /// The dependency is named `MoveStdlib` but has `rename-from = "std"`; this should be allowed
+    /// (although dumb)
+    #[test(tokio::test)]
+    async fn modern_uses_legacy_name_with_rename() {
+        let scenario = TestPackageGraph::new(["foo"])
+            .add_package("std", |pkg| pkg.set_legacy().set_legacy_name("MoveStdlib"))
+            .add_dep("foo", "std", |dep| {
+                dep.name("MoveStdlib").rename_from("std")
+            })
+            .build();
+
         scenario.graph_for("foo").await.check_rename_from().unwrap();
+    }
 
-        // 3.
-        let _ = scenario.graph_for("bar").await.check_rename_from().is_err();
+    /// modern package `bar` depends on legacy package `std` which has legacy name `MoveStdlib`.
+    ///
+    /// The dependency is named `foo` but has `rename-from = "MoveStdlib"`; this should fail
+    /// because you need to use the modern name in the rename-from field
+    #[test(tokio::test)]
+    async fn modern_uses_legacy_name_in_rename() {
+        let scenario = TestPackageGraph::new(["bar"])
+            .add_package("std", |pkg| pkg.set_legacy().set_legacy_name("MoveStdlib"))
+            .add_dep("bar", "std", |dep| {
+                dep.name("foo").rename_from("MoveStdlib")
+            })
+            .build();
 
-        // 4.
+        assert_snapshot!(scenario.graph_for("bar").await.check_rename_from().unwrap_err(), @r###"In Move.toml, the dependency `foo` has `rename-from = "MoveStdlib"`, but the referred package is named `std`. Change the `rename-from` field to `std`."###);
+    }
+
+    /// legacy package `legacy` uses legacy package `std` which has legacy name `MoveStdlib`;
+    ///
+    /// The dependency is named `MoveStdlib`; this should succeed
+    #[test(tokio::test)]
+    async fn legacy_legacy_name() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_package("legacy", |pkg| pkg.set_legacy())
+            .add_package("std", |pkg| pkg.set_legacy().set_legacy_name("MoveStdlib"))
+            .add_dep("legacy", "std", |dep| dep.name("MoveStdlib"))
+            .build();
+
         scenario
             .graph_for("legacy")
             .await
             .check_rename_from()
             .unwrap();
+    }
 
-        // 5.
-        scenario.graph_for("baz").await.check_rename_from().unwrap();
+    /// legacy package `legacy` uses legacy package `std` which has legacy name `MoveStdlib`;
+    ///
+    /// The dependency is named `std`; this should succeed to aid transition to the new system
+    #[test(tokio::test)]
+    async fn legacy_modern_name() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_package("legacy", |pkg| pkg.set_legacy())
+            .add_package("std", |pkg| pkg.set_legacy().set_legacy_name("MoveStdlib"))
+            .add_dep("legacy", "std", |dep| dep.name("std"))
+            .build();
 
-        // 6.
-        let _ = scenario
-            .graph_for("legacy2")
+        scenario
+            .graph_for("legacy")
             .await
             .check_rename_from()
-            .is_err();
+            .unwrap();
+    }
+
+    /// legacy package `baz` uses legacy package `malformed` which has legacy name `weird-name`;
+    ///
+    /// The dependency is named `weird-name`; this should succeed
+    #[test(tokio::test)]
+    async fn legacy_malformed_name() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_package("baz", |pkg| pkg.set_legacy())
+            .add_package("malformed", |pkg| {
+                pkg.set_legacy().set_legacy_name("weird-name")
+            })
+            .add_dep("baz", "malformed", |dep| dep.name("weird-name"))
+            .build();
+
+        scenario.graph_for("baz").await.check_rename_from().unwrap();
+    }
+
+    /// legacy package `legacy2` depends on legacy package `malformed` which has legacy name
+    /// `weird-name`.
+    ///
+    /// The dependency is named `Wrong`. This should fail because of the rename-from check
+    #[test(tokio::test)]
+    async fn legacy_wrong_name() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_package("legacy2", |pkg| pkg.set_legacy())
+            .add_package("malformed", |pkg| {
+                pkg.set_legacy().set_legacy_name("weird-name")
+            })
+            .add_dep("legacy2", "malformed", |dep| dep.name("Wrong"))
+            .build();
+
+        assert_snapshot!(scenario.graph_for("legacy2").await.check_rename_from().unwrap_err(), @r###"
+        In Move.toml, the dependency `Wrong` refers to a package named `malformed`. Consider renaming the dependency to `malformed`:
+
+                    malformed = { local = "../malformed", ... }
+        "###);
     }
 }

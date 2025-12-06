@@ -19,8 +19,8 @@ use sui_move_build::BuildConfig;
 use sui_move_build::CompiledPackage;
 use sui_types::move_package::UpgradePolicy;
 
-#[test]
-fn test_all() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_all() {
     let (mods_v1, pkg_v2, path) = get_packages("all");
     let result = compare_packages(
         AccountAddress::ZERO,
@@ -35,8 +35,8 @@ fn test_all() {
     assert_snapshot!(normalize_path(err.to_string()));
 }
 
-#[test]
-fn test_declarations_missing() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_declarations_missing() {
     let (pkg_v1, pkg_v2, path) = get_packages("declaration_errors");
     let result = compare_packages(
         AccountAddress::ZERO,
@@ -51,8 +51,8 @@ fn test_declarations_missing() {
     assert_snapshot!(normalize_path(err.to_string()));
 }
 
-#[test]
-fn test_function() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_function() {
     let (pkg_v1, pkg_v2, path) = get_packages("function_errors");
     let result = compare_packages(
         AccountAddress::ZERO,
@@ -67,8 +67,8 @@ fn test_function() {
     assert_snapshot!(normalize_path(err.to_string()));
 }
 
-#[test]
-fn test_struct() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_struct() {
     let (pkg_v1, pkg_v2, path) = get_packages("struct_errors");
     let result = compare_packages(
         AccountAddress::ZERO,
@@ -83,8 +83,8 @@ fn test_struct() {
     assert_snapshot!(normalize_path(err.to_string()));
 }
 
-#[test]
-fn test_enum() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_enum() {
     let (pkg_v1, pkg_v2, path) = get_packages("enum_errors");
     let result = compare_packages(
         AccountAddress::ZERO,
@@ -99,8 +99,8 @@ fn test_enum() {
     assert_snapshot!(normalize_path(err.to_string()));
 }
 
-#[test]
-fn test_type_param() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_type_param() {
     let (pkg_v1, pkg_v2, path) = get_packages("type_param_errors");
     let result = compare_packages(
         AccountAddress::ZERO,
@@ -115,8 +115,8 @@ fn test_type_param() {
     assert_snapshot!(normalize_path(err.to_string()));
 }
 
-#[test]
-fn test_additive() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_additive() {
     let (pkg_v1, pkg_v2, p) = get_packages("additive_errors");
     let result = compare_packages(
         AccountAddress::ZERO,
@@ -131,8 +131,8 @@ fn test_additive() {
     assert_snapshot!(normalize_path(err.to_string()));
 }
 
-#[test]
-fn test_deponly() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_deponly() {
     let (pkg_v1, pkg_v2, p) = get_packages("deponly_errors");
     let result = compare_packages(
         AccountAddress::ZERO,
@@ -146,8 +146,8 @@ fn test_deponly() {
     let err = result.unwrap_err();
     assert_snapshot!(normalize_path(err.to_string()));
 }
-#[test]
-fn test_version_mismatch() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_version_mismatch() {
     // use deponly errors package, but change the version of the package and the module
     // to trigger _only_ a version mismatch error (not a deponly error)
     let (mut pkg_v1, mut pkg_v2, p) = get_packages("deponly_errors");
@@ -165,8 +165,8 @@ fn test_version_mismatch() {
     assert_snapshot!(normalize_path(result.unwrap_err().to_string()));
 }
 
-#[test]
-fn test_friend_link_ok() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_friend_link_ok() {
     let (pkg_v1, pkg_v2, path) = get_packages("friend_linking");
     // upgrade compatibility ignores friend linking
     assert!(
@@ -181,8 +181,8 @@ fn test_friend_link_ok() {
     );
 }
 
-#[test]
-fn test_entry_linking_ok() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_entry_linking_ok() {
     let (pkg_v1, pkg_v2, path) = get_packages("entry_linking");
     // upgrade compatibility ignores entry linking
     assert!(
@@ -197,8 +197,8 @@ fn test_entry_linking_ok() {
     );
 }
 
-#[test]
-fn test_missing_module_toml() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_missing_module_toml() {
     // note: the first examples empty and whitespace shouldn't occur in practice
     // since a Move.toml which is empty will not build
     for malformed_pkg in [
@@ -242,8 +242,8 @@ fn test_missing_module_toml() {
     }
 }
 
-#[test]
-fn test_address_change() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_address_change() {
     // mismatched address on upgrade should fail
     let (pkg_v1, pkg_v2, path) = get_packages("address_change");
     let result = compare_packages(
@@ -261,7 +261,7 @@ fn test_address_change() {
     // with correct address, should not error
     let (pkg_v1, pkg_v2, path) = get_packages("address_change");
     let result = compare_packages(
-        AccountAddress::from_str("0x1").unwrap(), // correct "on-chain" address, matches address set in v1 package
+        AccountAddress::from_str("0xabc").unwrap(), // correct "on-chain" address, matches address set in v1 package
         pkg_v1,
         pkg_v2,
         path,
@@ -271,8 +271,8 @@ fn test_address_change() {
     assert!(result.is_ok());
 }
 
-#[test]
-fn positional_formatting() {
+#[tokio::test(flavor = "multi_thread")]
+async fn positional_formatting() {
     let name = Identifier::new("pos999").unwrap();
     let field = Field {
         name,

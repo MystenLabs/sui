@@ -4,11 +4,12 @@
 use move_stackless_bytecode_2::from_model;
 
 use move_command_line_common::insta_assert;
-use move_package::{BuildConfig, compilation::model_builder};
+use move_package_alt_compilation::{build_config::BuildConfig, model_builder};
 use move_symbol_pool::Symbol;
 
 use tempfile::TempDir;
 
+use move_package_alt::{flavor::Vanilla, package::RootPackage};
 use std::{collections::BTreeSet, io::BufRead, path::Path};
 
 fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
@@ -16,7 +17,6 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     let output_dir = TempDir::new()?;
 
     let config = BuildConfig {
-        dev_mode: true,
         install_dir: Some(output_dir.path().to_path_buf()),
         force_recompilation: false,
 
@@ -24,8 +24,11 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     };
 
     let mut writer = Vec::new();
-    let resolved_package = config.resolution_graph_for_package(pkg_dir, None, &mut writer)?;
-    let model = model_builder::build(resolved_package.clone(), &mut writer)?;
+
+    // Block on the async function
+    let env = move_package_alt::flavor::vanilla::default_environment();
+    let root_pkg =
+        RootPackage::<Vanilla>::load_sync(pkg_dir.to_path_buf(), env, config.mode_set())?;
 
     let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
         .lines()
@@ -35,6 +38,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
         .map(|name| name.into())
         .collect::<BTreeSet<Symbol>>();
 
+    let model = model_builder::build(&mut writer, &root_pkg, &config)?;
     let bytecode = from_model(&model, /* optimize */ true)?;
 
     for pkg in &bytecode.packages {

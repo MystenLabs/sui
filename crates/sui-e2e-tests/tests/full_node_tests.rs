@@ -1422,7 +1422,8 @@ async fn publish_init_events_without_local_execution() {
     let tx_data = test_cluster
         .test_transaction_builder()
         .await
-        .publish(path)
+        .publish_async(path)
+        .await
         .build();
     let tx = test_cluster.sign_transaction(&tx_data).await;
     let client = test_cluster.wallet.get_client().await.unwrap();

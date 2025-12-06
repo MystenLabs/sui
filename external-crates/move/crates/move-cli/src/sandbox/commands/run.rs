@@ -16,7 +16,7 @@ use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::TypeTag,
     runtime_value::MoveValue,
 };
-use move_package::compilation::compiled_package::CompiledPackage;
+use move_package_alt_compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::gas_schedule::CostTable;
 use std::{fs, path::Path};

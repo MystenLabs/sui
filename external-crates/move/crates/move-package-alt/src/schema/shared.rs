@@ -52,23 +52,32 @@ pub struct PublishAddresses {
 }
 
 /// A serialized dependency of the form `{ local = <path> }`
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LocalDepInfo {
     /// The path on the filesystem, relative to the location of the containing file
     pub local: PathBuf,
 }
 
 /// An on-chain dependency `{on-chain = true}`
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct OnChainDepInfo {
     #[serde(rename = "on-chain")]
     pub on_chain: ConstTrue,
 }
 
 /// The constant `true`
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(try_from = "bool", into = "bool")]
 pub struct ConstTrue;
+
+impl PublishAddresses {
+    pub fn zero() -> Self {
+        Self {
+            published_at: PublishedID(AccountAddress::ZERO),
+            original_id: OriginalID(AccountAddress::ZERO),
+        }
+    }
+}
 
 impl From<u16> for OriginalID {
     fn from(value: u16) -> Self {

@@ -4,8 +4,7 @@
 use clap::*;
 use move_analyzer::analyzer;
 use move_compiler::editions::Flavor;
-use sui_move_build::{SuiPackageHooks, implicit_deps};
-use sui_package_management::system_package_versions::latest_system_packages;
+use sui_package_alt::SuiFlavor;
 
 #[cfg(target_os = "linux")]
 mod alloc_utils {
@@ -55,11 +54,6 @@ struct App {}
 
 fn main() {
     App::parse();
-
     alloc_utils::maybe_enable_jemalloc();
-
-    let sui_implicit_deps = implicit_deps(latest_system_packages());
-    let flavor = Flavor::Sui;
-    let sui_pkg_hooks = Box::new(SuiPackageHooks);
-    analyzer::run(sui_implicit_deps, Some(flavor), Some(sui_pkg_hooks));
+    analyzer::run::<SuiFlavor>(Some(Flavor::Sui));
 }

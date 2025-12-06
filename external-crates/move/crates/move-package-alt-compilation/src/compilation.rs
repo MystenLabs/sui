@@ -4,9 +4,7 @@
 use crate::{
     build_config::BuildConfig,
     build_plan::BuildPlan,
-    compiled_package::{
-        BuildNamedAddresses, CompiledPackage, CompiledPackageInfo, CompiledUnitWithSource,
-    },
+    compiled_package::{CompiledPackage, CompiledPackageInfo, CompiledUnitWithSource},
     documentation::build_docs,
     shared,
     source_discovery::get_sources,
@@ -32,35 +30,33 @@ use move_compiler::{
     },
     sui_mode,
 };
-use move_core_types::account_address::AccountAddress;
 use move_docgen::DocgenFlags;
 use move_package_alt::{
-    errors::PackageResult,
     flavor::MoveFlavor,
-    graph::{NamedAddress, PackageInfo},
+    graph::PackageInfo,
     package::RootPackage,
-    schema::{Environment, OriginalID},
+    schema::{Environment, PackageID},
 };
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
 use tracing::debug;
 use vfs::VfsPath;
 
-pub async fn compile_package<W: Write, F: MoveFlavor>(
+pub async fn compile_package<W: Write + Send, F: MoveFlavor>(
     path: &Path,
     build_config: &BuildConfig,
     env: &Environment,
     writer: &mut W,
-) -> PackageResult<CompiledPackage> {
-    let root_pkg = RootPackage::<F>::load(path, env.clone()).await?;
+) -> anyhow::Result<CompiledPackage> {
+    let root_pkg = RootPackage::<F>::load(path, env.clone(), build_config.mode_set()).await?;
     BuildPlan::create(&root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 
-pub async fn compile_from_root_package<W: Write, F: MoveFlavor>(
+pub fn compile_from_root_package<W: Write + Send, F: MoveFlavor>(
     root_pkg: &RootPackage<F>,
     build_config: &BuildConfig,
     writer: &mut W,
-) -> PackageResult<CompiledPackage> {
+) -> anyhow::Result<CompiledPackage> {
     BuildPlan::create(root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 
@@ -79,22 +75,28 @@ pub fn compiler_flags(build_config: &BuildConfig) -> Flags {
         .set_modes(build_config.modes.clone())
 }
 
-pub fn build_all<W: Write, F: MoveFlavor>(
+pub fn build_all<W: Write + Send, F: MoveFlavor>(
     w: &mut W,
     vfs_root: Option<VfsPath>,
     root_pkg: &RootPackage<F>,
+    dependencies: BTreeSet<PackageID>,
     build_config: &BuildConfig,
     compiler_driver: impl FnOnce(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
 ) -> Result<CompiledPackage> {
-    let deps_published_ids = root_pkg.deps_published_ids().clone();
-    let project_root = root_pkg.path().as_ref().to_path_buf();
+    let project_root = root_pkg.package_path().to_path_buf();
     let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
     let package_name = Symbol::from(root_pkg.name().as_str());
-    let (file_map, all_compiled_units) =
-        build_for_driver(w, vfs_root, build_config, root_pkg, |compiler| {
+    let (file_map, all_compiled_units) = build_for_driver(
+        w,
+        vfs_root,
+        build_config,
+        root_pkg,
+        dependencies,
+        |compiler| {
             let compiler = compiler.add_save_hook(&program_info_hook);
             compiler_driver(compiler)
-        })?;
+        },
+    )?;
 
     let mut all_compiled_units_vec = vec![];
     let mut root_compiled_units = vec![];
@@ -140,7 +142,11 @@ pub fn build_all<W: Write, F: MoveFlavor>(
     // compilation
     if build_config.generate_docs {
         // TODO: fix this root_name_address_map
-        let root_named_address_map = BTreeMap::new();
+        let named_addresses = root_pkg.package_info().named_addresses()?;
+
+        // TODO: pkg-alt verify this is producing the correct map.
+        let root_named_address_map = build_config.addresses_for_config(named_addresses).into();
+
         let program_info = program_info_hook.take_typing_info();
         let model = move_model_2::source_model::Model::from_source(
             file_map.clone(),
@@ -177,7 +183,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
         root_compiled_units.clone(),
         compiled_package_info.clone(),
         deps_compiled_units.clone(),
-        compiled_docs,
+        compiled_docs.clone(),
         package_name,
         under_path,
     )?;
@@ -186,24 +192,28 @@ pub fn build_all<W: Write, F: MoveFlavor>(
         compiled_package_info,
         root_compiled_units,
         deps_compiled_units,
-        compiled_docs: None,
-        deps_published_ids,
         file_map,
-        // compiled_docs,
+        compiled_docs,
     };
 
     Ok(compiled_package)
 }
 
 #[allow(unreachable_code)] // TODO
-pub fn build_for_driver<W: Write, T, F: MoveFlavor>(
+pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     w: &mut W,
     vfs_root: Option<VfsPath>,
     build_config: &BuildConfig,
     root_pkg: &RootPackage<F>,
+    dependencies: BTreeSet<PackageID>,
     compiler_driver: impl FnOnce(Compiler) -> Result<T>,
 ) -> Result<T> {
-    let packages = root_pkg.packages()?;
+    // TODO: pkg-alt this seems to add more packages for the compiler than necessary.
+    let packages = root_pkg.packages();
+    let packages = packages
+        .into_iter()
+        .filter(|p| p.is_root() || dependencies.contains(p.id()))
+        .collect::<Vec<_>>();
     let package_paths = make_deps_for_compiler(w, packages, build_config)?;
 
     debug!("Package paths {:#?}", package_paths);
@@ -218,7 +228,6 @@ pub fn build_for_driver<W: Write, T, F: MoveFlavor>(
     let lint_level = build_config.lint_flag.get();
     let sui_mode = build_config.default_flavor == Some(Flavor::Sui);
     let flags = compiler_flags(build_config);
-
     let mut compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
         .unwrap()
         .set_flags(flags);
@@ -350,7 +359,7 @@ fn check_filepaths_ok(
 }
 
 /// Return a list of package paths for the transitive dependencies.
-pub fn make_deps_for_compiler<W: Write, F: MoveFlavor>(
+pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
     w: &mut W,
     packages: Vec<PackageInfo<'_, F>>,
     build_config: &BuildConfig,
@@ -363,24 +372,9 @@ pub fn make_deps_for_compiler<W: Write, F: MoveFlavor>(
             writeln!(w, "{} {name}", "INCLUDING DEPENDENCY".bold().green())?;
         }
 
-        let named_addresses: BTreeMap<_, _> = pkg
-            .named_addresses()?
-            .into_iter()
-            .map(|(id, addr)| {
-                (
-                    id,
-                    match addr {
-                        NamedAddress::Unpublished { dummy_addr: _ }
-                            if build_config.set_unpublished_deps_to_zero =>
-                        {
-                            NamedAddress::Defined(OriginalID(AccountAddress::ZERO))
-                        }
-                        addr => addr,
-                    },
-                )
-            })
-            .collect();
-        let named_addresses: BuildNamedAddresses = named_addresses.into();
+        // if the root_as_zero flag is set, we want to ensure that the root package is always
+        // mapped to `0x0`
+        let addresses = build_config.addresses_for_config(pkg.named_addresses()?);
 
         // TODO: better default handling for edition and flavor
         let config = PackageConfig {
@@ -393,16 +387,16 @@ pub fn make_deps_for_compiler<W: Write, F: MoveFlavor>(
             warning_filter: WarningFiltersBuilder::new_for_source(),
         };
 
-        // TODO: improve/rework this? Renaming the root pkg to have a unique name for the compiler
+        // Assign a unique name for the compiler for each package.
         let safe_name = Symbol::from(pkg.id().clone());
 
         debug!("Package name {:?} -- Safe name {:?}", name, safe_name);
-        debug!("Named address map {:#?}", named_addresses);
+        debug!("Named address map {:#?}", addresses);
         let paths = PackagePaths {
             name: Some((safe_name, config)),
             // paths: sources,
             paths: get_sources(pkg.path(), build_config)?,
-            named_address_map: named_addresses.inner,
+            named_address_map: addresses.inner,
         };
 
         package_paths.push(paths);

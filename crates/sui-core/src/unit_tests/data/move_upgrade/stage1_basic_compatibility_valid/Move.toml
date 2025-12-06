@@ -2,6 +2,7 @@
 name = "stage1_basic_compatibility_valid"
 version = "0.0.2"
 edition = "2024.beta"
+implicit-dependencies = false
 
 [addresses]
 base_addr = "0x0"

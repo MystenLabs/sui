@@ -25,7 +25,7 @@ use sysinfo::{Pid, ProcessesToUpdate, System};
 use vfs::VfsPath;
 
 use move_compiler::{editions::Flavor, linters::LintLevel};
-use move_package::source_package::parsed_manifest::Dependencies;
+use move_package_alt::flavor::MoveFlavor;
 
 /// Interval for checking if the parent process is still alive (in seconds)
 const PARENT_LIVENESS_MONITORING_INTERVAL_SECS: u64 = 10;
@@ -50,13 +50,12 @@ impl SymbolicatorRunner {
     }
 
     /// Create a new runner
-    pub fn new(
+    pub fn new<F: MoveFlavor>(
         ide_files_root: VfsPath,
         symbols_map: Arc<Mutex<BTreeMap<PathBuf, Symbols>>>,
         packages_info: Arc<Mutex<CachedPackages>>,
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
         lint: LintLevel,
-        implicit_deps: Dependencies,
         flavor: Option<Flavor>,
         parent_process_id: Option<u32>,
     ) -> Self {
@@ -144,13 +143,12 @@ impl SymbolicatorRunner {
                         );
                         for pkg_path in pkgs_to_analyze.into_iter() {
                             eprintln!("symbolication started");
-                            match get_symbols(
+                            match get_symbols::<F>(
                                 packages_info.clone(),
                                 ide_files_root.clone(),
                                 pkg_path.as_path(),
                                 lint,
                                 None,
-                                implicit_deps.clone(),
                                 flavor,
                             ) {
                                 Ok((symbols_opt, lsp_diagnostics)) => {

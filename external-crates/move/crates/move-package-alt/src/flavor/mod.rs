@@ -10,12 +10,16 @@ use std::{collections::BTreeMap, fmt::Debug};
 
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::schema::{EnvironmentID, EnvironmentName, PackageName, ReplacementDependency};
+use crate::schema::{
+    EnvironmentID, EnvironmentName, LockfileDependencyInfo, PackageName, ParsedManifest,
+    ReplacementDependency, SystemDepName,
+};
+use indexmap::IndexMap;
 
 /// A [MoveFlavor] is used to parameterize the package management system. It defines the types and
 /// methods for package management that are specific to a particular instantiation of the Move
 /// language.
-pub trait MoveFlavor: Debug {
+pub trait MoveFlavor: Debug + Send + Sync {
     /// Return an identifier for the flavor, used to ensure that the correct compiler is being used
     /// to parse a manifest.
     fn name() -> String;
@@ -24,26 +28,27 @@ pub trait MoveFlavor: Debug {
     /// during publication.
     //
     // TODO: should this include object IDs, or is that generic for Move? What about build config?
-    type PublishedMetadata: Debug + Serialize + DeserializeOwned + Clone + Default;
+    type PublishedMetadata: Debug + Serialize + DeserializeOwned + Clone + Default + Send + Sync;
 
     /// A [PackageMetadata] encapsulates the additional package information that can be stored in
     /// the `package` section of the manifest
-    type PackageMetadata: Debug + Serialize + DeserializeOwned + Clone;
+    type PackageMetadata: Debug + Serialize + DeserializeOwned + Clone + Send;
 
     /// An [AddressInfo] should give a unique identifier for a compiled package
-    type AddressInfo: Debug + Serialize + DeserializeOwned + Clone;
+    type AddressInfo: Debug + Serialize + DeserializeOwned + Clone + Send;
 
     /// Return the default environments for the flavor.
     /// Used for populating new manifests & migration purposes.
-    fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID>;
+    fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID>;
 
     /// Return ALL the system dependencies for the requested environment.
-    fn system_dependencies(
-        environment: EnvironmentID,
-    ) -> BTreeMap<PackageName, ReplacementDependency>;
+    fn system_deps(environment: &EnvironmentID) -> BTreeMap<SystemDepName, LockfileDependencyInfo>;
 
     /// Return the default system dependencies for the requested environment.
-    fn default_system_dependencies(
-        environment: EnvironmentID,
+    fn implicit_dependencies(
+        environment: &EnvironmentID,
     ) -> BTreeMap<PackageName, ReplacementDependency>;
+
+    /// Fail if an edition is not allowed
+    fn validate_manifest(manifest: &ParsedManifest) -> Result<(), String>;
 }

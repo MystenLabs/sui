@@ -7,7 +7,7 @@ description: tests/shell_tests/summaries/summarize_json.sh
 # SPDX-License-Identifier: Apache-2.0
 
 # Default output format is JSON
-sui move summary --path data/move_package
+sui move --client.config $CONFIG summary --path data/move_package
 ls -1 data/move_package/package_summaries | LC_ALL=C sort -f
 ls -1 data/move_package/package_summaries/move_package | LC_ALL=C sort -f
 ls -1 data/move_package/package_summaries/sui | LC_ALL=C sort -f
@@ -24,8 +24,8 @@ cat data/move_package/package_summaries/address_mapping.json
 success: true
 exit_code: 0
 ----- stdout -----
-INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
 BUILDING move_package
 
 Summary generation successful. Summaries stored in 'package_summaries'
@@ -126,4 +126,3 @@ vector.json
   "sui": "0x0000000000000000000000000000000000000000000000000000000000000002"
 }
 ----- stderr -----
-[note] Dependencies on Bridge, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.

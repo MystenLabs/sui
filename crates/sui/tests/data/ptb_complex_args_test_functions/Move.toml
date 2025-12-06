@@ -1,9 +1,9 @@
 [package]
 name = "test_functions"
 edition = "2024.beta"
+# turn off system deps
+implicit-dependencies = false
 
 [dependencies]
-Sui = { local = "../../../../sui-framework/packages/sui-framework" }
-
-[addresses]
-test_functions = "0x0"
+sui = { local = "../system-packages/sui-framework" }
+std = { local = "../system-packages/move-stdlib" }

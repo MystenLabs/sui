@@ -1,0 +1,21 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/find_env/multiple_match.sh
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Active environment chain ID matches multiple envs in the manifest
+echo 'duplicate_env = "1234"' >> Move.toml
+sui move --client.config configs/name_mismatch_id_match.yaml build
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+Found multiple environments defined in Move.toml with chain-id `1234`. Please pass one of the following:
+	--build-env duplicate_env
+	--build-env manifest_env
+
+----- stderr -----

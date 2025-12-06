@@ -144,6 +144,28 @@ impl WalletContext {
         self.internal_load_or_cache_chain_id(client, false).await
     }
 
+    /// Try to load the cached chain ID for the active environment.
+    pub async fn try_load_chain_id_from_cache(
+        &self,
+        env: Option<String>,
+    ) -> Result<String, anyhow::Error> {
+        let env = if let Some(env) = env {
+            self.config
+                .get_env(&Some(env.to_string()))
+                .ok_or_else(|| anyhow!("Environment configuration not found for env [{}]", env))?
+        } else {
+            self.get_active_env()?
+        };
+        if let Some(chain_id) = &env.chain_id {
+            Ok(chain_id.clone())
+        } else {
+            Err(anyhow!(
+                "No cached chain ID found for env {}. Please pass `-e env_name` to your command",
+                env.alias
+            ))
+        }
+    }
+
     /// Cache (or recache) chain ID for the active environment by fetching it from the
     /// network
     pub async fn cache_chain_id(&self, client: &SuiClient) -> Result<String, anyhow::Error> {

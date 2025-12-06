@@ -57,7 +57,8 @@ async fn publish_test_package(test_cluster: &TestCluster) -> ObjectID {
         .sign_transaction(
             &sui_test_transaction_builder::TestTransactionBuilder::new(sender, gas_object, 1000)
                 .with_gas_budget(50_000_000_000)
-                .publish(path)
+                .publish_async(path)
+                .await
                 .build(),
         )
         .await;

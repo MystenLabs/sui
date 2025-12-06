@@ -2,29 +2,31 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use base::{
-    build::Build, coverage::Coverage, decompile::Decompile, disassemble::Disassemble,
-    docgen::Docgen, info::Info, migrate::Migrate, new::New, summary::Summary, test::Test,
-};
-use move_package::{BuildConfig, resolution::resolution_graph::ResolvedGraph};
-
 pub mod base;
 pub mod sandbox;
+
+use std::path::PathBuf;
+
+use anyhow::Result;
+use clap::Parser;
+
+use crate::base::test::Test;
+use base::{
+    build::Build, coverage::Coverage, decompile::Decompile, disassemble::Disassemble,
+    docgen::Docgen, migrate::Migrate, new::New, profile::Profile, summary::Summary,
+};
+
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+use move_package_alt::flavor::MoveFlavor;
+use move_package_alt_compilation::build_config::BuildConfig;
+use move_vm_runtime::native_functions::NativeFunction;
+use move_vm_test_utils::gas_schedule::CostTable;
 
 /// Default directory where saved Move resources live
 pub const DEFAULT_STORAGE_DIR: &str = "storage";
 
 /// Default directory for build output
 pub const DEFAULT_BUILD_DIR: &str = ".";
-
-use anyhow::Result;
-use clap::Parser;
-use move_core_types::{account_address::AccountAddress, identifier::Identifier};
-use move_vm_runtime::native_functions::NativeFunction;
-use move_vm_test_utils::gas_schedule::CostTable;
-use std::path::PathBuf;
-
-use crate::base::profile::Profile;
 
 type NativeFunctionRecord = (AccountAddress, Identifier, Identifier, NativeFunction);
 
@@ -63,7 +65,6 @@ pub enum Command {
     Disassemble(Disassemble),
     Decompile(Decompile),
     Docgen(Docgen),
-    Info(Info),
     Migrate(Migrate),
     New(New),
     Test(Test),
@@ -81,7 +82,7 @@ pub enum Command {
     Summary(Summary),
 }
 
-pub fn run_cli(
+pub async fn run_cli<F: MoveFlavor>(
     natives: Vec<NativeFunctionRecord>,
     cost_table: &CostTable,
     move_args: Move,
@@ -91,41 +92,60 @@ pub fn run_cli(
     //         1. It's still using the old CostTable.
     //         2. The CostTable only affects sandbox runs, but not unit tests, which use a unit cost table.
     match cmd {
-        Command::Build(c) => c.execute(move_args.package_path.as_deref(), move_args.build_config),
+        Command::Build(c) => {
+            c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
+                .await
+        }
         Command::Coverage(c) => {
-            c.execute(move_args.package_path.as_deref(), move_args.build_config)
+            c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
+                .await
         }
         Command::Decompile(c) => {
             c.execute(move_args.package_path.as_deref(), move_args.build_config)
         }
         Command::Disassemble(c) => {
-            c.execute(move_args.package_path.as_deref(), move_args.build_config)
+            c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
+                .await
         }
-        Command::Docgen(c) => c.execute(move_args.package_path.as_deref(), move_args.build_config),
-        Command::Info(c) => c.execute(move_args.package_path.as_deref(), move_args.build_config),
-        Command::Migrate(c) => c.execute(move_args.package_path.as_deref(), move_args.build_config),
+        Command::Docgen(c) => {
+            c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
+                .await
+        }
+        Command::Migrate(c) => {
+            c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
+                .await
+        }
         Command::New(c) => c.execute_with_defaults(move_args.package_path.as_deref()),
-        Command::Test(c) => c.execute(
-            move_args.package_path.as_deref(),
-            move_args.build_config,
-            natives,
-            Some(cost_table.clone()),
-        ),
         Command::Profile(c) => c.execute(),
-        Command::Sandbox { storage_dir, cmd } => {
-            cmd.handle_command(natives, cost_table, &move_args, &storage_dir)
-        }
-        Command::Summary(summary) => summary
-            .execute::<(), fn(&mut ResolvedGraph) -> anyhow::Result<()>>(
+        Command::Test(c) => {
+            c.execute::<F>(
                 move_args.package_path.as_deref(),
                 move_args.build_config,
-                None,
-                None,
-            ),
+                natives,
+                Some(cost_table.clone()),
+            )
+            .await
+        }
+        Command::Sandbox { storage_dir, cmd } => {
+            cmd.handle_command::<F>(natives, cost_table, &move_args, &storage_dir)
+                .await
+        }
+        Command::Summary(summary) => {
+            summary
+                .execute::<F, ()>(
+                    move_args.package_path.as_deref(),
+                    move_args.build_config,
+                    None,
+                )
+                .await
+        }
     }
 }
 
-pub fn move_cli(natives: Vec<NativeFunctionRecord>, cost_table: &CostTable) -> Result<()> {
+pub async fn move_cli<F: MoveFlavor>(
+    natives: Vec<NativeFunctionRecord>,
+    cost_table: &CostTable,
+) -> Result<()> {
     let args = MoveCLI::parse();
-    run_cli(natives, cost_table, args.move_args, args.cmd)
+    run_cli::<F>(natives, cost_table, args.move_args, args.cmd).await
 }

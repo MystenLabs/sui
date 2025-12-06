@@ -6,50 +6,47 @@ use std::{
     path::PathBuf,
 };
 
-use move_core_types::account_address::AccountAddress;
+use indexmap::IndexMap;
+use move_compiler::editions::Edition;
 use move_package_alt::{
     dependency::{self, CombinedDependency, PinnedDependencyInfo},
     errors::{FileHandle, PackageResult},
     flavor::MoveFlavor,
     git::GitCache,
     schema::{
-        EnvironmentID, EnvironmentName, GitSha, ManifestDependencyInfo, ManifestGitDependency,
-        PackageName, ReplacementDependency,
+        EnvironmentID, EnvironmentName, GitSha, LockfileDependencyInfo, LockfileGitDepInfo,
+        ManifestDependencyInfo, ManifestGitDependency, PackageName, ParsedManifest,
+        ReplacementDependency, SystemDepName,
     },
 };
 use serde::{Deserialize, Serialize};
 use sui_package_management::system_package_versions::{
     SYSTEM_GIT_REPO, SystemPackagesVersion, latest_system_packages, system_packages_for_protocol,
 };
+use sui_sdk::types::{
+    base_types::ObjectID,
+    digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
+    supported_protocol_versions::Chain,
+};
 
-#[derive(Debug)]
+use crate::{mainnet_environment, testnet_environment};
+
+const EDITION: &str = "2024";
+const FLAVOR: &str = "sui";
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SuiFlavor;
 
 impl SuiFlavor {
     /// A map between system package names in the old style (capitalized) to the new naming style
     /// (lowercase).
-    fn system_deps_names_map() -> BTreeMap<PackageName, PackageName> {
+    fn system_deps_names_map() -> BTreeMap<String, SystemDepName> {
         BTreeMap::from([
-            (
-                PackageName::new("Sui").unwrap(),
-                PackageName::new("sui").unwrap(),
-            ),
-            (
-                PackageName::new("SuiSystem").unwrap(),
-                PackageName::new("sui_system").unwrap(),
-            ),
-            (
-                PackageName::new("MoveStdlib").unwrap(),
-                PackageName::new("std").unwrap(),
-            ),
-            (
-                PackageName::new("Bridge").unwrap(),
-                PackageName::new("bridge").unwrap(),
-            ),
-            (
-                PackageName::new("DeepBook").unwrap(),
-                PackageName::new("deepbook").unwrap(),
-            ),
+            ("Sui".into(), "sui".into()),
+            ("SuiSystem".into(), "sui_system".into()),
+            ("MoveStdlib".into(), "std".into()),
+            ("Bridge".into(), "bridge".into()),
+            ("DeepBook".into(), "deepbook".into()),
         ])
     }
 
@@ -64,22 +61,23 @@ impl SuiFlavor {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BuildParams {
-    flavor: String,
-    edition: String,
+    pub flavor: String,
+    pub edition: String,
 }
 
 /// Note: Every field should be optional, and the system can
 /// pick sensible defaults (or error out) if fields are missing.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "kebab-case")]
 pub struct PublishedMetadata {
     pub toolchain_version: Option<String>,
     pub build_config: Option<BuildParams>,
-    pub upgrade_capability: Option<AccountAddress>,
+    pub upgrade_capability: Option<ObjectID>,
 }
 
 impl MoveFlavor for SuiFlavor {
     fn name() -> String {
-        "sui".to_string()
+        FLAVOR.to_string()
     }
 
     type PublishedMetadata = PublishedMetadata;
@@ -88,20 +86,32 @@ impl MoveFlavor for SuiFlavor {
 
     type PackageMetadata = (); // TODO
 
-    fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID> {
+    fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID> {
+        let testnet = testnet_environment();
+        let mainnet = mainnet_environment();
+        IndexMap::from([(testnet.name, testnet.id), (mainnet.name, mainnet.id)])
+    }
+
+    fn implicit_dependencies(
+        environment: &EnvironmentID,
+    ) -> BTreeMap<PackageName, ReplacementDependency> {
         BTreeMap::from([
-            ("mainnet".to_string(), "35834a8a".to_string()),
-            ("testnet".to_string(), "4c78adac".to_string()),
+            (
+                PackageName::new("sui").expect("sui is a valid identifier"),
+                ReplacementDependency::override_system_dep("sui"),
+            ),
+            (
+                PackageName::new("std").expect("std is a valid identifier"),
+                ReplacementDependency::override_system_dep("std"),
+            ),
         ])
     }
 
-    // TODO this needs fixing, see todos
-    fn system_dependencies(
-        environment: EnvironmentID,
-    ) -> BTreeMap<PackageName, ReplacementDependency> {
+    fn system_deps(environment: &EnvironmentID) -> BTreeMap<SystemDepName, LockfileDependencyInfo> {
         let mut deps = BTreeMap::new();
         let deps_to_skip = ["DeepBook".into()];
-        // TODO: we need to use packages for protocol version as well, so we need to fix this
+
+        // TODO DVX-1814: we need to use packages for protocol version instead of latest
         let packages = latest_system_packages();
         let sha = &packages.git_revision;
         // filter out the packages that we want to skip
@@ -113,78 +123,38 @@ impl MoveFlavor for SuiFlavor {
         let names = Self::system_deps_names_map();
         for package in pkgs {
             let repo = SYSTEM_GIT_REPO.to_string();
-            let dependency_info = ManifestDependencyInfo::Git(ManifestGitDependency {
-                repo: repo.clone(),
-                rev: Some(sha.clone()),
-                subdir: PathBuf::from(&package.repo_path),
+            let info = LockfileDependencyInfo::Git(LockfileGitDepInfo {
+                repo,
+                path: PathBuf::from(&package.repo_path),
+                rev: GitSha::try_from(sha.clone()).expect("manifest has valid sha"),
             });
-
-            let replacement_dep = ReplacementDependency {
-                dependency: Some(move_package_alt::schema::DefaultDependency {
-                    dependency_info,
-                    is_override: true,
-                    rename_from: None,
-                }),
-                addresses: None,
-                use_environment: None,
-            };
 
             deps.insert(
                 names
-                    .get(
-                        &PackageName::new(package.package_name.clone())
-                            .expect("valid package name"),
-                    )
+                    .get(&package.package_name)
                     .expect("package exists in the renaming table")
                     .clone(),
-                replacement_dep,
+                info,
             );
         }
 
         deps
     }
 
-    fn default_system_dependencies(
-        environment: EnvironmentID,
-    ) -> BTreeMap<PackageName, ReplacementDependency> {
-        let default_deps = Self::default_system_dep_names();
-
-        Self::system_dependencies(environment)
-            .into_iter()
-            .filter(|(name, _)| default_deps.contains(name))
-            .collect()
+    fn validate_manifest(manifest: &ParsedManifest) -> Result<(), String> {
+        if manifest.package.edition == Some(Edition::DEVELOPMENT) {
+            Err(Edition::DEVELOPMENT.unknown_edition_error().to_string())
+        } else {
+            Ok(())
+        }
     }
 }
 
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    use move_package_alt::package::RootPackage;
-    use move_package_alt::package::manifest::Manifest;
-    use move_package_alt::schema::{Environment, PackageName};
-
-    #[test]
-    fn test_implicit_deps() {
-        let implicit_deps = ["sui", "std", "sui_system", "bridge"];
-        let env = Environment::new("mainnet".into(), "35834a8a".into());
-
-        let deps = SuiFlavor::system_dependencies(env.id().into());
-
-        for i in implicit_deps {
-            assert!(
-                deps.contains_key(&PackageName::new(i).unwrap()),
-                "Dependency {} not found in implicit dependencies",
-                i
-            );
-            assert!(
-                !deps.contains_key(&PackageName::new("DeepBook").unwrap()),
-                "Dependency DeepBook should not be in the implicit dependencies"
-            );
-            assert!(
-                !deps.contains_key(&PackageName::new("deepbook").unwrap()),
-                "Dependency deepbook should not be in the implicit dependencies"
-            );
+impl Default for BuildParams {
+    fn default() -> Self {
+        Self {
+            flavor: FLAVOR.to_string(),
+            edition: EDITION.to_string(),
         }
     }
 }

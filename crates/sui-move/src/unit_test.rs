@@ -6,18 +6,19 @@ use move_cli::base::{
     self,
     test::{self, UnitTestResult},
 };
-use move_package::BuildConfig;
+use move_package_alt_compilation::build_config::BuildConfig;
 use move_unit_test::{UnitTestingConfig, extensions::set_extension_hook};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
 use std::{cell::RefCell, collections::BTreeMap, path::Path, rc::Rc, sync::Arc};
-use sui_move_build::{decorate_warnings, implicit_deps};
+use sui_move_build::decorate_warnings;
 use sui_move_natives::{
     NativesCostTable, object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
     transaction_context::TransactionContext,
 };
-use sui_package_management::system_package_versions::latest_system_packages;
+use sui_package_alt::find_environment;
 use sui_protocol_config::ProtocolConfig;
+use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
     base_types::{SuiAddress, TxContext},
     digests::TransactionDigest,
@@ -37,10 +38,11 @@ pub struct Test {
 }
 
 impl Test {
-    pub fn execute(
+    pub async fn execute(
         self,
         path: Option<&Path>,
-        build_config: BuildConfig,
+        mut build_config: BuildConfig,
+        wallet: &WalletContext,
     ) -> anyhow::Result<UnitTestResult> {
         let compute_coverage = self.test.compute_coverage;
         if !cfg!(feature = "tracing") && compute_coverage {
@@ -51,9 +53,22 @@ impl Test {
         }
         // save disassembly if trace execution is enabled
         let save_disassembly = self.test.trace;
+        // set the default flavor to Sui if not already set by the user
+        if build_config.default_flavor.is_none() {
+            build_config.default_flavor = Some(move_compiler::editions::Flavor::Sui);
+        }
+
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
         let unit_test_config = self.test.unit_test_config();
+
+        // set the environment (this is a little janky: we get it from the manifest here, then pass
+        // it as the optional argument in the build-config, which then looks it up again, but it
+        // should be ok.
+        let environment =
+            find_environment(&rerooted_path, build_config.environment, wallet).await?;
+        build_config.environment = Some(environment.name);
+
         run_move_unit_tests(
             &rerooted_path,
             build_config,
@@ -61,6 +76,7 @@ impl Test {
             compute_coverage,
             save_disassembly,
         )
+        .await
     }
 }
 
@@ -76,9 +92,9 @@ static SET_EXTENSION_HOOK: Lazy<()> =
 
 /// This function returns a result of UnitTestResult. The outer result indicates whether it
 /// successfully started running the test, and the inner result indicatests whether all tests pass.
-pub fn run_move_unit_tests(
+pub async fn run_move_unit_tests(
     path: &Path,
-    mut build_config: BuildConfig,
+    build_config: BuildConfig,
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
     save_disassembly: bool,
@@ -88,9 +104,8 @@ pub fn run_move_unit_tests(
 
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
-    build_config.implicit_dependencies = implicit_deps(latest_system_packages());
 
-    let result = move_cli::base::test::run_move_unit_tests(
+    let result = move_cli::base::test::run_move_unit_tests::<sui_package_alt::SuiFlavor, _>(
         path,
         build_config,
         UnitTestingConfig {
@@ -105,7 +120,9 @@ pub fn run_move_unit_tests(
         compute_coverage,
         save_disassembly,
         &mut std::io::stdout(),
-    );
+    )
+    .await;
+
     result.map(|(test_result, warning_diags)| {
         if test_result == UnitTestResult::Success
             && let Some(diags) = warning_diags

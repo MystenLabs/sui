@@ -333,7 +333,10 @@ impl SurferState {
     #[tracing::instrument(skip_all, fields(surfer_id = self.id))]
     pub async fn publish_package(&mut self, path: &Path) {
         let rgp = self.cluster.get_reference_gas_price().await;
-        let package = BuildConfig::new_for_testing().build(path).unwrap();
+        let package = BuildConfig::new_for_testing()
+            .build_async(path)
+            .await
+            .unwrap();
         let modules = package.get_package_bytes(false);
         let tx_data = TransactionData::new_module(
             self.address,

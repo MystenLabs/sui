@@ -326,7 +326,8 @@ async fn test_simulate_transaction_with_events() {
     let tx_data = validator_cluster
         .test_transaction_builder()
         .await
-        .publish(path)
+        .publish_async(path)
+        .await
         .build();
     let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
     let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
@@ -585,7 +586,8 @@ async fn test_simulate_transaction_command_results() {
     let publish_tx = validator_cluster
         .test_transaction_builder()
         .await
-        .publish(package_path)
+        .publish_async(package_path)
+        .await
         .build();
     let signed_tx = validator_cluster.sign_transaction(&publish_tx).await;
     let publish_result = validator_cluster.execute_transaction(signed_tx).await;

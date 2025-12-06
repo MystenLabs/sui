@@ -1,0 +1,7 @@
+[package]
+name = "example"
+implicit-dependencies = false
+
+[dependencies]
+# Note: this is pinned to locked_dep_path in the lockfile
+dep = { local = "broken_dep_path" }

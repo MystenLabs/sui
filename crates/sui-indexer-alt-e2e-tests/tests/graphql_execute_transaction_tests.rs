@@ -314,7 +314,8 @@ async fn test_execute_transaction_with_events() {
     let tx_data = validator_cluster
         .test_transaction_builder()
         .await
-        .publish(path)
+        .publish_async(path)
+        .await
         .build();
     let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
     let (tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();

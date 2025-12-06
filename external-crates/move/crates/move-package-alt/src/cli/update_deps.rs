@@ -4,13 +4,13 @@
 
 use std::path::PathBuf;
 
-use clap::Parser;
+use anyhow::bail;
+use clap::{ArgAction, Parser};
 
 use crate::{
-    errors::{PackageError, PackageResult},
     flavor::Vanilla,
     package::RootPackage,
-    schema::{Environment, EnvironmentName},
+    schema::{Environment, EnvironmentName, ModeName},
 };
 
 /// Re-pin the dependencies of this package.
@@ -23,25 +23,33 @@ pub struct UpdateDeps {
     /// dependencies will be updated.
     #[arg(name = "environment", short = 'e', long = "environment")]
     environment: EnvironmentName,
+
+    /// Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]`
+    /// annodations during compiltaion.
+    #[arg(
+        long = "mode",
+        value_name = "MODE",
+        action = ArgAction::Append,
+    )]
+    modes: Vec<ModeName>,
 }
 
 impl UpdateDeps {
-    pub async fn execute(&self) -> PackageResult<()> {
+    pub async fn execute(&self) -> anyhow::Result<()> {
         let path = self.path.clone().unwrap_or(PathBuf::from("."));
 
         let envs = RootPackage::<Vanilla>::environments(&path)?;
 
         let Some(chain_id) = envs.get(&self.environment) else {
-            return Err(PackageError::Generic(format!(
-                "Environment {} not found",
-                self.environment
-            )));
+            bail!("Environment {} not found", self.environment);
         };
 
         let environment = Environment::new(self.environment.clone(), chain_id.clone());
 
-        let root_package = RootPackage::<Vanilla>::load_force_repin(&path, environment).await?;
-        root_package.save_to_disk()?;
+        let mut root_package =
+            RootPackage::<Vanilla>::load_force_repin(&path, environment, self.modes.clone())
+                .await?;
+        root_package.save_lockfile_to_disk()?;
 
         Ok(())
     }

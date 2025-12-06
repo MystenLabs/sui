@@ -1,1 +1,1 @@
-build -v -d
+build -v

@@ -1,4 +1,4 @@
-module A::m;
+module Dep::m;
 
 #[verify_only]
 public struct Bar() has drop;

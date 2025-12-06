@@ -5,8 +5,14 @@
 use move_command_line_common::files::{MOVE_EXTENSION, extension_equals, find_filenames};
 use move_core_types::parsing::address::NumericalAddress;
 use move_docgen::DocgenOptions;
-use move_package::BuildConfig;
-use std::{collections::BTreeMap, fs, path::Path, path::PathBuf};
+use move_package_alt::flavor::Vanilla;
+use move_package_alt_compilation::build_config::BuildConfig;
+use std::{
+    collections::BTreeMap,
+    fs,
+    io::Stdout,
+    path::{Path, PathBuf},
+};
 
 #[cfg(test)]
 mod tests;
@@ -60,10 +66,18 @@ pub fn named_addresses() -> BTreeMap<String, NumericalAddress> {
         .collect()
 }
 
-pub fn build_doc(output_directory: String) -> anyhow::Result<()> {
+pub async fn build_doc(output_directory: String) -> anyhow::Result<()> {
     let config = build_config();
-    let model =
-        config.move_model_for_package(Path::new(&modules_full_path()), &mut std::io::stdout())?;
+
+    let env = move_package_alt::flavor::vanilla::default_environment();
+
+    let model = config
+        .move_model_from_path::<Vanilla, Stdout>(
+            Path::new(&modules_full_path()).parent().unwrap(),
+            env,
+            &mut std::io::stdout(),
+        )
+        .await?;
     let options = DocgenOptions {
         output_directory,
         doc_path: vec![String::new()],
@@ -89,11 +103,5 @@ pub fn build_doc(output_directory: String) -> anyhow::Result<()> {
 }
 
 pub(crate) fn build_config() -> BuildConfig {
-    BuildConfig {
-        additional_named_addresses: named_addresses()
-            .into_iter()
-            .map(|(k, v)| (k, v.into_inner()))
-            .collect(),
-        ..BuildConfig::default()
-    }
+    BuildConfig::default()
 }

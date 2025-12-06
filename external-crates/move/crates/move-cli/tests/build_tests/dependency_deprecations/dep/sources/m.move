@@ -1,4 +1,4 @@
-module A::m {
+module Dep::m {
     #[deprecated(note = b"use a different struct instead")]
     public struct Bar() has drop;
 

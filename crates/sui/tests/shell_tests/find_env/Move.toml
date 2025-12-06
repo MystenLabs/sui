@@ -1,0 +1,6 @@
+[package]
+name = "example"
+implicit-dependencies = false
+
+[environments]
+manifest_env = "1234"

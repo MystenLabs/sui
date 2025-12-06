@@ -5,6 +5,7 @@ build/*
 traces/*
 .trace
 .coverage*
+Pub.*.toml
 External Command `ls -A package`:
 .gitignore
 Move.toml

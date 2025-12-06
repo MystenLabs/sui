@@ -46,7 +46,7 @@ pub const NO_MIGRATION_NEEDED_MSG: &str = "No migration is required. Enjoy!";
 
 pub const BAR: &str = "============================================================";
 
-pub struct MigrationContext<'a, F: MoveFlavor, W: Write, R: BufRead> {
+pub struct MigrationContext<'a, F: MoveFlavor, W: Write + Send, R: BufRead> {
     build_plan: BuildPlan<'a, F>,
     terminal: Terminal<'a, W, R>,
 }
@@ -55,7 +55,7 @@ pub struct MigrationOptions {
     pub edition: Edition,
 }
 
-impl<F: MoveFlavor, W: Write, R: BufRead> MigrationContext<'_, F, W, R> {
+impl<F: MoveFlavor, W: Write + Send, R: BufRead> MigrationContext<'_, F, W, R> {
     pub fn new<'new>(
         build_plan: BuildPlan<'new, F>,
         writer: &'new mut W,
@@ -148,7 +148,7 @@ impl<F: MoveFlavor, W: Write, R: BufRead> MigrationContext<'_, F, W, R> {
 }
 
 /// Migrate a legacy package to Move 2024 edition, if possible.
-pub fn migrate<F: MoveFlavor, W: Write, R: BufRead>(
+pub fn migrate<F: MoveFlavor, W: Write + Send, R: BufRead>(
     build_plan: BuildPlan<F>,
     writer: &mut W,
     reader: &mut R,

@@ -39,7 +39,7 @@ use move_compiler::{
     parser::ast::{LeadingNameAccess_, NameAccessChain_},
     shared::{Identifier, Name},
 };
-use move_package::source_package::parsed_manifest::Dependencies;
+use move_package_alt::flavor::MoveFlavor;
 
 // The following reflects prefixes of error messages for
 // problems with a single-element access chain that are
@@ -81,22 +81,20 @@ impl TwoElementChainDiagPrefix {
 }
 
 /// Handles inlay hints request of the language server
-pub fn on_code_action_request(
+pub fn on_code_action_request<F: MoveFlavor>(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
-    implicit_deps: Dependencies,
     flavor: Option<Flavor>,
 ) {
     let response = Response::new_ok(
         request.id.clone(),
-        access_chain_autofix_actions(
+        access_chain_autofix_actions::<F>(
             context,
             request,
             ide_files_root,
             pkg_dependencies,
-            implicit_deps,
             flavor,
         ),
     );
@@ -107,12 +105,11 @@ pub fn on_code_action_request(
 }
 
 /// Computes code actions related to access chain autofixes.
-fn access_chain_autofix_actions(
+fn access_chain_autofix_actions<F: MoveFlavor>(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
-    implicit_deps: Dependencies,
     flavor: Option<Flavor>,
 ) -> Vec<CodeAction> {
     let mut code_actions = vec![];
@@ -141,12 +138,11 @@ fn access_chain_autofix_actions(
         return code_actions;
     };
 
-    let Ok((Some(mut compiled_pkg_info), _)) = get_compiled_pkg(
+    let Ok((Some(mut compiled_pkg_info), _)) = get_compiled_pkg::<F>(
         pkg_dependencies.clone(),
         ide_files_root,
         &pkg_path,
         LintLevel::None,
-        implicit_deps,
         flavor,
         None,
     ) else {

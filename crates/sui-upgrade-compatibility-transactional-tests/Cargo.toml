@@ -12,10 +12,16 @@ anyhow.workspace = true
 datatest-stable.workspace = true
 insta.workspace = true
 move-compiler.workspace = true
-move-package.workspace = true
 move-binary-format.workspace = true
 move-command-line-common.workspace = true
 sui-move-build.workspace = true
+tokio.workspace = true
+
+[target.'cfg(msim)'.dependencies]
+msim.workspace = true
+
+[lints]
+workspace = true
 
 [[test]]
 name = "tests"

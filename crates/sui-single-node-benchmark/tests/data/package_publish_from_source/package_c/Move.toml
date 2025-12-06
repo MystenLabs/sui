@@ -1,8 +1,9 @@
 [package]
-name = "C"
+name = "c"
 version = "0.0.1"
 edition = "2024.beta"
+implicit-dependencies = false
 
 [dependencies]
-A = { local = "../package_a" }
-B = { local = "../package_b" }
+a = { local = "../package_a" }
+b = { local = "../package_b" }

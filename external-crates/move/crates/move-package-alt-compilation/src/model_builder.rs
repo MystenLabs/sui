@@ -9,7 +9,7 @@ use crate::{
 };
 use move_compiler::shared::{SaveFlag, SaveHook};
 use move_model_2::source_model;
-use move_package_alt::{errors::PackageResult, flavor::MoveFlavor, package::RootPackage};
+use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
 use move_symbol_pool::Symbol;
 use std::io::Write;
 
@@ -18,18 +18,15 @@ use std::io::Write;
 // across all packages and build the Move model from that.
 // TODO: In the future we will need a better way to do this to support renaming in packages
 // where we want to support building a Move model.
-pub fn build<W: Write, F: MoveFlavor>(
+pub fn build<W: Write + Send, F: MoveFlavor>(
     writer: &mut W,
     root_pkg: &RootPackage<F>,
     build_config: &BuildConfig,
-) -> PackageResult<source_model::Model> {
+) -> anyhow::Result<source_model::Model> {
     // TODO: does this also need to be `name_root` like in compilation?
     let root_package_name = Symbol::from(root_pkg.name().as_str());
-    let build_named_addresses: BuildNamedAddresses = root_pkg
-        .package_graph()
-        .root_package_info()
-        .named_addresses()?
-        .into();
+    let build_named_addresses: BuildNamedAddresses =
+        root_pkg.package_info().named_addresses()?.into();
     let root_named_address_map = build_named_addresses
         .inner
         .into_iter()
@@ -47,11 +44,11 @@ pub fn build<W: Write, F: MoveFlavor>(
         .cloned()
         .map(|CompiledUnitWithSource { unit, source_path }| (source_path, unit))
         .collect::<Vec<_>>();
-    Ok(source_model::Model::from_source(
+    source_model::Model::from_source(
         compiled_package.file_map,
         Some(root_package_name),
         root_named_address_map,
         program_info,
         all_compiled_units,
-    )?)
+    )
 }

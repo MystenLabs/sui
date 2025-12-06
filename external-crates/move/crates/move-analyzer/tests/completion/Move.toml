@@ -4,11 +4,11 @@ edition = "2024.beta"
 
 [dependencies]
 MoveStdlib = { local = "../../../move-stdlib/" }
-# dependency on a package with the same address as this one
-# for testing that package name is printed correctly in presence
-# of multiple packages with the same address
+# Note: in an older version of this test, the package `SamePkgAddr` had the
+# same address as this package; in the new system this isn't allowed, so the
+# addresses are now different
 SamePkgAddr = { local = "../same-pkg-addr-std-dep/" }
 
 [addresses]
-Completion = "0xCAFE"
+Completion = "0xCAFE2"
 std = "0x1"
