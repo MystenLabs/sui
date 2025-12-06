@@ -732,7 +732,7 @@ impl CommitFinalizer {
         }
         // current_commit_index is the commit index which includes the current / voting block.
         // When proposing the current block, the latest possible GC round is the GC round computed
-        // from the leader of of the previous commit (current_commit_index - 1).
+        // from the leader of the previous commit (current_commit_index - 1).
         let (commit_index, gc_round) = *gc_rounds
             .get((current_commit_index - 1 - pending_commit_index) as usize)
             .unwrap();
