@@ -1,0 +1,51 @@
+[package]
+name = "sui-adapter-replay_cut"
+version = "0.1.0"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+description = "Adapter and accompanying CLI for local sui development"
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true, features = ["backtrace"] }
+bcs.workspace = true
+leb128.workspace = true
+tracing.workspace = true
+serde.workspace = true
+indexmap.workspace = true
+serde_json.workspace = true
+
+move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
+move-bytecode-verifier-meter.workspace = true
+move-core-types.workspace = true
+move-trace-format.workspace = true
+move-vm-config.workspace = true
+mysten-common.workspace = true
+mysten-metrics.workspace = true
+nonempty.workspace = true
+
+move-bytecode-verifier = { path = "../../../external-crates/move/move-execution/replay_cut/crates/move-bytecode-verifier", package = "move-bytecode-verifier-replay_cut" }
+move-vm-runtime = { path = "../../../external-crates/move/move-execution/replay_cut/crates/move-vm-runtime", package = "move-vm-runtime-replay_cut" }
+move-vm-profiler = { path = "../../../external-crates/move/crates/move-vm-profiler" }
+sui-move-natives = { path = "../sui-move-natives", package = "sui-move-natives-replay_cut" }
+sui-verifier = { path = "../sui-verifier", package = "sui-verifier-replay_cut" }
+move-vm-types = { path = "../../../external-crates/move/move-execution/replay_cut/crates/move-vm-types", package = "move-vm-types-replay_cut" }
+move-regex-borrow-graph = { path = "../../../external-crates/move/crates/move-regex-borrow-graph" }
+
+sui-macros.workspace = true
+sui-protocol-config.workspace = true
+sui-types.workspace = true
+parking_lot.workspace = true
+
+[features]
+tracing = [
+    "sui-types/tracing",
+    "move-vm-runtime/tracing",
+    "move-vm-profiler/tracing",
+    "move-vm-config/tracing",
+]

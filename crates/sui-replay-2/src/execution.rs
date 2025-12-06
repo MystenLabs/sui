@@ -307,32 +307,30 @@ impl sui_types::storage::ObjectStore for ReplayStore<'_> {
     // at the checkpoint (mimic latest runtime behavior)
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         trace!("get_object({})", object_id);
-
-        match self.object_cache.borrow().get(object_id) {
-            Some(versions) => versions.last_key_value().map(|(_version, obj)| obj.clone()),
-            None => {
-                let fetched_object = self
-                    .store
-                    .get_objects(&[ObjectKey {
-                        object_id: *object_id,
-                        version_query: VersionQuery::AtCheckpoint(self.checkpoint),
-                    }])
-                    .map_err(|e| SuiErrorKind::Storage(e.to_string()))
-                    .ok()?
-                    .into_iter()
-                    .next()?
-                    .map(|(obj, _version)| obj)?;
-
-                // Add the fetched object to the cache
-                let mut cache = self.object_cache.borrow_mut();
-                cache
-                    .entry(*object_id)
-                    .or_default()
-                    .insert(fetched_object.version().value(), fetched_object.clone());
-
-                Some(fetched_object)
-            }
+        if let Some(cache) = self.object_cache.borrow().get(object_id) {
+            return cache.last_key_value().map(|(_version, obj)| obj.clone());
         }
+
+        let fetched_object = self
+            .store
+            .get_objects(&[ObjectKey {
+                object_id: *object_id,
+                version_query: VersionQuery::AtCheckpoint(self.checkpoint),
+            }])
+            .map_err(|e| SuiErrorKind::Storage(e.to_string()))
+            .ok()?
+            .into_iter()
+            .next()?
+            .map(|(obj, _version)| obj)?;
+
+        // Add the fetched object to the cache
+        let mut cache = self.object_cache.borrow_mut();
+        cache
+            .entry(*object_id)
+            .or_default()
+            .insert(fetched_object.version().value(), fetched_object.clone());
+
+        Some(fetched_object)
     }
 
     // Get an object by its ID and version
