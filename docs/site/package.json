@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.5.3",
-    "@docusaurus/plugin-content-docs": "^3.8.0",
+    "@docusaurus/plugin-content-docs": "3.8.1",
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.0",
     "@graphql-markdown/docusaurus": "^1.24.0",
@@ -73,7 +73,7 @@
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "^7.23.4",
     "@docusaurus/core": "3.8.1",
-    "@docusaurus/module-type-aliases": "^3.8.1",
+    "@docusaurus/module-type-aliases": "3.8.1",
     "@docusaurus/preset-classic": "3.8.1",
     "@docusaurus/remark-plugin-npm2yarn": "3.8.1",
     "@docusaurus/theme-classic": "3.8.1",
@@ -110,7 +110,11 @@
     "node": ">=18.12",
     "pnpm": ">=8.6.5"
   },
-  "overrides": {
-    "@docusaurus/*": "3.8.1"
+  "pnpm": {
+    "overrides": {
+      "@docusaurus/*": "3.8.1",
+      "prismjs@<1.30.0": ">=1.30.0",
+      "webpack-dev-server@<=5.2.0": ">=5.2.1"
+    }
   }
 }
