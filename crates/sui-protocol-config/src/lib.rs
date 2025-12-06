@@ -894,6 +894,10 @@ struct FeatureFlags {
     // If true, skip GC'ed accept votes in CommitFinalizer.
     #[serde(skip_serializing_if = "is_false")]
     consensus_skip_gced_accept_votes: bool,
+
+    // If true, include cancelled randomness txns in the consensus commit prologue.
+    #[serde(skip_serializing_if = "is_false")]
+    include_cancelled_randomness_txns_in_prologue: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2407,6 +2411,11 @@ impl ProtocolConfig {
 
     pub fn consensus_skip_gced_accept_votes(&self) -> bool {
         self.feature_flags.consensus_skip_gced_accept_votes
+    }
+
+    pub fn include_cancelled_randomness_txns_in_prologue(&self) -> bool {
+        self.feature_flags
+            .include_cancelled_randomness_txns_in_prologue
     }
 }
 
@@ -4293,6 +4302,9 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
                     }
+
+                    cfg.feature_flags
+                        .include_cancelled_randomness_txns_in_prologue = true;
                 }
                 // Use this template when making changes:
                 //
