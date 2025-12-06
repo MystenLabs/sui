@@ -202,6 +202,7 @@ pub async fn execute_transaction(
     let response = client
         .execute_transaction_and_wait_for_checkpoint(exec_request, Duration::from_secs(10))
         .await
+        .ok() // errors can be huge, avoid printing them if unwrap fails
         .unwrap()
         .into_inner()
         .transaction()
