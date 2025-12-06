@@ -64,6 +64,7 @@ use sui_types::messages_grpc::{
 use crate::formal_snapshot_util::read_summaries_for_list_no_verify;
 use sui_core::authority::authority_store_pruner::PrunerWatermarks;
 use sui_types::storage::ReadStore;
+use tracing::{info, warn};
 use typed_store::DBMetrics;
 
 pub mod commands;
@@ -652,6 +653,7 @@ fn start_summary_sync(
         )
         .await?;
         sync_progress_bar.finish_with_message("Checkpoint summary sync is complete");
+        info!("Checkpoint summary sync is complete");
 
         let checkpoint = checkpoint_store
             .get_checkpoint_by_sequence_number(*last_checkpoint)?
@@ -788,10 +790,13 @@ pub async fn download_formal_snapshot(
     max_retries: usize,
 ) -> Result<(), anyhow::Error> {
     let m = MultiProgress::new();
-    m.println(format!(
+    let msg = format!(
         "Beginning formal snapshot restore to end of epoch {}, network: {:?}, verification mode: {:?}",
-        epoch, network, verify,
-    ))?;
+        epoch, network, verify
+    );
+    m.println(&msg).unwrap();
+    info!("{}", msg);
+
     let path = path.join("staging").to_path_buf();
     if path.exists() {
         fs::remove_dir_all(path.clone())?;
@@ -893,6 +898,7 @@ pub async fn download_formal_snapshot(
             .read(&perpetual_db_clone, abort_registration, Some(sender))
             .await
             .unwrap_or_else(|err| panic!("Failed during read: {}", err));
+        info!("Snapshot download complete");
         Ok::<(), anyhow::Error>(())
     });
     let mut root_global_state_hash = GlobalStateHash::default();
@@ -1030,10 +1036,12 @@ async fn backfill_epoch_transaction_digests(
             .map(|cp| cp + 1)
             .unwrap_or(0)
     };
-    m.println(format!(
+    let msg = format!(
         "Beginning transaction digest backfill for epoch: {:?}, backfilling from: {:?}..{:?}",
         epoch, epoch_start_cp, epoch_last_cp_seq
-    ))?;
+    );
+    m.println(&msg).ok();
+    info!("{}", msg);
 
     let checkpoints_to_fetch: Vec<_> = (epoch_start_cp..=*epoch_last_cp_seq).collect();
     let num_checkpoints = checkpoints_to_fetch.len();
@@ -1047,7 +1055,7 @@ async fn backfill_epoch_transaction_digests(
         ),
     );
 
-    let client = create_remote_store_client(ingestion_url, vec![], 60)?;
+    let client = Arc::new(create_remote_store_client(ingestion_url, vec![], 60)?);
     let checkpoint_counter = Arc::new(AtomicU64::new(0));
     let tx_counter = Arc::new(AtomicU64::new(0));
     let cloned_checkpoint_counter = checkpoint_counter.clone();
@@ -1072,13 +1080,18 @@ async fn backfill_epoch_transaction_digests(
         }
     });
 
-    // Use reduced concurrency for backfill to avoid overwhelming the remote server
-    // when running in parallel with snapshot download
-    let backfill_concurrency = (concurrency / 4).max(1);
-
     futures::stream::iter(checkpoints_to_fetch)
-        .map(|sq| CheckpointReader::fetch_from_object_store(&client, sq))
-        .buffer_unordered(backfill_concurrency)
+        .map(|sq| {
+            let client = client.clone();
+            async move {
+                let res = CheckpointReader::fetch_from_object_store(&**client, sq).await;
+                if let Err(ref e) = res {
+                    warn!("Failed to fetch checkpoint {}: {:?}", sq, e);
+                }
+                res
+            }
+        })
+        .buffer_unordered(concurrency)
         .try_for_each(|checkpoint| {
             let perpetual_db = perpetual_db.clone();
             let tx_counter = tx_counter.clone();
@@ -1106,6 +1119,11 @@ async fn backfill_epoch_transaction_digests(
         "Backfill complete: {} transactions from {} checkpoints",
         tx_count, num_checkpoints
     ));
+    info!(
+        "Backfill complete: {} transactions from {} checkpoints",
+        tx_counter.load(Ordering::Relaxed),
+        checkpoint_counter.load(Ordering::Relaxed)
+    );
 
     Ok(())
 }
