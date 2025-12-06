@@ -89,6 +89,7 @@ const standards = [
 	},
 	'standards/display',
 	'standards/payment-kit',
+	'standards/sagat',
 	'standards/wallet-standard',
 ];
 export default standards;
