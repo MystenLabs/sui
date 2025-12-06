@@ -7,11 +7,7 @@ use move_compiler::editions::{Edition, Flavor};
 use move_package_alt_compilation::{
     build_config::BuildConfig as MoveBuildConfig, lint_flag::LintFlag,
 };
-use std::{
-    collections::BTreeMap,
-    env, fs,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, env, fs, path::Path};
 use sui_move_build::BuildConfig;
 use sui_package_alt::mainnet_environment;
 
