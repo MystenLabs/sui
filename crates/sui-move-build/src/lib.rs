@@ -247,6 +247,7 @@ impl BuildConfig {
             .config
             .install_dir
             .unwrap_or(root_pkg.package_path().to_path_buf());
+        eprintln!("out dir: {:?}");
         root_pkg.save_lockfile_to_disk(&out_dir)?;
 
         Ok(CompiledPackage {

@@ -133,6 +133,7 @@ async fn build_packages_with_move_config(
     .build_async(stdlib_path)
     .await
     .unwrap();
+    panic!("nope");
     let framework_pkg = BuildConfig {
         config: config.clone(),
         run_bytecode_verifier: true,
