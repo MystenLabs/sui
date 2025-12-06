@@ -1105,9 +1105,6 @@ ecvrf_verify
 ed25519_verify
 	public fun
 	0x2::ed25519
-is_feature_enabled
-	public(package) fun
-	0x2::protocol_config
 hash_to_input
 	public fun
 	0x2::vdf
@@ -1885,6 +1882,9 @@ expire_jwks
 get_active_jwks
 	fun
 	0x2::authenticator_state
+is_feature_enabled
+	public(package) fun
+	0x2::protocol_config
 Withdrawal
 	public struct
 	0x2::funds_accumulator
@@ -1964,7 +1964,7 @@ redeem_funds
 	public fun
 	0x2::balance
 withdraw_funds_from_object
-	public(package) fun
+	public fun
 	0x2::balance
 create_supply_internal
 	public(package) fun
